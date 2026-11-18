@@ -797,6 +797,7 @@ export const styles: PromptStyle[] = [
 
 /** A sample of the server catalog for zh_CN (schema labels). */
 export const serverCatalogZh: Record<string, string> = {
+  // pi-lens-ignore: no-dupe-keys -- false positive: the rule reads only the first fragment of "Prompt\n(…)" below
   Prompt: "提示词",
   "Prompt\n({{generate}} to Generate ; {{skip}} to Skip ; {{interrupt}} to Interrupt)": "提示词\n（{{generate}} 生成；{{skip}} 跳过；{{interrupt}} 中断）",
   "Negative prompt": "反向提示词",

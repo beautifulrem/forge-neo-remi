@@ -56,6 +56,7 @@ export function isHexColor(value: unknown): value is string {
  * Validates a persisted draft value against the current node. Returns the
  * (possibly clamped) value, or `NOT_ACCEPTED` when the default should win.
  */
+// pi-lens-ignore: no-unknown-returns -- a draft read back from storage; json / custom widgets keep any value
 function acceptDraft(node: InputNode, value: unknown): unknown {
   switch (node.type) {
     case "toggle":
@@ -91,6 +92,7 @@ function acceptDraft(node: InputNode, value: unknown): unknown {
 }
 
 /** The value a freshly loaded form should hold for `node`. */
+// pi-lens-ignore: no-unknown-returns -- form values are whatever their widget writes (custom widgets included)
 export function restoreValue(node: InputNode, draft: unknown, fallback: unknown): unknown {
   if (draft === undefined) return fallback
   const accepted = acceptDraft(node, draft)

@@ -39,7 +39,10 @@ export class MockSocket implements SocketLike {
   }
 }
 
-export function broadcast(event: object) {
+/** A server event as the mock sends it (`type` plus the event's fields). */
+export type MockEvent = { type: string } & Record<string, unknown>
+
+export function broadcast(event: MockEvent) {
   const text = JSON.stringify(event)
   for (const socket of sockets) socket.deliver(text)
 }

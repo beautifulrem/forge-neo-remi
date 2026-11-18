@@ -18,7 +18,7 @@ import type { SortKey, SortOrder } from "./queries"
 import type { PromptTarget } from "./store"
 
 /** A bootstrap option the shared client-option table does not list. */
-function bootstrapOption(options: Record<string, unknown> | undefined, key: string): unknown {
+function bootstrapOption(options: Bootstrap["options"] | undefined, key: string): Bootstrap["options"][string] {
   return options?.[key]
 }
 

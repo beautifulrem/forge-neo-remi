@@ -133,6 +133,7 @@ export type TestImage = { naturalWidth: number; naturalHeight: number; pixels: U
 export function testImage(width: number, height: number, rgba: readonly [number, number, number, number] = [255, 255, 255, 255]): TestImage & CanvasImageSource {
   const pixels = new Uint8ClampedArray(width * height * 4)
   for (let i = 0; i < pixels.length; i += 4) pixels.set(rgba, i)
+  // SAFETY: only the memory raster draws it, and it reads naturalWidth / naturalHeight / pixels, never the DOM image API.
   return { naturalWidth: width, naturalHeight: height, pixels } as unknown as TestImage & CanvasImageSource
 }
 

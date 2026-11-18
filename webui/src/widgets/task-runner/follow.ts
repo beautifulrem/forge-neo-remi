@@ -72,7 +72,8 @@ export function followTask(ctx: ActionContext, owner: string, task: string, id: 
 }
 
 async function poll(ctx: ActionContext, owner: string, task: string, extra: Record<string, unknown>): Promise<TaskStatus | null> {
-  // The task's own arguments (ActionExtra types the core actions' only)
+  // SAFETY: the task's own arguments travel in the action body as the server's task runner reads
+  // them; ActionExtra types only the core actions' extras, so the body is widened to it.
   const body = actionRequest(ctx, owner, { task, ...extra } as unknown as ActionExtra)
   const split = splitResponse(owner, await api.action(owner, "__task__", body))
   applyResponse(ctx.store, owner, split)

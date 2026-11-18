@@ -111,7 +111,8 @@ export const api = {
   upload: (file: Blob, name = file instanceof File ? file.name : "upload") => {
     const form = new FormData()
     form.append("file", file, name)
-    // The generated body type is the multipart schema; the client sends FormData as is.
+    // SAFETY: the generated body type is the multipart schema; openapi-fetch sends FormData as is,
+    // and the server reads the `file` part this form appends.
     return unwrap(client.POST("/api/v2/uploads", { body: form as unknown as { file: string } }))
   },
 
