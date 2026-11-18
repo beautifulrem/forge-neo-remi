@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 import torch
@@ -233,7 +234,7 @@ def test_patch_and_unpatch_round_trip(monkeypatch, negatives_seen):
             {"crossattn": torch.ones(1, 4), "c_negpip_mask": torch.ones(1, 1)},
             {"crossattn": torch.ones(2, 4), "c_negpip_mask": torch.ones(2, 1)},
         ]
-        groups = condition.compile_conditions(rows)
+        groups: Any = condition.compile_conditions(rows)
         assert [group["batch_indices"] for group in groups] == [[0, 2], [1]]
         masks = [group["model_conds"]["c_negpip_mask"].cond[:, :, 0].tolist() for group in groups]
         assert masks == [[[-1.0, -1.0], [1.0, 1.0]], [[1.0]]]

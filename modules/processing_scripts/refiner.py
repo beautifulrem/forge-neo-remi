@@ -29,7 +29,7 @@ def lookup_checkpoint(title):
 
 
 def checkpoint_choices() -> list[str]:
-    return ["None"] + shared.list_checkpoint_tiles(shared.opts.sd_checkpoint_dropdown_use_short)
+    return ["None"] + shared.list_checkpoint_tiles(bool(shared.opts.sd_checkpoint_dropdown_use_short))
 
 
 class ScriptRefiner(scripts.ScriptBuiltinUI):

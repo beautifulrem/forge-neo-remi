@@ -8,7 +8,7 @@ from remi import ui
 def postprocessing_scripts():
     import modules.scripts
 
-    return modules.scripts.scripts_postproc.scripts
+    return modules.scripts.scripts_postproc.scripts or []  # None until the scripts are loaded
 
 
 def refresh_vae_list():

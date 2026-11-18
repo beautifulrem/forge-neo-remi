@@ -102,7 +102,7 @@ def forge_loading_parameters(checkpoint_info, unet_storage_option: str) -> dict:
     """What sd_models.forge_model_reload() loads (and compares to decide on a
     reload) for the "Diffusion in Low Bits" choice ``unet_storage_option``."""
     unet_storage_dtype, _ = forge_unet_storage_dtype_options.get(unet_storage_option, (None, False))
-    parameters = dict(checkpoint_info=checkpoint_info, additional_modules=list(shared.opts.forge_additional_modules), unet_storage_dtype=unet_storage_dtype)
+    parameters = dict(checkpoint_info=checkpoint_info, additional_modules=list(shared.opts.forge_additional_modules or []), unet_storage_dtype=unet_storage_dtype)
     if anima_quant := anima_quant_options.get(unet_storage_option):
         parameters["anima_quant"] = anima_quant
     return parameters

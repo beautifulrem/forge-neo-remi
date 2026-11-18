@@ -63,6 +63,7 @@ def test_cond_and_uncond_of_different_lengths_run_apart_with_their_own_masks(hoo
 
     assert not sampling_function.can_concat_cond(first, second)
     for item, signs in ((first, [1, -1, 1, 1]), (second, [-1, 1])):
+        assert item is not None
         context, mask = item.conditioning["c_crossattn"].cond, item.conditioning["c_negpip_mask"].cond
         assert torch.equal(torch.sign(context), mask.expand_as(context))
         assert mask[0, :, 0].tolist() == signs

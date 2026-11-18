@@ -3,6 +3,7 @@
 import importlib.util
 import sys
 import types
+from typing import Any
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def lora(monkeypatch):
     from modules import shared
 
-    fake = types.ModuleType("networks")
+    fake: Any = types.ModuleType("networks")  # a stand-in with the attributes the script reads
     fake.available_networks = {}
     fake.loaded_networks = []
     fake.calls = []

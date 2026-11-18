@@ -1,6 +1,8 @@
+import importlib
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, Callable
 
 import pytest
 import torch
@@ -9,7 +11,10 @@ import torch
 EXTENSION_PATH = Path(__file__).parents[1]
 
 
-def _load():
+def _load() -> tuple[Any, Any, Any]:
+    # The runtime is imported from the extension's own path and patched by the
+    # tests, and the layers get Forge's weight_function / bias_function lists:
+    # typed as Any, as the checker cannot see either
     try:
         from backend.patcher.base import LowVramPatch, ModelPatcher
     except Exception as error:  # pragma: no cover - needs the WebUI backend
@@ -288,7 +293,7 @@ def test_edit_reference_queries_get_no_concept_bias():
 def _routed_linear(runtime, ModelPatcher, state):
     patcher = _patcher(ModelPatcher, online=True)
     state.validate_patches(patcher)
-    layer = patcher.model.layer
+    layer: Any = patcher.model.layer
     layer.weight_function = list(patcher.weight_wrapper_patches["layer.weight"])
     layer.bias_function = []
     forward = runtime._make_linear_forward(layer.forward, layer, state, "blocks.0.mlp.layer1")
@@ -334,7 +339,7 @@ def _lora_adapter(*, rank=3, out_features=6, in_features=8, alpha=5.0, mid=None,
     return LoRAAdapter(set(), (up, down, alpha, mid, dora_scale, None))
 
 
-def _lora_forward(runtime, ModelPatcher, adapter, *, dtype=torch.float32, strength=0.7):
+def _lora_forward(runtime, ModelPatcher, adapter, *, dtype=torch.float32, strength=0.7) -> tuple[Any, Callable]:
     model = torch.nn.Module()
     model.layer = torch.nn.Linear(8, 6, bias=True)
     model.to(dtype)
@@ -348,7 +353,7 @@ def _lora_forward(runtime, ModelPatcher, adapter, *, dtype=torch.float32, streng
     state = _state(runtime)
     state.routing_strength = 0.5
     state.validate_patches(patcher)
-    layer = patcher.model.layer
+    layer: Any = patcher.model.layer
     layer.weight_function = list(patcher.weight_wrapper_patches["layer.weight"])
     layer.bias_function = []
     state.grid_height, state.grid_width = 1, 3
@@ -430,9 +435,9 @@ def _scheduled_strength(monkeypatch, base_strength):
     hands it to Forge (its lib_stage_scheduler, on sys.path as Forge has it)."""
 
     monkeypatch.syspath_prepend(str(EXTENSION_PATH.parent / "anima-lora-stage-scheduler"))
-    from lib_stage_scheduler.runtime import BOTH_PASSES, ScheduledStrength
+    scheduler = importlib.import_module("lib_stage_scheduler.runtime")
 
-    return ScheduledStrength(base_strength, "/loras/cat.safetensors", BOTH_PASSES)
+    return scheduler.ScheduledStrength(base_strength, "/loras/cat.safetensors", scheduler.BOTH_PASSES)
 
 
 def test_plain_lora_follows_a_stage_scheduled_strength_between_calls(monkeypatch):
@@ -469,7 +474,7 @@ def test_plain_lora_follows_a_stage_scheduled_strength_between_calls(monkeypatch
     assert len(layer.weight_function) == 1 and layer.weight_function[0].patch[0][0] is strength  # the live object stays in place
 
 
-def _bias_forward(runtime, ModelPatcher, *, weight_patch):
+def _bias_forward(runtime, ModelPatcher, *, weight_patch) -> tuple[Any, Any, Callable]:
     model = torch.nn.Module()
     model.layer = torch.nn.Linear(2, 2, bias=True)
     patcher = ModelPatcher(model, torch.device("cpu"), torch.device("cpu"))
@@ -482,7 +487,7 @@ def _bias_forward(runtime, ModelPatcher, *, weight_patch):
     state = _state(runtime)
     state.routing_strength = 0.5
     state.validate_patches(patcher)
-    layer = patcher.model.layer
+    layer: Any = patcher.model.layer
     layer.weight_function = list(patcher.weight_wrapper_patches.get("layer.weight", []))
     layer.bias_function = list(patcher.weight_wrapper_patches["layer.bias"])
     state.grid_height, state.grid_width = 1, 2
@@ -547,6 +552,7 @@ def _quantized_linear(kind):
             tensor_type=gguf.GGMLQuantizationType.Q8_0,
             tensor_shape=weight.shape,
         )
+        assert packed.gguf_cls is not None
         packed.gguf_cls.bake(packed)
         f32_bias = ParameterGGUF(bias, tensor_type=gguf.GGMLQuantizationType.F32, tensor_shape=bias.shape)
         operations.current_device, operations.current_dtype = torch.device("cpu"), torch.float32
@@ -605,6 +611,7 @@ def test_quantized_linears_are_routed(kind):
 
     output = forward(x)
 
+    assert layer.bias is not None
     base = torch.nn.functional.linear(x, dense, layer.bias.float())
     delta = torch.nn.functional.linear(x, delta_weight)
     factors = torch.tensor([1.0, 0.5]).view(1, 2, 1)

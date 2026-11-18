@@ -396,7 +396,7 @@ class ModelPatcher:
         if hasattr(self.model, "get_dtype"):
             return self.model.get_dtype()
 
-    def add_patches(self, patches: list[dict], strength_patch: float = 1.0, strength_model: float = 1.0, *, filename: str = None, online_mode: bool = None):
+    def add_patches(self, patches: dict, strength_patch: float = 1.0, strength_model: float = 1.0, *, filename: str | None = None, online_mode: bool | None = None):
         p = set()
         model_sd = self.model.state_dict()
         for k in patches:
