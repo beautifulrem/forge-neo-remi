@@ -122,9 +122,21 @@ imperatively).
 - **Density** scales Tailwind's `--spacing` (`[data-density=compact]` →
   0.215rem), so every `p-*`, `gap-*`, `h-*`, `size-*` shrinks together. Use
   spacing utilities, not fixed pixel sizes, for anything that should follow.
-- Typography: Inter Variable (UI) and JetBrains Mono Variable via
-  `@fontsource-variable` (self-hosted, unicode-range split, no CDN); CJK falls
-  back to system fonts. `.tabular` / numeric inputs use tabular figures.
+- Typography: one superfamily, Recursive (OFL, `@fontsource-variable`,
+  self-hosted Latin subsets, no CDN), in three cuts declared in
+  `styles/fonts.css`: **Remi Sans** (linear, the UI), **Remi Hand** (casual
+  `CASL` axis, the prompt editor only) and **Remi Mono** (`MONO` axis, set
+  with `--font-mono--font-variation-settings`: setting keys, hashes, key caps,
+  code, JSON). Each file loads only where its face renders. CJK falls back to
+  the system faces (`<html lang>` picks the right Han forms). `.tabular` /
+  numeric inputs use tabular figures.
+- Typesetting (`index.css` base layer): `text-autospace` puts the CJK gap
+  between Han and Latin or digits in the text the UI writes (`2026 年 7 月
+  1 日`), never in inputs, text areas or the prompt editor; paragraphs and
+  labels use `text-wrap: pretty`, headings and text in a `.text-center` block
+  `balance` (no single character left on an empty state's last line).
+  A flex container does not ellipsize its text: put the text in its own
+  `truncate` box.
 - Motion: `tw-animate-css` + base-nova animations; a global
   `prefers-reduced-motion` rule neutralises animations and transitions.
   Nothing that stays on screen while a job runs animates endlessly (no
@@ -142,11 +154,54 @@ imperatively).
   one without animating it: a 150 ms fade drew about 12 frames per step).
 - Scrollbars: thin, theme-aware (`--scrollbar`). Focus: visible rings from
   `--ring` everywhere (`outline-ring/50`, `focus-visible:ring-3`).
+- See [Visual rules](#visual-rules) for the design rules every new screen
+  follows.
 - shadcn components import `cn` from the `cn` package (what the base-nova
   registry ships); app code imports it from `@/lib/utils`. Local fixes to
   vendored components: scalar sliders render one thumb and forward
   `getAriaLabel`; a select's value ellipsizes (line-clamp does nothing on
   the flex value); `number-field.tsx` is ours.
+
+### Visual rules
+
+The interface is an animation studio's light table: the desk recedes, the
+work (the stage, the gallery, the previews) carries the colour. The rules
+below keep new screens in that world and away from the generic look of
+generated interfaces (sources: Linear's
+2024 and 2026 refreshes, Figma UI3, Refactoring UI):
+
+- **The work first.** Chrome never competes with images: neutral surfaces,
+  no gradients or tinted washes on panels, no colour without meaning. The
+  blue pencil (`--primary`) marks selection and focus, the red pencil
+  destroys, the lamp (`--glow`) is the Generate button. The only decorative
+  colour is a missing preview's monogram.
+- **Spend boldness once per screen.** One element leads (the Generate button,
+  the stage, the image grid); everything around it stays quiet. Before adding
+  an accent, a badge or an icon, remove one.
+- **Structure is felt, not seen.** Group with space and surface tone before
+  borders; one border tone (`--border`); no card inside a card. Radii follow
+  hierarchy (controls `sm`/`md`, panels `lg`), not one radius everywhere;
+  shadows only on what floats (menus, dialogs, dragged items).
+- **Type carries hierarchy.** Size and weight, then colour; muted text keeps
+  the surface's hue. Sentence case everywhere: no all-caps labels, no eyebrow
+  labels above headings, no numbered markers unless the content is a
+  sequence. Mono is for strings a person copies (keys, hashes, code), not for
+  decoration.
+- **Words do one job.** Buttons say what happens ("Add to queue", not
+  "Submit") and the toast repeats the verb; errors say what failed and how to
+  fix it; an empty state says what to do next. No `→` welded to buttons.
+  The middle dot separates facts on one compact metadata line (a queue row,
+  a model's architecture and size, the window title); a header, a dialog or
+  a details table lays its facts out instead.
+- **Motion answers the user.** Opening, expanding, confirming, reordering
+  animate briefly (`--ease-out-soft`); nothing animates by itself, and nothing
+  that stays on screen during a job loops (see Motion above).
+- **Every state is designed.** Hover, focus, active, disabled, loading, empty
+  and error, in both themes and both densities, from a 390 px phone up; text
+  and controls keep 4.5:1 (`tests/e2e/a11y.spec.ts` scans every accent).
+- **Check with screenshots.** `pnpm dev:mock`, both themes (`?__theme=light`,
+  `?__theme=dark`), the real states (a running job, a result, open menus);
+  messy content (long names, CJK, 4 000 networks) before calling it done.
 
 ## API layer (`src/api`)
 

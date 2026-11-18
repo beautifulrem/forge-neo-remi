@@ -121,8 +121,9 @@ function ExtensionRow(props: { ext: ExtensionInfo; staged: Staged; access: boole
         </label>
         <p id={`${switchId}-meta`} className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
           {ext.remote_url ? (
-            <a href={ext.remote_url} target="_blank" rel="noreferrer noopener" className="inline-flex max-w-72 items-center gap-0.5 truncate hover:text-foreground hover:underline">
-              {ext.remote_url.replace(/^https:\/\/(www\.)?/, "")}
+            <a href={ext.remote_url} target="_blank" rel="noreferrer noopener" className="inline-flex max-w-72 min-w-0 items-center gap-0.5 hover:text-foreground hover:underline">
+              {/* the text in its own box: a flex container does not ellipsize its text */}
+              <span className="truncate">{ext.remote_url.replace(/^https:\/\/(www\.)?/, "")}</span>
               <ExternalLink className="size-3 shrink-0" aria-hidden />
             </a>
           ) : ext.builtin ? (
