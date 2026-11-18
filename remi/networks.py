@@ -81,7 +81,7 @@ class KindInfo:
 BUILTIN_KINDS: dict[str, KindInfo] = {
     "lora": KindInfo("lora", "LoRA", "prompt", True, ("description", "sd version", "activation text", "preferred weight", "negative text", "tags", "notes"), 0, True),
     "embeddings": KindInfo("embeddings", "Textual Inversion", "prompt", True, ("description", "sd version", "tags", "notes"), 10, True),
-    "checkpoints": KindInfo("checkpoints", "Checkpoints", "checkpoint", False, ("description", "sd version", "tags", "notes"), 20, True),
+    "checkpoints": KindInfo("checkpoints", "Checkpoints", "checkpoint", False, ("description", "sd version", nm.PREFERRED_MODULES_KEY, "tags", "notes"), 20, True),
     "vae": KindInfo("vae", "VAE", "module", False, ("description", "tags", "notes"), 30, True),
     "text_encoders": KindInfo("text_encoders", "Text Encoders", "module", False, ("description", "tags", "notes"), 40, True),
 }
@@ -1157,6 +1157,7 @@ class NetworkIndex:
             "preferred_weight": nm.preferred_weight(user),
             "negative_text": str(user.get("negative text") or "") or None,
             "tags": record.tags,
+            "preferred_modules": nm.preferred_modules(user) if entry.kind == "checkpoints" else [],
             "search_terms": [term for term in (record.relpath, entry.hash) if term],
             "hash": entry.hash,
             "alias": entry.alias,

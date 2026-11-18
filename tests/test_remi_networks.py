@@ -198,6 +198,20 @@ def test_user_metadata_edits_are_checked():
             nm.normalize_user_metadata(bad)
 
 
+def test_checkpoint_preferred_modules():
+    # upstream 1f2f068d: the checkpoint's preferred VAE / text encoders (sidecar key "vae_te")
+    assert nm.normalize_user_metadata({"vae_te": ["ae.safetensors", "sub/qwen_3_06b.safetensors", "ae.safetensors"]}) == {"vae_te": ["ae.safetensors", "qwen_3_06b.safetensors"]}
+    assert nm.normalize_user_metadata({"vae_te": []}) == {"vae_te": None}
+    for bad in ({"vae_te": "ae.safetensors"}, {"vae_te": [1]}, {"vae_te": ["m"] * 17}):
+        with pytest.raises(ValueError):
+            nm.normalize_user_metadata(bad)
+    # read back: upstream's older editor kept one name under "vae"; "Built in" means none
+    assert nm.preferred_modules({"vae_te": ["C:\\models\\VAE\\ae.safetensors"]}) == ["ae.safetensors"]
+    assert nm.preferred_modules({"vae": "ae.safetensors"}) == ["ae.safetensors"]
+    assert nm.preferred_modules({"vae": ["Built in"]}) == []
+    assert nm.preferred_modules({}) == []
+
+
 def test_js_prompt_expressions_are_evaluated(webui):
     webui.opts.data["extra_networks_default_multiplier"] = 0.8
     try:

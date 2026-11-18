@@ -57,10 +57,13 @@ def test_params_keep_the_legacy_contract(xyz, tab):
     script = make(xyz, tab)
     snapshot = contract.load_snapshot(FIXTURES / f"xyz_grid_{tab}.json")
     expected = {position: {"kind": "custom", "default": [], "infotext": None, "paste": True} for position in DROPDOWNS}
-    # upstream ad607938 "xyz": the old state-dict VAE override is an axis of its own after "VAE"
+    # upstream ad607938 "xyz": the old state-dict VAE override is an axis of its own after "VAE";
+    # 936d9dac "xyz: lora" and 980cd471 "xyz: module" add the LoRA prompt S/R and text-encoder axes
     for position in (0, 3, 6):
         choices = list(snapshot["inputs"][position]["choices"])
         choices.insert(choices.index("VAE") + 1, 'VAE ("state_dict" only)')
+        choices.insert(choices.index('VAE ("state_dict" only)') + 1, "Text Encoder")
+        choices.insert(choices.index("Prompt S/R") + 1, "Prompt S/R (LoRA)")
         expected[position] = {"choices": choices}
     assert contract.differences(script.layout, snapshot, expected=expected) == []
     assert [node.name for node in script.layout.inputs][:3] == ["x_type", "x_values", "x_values_dropdown"]
@@ -216,7 +219,7 @@ def test_ported():
 # region Upstream ad607938 "xyz" / f74f60c5 "cost"
 
 
-COSTS = {"Checkpoint name": 2.0, "Refiner checkpoint": 1.0, "VAE": 0.7, 'VAE ("state_dict" only)': 0.3, "Prompt S/R": 0.1, "Prompt order": 0.1, "Styles": 0.1, "Steps": 0.0}
+COSTS = {"Checkpoint name": 2.0, "Refiner checkpoint": 1.0, "VAE": 0.7, 'VAE ("state_dict" only)': 0.3, "Prompt S/R": 0.1, "Prompt S/R (LoRA)": 0.1, "Text Encoder": 0.7, "Prompt order": 0.1, "Styles": 0.1, "Steps": 0.0}
 
 
 def test_axis_costs_follow_the_setting(webui, monkeypatch):
@@ -229,7 +232,7 @@ def test_axis_costs_follow_the_setting(webui, monkeypatch):
 
 def test_the_vae_ranges_after_vae_and_before_clip_skip(xyz):
     labels = [x.label for x in make(xyz).current_axis_options]
-    assert labels[labels.index("VAE") :][:3] == ["VAE", 'VAE ("state_dict" only)', "Clip skip"]
+    assert labels[labels.index("VAE") :][:4] == ["VAE", 'VAE ("state_dict" only)', "Text Encoder", "Clip skip"]
 
 
 def test_checkpoint_axis_overrides_the_setting(xyz, monkeypatch):
@@ -245,21 +248,43 @@ def test_vae_axes(webui, xyz, monkeypatch):
     from types import SimpleNamespace
 
     from modules import sd_vae
+    from modules_forge import main_entry
 
     monkeypatch.setattr(sd_vae, "vae_dict", {"a.safetensors": "/m/VAE/a.safetensors", "b.safetensors": "/m/VAE/b.safetensors"})
+    # upstream 980cd471: the axes look modules up in main_entry.module_list (VAE and text encoders)
+    monkeypatch.setattr(main_entry, "module_list", {"a.safetensors": "/m/VAE/a.safetensors", "b.safetensors": "/m/VAE/b.safetensors", "te.safetensors": "/m/text_encoder/te.safetensors", "te2.safetensors": "/m/text_encoder/te2.safetensors"})
     monkeypatch.setitem(webui.opts.data, "forge_additional_modules", ["/m/VAE/a.safetensors", "/m/text_encoder/te.safetensors"])
 
     # "VAE": swaps the VAE among the loaded modules (the text encoders stay)
     p = SimpleNamespace(override_settings={})
-    xyz.apply_vae(p, "b.safetensors", ["a.safetensors", "b.safetensors"])
+    xyz.apply_module(p, "b.safetensors", ["a.safetensors", "b.safetensors"])
     assert p.override_settings == {"forge_additional_modules": ["/m/text_encoder/te.safetensors", "/m/VAE/b.safetensors"]}
     assert webui.opts.forge_additional_modules == ["/m/VAE/a.safetensors", "/m/text_encoder/te.safetensors"]  # not touched
+    # "Text Encoder" on top of a VAE override of the same cell: both swaps apply
+    xyz.apply_module(p, "te2.safetensors", ["te.safetensors", "te2.safetensors"])
+    assert p.override_settings == {"forge_additional_modules": ["/m/VAE/b.safetensors", "/m/text_encoder/te2.safetensors"]}
+    # "None" removes the axis' module
+    p = SimpleNamespace(override_settings={})
+    xyz.apply_module(p, "None", ["None", "a.safetensors"])
+    assert p.override_settings == {"forge_additional_modules": ["/m/text_encoder/te.safetensors"]}
+    assert xyz.text_encoder_choice() == ["None", "te.safetensors", "te2.safetensors"]
+    xyz.confirm_modules_or_none(p, ["None", "te.safetensors"])
+    with pytest.raises(RuntimeError, match="Unknown Module"):
+        xyz.confirm_modules_or_none(p, ["missing.safetensors"])
     # 'VAE ("state_dict" only)': the old override of the VAE weights only
     p = SimpleNamespace(override_settings={})
     xyz.apply_vae_fast(p, "b.safetensors", ["b.safetensors"])
     assert p.override_settings == {"sd_vae": "/m/VAE/b.safetensors"}
     xyz.apply_vae_fast(p, "None", ["None"])
     assert p.override_settings == {"sd_vae": "None"}
+
+
+def test_lora_prompt_sr_labels_name_and_weights(xyz):
+    """upstream 936d9dac: "Prompt S/R (LoRA)" labels a cell by its LoRA names and weights."""
+
+    assert xyz.format_lora_label(None, None, "<lora:style_a:0.80>, 1girl") == "style_a:0.8"
+    assert xyz.format_lora_label(None, None, "<lora:a:1>, <lora:b:0.5:0.25>") == "a:1.0, b:0.5:0.25"
+    assert xyz.format_lora_label(None, None, "no lora") == "no lora"
 
 
 def test_loading_params_are_reset_from_the_settings(webui, xyz, monkeypatch):

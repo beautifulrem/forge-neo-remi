@@ -9,6 +9,8 @@ export type Draft = {
   negative: string
   tags: string
   notes: string
+  /** checkpoints: preferred VAE / text encoder file names (`vae_te`) */
+  modules: string[]
 }
 
 /** `preferred weight` must lie in ±this (the server's `network_metadata.PREFERRED_WEIGHT_LIMIT`). */
@@ -16,7 +18,7 @@ export const PREFERRED_WEIGHT_LIMIT = 100
 
 const text = (value: unknown) => (typeof value === "string" ? value : "")
 
-export function draftFrom(meta: Pick<NetworkMeta, "user_metadata" | "description">): Draft {
+export function draftFrom(meta: Pick<NetworkMeta, "user_metadata" | "description"> & Partial<Pick<NetworkMeta, "preferred_modules">>): Draft {
   const user = meta.user_metadata
   const weight = Number(user["preferred weight"])
   const tags = user.tags
@@ -28,6 +30,7 @@ export function draftFrom(meta: Pick<NetworkMeta, "user_metadata" | "description
     negative: text(user["negative text"]),
     tags: Array.isArray(tags) ? tags.map(String).join(", ") : text(tags),
     notes: text(user.notes),
+    modules: meta.preferred_modules ?? [],
   }
 }
 
@@ -45,5 +48,6 @@ export function patchFrom(draft: Draft, fields: readonly string[]): Record<strin
   const tags = draft.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
   set("tags", tags.length ? tags : null)
   set("notes", draft.notes.trim() ? draft.notes : null)
+  set("vae_te", draft.modules.length ? draft.modules : null)
   return out
 }

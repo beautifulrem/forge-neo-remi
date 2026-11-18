@@ -127,9 +127,12 @@ def test_conditioning_hook_keeps_prompts_of_different_padded_lengths(negatives_s
         negpip_anima._hook_get_learned_conditioning(model, True)
 
     assert early["crossattn"].shape == (2, 512, 2)
-    assert late["crossattn"].shape == (2, 600, 2)
-    assert late["c_negpip_mask"].shape == (2, 600, 1)
-    assert late["c_negpip_mask"][:, 0, 0].tolist() == [-1.0, 1.0]
+    # upstream 2d79fc2f: rows of different lengths are no longer padded into one
+    # tensor; they stay per-prompt dicts, each mask with its own context
+    assert isinstance(late, list)
+    assert [row["crossattn"].shape for row in late] == [(600, 2), (512, 2)]
+    assert [row["c_negpip_mask"].shape for row in late] == [(600, 1), (512, 1)]
+    assert [row["c_negpip_mask"][0, 0].item() for row in late] == [-1.0, 1.0]
 
 
 def test_dit_hook_passes_the_mask_only_once_a_negative_was_seen(negatives_seen):
@@ -222,14 +225,19 @@ def test_patch_and_unpatch_round_trip(monkeypatch, negatives_seen):
         assert compiled["cross_attn"] is crossattn
         assert compiled["model_conds"]["c_negpip_mask"].cond is mask
 
-        # A shorter prompt (e.g. the negative) still batches with it: the mask
-        # tiles along the tokens exactly like its context.
-        (short,) = condition.compile_conditions({"crossattn": torch.ones(1, 1, 4), "c_negpip_mask": torch.ones(1, 1, 1)})
-        long_conds, short_conds = compiled["model_conds"], short["model_conds"]
-        for key in ("c_crossattn", "c_negpip_mask"):
-            assert long_conds[key].can_concat(short_conds[key])
-        merged = long_conds["c_negpip_mask"].concat([short_conds["c_negpip_mask"]])
-        assert merged[:, :, 0].tolist() == [[-1.0, -1.0], [1.0, 1.0]]
+        # Prompts of different lengths in one batch (upstream 2d79fc2f) arrive as
+        # a list of rows; Forge groups them by shape and each group goes through
+        # the hook again, so every group keeps its own mask
+        rows = [
+            {"crossattn": torch.ones(2, 4), "c_negpip_mask": -torch.ones(2, 1)},
+            {"crossattn": torch.ones(1, 4), "c_negpip_mask": torch.ones(1, 1)},
+            {"crossattn": torch.ones(2, 4), "c_negpip_mask": torch.ones(2, 1)},
+        ]
+        groups = condition.compile_conditions(rows)
+        assert [group["batch_indices"] for group in groups] == [[0, 2], [1]]
+        masks = [group["model_conds"]["c_negpip_mask"].cond[:, :, 0].tolist() for group in groups]
+        assert masks == [[[-1.0, -1.0], [1.0, 1.0]], [[1.0]]]
+        assert all(group["model_conds"]["c_crossattn"].cond.shape[:2] == group["model_conds"]["c_negpip_mask"].cond.shape[:2] for group in groups)
     finally:
         negpip_anima.patch_anima_negpip(NegPiP, unpatch=True)
 

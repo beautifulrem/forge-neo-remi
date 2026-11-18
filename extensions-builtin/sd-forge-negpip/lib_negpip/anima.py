@@ -132,7 +132,8 @@ def _hook_get_learned_conditioning(model: "AnimaEngine", remove: bool):
 
         # Prompts are padded to max(512, tokens), so lengths can differ; then
         # keep per-prompt lists like the unhooked engine (prompt_parser indexes
-        # either form per prompt and pads when it stacks the batch).
+        # either form per prompt; rows of different lengths stay a list of
+        # per-prompt dicts that compile_conditions groups by shape).
         if len({cond.shape[0] for cond in crossattn}) > 1:
             return {"crossattn": crossattn, "c_negpip_mask": negpip_mask}
         return {
@@ -292,8 +293,10 @@ def _hook_compile_conditions(remove: bool):
             cross_attn = cond["crossattn"]
             model_conds = {"c_crossattn": condition.ConditionCrossAttn(cross_attn)}
             if "c_negpip_mask" in cond:
-                # Tiled like the context, so prompts of different token
-                # lengths still batch cond and uncond into one call.
+                # The same condition type as the context, so the mask batches
+                # (and is sliced by ``batch_indices``) exactly like it. Rows of
+                # different lengths arrive as a list: Forge's compile_conditions
+                # stacks each shape group and calls this hook once per group.
                 model_conds["c_negpip_mask"] = condition.ConditionCrossAttn(
                     cond["c_negpip_mask"]
                 )

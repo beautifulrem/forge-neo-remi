@@ -36,6 +36,7 @@
   "Rescale CFG": "CFG 重缩放",
   "MaHiRo": "MaHiRo",
   "Prompt S/R": "提示词搜索/替换",
+  "Prompt S/R (LoRA)": "提示词搜索/替换（LoRA）",
   "Prompt order": "提示词顺序",
   "Sampler": "采样器",
   "Hires sampler": "高分辨率修复采样器",
@@ -601,7 +602,9 @@
   "[Lightbox]: tool bar opacity": "[灯箱]：工具栏不透明度",
   "[Lumina] Negative Template": "[Lumina] 反向模板",
   "[Lumina] Positive Template": "[Lumina] 正向模板",
-  "[Qwen-Image-Edit] Resize input image to 1 megapixel for ref_latent": "[Qwen-Image-Edit] 将输入图像缩放到 1 百万像素用于 ref_latent",
+  "Maximum Side Length for Reference Images": "参考图最大边长",
+  "applies to reference images from img2img and ImageStitch": "作用于来自图生图和 ImageStitch 的参考图",
+  "set to 0 for no limit": "设为 0 表示不限制",
   "[SDXL] Crop-Left Coordinate": "[SDXL] 裁剪左坐标",
   "[SDXL] Crop-Top Coordinate": "[SDXL] 裁剪上坐标",
   "[SDXL] High Aesthetic Score": "[SDXL] 高美学评分",
@@ -895,5 +898,6 @@
   "Moss-Image-Edit": "Moss-Image-Edit",
   "Enable the cost system for X/Y/Z Plot": "为 X/Y/Z 图表启用开销排序",
   "swap expensive axis (e.g. Checkpoint) the least number of times ; may generate images out of the order specified in the UI": "尽量少地切换开销大的轴（如模型）；生成顺序可能与界面中指定的顺序不同",
-  "VAE (\"state_dict\" only)": "VAE（仅 state_dict）"
+  "VAE (\"state_dict\" only)": "VAE（仅 state_dict）",
+  "Text Encoder": "文本编码器"
 }

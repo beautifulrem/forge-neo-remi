@@ -1,6 +1,7 @@
 /**
- * Available extensions: load an extension index (default: the A1111
- * extensions list), filter by text and tags, sort, and install. The list is
+ * Available extensions: load an extension index (default: the third-party
+ * Forge Neo extensions list), filter by text, tags and update date ("2025+",
+ * on by default, as upstream), sort, and install. The list is
  * virtualized (indexes hold well over a thousand entries) inside the page's
  * own scroll (`data-scroll-root`), so there is one scrollbar.
  */
@@ -32,6 +33,7 @@ import {
   formatDate,
   type IndexEntry,
   type IndexSort,
+  RECENT_SINCE,
   SORT_LABELS,
   SORTS,
 } from "./extensions-model"
@@ -192,6 +194,7 @@ export function AvailableView() {
   const [tagMode, setTagMode] = useState<"hide" | "show">("hide")
   const [match, setMatch] = useState<"any" | "all">("any")
   const [sort, setSort] = useState<IndexSort>("newest")
+  const [recentOnly, setRecentOnly] = useState(true)
   const source = url ?? defaultUrl
   const index = useQuery({
     queryKey: extensionKeys.index(source),
@@ -205,7 +208,7 @@ export function AvailableView() {
     onSuccess: (data) => queryClient.setQueryData(extensionKeys.index(source), data),
     onError: (error) => toast.error(t("Could not load the index"), { description: adminErrorMessage(error, t) }),
   })
-  const items = useMemo(() => (index.data ? filterIndex(index.data.items, { query, tags: tagSet, tagMode, match, sort }) : []), [index.data, query, tagSet, tagMode, match, sort])
+  const items = useMemo(() => (index.data ? filterIndex(index.data.items, { query, tags: tagSet, tagMode, match, sort, recentOnly }) : []), [index.data, query, tagSet, tagMode, match, sort, recentOnly])
   const allTags = index.data ? Object.keys(index.data.tags).sort() : []
 
   const load = () => {
@@ -231,6 +234,7 @@ export function AvailableView() {
           {index.isFetching || reload.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Download aria-hidden />}
           {url === null ? t("Load index") : t("Reload index")}
         </Button>
+        <p className="basis-full text-xs text-muted-foreground">{t("This index is maintained by third parties. Please verify an extension before installing it.")}</p>
       </form>
 
       {!access ? null : url === null ? (
@@ -274,6 +278,9 @@ export function AvailableView() {
                 ))}
               </SelectContent>
             </Select>
+            <Toggle size="sm" variant="outline" pressed={recentOnly} onPressedChange={setRecentOnly} title={t("Only extensions updated after {{date}}", { date: RECENT_SINCE })} className="h-7 px-2 text-xs">
+              {t("2025+")}
+            </Toggle>
             <span className="ml-auto text-xs text-muted-foreground tabular-nums" role="status" aria-live="polite">
               {t("{{shown}} of {{total}} extensions", { shown: items.length, total: index.data.items.length })}
             </span>

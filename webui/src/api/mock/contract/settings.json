@@ -1481,10 +1481,18 @@
        "type": "separator"
       },
       {
-       "type": "toggle",
-       "name": "qwen_vae_resize",
-       "label": "[Qwen-Image-Edit] Resize input image to 1 megapixel for ref_latent",
-       "default": false
+       "type": "slider",
+       "name": "reference_max_side",
+       "label": "Maximum Side Length for Reference Images",
+       "default": 1024,
+       "minimum": 0,
+       "maximum": 2048,
+       "step": 256,
+       "integer": true,
+       "notes": [
+        "applies to reference images from img2img and ImageStitch",
+        "set to 0 for no limit"
+       ]
       },
       {
        "type": "toggle",
@@ -4180,12 +4188,12 @@
          "label": "qwen_t2i_width"
         },
         {
-         "value": "qwen_vae_resize",
-         "label": "qwen_vae_resize"
-        },
-        {
          "value": "randn_source",
          "label": "randn_source"
+        },
+        {
+         "value": "reference_max_side",
+         "label": "reference_max_side"
         },
         {
          "value": "refiner_fast_sd",
@@ -14235,7 +14243,7 @@
   "slg_end_percent": 0.5,
   "neta_template_positive": "You are an assistant designed to generate anime images with the highest degree of image-text alignment based on danbooru tags. <Prompt Start>",
   "neta_template_negative": "You are an assistant designed to generate low-quality images based on textual prompts. <Prompt Start>",
-  "qwen_vae_resize": false,
+  "reference_max_side": 1024,
   "klein_do_reference": true,
   "qwen21_do_reference": true,
   "anima_do_reference": false,
@@ -14818,7 +14826,7 @@
   "slg_end_percent": 0.5,
   "neta_template_positive": "You are an assistant designed to generate anime images with the highest degree of image-text alignment based on danbooru tags. <Prompt Start>",
   "neta_template_negative": "You are an assistant designed to generate low-quality images based on textual prompts. <Prompt Start>",
-  "qwen_vae_resize": false,
+  "reference_max_side": 1024,
   "klein_do_reference": true,
   "qwen21_do_reference": true,
   "anima_do_reference": false,

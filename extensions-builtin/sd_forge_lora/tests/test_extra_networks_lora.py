@@ -18,10 +18,12 @@ def lora(monkeypatch):
     fake.available_networks = {}
     fake.loaded_networks = []
     fake.calls = []
+    fake.logger = types.SimpleNamespace(warning=lambda *_: None)
 
     def load_networks(names, te, unet):
         fake.calls.append(names)
-        return [name for name in names if name.startswith("missing")]
+        reasons = {"missing": "not found", "broken": "bad header"}
+        return {name: reasons[name.split("_")[0]] for name in names if name.split("_")[0] in reasons}
 
     fake.load_networks = load_networks
     monkeypatch.setitem(sys.modules, "networks", fake)
@@ -59,3 +61,12 @@ def test_found_loras_add_no_comment(lora):
     p = Processing()
     network.activate(p, [ExtraNetworkParams(["here", "1"])])
     assert p.comments == {}
+
+
+def test_a_lora_that_failed_to_load_names_the_reason(lora):
+    from modules.extra_networks import ExtraNetworkParams
+
+    network, _ = lora
+    p = Processing()
+    network.activate(p, [ExtraNetworkParams(["broken_one", "1"]), ExtraNetworkParams(["missing_two", "1"])])
+    assert list(p.comments) == ["LoRA not found or failed to load: broken_one (bad header), missing_two"]

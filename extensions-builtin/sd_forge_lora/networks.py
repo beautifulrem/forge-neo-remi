@@ -23,9 +23,6 @@ logger = logging.getLogger("lora")
 setup_logger(logger)
 
 
-load_lora_state_dict = functools.partial(load_torch_file, safe_load=True)
-
-
 def process_anima(lora: dict[str, torch.Tensor], blocks: int) -> bool:
     # LLMAdapter was moved from transformer to text_encoder
 
@@ -151,12 +148,26 @@ def load_network(name: str, network_on_disk: network.NetworkOnDisk):
     return net
 
 
-def load_networks(names: list[str], te_multipliers: list[float] = None, unet_multipliers: list[float] = None) -> list[str]:
+def load_networks(names: list[str], te_multipliers: list[float] = None, unet_multipliers: list[float] = None) -> dict[str, str]:
     """Load ``names`` onto the current model; returns the names that could
-    not be loaded (not found, or failed to load)."""
+    not be loaded (not found, or failed to load), each with the reason.
+
+    A LoRA that failed to load is remembered (``failed_networks``, cleared on
+    every rescan) so later generations skip it instead of reading it again;
+    it is still returned, so every generation reports it."""
+    failed: dict[str, str] = {}
+
+    if failed_networks:
+        keep = [i for i, name in enumerate(names) if name not in failed_networks]
+        if len(keep) != len(names):
+            failed.update((name, failed_networks[name]) for name in names if name in failed_networks)
+            names = [names[i] for i in keep]
+            te_multipliers = [te_multipliers[i] for i in keep]
+            unet_multipliers = [unet_multipliers[i] for i in keep]
+
     current_sd = sd_models.model_data.get_sd_model()
     if current_sd is None:
-        return []
+        return failed
 
     loaded_networks.clear()
 
@@ -175,29 +186,31 @@ def load_networks(names: list[str], te_multipliers: list[float] = None, unet_mul
         list_available_networks()
         networks_on_disk = [available_networks.get(name, None) if name.lower() in forbidden_network_aliases else available_network_aliases.get(name, None) for name in names]
 
-    failed: list[str] = []
     for network_on_disk, name in zip(networks_on_disk, names):
         if network_on_disk is None:
             logger.error(f'LoRA not found: "{name}"')
-            failed.append(name)
+            failed[name] = "not found"
             continue
         try:
             net = load_network(name, network_on_disk)
             net.mentioned_name = name
             network_on_disk.read_hash()
             loaded_networks.append(net)
-        except Exception:
+        except Exception as e:
             logger.error(f'Failed to load LoRA: "{name}"')
-            failed.append(name)
+            failed[name] = failed_networks[name] = str(e) or type(e).__name__
             continue
 
     online_mode = dynamic_args.online_lora or False
 
     compiled_lora_targets = []
-    for n, u, t in zip(networks_on_disk, unet_multipliers, te_multipliers):
-        if n is None:
+    compiled_names = []
+
+    for n, u, t, f in zip(networks_on_disk, unet_multipliers, te_multipliers, names):
+        if n is None or f in failed:
             continue
         compiled_lora_targets.append([n.filename, u, t, online_mode])
+        compiled_names.append(f)
 
     compiled_lora_targets_hash = str(compiled_lora_targets)
     if current_sd.current_lora_hash == compiled_lora_targets_hash:
@@ -210,8 +223,14 @@ def load_networks(names: list[str], te_multipliers: list[float] = None, unet_mul
     if dynamic_args.nunchaku:
         current_sd.forge_objects.unet.model.diffusion_model.loras.clear()
 
-    for filename, strength_model, strength_clip, online_mode in compiled_lora_targets:
-        lora_sd = load_lora_state_dict(filename)
+    for (filename, strength_model, strength_clip, online_mode), name in zip(compiled_lora_targets, compiled_names):
+        try:
+            lora_sd = load_torch_file(filename)
+        except Exception as e:
+            logger.error(f'Failed to read LoRA: "{filename}"')
+            failed[name] = failed_networks[name] = str(e) or type(e).__name__
+            loaded_networks[:] = [item for item in loaded_networks if item.network_on_disk.filename != filename]
+            continue
         if any(key.startswith("lora_unet__") for key in lora_sd):
             lora_sd = state_dict_prefix_replace(lora_sd, {"lora_unet__": "lora_unet_"})
         current_sd.forge_objects.unet, current_sd.forge_objects.clip = load_lora_for_models(current_sd.forge_objects.unet, current_sd.forge_objects.clip, lora_sd, strength_model, strength_clip, filename=filename, online_mode=online_mode)
@@ -221,12 +240,12 @@ def load_networks(names: list[str], te_multipliers: list[float] = None, unet_mul
 
 
 def process_network_files(names: Optional[list[str]] = None):
-    candidates = []
+    candidates: set[str] = set()
 
     for _dir in [shared.cmd_opts.lora_dir, *shared.cmd_opts.lora_dirs]:
-        candidates.extend(shared.walk_files(_dir, allowed_extensions=[".pt", ".ckpt", ".safetensors"]))
+        candidates.update(shared.walk_files(_dir, allowed_extensions=[".pt", ".ckpt", ".safetensors"]))
 
-    for filename in candidates:
+    for filename in sorted(candidates, key=shared.natural_sort_key):
         if os.path.isdir(filename):
             continue
         name = os.path.splitext(os.path.basename(filename))[0]
@@ -253,6 +272,7 @@ def update_available_networks_by_names(names: list[str]):
 
 
 def list_available_networks():
+    failed_networks.clear()
     available_networks.clear()
     available_network_aliases.clear()
     available_network_hash_lookup.clear()
@@ -299,6 +319,7 @@ def infotext_pasted(infotext, params: dict):
 
 extra_network_lora = None
 
+failed_networks: dict[str, str] = {}
 available_networks: dict[str, "network.NetworkOnDisk"] = {}
 available_network_aliases: dict[str, "network.NetworkOnDisk"] = {}
 available_network_hash_lookup: dict[bytes, "network.NetworkOnDisk"] = {}

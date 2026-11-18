@@ -57,11 +57,17 @@ function currentSeparator(): string {
 }
 
 /** Loads a checkpoint (optimistic, like the model bar). */
-export function selectCheckpoint(title: string) {
-  const key = MODEL_OPTION_KEYS.checkpoint
-  queryClient.setQueryData<Bootstrap>(keys.app, (data) => (data ? { ...data, options: { ...data.options, [key]: title } } : data))
+/**
+ * Loads a checkpoint; its preferred VAE / text encoders (user metadata
+ * `vae_te`, upstream 1f2f068d), when it has any, replace the module selection.
+ */
+export function selectCheckpoint(title: string, modules: readonly string[] = []) {
+  // one PATCH, so the model and its modules change together
+  const patch: Record<string, unknown> = { [MODEL_OPTION_KEYS.checkpoint]: title }
+  if (modules.length) patch[MODEL_OPTION_KEYS.modules] = [...modules]
+  queryClient.setQueryData<Bootstrap>(keys.app, (data) => (data ? { ...data, options: { ...data.options, ...patch } } : data))
   void api
-    .patchOptions({ [key]: title })
+    .patchOptions(patch)
     .catch((error: unknown) => toast.error(t("Could not change the model settings"), { description: error instanceof Error ? error.message : String(error) }))
     .finally(() => void queryClient.invalidateQueries({ queryKey: keys.app }))
 }
@@ -83,7 +89,7 @@ export type ApplyOutcome = { added: boolean; target?: PromptTarget | "both" } | 
 export function applyItem(item: NetworkItem, kind: Pick<NetworkKind, "action" | "negative">, form: string, target: PromptTarget): ApplyOutcome {
   if (kind.action === "checkpoint") {
     if (!item.value) return null
-    selectCheckpoint(item.value)
+    selectCheckpoint(item.value, item.preferred_modules ?? [])
     return { added: true }
   }
   if (kind.action === "module") {

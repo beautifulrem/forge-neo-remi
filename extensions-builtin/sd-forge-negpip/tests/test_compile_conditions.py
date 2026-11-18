@@ -34,22 +34,38 @@ def _negpip_cond(signs):
     return {"crossattn": features * mask, "c_negpip_mask": mask}
 
 
-def test_cond_and_uncond_of_different_lengths_run_as_one_batch_with_aligned_masks(hooked):
-    (cond,) = hooked(_negpip_cond([1, -1, 1, 1]))
-    (uncond,) = hooked(_negpip_cond([-1, 1]))
+def _batch(cond, uncond):
     x = torch.zeros(1, 4, 2, 2)
     timestep = torch.ones(1)
-    first = sampling_function.get_area_and_mult(cond, x, timestep)
-    second = sampling_function.get_area_and_mult(uncond, x, timestep)
+    return sampling_function.get_area_and_mult(cond, x, timestep), sampling_function.get_area_and_mult(uncond, x, timestep)
+
+
+def test_cond_and_uncond_of_one_length_run_as_one_batch_with_aligned_masks(hooked):
+    (cond,) = hooked(_negpip_cond([1, -1, 1, 1]))
+    (uncond,) = hooked(_negpip_cond([-1, 1, 1, 1]))
+    first, second = _batch(cond, uncond)
 
     assert sampling_function.can_concat_cond(first, second)
     batched = sampling_function.cond_cat([first.conditioning, second.conditioning])
     context, mask = batched["c_crossattn"], batched["c_negpip_mask"]
     assert context.shape == (2, 4, 3) and mask.shape == (2, 4, 1)
-    # The mask tiles with its context: each token's V sign still matches the
-    # (sign-baked) token it describes, also in the repeated uncond row.
+    # each token's V sign still matches the (sign-baked) token it describes
     assert torch.equal(torch.sign(context), mask.expand_as(context))
-    assert mask[:, :, 0].tolist() == [[1, -1, 1, 1], [-1, 1, -1, 1]]
+    assert mask[:, :, 0].tolist() == [[1, -1, 1, 1], [-1, 1, 1, 1]]
+
+
+def test_cond_and_uncond_of_different_lengths_run_apart_with_their_own_masks(hooked):
+    # upstream 2d79fc2f: contexts of different lengths are no longer tiled
+    # into one batch; each call keeps its own context and mask
+    (cond,) = hooked(_negpip_cond([1, -1, 1, 1]))
+    (uncond,) = hooked(_negpip_cond([-1, 1]))
+    first, second = _batch(cond, uncond)
+
+    assert not sampling_function.can_concat_cond(first, second)
+    for item, signs in ((first, [1, -1, 1, 1]), (second, [-1, 1])):
+        context, mask = item.conditioning["c_crossattn"].cond, item.conditioning["c_negpip_mask"].cond
+        assert torch.equal(torch.sign(context), mask.expand_as(context))
+        assert mask[0, :, 0].tolist() == signs
 
 
 def test_conditioning_without_a_mask_carries_only_the_context(hooked):

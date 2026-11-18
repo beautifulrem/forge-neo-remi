@@ -51,6 +51,17 @@ describe("input kinds", () => {
     expect(core(store).steps).toBe(42)
   })
 
+  it("a typed size snaps to the step grid when the box is left (upstream dimRounding.js)", () => {
+    const store = one({ type: "slider", name: "width", label: "Width", minimum: 64, maximum: 4096, step: 64, integer: true }, { width: 1024 })
+    const box = screen.getByLabelText("Width", { selector: "input:not([type=range])" })
+    fireEvent.change(box, { target: { value: "1000" } })
+    fireEvent.blur(box)
+    expect(core(store).width).toBe(1024)
+    fireEvent.change(box, { target: { value: "1300" } })
+    fireEvent.blur(box)
+    expect(core(store).width).toBe(1280)
+  })
+
   it("inactive_if dims a control whose value has no effect, without disabling it (Hires. fix target)", () => {
     const resized = { any: [{ param: "hr_resize_x", gt: 0 }, { param: "hr_resize_y", gt: 0 }] }
     const store = renderSchema(

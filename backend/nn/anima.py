@@ -36,6 +36,22 @@ BLOCK_MAPPINGS: Final[dict[tuple[int, int], list[int]]] = {
 _FUSED_ADALN_BACKENDS: dict[tuple, bool] = {}
 
 
+def fit_reference(ref: torch.Tensor, size) -> torch.Tensor:
+    """A ``(B, C, T, H, W)`` reference latent resized to the ``(H, W)`` of the
+    latent it is stacked with (area when shrinking, bilinear when growing)."""
+
+    size = tuple(size)
+    if tuple(ref.shape[-2:]) == size:
+        return ref
+    b, c, t = ref.shape[:3]
+    flat = ref.reshape(b, c * t, *ref.shape[-2:]).float()
+    if size[0] <= ref.shape[-2] and size[1] <= ref.shape[-1]:
+        flat = torch.nn.functional.interpolate(flat, size=size, mode="area")
+    else:
+        flat = torch.nn.functional.interpolate(flat, size=size, mode="bilinear", align_corners=False)
+    return flat.reshape(b, c, t, *size).to(ref.dtype)
+
+
 def _has_fused_adaln(x: torch.Tensor) -> bool:
     """Whether comfy-kitchen runs ``adaln`` on a real kernel (CUDA / Triton) for ``x``;
     its eager fallback is one kernel slower than ``addcmul``"""
@@ -552,6 +568,10 @@ class Anima(nn.Module):
             # batch-size) copies Forge batches together.
             if ref.shape[0] != x.shape[0] and x.shape[0] % ref.shape[0] == 0:
                 ref = ref.repeat(x.shape[0] // ref.shape[0], *([1] * (ref.ndim - 1)))
+            # Remi: references are stacked along the frames, so they take the
+            # generation's size (ImageStitch references are resized to
+            # reference_max_side, not to the image being generated)
+            ref = fit_reference(ref, x.shape[-2:])
             x = torch.cat((x, ref.to(x)), dim=2)
 
         x = pad_to_patch_size(x, (self.patch_temporal, self.patch_spatial, self.patch_spatial))
@@ -748,7 +768,7 @@ class LLMAdapter(nn.Module):
                 source_attention_mask = source_attention_mask.unsqueeze(1).unsqueeze(1)
 
         x = self.in_proj(self.embed(target_input_ids))
-        context = source_hidden_states
+        context = source_hidden_states.to(dtype=x.dtype)
         position_ids = torch.arange(x.shape[1], device=x.device).unsqueeze(0)
         position_ids_context = torch.arange(context.shape[1], device=x.device).unsqueeze(0)
         position_embeddings = self.rotary_emb(x, position_ids)

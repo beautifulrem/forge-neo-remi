@@ -1,26 +1,28 @@
 /**
  * The user-metadata editor (former sd_forge_lora / core editor popups): the
- * fields the kind offers (description, architecture, activation text with
- * the training tags to pick from, preferred weight, negative text, tags,
- * notes), a random prompt from the tags, saved to the `<model>.json`
+ * fields the kind offers (description, architecture, a checkpoint's
+ * preferred VAE / text encoders, activation text with the training tags to
+ * pick from, preferred weight, negative text, tags, notes), a random prompt from the tags, saved to the `<model>.json`
  * sidecar with `PATCH /networks/{kind}/{name}/meta`.
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
+import { clientOption } from "@/api/app-options"
 import { Copy, Dices, Save } from "@/components/icons"
 import { useId, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
-import { queryClient } from "@/api/queries"
+import { modelsQuery, queryClient } from "@/api/queries"
 import type { NetworkItem, NetworkKind, NetworkMeta } from "@/api/types"
 import { SearchSelect } from "@/components/SearchSelect"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { NumberField } from "@/components/ui/number-field"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
-import { PRESET_LABELS } from "@/features/model-bar/model-options"
+import { fileName, PRESET_LABELS } from "@/features/model-bar/model-options"
 import { useArchLabel } from "./labels"
 import { metaQuery, networkKeys } from "./queries"
 import { TagChips } from "./TagChips"
@@ -39,6 +41,45 @@ function Field({ id, label, info, children }: { id: string; label: string; info?
           {info}
         </p>
       ) : null}
+    </div>
+  )
+}
+
+/** A checkpoint's preferred VAE / text encoders: checked modules replace the selection when the card loads the model. */
+function PreferredModules({ id, value, onChange }: { id: string; value: string[]; onChange: (next: string[]) => void }) {
+  const { t } = useTranslation()
+  const models = useQuery(modelsQuery)
+  const listed = (models.data?.modules ?? [...(models.data?.vae ?? []), ...(models.data?.text_encoders ?? [])]).map((m) => ({ value: m.name, label: m.title ?? m.name }))
+  // chosen files that are no longer listed stay visible so they can be removed
+  const rows = [...value.filter((name) => !listed.some((m) => m.value === name)).map((name) => ({ value: name, label: name, missing: true })), ...listed.map((m) => ({ ...m, missing: false }))]
+  const current = clientOption("forge_additional_modules").map(fileName)
+  return (
+    <div className="flex flex-col gap-1.5 sm:col-span-2">
+      <div className="flex items-center gap-2">
+        <span id={id} className="text-[0.8rem] font-medium text-foreground/85">
+          {t("Preferred VAE / Text encoders")}
+        </span>
+        <Button type="button" variant="ghost" size="xs" className="ml-auto" disabled={current.length === 0} onClick={() => onChange(current)}>
+          {t("Use the current selection")}
+        </Button>
+        <Button type="button" variant="ghost" size="xs" disabled={value.length === 0} onClick={() => onChange([])}>
+          {t("Clear")}
+        </Button>
+      </div>
+      <div role="group" aria-labelledby={id} aria-describedby={`${id}-info`} className="flex max-h-40 flex-col gap-0.5 overflow-y-auto rounded-lg border bg-muted/30 p-1">
+        {rows.map((m, index) => (
+          <div key={m.value} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-accent">
+            <Checkbox id={`${id}-${index}`} checked={value.includes(m.value)} onCheckedChange={(on) => onChange(on ? [...value, m.value] : value.filter((v) => v !== m.value))} />
+            <label htmlFor={`${id}-${index}`} className={m.missing ? "min-w-0 flex-1 truncate text-sm text-muted-foreground line-through" : "min-w-0 flex-1 truncate text-sm"}>
+              {m.label}
+            </label>
+          </div>
+        ))}
+        {rows.length === 0 ? <p className="px-2 py-3 text-center text-sm text-muted-foreground">{t("No modules found")}</p> : null}
+      </div>
+      <p id={`${id}-info`} className="text-xs text-muted-foreground">
+        {t("Loading the checkpoint from its card also selects these (none: the selection is kept).")}
+      </p>
     </div>
   )
 }
@@ -95,6 +136,7 @@ function Editor({ meta, kind, onDone }: { meta: NetworkMeta; kind: NetworkKind; 
             />
           </Field>
         ) : null}
+        {has("vae_te") ? <PreferredModules id={`${id}-modules`} value={draft.modules} onChange={(modules) => update({ modules })} /> : null}
         {has("preferred weight") ? (
           <Field id={`${id}-weight`} label={t("Preferred weight")} info={t("0 uses the default weight for extra networks (Settings).")}>
             <NumberField

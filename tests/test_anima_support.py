@@ -164,7 +164,7 @@ def test_split_conditioning_batches_prompts_of_different_lengths():
 
 
 def test_lengths_exactly_four_times_apart_still_tile():
-    # ConditionCrossAttn.can_concat allows a factor of 4 itself: padding there
+    # tiling up to a factor of 4 (ConditionCrossAttn's old limit): padding there
     # would add zero keys and change the softmax normalisation
     short, long = torch.randn(2, 3), torch.randn(8, 3)
 
@@ -175,7 +175,7 @@ def test_lengths_exactly_four_times_apart_still_tile():
 
 def test_prompts_whose_lengths_do_not_tile_are_padded_to_the_longest():
     """512 and 600 tokens tiled to their LCM of 38400 (and 512/600/530 to
-    ~2M tokens, ~12.5 GB): past ConditionCrossAttn's factor 4, rows are
+    ~2M tokens, ~12.5 GB): past a factor of 4, rows are
     padded to the longest the way Anima and NegPiP pad prompts."""
 
     short, long = torch.randn(512, 4), torch.randn(600, 4)

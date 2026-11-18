@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os.path
+from typing import OrderedDict
 
 import torch
 from rich import print_json
@@ -46,8 +47,8 @@ anima_quant_options: dict[str, str] = {
 }
 
 
-module_list: dict[str, os.PathLike] = {}
-module_map: dict[str, str] = {}
+module_list: OrderedDict[str, os.PathLike] = OrderedDict()
+module_map: OrderedDict[str, str] = OrderedDict()
 
 
 def find_files_with_extensions(base_path: os.PathLike, extensions: list[str]) -> dict[str, os.PathLike]:
@@ -67,8 +68,8 @@ def refresh_models() -> tuple[list[os.PathLike], list[os.PathLike]]:
 
     file_extensions = ("ckpt", "pt", "pth", "bin", "safetensors", "sft", "gguf")
 
-    module_list.clear()
-    module_map.clear()
+    _module_list: dict[str, os.PathLike] = {}
+    _module_map: dict[str, str] = {}
 
     module_paths: set[os.PathLike] = {
         os.path.abspath(os.path.join(paths.models_path, "VAE")),
@@ -79,29 +80,35 @@ def refresh_models() -> tuple[list[os.PathLike], list[os.PathLike]]:
 
     for vae_path in module_paths:
         vae_files = find_files_with_extensions(vae_path, file_extensions)
-        module_list.update(vae_files)
+        _module_list.update(vae_files)
 
         for file, path in vae_files.items():
             rel = os.path.normpath(os.path.relpath(path, vae_path))
-            module_map[file] = rel
+            _module_map[file] = rel
+
+    module_list.clear()
+    module_map.clear()
+
+    module_list.update({title: _module_list[title] for title in sorted(_module_list)})
+    module_map.update({title: _module_map[title] for title in sorted(_module_map)})
 
     if shared.opts.sd_modules_dropdown_use_short:
-        return sorted(ckpt_list), sorted(module_list.keys())
+        return ckpt_list, list(module_list.keys())
     else:
-        return sorted(ckpt_list), sorted(module_map.values())
+        return ckpt_list, list(module_map.values())
 
 
 def forge_loading_parameters(checkpoint_info, unet_storage_option: str) -> dict:
     """What sd_models.forge_model_reload() loads (and compares to decide on a
     reload) for the "Diffusion in Low Bits" choice ``unet_storage_option``."""
     unet_storage_dtype, _ = forge_unet_storage_dtype_options.get(unet_storage_option, (None, False))
-    parameters = dict(checkpoint_info=checkpoint_info, additional_modules=shared.opts.forge_additional_modules, unet_storage_dtype=unet_storage_dtype)
+    parameters = dict(checkpoint_info=checkpoint_info, additional_modules=list(shared.opts.forge_additional_modules), unet_storage_dtype=unet_storage_dtype)
     if anima_quant := anima_quant_options.get(unet_storage_option):
         parameters["anima_quant"] = anima_quant
     return parameters
 
 
-def refresh_model_loading_parameters(*, refresh: bool = True):
+def refresh_model_loading_parameters(*, refresh: bool = True, disable_log: bool = False):
     if not refresh:
         return
 
@@ -123,17 +130,21 @@ def refresh_model_loading_parameters(*, refresh: bool = True):
     selected = dict(checkpoint=os.path.basename(ckpt), modules=modules, dtype=dtype)
     if anima_quant := parameters.get("anima_quant"):
         selected["anima_quant"] = anima_quant  # Anima only; other models load with dtype
-    logger.info("Model Selected:")
-    print_json(data=selected)
+    if not disable_log:
+        logger.info("Model Selected:")
+        print_json(data=selected)
 
     if ckpt.endswith(("gguf", "GGUF")) and not lora_fp16:
-        logger.warning("GGUF requires fp16 LoRA ; overriding option")
         lora_fp16 = True
+        if not disable_log:
+            logger.warning("GGUF requires fp16 LoRA ; overriding option")
 
     anima_online_lora.apply_user_setting(lora_fp16)  # held online-LoRA leases keep it on mid-run
-    logger.info(f"Patch LoRAs on-the-fly: {lora_fp16}")
-    if not ckpt.endswith(("gguf", "GGUF")) and lora_fp16:
-        logger.warning("on-the-fly WILL be slower ; enable only if you know what you are doing")
+
+    if not disable_log:
+        logger.info(f"Patch LoRAs on-the-fly: {lora_fp16}")
+        if not ckpt.endswith(("gguf", "GGUF")) and lora_fp16:
+            logger.warning("on-the-fly WILL be slower ; enable only if you know what you are doing")
 
     processing.need_global_unload = True
 

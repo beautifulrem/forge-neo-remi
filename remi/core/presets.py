@@ -41,13 +41,26 @@ def current_preset(opts: Any = None) -> str:
     return str(getattr(_opts(opts), "forge_preset", "sd") or "sd")
 
 
-def check_preset(preset: Any) -> str:
-    """``preset`` when it names a UI preset, else :class:`ValidationError`."""
+def ui_preset_choices() -> list[str]:
+    """The UI presets offered, in order: ``PresetArch`` without the ones
+    ``--disable-preset`` removes, sorted by name with ``--sort-preset``
+    (upstream 7f00fbb4: the same rule as Forge Neo's preset dropdown)."""
 
+    from modules import shared
     from modules_forge.presets import PresetArch
 
-    if not isinstance(preset, str) or preset not in PresetArch.choices():
-        raise ValidationError([ParamError(f"unknown UI preset {preset!r} (one of {', '.join(PresetArch.choices())})", owner="core", param="preset")])
+    cmd_opts = getattr(shared, "cmd_opts", None)
+    disabled = set(getattr(cmd_opts, "disable_preset", None) or ())
+    presets = [preset for preset in PresetArch.choices() if preset not in disabled]
+    return sorted(presets) if getattr(cmd_opts, "sort_preset", False) else presets
+
+
+def check_preset(preset: Any) -> str:
+    """``preset`` when it names an offered UI preset, else :class:`ValidationError`."""
+
+    choices = ui_preset_choices()
+    if not isinstance(preset, str) or preset not in choices:
+        raise ValidationError([ParamError(f"unknown UI preset {preset!r} (one of {', '.join(choices)})", owner="core", param="preset")])
     return preset
 
 

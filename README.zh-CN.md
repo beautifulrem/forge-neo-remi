@@ -50,13 +50,13 @@ Forge Neo Remi 是 [Forge Neo](https://github.com/Haoming02/sd-webui-forge-class
 
 **图库。** 为输出文件夹中的所有图片建立索引：搜索提示词、文件名或模型；按表单、文件夹、模型、日期范围和星标筛选；两端对齐或瀑布流布局；多选后可加星标、打包下载、两张对比或删除。查看器显示生成参数，并可在文件管理器中定位文件。
 
-**模型网络。** 一个浏览器统一管理 LoRA / LyCORIS、嵌入、checkpoint、VAE 和文本编码器，可作为整页或提示词旁的抽屉打开（Alt+N）：文件夹树、架构筛选（“与当前预设兼容”）、排序、卡片和列表视图、预览（图片或视频）、元数据与训练标签、条目用户元数据编辑器（描述、激活文本、推荐权重等）、从生成结果设置预览图，以及重新扫描文件夹的刷新按钮（同时更新模型栏）。数千个条目也能流畅滚动。
+**模型网络。** 一个浏览器统一管理 LoRA / LyCORIS、嵌入、checkpoint、VAE 和文本编码器，可作为整页或提示词旁的抽屉打开（Alt+N）：文件夹树、架构筛选（“与当前预设兼容”）、排序、卡片和列表视图、预览（图片或视频）、元数据与训练标签、条目用户元数据编辑器（描述、激活文本、推荐权重、checkpoint 的首选 VAE / 文本编码器——点击其卡片时一并选中等）、从生成结果设置预览图，以及重新扫描文件夹的刷新按钮（同时更新模型栏）。数千个条目也能流畅滚动。
 
 **队列。** 正在运行的任务及其实时预览，按运行顺序排列的待运行任务（拖动或用键盘调整顺序，高 / 普通 / 低优先级，复制、编辑、取消），暂停 / 继续，以及所有任务的可搜索历史（含输出、星标和“再次排队”）。可导入旧 Agent Scheduler 和 Prompt Queue 的任务。
 
 **设置。** 所有设置集中在一个可搜索的虚拟化列表中，带分类、“已修改” / “未保存” / “已固定”筛选、逐项重置、导出与导入（也支持 A1111 的 `config.json`），以及服务器工具：重新加载界面、重启、卸载或重新加载模型、查看内存中的权重、为所有 checkpoint 计算哈希、系统信息和许可证。
 
-**扩展。** 已安装扩展（启用、禁用、检查更新、更新、卸载）、可搜索并按标签筛选的扩展索引、从 git 网址安装，以及可恢复的配置备份。
+**扩展。** 已安装扩展（启用、禁用、检查更新、更新、卸载）、扩展索引（默认是第三方维护的 [Forge Neo 索引](https://github.com/eduardoabreu81/forge-neo-extensions)，安装前请自行确认扩展可靠；可搜索、按标签筛选，并可只看近期有更新的扩展“2025+”）、从 git 网址安装，以及可恢复的配置备份。
 
 **扩展页面。** 扩展可以添加自己的页面：Remi 自带 **JoyCaption**（图片描述，单张或整个文件夹，带进度与取消）、**Prompt Workshop** 和 **JSON Builder**（在画布上用方框排布 MOSS-Image 结构化提示词，连同尺寸发送到 txt2img 或 img2img）。
 
@@ -94,6 +94,8 @@ Remi 保留 Forge Neo 对现代模型的支持重点，并对 Anima 提供更深
 - FLUX Kontext 和 FLUX.2 Klein
 - Qwen-Image、Qwen-Image-Edit 和 Qwen-Image-2.1
 - Moss-Image 和 Moss-Image-Edit
+- Anima RGBA（透明图像；需要其 [LoRA 与 VAE](https://huggingface.co/localai0301/Anima-RGBA)；对透明图做图生图时请把 `img2img_background_color` 设为 `(255, 255, 255)`）
+- GGUF checkpoint 与文本编码器（使用 `gguf` 包，可用时以 Triton 反量化 K-quant）
 - Ernie-Image、PiD 1.5、Z-Image、Mugen、Lumina Image 2 和 Chroma
 - Wan 2.2 图像/视频工作流
 
@@ -155,13 +157,20 @@ export COMMANDLINE_ARGS="--uv"
 
 设置环境变量 `REMI_SKIP_WEBUI_BUILD=1` 可关闭自动构建；`--skip-install` 和 `--skip-prepare-environment` 也会跳过构建。
 
-### Docker（NVIDIA GPU）
+### Docker（NVIDIA 或 AMD GPU）
 
 `docker/Dockerfile` 用当前检出的代码构建镜像（构建上下文是仓库根目录）：网页界面在 Node.js 阶段构建，服务器镜像包含 Python 3.13、启动器使用的 PyTorch 版本和 `requirements.txt`，不含 Gradio。全部用户数据放在同一个卷 `/home/remi/data` 中。详见 [docker/README.md](docker/README.md)。
 
 ```bash
 docker build -f docker/Dockerfile -t remi-webui .
 docker run --gpus all -p 7860:7860 -v remi-data:/home/remi/data remi-webui
+```
+
+AMD GPU 使用 `docker/Dockerfile.rocm`，流程相同，只是换成 ROCm 版 PyTorch：
+
+```bash
+docker build -f docker/Dockerfile.rocm -t remi-webui-rocm .
+docker run --device /dev/kfd --device /dev/dri --group-add video -p 7860:7860 -v remi-data:/home/remi/data remi-webui-rocm
 ```
 
 ### 首次 Anima 生成建议
@@ -215,6 +224,16 @@ docker run --gpus all -p 7860:7860 -v remi-data:/home/remi/data remi-webui
 | `--skip-install`、`--skip-prepare-environment` | 跳过依赖安装（以及网页界面构建） |
 | `--sage` / `--flash` | 安装可选 attention 依赖；安装成功不代表一定会被选用 |
 | `--disable-extra-extensions`、`--disable-all-extensions` | 不加载用户扩展，或不加载任何扩展 |
+
+**模型与预设**
+
+| 参数 | 作用 |
+| --- | --- |
+| `--disable-preset sd xl …` | 从模型栏和预设设置中移除这些界面预设 |
+| `--sort-preset` | 按字母顺序列出界面预设 |
+| `--force-w4a8` | 以 `w4a8` 格式加载 `convrot_w4a4` checkpoint（画质更好） |
+| `--use-ck-attention`、`--enable-triton-backend` | 使用 Comfy-Kitchen attention（覆盖其他 attention 包）；启用 `comfy-kitchen` 的 Triton 内核 |
+| `--pynvml` | 通过 NVIDIA Management Library 读取实际可用显存 |
 
 **已变更的参数。** 仅用于 Gradio 的参数已移除：请把 `--gradio-auth` / `--gradio-auth-path` 改为 `--auth` / `--auth-file`，并删除 `--gradio-debug`、`--gradio-allowed-path` 和 `--no-gradio-queue`。遇到未知参数时 WebUI 会拒绝启动，因此旧的登录参数不会被悄悄忽略。`--share` 仍被接受，但只会输出警告（请改用 `--listen`、反向代理或 `--ngrok`）；`--use-textbox-seed` 不再起作用；`--theme light|dark|system` 是尚未在外观菜单中选择主题的浏览器所用的主题（与以前一样，URL 中的 `?__theme=light` 会选定主题）；`--agent-scheduler-sqlite-file` 告诉队列导入器旧 Agent Scheduler 数据库的位置。不要盲目安装所有 attention 后端；原生 PyTorch attention 往往兼容性最好，详见上游[额外安装说明](https://github.com/Haoming02/sd-webui-forge-classic/wiki/Extra-Installations)。
 

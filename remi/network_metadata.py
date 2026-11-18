@@ -15,6 +15,7 @@ import binascii
 import datetime
 import json
 import math
+import os
 import re
 from collections.abc import Mapping
 from typing import Any
@@ -31,6 +32,24 @@ TEXT_FIELDS = ("description", "activation text", "negative text", "notes")
 USER_TEXT_LIMIT = 16 * 1024
 PREFERRED_WEIGHT_LIMIT = 100
 """``preferred weight`` must lie in ±this (the editor uses the same bound)."""
+PREFERRED_MODULES_KEY = "vae_te"
+"""A checkpoint's preferred VAE / text encoder file names, applied with the
+checkpoint (upstream 1f2f068d; the same sidecar key as upstream's editor)."""
+PREFERRED_MODULES_LIMIT = 16
+
+
+def preferred_modules(user: Mapping[str, Any]) -> list[str]:
+    """The checkpoint's preferred modules (``vae_te``; upstream's older
+    editor wrote one name as ``vae``), file names only."""
+
+    value = user.get(PREFERRED_MODULES_KEY)
+    if value is None:
+        value = user.get("vae")
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        return []
+    return list(dict.fromkeys(os.path.basename(str(name).replace("\\", "/")) for name in value if isinstance(name, str) and name.strip() and name != "Built in"))[:PREFERRED_MODULES_LIMIT]
 
 
 def parse_json(value: Any) -> Any:
@@ -284,6 +303,13 @@ def normalize_user_metadata(values: Mapping[str, Any]) -> dict[str, Any]:
             if not isinstance(value, (str, list, tuple)):
                 raise ValueError("'tags' must be a list of text")
             out[key] = parse_tags(value)
+        elif key == PREFERRED_MODULES_KEY:
+            if not isinstance(value, (list, tuple)) or not all(isinstance(name, str) for name in value):
+                raise ValueError(f"{key!r} must be a list of file names")
+            if len(value) > PREFERRED_MODULES_LIMIT:
+                raise ValueError(f"{key!r} holds at most {PREFERRED_MODULES_LIMIT} names")
+            names = preferred_modules({key: value})
+            out[key] = names or None
         else:
             out[key] = value
     return out

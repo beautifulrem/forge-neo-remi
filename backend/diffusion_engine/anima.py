@@ -77,13 +77,12 @@ class Anima(ForgeDiffusionEngine):
 
     @torch.inference_mode()
     def encode_first_stage(self, x: torch.Tensor):
-        samples: torch.Tensor = super().encode_first_stage(x)
-
-        if opts.anima_do_reference:
-            sample = samples[0].detach().clone().unsqueeze(0).cpu()
-            if dynamic_args.is_referencing:
-                self.ref_latents.append(sample)
-            else:
-                self.ini_latent = sample
-
-        return samples
+        if opts.anima_do_reference and not dynamic_args.is_referencing:
+            # Remi: the img2img image is the first reference. Anima stacks the
+            # references along the frames, so they need the generation's size:
+            # keep the image's own latent instead of one resized to
+            # reference_max_side (upstream caaa2cca), which would not stack
+            samples = super().encode_first_stage(x)
+            self.store_reference(samples[:1].clone().cpu())
+            return samples
+        return super().encode_first_stage(x, multiple=16 if opts.anima_do_reference else 0)

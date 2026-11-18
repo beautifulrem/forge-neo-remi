@@ -291,9 +291,9 @@ def derive_rules(body: m.RulesRequest) -> dict[str, Any]:
 @router.get("/presets", response_model=m.PresetList, summary="Anima presets and UI presets")
 def preset_list() -> dict[str, Any]:
     from modules.anima_presets import PRESETS, SAFE_BASE_AESTHETIC_LABEL
-    from modules_forge.presets import PresetArch
+    from remi.core.presets import ui_preset_choices
 
-    return {"anima": [SAFE_BASE_AESTHETIC_LABEL, *[label for label in PRESETS if label != SAFE_BASE_AESTHETIC_LABEL]], "forge": PresetArch.choices(), "current": getattr(opts(), "forge_preset", None)}
+    return {"anima": [SAFE_BASE_AESTHETIC_LABEL, *[label for label in PRESETS if label != SAFE_BASE_AESTHETIC_LABEL]], "forge": ui_preset_choices(), "current": getattr(opts(), "forge_preset", None)}
 
 
 @router.get("/presets/{name:path}", response_model=m.ActionPatch, summary="The form patch of an Anima preset")
@@ -362,7 +362,7 @@ def locale_catalog(locale: str, response: Response, if_none_match: str | None = 
 @router.get("/models", response_model=m.Models, summary="Checkpoints, modules, samplers, schedulers, upscalers, styles, presets")
 def list_models() -> dict[str, Any]:
     from modules import sd_models, sd_samplers, sd_schedulers, shared
-    from modules_forge.presets import PresetArch
+    from remi.core.presets import ui_preset_choices
     from remi.networks import module_files
     from remi.server.runtime import unet_dtypes
 
@@ -380,7 +380,7 @@ def list_models() -> dict[str, Any]:
         "upscalers": [{"name": upscaler.name} for upscaler in shared.sd_upscalers or []],
         "styles": _styles(),
         "unet_dtypes": unet_dtypes(),
-        "presets": PresetArch.choices(),
+        "presets": ui_preset_choices(),
     }
 
 

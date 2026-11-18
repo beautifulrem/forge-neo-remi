@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Remi WebUI",
-    "version": "neo 2.31"
+    "version": "neo 2.32"
   },
   "paths": {
     "/api/v2/app": {
@@ -9450,6 +9450,14 @@
             "title": "Tags",
             "default": []
           },
+          "preferred_modules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Preferred Modules",
+            "default": []
+          },
           "search_terms": {
             "items": {
               "type": "string"
@@ -9756,6 +9764,14 @@
             },
             "type": "array",
             "title": "Tags",
+            "default": []
+          },
+          "preferred_modules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Preferred Modules",
             "default": []
           },
           "search_terms": {
