@@ -49,7 +49,7 @@ class ForgeDiffusionEngine:
         self.is_sdxl = False
         self.is_wan = False  # affects the usage of WanVAE (B, C, T, H, W)
 
-        self.ini_latent: "torch.Tensor" = None  # image from img2img input
+        self.ini_latent: "torch.Tensor | None" = None  # image from img2img input
         self.ref_latents: list["torch.Tensor"] = []  # images from ImageStitch
 
     def _get_predictor(self) -> PredictionDiscreteFlow | PredictionFlux:

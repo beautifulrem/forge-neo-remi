@@ -67,6 +67,7 @@ def show(rev: str, path: str) -> str:
 
 
 def read(path: str) -> str:
+    # pi-lens-ignore: unchecked-throwing-call-python, python-path-traversal -- a repository file named by this tool; a missing one must fail the check
     with open(os.path.join(ROOT, path), encoding="utf-8") as file:
         return file.read()
 
@@ -124,6 +125,7 @@ def build_models(source: str, name: str) -> types.ModuleType:
     module = types.ModuleType(name)
     module.__file__ = f"<{name}>"
     sys.modules[name] = module
+    # pi-lens-ignore: no-compile-call, eval-exec -- executes the repository's own models.py at a git revision, by design
     exec(compile(source, module.__file__, "exec"), module.__dict__)  # noqa: S102 - the repository's own models.py at a revision
     return module
 
@@ -208,7 +210,7 @@ def unmerged_files() -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0] if __doc__ else None)
     parser.add_argument("--rev", help=f"upstream revision to compare with (default: merge base with {UPSTREAM}, else {LAST_ABSORBED[:10]})")
     options = parser.parse_args(argv)
     # the check imports the WebUI, which cannot load while files hold conflict markers

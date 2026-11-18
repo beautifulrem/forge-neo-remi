@@ -24,7 +24,7 @@ For **Wan 2.2 I2V**: Use in **img2img** to set as the Last Frame to achieve Firs
 
 class ImageStitch(scripts.Script):
     sorting_priority = 529
-    cached_parameters: list[int] = None
+    cached_parameters: tuple | None = None
 
     def title(self):
         return "ImageStitch Integrated"
@@ -53,17 +53,16 @@ class ImageStitch(scripts.Script):
 
     def process(self, p: StableDiffusionProcessing, enable: bool, references: list[str | Image.Image | tuple[Image.Image, str]], *_legacy):
         # ``_legacy``: the former "Maximum Side Length" argument, still sent by older API clients
+        reference_images: list[Image.Image] | None = None
         if enable and references and dynamic_args.can_reference():
-            references: list[Image.Image] = self.extract_images(references)
-        else:
-            references = None
+            reference_images = self.extract_images(references)
 
         is_WanT2I: bool = dynamic_args.wan and isinstance(p, StableDiffusionProcessingTxt2Img)
 
         # the references are encoded again when the inputs, the model or a setting the encoding reads changes
-        cache: tuple = None
-        if references:
-            cache = (opts.reference_max_side, opts.klein_do_reference, opts.qwen21_do_reference, opts.anima_do_reference, opts.krea2_do_reference, opts.moss_do_reference, str(sd_models.model_data.forge_loading_parameters), opts.img2img_background_color, tuple(self.hash_image(ref) for ref in references), (p.width, p.height, p.batch_size) if is_WanT2I else None)
+        cache: tuple | None = None
+        if reference_images:
+            cache = (opts.reference_max_side, opts.klein_do_reference, opts.qwen21_do_reference, opts.anima_do_reference, opts.krea2_do_reference, opts.moss_do_reference, str(sd_models.model_data.forge_loading_parameters), opts.img2img_background_color, tuple(self.hash_image(ref) for ref in reference_images), (p.width, p.height, p.batch_size) if is_WanT2I else None)
 
         if ImageStitch.cached_parameters == cache:
             return
@@ -71,21 +70,21 @@ class ImageStitch(scripts.Script):
         self.reset_references(p)
         ImageStitch.cached_parameters = cache
 
-        if not references:
+        if not reference_images:
             return
 
         if dynamic_args.wan:
             if is_WanT2I and p.batch_size == 1:
                 logger.error("Wan 2.2 I2V requires more than one frame...")
                 return
-            if len(references) > 1:
+            if len(reference_images) > 1:
                 logger.warning("Wan 2.2 I2V only uses the first reference image...")
-                references = [references[0]]
+                reference_images = [reference_images[0]]
 
         dynamic_args.is_referencing = True
 
         try:
-            for reference in references:
+            for reference in reference_images:
                 if is_WanT2I:
                     reference = images.resize_image(1, reference, p.width, p.height)
                 image = images.flatten(reference, opts.img2img_background_color)
