@@ -164,7 +164,10 @@
   --font-sans: "Remi Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --font-heading: var(--font-sans);
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* Recursive's fixed-pitch cut: the UI's own letters on a grid (Tailwind
+     applies the axis with `font-mono` and in its code/kbd/samp/pre base). */
+  --font-mono: "Remi Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-mono--font-variation-settings: "MONO" 1;
   /* The prompt editor: Recursive's casual (hand-lettered) cut, like entries
      written on an exposure sheet; CJK falls back to the system faces. */
   --font-hand: "Remi Hand", "Remi Sans", ui-sans-serif, system-ui, "PingFang SC", "Hiragino Sans GB",
@@ -251,6 +254,29 @@
 
   html.dark {
     color-scheme: dark;
+  }
+
+  /*
+   * Typesetting the text the UI writes. Han next to Latin letters or digits
+   * gets the CJK typesetting gap ("生成 1024 张" without typed spaces; Chrome
+   * 140+, ignored elsewhere); what the user types keeps exactly their
+   * spacing. Paragraphs avoid a lone last word or character, headings and
+   * centred text (empty states, captions) break into even lines.
+   */
+  html {
+    text-autospace: normal;
+  }
+
+  :where(input, textarea, [contenteditable], .cm-editor) {
+    text-autospace: no-autospace;
+  }
+
+  :where(p, li, dd, dt, label, figcaption, blockquote) {
+    text-wrap: pretty;
+  }
+
+  :where(h1, h2, h3, h4, h5, h6, .text-center, .text-center :is(p, li, dd, dt, label, figcaption)) {
+    text-wrap: balance;
   }
 
   body {
