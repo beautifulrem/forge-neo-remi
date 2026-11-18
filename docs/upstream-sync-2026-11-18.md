@@ -95,6 +95,7 @@ Merged unchanged, or with conflicts that only kept Remi's hooks:
 | `backend/diffusion_engine/qwen.py`, `backend/nn/qwen21_vae.py` | Unused / duplicate imports from upstream removed for Remi's ruff gate |
 | XYZ plot (`980cd471`, `936d9dac`) | "Text Encoder" and "Prompt S/R (LoRA)" axes added to the zh_CN translation and the expected axis list |
 | PiD (`42c1a92f`) | Lists are natural-sorted at the source; the parameter tests give them in that order |
+| `tools/legacy_ui_recordings.py` (`caaa2cca`) | ImageStitch's legacy Gradio fixtures are recorded from `89e2e09d` (two arguments, no "Maximum Side Length") instead of the pre-port revision |
 | line endings | `modules/processing_scripts/refiner.py`, `modules/sysinfo.py`, `scripts/xyz_grid.py` restored to upstream's CRLF |
 
 ## Skipped
@@ -107,13 +108,14 @@ Merged unchanged, or with conflicts that only kept Remi's hooks:
 
 ## Validation
 
-`PYTHON=venv/bin/python tools/check.sh` on macOS (Apple Silicon): 57 of 59
-steps passed, 2 skipped (`legacy-ui`, `legacy-ui:fixtures`: no Gradio 4.40
-interpreter). That includes ruff, all pytest suites, the API / settings /
-schema contracts, line endings, i18n, the SPA build, lint, vitest and the
-215-second end-to-end run (ImageStitch on Anima included). The e2e run
-needs `ultralytics` in the venv (ADetailer) and Playwright's
-`chromium-headless-shell`.
+`PYTHON=venv/bin/python tools/check.sh --strict` on macOS (Apple Silicon):
+all 59 steps passed, among them ruff, every pytest suite, the API / settings /
+schema contracts, line endings, i18n, the SPA build, lint, vitest, the
+end-to-end run (ImageStitch on Anima included) and the legacy Gradio recorder
+(`tools/legacy_ui_env.sh` builds its interpreter in `../remi-gradio-env`).
+The e2e run needs `ultralytics` in the venv (ADetailer) and Playwright's
+`chromium-headless-shell`. Pyright findings on the lines this sync changed
+were fixed in the follow-up commit (the remaining ones are upstream's own).
 
 Still to check by hand on a GPU: a GGUF checkpoint, Anima RGBA, an Edit model
 on a large reference image (resized to `reference_max_side`), Anima Edit with

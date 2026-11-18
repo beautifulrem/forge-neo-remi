@@ -96,7 +96,9 @@ RECORDINGS: tuple[Recording, ...] = (
     # tests/remi_port_harness.py (a bare list per tab)
     _ext("sd_forge_spectrum", "spectrum.py", "port"),
     _ext("sd_forge_compile", "compile.py", "port", shown_without="Triton"),
-    _ext("sd_forge_image_stitch", "image_stitch.py", "port"),
+    # upstream caaa2cca dropped the "Maximum Side Length" slider (reference_max_side
+    # setting): recorded from the upstream revision Remi absorbed it with
+    _ext("sd_forge_image_stitch", "image_stitch.py", "port", rev="89e2e09d38b56c4f15558f06ee3773045e44f97e"),
     _ext("sd_forge_multidiffusion", "forge_multidiffusion.py", "port", tabs=("img2img",), preimport=("backend.nn.cnets.cldm",)),
     _ext("sd_forge_neveroom", "forge_never_oom.py", "port"),
     _ext("sd_forge_pid", "pid.py", "port", shown_without="a PiD model in models/"),
