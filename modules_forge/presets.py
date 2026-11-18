@@ -128,9 +128,16 @@ def register(options_templates: dict):
 
     from modules.options import OptionInfo, OptionRow, options_section
     from modules.shared_items import list_samplers, list_schedulers
+    from modules.shared import cmd_opts
+
+    # (getattr: modules_forge.shared adds the flag; a bare import of modules.shared, as in tests, parses without it)
+    disabled = getattr(cmd_opts, "disable_preset", None) or ()
 
     for arch in PresetArch:
         name = arch.name
+
+        if name in disabled:
+            continue
 
         options_templates.update(
             options_section(

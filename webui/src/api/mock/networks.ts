@@ -12,7 +12,7 @@ type MockRoute = [method: string, pattern: RegExp, handler: (match: RegExpExecAr
 const KINDS: NetworkKind[] = [
   { id: "lora", title: "LoRA", action: "prompt", negative: true, fields: ["description", "sd version", "activation text", "preferred weight", "negative text", "tags", "notes"], builtin: true },
   { id: "embeddings", title: "Textual Inversion", action: "prompt", negative: true, fields: ["description", "sd version", "tags", "notes"], builtin: true },
-  { id: "checkpoints", title: "Checkpoints", action: "checkpoint", negative: false, fields: ["description", "sd version", "tags", "notes"], builtin: true },
+  { id: "checkpoints", title: "Checkpoints", action: "checkpoint", negative: false, fields: ["description", "sd version", "vae_te", "tags", "notes"], builtin: true },
   { id: "vae", title: "VAE", action: "module", negative: false, fields: ["description", "tags", "notes"], builtin: true },
   { id: "text_encoders", title: "Text Encoders", action: "module", negative: false, fields: ["description", "tags", "notes"], builtin: true },
 ]
@@ -43,6 +43,7 @@ function makeItem(kind: string, index: number, name: string, folder: string, ext
     preferred_weight: null,
     negative_text: null,
     tags: index % 4 === 0 ? [WORDS[(index + 3) % WORDS.length]!] : [],
+    preferred_modules: [],
     search_terms: [path],
     hash: (index * 2654435761).toString(16).slice(0, 10),
     alias: name,
@@ -119,6 +120,7 @@ function view(entry: Entry): NetworkItem {
   item.negative_prompt = item.kind === "lora" ? item.negative_text : null
   if (typeof user.description === "string") item.description = user.description
   if (Array.isArray(user.tags)) item.tags = user.tags.map(String)
+  if (item.kind === "checkpoints") item.preferred_modules = Array.isArray(user.vae_te) ? user.vae_te.map(String) : []
   if (typeof user["sd version"] === "string") {
     item.sd_version = user["sd version"]
     if (user["sd version"] !== "Unknown") item.arch = user["sd version"]

@@ -100,6 +100,16 @@ export type IndexFilter = {
   /** Whether an entry needs any or all of the selected tags to count as having them. */
   match: "any" | "all"
   sort: IndexSort
+  /** Hide entries without a commit after {@link RECENT_SINCE} (upstream's "2025+" box). */
+  recentOnly?: boolean
+}
+
+/** Entries last updated on or before this date are hidden by the "2025+" filter. */
+export const RECENT_SINCE = "2025-01-01"
+
+/** Whether an entry has a commit after {@link RECENT_SINCE}; an undated one has not. */
+export function isRecent(entry: IndexEntry): boolean {
+  return Boolean(entry.commit_time) && entry.commit_time!.slice(0, 10) > RECENT_SINCE
 }
 
 /** An entry's tags, with `installed` added when it is. */
@@ -153,10 +163,11 @@ function compare(sort: IndexSort): (a: IndexEntry, b: IndexEntry) => number {
   }
 }
 
-/** Entries passing the text and tag filters, sorted. */
+/** Entries passing the text, tag and date filters, sorted. */
 export function filterIndex(items: readonly IndexEntry[], filter: IndexFilter): IndexEntry[] {
   const terms = filter.query.toLowerCase().split(/\s+/).filter(Boolean)
   const out = items.filter((entry) => {
+    if (filter.recentOnly && !isRecent(entry)) return false
     if (filter.tags.size > 0) {
       const has = hasTags(entry, filter.tags, filter.match)
       if (filter.tagMode === "hide" ? has : !has) return false

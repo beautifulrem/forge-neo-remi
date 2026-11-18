@@ -3,26 +3,6 @@
 import argparse
 import enum
 
-
-class EnumAction(argparse.Action):
-    """Argparse `action` for handling Enum"""
-
-    def __init__(self, **kwargs):
-        enum_type = kwargs.pop("type", None)
-        assert issubclass(enum_type, enum.Enum)
-
-        choices = tuple(e.value for e in enum_type)
-        kwargs.setdefault("choices", choices)
-        kwargs.setdefault("metavar", f"[{','.join(choices)}]")
-
-        super(EnumAction, self).__init__(**kwargs)
-        self._enum = enum_type
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        value = self._enum(values)
-        setattr(namespace, self.dest, value)
-
-
 parser = argparse.ArgumentParser(add_help=False)
 
 parser.add_argument("--loglevel", type=str, default=None, choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help="Set the logging level")
@@ -64,6 +44,7 @@ parser.add_argument("--use-ck-attention", action="store_true", help="use Comfy-K
 parser.add_argument("--use-pytorch-cross-attention", action="store_true", help="Use the PyTorch cross attention (override sageattention/flash_attn/xformers)")
 parser.add_argument("--force-xformers-vae", action="store_true", help="Force VAE to use xformers attention (meant to be used with --use-pytorch-cross-attention)")
 parser.add_argument("--force-upcast-attention", action="store_true", help="Always upcast to fp32 during attention")
+parser.add_argument("--force-w4a8", action="store_true", help="Always use w4a8 when loading convrot_w4a4 models")
 
 parser.add_argument("--sage", action="store_true", help="install sageattention")
 parser.add_argument("--flash", action="store_true", help="install flash_attn")
@@ -75,7 +56,6 @@ parser.add_argument("--disable-sage", action="store_true", help="disable sageatt
 parser.add_argument("--disable-flash", action="store_true", help="disable flash_attn")
 parser.add_argument("--disable-xformers", action="store_true", help="disable xformers")
 
-parser.add_argument("--directml", type=int, nargs="?", metavar="DIRECTML_DEVICE", const=-1, help="Use torch-directml")
 parser.add_argument("--deterministic", action="store_true", help="Use slower deterministic algorithms when possible")
 
 vram_group = parser.add_mutually_exclusive_group()
@@ -102,7 +82,7 @@ parser.add_argument("--mmap-torch-files", action="store_true", help="Use mmap wh
 parser.add_argument("--disable-mmap", action="store_true", help="Don't use mmap when loading safetensors")
 
 parser.add_argument("--tiled-conv2d", type=int, default=0, metavar="TILE_SIZE", choices=[0, 64, 128, 256, 512], help="reduce VAE memory usage ; increase processing time")
-parser.add_argument("--enable-triton-backend", action="store_true", help="Enable the use of Triton backend in comfy-kitchen")
+parser.add_argument("--enable-triton-backend", action="store_true", help="Enable the use of Triton backend in comfy-kitchen and supported GGUF K-quant layers")
 
 
 class SageAttentionFuncs(enum.Enum):
@@ -115,7 +95,7 @@ class SageAttentionFuncs(enum.Enum):
 
 
 sage = parser.add_argument_group(description="SageAttention")
-sage.add_argument("--sage-function", type=SageAttentionFuncs, default=SageAttentionFuncs.auto, action=EnumAction)
+sage.add_argument("--sage-function", type=SageAttentionFuncs, default=SageAttentionFuncs.auto)
 
 
 args, _ = parser.parse_known_args()

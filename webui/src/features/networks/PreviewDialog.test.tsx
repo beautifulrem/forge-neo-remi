@@ -8,7 +8,7 @@ import { PreviewDialog } from "./PreviewDialog"
 
 type Call = { method: string; path: string; url: URL; body: unknown }
 
-const item = (name: string): NetworkItem => ({ name, title: name, kind: "lora", path: `${name}.safetensors`, folder: "", tags: [], search_terms: [], editable: true, hidden: false })
+const item = (name: string): NetworkItem => ({ name, title: name, kind: "lora", path: `${name}.safetensors`, folder: "", tags: [], preferred_modules: [], search_terms: [], editable: true, hidden: false })
 
 function mockServer() {
   const calls: Call[] = []

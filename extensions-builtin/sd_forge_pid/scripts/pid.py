@@ -32,16 +32,16 @@ DESCRIPTION = (
 
 
 def pid_checkpoints() -> list[str]:
-    return [m for m in sorted(checkpoint_tiles(use_short=True)) if "pid" in m.lower()]
+    return [m for m in checkpoint_tiles(use_short=True) if "pid" in m.lower()]
 
 
 def vae_choices() -> list[str]:
-    return sorted(vae_dict.keys())
+    return list(vae_dict.keys())
 
 
 def text_encoder_choices() -> list[str]:
     vaes = set(vae_dict.keys())
-    return [m for m in sorted(module_list.keys()) if m not in vaes]
+    return [m for m in module_list.keys() if m not in vaes]
 
 
 class PiDForForge(scripts.Script):

@@ -40,8 +40,8 @@ def test_reference_uploads_reach_the_script_as_images(env):
     _script, layout = env.kit.layout_of(env.module.ImageStitch, "img2img")
     images = {"up-1": Image.new("RGB", (64, 64), "red"), "up-2": Image.new("RGB", (32, 32), "blue")}
     ctx = ui.Context(resolve_upload=lambda node, upload_id: images[upload_id])
-    enable, references, max_dim = layout.values_to_args({"enable": True, "references": ["up-2", "up-1"]}, ctx)
-    assert enable is True and max_dim == 1024
+    enable, references = layout.values_to_args({"enable": True, "references": ["up-2", "up-1"]}, ctx)
+    assert enable is True
     assert references == [images["up-2"], images["up-1"]]
     with pytest.raises(ui.ValidationError):
         layout.values_to_args({"references": "up-1"})
@@ -64,7 +64,7 @@ def test_schema_export(env):
     for tab in ("txt2img", "img2img"):
         schema = json.loads(dumps(tab_schema(tab)))
         entry = next(script for script in schema["scripts"] if script["id"] == "imagestitch_integrated")
-        assert entry["args"] == ["enable", "references", "max_dim"] and entry["defaults"]["references"] == []
+        assert entry["args"] == ["enable", "references"] and entry["defaults"]["references"] == []
         references = next(node for node in entry["layout"]["children"] if node.get("name") == "references")
         # An upload type (drafts never restore its ids) with a widget hint
         assert references == {"type": "image_list", "name": "references", "label": "Reference Image(s)", "default": [], "widget": "image-list", "props": {"columns": 3}}
@@ -89,5 +89,5 @@ def test_help_names_the_edit_models(env, tab, verb):
 
     _script, layout = env.kit.layout_of(env.module.ImageStitch, tab)
     (text,) = [string for string in env.kit.schema_strings(layout.schema()) if string.startswith("For **Edit Models**")]
-    assert text.startswith(f"For **Edit Models** (Flux.1-Kontext, Flux.2-Klein, Qwen-Image-Edit, Qwen-Image-2.1, Anima Edit, Krea2 Edit): Use in {verb}")
+    assert text.startswith(f"For **Edit Models** (Flux.1-Kontext, Flux.2-Klein, Qwen-Image-Edit, Qwen-Image-2.1, Anima Edit, Krea2 Edit, Moss Image Edit): Use in {verb}")
     assert "<" not in text and "paste images straight into the list" in text

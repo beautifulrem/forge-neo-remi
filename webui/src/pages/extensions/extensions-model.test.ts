@@ -9,6 +9,7 @@ import {
   type IndexEntry,
   type IndexFilter,
   isGitUrl,
+  isRecent,
   isValidDirname,
   NO_CHANGES,
   pruneStaged,
@@ -31,6 +32,14 @@ const base: IndexFilter = { query: "", tags: new Set(), tagMode: "hide", match: 
 const names = (list: IndexEntry[]) => list.map((e) => e.name)
 
 describe("extension index", () => {
+  it("2025+ hides entries last updated on or before 2025-01-01, and undated ones", () => {
+    expect(names(filterIndex(items, { ...base, recentOnly: true }))).toEqual([])
+    const fresh = entry("Fresh", { commit_time: "2025-01-13T00:00:00Z" })
+    expect(names(filterIndex([...items, fresh], { ...base, recentOnly: true }))).toEqual(["Fresh"])
+    expect(isRecent(items[1]!)).toBe(false)
+    expect(names(filterIndex(items, { ...base, recentOnly: false }))).toHaveLength(4)
+  })
+
   it("searches name, description, URL and tags", () => {
     expect(names(filterIndex(items, { ...base, query: "wd14" }))).toEqual(["Tagger"])
     expect(names(filterIndex(items, { ...base, query: "x/pose" }))).toEqual(["Pose"])

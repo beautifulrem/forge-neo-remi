@@ -14,16 +14,5 @@
   "infotext": null,
   "paste": false,
   "preset": null
- },
- {
-  "kind": "slider",
-  "label": "Maximum Side Length",
-  "default": 1024,
-  "minimum": 0,
-  "maximum": 2048,
-  "step": 256,
-  "infotext": null,
-  "paste": false,
-  "preset": null
  }
 ]

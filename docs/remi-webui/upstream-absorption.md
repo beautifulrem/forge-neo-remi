@@ -24,7 +24,8 @@ History of earlier syncs:
 diffs), [2026-10-14](../upstream-sync-2026-10-14.md) (Git merge of `neo`
 at `46af880c`, the last upstream commit absorbed before the UI rewrite) and
 [2026-10-27](../upstream-sync-2026-10-27.md) (merge of `c6c2b43d`, the first
-one done with this procedure).
+one done with this procedure) and
+[2026-11-18](../upstream-sync-2026-11-18.md) (merge of `89e2e09d`).
 Each new sync adds a `docs/upstream-sync-YYYY-MM-DD.md` from the template in
 [§5](#5-sync-note-template).
 

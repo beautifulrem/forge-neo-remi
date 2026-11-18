@@ -43,6 +43,8 @@ class NetworkItem(Model):
     preferred_weight: float | None = None
     negative_text: str | None = None
     tags: list[str] = []
+    preferred_modules: list[str] = []
+    """checkpoints: the VAE / text encoder file names applied with the model (user metadata ``vae_te``)"""
     search_terms: list[str] = []
     hash: str | None = None
     alias: str | None = None

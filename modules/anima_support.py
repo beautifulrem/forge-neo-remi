@@ -182,16 +182,18 @@ def split_conditioning(conds):
     return context, mask
 
 
-_MAX_TILE_FACTOR = 4  # ConditionCrossAttn.can_concat's limit
+_MAX_TILE_FACTOR = 4  # the limit ConditionCrossAttn.can_concat had before upstream 2d79fc2f
 
 
 def _stack_tiled(values, fill: float = 0.0):
     """Stack per-prompt ``(tokens, ...)`` tensors, tiling each along the tokens
-    to their least common multiple like Forge's ``ConditionCrossAttn``.
+    to their least common multiple as Forge's ``ConditionCrossAttn`` did
+    before upstream 2d79fc2f (Forge itself now runs rows of different lengths
+    as separate batches; these extra contexts are stacked here, per pass).
     Repeating a whole key/value sequence leaves attention unchanged.
 
     Prompts over 512 tokens have odd lengths (512, 600, 530 have an LCM of
-    ~2M tokens), so past the factor ``ConditionCrossAttn.can_concat`` allows,
+    ~2M tokens), so past that factor (``_MAX_TILE_FACTOR``),
     every row is padded with ``fill`` to the longest instead: zeros for
     contexts, as Anima pads prompts under 512 tokens; 1 (neutral) for NegPiP
     masks, as NegPiP pads them (V of a zero context row is zero either way)."""

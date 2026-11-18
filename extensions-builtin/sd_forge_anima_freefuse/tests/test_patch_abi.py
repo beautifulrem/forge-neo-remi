@@ -540,7 +540,7 @@ def _quantized_linear(kind):
     weight, bias = torch.randn(4, 256), torch.randn(4)
     if kind == "gguf":
         from backend.operations_gguf import ParameterGGUF, dequantize_tensor
-        from modules_forge.packages import gguf
+        import gguf
 
         packed = ParameterGGUF(
             torch.from_numpy(gguf.quantize(weight.numpy(), gguf.GGMLQuantizationType.Q8_0)),

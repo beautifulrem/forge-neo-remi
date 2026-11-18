@@ -47,9 +47,10 @@ def test_pid_and_hires_fix_are_one_of_two_in_txt2img(pid):
 def test_choices_follow_the_installed_models(pid, monkeypatch):
     from remi import ui
 
+    # the lists keep the order they are built in (upstream 42c1a92f natural-sorts them there)
     monkeypatch.setattr(pid, "checkpoint_tiles", lambda use_short=True: ["anima.safetensors", "PiD-4x.safetensors", "pid_v2.safetensors"])
-    monkeypatch.setattr(pid, "vae_dict", {"b.vae": 1, "a.vae": 2})
-    monkeypatch.setattr(pid, "module_list", {"gemma.safetensors": 1, "a.vae": 2, "clip.safetensors": 3})
+    monkeypatch.setattr(pid, "vae_dict", {"a.vae": 1, "b.vae": 2})
+    monkeypatch.setattr(pid, "module_list", {"a.vae": 1, "clip.safetensors": 2, "gemma.safetensors": 3})
     script = pid.PiDForForge()
     assert script.show(False)
     layout = harness.script_layout(script)

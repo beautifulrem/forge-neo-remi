@@ -9,7 +9,7 @@ from backend.nn.flux import EmbedND, timestep_embedding
 from backend.operations import main_stream_worker, weights_manual_cast
 from backend.operations_mixed_precision import linear_input_act
 from backend.quant_ops import ck
-from backend.utils import resize_to_batch_size
+from backend.utils import fp16_fix, resize_to_batch_size
 
 
 def situ(hidden, gate):
@@ -77,6 +77,7 @@ class TextBlock(nn.Module):
     def forward(self, x, pe, transformer_options={}):
         q, k, v = self.qkv(self.norm1(x)).chunk(3, dim=-1)
         x = x + self.proj(attention(q, k, v, self.q_norm, self.k_norm, pe, self.num_heads, transformer_options))
+        del q, k, v
         y = self.norm2(x)
         return x + self.ffn_down(situ(self.ffn_up(y), self.ffn_gate(y)))
 
@@ -114,10 +115,16 @@ class Block(nn.Module):
             q, k, v = self.proj["qkv"](y).chunk(3, dim=-1)
         else:
             q, k, v = self.proj["q"](y), self.proj["k"](y), self.proj["v"](y)
+        del y
         out = attention(q, k, v, self.q_norm, self.k_norm, pe, self.num_heads, transformer_options, ref_kv, kv_out)
+        del q, k, v
         x = residual(x, self.proj["o"](out), mod, 2, ref)
+        del out
         y = modulate(x, self.norm2, mod, 3, ref)
-        return residual(x, linear_input_act(self.proj["ffn_down"], self.proj["ffn_up_gate"](y), "situ"), mod, 5, ref)
+        y = self.proj["ffn_up_gate"](y)
+        z = residual(x, linear_input_act(self.proj["ffn_down"], y, "situ"), mod, 5, ref)
+        del x, y
+        return fp16_fix(z)
 
 
 class MOSSImage(nn.Module):

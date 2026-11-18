@@ -1355,5 +1355,11 @@
   "Text to render of item {{n}}": "第 {{n}} 项要渲染的文字",
   "The whole picture in a sentence or two": "用一两句话描述整幅画面",
   "Width": "宽度",
-  "e.g. a LoRA": "例如 LoRA"
+  "e.g. a LoRA": "例如 LoRA",
+  "This index is maintained by third parties. Please verify an extension before installing it.": "此索引由第三方维护，安装扩展前请自行确认其可靠性。",
+  "Only extensions updated after {{date}}": "仅显示 {{date}} 之后有更新的扩展",
+  "2025+": "2025+",
+  "Preferred VAE / Text encoders": "首选 VAE / 文本编码器",
+  "Use the current selection": "使用当前选择",
+  "Loading the checkpoint from its card also selects these (none: the selection is kept).": "从卡片加载此模型时一并选中这些模块（未选择则保持当前选择）。"
 }

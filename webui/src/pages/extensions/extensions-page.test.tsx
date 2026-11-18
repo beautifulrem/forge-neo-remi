@@ -200,7 +200,8 @@ const indexOf = (count: number): ExtensionIndex => ({
     tags: ["script"],
     added: i % 2 === 0 ? `2024-01-${String((i % 28) + 1).padStart(2, "0")}` : null,
     created_at: null,
-    commit_time: null,
+    // the last ten have no commit after 2025-01-01, so the default "2025+" filter hides them
+    commit_time: i < count - 10 ? "2025-06-01T00:00:00Z" : "2024-06-01T00:00:00Z",
     stars: i,
     order: i,
     installed: false,
@@ -230,6 +231,9 @@ describe("available extensions", { timeout: 20_000 }, () => {
     expect(rows.length).toBeGreaterThan(0)
     expect(rows.length).toBeLessThan(100)
     expect(container.querySelectorAll(".overflow-y-auto")).toHaveLength(1)
+    expect(screen.getByRole("status")).toHaveTextContent("490 of 500 extensions")
+    fireEvent.click(screen.getByRole("button", { name: "2025+" }))
+    expect(screen.getByRole("status")).toHaveTextContent("500 of 500 extensions")
     // Newest first: dated entries before undated ones.
     expect(within(rows[0]!).getByText("ext-26")).toBeInTheDocument()
     fireEvent.change(screen.getByRole("searchbox", { name: "Search extensions" }), { target: { value: "ext-7" } })

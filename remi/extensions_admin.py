@@ -46,7 +46,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-DEFAULT_INDEX_URL = "https://raw.githubusercontent.com/AUTOMATIC1111/stable-diffusion-webui-extensions/master/index.json"
+# The Forge Neo extension index (upstream e67193d9), maintained by a third party:
+# the Extensions page says so next to the URL.
+DEFAULT_INDEX_URL = "https://raw.githubusercontent.com/eduardoabreu81/forge-neo-extensions/main/index.json"
 INDEX_TIMEOUT = 20
 INDEX_MAX_BYTES = 16 * 1024 * 1024
 INDEX_CACHE_SECONDS = 600
@@ -766,7 +768,7 @@ def index_entries(data: dict[str, Any]) -> dict[str, Any]:
 
 def load_index(url: str | None = None, *, refresh: bool = False, opener: Callable[..., Any] | None = None) -> dict[str, Any]:
     """The index at ``url`` (default: ``WEBUI_EXTENSIONS_INDEX`` or the
-    A1111 index), cached for ten minutes. Another URL the client names must
+    Forge Neo index), cached for ten minutes. Another URL the client names must
     be a public internet address (:func:`check_index_url`)."""
 
     global _index_cache

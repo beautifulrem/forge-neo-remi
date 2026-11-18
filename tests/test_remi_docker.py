@@ -21,15 +21,16 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 DOCKER = ROOT / "docker"
 DOCKERFILE = (DOCKER / "Dockerfile").read_text(encoding="utf-8")
+ROCM_DOCKERFILE = (DOCKER / "Dockerfile.rocm").read_text(encoding="utf-8")
 ENTRYPOINT = (DOCKER / "entrypoint.sh").read_text(encoding="utf-8")
 README = (DOCKER / "README.md").read_text(encoding="utf-8")
 IGNORE = [line.strip() for line in (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")]
 
 
-def instructions() -> list[tuple[str, str]]:
+def instructions(recipe: str = DOCKERFILE) -> list[tuple[str, str]]:
     """``(INSTRUCTION, arguments)`` of the Dockerfile, continuation lines joined."""
 
-    joined = re.sub(r"\\\n", " ", DOCKERFILE)
+    joined = re.sub(r"\\\n", " ", recipe)
     found = []
     for line in joined.splitlines():
         line = line.strip()
@@ -39,8 +40,8 @@ def instructions() -> list[tuple[str, str]]:
     return found
 
 
-def arg_default(name: str) -> str:
-    for keyword, rest in instructions():
+def arg_default(name: str, recipe: str = DOCKERFILE) -> str:
+    for keyword, rest in instructions(recipe):
         if keyword == "ARG" and rest.startswith(f"{name}="):
             return rest.split("=", 1)[1].strip('"')
     raise AssertionError(f"no ARG {name}")
@@ -111,3 +112,27 @@ def test_the_readme_describes_this_image():
     assert "Forge - Neo" not in README and "git clone" not in README
     assert "docker build -f docker/Dockerfile -t remi-webui ." in README
     assert "--data-dir" in README
+
+
+def test_the_rocm_recipe_is_the_same_image_with_rocm_pytorch():
+    """docker/Dockerfile.rocm (upstream 2900d594, translated): the same
+    stages, data folder, launcher run and entrypoint; only the base image and
+    the PyTorch wheels differ (the ROCm wheels bundle the ROCm runtime)."""
+
+    assert "git clone" not in ROCM_DOCKERFILE and "github.com" not in ROCM_DOCKERFILE
+    assert "nvidia/cuda" not in ROCM_DOCKERFILE
+    rocm = instructions(ROCM_DOCKERFILE)
+    assert re.fullmatch(r"rocm\d+\.\d+", arg_default("TORCH_INDEX", ROCM_DOCKERFILE))
+    assert "TORCH_INDEX_URL=https://download.pytorch.org/whl/${TORCH_INDEX}" in ROCM_DOCKERFILE
+    runs = " ".join(rest for keyword, rest in rocm if keyword == "RUN")
+    assert 'uv pip install ${TORCH_PACKAGES} --index-url "${TORCH_INDEX_URL}"' in runs
+    assert "uv pip install -r requirements.txt" in runs
+    # everything but the base image and PyTorch is the NVIDIA recipe's
+    same = ("COPY", "VOLUME", "EXPOSE", "HEALTHCHECK", "ENTRYPOINT", "WORKDIR", "USER")
+    assert [i for i in rocm if i[0] in same] == [i for i in instructions() if i[0] in same]
+    for keyword in ("NODE_VERSION", "PNPM_VERSION"):
+        assert arg_default(keyword, ROCM_DOCKERFILE) == arg_default(keyword)
+    assert "python launch.py --exit --skip-torch-cuda-test --data-dir /tmp/remi-build" in runs
+    assert "REMI_SKIP_WEBUI_BUILD=1" in ROCM_DOCKERFILE and "REMI_DATA_DIR=/home/remi/data" in ROCM_DOCKERFILE
+    assert "docker build -f docker/Dockerfile.rocm -t remi-webui-rocm ." in README
+

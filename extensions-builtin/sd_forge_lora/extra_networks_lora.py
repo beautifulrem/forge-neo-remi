@@ -14,12 +14,7 @@ class ExtraNetworkLora(extra_networks.ExtraNetwork):
     def __init__(self):
         super().__init__("lora")
 
-        self.errors = {}
-        """mapping of network names to the number of errors the network had during operation"""
-
     def activate(self, p: "StableDiffusionProcessing", params_list: list["extra_networks.ExtraNetworkParams"]):
-        self.errors.clear()
-
         additional: str = shared.opts.sd_lora
         if additional != "None" and additional in networks.available_networks and not any(x for x in params_list if x.items[0] == additional):
             p.all_prompts = [x + f"<lora:{additional}:{shared.opts.extra_networks_default_multiplier}>" for x in p.all_prompts]
@@ -45,8 +40,11 @@ class ExtraNetworkLora(extra_networks.ExtraNetwork):
 
         failed = networks.load_networks(names, te_multipliers, unet_multipliers)
         if failed:
-            # a job warning (and a note under the image), not just a console line
-            p.comment("LoRA not found or failed to load: " + ", ".join(dict.fromkeys(failed)))
+            # a job warning (and a note under the image), not just a console line; a LoRA
+            # that was found but could not be read also names the reason
+            summary = ", ".join(name if reason == "not found" else f"{name} ({reason})" for name, reason in failed.items())
+            networks.logger.warning(f"Skipped LoRAs: {summary}")
+            p.comment("LoRA not found or failed to load: " + summary)
 
         if shared.opts.lora_add_hashes_to_infotext:
             if not getattr(p, "is_hr_pass", False) or not hasattr(p, "lora_hashes"):
@@ -60,6 +58,4 @@ class ExtraNetworkLora(extra_networks.ExtraNetwork):
                 p.extra_generation_params["Lora hashes"] = ", ".join(f"{k}: {v}" for k, v in p.lora_hashes.items())
 
     def deactivate(self, p: "StableDiffusionProcessing"):
-        if self.errors:
-            p.comment("Networks with errors: " + ", ".join(f"{k} ({v})" for k, v in self.errors.items()))
-            self.errors.clear()
+        pass  # failures are reported by activate() (also on the Hires pass)

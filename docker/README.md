@@ -1,8 +1,9 @@
 # Remi WebUI (Docker)
 
 > [!Warning]
-> Requires an **NVIDIA** GPU and the NVIDIA Container Toolkit.
-> The image uses the PyTorch CUDA 13.0 build the launcher installs on Linux: driver `580+`.
+> Requires an **NVIDIA** GPU and the NVIDIA Container Toolkit (`docker/Dockerfile`:
+> the PyTorch CUDA 13.0 build the launcher installs on Linux, driver `580+`), or an
+> **AMD** GPU with ROCm (`docker/Dockerfile.rocm`: the ROCm 7.2 PyTorch wheels).
 
 The image is built from this checkout, never from a clone: what it runs is the
 code of the folder you build it in, without Gradio (the WebUI's requirements do
@@ -13,7 +14,8 @@ not include it).
 From the repository root (the build context must be the whole checkout):
 
 ```bash
-docker build -f docker/Dockerfile -t remi-webui .
+docker build -f docker/Dockerfile -t remi-webui .            # NVIDIA
+docker build -f docker/Dockerfile.rocm -t remi-webui-rocm .  # AMD (ROCm)
 ```
 
 - Stage `webui` builds the web interface (`webui/dist`) with Node.js and
@@ -27,12 +29,19 @@ docker build -f docker/Dockerfile -t remi-webui .
 
 Build arguments: `CUDA_VERSION` (base image, default `13.0.0`), `NODE_VERSION`
 (default `24`), `PNPM_VERSION` (default `12`), `TORCH_INDEX_URL` and
-`TORCH_PACKAGES` (default: the launcher's Linux PyTorch build).
+`TORCH_PACKAGES` (default: the launcher's Linux PyTorch build). The ROCm recipe
+uses `ubuntu:22.04` as its base and takes `TORCH_INDEX` (default `rocm7.2`, an
+index of <https://download.pytorch.org/whl/>) and `TORCH_PACKAGES` (default
+`torch torchvision`) instead of the CUDA arguments.
 
 ## Run
 
 ```bash
+# NVIDIA
 docker run --gpus all -p 7860:7860 -v remi-data:/home/remi/data remi-webui
+# AMD (ROCm): pass the kernel driver and the GPU devices
+docker run --device /dev/kfd --device /dev/dri --group-add video \
+    -p 7860:7860 -v remi-data:/home/remi/data remi-webui-rocm
 ```
 
 Open `http://localhost:7860/`. Extra launch options go after the image name or
@@ -62,8 +71,8 @@ folders must be writable by it.
 
 | | |
 | --- | --- |
-| Base | `nvidia/cuda:13.0.0-runtime-ubuntu22.04` |
+| Base | `nvidia/cuda:13.0.0-runtime-ubuntu22.04` (ROCm: `ubuntu:22.04`) |
 | Python | `3.13` via **uv** |
-| PyTorch | the launcher's Linux build (`torch==2.14.0+cu130`) |
+| PyTorch | the launcher's Linux build (`torch==2.14.0+cu130`); ROCm: the `rocm7.2` wheels |
 | User | `remi` (UID 99 / GID 100) |
 | Port | 7860 |

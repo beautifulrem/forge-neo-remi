@@ -11,7 +11,7 @@ from modules.shared import device, opts
 from remi import ui
 
 # upstream 04772d93: one "Edit Models" entry (a hover list there; Markdown has no hover)
-_EDIT_MODELS = "Flux.1-Kontext, Flux.2-Klein, Qwen-Image-Edit, Qwen-Image-2.1, Anima Edit, Krea2 Edit"
+_EDIT_MODELS = "Flux.1-Kontext, Flux.2-Klein, Qwen-Image-Edit, Qwen-Image-2.1, Anima Edit, Krea2 Edit, Moss Image Edit"
 
 T2I_INFO = f"""For **Edit Models** ({_EDIT_MODELS}): Use in **txt2img** to achieve the effect of empty latent with custom resolution\\
 For **Wan 2.2 I2V**: Use in **txt2img** to set as the Last Frame to achieve LastFrameToVideo\\
@@ -40,15 +40,8 @@ class ImageStitch(scripts.Script):
                 ui.Markdown(I2I_INFO if is_img2img else T2I_INFO),
                 # Uploads (never restored from drafts) edited by the image-list widget: select, replace, remove, reorder
                 ui.ImageList("references", label="Reference Image(s)", widget="image-list", props={"columns": 3}),
-                ui.Slider(
-                    "max_dim",
-                    0,
-                    2048,
-                    1024,
-                    256,
-                    label="Maximum Side Length",
-                    info="reduce VRAM usage during encoding ; apply to all reference images ; set to 0 for no limit",
-                ),
+                # upstream caaa2cca: the side limit is the setting "Maximum Side Length for Reference
+                # Images" (reference_max_side), which also covers img2img's reference image
             ],
         )
 
@@ -58,57 +51,53 @@ class ImageStitch(scripts.Script):
         p.clear_prompt_cache()
         p.sd_model.clear_references()
 
-    def process(self, p: StableDiffusionProcessing, enable: bool, references: list[str | Image.Image | tuple[Image.Image, str]], max_dim: int):
-        if not (enable and references and dynamic_args.can_reference()):
-            if ImageStitch.cached_parameters is None:
-                return
+    def process(self, p: StableDiffusionProcessing, enable: bool, references: list[str | Image.Image | tuple[Image.Image, str]], *_legacy):
+        # ``_legacy``: the former "Maximum Side Length" argument, still sent by older API clients
+        if enable and references and dynamic_args.can_reference():
+            references: list[Image.Image] = self.extract_images(references)
+        else:
+            references = None
 
-            # if previously enabled, clear out the ref_latents
-            ImageStitch.cached_parameters = None
-            self.reset_references(p)
-            return
+        is_WanT2I: bool = dynamic_args.wan and isinstance(p, StableDiffusionProcessingTxt2Img)
 
-        references = self.extract_images(references)
+        # the references are encoded again when the inputs, the model or a setting the encoding reads changes
+        cache: tuple = None
+        if references:
+            cache = (opts.reference_max_side, opts.klein_do_reference, opts.qwen21_do_reference, opts.anima_do_reference, opts.krea2_do_reference, opts.moss_do_reference, str(sd_models.model_data.forge_loading_parameters), opts.img2img_background_color, tuple(self.hash_image(ref) for ref in references), (p.width, p.height, p.batch_size) if is_WanT2I else None)
 
-        # cache is based on reference inputs & model
-        cache: list[str | int | bool] = [str(sd_models.model_data.forge_loading_parameters), *(self.hash_image(ref) for ref in references), (dynamic_args.wan and isinstance(p, StableDiffusionProcessingTxt2Img))]
         if ImageStitch.cached_parameters == cache:
             return
 
-        ImageStitch.cached_parameters = cache
         self.reset_references(p)
+        ImageStitch.cached_parameters = cache
 
-        _batch_size: int = None
+        if not references:
+            return
 
         if dynamic_args.wan:
-            if isinstance(p, StableDiffusionProcessingTxt2Img):
-                _batch_size = p.batch_size
-                if _batch_size == 1:
-                    logger.error("Wan 2.2 requires more than one frame...")
-                    return
+            if is_WanT2I and p.batch_size == 1:
+                logger.error("Wan 2.2 I2V requires more than one frame...")
+                return
             if len(references) > 1:
-                logger.warning("Wan 2.2 only uses the first reference image...")
+                logger.warning("Wan 2.2 I2V only uses the first reference image...")
                 references = [references[0]]
 
         dynamic_args.is_referencing = True
 
-        for reference in references:
-            reference = self.preprocess(reference, max_dim)
-            if _batch_size:
-                reference = images.resize_image(1, reference, p.width, p.height)
-            image = images.flatten(reference, opts.img2img_background_color)
-            image = np.array(image, dtype=np.float32) / 255.0
-            image = np.moveaxis(image, 2, 0)
-            image = torch.from_numpy(image).to(device=device).unsqueeze(0)
-
-            if _batch_size:
-                dim = [_batch_size - 1] + list(image.shape)[1:]
-                empty = torch.empty(dim, dtype=torch.float32, device=device)
-                image = torch.cat([image, empty], dim=0)
-
-            images_tensor_to_samples(image, 0, p.sd_model)  # calls encode_first_stage
-
-        dynamic_args.is_referencing = False
+        try:
+            for reference in references:
+                if is_WanT2I:
+                    reference = images.resize_image(1, reference, p.width, p.height)
+                image = images.flatten(reference, opts.img2img_background_color)
+                image = np.array(image, dtype=np.float32) / 255.0
+                image = np.moveaxis(image, 2, 0)
+                image = torch.from_numpy(image).unsqueeze(0)
+                if dynamic_args.wan:
+                    p.sd_model.set_end_image(image, p.batch_size if is_WanT2I else 1)
+                else:
+                    images_tensor_to_samples(image.to(device=device), 0, p.sd_model)
+        finally:
+            dynamic_args.is_referencing = False
 
     @staticmethod
     def extract_images(gallery: list[str | Image.Image | tuple[Image.Image, str]]) -> list[Image.Image]:
@@ -124,26 +113,5 @@ class ImageStitch(scripts.Script):
         return images
 
     @staticmethod
-    def preprocess(img: Image.Image, limit: int) -> Image.Image:
-        w, h = img.size
-
-        if limit > 0 and max(w, h) > limit:
-            ratio = limit / max(w, h)
-            _w, _h = int(w * ratio), int(h * ratio)
-        else:
-            _w, _h = w, h
-
-        if _w % 64 != 0 or _h % 64 != 0:
-            _w = round(_w / 64) * 64
-            _h = round(_h / 64) * 64
-
-        if w != _w or h != _h:
-            return images.resize_image(1, img, _w, _h)
-        else:
-            return img
-
-    @staticmethod
     def hash_image(img: Image.Image) -> int:
-        img = img.resize((64, 64), Image.Resampling.LANCZOS)
-        img = img.convert("L")
-        return hash(str(list(img.getdata())))
+        return hash((img.mode, img.size, img.convert("L").tobytes()))

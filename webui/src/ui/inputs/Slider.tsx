@@ -24,6 +24,7 @@ export function Slider({ node }: { node: SliderNode }) {
   const fallbackName = useFallbackName(node.name)
   const ariaDescribedBy = describedBy(id, param.info, param.error, hintRef(id, param.hint))
 
+  const snapsTyped = integer && typeof step === "number" && step > 1
   const commit = (raw: number) => {
     if (!Number.isFinite(raw)) return
     const next = coerceNumber(node, raw, { minimum: min, maximum: max })
@@ -57,6 +58,9 @@ export function Slider({ node }: { node: SliderNode }) {
           step={step}
           format={{ maximumFractionDigits: Math.max(decimals, 0), useGrouping: false }}
           onValueChange={(next) => next !== null && commit(next)}
+          // A typed value of a stepped integer slider (width / height on the res_step grid) snaps
+          // to multiples of the step when the field is left, as upstream's dimRounding.js (6a8cbc01) does
+          onValueCommitted={(next) => next !== null && snapsTyped && commit(snapToStep(next, step))}
           disabled={!param.enabled}
         />
       }

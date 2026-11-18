@@ -50,13 +50,13 @@ Below 72 rem the history becomes a strip; on phones the stage comes first and th
 
 **Gallery.** Every image in your output folders, indexed: search the prompt, file name or model; filter by form, folder, model, date range and stars; justified or masonry layout; select many to star, download as zip, compare two, or delete. The viewer shows the parameters and can reveal the file in your file manager.
 
-**Networks.** One browser for LoRA / LyCORIS, embeddings, checkpoints, VAE and text encoders, as a full page or a drawer next to the prompt (Alt+N): folder tree, architecture filters ("compatible with the current preset"), sort, card and list views, previews (images or videos), metadata and training tags, an editor for each item's user metadata (description, activation text, preferred weight, …), setting a preview from your results, and a refresh button that rescans the folders (it also updates the model bar). Thousands of items scroll smoothly.
+**Networks.** One browser for LoRA / LyCORIS, embeddings, checkpoints, VAE and text encoders, as a full page or a drawer next to the prompt (Alt+N): folder tree, architecture filters ("compatible with the current preset"), sort, card and list views, previews (images or videos), metadata and training tags, an editor for each item's user metadata (description, activation text, preferred weight, a checkpoint's preferred VAE / text encoders that its card selects with it, …), setting a preview from your results, and a refresh button that rescans the folders (it also updates the model bar). Thousands of items scroll smoothly.
 
 **Queue.** The running job with its live preview, the queued jobs in run order (drag or keyboard to reorder, high / normal / low priority, duplicate, edit, cancel), pause / resume, and the searchable history of every job with its outputs, stars and "queue again". Imports tasks from the old Agent Scheduler and Prompt Queue.
 
 **Settings.** All settings in one searchable, virtualized list with categories, "changed" / "unsaved" / "pinned" filters, per-setting reset, export and import (also of an A1111 `config.json`), plus server tools: Reload UI, restart, unload or reload the model, show the weights in memory, hash all checkpoints, system info and licenses.
 
-**Extensions.** Installed extensions (enable, disable, check for updates, update, uninstall), the extension index with search and tag filters, install from a git URL, and configuration backups you can restore.
+**Extensions.** Installed extensions (enable, disable, check for updates, update, uninstall), the extension index (by default the third-party [Forge Neo index](https://github.com/eduardoabreu81/forge-neo-extensions); verify an extension before installing it) with search, tag filters and a recent-updates filter ("2025+"), install from a git URL, and configuration backups you can restore.
 
 **Extension pages.** Extensions add their own pages: **JoyCaption** (image captioning, single or folder, with progress and cancel), **Prompt Workshop** and **JSON Builder** (lay out a MOSS-Image structured prompt as boxes on a canvas, then send it with its size to txt2img or img2img) ship with Remi.
 
@@ -94,6 +94,8 @@ Remi retains Forge Neo's modern-model focus and adds deeper Anima integration.
 - FLUX Kontext and FLUX.2 Klein
 - Qwen-Image, Qwen-Image-Edit and Qwen-Image-2.1
 - Moss-Image and Moss-Image-Edit
+- Anima RGBA (transparent images; needs its [LoRA and VAE](https://huggingface.co/localai0301/Anima-RGBA); for img2img of a transparent image set `img2img_background_color` to `(255, 255, 255)`)
+- GGUF checkpoints and text encoders (the `gguf` package, with Triton K-quant dequantization where available)
 - Ernie-Image, PiD 1.5, Z-Image, Mugen, Lumina Image 2, and Chroma
 - Wan 2.2 image/video workflows
 
@@ -155,13 +157,20 @@ Without Node.js on the machine:
 
 `REMI_SKIP_WEBUI_BUILD=1` turns the automatic build off; `--skip-install` and `--skip-prepare-environment` skip it too.
 
-### Docker (NVIDIA GPU)
+### Docker (NVIDIA or AMD GPU)
 
 `docker/Dockerfile` builds an image of this checkout (the build context is the repository root): the web interface is built in a Node.js stage, the server image gets Python 3.13, the launcher's PyTorch build and `requirements.txt`, and no Gradio. Every piece of user data lives in one volume, `/home/remi/data`. See [docker/README.md](docker/README.md).
 
 ```bash
 docker build -f docker/Dockerfile -t remi-webui .
 docker run --gpus all -p 7860:7860 -v remi-data:/home/remi/data remi-webui
+```
+
+For AMD GPUs, `docker/Dockerfile.rocm` is the same recipe with the ROCm build of PyTorch:
+
+```bash
+docker build -f docker/Dockerfile.rocm -t remi-webui-rocm .
+docker run --device /dev/kfd --device /dev/dri --group-add video -p 7860:7860 -v remi-data:/home/remi/data remi-webui-rocm
 ```
 
 ### Recommended first Anima run
@@ -215,6 +224,16 @@ Pass options in `COMMANDLINE_ARGS` (`webui-user.bat`, `webui.settings.sh`) or to
 | `--skip-install`, `--skip-prepare-environment` | Skip package installation (and the web interface build) |
 | `--sage` / `--flash` | Install optional attention packages; availability does not guarantee selection |
 | `--disable-extra-extensions`, `--disable-all-extensions` | Start without user extensions, or without any |
+
+**Models and presets**
+
+| Option | Purpose |
+| --- | --- |
+| `--disable-preset sd xl …` | Remove these UI presets from the model bar and the preset settings |
+| `--sort-preset` | List the UI presets alphabetically |
+| `--force-w4a8` | Load `convrot_w4a4` checkpoints as `w4a8` (better quality) |
+| `--use-ck-attention`, `--enable-triton-backend` | Comfy-Kitchen attention (overrides other attention packages); Triton kernels in `comfy-kitchen` |
+| `--pynvml` | Read the actual free VRAM through the NVIDIA Management Library |
 
 **Changed options.** The Gradio-only options are gone: replace `--gradio-auth` / `--gradio-auth-path` with `--auth` / `--auth-file`, and drop `--gradio-debug`, `--gradio-allowed-path` and `--no-gradio-queue`. The WebUI refuses to start with an unknown option, so an old login option can never be silently ignored. `--share` is accepted but only logs a warning (use `--listen`, a reverse proxy or `--ngrok`); `--use-textbox-seed` has no effect; `--theme light|dark|system` is the theme of browsers that have not picked one in the Appearance menu (`?__theme=light` in the URL picks one, as before); `--agent-scheduler-sqlite-file` tells the queue importer where an old Agent Scheduler database is. Do not install every attention backend blindly; native PyTorch attention is often the most compatible choice, see the upstream [extra installation guide](https://github.com/Haoming02/sd-webui-forge-classic/wiki/Extra-Installations).
 

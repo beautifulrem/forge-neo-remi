@@ -4,7 +4,7 @@ import type { NetworkItem, NetworkKind } from "@/api/types"
 import { ItemMenu } from "./ItemMenu"
 
 const KIND: NetworkKind = { id: "lora", title: "LoRA", action: "prompt", negative: true, fields: ["description"], builtin: true }
-const item = (extra: Partial<NetworkItem> = {}): NetworkItem => ({ name: "ink", title: "ink", kind: "lora", path: "ink.safetensors", folder: "", tags: [], search_terms: [], editable: true, hidden: false, ...extra })
+const item = (extra: Partial<NetworkItem> = {}): NetworkItem => ({ name: "ink", title: "ink", kind: "lora", path: "ink.safetensors", folder: "", tags: [], preferred_modules: [], search_terms: [], editable: true, hidden: false, ...extra })
 
 function open(props: Partial<Parameters<typeof ItemMenu>[0]> = {}) {
   const anchor = document.createElement("div")

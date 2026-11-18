@@ -3123,6 +3123,11 @@ export interface components {
              */
             tags: string[];
             /**
+             * Preferred Modules
+             * @default []
+             */
+            preferred_modules: string[];
+            /**
              * Search Terms
              * @default []
              */
@@ -3222,6 +3227,11 @@ export interface components {
              * @default []
              */
             tags: string[];
+            /**
+             * Preferred Modules
+             * @default []
+             */
+            preferred_modules: string[];
             /**
              * Search Terms
              * @default []
