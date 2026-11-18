@@ -17,6 +17,8 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // ---------------------------------------------------------------- settings
 
+// SAFETY: the contract is `GET /api/v2/settings` dumped by tools/dump_settings.py (tools/check.sh
+// "contract:settings" keeps it equal to the server's); JSON imports widen its literal types.
 const settings = settingsContract as unknown as SettingsSchema
 const values: Record<string, unknown> = { ...settings.values, ...bootstrap.options }
 

@@ -3,10 +3,10 @@
  * Tiny and Konva-free, so the main bundle can ask: the img2img stage never
  * switches view under the user's brush.
  */
-const painting = new Set<object>()
+const painting = new Set<WeakKey>()
 
 /** Records whether `owner` (an editor's input handler) has a painting gesture in progress. */
-export function setPainting(owner: object, on: boolean) {
+export function setPainting(owner: WeakKey, on: boolean) {
   if (on) painting.add(owner)
   else painting.delete(owner)
 }

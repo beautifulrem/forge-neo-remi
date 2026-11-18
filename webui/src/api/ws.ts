@@ -15,6 +15,9 @@ import { flushPaintBatch, holdPaint, paintBatch } from "./paint-batch"
 /** What this client understands; sent in the hello message. */
 export const CLIENT_FEATURES = ["events.v1", "preview.binary", "preview.jpeg", "preview.webp"] as const
 
+/** A message to the server: its `type` (`hello`, `visibility`, a server command, …) and fields. */
+export type ClientMessage = { type: string } & Record<string, unknown>
+
 export type WsStatus = "idle" | "connecting" | "open" | "reconnecting" | "closed"
 
 export type LivePreview = { jobSeq: number; step: number; url: string }
@@ -44,7 +47,7 @@ type WsState = {
   preview: LivePreview | null
   connect: () => void
   disconnect: () => void
-  send: (message: object) => boolean
+  send: (message: ClientMessage) => boolean
   clearPreview: () => void
 }
 

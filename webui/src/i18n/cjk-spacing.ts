@@ -39,7 +39,7 @@ export function spaceInterpolations(text: string, values: readonly string[]): st
 /** The string and number values a `t()` call interpolates. */
 function interpolated(options: TOptions): string[] {
   const values: string[] = []
-  const add = (source: object) => {
+  const add = (source: Readonly<Record<string, unknown>>) => {
     for (const [name, value] of Object.entries(source)) {
       if (RESERVED.has(name)) continue
       if (typeof value === "string" || typeof value === "number") values.push(String(value))

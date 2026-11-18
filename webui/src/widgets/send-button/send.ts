@@ -41,6 +41,7 @@ export function openUrl(url: string): boolean {
     return false
   }
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false
+  // pi-lens-ignore: no-open-redirect -- only http(s) URLs reach this line (checked above), opened with noopener
   window.open(parsed.href, "_blank", "noopener,noreferrer")
   return true
 }

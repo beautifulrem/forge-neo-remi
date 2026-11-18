@@ -14,6 +14,7 @@ export function downloadFile(fileId: string) {
 }
 
 export function openInNewTab(fileId: string) {
+  // pi-lens-ignore: no-open-redirect -- a same-origin /files URL built from the file id, not a caller-supplied URL
   window.open(api.fileUrl(fileId), "_blank", "noopener,noreferrer")
 }
 

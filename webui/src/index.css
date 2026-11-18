@@ -426,7 +426,12 @@
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
 
-/* Motion: honour the OS preference everywhere, including tw-animate-css. */
+/*
+ * Motion: honour the OS preference everywhere, including tw-animate-css.
+ * `!important` on purpose: the preference must win over every utility,
+ * component and inline style that sets a duration (the standard pattern;
+ * webui/.pi-lens.json exempts this file from the no-important rule).
+ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

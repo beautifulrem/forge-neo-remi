@@ -22,10 +22,12 @@ export function check(condition: unknown, message: string): asserts condition {
 }
 
 type Json = Record<string, unknown>
+/** What `JSON.parse` can produce. */
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
 
 export const isObject = (value: unknown): value is Json => value !== null && typeof value === "object" && !Array.isArray(value)
 
-const has = (value: object, key: string) => Object.prototype.hasOwnProperty.call(value, key)
+const has = (value: Json, key: string) => Object.prototype.hasOwnProperty.call(value, key)
 
 function fields(value: unknown, allowed: ReadonlySet<string>, required: ReadonlySet<string>, location: string): asserts value is Json {
   check(isObject(value), `${location} must be an object`)
@@ -76,7 +78,7 @@ function centeredBox(box: unknown, width: number, height: number, location: stri
  * `JSON.parse` that refuses duplicate keys (the reference compiler's
  * `object_pairs_hook`), NaN / Infinity and numbers that overflow.
  */
-export function parseUniqueJson(source: string): unknown {
+export function parseUniqueJson(source: string): JsonValue {
   let pos = 0
 
   const skipWhitespace = () => {

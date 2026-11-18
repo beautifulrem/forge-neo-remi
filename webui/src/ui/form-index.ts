@@ -4,6 +4,7 @@ import {
   type GroupNode,
   type InputNode,
   isInput,
+  type Json,
   type Node,
   type OwnerDefaults,
   type ScriptSchema,
@@ -85,8 +86,8 @@ export function buildIndex(owners: readonly OwnerSpec[]): FormIndex {
 }
 
 /** The default for a param: the owner's `defaults` map first, then the node's own `default`. */
-export function defaultOf(spec: OwnerSpec, node: InputNode): unknown {
-  return Object.hasOwn(spec.defaults, node.name) ? spec.defaults[node.name] : (node.default ?? null)
+export function defaultOf(spec: OwnerSpec, node: InputNode): Json {
+  return Object.hasOwn(spec.defaults, node.name) ? (spec.defaults[node.name] ?? null) : (node.default ?? null)
 }
 
 /** The default slot for scripts without a (known) section. */

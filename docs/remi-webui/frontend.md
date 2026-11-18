@@ -281,7 +281,7 @@ scripts); `<PageForm schema={PageSchema}/>` renders one owner (extension
 pages). `jobRequest(store, schema)` (`ui/tab.ts`) builds the `POST /jobs` body.
 
 | file | role |
-|---|---|
+| --- | --- |
 | `schema.ts` | TypeScript mirror of schema-format.md |
 | `Renderer.tsx` | `RenderNode`: dispatch by `type`, `visible_if`/`enabled_if`, patch visibility, row cells |
 | `inputs/*` | one component per input kind: Toggle, Slider (+ number box), Number, Text (`prompt` → lazy `PromptEditor`), Choice (select / segmented or radio list / searchable; `choice_hints` as option tooltips), MultiChoice (chips or checkboxes), Seed (dice / recycle), Color, Image, ImageList, File (`DropZone`: drop, paste, click → `POST /uploads`), Json, Custom |
@@ -435,7 +435,7 @@ that widget) returning translated text or `null`. It is imported eagerly
   time the page is shown. Other views send values to a page with
   `sendToPage(id, values)` (`pages/ext/deliver.ts`: applied at once to a
   loaded page, else right after its first load; each value's `on_change`
-  runs). Pages declaring `send_to` image targets get "Send to <label>"
+  runs). Pages declaring `send_to` image targets get "Send to *label*"
   buttons wherever `PageSendButtons` (`pages/ext/send-targets.tsx`) is
   placed: PNG Info's "Send image" group.
 - Page widgets: `task-runner` (start a page task and follow it: progress,
@@ -614,7 +614,7 @@ chunk, `preloadImageEditor()` fetches it early), the img2img integration
 (`Img2imgSourcePanel`, `Img2imgStage`) and the schema binding helpers.
 
 | directory | role |
-|---|---|
+| --- | --- |
 | `core/` | pure logic, unit-tested: geometry and view math, undo `History` (≥ 32 states, byte budget), pixel patches (empty / RLE / raw, masks as alpha), dab placement along strokes, flood fill, tiles, mask export / luminance fallback, resize-frame and "Only masked" area maths (mirrors `modules.images` / `modules.masking`), shortcuts, schema → mode layers (`modes.ts`) |
 | `engine/` | `EditorDocument` (background, one raster per layer, history, per-layer upload sync), `CanvasRaster` / `MemoryRaster` (tests), `LayerSync` (debounced, hash-cached uploads), `Interaction` (pointer / wheel / pinch), `Renderer` (the only Konva file), `registry` (documents by key) |
 | `state/` | tool settings persisted per browser (`remi-canvas-tools`); `activity.ts` (a painting gesture is in progress, readable from the main bundle) |
@@ -771,7 +771,7 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
   hidden for items without a model file (`editable: false`). The
   checkpoint editor no longer offers upstream's unused "Preferred VAE / Text
   encoder(s)" (`vae_te`) field; the key is kept in sidecars that have it.
-- **Filters**: architecture chips with counts, "For <preset>" (default on
+- **Filters**: architecture chips with counts, "For *preset*" (default on
   for LoRA when `lora_preset_filter` is set; it filters by the *effective*
   architecture, the user's `sd version` or else the one read from the file,
   where upstream only used `sd version`), the folder (a resizable tree pane
@@ -849,7 +849,7 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
   that the browser remembers:
 
   | removed setting(s) | replacement |
-  |---|---|
+  | --- | --- |
   | `prompt_box_style` (Default / Compact / Scrollable / Accordion) | the prompt editors grow with their text up to 24 rem and then scroll (the former Scrollable); the form column of Generate is a resizable pane; the extra networks open in the Networks drawer beside the prompts (Alt+N) rather than the Compact layout's tabs |
   | `txt2img_settings_accordion`, `img2img_settings_accordion` | every section of the form collapses on its own and keeps its open state (`sectionKey`) |
   | `gallery_height` | the result stage fills the page height beside the form (the split between them is a drag-resizable pane) |
@@ -868,6 +868,7 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
   | `send_image_info_not_ui` | "Send to" always sends the parameters recorded in the image (e.g. the expanded wildcards) |
   | `open_dir_button_choice` | "Show in folder" opens the folder of the image itself (local browsers only) |
   | `cross_attention_optimization` (a read-only "Automatic") | the attention backend is chosen by launch flags |
+
 - **Quick settings** (`features/quicksettings`): the header's ⚡ button lists
   `quicksettings_list` minus the model bar's keys (checkpoint, VAE / TE,
   dtype, preset), rendered by the schema renderer in a lazy popover and
@@ -1018,7 +1019,7 @@ older server) nothing is shown.
   (`filter: false`), caches queries (LRU, 60 s; cleared on settings / network
   changes) and waits `tags.delay` (`tac_delayTime`, 40 ms) before an
   uncached request. `insert.ts` applies the insertion settings
-  (underscores and their exclusions, escaped brackets, `, ` after a tag but
+  (underscores and their exclusions, escaped brackets, a comma and a space after a tag but
   not before `,` `)` `]` `}` `>` `|` `:`, `<lora:alias:weight>`, activation
   text at the start / end / before / after, Anima's `@` artist prefix, Tab
   completing nested wildcards one folder or to the first difference). An
