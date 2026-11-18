@@ -122,9 +122,7 @@ def test_lowvram_patches_expose_their_patch_list():
     runtime, ModelPatcher, LowVramPatch = _load()
     patcher = _patcher(ModelPatcher, online=False)
 
-    key, patches = runtime._lora_function_patches(
-        LowVramPatch("layer.weight", patcher.patches)
-    )
+    key, patches = runtime._lora_function_patches(LowVramPatch("layer.weight", patcher.patches))
 
     assert key == "layer.weight"
     assert patches is patcher.patches["layer.weight"]
