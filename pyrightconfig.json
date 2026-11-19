@@ -1,0 +1,47 @@
+{
+  "include": [
+    "remi",
+    "modules",
+    "modules_forge",
+    "backend",
+    "extensions-builtin",
+    "scripts",
+    "tools",
+    "tests",
+    "webui/tools",
+    "launch.py",
+    "webui.py",
+    "download_configs.py"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/node_modules",
+    "venv",
+    ".venv",
+    "models",
+    "extensions",
+    "extension-data",
+    "modules_forge/packages",
+    "webui/src",
+    "webui/dist",
+    "output",
+    "tmp",
+    "cache"
+  ],
+  "extraPaths": [
+    "modules_forge/packages"
+  ],
+  "venvPath": ".",
+  "venv": "venv",
+  "pythonVersion": "3.13",
+  "pythonPlatform": "All",
+  "typeCheckingMode": "standard",
+  "reportMissingModuleSource": "none",
+  "reportMissingImports": "warning",
+  "reportAttributeAccessIssue": "error",
+  "reportPossiblyUnboundVariable": "error",
+  "reportOptionalMemberAccess": "error",
+  "reportRedeclaration": "error",
+  "enableTypeIgnoreComments": true,
+  "failOnWarnings": false
+}
