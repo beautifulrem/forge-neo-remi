@@ -96,8 +96,9 @@ Assessed in a real browser (light and dark, desktop and narrow widths):
   extension-install inputs are validated.
 
 ### 10. Documentation and upstream absorption
-- The README (en and zh-CN) describes the new UI, installation (including the
-  prebuilt-SPA or Node requirement), and launch flags.
+- The README and the usage guide (`usage.md`; both en and zh-CN) describe the
+  new UI, installation (including the prebuilt-SPA or Node requirement), and
+  launch flags.
 - `docs/remi-webui/` covers the architecture, schema format, frontend
   conventions, an extension developer guide (porting from A1111 `ui()` to
   `params()`), and the API.

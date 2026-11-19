@@ -1,14 +1,17 @@
 # Remi documentation
 
 Start with the [project README](../../README.md) ([简体中文](../../README.zh-CN.md)):
-what the Remi WebUI is, installation, launch options, data locations,
-keyboard shortcuts, migration from the Gradio UI and troubleshooting.
+what the Remi WebUI is, screenshots and a quick start. The
+[usage guide](usage.md) ([简体中文](usage.zh-CN.md)) has the details: every page,
+installation, launch options, data locations, keyboard shortcuts, migration
+from the Gradio UI, security and troubleshooting.
 
 ## Using Remi
 
 | document | for |
 |---|---|
-| [README](../../README.md) / [README.zh-CN](../../README.zh-CN.md) | users: the interface, install, launch flags, where data lives, shortcuts, migration, troubleshooting |
+| [README](../../README.md) / [README.zh-CN](../../README.zh-CN.md) | users: what Remi is, screenshots, quick start, supported model families |
+| [usage.md](usage.md) / [usage.zh-CN.md](usage.zh-CN.md) | users: every page of the interface, the Anima integration table, install (web interface build, Docker), launch flags, where data lives, shortcuts, migration from the Gradio UI, built-in extensions, security and remote access, troubleshooting, compatibility notes |
 | [Remi Anima generation and parameter guide](../remi-anima-generation-guide.zh-CN.md) (zh-CN) | choosing and combining the Anima samplers, guidance, spatial and LoRA features |
 | [api.md](api.md) | script and tool authors: REST `/api/v2`, the WebSocket protocol and binary previews, `/sdapi/v1` compatibility, auth, curl and Python examples |
 | [security.md](security.md) | administrators: the threat model, every security control, how to run the server exposed (`--listen`, TLS, proxies), residual risks |

@@ -1,6 +1,6 @@
 """`python launch.py --help` lists every flag, including the ones extensions add.
 
-README.md / README.zh-CN.md ("Launch Options") promise that `--help` lists all
+docs/remi-webui/usage.md / usage.zh-CN.md ("Launch Options") promise that `--help` lists all
 launch options. Bundled extensions register theirs in ``preload.py``, which runs
 after the launcher's own early parse, so this guards against `--help` exiting
 before the preloads have run.
