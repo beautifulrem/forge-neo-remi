@@ -5,7 +5,7 @@
  * apart; built-in ones cannot be uninstalled.
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { ArrowUpCircle, Check, ChevronRight, CircleAlert, ExternalLink, GitBranch, Loader2, MoreHorizontal, RefreshCw, Search, Trash2, X } from "@/components/icons"
+import { ArrowUpCircle, Check, ChevronDown, CircleAlert, ExternalLink, GitBranch, Loader2, MoreHorizontal, RefreshCw, Search, Trash2, X } from "@/components/icons"
 import { useEffect, useId, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
@@ -35,6 +35,7 @@ import { Switch } from "@/components/ui/switch"
 import { requestServerCommand, runServerCommandAfterApply } from "@/features/server-control/server-control"
 import { useUnsaved } from "@/features/server-control/unsaved"
 import { cn } from "@/lib/utils"
+import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import {
   adminErrorMessage,
   disabledList,
@@ -116,12 +117,12 @@ function ExtensionRow(props: { ext: ExtensionInfo; staged: Staged; access: boole
     <li className={cn("flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/40", changed && "bg-primary/[0.06]")}>
       <Switch id={switchId} checked={enabled} disabled={!access} onCheckedChange={(on) => set(stageEnabled(staged, ext, on))} aria-describedby={`${switchId}-meta`} />
       <div className="min-w-0 flex-1 basis-48">
-        <label htmlFor={switchId} className={cn("block truncate text-sm font-medium", !enabled && "text-muted-foreground line-through decoration-muted-foreground/50")}>
+        <label htmlFor={switchId} title={ext.name} className={cn("block truncate text-sm font-medium", !enabled && "text-muted-foreground line-through decoration-muted-foreground/50")}>
           {ext.name}
         </label>
         <p id={`${switchId}-meta`} className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
           {ext.remote_url ? (
-            <a href={ext.remote_url} target="_blank" rel="noreferrer noopener" className="inline-flex max-w-72 min-w-0 items-center gap-0.5 hover:text-foreground hover:underline">
+            <a href={ext.remote_url} title={ext.remote_url} target="_blank" rel="noreferrer noopener" className="inline-flex max-w-72 min-w-0 items-center gap-0.5 hover:text-foreground hover:underline">
               {/* the text in its own box: a flex container does not ellipsize its text */}
               <span className="truncate">{ext.remote_url.replace(/^https:\/\/(www\.)?/, "")}</span>
               <ExternalLink className="size-3 shrink-0" aria-hidden />
@@ -197,14 +198,16 @@ function Group(props: { title: string; count: number; defaultOpen: boolean; filt
     if (props.filtering && props.count > 0) setOpen(true)
   }
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="rounded-md bg-card">
-      <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm font-semibold outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/60">
-        <ChevronRight className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-90")} aria-hidden />
+    // an inspector panel like the form sections (`ui/layout/panel.ts`), not a card
+    <Collapsible open={open} onOpenChange={setOpen} className={panelClass(0)}>
+      <CollapsibleTrigger className={cn("flex min-h-8 w-full items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50", panelTitleClass(0))}>
         {t(props.title)}
         <span className="text-xs font-normal text-muted-foreground tabular-nums">{props.count}</span>
+        <ChevronDown className={cn("ml-auto size-4 text-muted-foreground transition-transform duration-150", !open && "-rotate-90")} aria-hidden />
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <ul className="flex flex-col border-t p-1">{props.children}</ul>
+        {/* rows keep their hover fill's padding; the list bleeds it so their text sits on the column's edge */}
+        <ul className="-mx-3 flex flex-col pt-1">{props.children}</ul>
       </CollapsibleContent>
     </Collapsible>
   )
@@ -334,11 +337,11 @@ export function InstalledView() {
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        <InputGroup className="max-w-xs min-w-44 flex-1">
+        <InputGroup className="h-7 min-w-44 flex-1 sm:max-w-xs">
           <InputGroupAddon>
             <Search aria-hidden />
           </InputGroupAddon>
-          <InputGroupInput type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("Filter extensions")} aria-label={t("Filter extensions")} />
+          <InputGroupInput className="h-full" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("Filter extensions")} aria-label={t("Filter extensions")} />
         </InputGroup>
         <div className="flex items-center gap-2">
           <span id="disable-all-label" className="text-xs text-muted-foreground">

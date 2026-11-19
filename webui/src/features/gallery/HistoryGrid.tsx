@@ -150,8 +150,12 @@ export function HistoryGrid({ onOpen, orientation = "grid", className }: History
                     }}
                     onDoubleClick={() => onOpen(item.key)}
                     className={cn(
-                      "group/cell relative shrink-0 cursor-pointer overflow-hidden rounded-md bg-checker ring-offset-1 ring-offset-background transition-shadow",
-                      selected ? "ring-2 ring-primary" : "hover:ring-2 hover:ring-ring/40",
+                      // The ring is drawn inside the cell, over the image: one outside it would be cut by the scroller at the edges.
+                      "group/cell relative shrink-0 cursor-pointer overflow-hidden rounded-md bg-checker",
+                      "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:transition-shadow",
+                      selected
+                        ? "after:shadow-[inset_0_0_0_2px_var(--primary),inset_0_0_0_3px_var(--background)]"
+                        : "hover:after:shadow-[inset_0_0_0_2px_color-mix(in_oklch,var(--ring)_40%,transparent)]",
                     )}
                     style={{ width: cell, height: cell, marginRight: strip ? GAP_PX : undefined }}
                   >
@@ -164,7 +168,7 @@ export function HistoryGrid({ onOpen, orientation = "grid", className }: History
                       className="size-full object-cover"
                     />
                     {item.tab === "img2img" ? (
-                      <span className="absolute bottom-1 left-1 rounded bg-black/55 px-1 text-[0.6rem] font-medium text-white">i2i</span>
+                      <span className="absolute bottom-1 left-1 rounded bg-black/55 px-1 text-[0.625rem] font-medium text-white">i2i</span>
                     ) : null}
                   </div>
                 )

@@ -53,7 +53,7 @@ function EntryRow({ entry, tags, access, installing, onInstall }: { entry: Index
         {entry.description ? <p className="mt-0.5 line-clamp-2 text-[0.8rem] text-muted-foreground">{entry.description}</p> : null}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           {entryTags(entry).map((tag) => (
-            <Badge key={tag} variant="outline" className="h-4.5 px-1.5 text-[0.68rem] font-normal" title={tags[tag] || undefined}>
+            <Badge key={tag} variant="outline" className="h-4.5 px-1.5 text-[0.6875rem] font-normal" title={tags[tag] || undefined}>
               {tag}
             </Badge>
           ))}
@@ -157,7 +157,7 @@ function IndexList({ items, tags, access }: { items: IndexEntry[]; tags: Record<
     )
   }
   return (
-    <div className="rounded-md bg-card px-3">
+    <div>
       <div ref={list} role="list" aria-label={t("Available extensions")} className="relative" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((row) => {
           const entry = items[row.index]
@@ -260,11 +260,11 @@ export function AvailableView() {
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <InputGroup className="max-w-sm min-w-48 flex-1">
+            <InputGroup className="h-7 max-w-sm min-w-48 flex-1">
               <InputGroupAddon>
                 <Search aria-hidden />
               </InputGroupAddon>
-              <InputGroupInput type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("Search extensions")} aria-label={t("Search extensions")} />
+              <InputGroupInput className="h-full" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("Search extensions")} aria-label={t("Search extensions")} />
             </InputGroup>
             <Select<IndexSort> items={SORTS.map((value) => ({ value, label: t(SORT_LABELS[value]) }))} value={sort} onValueChange={(value) => value && setSort(value)}>
               <SelectTrigger size="sm" aria-label={t("Sort order")} className="min-w-40">

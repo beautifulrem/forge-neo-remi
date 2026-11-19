@@ -66,7 +66,7 @@ function HistoryRow({ job, onView }: { job: Job; onView: (job: Job, index: numbe
   const duration = durationOf(job)
   const [notesOpen, setNotesOpen] = useState(false)
   return (
-    <div className="flex gap-3 rounded-lg border bg-card p-2.5">
+    <div className="flex items-center gap-3 py-2.5">
       <div className="flex shrink-0 gap-1">
         {images.length > 0 ? (
           images.slice(0, THUMBS).map((output, index) => (
@@ -90,7 +90,7 @@ function HistoryRow({ job, onView }: { job: Job; onView: (job: Job, index: numbe
         )}
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex items-start gap-2">
+        <div className="flex items-center gap-2">
           <p className="min-w-0 flex-1 truncate text-sm" title={job.summary ?? undefined}>
             {jobTitle(job)}
           </p>
@@ -106,7 +106,7 @@ function HistoryRow({ job, onView }: { job: Job; onView: (job: Job, index: numbe
           {duration !== null ? <span>· {formatDuration(duration)}</span> : null}
           {images.length > 1 ? <span>· {t("Images: {{count}}", { count: images.length })}</span> : null}
           {job.source ? (
-            <Badge variant="outline" className="h-4 px-1 text-[0.65rem]">
+            <Badge variant="outline" className="h-4 px-1 text-[0.625rem]">
               {t("Imported")}
             </Badge>
           ) : null}
@@ -138,9 +138,9 @@ function HistoryRow({ job, onView }: { job: Job; onView: (job: Job, index: numbe
           </div>
         ) : null}
       </div>
-      <div className="flex shrink-0 flex-col items-end justify-between gap-0.5 sm:flex-row sm:items-start">
+      <div className="flex shrink-0 flex-col items-end justify-between gap-0.5 self-stretch sm:flex-row sm:items-center sm:self-auto">
         <IconAction label={job.starred ? t("Unstar") : t("Star")} pressed={job.starred} onClick={() => void starJob(job, !job.starred)}>
-          <Star className={cn(job.starred && "fill-amber-400 text-amber-400")} />
+          <Star className={cn(job.starred && "fill-star text-star")} />
         </IconAction>
         <IconAction label={t("Queue again")} disabled={!job.replayable} onClick={() => void requeue(job)}>
           <RotateCw />
@@ -198,7 +198,8 @@ export function HistoryList({ jobs, total, hasMore, loadingMore, onLoadMore, onV
               role="listitem"
               aria-posinset={row.index + 1}
               aria-setsize={total ?? (hasMore ? -1 : jobs.length)}
-              className="absolute inset-x-0 top-0 pb-1.5"
+              // rows of a list, a hairline between them: not a stack of cards
+              className="absolute inset-x-0 top-0 border-b border-border/70"
               style={{ transform: `translateY(${row.start}px)` }}
             >
               <HistoryRow job={job} onView={onView} />

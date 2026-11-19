@@ -28,7 +28,7 @@ export function RunningCard({ paused, queued, loading = false }: { paused: boole
 
   if (!running && loading) {
     return (
-      <section aria-label={t("Now running")} aria-busy="true" className="flex items-center gap-3 rounded-md bg-card px-4 py-3">
+      <section aria-label={t("Now running")} aria-busy="true" className="flex items-center gap-3 py-1">
         <Skeleton className="size-10 shrink-0 rounded-lg" />
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <Skeleton className="h-3.5 w-32" />
@@ -41,7 +41,7 @@ export function RunningCard({ paused, queued, loading = false }: { paused: boole
 
   if (!running) {
     return (
-      <section aria-label={t("Now running")} className="flex items-center gap-3 rounded-md bg-card px-4 py-3">
+      <section aria-label={t("Now running")} className="flex items-center gap-3 py-1">
         {paused ? <Pause className="size-5 shrink-0 text-muted-foreground" aria-hidden /> : null}
         <div className="min-w-0">
           <p className="text-sm font-medium">{paused ? t("The queue is paused") : t("Nothing is running")}</p>
@@ -73,7 +73,7 @@ export function RunningCard({ paused, queued, loading = false }: { paused: boole
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex items-center gap-1.5">
-            <Badge>{t("Running")}</Badge>
+            <Badge variant="secondary">{t("Running")}</Badge>
             {job ? (
               <span className="text-xs text-muted-foreground">
                 #{job.seq} · {formLabel(job.tab)}

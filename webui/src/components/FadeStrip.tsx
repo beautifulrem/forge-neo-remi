@@ -10,5 +10,6 @@ import { cn } from "@/lib/utils"
 export function FadeStrip({ active, className, style, ...props }: ComponentProps<"div"> & { active?: unknown }) {
   const strip = useRef<HTMLDivElement>(null)
   const fade = useScrollFade(strip, active)
-  return <div ref={strip} style={{ ...style, ...fade }} className={cn("overflow-x-auto [scrollbar-width:none]", className)} {...props} />
+  // 4 px above and below (-my-1 / py-1): a scroller clips both axes, and the controls' focus rings need the room
+  return <div ref={strip} style={{ ...style, ...fade }} className={cn("-my-1 overflow-x-auto py-1 [scrollbar-width:none]", className)} {...props} />
 }

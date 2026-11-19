@@ -48,7 +48,8 @@ describe("GalleryDetails", () => {
   it("lists the file facts and the generation parameters", () => {
     renderDetails(ITEM)
     expect(fact("File")).toBe("00012-1234.png")
-    expect(fact("Size")).toBe("832 × 1216 · 1.5 MB")
+    expect(fact("Size")).toBe("832 × 1216")
+    expect(fact("File size")).toBe("1.5 MB")
     expect(fact("Created")).toBe(new Date(ITEM.created_at).toLocaleString("en"))
     expect(fact("From")).toBe("txt2img")
     expect(fact("Model")).toBe("animagine-xl-4.0")
@@ -57,7 +58,8 @@ describe("GalleryDetails", () => {
 
   it("falls back for unknown sizes, unreadable dates and categories, and leaves out a missing model", () => {
     renderDetails({ ...ITEM, width: null, height: undefined, size: 300, created_at: "yesterday", category: "other", model: null, infotext: null })
-    expect(fact("Size")).toBe("? × ? · 300 B")
+    expect(fact("Size")).toBe("? × ?")
+    expect(fact("File size")).toBe("300 B")
     expect(fact("Created")).toBe("yesterday")
     expect(fact("From")).toBe("Other")
     expect(within(document.querySelector("dl")!).queryByText("Model", { selector: "dt" })).toBeNull()

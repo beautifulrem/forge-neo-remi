@@ -49,22 +49,20 @@ export type PromptEditorProps = {
 const externalSync = Annotation.define<boolean>()
 
 const theme = EditorView.theme({
-  // An entry sheet: an inset sheet of paper, underlined in blue pencil while being written on.
+  // An entry sheet: the fields' fill, no edge; ringed in blue pencil while being written on.
   "&": {
     fontSize: "0.9rem",
     borderRadius: "var(--radius-sm)",
     border: "none",
-    backgroundColor: "color-mix(in oklch, var(--foreground) 4.5%, transparent)",
-    boxShadow: "inset 0 -1px 0 var(--input)",
+    backgroundColor: "var(--field)",
     transition: "box-shadow 140ms",
   },
   "&.cm-focused": {
     outline: "none",
-    boxShadow: "inset 0 -2px 0 var(--ring)",
+    boxShadow: "inset 0 0 0 1px var(--ring), 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent)",
   },
   ".cm-scroller": {
-    fontFamily: "var(--font-hand)",
-    fontVariationSettings: "'CASL' 1",
+    fontFamily: "var(--font-sans)",
     lineHeight: "1.5rem",
     overflow: "auto",
   },
@@ -94,7 +92,7 @@ const theme = EditorView.theme({
     borderRadius: "3px",
   },
   ".cm-prompt-keyword": { color: "color-mix(in oklch, var(--chart-3) 48%, var(--foreground))", fontWeight: "700", letterSpacing: "0.02em" },
-  ".cm-prompt-wildcard": { color: "color-mix(in oklch, var(--chart-5) 72%, var(--foreground))", fontStyle: "italic" },
+  ".cm-prompt-wildcard": { color: "color-mix(in oklch, var(--chart-5) 66%, var(--foreground))", fontStyle: "italic" },
   ".cm-prompt-comment": { color: "var(--muted-foreground)", fontStyle: "italic" },
   ".cm-prompt-escape": { color: "var(--muted-foreground)" },
   ".cm-lintRange-warning": {

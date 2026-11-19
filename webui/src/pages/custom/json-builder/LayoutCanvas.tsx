@@ -10,6 +10,7 @@ import { Maximize, ZoomIn, ZoomOut } from "@/components/icons"
 import { type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
+import { useMediaQuery } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { type Item, LABEL_NAMES, type Missing, moveBox, resizeBox } from "./draft"
 import { useBuilder } from "./store"
@@ -17,6 +18,8 @@ import { clampView, fitStage, RESET_VIEW, type View, ZOOM_STEP, zoomAbout } from
 
 /** The stage's margin inside the canvas area, in CSS pixels (each side). */
 const INSET = 16
+/** Room under the frame for the zoom bar when the canvas sits above the form (`pb-9`). */
+const ZOOM_STRIP = 36
 /** A press moves a box once the pointer went this far (in canvas pixels). */
 const DRAG_THRESHOLD = 3
 
@@ -142,7 +145,7 @@ function BoxView({
           if (event.key === "Escape") event.currentTarget.blur()
         }}
         className={cn(
-          "m-1.5 min-h-0 min-w-0 flex-1 resize-none overflow-hidden rounded bg-background/50 px-1.5 py-0.5 leading-normal text-foreground outline-none placeholder:text-muted-foreground",
+          "m-1.5 min-h-0 min-w-0 flex-1 resize-none overflow-hidden rounded-sm bg-background/50 px-1.5 py-0.5 leading-normal text-foreground outline-none placeholder:text-muted-foreground",
           "text-[length:calc(0.875rem*var(--jb-text-scale))]",
           editing === name ? "cursor-text ring-2 ring-ring/60 select-text" : "cursor-move select-none",
           invalid && "ring-2 ring-destructive",
@@ -174,7 +177,7 @@ function BoxView({
         (active || dragging) && "z-10 border-primary shadow-lg ring-3 ring-primary/30",
       )}
     >
-      <div className="flex-none truncate bg-primary px-1.5 text-[length:calc(0.6875rem*var(--jb-text-scale))] leading-normal font-medium tracking-wide text-primary-foreground uppercase">
+      <div className="flex-none truncate bg-primary px-1.5 text-[length:calc(0.6875rem*var(--jb-text-scale))] leading-normal font-medium text-primary-foreground">
         {t(LABEL_NAMES[item.label])}
       </div>
       {field("caption")}
@@ -211,8 +214,12 @@ export function LayoutCanvas({
   const items = useBuilder((s) => s.items)
   const [area, setArea] = useState<HTMLDivElement | null>(null)
   const [stage, setStage] = useState<HTMLDivElement | null>(null)
+  // Stacked above the form (below lg) the area takes the frame's aspect, plus the inset and the zoom bar's
+  // strip, rather than a fixed height that leaves empty bands around a square frame.
+  const stacked = !useMediaQuery("(min-width: 64rem)")
   const areaSize = useElementSize(area)
-  const inner = { width: areaSize.width - 2 * INSET, height: areaSize.height - 2 * INSET }
+  // clientHeight counts the zoom bar's strip (`pb-9`) when stacked: the frame fits above it.
+  const inner = { width: areaSize.width - 2 * INSET, height: areaSize.height - 2 * INSET - (stacked ? ZOOM_STRIP : 0) }
   const fitted = fitStage(inner.width, inner.height, width / height)
   // A new canvas size, or a resized area, fits the stage again (upstream's fitStage resets the view).
   const sizeKey = `${width}x${height}@${areaSize.width}x${areaSize.height}`
@@ -262,7 +269,8 @@ export function LayoutCanvas({
     <div
       ref={setArea}
       data-testid="json-builder-canvas"
-      className={cn("relative flex min-h-0 min-w-0 items-center justify-center overflow-hidden rounded-md bg-card", panning && "cursor-grabbing", className)}
+      className={cn("relative flex min-h-0 min-w-0 items-center justify-center overflow-hidden rounded-md bg-canvas", stacked && "pb-9", panning && "cursor-grabbing", className)}
+      style={stacked && areaSize.width > 0 ? { height: Math.round(((areaSize.width - 2 * INSET) * height) / width + 2 * INSET + ZOOM_STRIP) } : undefined}
       onPointerDown={(event) => {
         if (event.button === 1 || (event.button === 0 && view.scale > 1 && onBackground(event.target))) {
           event.preventDefault()
@@ -294,7 +302,11 @@ export function LayoutCanvas({
           <BoxView key={item.id} item={item} index={index} stage={stage} active={item.id === activeId} missing={missing} onActivate={onActivate} />
         ))}
       </div>
-      <div className="absolute right-2 bottom-2 flex items-center gap-0.5 rounded-lg border bg-background/90 p-0.5 shadow-sm">
+      <div className="absolute right-2 bottom-2 flex items-center gap-0.5 rounded-lg bg-background/90 p-0.5 shadow-sm">
+        <span className="px-1.5 text-xs text-muted-foreground tabular-nums">
+          {width} × {height}
+        </span>
+        <span aria-hidden className="h-4 w-px bg-border" />
         <Button size="icon-xs" variant="ghost" aria-label={t("Zoom out")} title={t("Zoom out")} onClick={() => zoom(1 / ZOOM_STEP)}>
           <ZoomOut aria-hidden />
         </Button>
@@ -306,9 +318,6 @@ export function LayoutCanvas({
           <Maximize aria-hidden />
         </Button>
       </div>
-      <span className="pointer-events-none absolute top-2 left-3 text-xs text-muted-foreground tabular-nums">
-        {width} × {height}
-      </span>
     </div>
   )
 }

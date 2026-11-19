@@ -132,11 +132,13 @@ function HoverActions({ item, kind, index, onAction, variant, className }: Pick<
             event.stopPropagation()
             onAction(button.action, item, index, event.currentTarget)
           }}
-          className={
+          className={cn(
             variant === "card"
               ? "grid size-7 place-items-center rounded-md bg-black/45 text-white transition-colors outline-none hover:bg-black/70 [&_svg]:size-3.5"
-              : "grid size-7 place-items-center rounded-md text-muted-foreground outline-none hover:bg-background hover:text-foreground [&_svg]:size-3.5"
-          }
+              : "grid size-7 place-items-center rounded-md text-muted-foreground outline-none hover:bg-background hover:text-foreground [&_svg]:size-3.5",
+            // a touch screen cannot hover, so a card keeps only its menu button showing (the menu has every action): the preview stays clear
+            variant === "card" && button.action !== "menu" && "[@media(hover:none)]:hidden",
+          )}
         >
           {button.icon}
         </button>
@@ -166,8 +168,8 @@ function CardView({ item, kind, id, index, active, cursor, mismatch, width, onAp
         onClick={() => onApply(item, index)}
         onContextMenu={contextMenu(onAction, item, index)}
         className={cn(
-          "relative size-full cursor-pointer overflow-hidden rounded-md bg-card shadow-xs ring-1 ring-border transition-shadow select-none",
-          "group-hover/card:shadow-md group-hover/card:ring-foreground/20",
+          "relative size-full cursor-pointer overflow-hidden rounded-md bg-card ring-1 ring-border transition-shadow select-none",
+          "group-hover/card:ring-foreground/30",
           "data-active:ring-2 data-active:ring-primary",
           "data-cursor:outline-2 data-cursor:outline-offset-2 data-cursor:outline-ring/70",
         )}
@@ -175,16 +177,16 @@ function CardView({ item, kind, id, index, active, cursor, mismatch, width, onAp
         <Preview item={item} width={width} className={cn("absolute inset-0 transition-[filter]", mismatch && "opacity-70 saturate-50")} />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 via-black/40 to-transparent px-2.5 pt-8 pb-2 text-white">
           <p className="line-clamp-2 text-[0.8rem] leading-snug font-medium [overflow-wrap:anywhere] drop-shadow-sm">{item.title}</p>
-          {item.folder ? <p className="truncate text-[0.68rem] leading-4 text-white/70">{item.folder}</p> : null}
+          {item.folder ? <p className="truncate text-[0.6875rem] leading-4 text-white/70">{item.folder}</p> : null}
         </div>
         <div className="pointer-events-none absolute top-1.5 left-1.5 flex max-w-[70%] flex-wrap gap-1">
           {item.arch ? (
-            <span className={cn("rounded-md px-1.5 py-px text-[0.65rem] leading-4 font-medium", mismatch ? "bg-warning/85 text-black" : "bg-black/50 text-white")}>
+            <span className={cn("rounded-md px-1.5 py-px text-[0.625rem] leading-4 font-medium", mismatch ? "bg-warning/85 text-black" : "bg-black/50 text-white")}>
               {mismatch ? <AlertTriangle className="-mt-px mr-0.5 inline size-2.5" aria-hidden /> : null}
               {archLabel(item.arch)}
             </span>
           ) : null}
-          {item.subtype && item.subtype !== "LoRA" ? <span className="rounded-md bg-black/50 px-1.5 py-px text-[0.65rem] leading-4 font-medium text-white">{item.subtype}</span> : null}
+          {item.subtype && item.subtype !== "LoRA" ? <span className="rounded-md bg-black/50 px-1.5 py-px text-[0.625rem] leading-4 font-medium text-white">{item.subtype}</span> : null}
         </div>
         {active ? (
           <span aria-hidden className="absolute right-1.5 bottom-1.5 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm ring-2 ring-black/20">
@@ -248,9 +250,9 @@ function RowView({ item, kind, id, index, active, cursor, mismatch, onApply, onA
           <p className="truncate text-xs text-muted-foreground">{item.path}</p>
         </div>
         <div className="hidden shrink-0 items-center gap-1 @md:flex">
-          {item.subtype && item.subtype !== "LoRA" ? <span className="rounded-md bg-muted px-1.5 text-[0.68rem] leading-5 text-muted-foreground">{item.subtype}</span> : null}
+          {item.subtype && item.subtype !== "LoRA" ? <span className="rounded-md bg-muted px-1.5 text-[0.6875rem] leading-5 text-muted-foreground">{item.subtype}</span> : null}
           {item.arch ? (
-            <span className={cn("rounded-md px-1.5 text-[0.68rem] leading-5", mismatch ? "bg-warning/20 text-[color-mix(in_oklch,var(--warning)_70%,var(--foreground))]" : "bg-muted text-muted-foreground")}>
+            <span className={cn("rounded-md px-1.5 text-[0.6875rem] leading-5", mismatch ? "bg-warning/20 text-[color-mix(in_oklch,var(--warning)_70%,var(--foreground))]" : "bg-muted text-muted-foreground")}>
               {archLabel(item.arch)}
             </span>
           ) : null}

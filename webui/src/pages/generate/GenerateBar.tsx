@@ -10,6 +10,7 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { progressFraction, useProgress } from "@/api/progress"
+import { useStageOverlay } from "@/features/progress/stage-overlay"
 import { queueItemsQuery } from "@/api/queries"
 import { formatShortcut } from "@/app/commands"
 import { Button } from "@/components/ui/button"
@@ -91,13 +92,15 @@ function StatusLine({ tab }: { tab: GenerateTab }) {
   const ahead = useQueuePosition(firstQueued)
   const fraction = progressFraction(job)
   const eta = formatEta(job?.eta)
+  // The stage shows the step, the sheet and the ETA over the image: not a second time here.
+  const onStage = useStageOverlay((s) => (s[tab] ?? 0) > 0)
 
   // Each fact its own span, spaced apart: no "A · B · C" string.
   let parts: (string | null)[] = []
   if (phase === "submitting") parts = [t("Queueing…")]
   else if (phase === "interrupting") parts = [t("Interrupting…")]
   else if (phase === "queued") parts = [ahead !== null ? t("Queued, {{count}} ahead", { count: ahead }) : t("Queued")]
-  else if (job) {
+  else if (job && !onStage) {
     parts = [
       stepText(job),
       job.jobCount && job.jobCount > 1 ? t("Batch {{index}} of {{count}}", { index: (job.jobNo ?? 0) + 1, count: job.jobCount }) : null,
@@ -110,7 +113,7 @@ function StatusLine({ tab }: { tab: GenerateTab }) {
   if (facts.length === 0 && !extras) return null
   return (
     <div className="flex flex-col gap-1.5">
-      {phase === "running" && job && fraction !== null ? (
+      {phase === "running" && job && fraction !== null && !onStage ? (
         <ExposureSheet step={job.step} steps={job.steps} fraction={fraction} aria-label={t("Generation progress")} />
       ) : null}
       <div className="flex min-h-5 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -169,7 +172,7 @@ export function GenerateBar({ tab, className }: { tab: GenerateTab; className?: 
           <Button
             variant="glow"
             size="lg"
-            className="h-11 min-w-0 flex-1 gap-2 rounded-r-none text-[0.95rem] font-semibold"
+            className="h-11 min-w-0 flex-1 gap-2 rounded-r-none text-[0.9375rem] font-semibold"
             onClick={() => dispatchRun(tab, { type: "generate" })}
             disabled={phase === "submitting"}
             aria-keyshortcuts="Control+Enter Meta+Enter"

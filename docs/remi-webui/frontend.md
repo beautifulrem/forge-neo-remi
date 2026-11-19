@@ -71,7 +71,10 @@ imperatively).
 - **Navigation**: `BUILTIN_NAV` plus extension pages from `GET /app`
   (`pages`), ordered/filtered by `Bootstrap.tabs`; Queue, Settings and
   Extensions are always present. Desktop: slim left rail with tooltips;
-  below `md`: bottom bar (primary items) + "More" sheet.
+  below `md`: bottom bar (primary items) + "More" sheet. Both sit on the
+  neutral `--rail` surface (the sidebar tone, a shade off the page, never a
+  colour of its own); only the current page is marked, by a `--primary`
+  tint (`--rail-active`) and its icon in `--primary` (`--rail-current`).
 - **Header**: page title, a page slot (`<HeaderSlot>` from
   `app/header-slot.tsx` portals page controls into it), the model quick-bar,
   command palette button, WS connection dot, appearance menu, and a progress
@@ -119,17 +122,38 @@ imperatively).
   accent with `[data-accent=…]` (works on any element, e.g. swatches). shadcn's
   `--accent` stays a neutral hover surface. Extra semantic colours:
   `success`, `warning`, `canvas` (image backdrops), utility `bg-checker`.
+  The shell (nav rail, bottom bar) is a neutral surface too: `--rail` is
+  `--sidebar`, not a brand colour.
 - **Density** scales Tailwind's `--spacing` (`[data-density=compact]` →
   0.215rem), so every `p-*`, `gap-*`, `h-*`, `size-*` shrinks together. Use
   spacing utilities, not fixed pixel sizes, for anything that should follow.
-- Typography: one superfamily, Recursive (OFL, `@fontsource-variable`,
-  self-hosted Latin subsets, no CDN), in three cuts declared in
-  `styles/fonts.css`: **Remi Sans** (linear, the UI), **Remi Hand** (casual
-  `CASL` axis, the prompt editor only) and **Remi Mono** (`MONO` axis, set
-  with `--font-mono--font-variation-settings`: setting keys, hashes, key caps,
-  code, JSON). Each file loads only where its face renders. CJK falls back to
-  the system faces (`<html lang>` picks the right Han forms). `.tabular` /
-  numeric inputs use tabular figures.
+- Toolbars and option grids respond to their own width (Tailwind container
+  queries, `@container/<name>`), not the window's: a pane of the three-pane
+  generate view is narrow on a wide screen. A toolbar keeps to one row by
+  moving its less used actions into a "More actions" menu (`ResultActions`
+  `collapsible`, on `@container/actions`; its groups, keep / reuse / send /
+  remove, are set apart by hairlines), or, narrow, by giving search a row of
+  its own with a "View options" menu (sort, layout, size) beside it and the
+  filters on a second row that scrolls sideways (`GalleryToolbar`,
+  `@container/gallerybar`; the network browser folds card size and refresh
+  into one menu). It never wraps into ragged rows. A grid never leaves an
+  empty cell (the img2img mode picker and the phone's More sheet centre a
+  short last row).
+- A running job's progress shows once where the user looks: over the stage
+  (`ProgressOverlay`, which registers itself in
+  `features/progress/stage-overlay.ts`), and in the run bar's status line
+  only while the stage does not show it (img2img's Source view, the progress
+  bar turned off), so the form does not move for the length of a job. The
+  header's hairline is the global indicator on every page.
+- Typography: self-hosted OFL faces (`@fontsource-variable`, no CDN), each
+  split by unicode range so only the slices a page renders download, declared
+  in `styles/fonts.css`: **Remi Sans** is Geist (the UI's Latin letters and
+  digits, also the prompt editor's), **Remi Mono** is Geist Mono (setting
+  keys, hashes, seeds, key caps, code, JSON) and Han is **Noto Sans SC**
+  (`Noto Sans SC Variable`, next in `--font-sans`), so Chinese has the same
+  letters and the same weights on every system instead of Microsoft YaHei's
+  two; the system CJK faces stay behind it for the moment before a slice
+  loads. `.tabular` / numeric inputs use tabular figures.
 - Typesetting (`index.css` base layer): `text-autospace` puts the CJK gap
   between Han and Latin or digits in the text the UI writes (`2026 年 7 月
   1 日`), never in inputs, text areas or the prompt editor; paragraphs and
@@ -171,18 +195,63 @@ generated interfaces (sources: Linear's
 2024 and 2026 refreshes, Figma UI3, Refactoring UI):
 
 - **The work first.** Chrome never competes with images: neutral surfaces,
-  no gradients or tinted washes on panels, no colour without meaning. The
+  no gradients or tinted washes on panels or on the shell (the nav rail is
+  a neutral strip, not a coloured bar), no colour without meaning. The
   blue pencil (`--primary`) marks selection and focus, the red pencil
   destroys, the lamp (`--glow`) is the Generate button. The only decorative
   colour is a missing preview's monogram.
 - **Spend boldness once per screen.** One element leads (the Generate button,
   the stage, the image grid); everything around it stays quiet. Before adding
-  an accent, a badge or an icon, remove one.
+  an accent, a badge or an icon, remove one. Section labels in one menu are
+  all text or all iconed, never a mix; a touch screen, which cannot hover,
+  shows a card's menu button only, not its row of hover shortcuts. A screen
+  has one filled (`default`) button: in a generate form that is Generate, so
+  an extension's `primary` button renders `secondary` there
+  (`ui/layout/ActionButton.tsx`); status badges are neutral.
 - **Structure is felt, not seen.** Group with space and surface tone before
   borders; one border tone (`--border`); no card inside a card. Radii follow
   hierarchy (controls `sm`/`md`, panels `lg`), not one radius everywhere;
-  shadows only on what floats (menus, dialogs, dragged items).
-- **Type carries hierarchy.** Size and weight, then colour; muted text keeps
+  shadows only on what floats (menus, dialogs, dragged items, and the
+  slider's cap, the handle a drag holds); a segmented control's selection is
+  a tone, not a raised pill. One depth cue per element, never an edge and
+  a shadow together, and no one-sided edge: a field (input, select, number,
+  the prompt editor, `FIELD_BUTTON_CLASS`) is a flat fill (`--field`) with
+  no underline or bottom shadow, and focus rings it evenly (`border-ring`
+  plus a 3 px `ring-ring/50`). Image tiles (network cards) keep a hairline
+  ring and no shadow. A star mark uses `--star` (≥ 3:1 on the paper), not a
+  fixed amber. Touch screens get no number steppers (the numeric keyboard
+  types the value), and controls hidden until hover take no taps while
+  hidden. A scroller (the JSON Builder column, `FadeStrip`) keeps 4 px of
+  room around its controls so their focus rings are not clipped. Toolbar
+  controls (header, settings, extensions, gallery) are one 28 px height.
+  Truncated names and URLs carry their full text in a `title`. A form column (the generate parameters, an
+  extension page, the JSON Builder's side column, the Extensions list) is an inspector, not a
+  stack of cards: each block is a panel with a hairline above it and no box,
+  fill or radius (`ui/layout/panel.ts`), its title on the column's edge and
+  a section's chevron at the row's end; a panel inside a panel (an
+  extension in the Extensions list) is a level down, with a fainter hairline
+  and a 14 px title. Lists (the queue history) are rows with a hairline
+  between them. Section and pane titles are 15 px semibold, below the 20 px
+  page title. The slider is a fader: a recessed groove filled with
+  `--primary` up to the value and a squared cap with a centre notch (the
+  switch's shape family; `--slider-*` tokens).
+  Controls in one row share one look: a button among selects (the header's
+  search and VAE / TE, the gallery's date and star) wears the filled field
+  style (`FIELD_BUTTON_CLASS`), and everything that opens a list shows the
+  same chevron. Empty areas follow two patterns: a drop zone (dashed box,
+  round tinted icon, a 14 px title, a muted hint: img2img, PNG Info) and a
+  placeholder (a dimmed glyph over one muted line: the stage, Extras, the
+  history).
+  Image surfaces (the stage, Extras, the image editor) are one borderless
+  `bg-canvas` (the JSON Builder's layout canvas too). In the light theme the
+  page and the fields are separate steps of lightness, and control tracks
+  (slider, switch) are dark enough to read as controls.
+- **Type carries hierarchy.** One scale: 0.625 rem (badges, tags on
+  thumbnails), 0.6875 rem (the bottom bar, dense metadata), `text-xs`,
+  0.8 rem (compact controls), `text-sm`, 0.9375 rem (section and pane
+  titles), `text-xl` (the page title); no other arbitrary sizes. (Written as
+  `text-[…rem]`, not theme names: `cn` would take an unknown `text-*` name
+  for a colour and drop it beside one.) Size and weight, then colour; muted text keeps
   the surface's hue. Sentence case everywhere: no all-caps labels, no eyebrow
   labels above headings, no numbered markers unless the content is a
   sequence. Mono is for strings a person copies (keys, hashes, code), not for
@@ -1264,7 +1333,7 @@ Keeping a first view small:
   stage, the networks item dialogs, the lightbox, the style editor) are
   `lazy()` and mounted on first use.
 
-Fonts load per unicode range (Inter latin ≈ 48 KB woff2).
+Fonts load per unicode range (Geist latin ≈ 28 KB woff2; a Chinese page loads a dozen Noto Sans SC slices of 20 to 70 KB, cached after the first visit).
 
 ## Backend contract
 

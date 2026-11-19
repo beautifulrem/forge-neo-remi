@@ -101,6 +101,8 @@ export function SearchSelectImpl({ openOnMount, standInKey, ...props }: ImplProp
         <Combobox.Positioner sideOffset={4} align="start" className="isolate z-50">
           <Combobox.Popup
             aria-label={popupName || props.placeholder || t("Options")}
+            // never narrower than the trigger, and never wider than the room beside it
+            style={props.popupMinWidth ? { width: `max(var(--anchor-width), min(${props.popupMinWidth}, var(--available-width)))` } : undefined}
             className={cn(
               "cn-menu-translucent flex max-h-[min(24rem,var(--available-height))] w-(--anchor-width) min-w-56 max-w-[min(32rem,var(--available-width))] origin-(--transform-origin) flex-col overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10",
               "duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",

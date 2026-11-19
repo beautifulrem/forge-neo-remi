@@ -34,7 +34,7 @@ export default function BlockWeights({ value, onChange, props, disabled, id, lab
       <div className="flex gap-1 overflow-x-auto rounded-lg border bg-muted/30 p-2">
         {blocks.map((block, i) => (
           <div key={block} className="flex w-9 shrink-0 flex-col items-center gap-1">
-            <span className="text-[0.65rem] text-muted-foreground tabular-nums">{(weights[i] ?? 0).toFixed(2)}</span>
+            <span className="text-[0.625rem] text-muted-foreground tabular-nums">{(weights[i] ?? 0).toFixed(2)}</span>
             <Slider
               orientation="vertical"
               value={weights[i]}
@@ -46,7 +46,7 @@ export default function BlockWeights({ value, onChange, props, disabled, id, lab
               getAriaLabel={() => block}
               className="h-24"
             />
-            <span className="max-w-full truncate text-[0.65rem] text-muted-foreground" title={block}>
+            <span className="max-w-full truncate text-[0.625rem] text-muted-foreground" title={block}>
               {block}
             </span>
           </div>

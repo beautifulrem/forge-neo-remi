@@ -34,7 +34,7 @@ export function HistoryPane({ onOpen, orientation = "grid", className }: { onOpe
   return (
     <section aria-label={t("History")} className={cn("flex min-h-0 flex-col gap-2", className)}>
       <div className="flex items-center gap-2">
-        <h2 className="text-[1.0625rem] font-semibold tracking-[-0.01em]">{t("History")}</h2>
+        <h2 className="text-[0.9375rem] font-semibold">{t("History")}</h2>
         <span className="text-sm text-muted-foreground tabular-nums">{count}</span>
         {count > 0 ? (
           <Button

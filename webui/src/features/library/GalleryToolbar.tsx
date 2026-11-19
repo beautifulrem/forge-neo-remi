@@ -1,9 +1,10 @@
 /** Gallery filters: search, form / folder, model, date range, stars, sort, layout and tile size. */
 import { useQuery } from "@tanstack/react-query"
-import { CalendarRange, FilterX, LayoutGrid, Rows3, Search, Star, X } from "@/components/icons"
+import { CalendarRange, FilterX, LayoutGrid, Rows3, Search, SlidersHorizontal, Star, X } from "@/components/icons"
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { GalleryCategory, GallerySort } from "@/api/types"
+import { FadeStrip } from "@/components/FadeStrip"
 import { SearchSelect } from "@/components/SearchSelect"
 import { Segmented } from "@/components/Segmented"
 import { Button } from "@/components/ui/button"
@@ -12,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useFittingPlaceholder } from "@/lib/use-fitting-placeholder"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Toggle } from "@/components/ui/toggle"
+import { FIELD_BUTTON_CLASS } from "@/components/ui/select-styles"
 import { cn } from "@/lib/utils"
 import { activeFilters, useGalleryView } from "./filters"
 import { CATEGORY_LABELS, daysAgo } from "./labels"
@@ -62,7 +64,7 @@ function SearchBox() {
   const input = useRef<HTMLInputElement>(null)
   const placeholder = useFittingPlaceholder(input, [t("Search prompts, parameters, file names…"), t("Search…")])
   return (
-    <div className="relative min-w-60 flex-1 sm:max-w-80">
+    <div className="relative min-w-40 flex-1 @6xl/gallerybar:max-w-80">
       <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
       <Input
         type="search"
@@ -87,7 +89,7 @@ function DateRange() {
   const summary = from && to ? `${format(from)} – ${format(to)}` : from ? t("Since {{date}}", { date: format(from) }) : to ? t("Until {{date}}", { date: format(to) }) : t("Any date")
   return (
     <Popover>
-      <PopoverTrigger render={<Button variant="outline" size="sm" aria-label={t("Date range")} className={cn((from || to) && "border-primary/50 text-primary")} />}>
+      <PopoverTrigger render={<Button variant="ghost" size="sm" aria-label={t("Date range")} className={cn(FIELD_BUTTON_CLASS, "font-normal", (from || to) && "text-primary")} />}>
         <CalendarRange aria-hidden />
         <span className="max-w-36 truncate">{summary}</span>
       </PopoverTrigger>
@@ -123,6 +125,68 @@ function DateRange() {
   )
 }
 
+/** Sort, layout and tile size: in the toolbar's row when it is wide, stacked in the "View options" popover when not. */
+function ViewControls({ stacked = false }: { stacked?: boolean }) {
+  const { t } = useTranslation()
+  const view = useGalleryView()
+  const controls = [
+    {
+      label: t("Sort"),
+      control: (
+        <PlainSelect
+          label={t("Sort")}
+          value={view.sort}
+          onChange={(sort) => view.set({ sort })}
+          options={(Object.keys(SORT_LABELS) as GallerySort[]).map((value) => ({ value, label: t(SORT_LABELS[value]) }))}
+          className={stacked ? "w-full" : undefined}
+        />
+      ),
+    },
+    {
+      label: t("Layout"),
+      control: (
+        <Segmented
+          size="sm"
+          aria-label={t("Layout")}
+          value={view.layout}
+          onValueChange={(layout) => view.set({ layout })}
+          options={[
+            { value: "justified", label: t("Rows") },
+            { value: "masonry", label: t("Columns") },
+          ]}
+        />
+      ),
+    },
+    {
+      label: t("Tile size"),
+      control: (
+        <Segmented
+          size="sm"
+          aria-label={t("Tile size")}
+          value={view.size}
+          onValueChange={(size) => view.set({ size })}
+          options={[
+            { value: "s", label: t("S") },
+            { value: "m", label: t("M") },
+            { value: "l", label: t("L") },
+          ]}
+        />
+      ),
+    },
+  ]
+  if (!stacked) return <>{controls.map((entry) => <span key={entry.label} className="contents">{entry.control}</span>)}</>
+  return (
+    <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2">
+      {controls.map((entry) => (
+        <div key={entry.label} className="contents">
+          <span className="text-xs text-muted-foreground">{entry.label}</span>
+          <div className="flex justify-end">{entry.control}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /** `failed`: the image list could not be read (the page shows why): the toolbar shows no count then. */
 export function GalleryToolbar({ count, total, failed = false }: { count: number; total: number | null; failed?: boolean }) {
   const { t } = useTranslation()
@@ -133,72 +197,67 @@ export function GalleryToolbar({ count, total, failed = false }: { count: number
   const filtered = activeFilters(view)
 
   return (
-    <div className="flex flex-col gap-2 border-b bg-background px-3 py-2">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <SearchBox />
-        <PlainSelect
-          label={t("Form or folder")}
-          value={view.category ?? ALL}
-          onChange={(value) => view.set({ category: value === ALL ? null : (value as GalleryCategory) })}
-          options={[
-            { value: ALL, label: t("All images") },
-            ...categories.filter((entry) => entry.count > 0 || entry.name === view.category).map((entry) => ({ value: entry.name, label: `${t(CATEGORY_LABELS[entry.name as GalleryCategory] ?? entry.name)} · ${entry.count}` })),
-          ]}
-        />
-        <SearchSelect
-          size="sm"
-          aria-label={t("Model")}
-          className="w-44"
-          value={view.model ?? ALL}
-          onValueChange={(value) => view.set({ model: value === ALL ? null : value })}
-          options={[{ value: ALL, label: t("All models") }, ...models.map((model) => ({ value: model.name, label: model.name, hint: String(model.count) }))]}
-        />
-        <DateRange />
-        <Toggle
-          size="sm"
-          variant="outline"
-          pressed={view.starred}
-          onPressedChange={(starred) => view.set({ starred })}
-          aria-label={t("Starred only")}
-          title={t("Starred only")}
-        >
-          <Star className={cn(view.starred && "fill-amber-400 text-amber-400")} aria-hidden />
-        </Toggle>
-        {filtered > 0 ? (
-          <Button variant="ghost" size="sm" onClick={view.reset}>
-            <FilterX aria-hidden />
-            {t("Clear filters")}
-          </Button>
-        ) : null}
-        <div className="ml-auto flex items-center gap-1.5">
-          <PlainSelect
-            label={t("Sort")}
-            value={view.sort}
-            onChange={(sort) => view.set({ sort })}
-            options={(Object.keys(SORT_LABELS) as GallerySort[]).map((value) => ({ value, label: t(SORT_LABELS[value]) }))}
-          />
-          <Segmented
-            size="sm"
-            aria-label={t("Layout")}
-            value={view.layout}
-            onValueChange={(layout) => view.set({ layout })}
-            options={[
-              { value: "justified", label: t("Rows") },
-              { value: "masonry", label: t("Columns") },
-            ]}
-          />
-          <Segmented
-            size="sm"
-            aria-label={t("Tile size")}
-            value={view.size}
-            onValueChange={(size) => view.set({ size })}
-            options={[
-              { value: "s", label: t("S") },
-              { value: "m", label: t("M") },
-              { value: "l", label: t("L") },
-            ]}
-          />
+    // Wide: one row, the view controls at its end. Narrow (a phone, a tablet, the details pane open): the
+    // search and a "View options" button on the first row, the filters on a second that scrolls sideways,
+    // never three ragged rows.
+    <div className="@container/gallerybar flex flex-col gap-2 border-b bg-background px-3 py-2">
+      <div className="flex flex-col gap-1.5 @6xl/gallerybar:flex-row @6xl/gallerybar:items-center">
+        <div className="flex items-center gap-1.5 @6xl/gallerybar:contents">
+          <SearchBox />
+          <Popover>
+            <PopoverTrigger
+              render={<Button variant="ghost" size="icon-sm" aria-label={t("View options")} title={t("View options")} className="@6xl/gallerybar:hidden" />}
+            >
+              <SlidersHorizontal aria-hidden />
+            </PopoverTrigger>
+            <PopoverContent aria-label={t("View options")} align="end" className="w-auto">
+              <ViewControls stacked />
+            </PopoverContent>
+          </Popover>
         </div>
+        <FadeStrip
+          role="group"
+          aria-label={t("Filters")}
+          className="-mx-3 flex items-center gap-1.5 px-3 *:shrink-0 @6xl/gallerybar:mx-0 @6xl/gallerybar:flex-1 @6xl/gallerybar:overflow-visible @6xl/gallerybar:px-0"
+        >
+          <PlainSelect
+            label={t("Form or folder")}
+            value={view.category ?? ALL}
+            onChange={(value) => view.set({ category: value === ALL ? null : (value as GalleryCategory) })}
+            options={[
+              { value: ALL, label: t("All images") },
+              ...categories.filter((entry) => entry.count > 0 || entry.name === view.category).map((entry) => ({ value: entry.name, label: `${t(CATEGORY_LABELS[entry.name as GalleryCategory] ?? entry.name)} · ${entry.count}` })),
+            ]}
+          />
+          <SearchSelect
+            size="sm"
+            aria-label={t("Model")}
+            className="w-44"
+            value={view.model ?? ALL}
+            onValueChange={(value) => view.set({ model: value === ALL ? null : value })}
+            options={[{ value: ALL, label: t("All models") }, ...models.map((model) => ({ value: model.name, label: model.name, hint: String(model.count) }))]}
+          />
+          <DateRange />
+          <Toggle
+            size="sm"
+            className={FIELD_BUTTON_CLASS}
+            pressed={view.starred}
+            onPressedChange={(starred) => view.set({ starred })}
+            aria-label={t("Starred only")}
+            title={t("Starred only")}
+          >
+            <Star className={cn(view.starred && "fill-star text-star")} aria-hidden />
+          </Toggle>
+          {filtered > 0 ? (
+            <Button variant="ghost" size="sm" onClick={view.reset}>
+              <FilterX aria-hidden />
+              {t("Clear filters")}
+            </Button>
+          ) : null}
+          <div className="ml-auto hidden items-center gap-1.5 @6xl/gallerybar:flex">
+            <ViewControls />
+          </div>
+        </FadeStrip>
       </div>
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums empty:hidden" aria-live="polite">
         {failed ? null : (

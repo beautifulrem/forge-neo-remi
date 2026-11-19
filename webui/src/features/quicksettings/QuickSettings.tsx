@@ -49,7 +49,7 @@ export default function QuickSettings() {
           }
         >
           <Zap aria-hidden />
-          <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[0.65rem] tabular-nums">
+          <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[0.625rem] tabular-nums">
             {pinned.length}
           </Badge>
         </TooltipTrigger>

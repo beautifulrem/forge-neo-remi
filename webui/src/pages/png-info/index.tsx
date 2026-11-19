@@ -187,9 +187,9 @@ export default function PngInfoPage({ route }: { route: Route }) {
     return (
       <div className="flex h-full items-center justify-center overflow-y-auto p-4">
         <DropZone onFiles={onFiles} accept={ACCEPT} disabled={busy} aria-label={t("Choose an image to read")} className="flex w-full max-w-xl flex-col items-center gap-3 px-6 py-16 text-center">
-          <span className="grid size-14 place-items-center rounded-md bg-primary/10 text-primary">{busy ? <Upload className="size-6 animate-pulse" aria-hidden /> : <FileSearch className="size-6" aria-hidden />}</span>
-          <span className="text-base font-semibold">{busy ? t("Reading…") : t("Drop an image here")}</span>
-          <span className="max-w-sm text-sm text-muted-foreground">
+          <span className="grid size-12 place-items-center rounded-full bg-primary/10 text-primary">{busy ? <Upload className="size-5 animate-pulse" aria-hidden /> : <FileSearch className="size-5" aria-hidden />}</span>
+          <span className="text-sm font-medium">{busy ? t("Reading…") : t("Drop an image here")}</span>
+          <span className="max-w-sm text-xs text-muted-foreground">
             {t("Or paste it, or click to choose a file. PNG, JPEG, WebP and other formats: the generation parameters, metadata and PNG chunks are shown.")}
           </span>
         </DropZone>

@@ -61,9 +61,11 @@ type ResultActionsProps = {
   /** After "Send to" switched pages (the lightbox closes itself). */
   onSent?: () => void
   /**
-   * Narrow screens (below the `sm` breakpoint): the less used actions move
-   * into a "More actions" menu and "Send to" shows its icon only, so the bar
-   * fits beside the viewer's own buttons.
+   * A narrow bar (its `@container/actions` ancestor below 34rem, or no such
+   * ancestor): the less used actions move into a "More actions" menu and
+   * "Send to" shows its icon only, so the bar keeps to one row. The width is
+   * the bar's own, not the window's: the stage of a three-pane layout is narrow
+   * on a wide screen.
    */
   collapsible?: boolean
   className?: string
@@ -114,6 +116,9 @@ export function ResultActions({ item, tab, tone, removable = true, upscalable = 
     })
   }
 
+  // Groups (keep, reuse, send, remove) are set apart by a hairline, so nine look-alike icons read as four sets.
+  const divider = <span aria-hidden className={cn("mx-1 h-4 w-px shrink-0", tone === "light" ? "bg-white/25" : "bg-border")} />
+
   return (
     <div role="toolbar" aria-label={t("Image actions")} className={cn("flex items-center gap-0.5", className)}>
       <Action label={t("Download")} shortcut="S" tone={tone} disabled={disabled} onClick={() => item && downloadFile(item.fileId)}>
@@ -150,8 +155,9 @@ export function ResultActions({ item, tab, tone, removable = true, upscalable = 
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      {divider}
       {secondary.map((action) => (
-        <Action key={action.label} label={action.label} tone={tone} disabled={action.disabled} onClick={action.run} className={cn(collapsible && "hidden sm:inline-flex")}>
+        <Action key={action.label} label={action.label} tone={tone} disabled={action.disabled} onClick={action.run} className={cn(collapsible && "hidden @[34rem]/actions:inline-flex")}>
           {action.icon}
         </Action>
       ))}
@@ -164,7 +170,7 @@ export function ResultActions({ item, tab, tone, removable = true, upscalable = 
                 size="icon-sm"
                 aria-label={t("More actions")}
                 disabled={disabled}
-                className={cn("sm:hidden", tone === "light" && "text-white/85 hover:bg-white/12 hover:text-white")}
+                className={cn("@[34rem]/actions:hidden", tone === "light" && "text-white/85 hover:bg-white/12 hover:text-white")}
               />
             }
           >
@@ -180,6 +186,7 @@ export function ResultActions({ item, tab, tone, removable = true, upscalable = 
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
+      {divider}
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
@@ -192,7 +199,7 @@ export function ResultActions({ item, tab, tone, removable = true, upscalable = 
           }
         >
           <ArrowRightLeft />
-          <span className={cn(collapsible && "sr-only sm:not-sr-only")}>{t("Send to")}</span>
+          <span className={cn(collapsible && "sr-only @[34rem]/actions:not-sr-only")}>{t("Send to")}</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-44">
           <DropdownMenuItem onClick={() => item && sendImage("img2img", item)}>
@@ -215,9 +222,12 @@ export function ResultActions({ item, tab, tone, removable = true, upscalable = 
         </DropdownMenuContent>
       </DropdownMenu>
       {removable ? (
-        <Action label={t("Remove from history")} tone={tone} disabled={disabled} onClick={() => item && useSession.getState().remove(item.key)}>
-          <Trash2 />
-        </Action>
+        <>
+          {divider}
+          <Action label={t("Remove from history")} tone={tone} disabled={disabled} onClick={() => item && useSession.getState().remove(item.key)}>
+            <Trash2 />
+          </Action>
+        </>
       ) : null}
     </div>
   )

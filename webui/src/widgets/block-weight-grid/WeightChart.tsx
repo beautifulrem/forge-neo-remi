@@ -149,7 +149,7 @@ export function WeightChart(props: Props) {
           )
         })}
       </div>
-      <div aria-hidden className="flex gap-px px-1 text-[0.6rem] text-muted-foreground tabular-nums">
+      <div aria-hidden className="flex gap-px px-1 text-[0.625rem] text-muted-foreground tabular-nums">
         {shown.map((_, index) => (
           <span key={index} className="min-w-1 flex-1 text-center">
             {index % every === 0 ? index : ""}

@@ -270,14 +270,14 @@ export default function SettingsPage({ route }: { route: Route }) {
               <Button variant="ghost" size="icon-sm" className="lg:hidden" aria-label={t("Settings sections")} onClick={() => setNavOpen(true)}>
                 <ListTree />
               </Button>
-              <InputGroup className="max-w-md min-w-48 flex-1">
+              <InputGroup className="h-7 max-w-md min-w-48 flex-1">
                 <InputGroupAddon>
                   <Search aria-hidden />
                 </InputGroupAddon>
                 <InputGroupInput
                   ref={searchRef}
                   type="search"
-                  className="[&::-webkit-search-cancel-button]:hidden"
+                  className="h-full [&::-webkit-search-cancel-button]:hidden"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   onKeyDown={(event) => {

@@ -7,6 +7,7 @@ import { useWs, type WsStatus } from "@/api/ws"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { FIELD_BUTTON_CLASS } from "@/components/ui/select-styles"
 import { cn } from "@/lib/utils"
 import { formatShortcut, useCommands } from "./commands"
 import { useHeaderSlotTarget } from "./header-slot-store"
@@ -100,22 +101,22 @@ export function Header({ title, locales }: { title: string; locales: LocaleInfo[
           <QuickSettings />
         </Suspense>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={openPalette}
-          className="hidden gap-2 pr-1.5 text-muted-foreground lg:inline-flex"
+          className={cn(FIELD_BUTTON_CLASS, "hidden gap-2 pr-1.5 font-normal text-muted-foreground lg:inline-flex")}
         >
           <Search aria-hidden />
           <span>{t("Search")}</span>
           <Kbd className="touch-only:hidden">{formatShortcut("Mod+K")}</Kbd>
         </Button>
-        <Button variant="ghost" size="icon" onClick={openPalette} className="lg:hidden" aria-label={t("Search")}>
+        <Button variant="ghost" size="icon-sm" onClick={openPalette} className="lg:hidden" aria-label={t("Search")}>
           <Search />
         </Button>
         <ConnectionDot />
         <Suspense
           fallback={
-            <Button variant="ghost" size="icon" disabled aria-label={t("Appearance")}>
+            <Button variant="ghost" size="icon-sm" disabled aria-label={t("Appearance")}>
               <Palette />
             </Button>
           }

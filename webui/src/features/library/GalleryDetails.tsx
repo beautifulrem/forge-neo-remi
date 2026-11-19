@@ -23,7 +23,8 @@ export function GalleryDetails({ item, onDelete, onClose }: GalleryDetailsProps)
   const created = new Date(item.created_at)
   const facts: [string, string][] = [
     [t("File"), item.name],
-    [t("Size"), `${item.width ?? "?"} × ${item.height ?? "?"} · ${formatBytes(item.size, i18n.language)}`],
+    [t("Size"), `${item.width ?? "?"} × ${item.height ?? "?"}`],
+    [t("File size"), formatBytes(item.size, i18n.language)],
     [t("Created"), Number.isNaN(created.getTime()) ? item.created_at : created.toLocaleString(i18n.language)],
     [t("From"), t(CATEGORY_LABELS[item.category as GalleryCategory] ?? item.category)],
   ]

@@ -43,56 +43,66 @@
      the stage glass is nearly square. */
   --radius: 0.375rem;
 
-  --background: oklch(0.938 0.005 250);
+  --background: oklch(0.952 0.004 250);
   --foreground: oklch(0.235 0.016 260);
-  --card: oklch(0.972 0.003 250);
+  --card: oklch(0.988 0.002 250);
   --card-foreground: var(--foreground);
-  --popover: oklch(0.985 0.002 250);
+  --popover: oklch(0.995 0.001 250);
   --popover-foreground: var(--foreground);
   --primary: oklch(var(--brand-l) var(--brand-c) var(--brand-h));
   --primary-hover: oklch(calc(var(--brand-l) + var(--brand-hover-dl)) var(--brand-c) var(--brand-h));
   --primary-foreground: var(--brand-fg);
-  --secondary: oklch(0.905 0.006 250);
+  --secondary: oklch(0.915 0.006 250);
   --secondary-foreground: var(--foreground);
-  --muted: oklch(0.91 0.006 250);
+  --muted: oklch(0.925 0.005 250);
   --muted-foreground: oklch(0.47 0.016 255);
-  --accent: oklch(0.895 0.007 250);
+  --accent: oklch(0.905 0.007 250);
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.52 0.19 33); /* red pencil; ≥ 4.5:1 as text on its own 10 % tint */
   --success: oklch(0.5 0.12 160); /* ≥ 4.5:1 as text on the paper */
   --warning: oklch(0.52 0.13 62); /* ≥ 4.5:1 as text on the paper */
+  --star: oklch(0.6 0.15 66); /* a starred mark on the paper: ≥ 3:1 as an icon */
   --border: oklch(0.24 0.02 258 / 12%);
-  --input: oklch(0.24 0.02 258 / 18%);
+  --input: oklch(0.24 0.02 258 / 24%);
   --ring: oklch(var(--brand-l) var(--brand-c) var(--brand-h));
   --chart-1: oklch(0.6 0.12 var(--brand-h));
   --chart-2: oklch(0.62 0.17 33);
   --chart-3: oklch(0.7 0.13 85);
   --chart-4: oklch(0.6 0.1 160);
   --chart-5: oklch(0.55 0.08 300);
-  --sidebar: oklch(0.905 0.007 250);
+  --sidebar: oklch(0.925 0.006 250);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: oklch(0.87 0.009 250);
+  --sidebar-accent: oklch(0.89 0.008 250);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
   /* The stage: an unlit light-table glass, and the lamp. In daylight the
      Generate button is the dark ink block; at night it is the lit lamp. */
-  --canvas: oklch(0.885 0.004 250);
+  --canvas: oklch(0.915 0.004 250);
   /* Entry fields: a filled patch of the sheet, underlined (see the field classes). */
-  --field: oklch(0.235 0.016 260 / 5.5%);
-  --field-hover: oklch(0.235 0.016 260 / 8%);
-  /* The shell: the nav rail is set in the blue pencil's ink, in both themes. */
-  --rail: oklch(0.31 0.075 256);
-  --rail-foreground: oklch(0.97 0.01 250);
-  --rail-muted: oklch(0.8 0.035 250);
-  --rail-active: oklch(0.4 0.085 256);
+  --field: oklch(0.235 0.016 260 / 6.5%);
+  --field-hover: oklch(0.235 0.016 260 / 9.5%);
+  /* The shell: the nav rail and the phone's bottom bar are a neutral strip of the desk, a shade off
+     the page; only the current page is marked, with the blue pencil (a tint of --primary, its icon in it). */
+  --rail: var(--sidebar);
+  --rail-foreground: var(--foreground);
+  --rail-muted: var(--muted-foreground);
+  --rail-active: color-mix(in oklch, var(--primary) 15%, var(--rail));
+  --rail-current: var(--primary);
   --glow: oklch(0.31 0.075 256);
   --glow-foreground: oklch(0.97 0.01 250);
   --glow-dim: oklch(0.31 0.075 256 / 12%);
   --peg: oklch(0.24 0.02 258 / 22%);
   --scrollbar: oklch(0.24 0.02 258 / 24%);
+  /* The fader (components/ui/slider.tsx): a groove cut into the sheet and a cap that stands on it. */
+  --slider-groove: oklch(0.24 0.02 258 / 11%);
+  --slider-groove-shade: oklch(0.2 0.02 258 / 22%);
+  --slider-cap: oklch(0.995 0.002 250);
+  --slider-cap-edge: oklch(0.24 0.02 258 / 30%);
+  --slider-cap-shade: oklch(0.2 0.02 258 / 22%);
+  --slider-notch: oklch(0.24 0.02 258 / 55%);
 }
 
 .dark {
@@ -115,6 +125,7 @@
   --destructive: oklch(0.75 0.15 33); /* red pencil; ≥ 4.5:1 as text on its own 20 % tint */
   --success: oklch(0.74 0.13 160);
   --warning: oklch(0.8 0.13 80);
+  --star: oklch(0.83 0.15 84);
   --border: oklch(0.86 0.02 248 / 9%);
   --input: oklch(0.86 0.02 248 / 14%);
   --sidebar: oklch(0.205 0.012 258);
@@ -122,13 +133,18 @@
   --canvas: oklch(0.2 0.005 258);
   --field: oklch(0.93 0.006 248 / 6%);
   --field-hover: oklch(0.93 0.006 248 / 9%);
-  --rail: oklch(0.285 0.065 256);
-  --rail-active: oklch(0.37 0.08 256);
+  --rail-active: color-mix(in oklch, var(--primary) 18%, var(--rail));
   --glow: oklch(0.955 0.012 230);
   --glow-foreground: oklch(0.22 0.02 258);
   --glow-dim: oklch(0.955 0.012 230 / 7%);
   --peg: oklch(0.86 0.02 248 / 16%);
   --scrollbar: oklch(0.86 0.02 248 / 18%);
+  --slider-groove: oklch(0.13 0.01 258 / 55%);
+  --slider-groove-shade: oklch(0 0 0 / 45%);
+  --slider-cap: oklch(0.86 0.008 250);
+  --slider-cap-edge: oklch(0.98 0.005 250 / 35%);
+  --slider-cap-shade: oklch(0 0 0 / 50%);
+  --slider-notch: oklch(0.25 0.015 258 / 70%);
 }
 
 /* Accent presets: hue, chroma, and the light-mode lightness that keeps every
@@ -156,22 +172,32 @@
 }
 
 /* Compact density scales every spacing utility (padding, gap, h-*, size-*). */
+/* Noto Sans SC draws Simplified Chinese forms: a page in Japanese, Korean or Traditional Chinese (a
+   localization the server may add) keeps the system face, which follows `<html lang>`. */
+:root {
+  --font-han: "Noto Sans SC Variable";
+}
+:root:lang(ja),
+:root:lang(ko),
+:root:lang(zh-TW),
+:root:lang(zh-HK),
+:root:lang(zh-Hant) {
+  --font-han: ui-sans-serif;
+}
+
 [data-density="compact"] {
   --spacing: 0.215rem;
 }
 
 @theme inline {
-  --font-sans: "Remi Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  /* Geist for Latin, Noto Sans SC for Han (styles/fonts.css): one look on every system. The system
+     CJK faces stay behind them for the moment before a slice has loaded. */
+  --font-sans: "Remi Sans", var(--font-han), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-heading: var(--font-sans);
-  /* Recursive's fixed-pitch cut: the UI's own letters on a grid (Tailwind
-     applies the axis with `font-mono` and in its code/kbd/samp/pre base). */
-  --font-mono: "Remi Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --font-mono--font-variation-settings: "MONO" 1;
-  /* The prompt editor: Recursive's casual (hand-lettered) cut, like entries
-     written on an exposure sheet; CJK falls back to the system faces. */
-  --font-hand: "Remi Hand", "Remi Sans", ui-sans-serif, system-ui, "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  /* Geist Mono, the UI's fixed-pitch twin (Tailwind applies it with `font-mono` and in its
+     code/kbd/samp/pre base); Han in a mono run takes the UI's Han face. */
+  --font-mono: "Remi Mono", ui-monospace, "SF Mono", Menlo, Consolas, var(--font-han), monospace;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -212,12 +238,14 @@
   --color-glow-foreground: var(--glow-foreground);
   --color-glow-dim: var(--glow-dim);
   --color-peg: var(--peg);
+  --color-star: var(--star);
   --color-field: var(--field);
   --color-field-hover: var(--field-hover);
   --color-rail: var(--rail);
   --color-rail-foreground: var(--rail-foreground);
   --color-rail-muted: var(--rail-muted);
   --color-rail-active: var(--rail-active);
+  --color-rail-current: var(--rail-current);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);

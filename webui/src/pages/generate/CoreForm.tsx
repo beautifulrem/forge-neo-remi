@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
 import { Img2imgSourcePanel } from "@/canvas"
 import { OwnerProvider } from "@/ui/context"
+import { panelClass, panelTitleClass, usePanelDepth } from "@/ui/layout/panel"
 import { RenderNode } from "@/ui/Renderer"
 import type { Node } from "@/ui/schema"
 import type { BlockKind, CuratedForm } from "./curate"
@@ -18,10 +19,12 @@ import { SizeTools } from "./SizeTools"
 
 export function Card({ title, actions, children, className, onPaste }: { title: string; actions?: ReactNode; children: ReactNode; className?: string; onPaste?: (event: React.ClipboardEvent) => void }) {
   const id = useId()
+  const depth = usePanelDepth()
+  // an inspector panel, not a card (`ui/layout/panel.ts`)
   return (
-    <section aria-labelledby={id} onPaste={onPaste} className={cn("flex min-w-0 flex-col gap-3 rounded-md bg-card p-3 text-card-foreground", className)}>
-      <div className="flex min-h-7 items-center gap-2">
-        <h2 id={id} className="text-[1.0625rem] font-semibold tracking-[-0.01em]">
+    <section aria-labelledby={id} onPaste={onPaste} className={cn("flex min-w-0 flex-col gap-3", panelClass(depth), className)}>
+      <div className="flex min-h-8 items-center gap-2">
+        <h2 id={id} className={panelTitleClass(depth)}>
           {title}
         </h2>
         {actions ? <div className="ml-auto flex items-center gap-1">{actions}</div> : null}
@@ -46,13 +49,20 @@ function runs(blocks: CuratedForm["blocks"]): { kind: BlockKind; nodes: Node[] }
   return out
 }
 
+/** A schema separator at the column's end would sit on the next panel's hairline. */
+function withoutTrailingSeparators(blocks: CuratedForm["blocks"]) {
+  let end = blocks.length
+  while (end > 0 && blocks[end - 1]?.node.type === "separator") end--
+  return blocks.slice(0, end)
+}
+
 export function CoreForm({ curated }: { curated: CuratedForm }) {
   const { t } = useTranslation()
   const pasteSize = usePasteSize()
   return (
     <OwnerProvider owner="core">
       <div className="flex flex-col gap-3">
-        {runs(curated.blocks.filter((block) => block.kind !== "source")).map(({ kind, nodes }, index) => {
+        {runs(withoutTrailingSeparators(curated.blocks.filter((block) => block.kind !== "source"))).map(({ kind, nodes }, index) => {
           switch (kind) {
             case "size":
               return (

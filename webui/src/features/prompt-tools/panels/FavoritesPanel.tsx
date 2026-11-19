@@ -300,7 +300,7 @@ export default function FavoritesPanel({ value, setValue, kind, disabled, close 
                     >
                       <span className="flex items-center gap-1.5">
                         {item.name ? <span className="truncate text-xs font-semibold">{item.name}</span> : null}
-                        {item.kind === "tags" ? <span className="rounded bg-muted px-1 text-[0.65rem] font-medium text-muted-foreground">{t("Tags")}</span> : null}
+                        {item.kind === "tags" ? <span className="rounded bg-muted px-1 text-[0.625rem] font-medium text-muted-foreground">{t("Tags")}</span> : null}
                       </span>
                       <span className="line-clamp-3 text-xs break-words whitespace-pre-wrap">{item.text}</span>
                     </button>

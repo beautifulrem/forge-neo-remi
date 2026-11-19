@@ -147,14 +147,17 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
           <Dialog.Title className="sr-only">{t("Image viewer")}</Dialog.Title>
           <div
             style={dim(toolbarOpacity)}
-            className="flex h-12 shrink-0 items-center gap-2 bg-gradient-to-b from-black/60 to-transparent px-3 opacity-(--lightbox-dim) transition-opacity focus-within:opacity-100 hover:opacity-100"
+            className="@container/actions flex h-12 shrink-0 items-center gap-2 bg-gradient-to-b from-black/60 to-transparent px-3 opacity-(--lightbox-dim) transition-opacity focus-within:opacity-100 hover:opacity-100"
           >
             <span className="shrink-0 text-sm whitespace-nowrap text-white/75 tabular-nums" aria-live="polite">
               {live ? t("Live preview") : items.length > 0 ? t("{{index}} of {{count}}", { index: index + 1, count: items.length }) : ""}
             </span>
             {natural ? (
-              <span className="hidden text-xs text-white/50 tabular-nums sm:inline">
-                {natural.width}×{natural.height} · {Math.round(view.scale * 100)}%
+              <span className="hidden gap-3 text-xs text-white/50 tabular-nums sm:inline-flex">
+                <span>
+                  {natural.width} × {natural.height}
+                </span>
+                <span>{Math.round(view.scale * 100)}%</span>
               </span>
             ) : null}
             <div className="ml-auto flex min-w-0 items-center gap-0.5">

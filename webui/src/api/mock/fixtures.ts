@@ -802,6 +802,11 @@ export const serverCatalogZh: Record<string, string> = {
   "Prompt\n({{generate}} to Generate ; {{skip}} to Skip ; {{interrupt}} to Interrupt)": "提示词\n（{{generate}} 生成；{{skip}} 跳过；{{interrupt}} 中断）",
   "Negative prompt": "反向提示词",
   "Sampling method": "采样方法",
+  // as localizations/zh_CN.json has them
+  "Sampler": "采样器",
+  "Resize to": "调整到",
+  "Resize by": "按倍率缩放",
+  "Scale by": "按倍率缩放",
   "Schedule type": "调度类型",
   "Sampling steps": "迭代步数",
   Width: "宽度",

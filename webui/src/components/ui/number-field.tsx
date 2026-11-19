@@ -31,7 +31,7 @@ function NumberField({
       <NumberFieldPrimitive.Group
         data-size={size}
         data-invalid={ariaInvalid || undefined}
-        className="flex w-full items-stretch overflow-hidden rounded-sm border border-transparent bg-field shadow-[inset_0_-1px_0_var(--input)] transition-colors focus-within:shadow-[inset_0_-2px_0_var(--ring)] data-disabled:cursor-not-allowed data-disabled:opacity-50 data-invalid:border-destructive data-invalid:ring-3 data-invalid:ring-destructive/20 data-[size=default]:h-8 data-[size=sm]:h-7"
+        className="flex w-full items-stretch overflow-hidden rounded-sm border border-transparent bg-field transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 data-disabled:cursor-not-allowed data-disabled:opacity-50 data-invalid:border-destructive data-invalid:ring-3 data-invalid:ring-destructive/20 data-[size=default]:h-8 data-[size=sm]:h-7"
       >
         <NumberFieldPrimitive.Input
           aria-label={ariaLabel}
@@ -44,7 +44,8 @@ function NumberField({
           )}
         />
         {steppers ? (
-          <div className="flex w-5 shrink-0 flex-col border-l border-input">
+          // touch screens type the value (numeric keyboard): 16 px steppers are too small a target
+          <div className="flex w-5 shrink-0 flex-col border-l border-input pointer-coarse:hidden">
             <NumberFieldPrimitive.Increment aria-label={t("Increase")} className="grid flex-1 place-items-center text-muted-foreground transition-[color,background-color,box-shadow] outline-none hover:bg-muted hover:text-foreground disabled:opacity-40">
               <ChevronUpIcon className="size-3" />
             </NumberFieldPrimitive.Increment>

@@ -132,7 +132,7 @@ function SettingHelp({ node }: { node: SettingNode }) {
       {(node.links?.length ?? 0) > 0 || badges.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
           {badges.map((badge) => (
-            <Badge key={badge} variant="secondary" className="h-4.5 px-1.5 text-[0.68rem] font-normal">
+            <Badge key={badge} variant="secondary" className="h-4.5 px-1.5 text-[0.6875rem] font-normal">
               {t(badge)}
             </Badge>
           ))}
@@ -215,9 +215,9 @@ export function SettingView({ node }: { node: SettingNode }) {
       </div>
       <SettingHelp node={node} />
       <div className="flex items-center gap-2">
-        <code className="font-mono text-[0.68rem] text-muted-foreground select-all">{node.name}</code>
+        <code className="font-mono text-[0.6875rem] text-muted-foreground select-all">{node.name}</code>
         {unsaved ? (
-          <span className="text-[0.68rem] font-medium text-primary">{t("Unsaved")}</span>
+          <span className="text-[0.6875rem] font-medium text-primary">{t("Unsaved")}</span>
         ) : null}
       </div>
     </div>

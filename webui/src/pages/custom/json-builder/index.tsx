@@ -29,6 +29,7 @@ import { ASPECT_RATIOS, type AspectRatio, buildDraft, finalPrompt, type Item, LA
 import { LayoutCanvas } from "./LayoutCanvas"
 import { sizeLimit } from "./size-limit"
 import { useBuilder } from "./store"
+import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 
 const CANVAS_NAMES: Record<CanvasType, string> = { single: "Single", multi_panel: "Multi-panel", collage: "Collage" }
 
@@ -36,9 +37,10 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 
 function Section({ title, children, className, actions }: { title: string; children: React.ReactNode; className?: string; actions?: React.ReactNode }) {
   return (
-    <section className={cn("flex flex-col gap-2.5 rounded-md bg-card p-3", className)}>
-      <div className="flex min-h-6 items-center justify-between gap-2">
-        <h2 className="text-[0.8rem] font-medium text-muted-foreground">{title}</h2>
+    // an inspector panel, not a card (`ui/layout/panel.ts`)
+    <section className={cn("flex flex-col gap-2.5", panelClass(0), className)}>
+      <div className="flex min-h-7 items-center justify-between gap-2">
+        <h2 className={panelTitleClass(0)}>{title}</h2>
         {actions}
       </div>
       {children}
@@ -90,12 +92,13 @@ function ResolutionSection() {
         <SizeField id={`${id}-w`} label={t("Width")} value={width} onChange={(v, commit) => (commit ? setSize(round16(v), height, true) : setSize(v, height))} />
         <SizeField id={`${id}-h`} label={t("Height")} value={height} onChange={(v, commit) => (commit ? setSize(width, round16(v), true) : setSize(width, v))} />
       </div>
-      <div className="flex items-end gap-2">
-        <div className="flex w-24 flex-col gap-1">
+      {/* the button drops under the fields where the card is too narrow for all three */}
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="flex w-24 shrink-0 flex-col gap-1">
           <FieldLabel htmlFor={`${id}-mp`}>{t("Megapixels")}</FieldLabel>
           <NumberField id={`${id}-mp`} value={mp} min={0.1} step={0.1} format={{ maximumFractionDigits: 2 }} onValueChange={(next) => next !== null && next > 0 && set({ mp: next })} />
         </div>
-        <div className="flex w-24 flex-col gap-1">
+        <div className="flex w-24 shrink-0 flex-col gap-1">
           <span id={`${id}-ar`} className="text-[0.8rem] font-medium text-foreground/85">
             {t("Aspect ratio")}
           </span>
@@ -112,7 +115,7 @@ function ResolutionSection() {
             </SelectContent>
           </Select>
         </div>
-        <Button variant="secondary" className="flex-1" onClick={applyMp}>
+        <Button variant="secondary" className="flex-1 basis-auto" onClick={applyMp}>
           <Ratio aria-hidden />
           {t("Set resolution")}
         </Button>
@@ -319,7 +322,7 @@ function ItemRow({ item, index, active, missing, onActivate }: { item: Item; ind
       data-item={item.id}
       onFocusCapture={() => onActivate(item.id)}
       onPointerDown={() => onActivate(item.id)}
-      className={cn("flex flex-col gap-1.5 rounded-lg border border-transparent bg-muted/50 p-2 transition-colors hover:border-border", active && "border-primary/50 bg-primary/5")}
+      className={cn("flex flex-col gap-1.5 rounded-md border border-transparent p-2 transition-colors hover:bg-muted/50", active && "border-primary/40 bg-primary/5 hover:bg-primary/5")}
     >
       <div className="flex items-center gap-1.5">
         <span className="w-5 shrink-0 text-center text-xs text-muted-foreground tabular-nums">{index + 1}</span>
@@ -356,7 +359,7 @@ function ItemRow({ item, index, active, missing, onActivate }: { item: Item; ind
       <div className="grid grid-cols-4 gap-1.5" role="group" aria-label={t("Box of item {{n}}", { n: index + 1 })}>
         {CORNERS.map((corner, i) => (
           <div key={corner} className="flex min-w-0 items-center gap-1">
-            <label htmlFor={`${id}-${corner}`} className="text-[0.7rem] text-muted-foreground">
+            <label htmlFor={`${id}-${corner}`} className="text-[0.6875rem] text-muted-foreground">
               {corner}
             </label>
             <NumberField
@@ -460,15 +463,18 @@ export default function JsonBuilderPage(_props: CustomPageProps) {
   return (
     <div className="h-full overflow-y-auto lg:overflow-hidden" data-scroll-root>
       <div className="flex min-h-full flex-col gap-3 p-3 sm:p-4 lg:h-full lg:flex-row">
-        <LayoutCanvas className="h-[60vh] min-h-80 shrink-0 lg:h-auto lg:min-h-0 lg:flex-1 lg:shrink" activeId={activeId} onActivate={setActiveId} missing={missing} />
-        <div className="flex min-h-0 flex-col gap-3 lg:w-[26rem] lg:shrink-0 lg:overflow-y-auto xl:w-[30rem]">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+        <LayoutCanvas className="h-[60vh] max-h-[75vh] min-h-64 shrink-0 lg:h-auto lg:max-h-none lg:min-h-0 lg:flex-1 lg:shrink" activeId={activeId} onActivate={setActiveId} missing={missing} />
+        {/* lg: a scroller; 4 px of room either side (-mx-1 / px-1) keeps the fields' focus rings */}
+        <div className="flex min-h-0 flex-col gap-3 lg:-mx-1 lg:w-[calc(26rem+0.5rem)] lg:shrink-0 lg:overflow-y-auto lg:px-1 xl:w-[calc(30rem+0.5rem)]">
+          {/* side by side only where the panel spans the page: the side column (lg+) is too narrow for two */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
             <ResolutionSection />
             <FileSection />
           </div>
           <SummarySection missing={missing} />
           <ItemsSection activeId={activeId} onActivate={setActiveId} missing={missing} />
-          <div className="sticky bottom-0 flex gap-2 bg-background/95 py-1 lg:static lg:bg-transparent lg:py-0" data-toast-obstacle>
+          {/* pinned to the bottom of the page (phone) or of the scrolling side column (lg+): the send buttons stay in reach */}
+          <div className="sticky bottom-0 z-10 flex gap-2 border-t border-border/70 bg-background py-2 lg:border-t-0 lg:pt-2 lg:pb-0" data-toast-obstacle>
             <Button className="flex-1" onClick={() => send("txt2img")}>
               <Wand aria-hidden />
               {t("Send to txt2img")}

@@ -22,7 +22,11 @@ function renderViewer(current = "job:0") {
   return { onNavigate, onOpenChange, dialog: screen.getByRole("dialog"), image }
 }
 
-const zoomText = () => screen.getByText(/400×300 · \d+%/).textContent
+// the size and the zoom are two facts side by side ("400 × 300", "125%")
+const zoomText = () => {
+  expect(screen.getByText("400 × 300")).toBeInTheDocument()
+  return screen.getByText(/^\d+%$/).textContent
+}
 
 describe("lightbox", () => {
   afterEach(() => vi.restoreAllMocks())
@@ -56,7 +60,7 @@ describe("lightbox", () => {
     expect(onNavigate).toHaveBeenLastCalledWith("job:1")
     expect(zoomText()).toContain("100%")
     fireEvent.wheel(viewport, { deltaY: -100 })
-    expect(zoomText()).not.toContain(" 100%")
+    expect(zoomText()).not.toBe("100%")
   })
 
   it("zooms with + / − and resets with 1", () => {

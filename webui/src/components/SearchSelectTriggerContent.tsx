@@ -1,4 +1,4 @@
-import { ChevronsUpDown } from "@/components/icons"
+import { ChevronDown } from "@/components/icons"
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import type { SelectOption } from "./search-select-shared"
@@ -14,7 +14,7 @@ export function SearchSelectTriggerContent({ selected, placeholder, prefix, suff
           {suffix}
         </span>
       ) : null}
-      <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
     </>
   )
 }

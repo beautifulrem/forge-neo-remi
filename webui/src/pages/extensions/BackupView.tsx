@@ -95,7 +95,7 @@ function StateDetail({ detail }: { detail: ConfigStateDetail }) {
                         <span className="flex flex-wrap items-center gap-1.5">
                           <Commit repo={repo} />
                           {repo.branch ? <span className="text-muted-foreground">{repo.branch}</span> : null}
-                          {repo.enabled === false ? <Badge variant="outline" className="h-4 px-1 text-[0.65rem]">{t("disabled")}</Badge> : null}
+                          {repo.enabled === false ? <Badge variant="outline" className="h-4 px-1 text-[0.625rem]">{t("disabled")}</Badge> : null}
                         </span>
                       ) : (
                         <span className="text-muted-foreground">{index === 0 ? t("not in the backup") : t("not installed")}</span>
@@ -192,7 +192,7 @@ export function BackupView({ access }: { access: boolean }) {
                   state.id === current && "bg-accent",
                 )}
               >
-                <p className="truncate text-sm font-medium">{state.name}</p>
+                <p className="truncate text-sm font-medium" title={state.name}>{state.name}</p>
                 <p className="text-xs text-muted-foreground tabular-nums">
                   {state.created_at ? new Date(state.created_at).toLocaleString(i18n.language) : ""} · {t("Extensions: {{count}}", { count: state.extensions })}
                 </p>
@@ -220,7 +220,7 @@ export function BackupView({ access }: { access: boolean }) {
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center gap-2">
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-base font-semibold">{detail.data.name}</h2>
+                <h2 className="truncate text-base font-semibold" title={detail.data.name}>{detail.data.name}</h2>
                 <p className="text-xs text-muted-foreground">{formatDate(detail.data.created_at, i18n.language)}</p>
               </div>
               <Button disabled={!access} onClick={() => setConfirm("restore")}>

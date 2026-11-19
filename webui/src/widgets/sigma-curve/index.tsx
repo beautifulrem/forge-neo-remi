@@ -98,8 +98,8 @@ export default function SigmaCurve({ props, id, disabled }: WidgetProps<null, Pr
           {selected.title}
           {selectedState.mode !== "both" ? ` · ${selectedState.mode.toUpperCase()}` : ""}
         </figcaption>
-        <span className="pointer-events-none absolute top-1 right-2 text-[0.65rem] text-muted-foreground">1</span>
-        <span className="pointer-events-none absolute right-2 bottom-1 text-[0.65rem] text-muted-foreground">−1</span>
+        <span className="pointer-events-none absolute top-1 right-2 text-[0.625rem] text-muted-foreground">1</span>
+        <span className="pointer-events-none absolute right-2 bottom-1 text-[0.625rem] text-muted-foreground">−1</span>
       </figure>
       {daemons.length > 1 ? (
         <div role="group" aria-label={tw("Daemons")} className="grid grid-cols-5 gap-1 sm:w-48 sm:grid-cols-3">
@@ -121,7 +121,7 @@ export default function SigmaCurve({ props, id, disabled }: WidgetProps<null, Pr
                   current ? "border-primary/60 ring-1 ring-primary/30" : "hover:bg-accent",
                 )}
               >
-                <span className="text-[0.65rem] leading-none font-semibold text-muted-foreground">
+                <span className="text-[0.625rem] leading-none font-semibold text-muted-foreground">
                   {daemon.title}
                   {state.mode !== "both" ? ` ${state.mode.toUpperCase()}` : ""}
                 </span>
