@@ -75,3 +75,16 @@ def test_localized(env):
 
 def test_standalone(ext_kit):
     ext_kit.assert_standalone(EXTENSION, [SCRIPT])
+
+
+def test_masks_for_decoded_samples_are_built_per_overlay_image(env):
+    """``apply_masks`` (the path for samples a script already decoded) filled an empty list by
+    index: IndexError on the first image (upstream bug)."""
+    import torch
+    from PIL import Image
+
+    settings = env.module.SoftInpaintingSettings(1, 0.5, 4, 1.0, 0.5, 2)
+    overlays = [Image.new("RGB", (64, 64), "red"), Image.new("RGB", (64, 64), "blue")]
+    masks = env.module.apply_masks(settings=settings, nmask=torch.full((2, 4, 8, 8), 0.5), overlay_images=overlays, width=64, height=64, paste_to=None)
+    assert len(masks) == 2 and all(mask.size == (64, 64) for mask in masks)
+    assert all(image.mode == "RGBA" for image in overlays)

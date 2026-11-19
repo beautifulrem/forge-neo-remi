@@ -11,6 +11,11 @@ it would come in silently and import a ``Spectrum`` class Remi's
 forked path the merge touched, conflicted or not, goes back to Remi's version
 here, and the tool prints the upstream diff to read for the selective port.
 
+The files where Remi fixed an upstream bug but otherwise keeps upstream's code
+(§1.2, ``DIVERGED``) are not restored: they merge as usual, ``review`` lists the
+upstream commits on them, and the test each §1.2 row names fails if a merge
+dropped the fix.
+
     $PYTHON tools/upstream_forks.py review               # before the merge: upstream commits and
                                                          # diffstat on the forked paths
     $PYTHON tools/upstream_forks.py restore --dry-run    # during the merge: what restore would do
@@ -41,6 +46,36 @@ FORKED = (
 )
 """The paths of upstream-absorption.md §1.1 (files and folders), one per forked
 file or folder; ``tests/test_remi_upstream_forks.py`` keeps the two in step."""
+
+DIVERGED = (
+    "backend/memory_management.py",
+    "backend/sampling/sampling_function.py",
+    "backend/text_processing/anima_engine.py",
+    "extensions-builtin/forge_preprocessor_inpaint/scripts/preprocessor_inpaint.py",
+    "extensions-builtin/forge_preprocessor_reference/scripts/forge_reference.py",
+    "extensions-builtin/forge_preprocessor_tile/scripts/preprocessor_tile.py",
+    "extensions-builtin/sd_forge_controlllite/lib_controllllite/lib_controllllite.py",
+    "extensions-builtin/sd_forge_controlllite/lib_controllllite/lib_controllllite_anima.py",
+    "extensions-builtin/sd_forge_controlllite/scripts/forge_controllllite.py",
+    "extensions-builtin/sd_forge_controlnet/scripts/controlnet.py",
+    "extensions-builtin/sd_forge_image_stitch/scripts/image_stitch.py",
+    "extensions-builtin/sd_forge_lora/networks.py",
+    "extensions-builtin/sd_forge_lora_schedule/scripts/control.py",
+    "extensions-builtin/sd_forge_radial/scripts/forge_radial.py",
+    "extensions-builtin/soft-inpainting/scripts/soft_inpainting.py",
+    "modules/api/api.py",
+    "modules/extras.py",
+    "modules/images.py",
+    "modules/img2img.py",
+    "modules/infotext_utils.py",
+    "modules/processing.py",
+    "modules/processing_scripts/refiner.py",
+    "modules_forge/supported_controlnet.py",
+)
+"""Upstream files that keep upstream's code but carry Remi's fixes of upstream bugs
+(upstream-absorption.md §1.2, one row per file naming the test that pins the fix).
+They merge normally, and ``restore`` never touches them: a merge that conflicts
+there keeps the fix, and the pinning tests fail if a clean merge drops one."""
 
 
 def git(*args: str, root: str = ROOT, check: bool = True) -> str:
@@ -94,17 +129,24 @@ def restore(paths: tuple[str, ...] = FORKED, root: str = ROOT, dry_run: bool = F
 
 def review(base: str | None, upstream: str, root: str = ROOT) -> str:
     base = base or git("merge-base", "HEAD", upstream, root=root).strip()
-    log = git("log", "--oneline", "--no-merges", f"{base}..{upstream}", "--", *FORKED, root=root)
-    stat = git("diff", "--stat=200", base, upstream, "--", *FORKED, root=root)
-    if not log.strip():
-        return f"No upstream commit after {base[:10]} touches the files Remi forked."
-    return f"Upstream commits after {base[:10]} on the files Remi forked (keep Remi's, port selectively):\n{log}\n{stat}"
+    found = []
+    for paths, what in (
+        (FORKED, "the files Remi forked (keep Remi's, port selectively)"),
+        (DIVERGED, "the files carrying Remi's fixes of upstream bugs (merge, keep each fix; §1.2 names its test)"),
+    ):
+        log = git("log", "--oneline", "--no-merges", f"{base}..{upstream}", "--", *paths, root=root)
+        if not log.strip():
+            found.append(f"No upstream commit after {base[:10]} touches {what.split(' (')[0]}.")
+            continue
+        stat = git("diff", "--stat=200", base, upstream, "--", *paths, root=root)
+        found.append(f"Upstream commits after {base[:10]} on {what}:\n{log}\n{stat}")
+    return "\n".join(found)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    shown = sub.add_parser("review", help="upstream commits and diffstat on the forked paths (before merging)")
+    shown = sub.add_parser("review", help="upstream commits and diffstat on the forked and diverged paths (before merging)")
     shown.add_argument("--base", help="merge base (default: git merge-base HEAD <upstream>)")
     shown.add_argument("--upstream", default=UPSTREAM, help="upstream revision (default: %(default)s)")
     back = sub.add_parser("restore", help="during a merge: every forked path the merge touched back to HEAD")

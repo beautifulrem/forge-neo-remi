@@ -419,11 +419,13 @@ class JobQueue:
     def interrupt(self, job_id: str) -> Job:
         """Stop the running job (keeping what it made) or cancel a queued one."""
 
-        job = self.get(job_id)
-        if job.status == RUNNING:
-            self._user_interrupt(job_id)
-        elif job.status == QUEUED:
-            self._cancel_queued(job)
+        for _attempt in range(2):
+            job = self.get(job_id)
+            if job.status == RUNNING:
+                self._user_interrupt(job_id)
+            elif job.status == QUEUED and not self._cancel_queued(job):
+                continue  # the worker claimed it between the read and the cancel: interrupt it
+            break
         return self.get(job_id)
 
     def skip(self, job_id: str) -> None:
@@ -433,13 +435,17 @@ class JobQueue:
     def delete(self, job_id: str) -> None:
         """Cancel a running job, or remove a queued or finished one."""
 
-        job = self.get(job_id)
-        if job.status == RUNNING and self._signal(job_id, self._cancelled):
-            return
-        was_queued = job.status == QUEUED
-        if self.store.delete(job_id) and was_queued:
-            self._pending_done(job)
-            self._changed()
+        for _attempt in range(3):
+            job = self.get(job_id)
+            if job.status == RUNNING and self._signal(job_id, self._cancelled):
+                return
+            if self.store.delete(job_id):
+                if job.status == QUEUED:
+                    self._pending_done(job)
+                    self._changed()
+                return
+            # the worker claimed it between the read and the delete (the store keeps running
+            # jobs): cancel it as the running job it now is
 
     def update(self, job_id: str, *, priority: int | None = None, forever: bool | None = None) -> Job:
         self.get(job_id)
@@ -547,12 +553,16 @@ class JobQueue:
         with self._cv:
             self._cv.notify_all()
 
-    def _cancel_queued(self, job: Job, *, notify: bool = True) -> None:
-        if self.store.cancel_queued(job.id):
-            self._pending_done(job)
-            self.bus.publish("job.failed", job_id=job.id, seq=job.seq, tab=job.tab, status=CANCELLED, error="Cancelled")
-            if notify:
-                self._changed()
+    def _cancel_queued(self, job: Job, *, notify: bool = True) -> bool:
+        """False when ``job`` is not queued any more (the worker claimed it)."""
+
+        if not self.store.cancel_queued(job.id):
+            return False
+        self._pending_done(job)
+        self.bus.publish("job.failed", job_id=job.id, seq=job.seq, tab=job.tab, status=CANCELLED, error="Cancelled")
+        if notify:
+            self._changed()
+        return True
 
     def _changed(self) -> None:
         self.bus.publish("queue.changed", **self.status())
@@ -621,6 +631,9 @@ class JobQueue:
             self._pending_done(job)
             self.bus.publish("job.completed", **ref.fields(), status=status, outputs=[], infotext=None)
             return
+        from remi import model_selection
+
+        model_selection.apply_held()  # picked while the previous job ran: this job loads it
         self.bus.publish("job.started", **ref.fields())
         self._changed()
         ctx = JobContext(id_task=job.id_task, user=job.user, resolve_upload=self.files.resolve_upload, on_begin=lambda: self._on_begin(job.id))
@@ -785,6 +798,10 @@ def pending_model() -> str | None:
     """The checkpoint the next generation will load, if it differs from the
     loaded one."""
 
+    from remi import model_selection
+
+    if (held := model_selection.held().get("sd_model_checkpoint")) is not None:
+        return str(held)  # picked during the running job, loaded by the next one
     sd_models = sys.modules.get("modules.sd_models")
     data = getattr(sd_models, "model_data", None)
     params = getattr(data, "forge_loading_parameters", None)

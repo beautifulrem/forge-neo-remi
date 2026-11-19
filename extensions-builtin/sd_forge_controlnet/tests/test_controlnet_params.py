@@ -802,7 +802,7 @@ def test_a_generation_that_raised_has_its_models_undo_their_patches(cn):
     undone = []
     model = SimpleNamespace(process_after_every_sampling=lambda p, params: undone.append(params))
     script = cn.ControlNetForForgeOfficial()
-    with_model, without_model = SimpleNamespace(model=model), SimpleNamespace(model=None)
+    with_model, without_model = SimpleNamespace(model=model, preprocessor=None), SimpleNamespace(model=None, preprocessor=None)
     script.current_params = {0: with_model, 1: without_model}
 
     script.cleanup(SimpleNamespace())
@@ -984,3 +984,261 @@ def test_anima_lllite_skips_a_hires_checkpoint_it_does_not_fit(cn, monkeypatch):
     first_pass_on_sdxl.is_hr_pass = False
     with pytest.raises(AttributeError):  # the first pass on a model it does not fit still fails as before
         lllite.ControlLLLiteAnimaPatcher({"lllite_dit.weight": torch.zeros(1)}, inpaint=False).process_before_every_sampling(first_pass_on_sdxl, cond, None)
+
+
+def _fake_process(seed=1):
+    """A processing object for the preprocessors' ``process_before_every_sampling``: a VAE that
+    encodes to zeros and a UNet whose clone records the modifiers a preprocessor adds."""
+
+    import torch
+
+    added = {}
+
+    class Unet:
+        model = SimpleNamespace(predictor=SimpleNamespace(sigma_data=1.0, percent_to_sigma=lambda percent: 10.0 * (1 - percent)))
+
+        def clone(self):
+            return self
+
+        def add_block_modifier(self, f):
+            added["block"] = f
+
+        def add_conditioning_modifier(self, f):
+            added["conditioning"] = f
+
+        def set_model_replace_all(self, f, name):
+            added[name] = f
+
+        def add_sampler_pre_cfg_function(self, f):
+            added["pre_cfg"] = f
+
+        def set_model_sampler_post_cfg_function(self, f):
+            added["post_cfg"] = f
+
+    vae = SimpleNamespace(encode=lambda image: torch.zeros(1, 4, 8, 8), first_stage_model=SimpleNamespace(process_in=lambda latent: latent))
+    process = SimpleNamespace(sd_model=SimpleNamespace(is_sdxl=False, forge_objects=SimpleNamespace(vae=vae, unet=Unet())), seeds=[seed])
+    return process, added
+
+
+def test_tile_colorfix_uses_each_images_sigma_in_a_batch(cn, monkeypatch):
+    """A batch of two images calls the UNet with their cond and uncond rows (4 rows) and one sigma
+    per image: each row is scaled by its own image's sigma (upstream broadcast the 2 sigmas against
+    the image width, failing or mixing the images up)."""
+    import torch
+
+    from modules_forge import shared as forge_shared
+
+    monkeypatch.setattr(forge_shared, "supported_preprocessors", dict(forge_shared.supported_preprocessors))
+    tile = harness.load_script(harness.REPO / "extensions-builtin" / "forge_preprocessor_tile" / "scripts" / "preprocessor_tile.py", "preprocessor_tile_under_test")
+    process, added = _fake_process()
+    tile.PreprocessorTileColorFix().process_before_every_sampling(process, torch.zeros(1, 3, 64, 64), None, unit=SimpleNamespace(threshold_a=3))
+
+    sigmas = torch.tensor([1.0, 3.0])
+    options = {"sigmas": sigmas, "cond_mark": torch.tensor([0.0, 0.0, 1.0, 1.0])}
+    h = torch.ones(4, 4, 8, 8)
+    added["block"](h, "before", {**options, "block": ("input", 0)})
+    eps = added["block"](torch.zeros(4, 4, 8, 8), "after", {**options, "block": ("last", 0)})
+
+    # the latent is zero and the prediction exact: what is left is x * sqrt(s^2 + 1) / s per row
+    expected = torch.stack([(s**2 + 1) ** 0.5 / s for s in torch.cat([sigmas, sigmas])])
+    assert eps.shape == h.shape
+    assert torch.allclose(eps.mean(dim=(1, 2, 3)), expected, atol=1e-4)
+
+
+def test_reference_recording_stops_after_an_error_and_its_records_are_released(cn, monkeypatch):
+    """An error while recording the reference (out of memory) does not leave the preprocessor
+    recording, which would make every later run skip the reference; the recorded tensors are
+    released after sampling."""
+    import torch
+
+    from modules_forge import shared as forge_shared
+
+    monkeypatch.setattr(forge_shared, "supported_preprocessors", dict(forge_shared.supported_preprocessors))
+    reference = harness.load_script(harness.REPO / "extensions-builtin" / "forge_preprocessor_reference" / "scripts" / "forge_reference.py", "forge_reference_under_test")
+
+    def out_of_memory(*args, **kwargs):
+        raise RuntimeError("MPS backend out of memory")
+
+    monkeypatch.setattr(reference, "sampling_function_inner", out_of_memory)
+    preprocessor = reference.PreprocessorReference("reference_only")
+    unit = SimpleNamespace(weight=1.0, threshold_a=0.5, guidance_start=0.0, guidance_end=1.0)
+    process, added = _fake_process()
+    preprocessor.process_before_every_sampling(process, torch.zeros(1, 3, 64, 64), None, unit=unit)
+
+    x = torch.zeros(1, 4, 8, 8)
+    with pytest.raises(RuntimeError):
+        added["conditioning"](None, x, torch.tensor([5.0]), [], [], 7.0, {}, 1)
+    assert preprocessor.is_recording_style is False
+
+    preprocessor.recorded_attn1 = {("input", 1, 0): (torch.zeros(1), torch.zeros(1))}
+    preprocessor.recorded_h = {("input", 1): (torch.zeros(1), torch.zeros(1))}
+    preprocessor.process_after_every_sampling(process, SimpleNamespace())
+    assert preprocessor.recorded_attn1 == {} and preprocessor.recorded_h == {}
+
+
+def _lllite_libs(monkeypatch):
+    from modules_forge import shared as forge_shared
+
+    monkeypatch.setattr(forge_shared, "supported_control_models", list(forge_shared.supported_control_models))
+    script = harness.load_script(harness.REPO / "extensions-builtin" / "sd_forge_controlllite" / "scripts" / "forge_controllllite.py", "forge_controllllite_under_test_libs")
+    import sys
+
+    return script, sys.modules["lib_controllllite.lib_controllllite_anima"], sys.modules["lib_controllllite.lib_controllllite"]
+
+
+@pytest.mark.parametrize("order", [(0, 1), (1, 0), (1, 0, 2), (0, 2, 1)])
+def test_anima_lllite_units_on_the_same_linear_restore_in_any_order(cn, monkeypatch, order):
+    """Two (or three) Anima LLLite units wrap the same DiT Linears; ControlNet restores them in unit
+    order. Every order leaves the Linear's own forward, which still runs (upstream reinstalled the
+    first unit's wrapper: the next call found its org_forward gone)."""
+    import torch
+
+    _, anima, _ = _lllite_libs(monkeypatch)
+    linear = torch.nn.Linear(8, 8)
+    units = [anima.LLLiteModuleDiT(f"u{i}", linear, cond_emb_dim=4, mlp_dim=4) for i in range(len(order))]
+    for unit in units:
+        unit.apply_to()
+    for index in order:
+        units[index].restore()
+    assert "forward" not in vars(linear) or vars(linear)["forward"].__self__ is linear
+    x = torch.ones(1, 3, 8)
+    assert torch.equal(linear(x), torch.nn.functional.linear(x, linear.weight, linear.bias))
+    for unit in units:  # the next batch applies them again, without wrapping themselves
+        unit.apply_to()
+    assert linear(x).shape == x.shape
+
+
+def test_lllite_runs_in_its_window_of_sampler_steps_whatever_the_forward_calls(cn, monkeypatch):
+    """The start / end window is read from the sampler's step, not counted per forward call: the
+    tiles of one MultiDiffusion step (or cond and uncond called apart, second-order sub-steps)
+    stay in the same step, and a Hires pass with 4 steps uses its own 4."""
+    import torch
+
+    _, anima, lib = _lllite_libs(monkeypatch)
+    linear = torch.nn.Linear(8, 8)
+    unit = anima.LLLiteModuleDiT("u", linear, cond_emb_dim=4, mlp_dim=4)
+    torch.nn.init.constant_(unit.up.weight, 0.5)  # a control that changes the output
+    unit.cond_emb = torch.ones(1, 3, 4)
+    now = {"step": 0, "total": 8}
+    unit.progress = lambda: (now["step"], now["total"])
+    unit.start_percent, unit.end_percent = 0.0, 0.5
+    unit.num_steps = 8  # upstream's counter (process.steps) must not be used
+    unit.apply_to()
+    x = torch.ones(1, 3, 8)
+    plain = torch.nn.functional.linear(x, linear.weight, linear.bias)
+
+    active = []
+    for step in range(8):
+        now["step"] = step
+        active.append([not torch.equal(linear(x), plain) for _tile in range(3)])
+    assert active == [[True] * 3] * 4 + [[False] * 3] * 4
+
+    now["total"] = 4  # the hires pass: 4 steps
+    active = []
+    for step in range(4):
+        now["step"] = step
+        active.append(not torch.equal(linear(x), plain))
+    assert active == [True, True, False, False]
+    unit.restore()
+
+    assert lib.step_active(None, 0.0, 0.5) is None  # no sampler: upstream's counting
+    process = SimpleNamespace(sampler=SimpleNamespace(model_wrap_cfg=SimpleNamespace(step=3, total_steps=8)))
+    assert lib.sampler_progress(process)() == (3, 8)
+    assert lib.sampler_progress(SimpleNamespace())() is None
+
+
+def test_lllite_masks_a_copy_of_the_units_control_image(cn, monkeypatch):
+    """The unit's control image is used by every batch and the hires pass: masking it in place
+    compounded a soft mask (the second batch got cond * mask * mask)."""
+    import torch
+
+    script, _, _ = _lllite_libs(monkeypatch)
+    seen = {}
+    monkeypatch.setattr(script.LLLiteLoader, "load_lllite", staticmethod(lambda **kwargs: seen.setdefault("cond", kwargs["cond_image"]) is not None and kwargs["model"]))
+    patcher = script.ControlLLLitePatcher({"lllite": torch.zeros(1)})
+    unet = SimpleNamespace()
+    process = SimpleNamespace(sd_model=SimpleNamespace(forge_objects=SimpleNamespace(unet=unet)), steps=8)
+    cond = torch.full((1, 3, 4, 4), 0.8)
+    patcher.process_before_every_sampling(process, cond, torch.full((1, 1, 4, 4), 0.5))
+    assert torch.allclose(cond, torch.full_like(cond, 0.8))
+    assert torch.allclose(seen["cond"], torch.full((1, 4, 4, 3), 0.4))
+
+
+def test_two_inpaint_only_units_blend_each_with_its_own_image_and_mask(cn, monkeypatch):
+    """inpaint_only is one preprocessor object for every unit: each unit's blend after sampling
+    uses that unit's original and mask (upstream blended every unit with the last unit's)."""
+    import torch
+
+    from modules_forge import shared as forge_shared
+
+    monkeypatch.setattr(forge_shared, "supported_preprocessors", dict(forge_shared.supported_preprocessors))
+    inpaint = harness.load_script(harness.REPO / "extensions-builtin" / "forge_preprocessor_inpaint" / "scripts" / "preprocessor_inpaint.py", "preprocessor_inpaint_under_test_units")
+    preprocessor = inpaint.PreprocessorInpaintOnly()
+    left, right = torch.zeros(1, 1, 32, 32), torch.zeros(1, 1, 32, 32)
+    left[..., :, :16], right[..., :, 16:] = 1, 1
+    units = [SimpleNamespace(), SimpleNamespace()]
+    for params, mask, value in zip(units, (left, right), (0.25, 0.75), strict=True):
+        process, _ = _fake_process()
+        preprocessor.process_before_every_sampling(process, torch.full((1, 3, 32, 32), value), mask, params=params)
+
+    results = []
+    for params in units:
+        batch = SimpleNamespace(images=[torch.ones(3, 32, 32)])
+        preprocessor.process_after_every_sampling(SimpleNamespace(), params, batch)
+        results.append(batch.images[0])
+    # far from its mask's edge, each unit keeps its own original outside its own mask
+    assert torch.allclose(results[0][:, 16, 28], torch.full((3,), 0.25)) and torch.allclose(results[0][:, 16, 2], torch.ones(3))
+    assert torch.allclose(results[1][:, 16, 2], torch.full((3,), 0.75)) and torch.allclose(results[1][:, 16, 28], torch.ones(3))
+
+    batch = SimpleNamespace(images=[torch.ones(3, 32, 32)])  # a unit that never sampled (interrupted)
+    inpaint.PreprocessorInpaintOnly().process_after_every_sampling(SimpleNamespace(), SimpleNamespace(), batch)
+    assert torch.equal(batch.images[0], torch.ones(3, 32, 32))
+
+
+def test_a_unit_whose_model_fails_to_load_leaves_no_infotext(cn, monkeypatch):
+    """The units are written to the infotext before they run (so pixel perfect and preview-as-input
+    do not change what was asked for); a unit whose control model failed to load does not run, so
+    its entry is removed (upstream kept it, so the image claimed a ControlNet it never had)."""
+    from lib_controlnet.external_code import ControlNetUnit
+
+    units = [
+        ControlNetUnit(enabled=True, module="canny", model="missing_model", pixel_perfect=True),
+        ControlNetUnit(enabled=True, module="canny", model="control_v11p_sd15_canny", pixel_perfect=True),
+    ]
+    script = cn.ControlNetForForgeOfficial()
+    monkeypatch.setattr(script, "get_enabled_units", lambda args: units)
+
+    def run(p, unit, params, *args, **kwargs):
+        unit.processor_res = 1024  # pixel perfect: not what the infotext records
+        params.model = None if unit.model == "missing_model" else object()
+
+    monkeypatch.setattr(script, "process_unit_after_click_generate", run)
+    p = SimpleNamespace(extra_generation_params={})
+    script.process(p)
+
+    assert set(p.extra_generation_params) == {"ControlNet 1"}
+    assert "1024" not in p.extra_generation_params["ControlNet 1"]
+
+
+def test_a_generation_that_raised_releases_the_reference_recordings(cn, monkeypatch):
+    """An error during sampling never reaches the reference preprocessor's after-sampling hook:
+    ControlNet's cleanup releases its recorded attention tensors (and its recording flag)."""
+    import torch
+
+    from modules_forge import shared as forge_shared
+
+    monkeypatch.setattr(forge_shared, "supported_preprocessors", dict(forge_shared.supported_preprocessors))
+    reference = harness.load_script(harness.REPO / "extensions-builtin" / "forge_preprocessor_reference" / "scripts" / "forge_reference.py", "forge_reference_under_test")
+    preprocessor = reference.PreprocessorReference("reference_only")
+    preprocessor.is_recording_style = True
+    preprocessor.recorded_attn1 = {("input", 1, 0): (torch.zeros(1), torch.zeros(1))}
+    preprocessor.recorded_h = {("input", 1): (torch.zeros(1), torch.zeros(1))}
+
+    script = cn.ControlNetForForgeOfficial()
+    params = cn.ControlNetCachedParameters()
+    params.preprocessor, params.model = preprocessor, SimpleNamespace(process_after_every_sampling=lambda p, params: None)
+    script.current_params = {0: params}
+    script.cleanup(SimpleNamespace())
+
+    assert preprocessor.recorded_attn1 == {} and preprocessor.recorded_h == {} and preprocessor.is_recording_style is False
+

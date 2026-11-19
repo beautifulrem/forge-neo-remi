@@ -301,21 +301,75 @@ def test_keep_loaded_off_unloads_after_a_cancel_or_an_error(page, engine, tmp_pa
     assert engine.unloads == 2 and not engine.is_loaded()
 
 
-def test_load_task_reports_the_download_phase(page, engine, jc, monkeypatch):
-    monkeypatch.setattr(jc.jcm, "is_model_downloaded", lambda: False)
-    seen = []
-    original = jc._ensure_loaded
-
-    def spy(task, quant):
-        original(task, quant)
-        seen.append(task.text)
-
-    monkeypatch.setattr(jc, "_ensure_loaded", spy)
+def test_the_download_runs_before_the_generation_lock_and_can_be_cancelled(page, engine, jc, monkeypatch):
+    """The ~17 GB first download needs no GPU: it runs before the task waits for the generation
+    lock (a generation can run meanwhile), it reports its phase, and Cancel stops it."""
+    downloaded = {"done": False}
+    monkeypatch.setattr(jc.jcm, "is_model_downloaded", lambda: downloaded["done"])
     ctx = harness.fake_ctx(page)
-    harness.run_action(page, "load", ctx, {"quant": "bf16 (best quality, ~17 GB VRAM)"})
+    seen = []
+
+    def download(progress_print, check):
+        task = page.task(ctx, "load")
+        seen.append((task.text, ctx.generation_lock.locked()))
+        downloaded["done"] = True
+
+    monkeypatch.setattr(jc.jcm, "ensure_model_downloaded", download)
+    with ctx.generation_lock:  # a generation is running: the download does not wait for it
+        harness.run_action(page, "load", ctx, {"quant": "bf16 (best quality, ~17 GB VRAM)"})
+        assert _wait(lambda: seen)
+        assert seen == [("Downloading the model weights (~17 GB, first use only)…", True)] and engine.loaded_quant is None
     done = harness.wait_task(page, ctx, "load")
-    assert seen == ["Downloading the model weights (~17 GB, first use only)…"] and engine.loaded_quant == "bf16"
-    assert done["__toast__"] == {"level": "success", "message": "JoyCaption model loaded"}
+    assert engine.loaded_quant == "bf16" and done["__toast__"] == {"level": "success", "message": "JoyCaption model loaded"}
+
+    downloaded["done"] = False
+    started = threading.Event()
+
+    def slow_download(progress_print, check):
+        started.set()
+        while True:  # the child process's polling loop
+            check()
+
+    monkeypatch.setattr(jc.jcm, "ensure_model_downloaded", slow_download)
+    harness.run_action(page, "load", ctx, {"quant": "bf16 (best quality, ~17 GB VRAM)"})
+    assert started.wait(5)
+    harness.run_action(page, "__cancel__", ctx, task="load")
+    done = harness.wait_task(page, ctx, "load")
+    assert done["__toast__"] == {"level": "info", "message": "Cancelled"} and engine.loaded_quant == "bf16"
+
+
+def _wait(predicate, timeout=5.0):
+    import time
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return False
+
+
+def test_a_cancelled_download_stops_its_child_process(jc, tmp_path, monkeypatch):
+    """snapshot_download cannot be interrupted: it runs in a child process that Cancel terminates
+    (huggingface_hub resumes the partial files next time)."""
+    import time
+
+    monkeypatch.setattr(jc.jcm, "_DOWNLOAD_CODE", "import time\ntime.sleep(60)\n")
+    polls = []
+
+    def check():
+        polls.append(time.monotonic())
+        if len(polls) == 2:
+            raise jc.pages.TaskCancelled()
+
+    start = time.monotonic()
+    with pytest.raises(jc.pages.TaskCancelled):
+        jc.jcm._download_in_child(tmp_path / "model", check, lambda line: None)
+    assert time.monotonic() - start < 15
+
+    monkeypatch.setattr(jc.jcm, "_DOWNLOAD_CODE", "import sys\nsys.exit('401 Unauthorized')\n")
+    with pytest.raises(RuntimeError, match="401 Unauthorized"):
+        jc.jcm._download_in_child(tmp_path / "model", lambda: None, lambda line: None)
 
 
 # endregion

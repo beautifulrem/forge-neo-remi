@@ -98,7 +98,7 @@ def test_no_merge_no_merge_head(tmp_path):
 def documented_forks() -> set[str]:
     """The ``extensions-builtin/…`` paths of the first column of upstream-absorption.md §1.1."""
 
-    section = DOC.read_text(encoding="utf-8").split("### 1.1 ", 1)[1].split("\n## 2.", 1)[0]
+    section = DOC.read_text(encoding="utf-8").split("### 1.1 ", 1)[1].split("\n### 1.2 ", 1)[0]
     rows = [line for line in section.splitlines() if line.startswith("| `")]
     found = set()
     for row in rows:
@@ -113,3 +113,29 @@ def test_the_tool_and_the_doc_list_the_same_forked_paths():
         assert (REPO / path).exists() or path.endswith("controlnet_ui"), path  # controlnet_ui: deleted by Remi, kept deleted
     text = DOC.read_text(encoding="utf-8")
     assert "tools/upstream_forks.py restore" in text and "tools/upstream_forks.py review" in text
+
+
+def documented_divergences() -> dict[str, str]:
+    """Upstream-absorption.md §1.2: each row's file and the test it names."""
+
+    section = DOC.read_text(encoding="utf-8").split("### 1.2 ", 1)[1].split("\n## 2.", 1)[0]
+    found = {}
+    for row in section.splitlines():
+        if row.startswith("| `"):
+            cells = [cell.strip() for cell in row.strip("|").split(" | ")]
+            found[cells[0].strip("`")] = cells[-1].strip("`")
+    return found
+
+
+def test_the_tool_and_the_doc_list_the_same_diverged_files():
+    """Every file with a fix of an upstream bug is in ``DIVERGED`` and in §1.2 with the test that pins
+    the fix; ``restore`` (the forks) and the divergences do not overlap."""
+
+    rows = documented_divergences()
+    assert set(rows) == set(forks.DIVERGED)
+    assert len(forks.DIVERGED) == len(set(forks.DIVERGED))
+    assert not set(forks.DIVERGED) & set(forks.FORKED)
+    for path, test in rows.items():
+        assert (REPO / path).is_file(), path
+        assert (REPO / test).is_file() and Path(test).name.startswith("test_"), (path, test)
+    assert "deterministic upstream bugs are fixed in Remi" in DOC.read_text(encoding="utf-8")

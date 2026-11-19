@@ -489,14 +489,7 @@ class PromptToolsStore:
             if "before" in changes or "collection_id" in changes:
                 before = changes.get("before")
                 if before:
-                    target = db.execute("SELECT position FROM favorites WHERE id = ? AND collection_id IS ?", (before, collection_id)).fetchone()
-                    if target is None:
-                        raise StoreError("no such favorite to move before", 404)
-                    previous = db.execute(
-                        "SELECT MAX(position) AS p FROM favorites WHERE collection_id IS ? AND position < ? AND id != ?",
-                        (collection_id, target["position"], favorite_id),
-                    ).fetchone()["p"]
-                    position = (target["position"] + previous) / 2 if previous is not None else target["position"] - 1.0
+                    position = self._position_before(db, collection_id, before, favorite_id)
                 else:
                     last = db.execute("SELECT MAX(position) AS p FROM favorites WHERE collection_id IS ? AND id != ?", (collection_id, favorite_id)).fetchone()["p"]
                     position = (last if last is not None else 0.0) + 1.0
@@ -505,6 +498,31 @@ class PromptToolsStore:
             if sets:
                 db.execute(f"UPDATE favorites SET {', '.join(sets)} WHERE id = ?", (*params, favorite_id))
         return self.favorite(favorite_id)  # type: ignore[return-value]
+
+    @staticmethod
+    def _position_before(db: sqlite3.Connection, collection_id: str | None, before: str, favorite_id: str) -> float:
+        """The position right in front of ``before``: half way to the one in front of it. Halving the
+        same gap runs out of floats after about 50 moves (the positions tie, and the order falls back
+        to the creation time): the collection is then renumbered 1, 2, … in its order and the gap
+        halved again."""
+
+        for _attempt in range(2):
+            target = db.execute("SELECT position FROM favorites WHERE id = ? AND collection_id IS ?", (before, collection_id)).fetchone()
+            if target is None:
+                raise StoreError("no such favorite to move before", 404)
+            previous = db.execute(
+                "SELECT MAX(position) AS p FROM favorites WHERE collection_id IS ? AND position < ? AND id != ?",
+                (collection_id, target["position"], favorite_id),
+            ).fetchone()["p"]
+            if previous is None:
+                return target["position"] - 1.0
+            middle = (target["position"] + previous) / 2
+            tied = db.execute("SELECT COUNT(*) - COUNT(DISTINCT position) AS n FROM favorites WHERE collection_id IS ? AND id != ?", (collection_id, favorite_id)).fetchone()["n"]
+            if previous < middle < target["position"] and not tied:
+                return middle
+            ids = [row["id"] for row in db.execute("SELECT id FROM favorites WHERE collection_id IS ? AND id != ? ORDER BY position, created", (collection_id, favorite_id)).fetchall()]
+            db.executemany("UPDATE favorites SET position = ? WHERE id = ?", [(float(index + 1), other) for index, other in enumerate(ids)])
+        raise AssertionError("renumbered positions always leave a gap")
 
     def delete_favorite(self, favorite_id: str) -> bool:
         with self._tx() as db:

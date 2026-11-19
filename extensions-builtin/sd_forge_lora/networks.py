@@ -217,9 +217,9 @@ def load_networks(names: list[str], te_multipliers: list[float] = None, unet_mul
         failed_hash, apply_failures = getattr(current_sd, "lora_apply_failures", None) or (None, {})
         if failed_hash != compiled_lora_targets_hash:  # the hash was reset (Refiner) and rebuilt since
             apply_failures = {}
-        failed.update({name: error for name, (_filename, error) in apply_failures.items()})
-        failed_files = {filename for filename, _error in apply_failures.values()}
-        loaded_networks[:] = [item for item in loaded_networks if item.network_on_disk.filename not in failed_files]
+        # Named as this prompt names them (another alias of the same file may have failed first)
+        failed.update({name: apply_failures[n.filename] for n, name in zip(networks_on_disk, names) if n is not None and n.filename in apply_failures})
+        loaded_networks[:] = [item for item in loaded_networks if item.network_on_disk.filename not in apply_failures]
         return failed
 
     current_sd.lora_apply_failures = (compiled_lora_targets_hash, {})  # failures of this set (above)
@@ -250,7 +250,7 @@ def load_networks(names: list[str], te_multipliers: list[float] = None, unet_mul
             errors.report(f'Failed to apply LoRA: "{filename}"', exc_info=True)
             failed[name] = str(e) or type(e).__name__
             loaded_networks[:] = [item for item in loaded_networks if item.network_on_disk.filename != filename]
-            current_sd.lora_apply_failures[1][name] = (filename, failed[name])  # for the same set again (above)
+            current_sd.lora_apply_failures[1][filename] = failed[name]  # for the same set again (above)
 
     current_sd.forge_objects_after_applying_lora = current_sd.forge_objects.shallow_copy()
     return failed

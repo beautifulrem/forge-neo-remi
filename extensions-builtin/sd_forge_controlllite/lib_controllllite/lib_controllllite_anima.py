@@ -13,6 +13,7 @@ from backend.args import dynamic_args
 from backend.misc.image_resize import adaptive_resize
 from backend.nn.anima import BLOCK_MAPPINGS, Anima
 from backend.state_dict import load_state_dict
+from lib_controllllite.lib_controllllite import step_active
 
 logger = logging.getLogger("ControlNet")
 
@@ -167,6 +168,8 @@ class LLLiteModuleDiT(nn.Module):
         self.end_step: int = 0
         self.current_step: int = 0
         self.is_first: bool = False
+        self.progress = None  # Remi: sampler_progress(process), see step_active
+        self.start_percent, self.end_percent = 0.0, 1.0
 
     def apply_to(self):
         if self.org_forward is None:
@@ -174,9 +177,25 @@ class LLLiteModuleDiT(nn.Module):
             self.org_module[0].forward = self.forward
 
     def restore(self):
-        if self.org_forward is not None:
-            self.org_module[0].forward = self.org_forward
-            self.org_forward = None
+        # Remi: units on the same Linear wrap each other (the later one's org_forward is the earlier
+        # one's forward), and ControlNet restores them in unit order: putting org_forward back on the
+        # Linear reinstalled the earlier unit's wrapper (its org_forward None: the next generation
+        # crashed, or wrapped itself). Unhook this one from wherever it sits in the chain.
+        if self.org_forward is None:
+            return
+        target = self.org_module[0]
+        above, current = None, target.forward
+        while getattr(current, "__self__", None) is not self:
+            owner = getattr(current, "__self__", None)
+            if not isinstance(owner, LLLiteModuleDiT) or owner.org_forward is None:
+                break  # not installed any more: nothing to put back
+            above, current = owner, owner.org_forward
+        else:
+            if above is None:
+                target.forward = self.org_forward
+            else:
+                above.org_forward = self.org_forward
+        self.org_forward = None
 
     @torch.compiler.disable
     @torch.inference_mode()
@@ -190,7 +209,10 @@ class LLLiteModuleDiT(nn.Module):
         if self.multiplier == 0.0 or self.cond_emb is None:
             return _pass()
 
-        if self.num_steps > 0:
+        active = step_active(self.progress, self.start_percent, self.end_percent)
+        if active is False:
+            return _pass()
+        if active is None and self.num_steps > 0:
             step = self.current_step
             self.current_step += 1
             if self.current_step >= self.num_steps:
@@ -397,7 +419,7 @@ class ControlNetLLLiteDiT(nn.Module):
         for m in self.lllite_modules:
             m.multiplier = multiplier
 
-    def set_step_range(self, num_steps: int, start_percent: float, end_percent: float):
+    def set_step_range(self, num_steps: int, start_percent: float, end_percent: float, progress=None):
         start_step = math.floor(num_steps * start_percent) if start_percent > 0 else 0
         end_step = math.floor(num_steps * end_percent) if end_percent > 0 else num_steps
 
@@ -407,6 +429,7 @@ class ControlNetLLLiteDiT(nn.Module):
             m.end_step = end_step
             m.current_step = 0
             m.is_first = i == 0
+            m.progress, m.start_percent, m.end_percent = progress, start_percent, end_percent
 
     def apply_to(self):
         for m in self.lllite_modules:

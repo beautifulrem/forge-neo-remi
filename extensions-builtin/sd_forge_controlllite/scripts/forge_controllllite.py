@@ -2,7 +2,7 @@ import logging
 
 import torch
 import torch.nn.functional as F
-from lib_controllllite.lib_controllllite import LLLiteLoader
+from lib_controllllite.lib_controllllite import LLLiteLoader, sampler_progress
 from lib_controllllite.lib_controllllite_anima import (
     ControlNetLLLiteDiT,
     infer_anima_config,
@@ -99,7 +99,7 @@ class ControlLLLiteAnimaPatcher(ControlModelPatcher):
 
         self._lllite_net.set_cond_image(cond_image.to(device=device, dtype=dtype))
         self._lllite_net.set_multiplier(self.strength)
-        self._lllite_net.set_step_range(num_steps=process.steps, start_percent=self.start_percent, end_percent=self.end_percent)
+        self._lllite_net.set_step_range(num_steps=process.steps, start_percent=self.start_percent, end_percent=self.end_percent, progress=sampler_progress(process))
         self._lllite_net.apply_to()
 
     def process_after_every_sampling(self, *args, **kwargs):
@@ -130,7 +130,7 @@ class ControlLLLitePatcher(ControlModelPatcher):
                 mask = 1.0 - mask
             cond = cond * mask  # not in place: cond is the unit's cached control, used by every pass
 
-        unet = LLLiteLoader.load_lllite(model=unet, state_dict=self.state_dict, cond_image=cond.movedim(1, -1), strength=self.strength, steps=process.steps, start_percent=self.start_percent, end_percent=self.end_percent)
+        unet = LLLiteLoader.load_lllite(model=unet, state_dict=self.state_dict, cond_image=cond.movedim(1, -1), strength=self.strength, steps=process.steps, start_percent=self.start_percent, end_percent=self.end_percent, progress=sampler_progress(process))
 
         process.sd_model.forge_objects.unet = unet
 

@@ -171,6 +171,17 @@ def compute_cond_indices(cond_or_uncond, sigmas):
     return cond_indices, uncond_indices
 
 
+def merges_by_free_memory(device: torch.device) -> bool:
+    """Remi: whether cond / uncond / area chunks that fit share one model call when the free memory
+    allows it (upstream's rule). Not on MPS and CPU: there ``get_free_memory`` is the system's
+    available RAM, which other processes and the file cache move, so the same request ran as one
+    batch-2 call or two batch-1 calls from one run to the next. Batch-2 kernels round differently
+    in bf16, and the model and CFG amplify that into a different image (seen with Anima's hires
+    pass). The chunks run one by one there; batching them was not faster on an M4."""
+
+    return device.type not in ("mps", "cpu")
+
+
 def calc_cond_uncond_batch(model, cond, uncond, x_in, timestep, model_options):
     out_cond = torch.zeros_like(x_in)
     out_count = torch.ones_like(x_in) * 1e-37
@@ -223,7 +234,7 @@ def calc_cond_uncond_batch(model, cond, uncond, x_in, timestep, model_options):
                 logger.warning('You can add "--reserve-vram 2" to keep a larger headroom')
                 logger.warning('You can also (not recommended) add "--disable-gpu-warning" to remove this warning')
 
-        for i in range(1, len(to_batch_temp) + 1):
+        for i in range(1, len(to_batch_temp) + 1) if merges_by_free_memory(x_in.device) else ():
             batch_amount = to_batch_temp[: len(to_batch_temp) // i]
             input_shape = [len(batch_amount) * first_shape[0]] + list(first_shape)[1:]
             if model.memory_required(input_shape) < free_memory:

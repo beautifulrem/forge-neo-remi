@@ -201,7 +201,7 @@ def apply_masks(settings: "SoftInpaintingSettings", nmask: torch.Tensor, overlay
     masks_for_overlay = []
 
     for i, overlay_image in enumerate(overlay_images):
-        masks_for_overlay[i] = converted_mask
+        masks_for_overlay.append(converted_mask)
 
         image_masked = Image.new("RGBa", (overlay_image.width, overlay_image.height))
         image_masked.paste(overlay_image.convert("RGBA").convert("RGBa"), mask=ImageOps.invert(converted_mask.convert("L")))

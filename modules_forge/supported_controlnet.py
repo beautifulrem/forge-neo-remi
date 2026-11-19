@@ -33,12 +33,21 @@ class ModelCache:
         return None
 
     def put(self, key, model):
+        # Remi: the setting's 0 ("cache nothing", its minimum) kept one model; its default is 1
+        size = shared.opts.data.get("control_net_model_cache_size")
+        max_size = max(0, int(1 if size is None else size))
         self.cache[key] = model
         self.cache.move_to_end(key)
-
-        max_size = max(1, shared.opts.data.get("control_net_model_cache_size", 3))
         while len(self.cache) > max_size:
             self.cache.popitem(last=False)
+
+
+def cache_key(ckpt_path, *dtypes):
+    """Remi: a built model is reused only for the same file *contents* and dtypes. Keyed on the
+    path alone, a file replaced under the same name (a re-download, a newer version) kept the old
+    weights until a restart, and a model built for another base model's dtypes was reused."""
+    stat = os.stat(ckpt_path)
+    return (os.path.realpath(ckpt_path), stat.st_mtime_ns, stat.st_size, *map(str, dtypes))
 
 
 _CONTROL_MODEL_CACHE = ModelCache()
@@ -165,7 +174,8 @@ class ControlNetPatcher(ControlModelPatcher):
         controlnet_config["hint_width"] = controlnet_data["{}input_hint_block.0.weight".format(prefix)].shape[0]
 
         global _CONTROL_MODEL_CACHE
-        control_model = _CONTROL_MODEL_CACHE.get(ckpt_path)
+        key = cache_key(ckpt_path, unet_dtype, computation_dtype)
+        control_model = _CONTROL_MODEL_CACHE.get(key)
 
         if control_model is not None:
             logger.info("Reusing ControlNet Model...")
@@ -193,7 +203,7 @@ class ControlNetPatcher(ControlModelPatcher):
             if len(unexpected) > 0:
                 logger.debug("Unexpected ControlNet Keys: {}".format(unexpected))
 
-            _CONTROL_MODEL_CACHE.put(ckpt_path, control_model)
+            _CONTROL_MODEL_CACHE.put(key, control_model)
 
         global_average_pooling = False
         filename = os.path.splitext(ckpt_path)[0]

@@ -63,6 +63,16 @@ class NAGAttentionModifier:
         self._window_active = True
 
     def set_negative_context(self, context) -> None:
+        if isinstance(context, (list, tuple)):
+            # The images' negative prompts encode to different lengths (one over 512 tokens):
+            # stack_conditioning keeps them per image. Stack them as the other swapped-in contexts
+            # are (split_conditioning tiles them), instead of running without NAG.
+            masks = [item.get("c_negpip_mask") if isinstance(item, dict) else None for item in context]
+            contexts = [conditioning_context(item) for item in context]
+            if not contexts or not all(torch.is_tensor(item) for item in contexts):
+                self.negative_context = self.negative_mask = self._negative_inputs = None
+                return
+            context = {"crossattn": contexts, "c_negpip_mask": masks if all(torch.is_tensor(item) for item in masks) else None}
         mask = context.get("c_negpip_mask") if isinstance(context, dict) else None
         if torch.is_tensor(mask):
             # Keep NegPiP's mask as is: split_conditioning's "any negative

@@ -394,6 +394,20 @@ def test_history_paging_limit_names_and_removal(store):
         store.rename_history("missing", "x")
 
 
+def test_moving_favorites_into_the_same_gap_many_times_keeps_the_order(store):
+    """Each move in front of the favorite just moved halves the same gap; after about 50 the
+    positions tied and the order fell back to the creation time (the move did nothing)."""
+    x, y, z = (store.add_favorite(text) for text in ("x", "y", "z"))
+    store.update_favorite(x["id"], {"before": z["id"]})  # newest first (z, y, x), then x to the front
+    order = lambda: [f["id"] for f in store.favorites()]  # noqa: E731
+    assert order() == [x["id"], z["id"], y["id"]]
+    for _ in range(80):
+        store.update_favorite(y["id"], {"before": z["id"]})
+        assert order() == [x["id"], y["id"], z["id"]]
+        store.update_favorite(z["id"], {"before": y["id"]})
+        assert order() == [x["id"], z["id"], y["id"]]
+
+
 def test_favorites_collections_and_order(store):
     collection = store.create_collection("Portraits")
     with pytest.raises(StoreError):

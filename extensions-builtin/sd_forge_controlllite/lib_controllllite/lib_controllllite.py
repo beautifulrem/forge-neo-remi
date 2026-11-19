@@ -16,6 +16,37 @@ from backend.state_dict import load_state_dict
 logger = logging.getLogger("ControlNet")
 
 
+def sampler_progress(process):
+    """Remi: ``() -> (step, total_steps)`` of the sampler running ``process``'s pass (its CFG
+    denoiser counts calls as prompt editing and the Refiner switch do), ``None`` when unknown."""
+
+    def progress():
+        denoiser = getattr(getattr(process, "sampler", None), "model_wrap_cfg", None)
+        step, total = getattr(denoiser, "step", None), getattr(denoiser, "total_steps", None)
+        if isinstance(step, int) and isinstance(total, int) and total > 0:
+            return step, total
+        return None
+
+    return progress
+
+
+def step_active(progress, start_percent: float, end_percent: float):
+    """Remi: whether the control runs at the sampler's step (upstream's window: floor(total *
+    percent)), ``None`` when ``progress`` does not know the step.
+
+    Upstream counted each module's own forward calls against ``process.steps``: a call per
+    MultiDiffusion tile, per cond / uncond chunk or per second-order sub-step, or a pass with
+    another step count (Hires steps, img2img denoising), moved the start / end window."""
+
+    now = progress() if progress is not None else None
+    if now is None:
+        return None
+    step, total = now
+    start = math.floor(total * start_percent) if start_percent > 0 else 0
+    end = math.floor(total * end_percent) if end_percent > 0 else total
+    return start <= step < end
+
+
 def extra_options_to_module_prefix(extra_options: dict) -> str:
     block = extra_options["block"]
     block_index = extra_options["block_index"]
@@ -30,7 +61,7 @@ def extra_options_to_module_prefix(extra_options: dict) -> str:
     return module_pfx
 
 
-def load_control_net_lllite_patch(ctrl_sd: dict, cond_image: torch.Tensor, multiplier: float, num_steps: int, start_percent: float, end_percent: float, *, model_dtype: torch.dtype):
+def load_control_net_lllite_patch(ctrl_sd: dict, cond_image: torch.Tensor, multiplier: float, num_steps: int, start_percent: float, end_percent: float, *, model_dtype: torch.dtype, progress=None):
     start_step = math.floor(num_steps * start_percent) if start_percent > 0 else 0
     end_step = math.floor(num_steps * end_percent) if end_percent > 0 else num_steps
 
@@ -66,6 +97,7 @@ def load_control_net_lllite_patch(ctrl_sd: dict, cond_image: torch.Tensor, multi
             start_step=start_step,
             end_step=end_step,
         )
+        module.progress, module.start_percent, module.end_percent = progress, start_percent, end_percent
         load_state_dict(module, weights)
         modules[module_name] = module.eval().to(dtype=model_dtype)
         if len(modules) == 1:
@@ -249,6 +281,8 @@ class LLLiteModule(nn.Module):
         self.cond_image = None
         self.cond_emb = None
         self.current_step = 0
+        self.progress = None  # Remi: sampler_progress(process), see step_active
+        self.start_percent, self.end_percent = 0.0, 1.0
 
     def set_cond_image(self, cond_image):
         self.cond_image = cond_image
@@ -258,7 +292,10 @@ class LLLiteModule(nn.Module):
     @torch.compiler.disable
     @torch.inference_mode()
     def forward(self, x):
-        if self.num_steps > 0:
+        active = step_active(self.progress, self.start_percent, self.end_percent)
+        if active is False:
+            return torch.zeros_like(x)
+        if active is None and self.num_steps > 0:
             if self.current_step < self.start_step:
                 self.current_step += 1
                 return torch.zeros_like(x)
@@ -300,10 +337,10 @@ class LLLiteModule(nn.Module):
 class LLLiteLoader:
 
     @staticmethod
-    def load_lllite(model: "UnetPatcher", state_dict, cond_image, strength, steps, start_percent, end_percent):
+    def load_lllite(model: "UnetPatcher", state_dict, cond_image, strength, steps, start_percent, end_percent, progress=None):
         m = model.clone()
 
-        patch = load_control_net_lllite_patch(state_dict, cond_image, strength, steps, start_percent, end_percent, model_dtype=model.model.diffusion_model.computation_dtype)
+        patch = load_control_net_lllite_patch(state_dict, cond_image, strength, steps, start_percent, end_percent, model_dtype=model.model.diffusion_model.computation_dtype, progress=progress)
 
         if patch is not None:
             m.set_model_attn1_patch(patch)

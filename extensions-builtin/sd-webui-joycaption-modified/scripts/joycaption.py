@@ -13,6 +13,7 @@ lifting (model loading, prompt construction) lives in ``joycaption_lib``.
 
 from __future__ import annotations
 
+import logging
 import math
 import sys
 import traceback
@@ -29,6 +30,8 @@ from joycaption_lib import pnginfo as jcpi  # noqa: E402
 from joycaption_lib import prompts as jcp  # noqa: E402
 
 from remi import pages, ui  # noqa: E402
+
+log = logging.getLogger(__name__)
 
 PAGE_ID = "joycaption"
 
@@ -142,6 +145,16 @@ def _editable_types() -> list:
 # ---------------------------------------------------------------------------
 # Model work (page tasks hold the generation lock: never fights a generation for VRAM)
 # ---------------------------------------------------------------------------
+
+
+def _download(task: pages.Task) -> None:
+    """Before the task waits for the generation lock (``prepare``): the
+    weights download needs no GPU and can take hours, so it neither holds
+    generation up nor waits for it, and Cancel stops it."""
+    if jcm.is_model_downloaded():
+        return
+    task.progress(None, "Downloading the model weights (~17 GB, first use only)…")
+    jcm.ensure_model_downloaded(progress_print=lambda line: log.info(line), check=task.check)
 
 
 def _ensure_loaded(task: pages.Task, quant_label: str) -> None:
@@ -380,7 +393,7 @@ class JoyCaptionPage(pages.Page):
             _ensure_loaded(task, resolved["quant"])
             return {"__outputs__": {"status": _status()}, **ui.toast("JoyCaption model loaded", "success")}
 
-        return self.start_task(ctx, "load", work, gpu=True)
+        return self.start_task(ctx, "load", work, gpu=True, prepare=_download)
 
     @ui.action("unload")
     def unload(self, ctx, values):
@@ -488,7 +501,7 @@ class JoyCaptionPage(pages.Page):
                 "__outputs__": {"status": _status()},
             }
 
-        return self.start_task(ctx, "caption", work, gpu=True)
+        return self.start_task(ctx, "caption", work, gpu=True, prepare=_download)
 
     # ---- Batch ------------------------------------------------------------------
 
@@ -552,7 +565,7 @@ class JoyCaptionPage(pages.Page):
             summary = ui.message("Done. Captioned {{done}}, skipped {{skipped}}, errors {{errors}}.", done=done, skipped=skipped, errors=errors)
             return {"__outputs__": {"log": "\n".join(log_lines[-400:])}, **ui.toast(summary, "success" if not errors else "warning")}
 
-        return self.start_task(ctx, "batch", work, gpu=True)
+        return self.start_task(ctx, "batch", work, gpu=True, prepare=_download)
 
 
 pages.register(JoyCaptionPage(PAGE_ID, "JoyCaption", "camera", on_load="status", send_to=[pages.SendTarget("image", "JoyCaption")]))

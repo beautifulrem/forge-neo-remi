@@ -179,11 +179,10 @@ class JobStore:
             seq = cursor.lastrowid
             position = self._tail_position(seq, int(priority))
             anchor = self._db.execute("SELECT position, priority FROM jobs WHERE id = ? AND status = ?", (after, QUEUED)).fetchone() if after else None
-            if anchor is not None:
-                following = self._db.execute("SELECT MIN(position) FROM jobs WHERE status = ? AND priority = ? AND position > ? AND seq != ?", (QUEUED, anchor[1], anchor[0], seq)).fetchone()[0]
-                position = (anchor[0] + following) / 2 if following is not None else anchor[0] + 1
-                self._db.execute("UPDATE jobs SET priority = ? WHERE seq = ?", (anchor[1], seq))
             self._db.execute("UPDATE jobs SET position = ? WHERE seq = ?", (position, seq))
+            if anchor is not None:
+                self._db.execute("UPDATE jobs SET priority = ? WHERE seq = ?", (anchor[1], seq))
+                self._place(job_id, anchor[1], after, None)
         return self.get(job_id)
 
     def add_record(self, job: Job) -> Job:
@@ -320,15 +319,22 @@ class JobStore:
             group = row[0] if priority is None else int(priority)
             if priority is not None:
                 self._db.execute("UPDATE jobs SET priority = ? WHERE id = ?", (group, job_id))
-            for _attempt in range(2):
-                spot = self._spot(job_id, group, after, before)
-                if spot is None:
-                    return True
-                if spot is not False:
-                    self._db.execute("UPDATE jobs SET position = ? WHERE id = ?", (spot, job_id))
-                    return True
-                self._renumber()  # positions too close (or tied) to place it between
+            self._place(job_id, group, after, before)
             return True
+
+    def _place(self, job_id: str, group: int, after: str | None, before: str | None) -> None:
+        """Under the lock: give the queued ``job_id`` the position between its new neighbours
+        (see :meth:`_spot`), renumbering the queue when halving the gap no longer fits one (about
+        50 jobs put at the same spot)."""
+
+        for _attempt in range(2):
+            spot = self._spot(job_id, group, after, before)
+            if spot is None:
+                return
+            if spot is not False:
+                self._db.execute("UPDATE jobs SET position = ? WHERE id = ?", (spot, job_id))
+                return
+            self._renumber()  # positions too close (or tied) to place it between
 
     def _spot(self, job_id: str, group: int, after: str | None, before: str | None) -> float | bool | None:
         """The position between the neighbours; None: no neighbour; False:

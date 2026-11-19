@@ -89,3 +89,14 @@ def test_failures_of_another_set_are_not_reported(networks):
     model.current_lora_hash = "[]"
 
     assert module.load_networks([], [], []) == {}
+
+
+def test_the_same_set_under_another_alias_names_the_failure_as_this_prompt_does(networks, monkeypatch):
+    module, _model = networks
+    monkeypatch.setitem(module.available_network_aliases, "broken-alias", module.available_network_aliases["broken"])
+
+    module.load_networks(["good", "broken"], [1.0, 1.0], [1.0, 1.0])
+    failed = module.load_networks(["good", "broken-alias"], [1.0, 1.0], [1.0, 1.0])
+
+    assert failed == {"broken-alias": "division by zero"}
+    assert [net.mentioned_name for net in module.loaded_networks] == ["good"]
