@@ -580,6 +580,15 @@ class ControlNetForForgeOfficial(scripts.Script):
     def postprocess(self, p, processed, *args):
         self.current_params = {}
 
+    def cleanup(self, p, *args, **kwargs):
+        # A generation that raised never reached postprocess_batch_list: a model that patched the
+        # model's own modules (Anima ControlNet-LLLite) would keep its control in every later
+        # generation. The models' after-sampling hook undoes it and is idempotent.
+        for params in (getattr(self, "current_params", None) or {}).values():
+            if params.model is not None:
+                params.model.process_after_every_sampling(p, params)
+        self.current_params = {}
+
 
 def on_ui_settings():
     section = ("control_net", "ControlNet")

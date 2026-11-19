@@ -185,20 +185,29 @@ class WildcardCache:
         self._items: list[Wildcard] | None = None
         self._key: tuple | None = None
         self._time = 0.0
+        """when the stored scan started (its age for the TTL)"""
+        self._done = 0.0
+        """when the stored scan finished"""
+        self._epoch = 0
+        """counts refresh() calls: a scan a refresh overtook is not stored"""
         self._rescanning = False
         self._yaml: YamlCache = {}
 
     def _scan(self, key: tuple) -> list[Wildcard]:
-        requested = time.monotonic()
+        with self._lock:
+            requested, epoch = time.monotonic(), self._epoch
         with self._scan_lock:
             with self._lock:
-                # a scan that started after this request (concurrent first requests)
-                if self._items is not None and self._key == key and self._time >= requested:
+                # concurrent requests share the scan that ended while they waited, unless a
+                # refresh came after them (that one must see the folder as it is now)
+                if self._items is not None and self._key == key and self._done >= requested and self._epoch == epoch:
                     return self._items
+                epoch = self._epoch
+            started = time.monotonic()
             items = scan_wildcards(key[0], key[1], yaml_cache=self._yaml)
         with self._lock:
-            # a refresh or another key while scanning: still the newest scan of this key
-            self._items, self._key, self._time = items, key, time.monotonic()
+            if self._epoch == epoch:  # else a refresh came while scanning: the next request scans again
+                self._items, self._key, self._time, self._done = items, key, started, time.monotonic()
             self._rescanning = False
         return items
 
@@ -231,6 +240,7 @@ class WildcardCache:
     def refresh(self) -> None:
         with self._lock:
             self._items = None
+            self._epoch += 1
 
     def find(self, name: str) -> Wildcard | None:
         key = name.strip().strip("_").lower()

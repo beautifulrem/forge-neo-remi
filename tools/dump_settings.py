@@ -39,6 +39,7 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="exit 1 when the file is out of date")
     args = parser.parse_args()
     sys.argv = sys.argv[:1]  # the WebUI parses the command line when imported
+    os.chdir(ROOT)  # the output folder defaults are relative to the working directory
     sys.path.insert(0, ROOT)
     sys.path.insert(0, os.path.join(ROOT, "modules_forge", "packages"))
     text = render(settings_document())

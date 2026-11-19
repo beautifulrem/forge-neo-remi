@@ -24,10 +24,11 @@ def screw_yolo():
     os.makedirs = lambda *args, **kwargs: None
     os.mkdir = lambda *args, **kwargs: None
 
-    yield
-
-    os.makedirs = orig1
-    os.mkdir = orig2
+    try:
+        yield
+    finally:  # a failed prediction must not leave every os.makedirs of the process a no-op
+        os.makedirs = orig1
+        os.mkdir = orig2
 
 
 def ultralytics_predict(

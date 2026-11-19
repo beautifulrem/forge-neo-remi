@@ -627,7 +627,12 @@ def qwen_layer_index(key: str) -> int | None:
         return int(match.group(1))
 
     normalized = key_text.lower().replace(".", "_")
-    match = re.search(r"qwen3_06b_(?:model_)?layers_(\d+)", normalized) or re.search(r"(?:^|_)llm_adapter_blocks_(\d+)", normalized)
+    match = (
+        re.search(r"qwen3_06b_(?:model_)?layers_(\d+)", normalized)
+        or re.search(r"(?:^|_)llm_adapter_blocks_(\d+)", normalized)
+        # kohya's text-encoder keys, as the Anima key map loads them (lora_te_layers_<n>_<module>)
+        or re.search(r"(?:^|_)lora_te_layers_(\d+)_", normalized)
+    )
     if not match:
         return None
     return int(match.group(1))

@@ -11,6 +11,7 @@ from __future__ import annotations
 import ast
 import math
 import re
+import sys
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from typing import Any, ClassVar, TypeAlias
 
@@ -80,6 +81,8 @@ def to_number(value: Any) -> int | float:
         raise ParamError(f"expected a number, got {type(value).__name__}")
     if isinstance(value, float) and not math.isfinite(value):
         raise ParamError(f"expected a finite number, got {value!r}")
+    if isinstance(value, int) and abs(value) > sys.float_info.max:  # float(value) would raise OverflowError
+        raise ParamError("expected a finite number, got an integer beyond the float range")
     return value
 
 

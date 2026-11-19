@@ -4,6 +4,7 @@ history / favorites store, translation providers and the
 
 import json
 import sqlite3
+import threading
 import time
 from contextlib import closing
 
@@ -151,9 +152,97 @@ def test_files_and_formats(tmp_path):
     assert len(cache.get(files)) == 12
 
 
+def test_a_tag_file_that_is_not_utf8_is_left_out_not_fatal(tmp_path):
+    (tmp_path / "tags.csv").write_text(TAG_CSV, encoding="utf8")
+    (tmp_path / "gbk.csv").write_bytes("long_hair,长发\n".encode("gbk"))
+    files = T.TagFiles(str(tmp_path / "tags.csv"), None, str(tmp_path / "gbk.csv"))
+    index = T.IndexCache().get(files)
+    assert len(index) == 11 and index.translation("long_hair") is None
+
+
+def test_edited_extra_translations_rebuild_the_index(tmp_path):
+    (tmp_path / "tags.csv").write_text(TAG_CSV, encoding="utf8")
+    cache = T.IndexCache()
+    old = T.TagFiles(str(tmp_path / "tags.csv"), extra_translations={"long_hair": "OLD"})
+    assert cache.get(old).translation("long_hair") == "OLD"
+    new = T.TagFiles(str(tmp_path / "tags.csv"), extra_translations={"long_hair": "NEW"})  # same length
+    assert cache.get(new).translation("long_hair") == "NEW"
+    assert cache.get(new) is cache.get(new)
+
+
+def test_custom_tag_groups_are_read_again_only_when_they_change(tmp_path, monkeypatch):
+    from remi.prompt_tools import groups as G
+
+    (tmp_path / "custom.yaml").write_text("- name: Mine\n  groups:\n    - name: Set\n      tags:\n        1girl: one\n", encoding="utf8")
+    reads = []
+    real = G._read
+    monkeypatch.setattr(G, "_read", lambda path: reads.append(path) or real(path))
+    tag_groups = G.TagGroups([str(tmp_path)])
+    assert tag_groups.dictionary("zh_CN") == {"1girl": "one"}
+    count = len(reads)
+    for _ in range(3):
+        tag_groups.dictionary("zh_CN")
+    assert len(reads) == count
+
+
+def test_a_refresh_during_a_background_rescan_waits_for_a_new_scan(tmp_path, monkeypatch):
+    from remi.prompt_tools import sources
+
+    files, block = ["old"], []
+    in_scan, release = threading.Event(), threading.Event()
+
+    def scan(roots, excluded, yaml_cache):
+        names = list(files)
+        if block:
+            block.clear()
+            in_scan.set()
+            release.wait(5)
+        return [sources.Wildcard(name) for name in names]
+
+    monkeypatch.setattr(sources, "scan_wildcards", scan)
+    cache = sources.WildcardCache(lambda: [str(tmp_path)], ttl=3600, background=False)
+    assert [item.name for item in cache.items()] == ["old"]
+    block.append(True)
+    rescan = threading.Thread(target=cache._rescan, args=(cache._key,))
+    rescan.start()  # a background rescan, still reading the folder as it was
+    assert in_scan.wait(5)
+    files.append("new")  # a wildcard file is added, then Refresh
+    cache.refresh()
+    result = []
+    reader = threading.Thread(target=lambda: result.append(cache.items()))
+    reader.start()
+    time.sleep(0.05)
+    release.set()
+    reader.join(5)
+    rescan.join(5)
+    assert [item.name for item in result[0]] == ["old", "new"]
+
+
 # endregion
 
 # region Wildcards and chants
+
+
+def test_concurrent_first_requests_share_one_wildcard_scan(monkeypatch):
+    from remi.prompt_tools import sources
+
+    calls = []
+
+    def scan(roots, excluded, yaml_cache):
+        calls.append(roots)
+        time.sleep(0.2)
+        return []
+
+    monkeypatch.setattr(sources, "scan_wildcards", scan)
+    cache = sources.WildcardCache(lambda: ["/nonexistent"], ttl=3600, background=False)
+    first = threading.Thread(target=cache.items)
+    first.start()
+    time.sleep(0.05)
+    second = threading.Thread(target=cache.items)  # arrives during the first scan
+    second.start()
+    first.join(5)
+    second.join(5)
+    assert len(calls) == 1
 
 
 def test_wildcards_nested_yaml_and_values(tmp_path):
@@ -244,6 +333,36 @@ def test_history_deduplicates_groups_and_searches(store):
     assert [item["prompt"] for item in store.history(query="DOG")[0]] == ["a dog"]
     assert store.history(query="a blurry")[2] == 2 and store.history(query="cat dog")[2] == 0
     assert store.record_history("", "  ") is None
+
+
+def test_searches_fold_the_case_of_non_ascii_letters(store):
+    store.record_history("Ärger, Émilie", "", when=1)
+    store.add_favorite("Ωmega pose", "prompt")
+    for query in ("ärger", "Ärger", "ÉMILIE"):
+        assert [item["prompt"] for item in store.history(query=query)[0]] == ["Ärger, Émilie"], query
+    assert [item["text"] for item in store.favorites_page(query="ωMEGA", all_collections=True)[0]] == ["Ωmega pose"]
+
+
+def test_a_crafted_cursor_starts_at_the_first_page(store):
+    # "²".isdigit() is true but int("²") raises: a 500 before
+    import base64
+
+    store.record_history("a cat", "", when=1)
+    store.add_favorite("a pose", "prompt")
+    cursor = base64.urlsafe_b64encode("²".encode()).decode().rstrip("=")
+    assert [item["prompt"] for item in store.history(cursor=cursor)[0]] == ["a cat"]
+    assert [item["text"] for item in store.favorites_page(cursor=cursor, all_collections=True)[0]] == ["a pose"]
+
+
+def test_the_history_limit_counts_unnamed_entries_only(store):
+    for number in range(4):
+        store.record_history(f"plain {number}", "", when=number)
+    for number in range(3):
+        entry = store.record_history(f"named {number}", "", when=10 + number)
+        store.rename_history(entry["id"], f"n{number}")
+    store.record_history("plain 4", "", when=20, limit=3)
+    kept = {item["prompt"] for item in store.history()[0] if not item["name"]}
+    assert kept == {"plain 4", "plain 3", "plain 2"}
 
 
 def test_grouped_history_rename_and_delete_cover_the_group(store):
@@ -718,6 +837,21 @@ def test_translation_key_is_write_only(server, webui, monkeypatch):
     assert tools.translation_config().key == "secret:fx"
     assert server.client.put(f"{api}/translation-key", json={"key": ""}).json() == {"configured": False}
     assert tools.translation_config().key == ""
+
+
+def test_the_translation_key_is_only_sent_where_it_was_entered_for(server, webui, monkeypatch):
+    monkeypatch.setitem(webui.opts.data, "prompt_tools_translation_provider", "deepl")
+    monkeypatch.setitem(webui.opts.data, "prompt_tools_translation_url", "https://api.deepl.com")
+    tools = pt.tools_for(server.services)
+    assert tools.set_translation_key("secret:fx") and tools.translation_config().key == "secret:fx"
+    monkeypatch.setitem(webui.opts.data, "prompt_tools_translation_url", "https://elsewhere.example")
+    assert tools.translation_config().key == ""  # a changed URL gets no key until it is entered again
+    monkeypatch.setitem(webui.opts.data, "prompt_tools_translation_url", "https://api.deepl.com")
+    monkeypatch.setitem(webui.opts.data, "prompt_tools_translation_provider", "openai")
+    assert tools.translation_config().key == ""
+    monkeypatch.setitem(webui.opts.data, "prompt_tools_translation_provider", "deepl")
+    assert tools.translation_config().key == "secret:fx"
+    tools.set_translation_key("")
 
 
 def test_a_key_in_the_settings_moves_to_the_store(server, webui, monkeypatch):

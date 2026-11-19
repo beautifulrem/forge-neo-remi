@@ -191,6 +191,26 @@ class NAGTests(unittest.TestCase):
 
         self.assertTrue(torch.allclose(positive_only, batched[:1]))
 
+    def test_positive_only_call_on_some_images_uses_their_negative_rows(self):
+        # A split batch (prompts of different lengths): the call runs image 1
+        # alone, named by batch_indices; it is guided by image 1's negative.
+        modifier = NAGAttentionModifier(scale=1.5, tau=2.0, alpha=0.7, sigma_start=0.0, sigma_end=1.0)
+        modifier.set_negative_context(torch.tensor([1.0, 5.0]).reshape(2, 1, 1))  # image 0's, image 1's
+        seen = []
+
+        def attention(q, k, v, *, mask=None):
+            seen.append(k.flatten().tolist())
+            return fake_attention(q, k, v, mask=mask)
+
+        options = {
+            "cond_or_uncond": [0],
+            "batch_indices": [1],
+            "sigmas": torch.tensor([0.5]),
+            "anima_project_kv": lambda context: (context.unsqueeze(-1), torch.zeros_like(context).unsqueeze(-1)),
+        }
+        modifier(attention, self.q[:1], self.k[:1], self.v[:1], transformer_options=options, is_self_attention=False)
+        self.assertEqual(seen[-1], [5.0])
+
     def test_all_positive_rows_skip_the_copy_of_the_attention_output(self):
         # CFG 1 / Turbo: every row is positive, so the blend is the result;
         # copying ``base`` first would only be overwritten. A CFG batch

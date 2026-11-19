@@ -136,8 +136,11 @@ def process_batch(p: StableDiffusionProcessingImg2Img, input, output_dir, inpain
                 geninfo, _ = images.read_info_from_image(info_img)
                 _orig: str = shared.opts.infotext_styles
                 shared.opts.infotext_styles = "Ignore"
-                parsed_parameters = parse_generation_parameters(geninfo)
-                shared.opts.infotext_styles = _orig
+                try:
+                    parsed_parameters = parse_generation_parameters(geninfo)
+                finally:
+                    # a parse error must not leave the setting at "Ignore" for every later paste
+                    shared.opts.infotext_styles = _orig
                 parsed_parameters = {k: v for k, v in parsed_parameters.items() if k in (png_info_props or [])}
             except Exception:
                 parsed_parameters = {}

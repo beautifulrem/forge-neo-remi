@@ -52,6 +52,9 @@ class Qwen06Engine:
 
     def tokenize_line(self, line):
         parsed = parsing.parse_prompt_attention(line, self.emphasis.name)
+        # BREAK is the parser's chunk marker (weight -1), not text: Anima has one chunk, so it is a space
+        # (as modulation guidance reads the prompt); left as is it would encode "BREAK" at weight -1
+        parsed = [(" ", 1.0) if text == "BREAK" and weight == -1 else (text, weight) for text, weight in parsed]
         qwen_tokenized, t5_tokenized = self.tokenize([text for text, _ in parsed])
 
         chunks = []

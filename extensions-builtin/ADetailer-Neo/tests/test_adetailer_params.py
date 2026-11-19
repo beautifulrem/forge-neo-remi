@@ -456,6 +456,21 @@ def test_refresh_rescans_the_detectors(ad, models, monkeypatch):
         ad.model_mapping = saved
 
 
+def test_refresh_keeps_a_checkpoint_picked_before_its_hash_was_known(ad, models, monkeypatch):
+    import dataclasses
+
+    monkeypatch.setattr(ad, "get_models", lambda *dirs, download=True: {"face_yolov8n.pt": "/m/face_yolov8n.pt"})
+    monkeypatch.setattr(ad, "WEBUI_INFO", dataclasses.replace(ad.WEBUI_INFO, checkpoints_list=lambda: ["other [0123abcd]", "anima [fba1195327]"]))
+    saved = dict(ad.model_mapping)
+    script = make(ad)
+    try:
+        patch = ui.call_action(script, "refresh_models", ui.ActionContext(tab="txt2img", owner="adetailer"), {"ad_checkpoint": "anima", "ad_checkpoint_2nd": "gone"})
+        assert patch["ad_checkpoint"]["value"] == "anima [fba1195327]"
+        assert patch["ad_checkpoint_2nd"]["value"] == "other [0123abcd]"  # gone: the first one
+    finally:
+        ad.model_mapping = saved
+
+
 @pytest.fixture
 def downloads(monkeypatch):
     """Stock model downloads allowed (no --ad-no-huggingface); every
@@ -649,3 +664,49 @@ def test_zh_cn_covers_every_string(ad, models, settings):
 
 
 # endregion
+
+
+def test_a_failed_yolo_prediction_restores_the_folder_functions():
+    import os
+
+    from lib_adetailer.detection import ultralytics
+
+    makedirs, mkdir = os.makedirs, os.mkdir
+    with pytest.raises(RuntimeError), ultralytics.screw_yolo():
+        raise RuntimeError("out of memory")
+    assert os.makedirs is makedirs and os.mkdir is mkdir
+
+
+def test_an_inner_run_that_raises_still_re_arms_the_outer_scripts(ad, monkeypatch):
+    """ADetailer postprocesses the outer scripts before its inner runs (ControlNet's units, Detail
+    Daemon's callback are released) and runs their before_process/process again after them: an inner
+    run that raises (out of memory, a detector that fails to load) must not skip that, or the next
+    batch generates without them while its infotext still lists them."""
+    import contextlib
+
+    from PIL import Image
+
+    calls = []
+    def record(name):
+        return lambda copy_p, *rest: calls.append(name)
+
+    runner = SimpleNamespace(**{name: record(name) for name in ("postprocess", "before_process", "process")})
+    p = SimpleNamespace(scripts=runner, batch_index=0, batch_size=1, seed=1, _ad_disabled=False)
+    script = ad.AfterDetailerScript()
+    monkeypatch.setattr(ad, "pack_args", lambda args: args)
+    monkeypatch.setattr(ad, "Processed", lambda *args, **kwargs: None)
+    monkeypatch.setattr(ad, "preserve_prompts", lambda p: contextlib.nullcontext())
+    monkeypatch.setattr(script, "is_ad_enabled", lambda *args: True)
+    monkeypatch.setattr(script, "get_i2i_init_image", lambda p, pp: Image.new("RGB", (8, 8)))
+    monkeypatch.setattr(script, "get_args", lambda p, *args: [SimpleNamespace(need_skip=lambda: False)])
+    monkeypatch.setattr(script, "read_params_txt", lambda: "outer params")
+    monkeypatch.setattr(script, "write_params_txt", lambda content: calls.append(("params.txt", content)))
+
+    def inner(*args, **kwargs):
+        raise RuntimeError("MPS backend out of memory")
+
+    monkeypatch.setattr(script, "_postprocess_image_inner", inner)
+
+    with pytest.raises(RuntimeError):
+        script.postprocess_image(p, SimpleNamespace(image=None))
+    assert calls == ["postprocess", "before_process", "process", ("params.txt", "outer params")]

@@ -148,6 +148,8 @@ def _run_modelmerger(primary_model_name: str, secondary_model_name: str, tertiar
     secondary_model_info = sd_models.checkpoint_aliases[secondary_model_name] if theta_func2 else None
     tertiary_model_info = sd_models.checkpoint_aliases[tertiary_model_name] if theta_func1 else None
     output_modelname = merge_output_path(custom_name or filename_generator())  # a bad name fails before any loading
+    if any(info is not None and os.path.realpath(info.filename) == output_modelname for info in (primary_model_info, secondary_model_info, tertiary_model_info)):
+        return fail("Failed: The filename is one of the models being merged")  # never overwrite a model while reading it
 
     def _load_state_dict(filename: str) -> dict[str, torch.Tensor]:
         sd = load_torch_file(filename)

@@ -130,7 +130,11 @@ class NAGAttentionModifier:
                 self._report_unbatched()
                 return base
             k_negative, v_negative = projected
-            rows = _indexer([index % k_negative.shape[0] for index in range(len(positive))])
+            # Each row's own image: a split batch (prompts of different
+            # lengths) runs some images per call, named by batch_indices
+            indices = transformer_options.get("batch_indices")
+            images = [index % group if indices is None else int(indices[index % group]) for index in range(len(positive))]
+            rows = _indexer([image % k_negative.shape[0] for image in images])
             negative_attention = next_attention(q[_indexer(positive)], k_negative[rows], v_negative[rows], mask=None)
             return self._blend(base, positive, negative_attention)
 

@@ -90,16 +90,27 @@ class PreprocessorInpaintOnly(PreprocessorInpaint):
         new_results = []
 
         for img in a1111_batch_result.images:
+            image, image_mask = self.image, self.mask
+            hr_image, hr_mask = getattr(params, "control_cond_for_hr_fix", None), getattr(params, "control_mask_for_hr_fix", None)
+            if image_mask.shape[2:] != img.shape[1:] and isinstance(hr_image, torch.Tensor) and isinstance(hr_mask, torch.Tensor) and hr_mask.shape[2:] == img.shape[1:]:
+                # A unit that sat out the hires pass ("Low res only"): the hires image takes the
+                # original and its mask prepared at its size (as a unit in both passes would have)
+                image, image_mask = hr_image, hr_mask.round()
+
             sigma = 7
-            mask = self.mask[0, 0].detach().cpu().numpy().astype(np.float32)
+            mask = image_mask[0, 0].detach().cpu().numpy().astype(np.float32)
             mask = cv2.dilate(mask, np.ones((sigma, sigma), dtype=np.uint8))
             mask = cv2.blur(mask, (sigma, sigma))[None]
             mask = torch.from_numpy(np.ascontiguousarray(mask).copy()).to(img).clip(0, 1)
-            raw = self.image[0].to(img).clip(0, 1)
+            raw = image[0].to(img).clip(0, 1)
             img = img.clip(0, 1)
 
-            if img.shape != mask.shape:  # Interrupted
-                img = F.interpolate(img.unsqueeze(0), size=(mask.shape[1], mask.shape[2]), mode="nearest").squeeze(0)
+            if img.shape[1:] != mask.shape[1:]:
+                # An interrupted run (or no hires original): fit the original and its mask to the
+                # image (scaling the image down to them would undo the hires pass)
+                size = (img.shape[1], img.shape[2])
+                mask = F.interpolate(mask.unsqueeze(0), size=size, mode="bilinear").squeeze(0).clip(0, 1)
+                raw = F.interpolate(raw.unsqueeze(0), size=size, mode="bilinear").squeeze(0).clip(0, 1)
 
             new_results.append(raw * (1.0 - mask) + img * mask)
 

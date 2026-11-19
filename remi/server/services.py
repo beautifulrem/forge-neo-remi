@@ -107,10 +107,11 @@ class Services:
 
         try:
             days = float(option("remi_upload_retention_days", 7))
-            removed = self.files.prune_uploads(days * 86400, keep=self.store.referenced_strings())
+            referenced = self.store.referenced_strings()
+            removed = self.files.prune_uploads(days * 86400, keep=referenced)
             if removed:
                 log.info("Removed %d old upload(s)", removed)
-            removed = self.files.prune_unsaved(days * 86400)
+            removed = self.files.prune_unsaved(days * 86400, keep=referenced)
             if removed:
                 log.info("Removed %d old unsaved output(s)", removed)
         except Exception:

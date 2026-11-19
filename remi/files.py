@@ -141,7 +141,29 @@ def decode_cursor(cursor: str | None, count: int) -> list[str] | None:
         parts = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode().split(":")
     except (ValueError, UnicodeDecodeError):
         return None
-    return parts if len(parts) == count else None
+    if len(parts) != count or any(not _in_sqlite_range(part) for part in parts):
+        return None
+    return parts
+
+
+def decode_offset(cursor: str | None) -> int:
+    """The offset of an ``encode_cursor(offset)`` cursor; 0 for none or a
+    malformed one (``"²".isdigit()`` is true, ``int("²")`` raises)."""
+
+    position = decode_cursor(cursor, 1)
+    text = position[0] if position else ""
+    return int(text) if text.isascii() and text.isdigit() else 0
+
+
+def _in_sqlite_range(part: str) -> bool:
+    """False for an integer SQLite cannot bind (a crafted cursor: OverflowError)."""
+
+    try:
+        return -(2**63) <= int(part) < 2**63
+    except ValueError:
+        # not an integer (a name key), unless it is one too long for int() (over 4300 digits)
+        digits = part.strip().lstrip("+-")
+        return not (digits.isascii() and digits.isdigit())
 
 
 def _like_terms(query: str | None) -> list[str]:
@@ -192,7 +214,7 @@ class FileStore:
     are temporary, see :meth:`prune_unsaved`."""
 
     def __init__(self, root: str | os.PathLike, *, max_upload_bytes: int | Callable[[], int] = DEFAULT_MAX_UPLOAD) -> None:
-        self.root = Path(root)
+        self.root = Path(os.path.realpath(root))  # outputs are indexed by real path (outputs_dir is compared with them)
         self.uploads_dir = self.root / "uploads"
         self.outputs_dir = self.root / "outputs"
         self.thumbs_dir = self.root / "thumbs"
@@ -242,25 +264,36 @@ class FileStore:
         with self._lock:
             return self._record(self._db.execute(f"SELECT {_COLUMNS} FROM files WHERE kind = ? AND path = ?", (kind, path)).fetchone())
 
-    def delete(self, file_id: str, *, delete_file: bool = False) -> bool:
+    def delete(self, file_id: str, *, delete_file: bool = False, created_before: float | None = None) -> bool:
         """Forget a file; uploads and unsaved outputs are deleted, other
         outputs only with ``delete_file`` (else the folder scan skips them
-        from now on)."""
+        from now on). ``created_before``: only if still that old (a prune;
+        a re-upload refreshes the time)."""
 
         with self._lock:
-            row = self._db.execute("SELECT path, kind FROM files WHERE id = ?", (file_id,)).fetchone()
-            if row is None:
+            row = self._db.execute("SELECT path, kind, created FROM files WHERE id = ?", (file_id,)).fetchone()
+            if row is None or (created_before is not None and row[2] >= created_before):
                 return False
             self._db.execute("DELETE FROM files WHERE id = ?", (file_id,))
-            path, kind = row
+            path, kind, _ = row
             remove = delete_file or kind == "upload" or Path(path).parent == self.outputs_dir
             if kind == "output" and not remove:
                 self._db.execute("INSERT OR IGNORE INTO removed (path) VALUES (?)", (path,))
+            if kind == "upload":
+                # Under the lock: an upload of the same content writes this very path
+                Path(path).unlink(missing_ok=True)
+                remove = False
         if remove:
             Path(path).unlink(missing_ok=True)
-        for thumb in self.thumbs_dir.glob(f"{file_id}-*.webp"):
-            thumb.unlink(missing_ok=True)
+        self.delete_thumbnails(file_id)
         return True
+
+    def delete_thumbnails(self, file_id: str) -> None:
+        """Remove the cached thumbnails of ``file_id`` (by name: a glob would
+        list the whole thumbnail folder for each file)."""
+
+        for width in THUMB_WIDTHS:
+            (self.thumbs_dir / f"{file_id}-{width}.webp").unlink(missing_ok=True)
 
     # endregion
 
@@ -356,7 +389,7 @@ class FileStore:
             raise ParamError("the upload is not an image")
         return file_id
 
-    def prune_uploads(self, max_age: float, keep: set[str] = frozenset()) -> int:
+    def prune_uploads(self, max_age: float, keep: set[str] | frozenset[str] = frozenset()) -> int:
         """Delete uploads older than ``max_age`` seconds, except ``keep``."""
 
         cutoff = time.time() - max_age
@@ -364,18 +397,19 @@ class FileStore:
             rows = self._db.execute("SELECT id FROM files WHERE kind = 'upload' AND created < ?", (cutoff,)).fetchall()
         removed = 0
         for (file_id,) in rows:
-            if file_id not in keep and self.delete(file_id):
+            if file_id not in keep and self.delete(file_id, created_before=cutoff):
                 removed += 1
         return removed
 
-    def prune_unsaved(self, max_age: float) -> int:
+    def prune_unsaved(self, max_age: float, keep: set[str] | frozenset[str] = frozenset()) -> int:
         """Delete outputs older than ``max_age`` seconds that the save path
-        did not write (``outputs/``: generated with saving turned off)."""
+        did not write (``outputs/``: generated with saving turned off), except
+        ``keep`` (ids a queued job still reads)."""
 
         cutoff = time.time() - max_age
         with self._lock:
             rows = self._db.execute("SELECT id, path FROM files WHERE kind = 'output' AND created < ?", (cutoff,)).fetchall()
-        return sum(1 for file_id, path in rows if Path(path).parent == self.outputs_dir and self.delete(file_id))
+        return sum(1 for file_id, path in rows if file_id not in keep and Path(path).parent == self.outputs_dir and self.delete(file_id))
 
     # endregion
 
@@ -388,8 +422,33 @@ class FileStore:
         with self._lock:
             self._db.execute("DELETE FROM removed WHERE path = ?", (path,))
         existing = self._by_path("output", path)
-        if existing is not None:
-            return existing
+        if existing is not None and job_id and existing.job_id not in (None, job_id):
+            # Another job's output: this job wrote over it (a fixed file name, "Override"). A record
+            # of its own, so the old job's file id neither shows nor deletes this image
+            self._forget_row(existing)
+            existing = None
+        if existing is None:
+            record = self._new_output(path, job_id, tab, infotext, width, height, created)
+            try:
+                return self._insert(record)
+            except sqlite3.IntegrityError:  # registered concurrently (a folder scan)
+                existing = self._by_path("output", path)
+                if existing is None:
+                    return record
+        return self._claim(existing, job_id, tab, infotext, width, height, created) if job_id and existing.job_id is None else existing
+
+    def _forget_row(self, record: FileRecord) -> None:
+        """Drop an output's record (and its gallery row and thumbnails), keeping the file."""
+
+        with self._lock:
+            self._db.execute("DELETE FROM files WHERE id = ?", (record.id,))
+            try:  # the gallery's side table (remi.library), when it exists
+                self._db.execute("DELETE FROM gallery_meta WHERE file_id = ?", (record.id,))
+            except sqlite3.OperationalError:
+                pass
+        self.delete_thumbnails(record.id)
+
+    def _new_output(self, path: str, job_id: str | None, tab: str | None, infotext: str | None, width: int | None, height: int | None, created: float | None) -> FileRecord:
         stat = os.stat(path)
         sniffed = sniff(_read_head(path), path)
         mime = sniffed.mime if sniffed else "application/octet-stream"
@@ -398,11 +457,30 @@ class FileStore:
                 width, height = _image_size(path)
             except FileError:
                 pass
-        record = FileRecord(secrets.token_urlsafe(16), "output", path, os.path.basename(path), mime, stat.st_size, width, height, created or stat.st_mtime, job_id, tab, infotext)
+        return FileRecord(secrets.token_urlsafe(16), "output", path, os.path.basename(path), mime, stat.st_size, width, height, created or stat.st_mtime, job_id, tab, infotext)
+
+    def _claim(self, record: FileRecord, job_id: str, tab: str | None, infotext: str | None, width: int | None, height: int | None, created: float | None = None) -> FileRecord:
+        """Give an output the folder scan indexed while its job still ran
+        (no job, no tab) the job's fields, and let the gallery file it again
+        (its category follows the tab). The job's own infotext and size win:
+        the scan may have indexed an older file the job overwrote (so its
+        time is the job's file's too, or the gallery files it weeks back)."""
+
         try:
-            return self._insert(record)
-        except sqlite3.IntegrityError:  # registered concurrently
-            return self._by_path("output", path) or record
+            stat = os.stat(record.path)
+            size, mtime = stat.st_size, stat.st_mtime
+        except OSError:
+            size, mtime = record.size, record.created
+        fields = {"job_id": job_id, "tab": tab or record.tab, "infotext": infotext or record.infotext, "size": size, "width": width or record.width, "height": height or record.height, "created": created or mtime}
+        with self._lock:
+            self._db.execute("UPDATE files SET job_id = ?, tab = ?, infotext = ?, size = ?, width = ?, height = ?, created = ? WHERE id = ?", (*fields.values(), record.id))
+            try:  # the gallery's side table (remi.library), when it exists; a starred row keeps its category
+                self._db.execute("DELETE FROM gallery_meta WHERE file_id = ? AND starred = 0", (record.id,))
+            except sqlite3.OperationalError:
+                pass
+        if size != record.size:
+            self.delete_thumbnails(record.id)  # of the overwritten file
+        return dataclasses.replace(record, **fields)
 
     def save_output_image(self, image: Image.Image, infotext: str | None, **fields: Any) -> FileRecord:
         """Store an image that the normal save path did not write (sample

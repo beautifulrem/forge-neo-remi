@@ -111,10 +111,14 @@ class Spa:
 
     def _file(self, path: str) -> Path | None:
         relative = path.lstrip("/")
-        if not relative or relative == "index.html":
+        # ".." would reach other build files through the public /assets/ prefix (auth.PUBLIC_PATHS)
+        if not relative or relative == "index.html" or ".." in relative.replace("\\", "/").split("/") or "\0" in relative:  # "\\": a separator on Windows
             return None
-        candidate = (self.dist / relative).resolve()
-        if not candidate.is_relative_to(self.dist) or not candidate.is_file():
+        try:
+            candidate = (self.dist / relative).resolve()
+            if not candidate.is_relative_to(self.dist) or not candidate.is_file():
+                return None
+        except (OSError, ValueError):
             return None
         return candidate
 

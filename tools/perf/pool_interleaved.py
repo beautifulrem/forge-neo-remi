@@ -113,7 +113,7 @@ def analyse(paths: list[Path]) -> dict:
         summary = {"file": str(path), "jobs": len(jobs), "previewClients": run.get("previewClients"), "paintedShare": run.get("paintedShare"), "pairStats": pair_stats(run_pairs), "trimmedPairStats": pair_stats(run_trimmed)}
         for key in ("pairStats", "trimmedPairStats"):
             recorded = run[key]
-            if abs(summary[key]["mean"] - recorded["mean"]) > 0.05:
+            if None not in (summary[key]["mean"], recorded["mean"]) and abs(summary[key]["mean"] - recorded["mean"]) > 0.05:
                 raise ValueError(f"{path}: {key} mean {summary[key]['mean']} != recorded {recorded['mean']}")
         runs.append(summary)
         pairs += run_pairs

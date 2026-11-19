@@ -202,6 +202,12 @@ class AnimaFreeFuseScript(scripts.Script):
         args = _arguments((enable, *values))
         if not args.enable:
             return
+        if is_feature_active(p, FREEFUSE):
+            # A copy of the running generation (ADetailer re-runs process()
+            # on one after a batch's last image and never cleans it up): the
+            # run is set up, and the copy's online-LoRA lease would never be
+            # released.
+            return
         current_model = getattr(p, "sd_model", None)
         if current_model is not None and not is_anima_engine(current_model):
             logger.warning(

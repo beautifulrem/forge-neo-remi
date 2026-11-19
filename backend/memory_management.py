@@ -1478,6 +1478,10 @@ if args.pin_shared_memory:
 
 
 def discard_cuda_async_error():
+    # Remi: CUDA only. On MPS torch.cuda.synchronize() raises "Torch not compiled with CUDA enabled",
+    # which made is_oom raise on an MPS out-of-memory error (no tiled VAE fallback, a job left running)
+    if not is_device_cuda(get_torch_device()):
+        return
     try:
         a = torch.tensor([1], dtype=torch.uint8, device=get_torch_device())
         b = torch.tensor([1], dtype=torch.uint8, device=get_torch_device())

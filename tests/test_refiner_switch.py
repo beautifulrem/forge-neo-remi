@@ -175,3 +175,33 @@ def test_the_loaded_checkpoint_as_refiner_is_a_no_op(checkpoints):
     same = _sample(base)
     assert torch.equal(same[0], plain[0]) and same[2] == plain[2]
     assert same[1].extra_generation_params == {}
+
+
+def test_a_generation_that_raises_after_the_fast_swap_restores_the_base_weights(webui, monkeypatch):
+    """The fast swap loads the refiner's weights into the base model; postprocess restores them, but
+    a generation that raises never gets there. cleanup runs from process_images' finally and does the
+    same restore, once: after a successful postprocess it has nothing left to do."""
+    from modules import scripts, sd_samplers_common
+    from modules.processing_scripts.refiner import ScriptRefiner
+
+    for runner in (scripts.scripts_txt2img, scripts.scripts_img2img):
+        assert any(isinstance(script, ScriptRefiner) for script in runner.ordered_scripts("cleanup"))
+    restored = []
+
+    def restore():
+        if sd_samplers_common.ORIGINAL_CHECKPOINT is None:
+            return
+        restored.append(sd_samplers_common.ORIGINAL_CHECKPOINT)
+        sd_samplers_common.ORIGINAL_CHECKPOINT = None
+
+    monkeypatch.setattr(ScriptRefiner, "restore_base_weights", staticmethod(restore))
+    monkeypatch.setattr(sd_samplers_common, "ORIGINAL_CHECKPOINT", "base.safetensors")
+    script = ScriptRefiner()
+
+    script.cleanup(SimpleNamespace())
+    assert restored == ["base.safetensors"]
+
+    monkeypatch.setattr(sd_samplers_common, "ORIGINAL_CHECKPOINT", "base.safetensors")
+    script.postprocess(SimpleNamespace(), None)
+    script.cleanup(SimpleNamespace())
+    assert restored == ["base.safetensors"] * 2

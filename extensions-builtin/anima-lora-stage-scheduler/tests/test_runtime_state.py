@@ -434,3 +434,63 @@ def test_loras_scheduled_by_lora_control_are_left_to_it(monkeypatch):
         ModelPatcher.add_patches(patcher, {}, filename=filename, online_mode=True)
     assert calls == [("scheduled.safetensors", True), ("controlled.safetensors", False)]
     assert process.extra_generation_params["Anima stage scheduler skipped"] == "controlled"
+
+
+def test_a_pass_with_scheduled_loras_runs_spectrum_on_actual_forwards():
+    from modules import spectrum_force
+
+    class Patcher:
+        def __init__(self, options):
+            self.model_options = options
+
+        def clone(self):
+            return Patcher(copy.deepcopy(self.model_options))
+
+    script = _load().Script()
+    shared_unet = Patcher({"transformer_options": {}})
+    process = SimpleNamespace(sd_model=SimpleNamespace(forge_objects=SimpleNamespace(unet=shared_unet)))
+    state = _state(process)
+    process._anima_lora_stage_scheduler_state = state
+
+    script.process_before_every_sampling(process)  # no scheduled LoRA: Spectrum left alone
+    assert process.sd_model.forge_objects.unet is shared_unet
+
+    strength = runtime.ScheduledStrength(1.0, SimpleNamespace(), "base")
+    state.register(strength)
+    script.process_before_every_sampling(process)
+    unet = process.sd_model.forge_objects.unet
+    assert unet is not shared_unet and shared_unet.model_options == {"transformer_options": {}}
+    assert spectrum_force.is_forced(unet.model_options["transformer_options"][spectrum_force.KEY], 0.5)
+
+
+def test_adetailers_reprocessed_copy_leaves_the_run_in_place(monkeypatch):
+    # ADetailer, after a batch's last image: postprocess(copy(p)), then
+    # process() on another copy, which nothing cleans up. The run keeps
+    # driving its strengths in the next batch, and the job ends clean.
+    from backend.args import dynamic_args
+    from modules import anima_online_lora
+
+    monkeypatch.setattr(anima_online_lora, "_leases", set())
+    monkeypatch.setattr(anima_online_lora, "_user_setting", None)
+    monkeypatch.setattr(dynamic_args, "online_lora", False)
+    monkeypatch.setattr(runtime, "_ACTIVE_STATE", None)
+    module = _load()
+    script = module.Script()
+    started = []
+
+    def start_run(p, args):  # runtime.start_run's state, lease and active run
+        started.append(p)
+        p._anima_lora_stage_scheduler_state = runtime._ACTIVE_STATE = _state(p)
+        anima_online_lora.acquire_online_lora(p, runtime.ONLINE_LORA_OWNER)
+
+    monkeypatch.setattr(module, "start_run", start_run)
+    monkeypatch.setattr(module, "_arguments", lambda values: SimpleNamespace(enabled=True))
+    p = SimpleNamespace(extra_generation_params={})
+    script.process(p)
+    outer = p._anima_lora_stage_scheduler_state
+    script.postprocess(copy.copy(p), None)
+    script.process(copy.copy(p))
+    assert started == [p] and runtime._ACTIVE_STATE is outer
+
+    script.postprocess(p, None)
+    assert runtime._ACTIVE_STATE is None and anima_online_lora._leases == set() and dynamic_args.online_lora is False

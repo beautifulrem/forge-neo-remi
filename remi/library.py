@@ -237,8 +237,7 @@ class GalleryIndex:
             self._db.executemany("DELETE FROM files WHERE id = ? AND kind = 'output'", [(file_id,) for file_id in ids])
             self._db.executemany("DELETE FROM gallery_meta WHERE file_id = ?", [(file_id,) for file_id in ids])
         for file_id in ids:
-            for thumb in self.files.thumbs_dir.glob(f"{file_id}-*.webp"):
-                thumb.unlink(missing_ok=True)
+            self.files.delete_thumbnails(file_id)
 
     # endregion
 
@@ -274,7 +273,8 @@ class GalleryIndex:
 
         self.sync()
         sort = q.sort if q.sort in SORTS else "newest"
-        key, direction = {"newest": ("f.created", "DESC"), "oldest": ("f.created", "ASC"), "name": ("f.name", "ASC"), "largest": ("f.width * f.height", "DESC")}[sort]
+        # created and name are NOT NULL: bare, so files_kind_created serves the order (COALESCE would sort every output)
+        key, direction = {"newest": ("f.created", "DESC"), "oldest": ("f.created", "ASC"), "name": ("f.name", "ASC"), "largest": ("COALESCE(f.width * f.height, 0)", "DESC")}[sort]
         where, args = self._filters(q)
         op = "<" if direction == "DESC" else ">"
         after = _position(cursor, text=sort == "name")
@@ -289,11 +289,11 @@ class GalleryIndex:
         for _round in range(MAX_SCAN_ROUNDS):
             page_where, page_args = list(where), list(args)
             if after is not None:
-                page_where.append(f"(COALESCE({key}, 0) {op} ? OR (COALESCE({key}, 0) = ? AND f.rowid {op} ?))")
+                page_where.append(f"({key} {op} ? OR ({key} = ? AND f.rowid {op} ?))")
                 page_args += [after[0], after[0], after[1]]
             sql = (
-                f"SELECT {_COLUMNS}, g.model, g.category, g.starred, COALESCE({key}, 0), f.rowid FROM files f JOIN gallery_meta g ON g.file_id = f.id "
-                f"WHERE {' AND '.join(page_where)} ORDER BY COALESCE({key}, 0) {direction}, f.rowid {direction} LIMIT ?"
+                f"SELECT {_COLUMNS}, g.model, g.category, g.starred, {key}, f.rowid FROM files f JOIN gallery_meta g ON g.file_id = f.id "
+                f"WHERE {' AND '.join(page_where)} ORDER BY {key} {direction}, f.rowid {direction} LIMIT ?"
             )
             with self._lock:
                 rows = self._db.execute(sql, [*page_args, limit + 1]).fetchall()
@@ -410,10 +410,12 @@ class GalleryIndex:
                     pass
         with self._lock:
             rows = self._db.execute("SELECT id, path, created FROM files WHERE kind = 'export'").fetchall()
+        inside = os.path.realpath(exports)
         for file_id, path, created in rows:
             if created < cutoff or not os.path.isfile(path):
                 self.files.delete(file_id)  # an export: only the row
-                Path(path).unlink(missing_ok=True)
+                if os.path.dirname(os.path.realpath(path)) == inside:  # not a zip the user saved elsewhere ("Save" folder)
+                    Path(path).unlink(missing_ok=True)
         return removed
 
     def export_zip(self, ids: list[str], exports_dir: Path | None = None) -> tuple[Path, int]:
@@ -464,6 +466,8 @@ def _position(cursor: str | None, *, text: bool) -> tuple[Any, int] | None:
     except (ValueError, TypeError, binascii.Error):
         return None
     if not isinstance(rowid, int) or isinstance(value, bool) or not isinstance(value, str if text else (int, float)):
+        return None
+    if not all(-(2**63) <= number < 2**63 for number in (rowid, value) if isinstance(number, int)):  # SQLite binds 64-bit integers only
         return None
     return value, rowid
 

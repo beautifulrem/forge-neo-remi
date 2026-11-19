@@ -38,6 +38,7 @@ import logging
 import os
 import pickle
 import sqlite3
+import threading
 import zlib
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
@@ -616,6 +617,9 @@ def _summary(core: Mapping[str, Any], tab: str) -> str:
     return " ".join(text.split())[:200]
 
 
+_RUN_LOCK = threading.Lock()
+
+
 class Importer:
     """Imports one source into ``queue`` (a :class:`remi.jobs.JobQueue`)."""
 
@@ -834,6 +838,10 @@ class Importer:
 
         if source not in SOURCES:
             raise ImportFailed(f"unknown source {source!r}", 422)
+        with _RUN_LOCK:  # two imports at once would both pass the already-imported check
+            return self._run(source)
+
+    def _run(self, source: str) -> ImportReport:
         was_paused = self.queue.paused
         if not was_paused:
             self.queue.set_paused(True)

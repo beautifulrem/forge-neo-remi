@@ -173,7 +173,9 @@ class AfterDetailerScript(scripts.Script):
                 name = param_name(attr, n)
                 entry = {"choices": list(choices)}
                 if name in values and values[name] not in choices:
-                    entry["value"] = choices[0] if choices else None
+                    # a checkpoint picked before its hash was computed still names the same model
+                    same = [choice for choice in choices if ui.without_model_hash(choice) == ui.without_model_hash(values[name])]
+                    entry["value"] = same[0] if len(same) == 1 else choices[0] if choices else None
                 patch[name] = entry
         selected = {**values, **{name: entry["value"] for name, entry in patch.items() if "value" in entry}}
         patch.update(world_flags(selected, count))
@@ -856,25 +858,28 @@ class AfterDetailerScript(scripts.Script):
             with preserve_prompts(p):
                 p.scripts.postprocess(copy(p), dummy)
 
-        is_processed = False
-        with pause_total_tqdm():
-            for n, args in enumerate(arg_list):
-                if args.need_skip():
-                    continue
-                is_processed |= self._postprocess_image_inner(p, pp, args, n=n)
+        # The outer scripts were just postprocessed (ControlNet's units, Detail Daemon's callback
+        # gone): an inner run that raises must not leave the next batch without them
+        try:
+            is_processed = False
+            with pause_total_tqdm():
+                for n, args in enumerate(arg_list):
+                    if args.need_skip():
+                        continue
+                    is_processed |= self._postprocess_image_inner(p, pp, args, n=n)
 
-        if is_processed and not is_skip_img2img(p):
-            self.save_image(
-                p, init_image, condition="ad_save_images_before", suffix="-ad-before"
-            )
+            if is_processed and not is_skip_img2img(p):
+                self.save_image(
+                    p, init_image, condition="ad_save_images_before", suffix="-ad-before"
+                )
+        finally:
+            if need_call_process(p):
+                with preserve_prompts(p):
+                    copy_p = copy(p)
+                    p.scripts.before_process(copy_p)
+                    p.scripts.process(copy_p)
 
-        if need_call_process(p):
-            with preserve_prompts(p):
-                copy_p = copy(p)
-                p.scripts.before_process(copy_p)
-                p.scripts.process(copy_p)
-
-        self.write_params_txt(params_txt_content)
+            self.write_params_txt(params_txt_content)
 
 
 # region Settings

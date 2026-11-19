@@ -792,3 +792,195 @@ def test_zh_cn_covers_the_panel(cn, registry):
     texts |= {"Upload a control image first", "Unknown preprocessor {{name}}", "The preprocessor failed: {{error}}", "The pose file is too large", "The pose is not valid JSON", "Not an OpenPose pose: {{error}}"}
     texts |= {info.label for key, info in shared.opts.data_labels.items() if key.startswith("control_net_")} | {"ControlNet", "e.g. training output directory"}
     harness.assert_localized(EXTENSION, schemas, extra=texts)
+
+
+def test_a_generation_that_raised_has_its_models_undo_their_patches(cn):
+    """postprocess_batch_list, where a model undoes what it patched (Anima ControlNet-LLLite swaps the
+    DiT's own Linear forwards), is never reached by a generation that raised: cleanup does it."""
+    from types import SimpleNamespace
+
+    undone = []
+    model = SimpleNamespace(process_after_every_sampling=lambda p, params: undone.append(params))
+    script = cn.ControlNetForForgeOfficial()
+    with_model, without_model = SimpleNamespace(model=model), SimpleNamespace(model=None)
+    script.current_params = {0: with_model, 1: without_model}
+
+    script.cleanup(SimpleNamespace())
+    script.cleanup(SimpleNamespace())  # after a successful postprocess, nothing is left to undo
+
+    assert undone == [with_model] and script.current_params == {}
+
+
+def test_inpaint_only_keeps_the_hires_size_of_a_unit_that_sat_out_the_hires_pass(cn, monkeypatch):
+    """An inpaint_only unit set to "Low res only" holds the first pass's image and mask when the
+    hires image comes back: the blend fits them to the image instead of scaling it back down."""
+    from types import SimpleNamespace
+
+    import torch
+
+    from modules_forge import shared as forge_shared
+
+    monkeypatch.setattr(forge_shared, "supported_preprocessors", dict(forge_shared.supported_preprocessors))
+    inpaint = harness.load_script(harness.REPO / "extensions-builtin" / "forge_preprocessor_inpaint" / "scripts" / "preprocessor_inpaint.py", "preprocessor_inpaint_under_test")
+    preprocessor = inpaint.PreprocessorInpaintOnly()
+    preprocessor.image = torch.zeros(1, 3, 32, 32)
+    preprocessor.mask = torch.zeros(1, 1, 32, 32)
+    preprocessor.mask[..., 8:24, 8:24] = 1
+    batch = SimpleNamespace(images=[torch.ones(3, 64, 64)])
+
+    preprocessor.process_after_every_sampling(SimpleNamespace(), SimpleNamespace(), batch)
+
+    (image,) = batch.images
+    assert image.shape == (3, 64, 64)
+    assert image[:, 32, 32].eq(1).all() and image[:, 0, 0].eq(0).all()  # generated inside the mask, the original outside
+
+    # The original and mask ControlNet prepared at the hires size are used when there are some
+    hr_mask = torch.zeros(1, 1, 64, 64)
+    hr_mask[..., 16:48, 16:48] = 1
+    params = SimpleNamespace(control_cond_for_hr_fix=torch.full((1, 3, 64, 64), 0.5), control_mask_for_hr_fix=hr_mask)
+    batch = SimpleNamespace(images=[torch.ones(3, 64, 64)])
+
+    preprocessor.process_after_every_sampling(SimpleNamespace(), params, batch)
+
+    (image,) = batch.images
+    assert image.shape == (3, 64, 64)
+    assert image[:, 32, 32].eq(1).all() and image[:, 0, 0].eq(0.5).all()
+
+
+def test_anima_lllite_follows_a_hires_checkpoint_to_its_dit(cn, monkeypatch):
+    """A hires checkpoint swaps the DiT between the passes: the hires pass builds the net over the
+    DiT it runs, and the first pass's patches are undone (not left on a model that no longer runs)."""
+    from types import SimpleNamespace
+
+    import torch
+
+    from modules_forge import shared as forge_shared
+
+    monkeypatch.setattr(forge_shared, "supported_control_models", list(forge_shared.supported_control_models))
+    lllite = harness.load_script(harness.REPO / "extensions-builtin" / "sd_forge_controlllite" / "scripts" / "forge_controllllite.py", "forge_controllllite_under_test")
+
+    class Net:
+        def __init__(self, dit, **cfg):
+            self.dit, self.applied, self.restored = dit, 0, 0
+
+        def eval(self):
+            return self
+
+        def to(self, **kwargs):
+            return self
+
+        def set_cond_image(self, image): ...
+        def set_multiplier(self, strength): ...
+        def set_step_range(self, **kwargs): ...
+
+        def apply_to(self):
+            self.applied += 1
+
+        def restore(self):
+            self.restored += 1
+
+    monkeypatch.setattr(lllite, "ControlNetLLLiteDiT", Net)
+    monkeypatch.setattr(lllite, "map_blocks", lambda dit, state_dict: dit)
+    monkeypatch.setattr(lllite, "infer_anima_config", lambda state_dict: {})
+    monkeypatch.setattr(lllite, "load_lllite_weights_from_dict", lambda net, state_dict: None)
+
+    def process(dit):
+        unet = SimpleNamespace(load_device="cpu", model=SimpleNamespace(computation_dtype=torch.float32, diffusion_model=dit))
+        return SimpleNamespace(sd_model=SimpleNamespace(forge_objects=SimpleNamespace(unet=unet)), steps=8, enable_hr=True, hr_checkpoint_info=object())
+
+    patcher = lllite.ControlLLLiteAnimaPatcher({"lllite_dit.weight": torch.zeros(1)}, inpaint=False)
+    base, hires = object(), object()
+    cond = torch.zeros(1, 3, 8, 8)
+
+    patcher.process_before_every_sampling(process(base), cond, None)
+    first = patcher._lllite_net
+    patcher.process_before_every_sampling(process(hires), cond, None)
+
+    assert first.dit is base and first.restored == 1
+    assert patcher._lllite_net.dit is hires and patcher._lllite_net.applied == 1
+    patcher.process_before_every_sampling(process(hires), cond, None)  # the same DiT again: the same net
+    second = patcher._lllite_net
+    assert second.applied == 2 and second.restored == 0
+
+    patcher.process_after_every_sampling()  # the batch ends: nothing may keep the hires model alive
+    assert second.restored == 1 and patcher._lllite_net is None and patcher._dit is None
+    patcher.process_before_every_sampling(process(base), cond, None)  # the next batch's first pass
+    assert patcher._lllite_net.dit is base
+
+
+def test_anima_lllite_skips_a_hires_checkpoint_it_does_not_fit(cn, monkeypatch):
+    """A hires checkpoint that is not an Anima DiT (or has another block count): the hires pass runs
+    without the control, as before; the generation is not failed after its first pass."""
+    from types import SimpleNamespace
+
+    import torch
+
+    from modules_forge import shared as forge_shared
+
+    monkeypatch.setattr(forge_shared, "supported_control_models", list(forge_shared.supported_control_models))
+    lllite = harness.load_script(harness.REPO / "extensions-builtin" / "sd_forge_controlllite" / "scripts" / "forge_controllllite.py", "forge_controllllite_under_test_unfit")
+
+    class Net:
+        def __init__(self, dit, **cfg):
+            self.dit, self.applied, self.restored = dit, 0, 0
+
+        def eval(self):
+            return self
+
+        def to(self, **kwargs):
+            return self
+
+        def set_cond_image(self, image): ...
+        def set_multiplier(self, strength): ...
+        def set_step_range(self, **kwargs): ...
+
+        def apply_to(self):
+            self.applied += 1
+
+        def restore(self):
+            self.restored += 1
+
+    def map_blocks(dit, state_dict):
+        if dit == "sdxl-unet":
+            raise AttributeError("'UNet' object has no attribute 'blocks'")
+        return dit
+
+    monkeypatch.setattr(lllite, "ControlNetLLLiteDiT", Net)
+    def load_weights(net, state_dict):
+        if net.dit == "anima-wider":
+            raise RuntimeError("size mismatch for lllite_modules.0.down.weight")
+
+    monkeypatch.setattr(lllite, "map_blocks", map_blocks)
+    monkeypatch.setattr(lllite, "infer_anima_config", lambda state_dict: {})
+    monkeypatch.setattr(lllite, "load_lllite_weights_from_dict", load_weights)
+
+    def process(dit):
+        unet = SimpleNamespace(load_device="cpu", model=SimpleNamespace(computation_dtype=torch.float32, diffusion_model=dit))
+        return SimpleNamespace(sd_model=SimpleNamespace(forge_objects=SimpleNamespace(unet=unet)), steps=8, enable_hr=True, hr_checkpoint_info=object(), is_hr_pass=dit != "anima-dit")
+
+    cond = torch.zeros(1, 3, 8, 8)
+    hires_only = lllite.ControlLLLiteAnimaPatcher({"lllite_dit.weight": torch.zeros(1)}, inpaint=False)
+    hires_only.process_before_every_sampling(process("sdxl-unet"), cond, None)  # "High res only": skipped too
+    assert hires_only._lllite_net is None
+
+    wider = lllite.ControlLLLiteAnimaPatcher({"lllite_dit.weight": torch.zeros(1)}, inpaint=False)
+    wider.process_before_every_sampling(process("anima-dit"), cond, None)
+    wider.process_before_every_sampling(process("anima-wider"), cond, None)  # same blocks, other widths
+    assert wider._lllite_net is None
+
+    patcher = lllite.ControlLLLiteAnimaPatcher({"lllite_dit.weight": torch.zeros(1)}, inpaint=False)
+    patcher.process_before_every_sampling(process("anima-dit"), cond, None)
+    first = patcher._lllite_net
+
+    patcher.process_before_every_sampling(process("sdxl-unet"), cond, None)
+
+    assert first.restored == 1 and patcher._lllite_net is None
+    patcher.process_before_every_sampling(process("sdxl-unet"), cond, None)  # again on it: skipped again
+    patcher.process_after_every_sampling()  # nothing left to undo
+    patcher.process_before_every_sampling(process("anima-dit"), cond, None)  # the next batch's first pass
+    assert patcher._lllite_net.dit == "anima-dit" and patcher._lllite_net.applied == 1
+
+    first_pass_on_sdxl = process("sdxl-unet")
+    first_pass_on_sdxl.is_hr_pass = False
+    with pytest.raises(AttributeError):  # the first pass on a model it does not fit still fails as before
+        lllite.ControlLLLiteAnimaPatcher({"lllite_dit.weight": torch.zeros(1)}, inpaint=False).process_before_every_sampling(first_pass_on_sdxl, cond, None)

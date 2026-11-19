@@ -162,6 +162,13 @@ def _int_option(name: str) -> int:
 
 TRANSLATION_KEY = "translation_key"
 """the store secret holding the translation API key (never in the settings)"""
+TRANSLATION_KEY_ENDPOINT = "translation_key_endpoint"
+"""the provider and URL the key was entered for: the key is only sent there
+(a client that may change the settings must not be able to send it elsewhere)"""
+
+
+def translation_endpoint() -> str:
+    return f"{opt.option('prompt_tools_translation_provider') or 'none'} {str(opt.option('prompt_tools_translation_url') or '').strip()}"
 
 
 def translation_config(key: str = "") -> ProviderConfig:
@@ -348,7 +355,17 @@ class PromptTools:
     # region translation settings
 
     def translation_config(self) -> ProviderConfig:
-        return translation_config(self.store.secret(TRANSLATION_KEY) or "")
+        """The provider with the stored key, unless the provider or URL changed
+        since the key was entered (then without it: enter it again)."""
+
+        key = self.store.secret(TRANSLATION_KEY) or ""
+        if key:
+            bound = self.store.secret(TRANSLATION_KEY_ENDPOINT)
+            if bound is None:  # stored before keys were bound: to the endpoint it is first used with
+                self.store.set_secret(TRANSLATION_KEY_ENDPOINT, translation_endpoint())
+            elif bound != translation_endpoint():
+                key = ""
+        return translation_config(key)
 
     def client_config(self) -> dict[str, Any]:
         return client_config(self.translation_config())
@@ -358,6 +375,7 @@ class PromptTools:
 
         key = key.strip()
         self.store.set_secret(TRANSLATION_KEY, key or None)
+        self.store.set_secret(TRANSLATION_KEY_ENDPOINT, translation_endpoint() if key else None)
         return bool(key)
 
     def migrate_translation_key(self) -> bool:
@@ -369,6 +387,7 @@ class PromptTools:
             return False
         if not self.store.secret(TRANSLATION_KEY):
             self.store.set_secret(TRANSLATION_KEY, legacy)
+            self.store.set_secret(TRANSLATION_KEY_ENDPOINT, translation_endpoint())
         return True
 
     # endregion

@@ -151,16 +151,25 @@ def make_skim_cfg_function(
             if flip_sigma is not None and sigma > flip_sigma:
                 flip_filter = not flip_filter
 
-            cond, uncond = apply_skim_to_predictions(
-                x_orig,
-                args["cond_denoised"],
-                args["uncond_denoised"],
-                # The scale the combine applies, AND-prompt weight included.
-                effective_cfg_scale(args),
-                float(skimming_scale),
-                full_skim_negative=bool(full_skim_negative),
-                disable_flipping_filter=flip_filter,
-            )
+            def skim(rows, scale):
+                return apply_skim_to_predictions(
+                    x_orig[rows],
+                    args["cond_denoised"][rows],
+                    args["uncond_denoised"][rows],
+                    scale,
+                    float(skimming_scale),
+                    full_skim_negative=bool(full_skim_negative),
+                    disable_flipping_filter=flip_filter,
+                )
+
+            # The scale the combine applies, AND-prompt weight included: per
+            # row when the batch rows have different AND prompts.
+            scale = effective_cfg_scale(args)
+            if isinstance(scale, torch.Tensor):
+                pairs = [skim(slice(i, i + 1), value) for i, value in enumerate(scale.flatten().tolist())]
+                cond, uncond = (torch.cat(parts) for parts in zip(*pairs))
+            else:
+                cond, uncond = skim(slice(None), scale)
             adjusted_args = dict(args)
             adjusted_args["cond_denoised"] = cond
             adjusted_args["uncond_denoised"] = uncond

@@ -1,3 +1,5 @@
+import weakref
+
 import numpy as np
 import torch
 from PIL import Image
@@ -25,6 +27,9 @@ For **Wan 2.2 I2V**: Use in **img2img** to set as the Last Frame to achieve Firs
 class ImageStitch(scripts.Script):
     sorting_priority = 529
     cached_parameters: tuple | None = None
+    # the engine holding the encoded references: an unload or reload builds a new one without them
+    # (same loading parameters), so the cache key alone would skip encoding them again
+    cached_model: weakref.ref | None = None
 
     def title(self):
         return "ImageStitch Integrated"
@@ -64,11 +69,13 @@ class ImageStitch(scripts.Script):
         if reference_images:
             cache = (opts.reference_max_side, opts.klein_do_reference, opts.qwen21_do_reference, opts.anima_do_reference, opts.krea2_do_reference, opts.moss_do_reference, str(sd_models.model_data.forge_loading_parameters), opts.img2img_background_color, tuple(self.hash_image(ref) for ref in reference_images), (p.width, p.height, p.batch_size) if is_WanT2I else None)
 
-        if ImageStitch.cached_parameters == cache:
+        same_model = ImageStitch.cached_model is not None and ImageStitch.cached_model() is p.sd_model
+        if ImageStitch.cached_parameters == cache and (cache is None or same_model):
             return
 
         self.reset_references(p)
         ImageStitch.cached_parameters = cache
+        ImageStitch.cached_model = weakref.ref(p.sd_model)
 
         if not reference_images:
             return

@@ -31,6 +31,7 @@ from __future__ import annotations
 import bisect
 import csv
 import heapq
+import logging
 import math
 import os
 import re
@@ -38,6 +39,9 @@ import threading
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import IntEnum
+from typing import Any
+
+log = logging.getLogger(__name__)
 
 FUZZY_SCOPE = 60_000
 """Fuzzy matching only looks at this many of the most popular tags."""
@@ -453,19 +457,31 @@ class TagFiles:
             except OSError:
                 return (path, None)
 
-        return (stamp(self.tag_file), stamp(self.extra_file), stamp(self.translation_file), len(self.extra_translations))
+        # the mapping itself: an edited label keeps its length; the tag groups hand out a new
+        # mapping only when they reloaded (comparing the same object is an identity check)
+        return (stamp(self.tag_file), stamp(self.extra_file), stamp(self.translation_file), self.extra_translations)
+
+
+def _read(reader: Callable[[str], Any], path: str | None, default: Any) -> Any:
+    """``reader(path)``; ``default`` for a missing file or one that cannot be
+    read (not UTF-8, not CSV): one bad file must not fail every completion."""
+
+    if not path or not os.path.isfile(path):
+        return default
+    try:
+        return reader(path)
+    except (OSError, UnicodeError, csv.Error) as error:
+        log.warning("cannot read the tag file %s: %s", path, error)
+        return default
 
 
 def load_index(files: TagFiles) -> TagIndex:
-    entries = read_tag_file(files.tag_file) if files.tag_file and os.path.isfile(files.tag_file) else []
-    extras: list[TagEntry] = []
+    entries = _read(read_tag_file, files.tag_file, [])
     translations: dict[str, str] = dict(files.extra_translations)
-    if files.translation_file and os.path.isfile(files.translation_file):
-        translations.update(read_translation_file(files.translation_file))
-    if files.extra_file and os.path.isfile(files.extra_file):
-        extras, extra_translations = read_extra_file(files.extra_file)
-        for key, value in extra_translations.items():
-            translations.setdefault(key, value)
+    translations.update(_read(read_translation_file, files.translation_file, {}))
+    extras, extra_translations = _read(read_extra_file, files.extra_file, ([], {}))
+    for key, value in extra_translations.items():
+        translations.setdefault(key, value)
     return TagIndex(entries, extras, translations)
 
 

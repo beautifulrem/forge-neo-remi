@@ -214,6 +214,25 @@ class ModulationBlockLayoutTests(unittest.TestCase):
         self.assertEqual(tuple(deltas[2].shape), (2, 1, 6))
         self.assertTrue(torch.equal(deltas[2][:, 0, 0], torch.tensor([1.0, 0.0])))  # cond row, uncond row
 
+    def test_a_call_on_some_images_gets_their_rows(self):
+        # Prompts of different lengths: the backend calls the model once per
+        # conditioning shape, with that call's images in batch_indices.
+        positive = torch.arange(3.0).unsqueeze(1).repeat(1, 6)  # image i: i
+        patch = ModulationPatch(positive, torch.full((3, 6), -1.0), torch.ones(28, 6), 0, -1)
+        patched, _, _ = patch.apply(_Patcher(28))
+        seen = []
+
+        def model_function(x, t, **c):
+            seen.append(_delta_of(patched.model.diffusion_model.blocks[3])[:, 0, 0].tolist())
+            return x
+
+        wrapper = patched.model_options["model_function_wrapper"]
+        for indices in ([0, 2], [1], None):
+            rows = 3 if indices is None else len(indices)
+            options = {"transformer_options": {"batch_indices": indices}}
+            wrapper(model_function, {"input": torch.zeros(2 * rows, 4), "timestep": torch.zeros(2 * rows), "c": options, "cond_or_uncond": [0, 1]})
+        self.assertEqual(seen, [[0.0, 2.0, -1.0, -1.0], [1.0, -1.0], [0.0, 1.0, 2.0, -1.0, -1.0, -1.0]])
+
     def test_deltas_are_built_in_the_models_compute_dtype(self):
         # The latent is fp32 but the blocks' AdaLN-LoRA input is in the
         # computation dtype: the cached delta already has it (no cast per

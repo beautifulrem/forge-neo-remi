@@ -10,7 +10,6 @@ it in memory. Supports bf16 (~17 GB VRAM), 8-bit (~10 GB), and 4-bit
 from __future__ import annotations
 
 import gc
-import os
 import threading
 from pathlib import Path
 from typing import Optional
@@ -92,7 +91,7 @@ def ensure_model_downloaded(progress_print=print) -> Path:
             "generation_config.json",
         ],
     )
-    progress_print(f"[JoyCaption] Download complete.")
+    progress_print("[JoyCaption] Download complete.")
     return target
 
 

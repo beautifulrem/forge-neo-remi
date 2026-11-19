@@ -42,11 +42,12 @@ class LoRAControl(scripts.Script):
             ctl = True
 
             alias: str = m.group(1)
-            lora: str = available_network_aliases[alias].filename
 
             try:
-                self.mapping[lora] = self._parse_schedule(m.group(2))
-                assert len(self.mapping[lora]) > 1
+                lora: str = available_network_aliases[alias].filename
+                schedule = self._parse_schedule(m.group(2))
+                assert len(schedule) > 1 and all(len(point) == 2 for point in schedule)  # weight@time points
+                self.mapping[lora] = schedule
             except Exception:
                 logger.error(f'Invalid Syntax for "{alias}": "{m.group(2)}"')
                 continue
@@ -72,6 +73,7 @@ class LoRAControl(scripts.Script):
                     if lora.name != name:
                         continue
 
+                    w = schedule[0][0]  # before the first point: its weight
                     if schedule[-1][1] <= t:
                         w = schedule[-1][0]
                     else:

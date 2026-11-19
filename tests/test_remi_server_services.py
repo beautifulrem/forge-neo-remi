@@ -121,7 +121,7 @@ def test_housekeeping_prunes_with_the_retention_setting_and_indexes_outputs(serv
         services.housekeeping()
     [(args, kwargs)] = recorders["prune_uploads"].calls
     assert args == (0.5 * 86400,) and kwargs == {"keep": services.store.referenced_strings()}
-    assert recorders["prune_unsaved"].calls == [((0.5 * 86400,), {})]
+    assert recorders["prune_unsaved"].calls == [((0.5 * 86400,), {"keep": services.store.referenced_strings()})]
     assert recorders["prune_exports"].calls == [((), {})]
     assert recorders["scan_outputs"].calls == [((["/outputs/txt2img"],), {})]
     messages = [record.getMessage() for record in caplog.records]

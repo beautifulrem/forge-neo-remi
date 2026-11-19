@@ -129,6 +129,13 @@ def _job(row: tuple) -> Job:
     return Job(**values)
 
 
+def _json_text(query: str | None) -> str:
+    """``query`` with each word as ``json.dumps`` writes it inside a string
+    (non-ASCII as ``\\uXXXX``), the form it has in the stored parameters."""
+
+    return " ".join(json.dumps(term)[1:-1] for term in (query or "").split())
+
+
 def like_terms(query: str | None) -> list[str]:
     """``LIKE`` patterns (escaped with ``\\``) for the words of ``query``."""
 
@@ -170,7 +177,7 @@ class JobStore:
                 (job_id, tab, json.dumps(core), json.dumps(scripts), layout_hash, schema_version, int(priority), QUEUED, now, summary, int(forever), user, retry_of, json.dumps(meta) if meta else None),
             )
             seq = cursor.lastrowid
-            position = float(seq)
+            position = self._tail_position(seq, int(priority))
             anchor = self._db.execute("SELECT position, priority FROM jobs WHERE id = ? AND status = ?", (after, QUEUED)).fetchone() if after else None
             if anchor is not None:
                 following = self._db.execute("SELECT MIN(position) FROM jobs WHERE status = ? AND priority = ? AND position > ? AND seq != ?", (QUEUED, anchor[1], anchor[0], seq)).fetchone()[0]
@@ -197,8 +204,17 @@ class JobStore:
                     int(job.starred), int(job.replayable), json.dumps(job.meta) if job.meta else None, job_id,
                 ),
             )
-            self._db.execute("UPDATE jobs SET position = ? WHERE seq = ?", (float(cursor.lastrowid), cursor.lastrowid))
+            self._db.execute("UPDATE jobs SET position = ? WHERE seq = ?", (self._tail_position(cursor.lastrowid, int(job.priority)), cursor.lastrowid))
         return self.get(job_id)
+
+    def _tail_position(self, seq: int, priority: int) -> float:
+        """The position of a job added at the end of its priority group: its
+        sequence number, or past the last queued job when moves put that one
+        further (a job moved to the end gets the last position + 1, which can
+        exceed the sequence numbers of jobs submitted after it)."""
+
+        last = self._db.execute("SELECT MAX(position) FROM jobs WHERE status = ? AND priority = ? AND seq != ?", (QUEUED, priority, seq)).fetchone()[0]
+        return float(seq) if last is None else max(float(seq), last + 1.0)
 
     def get(self, job_id: str) -> Job | None:
         jobs = self._fetch(f"SELECT {_COLUMNS} FROM jobs WHERE id = ?", (job_id,))
@@ -361,9 +377,12 @@ class JobStore:
             wanted = [item for item in status.split(",") if item in STATUSES]
             where.append(f"status IN ({','.join('?' * len(wanted))})" if wanted else "0")
             args += wanted
-        for pattern in like_terms(query):
+        for pattern, encoded in zip(like_terms(query), like_terms(_json_text(query)), strict=True):
             where.append("(summary LIKE ? ESCAPE '\\' OR infotext LIKE ? ESCAPE '\\' OR core LIKE ? ESCAPE '\\' OR meta LIKE ? ESCAPE '\\')")
             args += [pattern] * 4
+            if encoded != pattern:  # core and meta are JSON with \uXXXX escapes: a non-ASCII word is also matched in that form
+                where[-1] = where[-1][:-1] + " OR core LIKE ? ESCAPE '\\' OR meta LIKE ? ESCAPE '\\')"
+                args += [encoded] * 2
         if starred is not None:
             where.append("starred = ?")
             args.append(int(starred))
@@ -371,7 +390,9 @@ class JobStore:
             where.append("tab = ?")
             args.append(tab)
         filters = " AND ".join(where)
-        page = filters
+        # The page walks jobs_created in order: through jobs_status (or no
+        # index for tab) SQLite would sort every matching row, JSON included
+        page = filters.replace("status IN (", "+status IN (", 1)
         page_args = list(args)
         position = decode_cursor(cursor, 2)
         if position is not None:

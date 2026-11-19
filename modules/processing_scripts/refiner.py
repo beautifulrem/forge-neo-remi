@@ -78,8 +78,17 @@ class ScriptRefiner(scripts.ScriptBuiltinUI):
         shared.opts.set("refiner_lora_replacement", replacements.strip())
         shared.opts.save(shared.config_filename)
 
-    @torch.inference_mode()
     def postprocess(self, *args, **kwargs):
+        self.restore_base_weights()
+
+    def cleanup(self, p, *args):
+        # a generation that raised after the fast swap never reaches postprocess: without this the
+        # refiner's weights would stay in the base model for every later generation
+        self.restore_base_weights()
+
+    @staticmethod
+    @torch.inference_mode()
+    def restore_base_weights():
         from modules import sd_samplers_common, shared
 
         if sd_samplers_common.ORIGINAL_CHECKPOINT is None:

@@ -20,14 +20,25 @@ def sigma_broadcast(value, reference: torch.Tensor):
     return max(float(value), 1e-12)
 
 
-def effective_cfg_scale(args) -> float:
+def scale_value(value) -> float | torch.Tensor:
+    """``float(value)``, or a per-row tensor as it is.
+
+    Forge's ``edit_strength`` is a tensor shaped to broadcast over the batch
+    when its rows have different AND prompts (each row's own weight sum).
+    """
+
+    return value if isinstance(value, torch.Tensor) else float(value)
+
+
+def effective_cfg_scale(args) -> float | torch.Tensor:
     """CFG scale times the AND-prompt weight sum, as Forge's default combine.
 
     Forge averages ``a AND b`` sub-prompts by weight into ``cond_denoised``
-    and multiplies the guidance by the weight sum (``edit_strength``).
+    and multiplies the guidance by the weight sum (``edit_strength``): a
+    float, or a per-row tensor (see ``scale_value``).
     """
 
-    return float(args["cond_scale"]) * float(args.get("edit_strength", 1.0))
+    return float(args["cond_scale"]) * scale_value(args.get("edit_strength", 1.0))
 
 
 def uncond_is_placeholder(args) -> bool:
@@ -196,22 +207,22 @@ def _low_frequency(value: torch.Tensor) -> torch.Tensor:
 def fdg_combine(
     cond: torch.Tensor,
     uncond: torch.Tensor,
-    guidance_scale: float,
-    high_frequency_scale: float,
+    guidance_scale: float | torch.Tensor,
+    high_frequency_scale: float | torch.Tensor,
 ) -> torch.Tensor:
     """Frequency-decoupled CFG with an independently bounded detail scale."""
 
     delta = cond - uncond
     low = _low_frequency(delta)
     high = delta - low
-    return uncond + float(guidance_scale) * low + float(high_frequency_scale) * high
+    return uncond + scale_value(guidance_scale) * low + scale_value(high_frequency_scale) * high
 
 
 def make_fdg_cfg_function(high_frequency_scale: float):
     @torch.no_grad()
     def cfg_function(args):
         # The AND-prompt weight scales the whole update, so both bands.
-        weight = float(args.get("edit_strength", 1.0))
+        weight = scale_value(args.get("edit_strength", 1.0))
         denoised = fdg_combine(
             args["cond_denoised"],
             args["uncond_denoised"],
@@ -237,7 +248,7 @@ def cfg_zero_star_scale(cond: torch.Tensor, uncond: torch.Tensor) -> torch.Tenso
 def cfg_zero_star_combine(
     cond: torch.Tensor,
     uncond: torch.Tensor,
-    guidance_scale: float,
+    guidance_scale: float | torch.Tensor,
 ) -> torch.Tensor:
     """CFG-Zero* optimized-scale combine of two velocity predictions.
 
@@ -247,7 +258,7 @@ def cfg_zero_star_combine(
     """
 
     scaled_uncond = uncond * cfg_zero_star_scale(cond, uncond)
-    return cond + (float(guidance_scale) - 1.0) * (cond - scaled_uncond)
+    return cond + (scale_value(guidance_scale) - 1.0) * (cond - scaled_uncond)
 
 
 class CFGZeroStarState:
@@ -394,7 +405,7 @@ def tcfg_damp_uncond(cond: torch.Tensor, uncond: torch.Tensor) -> torch.Tensor:
     return damped.reshape(uncond.shape)
 
 
-def tcfg_combine(cond: torch.Tensor, uncond: torch.Tensor, guidance_scale: float) -> torch.Tensor:
+def tcfg_combine(cond: torch.Tensor, uncond: torch.Tensor, guidance_scale: float | torch.Tensor) -> torch.Tensor:
     """CFG against TCFG's damped unconditional prediction, in float32.
 
     ``uncond' + w * (cond - uncond')`` written as ``cond + (w - 1) * (cond -
@@ -403,7 +414,7 @@ def tcfg_combine(cond: torch.Tensor, uncond: torch.Tensor, guidance_scale: float
 
     cond_f = cond.float()
     damped = tcfg_damp_uncond(cond_f, uncond)
-    return cond_f + (float(guidance_scale) - 1.0) * (cond_f - damped)
+    return cond_f + (scale_value(guidance_scale) - 1.0) * (cond_f - damped)
 
 
 def make_tcfg_cfg_function():
@@ -470,7 +481,7 @@ class APGState:
         self,
         cond: torch.Tensor,
         uncond: torch.Tensor,
-        guidance_scale: float,
+        guidance_scale: float | torch.Tensor,
         *,
         update_state: bool = True,
     ) -> torch.Tensor:
@@ -489,7 +500,7 @@ class APGState:
             norm = torch.linalg.vector_norm(diff.float(), dim=tuple(range(1, diff.ndim)), keepdim=True)
             diff = diff * (self.norm_threshold / norm.clamp_min(1e-12)).clamp(max=1.0).to(diff.dtype)
         parallel, orthogonal = apg_project(diff, cond)
-        return cond + (float(guidance_scale) - 1.0) * (orthogonal + self.eta * parallel)
+        return cond + (scale_value(guidance_scale) - 1.0) * (orthogonal + self.eta * parallel)
 
 
 def make_apg_cfg_function(state: APGState, process=None):

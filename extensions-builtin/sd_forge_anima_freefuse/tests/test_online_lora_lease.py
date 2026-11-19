@@ -112,3 +112,24 @@ def test_a_hires_run_drops_the_refiner_and_samples_both_passes_with_freefuse(mon
     finally:
         script.postprocess(p, None)
         script.cleanup(p)
+
+
+def test_adetailers_reprocessed_copy_takes_no_lease(monkeypatch):
+    # ADetailer, after a batch's last image: postprocess(copy(p)), then
+    # before_process / process on another copy, which nothing cleans up.
+    import copy
+
+    from backend.args import dynamic_args
+    from modules import anima_online_lora
+
+    module = _load(monkeypatch)
+    monkeypatch.setattr(anima_online_lora, "_leases", set())
+    monkeypatch.setattr(anima_online_lora, "_user_setting", None)
+    monkeypatch.setattr(dynamic_args, "online_lora", False)
+    p = SimpleNamespace(sd_model=None, sampler_name="Euler", enable_hr=False, extra_generation_params={})
+    script = module.AnimaFreeFuseScript()
+    script.process(p, *_enabled(module))
+    script.postprocess(copy.copy(p), None)
+    script.process(copy.copy(p), *_enabled(module))
+    script.postprocess(p, None)
+    assert anima_online_lora._leases == set() and dynamic_args.online_lora is False

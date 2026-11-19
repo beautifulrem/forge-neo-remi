@@ -75,6 +75,25 @@ def test_refiner_checkpoint_pastes_as_one_of_the_choices(webui, checkpoints, use
         webui.opts.data.pop("sd_checkpoint_dropdown_use_short", None)
 
 
+@pytest.mark.parametrize("use_short", [False, True])
+def test_hires_checkpoint_pastes_as_one_of_the_choices(webui, checkpoints, use_short):
+    """processing.py writes ``Hires checkpoint: <short title>``; the choices are
+    the file names unless short names are on."""
+    from remi.core.infotext import parse_infotext
+
+    webui.opts.data["sd_checkpoint_dropdown_use_short"] = use_short
+    try:
+        for info in checkpoints:
+            text = _infotext("cat", {"Steps": 20, "Denoising strength": 0.5, "Hires upscale": 2, "Hires upscaler": "Latent", "Hires checkpoint": info.short_title})
+            result = parse_infotext(text, "txt2img")
+            assert result["problems"] == []
+            assert result["core"]["hr_checkpoint_name"] == (info.short_title if use_short else info.name)
+        same = parse_infotext(_infotext("cat", {"Steps": 20, "Denoising strength": 0.5, "Hires upscale": 2, "Hires checkpoint": "Use same checkpoint"}), "txt2img")
+        assert same["core"]["hr_checkpoint_name"] == "Use same checkpoint" and same["problems"] == []
+    finally:
+        webui.opts.data.pop("sd_checkpoint_dropdown_use_short", None)
+
+
 def test_unknown_refiner_checkpoint_is_left_alone(webui, checkpoints):
     from remi.core.infotext import parse_infotext
 
@@ -150,6 +169,87 @@ def test_whole_picture_inpaint_writes_inpaint_area():
     src = inspect.getsource(StableDiffusionProcessingImg2Img.init)
     assert 'self.extra_generation_params["Inpaint area"] = "Whole picture"' in src
     assert 'self.extra_generation_params["Inpaint area"] = "Only masked"' in src
+
+
+# endregion
+
+
+# region Hires modules
+
+
+@pytest.mark.parametrize(
+    ("params", "expected"),
+    [
+        ({"Hires Module 1": "Built-in"}, []),
+        ({"Hires Module 1": "Use same choices"}, ["Use same choices"]),
+        ({"Hires Module 1": "ae", "Hires Module 2": "qwen"}, ["ae.safetensors", "qwen.safetensors"]),
+        ({"Hires Module 1": "missing_vae"}, ["Use same choices"]),  # not installed here: not Built-in
+        ({}, ["Use same choices"]),
+    ],
+)
+def test_hires_modules_paste_as_written(webui, monkeypatch, params, expected):
+    from modules.infotext_utils import parse_generation_parameters
+    from modules_forge import main_entry
+
+    monkeypatch.setattr(main_entry, "module_list", {"ae.safetensors": "/m/ae.safetensors", "qwen.safetensors": "/m/qwen.safetensors"})
+    res = parse_generation_parameters(_infotext("dog", {"Steps": 20, "Hires upscale": 2, **params}))
+    assert res["Hires VAE/TE"] == expected
+    assert not any(key.startswith("Hires Module") for key in res)
+
+
+def test_hires_modules_paste_into_the_form(webui, monkeypatch):
+    from modules_forge import main_entry
+    from remi.core.infotext import parse_infotext
+
+    monkeypatch.setattr(main_entry, "module_list", {"ae.safetensors": "/m/ae.safetensors"})
+    params = {"Steps": 20, "Sampler": "Euler", "Size": "512x512", "Denoising strength": 0.5, "Hires upscale": 2}
+    for recorded, expected in (("Built-in", []), ("ae", ["ae.safetensors"]), ("Use same choices", ["Use same choices"])):
+        result = parse_infotext(_infotext("dog", {**params, "Hires Module 1": recorded}), "txt2img")
+        assert result["problems"] == [] and result["core"]["hr_additional_modules"] == expected
+
+
+# endregion
+
+
+# region Inpaint defaults
+
+
+def test_inpaint_settings_left_out_at_their_defaults_paste_as_the_defaults(webui):
+    # Processing writes Mask blur only above 0, Mask mode only inverted and
+    # Masked content only other than original
+    from remi.core.infotext import parse_infotext
+
+    base = {"Steps": 20, "Sampler": "Euler", "Denoising strength": 0.75}
+    result = parse_infotext(_infotext("dog", {**base, "Inpaint area": "Whole picture"}), "img2img")
+    assert result["problems"] == []
+    assert (result["core"]["mask_blur"], result["core"]["inpainting_mask_invert"], result["core"]["inpainting_fill"]) == (0, "Inpaint masked", "original")
+    written = parse_infotext(_infotext("dog", {**base, "Inpaint area": "Whole picture", "Mask blur": 8, "Mask mode": "Inpaint not masked", "Masked content": "fill"}), "img2img")
+    assert (written["core"]["mask_blur"], written["core"]["inpainting_mask_invert"], written["core"]["inpainting_fill"]) == (8, "Inpaint not masked", "fill")
+    plain = parse_infotext(_infotext("dog", base), "img2img")["core"]
+    assert not {"mask_blur", "inpainting_mask_invert", "inpainting_fill"} & set(plain)
+
+
+# endregion
+
+
+# region Hires fix toggle
+
+
+@pytest.mark.parametrize(
+    ("params", "enabled"),
+    [
+        ({"Denoising strength": 0.75}, False),  # an img2img infotext: no hires pass
+        ({"Denoising strength": 0.5, "Hires upscale": 2, "Hires upscaler": "Latent"}, True),
+        ({"Denoising strength": 0.5, "Hires resize": "1024x1536", "Hires upscaler": "Latent"}, True),
+        ({"Denoising strength": 0.5, "Hires resize": "1024x1536"}, True),
+        ({}, False),
+    ],
+)
+def test_hires_fix_pastes_on_only_for_a_hires_infotext(webui, params, enabled):
+    from remi.core.infotext import parse_infotext
+
+    result = parse_infotext(_infotext("dog", {"Steps": 20, "Sampler": "Euler", "Size": "512x512", **params}), "txt2img")
+    assert result["core"]["enable_hr"] is enabled
 
 
 # endregion

@@ -709,6 +709,42 @@ class GuidanceRangeTests(unittest.TestCase):
             self.assertTrue(torch.allclose(cfg({**args, "sigma": torch.tensor([sigma])}), x - cond))
 
 
+class PerRowANDWeightTests(unittest.TestCase):
+    def test_per_row_and_prompt_weights_guide_each_row_by_its_own_weight(self):
+        # Batch rows with different AND prompts: Forge passes edit_strength as
+        # a per-row tensor (each row's weight sum), which a float() rejected.
+        from lib_anima_guidance.skim import make_skim_cfg_function
+        from lib_anima_guidance.smc import SMCCFGState, make_smc_cfg_function
+
+        torch.manual_seed(7)
+        x = torch.randn(2, 4, 8, 8)
+        cond, uncond = torch.randn_like(x), torch.randn_like(x)
+        weights = torch.tensor([1.5, 0.8]).reshape(2, 1, 1, 1)
+        hooks = {
+            "range": lambda: make_guidance_range_cfg_function(None, sigma_start=1.0, sigma_end=0.0),
+            "fdg": lambda: make_fdg_cfg_function(2.0),
+            "apg": lambda: make_apg_cfg_function(APGState(eta=0.5, norm_threshold=0.0, momentum=0.0)),
+            "smc": lambda: make_smc_cfg_function(SMCCFGState(lam=5.0, alpha=0.2)),
+            "cfg zero star": make_cfg_zero_star_cfg_function,
+            "tcfg": make_tcfg_cfg_function,
+            "skim": lambda: make_skim_cfg_function(
+                None, sigma_start=1.0, sigma_end=0.0, skimming_scale=2.0,
+                full_skim_negative=False, disable_flipping_filter=False, flip_sigma=None,
+            ),
+        }
+        sigma = torch.tensor([0.5, 0.5])
+        for name, make in hooks.items():
+            with self.subTest(name):
+                args = {"input": x, "cond_denoised": cond, "uncond_denoised": uncond, "cond_scale": 4.0, "sigma": sigma, "edit_strength": weights}
+                batch = make()(args)
+                for row in range(2):
+                    alone = make()({
+                        "input": x[row : row + 1], "cond_denoised": cond[row : row + 1], "uncond_denoised": uncond[row : row + 1],
+                        "cond_scale": 4.0, "sigma": sigma[row : row + 1], "edit_strength": float(weights[row]),
+                    })
+                    self.assertTrue(torch.allclose(batch[row : row + 1], alone, atol=1e-5))
+
+
 class GuidanceRangeUncondSkipTests(unittest.TestCase):
     def setUp(self):
         self.cfg = make_guidance_range_cfg_function(None, sigma_start=0.2, sigma_end=0.8)

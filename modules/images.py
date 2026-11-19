@@ -843,9 +843,12 @@ def read_info_from_image(image: Image.Image) -> tuple[str | None, dict]:
         if "exif" in items:
             exif_data = items["exif"]
             try:
+                # piexif opens anything without a JPEG / TIFF / Exif header as a
+                # file name: an uploaded image's EXIF chunk must never be one
+                if not isinstance(exif_data, bytes) or not exif_data.startswith((b"\xff\xd8", b"II", b"MM", b"Exif")):
+                    raise ValueError("not EXIF data")
                 exif = piexif.load(exif_data)
-            except OSError:
-                # memory / exif was not valid so piexif tried to read from a file
+            except Exception:  # malformed EXIF (struct.error, ValueError, ...): no comment
                 exif = None
             exif_comment = (exif or {}).get("Exif", {}).get(piexif.ExifIFD.UserComment, b"")
             try:

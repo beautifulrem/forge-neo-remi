@@ -329,8 +329,12 @@ def main() -> int:
     parser.add_argument("--startup-timeout", type=float, default=600)
     options = parser.parse_args()
 
+    marker = options.out / ".remi-extensions-smoke"
+    if options.out.exists() and any(options.out.iterdir()) and not marker.exists():
+        parser.error(f"{options.out} is not empty and not a folder this tool made: pick another --out")
     shutil.rmtree(options.out, ignore_errors=True)
     options.out.mkdir(parents=True)
+    marker.touch()
     data_dir, models = options.out / "data", options.out / "models"
     models.mkdir()
     data_dir.mkdir()

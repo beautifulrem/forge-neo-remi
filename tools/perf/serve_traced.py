@@ -123,7 +123,7 @@ def _patch_realtime(module) -> None:
     module.PreviewEncoder.tick, module.EventBus.publish_frame = tick_, publish_frame
 
 
-MUTE_FILE = os.environ.get("REMI_PERF_MUTE", "/tmp/remi-perf-mute")
+MUTE_FILE = os.path.abspath(os.environ.get("REMI_PERF_MUTE", "/tmp/remi-perf-mute"))  # before main() changes to the repo root
 
 
 def _patch_ws(module) -> None:

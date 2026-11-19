@@ -359,7 +359,13 @@ def _block_deltas(pairs):
             handle.remove()
 
 
-def _expand_rows(value: torch.Tensor, batch: int) -> torch.Tensor:
+def _expand_rows(value: torch.Tensor, batch: int, indices: tuple[int, ...] | None = None) -> torch.Tensor:
+    """``value``'s rows for a model call of ``batch`` rows per branch:
+    ``indices`` are the images of the call when the backend splits the batch
+    by conditioning shape (prompts of different lengths)."""
+
+    if indices is not None and value.shape[0] > 1 and len(indices) == batch:
+        return value[list(indices)]
     if value.shape[0] == batch:
         return value
     if value.shape[0] == 1:
@@ -405,15 +411,15 @@ class ModulationPatch:
         # cast once, so the sum is the same as casting at every use.
         deltas: dict[tuple, tuple[torch.Tensor, ...]] = {}
 
-        def deltas_for(branches: tuple[int, ...], chunk: int, reference: torch.Tensor) -> tuple[torch.Tensor, ...]:
+        def deltas_for(branches: tuple[int, ...], chunk: int, indices: tuple[int, ...] | None, reference: torch.Tensor) -> tuple[torch.Tensor, ...]:
             dtype = compute_dtype or reference.dtype
-            key = (branches, chunk, reference.device, dtype)
+            key = (branches, chunk, indices, reference.device, dtype)
             cached = deltas.get(key)
             if cached is None:
                 if len(deltas) >= 8:
                     deltas.clear()
                 positive, negative, scales = (t.to(device=reference.device, dtype=torch.float32) for t in (self.positive, self.negative, self.scales))
-                pooled = torch.cat([_expand_rows(positive if branch == 0 else negative, chunk) for branch in branches], dim=0)
+                pooled = torch.cat([_expand_rows(positive if branch == 0 else negative, chunk, indices) for branch in branches], dim=0)
                 cached = deltas[key] = tuple((pooled * scales[row]).unsqueeze(1).to(dtype) for _, row in targets)
             return cached
 
@@ -424,7 +430,9 @@ class ModulationPatch:
                 logger.warning("Anima modulation skipped a non-divisible conditioning batch.")
                 return call_model_wrapper(previous, model_function, args)
             chunk = input_x.shape[0] // len(branches)
-            pairs = zip((dit.blocks[index] for index, _ in targets), deltas_for(branches, chunk, input_x))
+            indices = ((args.get("c") or {}).get("transformer_options") or {}).get("batch_indices")
+            indices = None if indices is None else tuple(int(index) for index in indices)
+            pairs = zip((dit.blocks[index] for index, _ in targets), deltas_for(branches, chunk, indices, input_x))
             with _block_deltas(pairs):
                 return call_model_wrapper(previous, model_function, args)
 

@@ -44,9 +44,9 @@ STRICT=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --strict) STRICT=1; shift ;;
-    --only) ONLY="${2:-}"; shift 2 ;;
+    --only) [ $# -ge 2 ] || { echo "--only needs a value (see --help)" >&2; exit 2; }; ONLY="$2"; shift 2 ;;
     --only=*) ONLY="${1#*=}"; shift ;;
-    --skip) SKIP="${2:-}"; shift 2 ;;
+    --skip) [ $# -ge 2 ] || { echo "--skip needs a value (see --help)" >&2; exit 2; }; SKIP="$2"; shift 2 ;;
     --skip=*) SKIP="${1#*=}"; shift ;;
     --list) LIST=1; shift ;;
     -h|--help) awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"; exit 0 ;;
@@ -111,6 +111,8 @@ mkdir -p "$LOGS"
 export COVERAGE_FILE="$LOGS/.coverage"
 # Port of the e2e test's own mock dev server: away from a developer's `pnpm dev` (5173/5199).
 export REMI_E2E_PORT="${REMI_E2E_PORT:-5299}"
+# A real-server try (playwright.config.ts) would replace the mock suite with the few @real tests.
+unset REMI_E2E_BASE_URL REMI_E2E_GREP
 export PYTHONDONTWRITEBYTECODE=1
 
 # endregion
@@ -121,6 +123,7 @@ NAMES=()
 RESULTS=()
 TIMES=()
 SKIPPED=() # "<name>: <reason>" of each skipped step
+DECLARED=() # every step name, run or not (to report --only/--skip items that name no step)
 
 matches() { # matches <name> <comma list>: exact name or prefix
   local item
@@ -142,6 +145,7 @@ wanted() {
 step() {
   local name="$1"
   shift
+  DECLARED+=("$name")
   if [ "$LIST" = 1 ]; then
     echo "$name"
     return 0
@@ -170,6 +174,7 @@ step() {
 # still listed, and the summary reports it as "skip" with the reason; --strict counts it as failed.
 skip_step() {
   local name="$1" reason="$2"
+  DECLARED+=("$name")
   if [ "$LIST" = 1 ]; then
     echo "$name"
     return 0
@@ -208,7 +213,8 @@ step env:gradio-free gradio_free
 # Which rules apply to which file is pyproject.toml's business (strict for Remi's files).
 step ruff:remi "${RUFF[@]}" check remi tools webui/tools docs tests/remi_*.py tests/test_remi_*.py modules/extra_networks_pages.py modules/redact.py
 step ruff:tests "${RUFF[@]}" check tests extensions-builtin/*/tests
-step ruff:extensions "${RUFF[@]}" check extensions-builtin/*/scripts extensions-builtin/*/lib_*
+# also the modules at an extension's root (install.py, preload.py, sd_forge_lora/networks.py, ...) and joycaption_lib/
+step ruff:extensions "${RUFF[@]}" check extensions-builtin/*/scripts extensions-builtin/*/lib_* extensions-builtin/*/*.py extensions-builtin/sd-webui-joycaption-modified/joycaption_lib
 # The upstream-origin runtime Remi edits (legacy rules); modules_forge/packages is vendored as is.
 step ruff:core "${RUFF[@]}" check modules modules_forge backend scripts launch.py webui.py --extend-exclude modules_forge/packages
 step ruff:syntax "${RUFF[@]}" check . --select E9,TID251 --output-format concise
@@ -334,6 +340,18 @@ echo "Legacy: ${LEGACY_PY:-none found}"
 echo "Logs:   $LOGS"
 if [ ${#NAMES[@]} -eq 0 ]; then
   echo "No step matched --only/--skip." >&2
+  exit 2
+fi
+unmatched=() # a mistyped item (--only ruff,pytset) would otherwise just leave its steps out
+for item in ${ONLY//,/ } ${SKIP//,/ }; do
+  found=0
+  for name in "${DECLARED[@]}"; do
+    if matches "$name" "$item"; then found=1; break; fi
+  done
+  [ $found = 1 ] || unmatched+=("$item")
+done
+if [ ${#unmatched[@]} -gt 0 ]; then
+  echo "No step is named (or prefixed) ${unmatched[*]} (see --list)." >&2
   exit 2
 fi
 if [ $skipped -gt 0 ]; then
