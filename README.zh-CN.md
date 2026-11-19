@@ -8,7 +8,7 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Branch: remi](https://img.shields.io/badge/branch-remi-8A2BE2)](https://github.com/beautifulrem/sd-webui-forge-classic/tree/remi)
+[![Branch: remi](https://img.shields.io/badge/branch-remi-8A2BE2)](https://github.com/beautifulrem/forge-neo-remi/tree/remi)
 [![Upstream: Forge Neo](https://img.shields.io/badge/upstream-Forge%20Neo-2ea44f)](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo)
 
 
@@ -49,7 +49,7 @@ Forge Neo Remi 是 [Forge Neo](https://github.com/Haoming02/sd-webui-forge-class
 需要 [Git](https://git-scm.com/downloads)、[Python 3.13](https://www.python.org/downloads/) 或 [uv](https://docs.astral.sh/uv/)、受支持的 PyTorch 设备（NVIDIA GPU 是测试最充分的选择；Apple Silicon 可通过 MPS 运行），以及用于构建网页界面的 [Node.js](https://nodejs.org/) 20.19+ 或 22.12+。
 
 ```bash
-git clone --branch remi https://github.com/beautifulrem/sd-webui-forge-classic.git forge-neo-remi
+git clone --branch remi https://github.com/beautifulrem/forge-neo-remi.git forge-neo-remi
 cd forge-neo-remi
 ```
 
@@ -103,7 +103,7 @@ checkpoint、VAE 和文本编码器的放置方式请参考上游[模型下载�
 - 启动参数和相关生成参数
 - 完整控制台 traceback、界面问题的浏览器控制台输出，或最小复现
 
-Remi 特有问题请提交到 [Remi Issues](https://github.com/beautifulrem/sd-webui-forge-classic/issues)。仅与上游有关的问题，请先在 [Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo) 中复现后再向上游反馈。
+Remi 特有问题请提交到 [Remi Issues](https://github.com/beautifulrem/forge-neo-remi/issues)。仅与上游有关的问题，请先在 [Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo) 中复现后再向上游反馈。
 
 贡献代码时请保持功能隔离，不改变非 Anima 行为；修改共享采样或模型加载路径时请增加回归测试，并记录界面与运行时的冲突语义。`tools/check.sh` 会运行全部检查（Python 与前端测试、lint、类型检查、构建）。
 

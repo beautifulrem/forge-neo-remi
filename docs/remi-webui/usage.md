@@ -87,7 +87,7 @@ Read the [Remi Anima generation and parameter guide](../remi-anima-generation-gu
 ### Install and run
 
 ```bash
-git clone --branch remi https://github.com/beautifulrem/sd-webui-forge-classic.git forge-neo-remi
+git clone --branch remi https://github.com/beautifulrem/forge-neo-remi.git forge-neo-remi
 cd forge-neo-remi
 ```
 
