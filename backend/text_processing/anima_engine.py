@@ -21,7 +21,7 @@ class PromptChunk:
 
 
 class Qwen06Engine:
-    def __init__(self, text_encoder, qwen_tokenizer, t5_tokenizer):
+    def __init__(self, text_encoder, qwen_tokenizer, t5_tokenizer, semantic_encoder=None, semantic_tokenizer=None, semantic_layers=None):
         self.text_encoder: "Qwen3_06B" = text_encoder
         self.clip_model = SDClipModel(
             text_encoder,
@@ -39,6 +39,12 @@ class Qwen06Engine:
 
         self.id_pad = 151643
         self.id_end = 1
+
+        # Remi: Anima-3.8B's Qwen3.5 4B (backend.nn.anima_qwen35) and the layers its semantic
+        # connector reads; None for the other Anima models
+        self.semantic_encoder = semantic_encoder
+        self.semantic_tokenizer = semantic_tokenizer
+        self.semantic_layers = tuple(semantic_layers or ())
 
     @property
     def emphasis(self):
@@ -96,7 +102,13 @@ class Qwen06Engine:
 
         return chunks
 
-    def __call__(self, texts):
+    def uses_semantic(self, negative: bool = False) -> bool:
+        """Whether prompts are encoded for Anima-3.8B's semantic connector (the negative
+        prompt only with the ``anima_semantic_negative`` setting)."""
+
+        return self.semantic_encoder is not None and (not negative or bool(getattr(opts, "anima_semantic_negative", False)))
+
+    def __call__(self, texts, semantic: bool = False):
         if any(emphasis.uses_emphasis(x) for x in texts):
             dynamic_args.last_extra_generation_params["Emphasis"] = self.emphasis.name
 
@@ -119,6 +131,8 @@ class Qwen06Engine:
                     mul = torch.tensor(chunk.t5_multipliers)
 
                 cond = self.anima_preprocess(z, tok, mul)
+                if semantic:
+                    cond = {"crossattn": cond, **self.semantic_inputs(line, z, tok, mul)}
                 cache[line] = cond
 
             zs.append(cond)
@@ -140,6 +154,33 @@ class Qwen06Engine:
             cross_attn = torch.nn.functional.pad(cross_attn, (0, 0, 0, 512 - cross_attn.shape[1]))
 
         return cross_attn
+
+    def semantic_text(self, line: str) -> str:
+        """The prompt as Qwen3.5 reads it: the text without emphasis syntax, BREAK as a space."""
+
+        parsed = parsing.parse_prompt_attention(line, self.emphasis.name)
+        return "".join(" " if text == "BREAK" and weight == -1 else text for text, weight in parsed)
+
+    def semantic_tokens(self, line: str) -> list[int]:
+        # As the connector was trained: no special tokens, at most 1024 tokens, never empty
+        ids = self.semantic_tokenizer.encode(self.semantic_text(line), add_special_tokens=False).ids[:1024]
+        return ids or [self.id_pad]
+
+    def semantic_inputs(self, line: str, source: torch.Tensor, t5_ids: torch.Tensor, t5_weights: torch.Tensor) -> dict[str, torch.Tensor]:
+        """What ``Anima.semantic_context`` needs besides the timestep, per prompt: the Qwen3 0.6B
+        states, the T5 ids and weights, and the Qwen3.5 layers (stacked) with their mask."""
+
+        device = memory_management.text_encoder_device()
+        ids = torch.tensor([self.semantic_tokens(line)], dtype=torch.long, device=device)
+        layers = self.semantic_encoder(ids, self.semantic_layers, dtype=self.semantic_encoder.embed_tokens.weight.dtype)
+        semantic = torch.stack(layers, dim=1)[0]
+        return {
+            "anima_source": source.to(device),
+            "anima_ids": t5_ids.to(device=device, dtype=torch.long),
+            "anima_weights": t5_weights.to(device=device, dtype=source.dtype),
+            "anima_semantic": semantic.to(source.dtype),
+            "anima_semantic_mask": torch.ones(semantic.shape[1], dtype=torch.long, device=device),
+        }
 
     def process_embeds(self, batch_tokens):
         return self.clip_model.process_tokens(batch_tokens, memory_management.text_encoder_device())

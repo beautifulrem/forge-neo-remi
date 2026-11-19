@@ -104,9 +104,15 @@ def _hook_get_learned_conditioning(model: "AnimaEngine", remove: bool):
 
         crossattn = []
         negpip_mask = []
+        extras = []
         _count = 0
 
         for line, cond in zip(prompt, conds):
+            # Anima-3.8B: the semantic connector's inputs ride along with the context
+            # (its context is rebuilt at every step and then takes the same mask)
+            extras.append({key: value for key, value in cond.items() if key != "crossattn"} if isinstance(cond, dict) else {})
+            if isinstance(cond, dict):
+                cond = cond["crossattn"]
             assert isinstance(cond, torch.Tensor)
 
             cond_data = cond.reshape(-1, cond.shape[-1])
@@ -129,6 +135,9 @@ def _hook_get_learned_conditioning(model: "AnimaEngine", remove: bool):
             _NEGATIVES_SEEN[0] = True
             key = "Negative" if prompt.is_negative_prompt else "Positive"
             logger.info("NegPiP Enable (%s: %d)", key, _count)
+
+        if any(extras):
+            return [{"crossattn": cond, "c_negpip_mask": mask, **extra} for cond, mask, extra in zip(crossattn, negpip_mask, extras)]
 
         # Prompts are padded to max(512, tokens), so lengths can differ; then
         # keep per-prompt lists like the unhooked engine (prompt_parser indexes
@@ -300,6 +309,9 @@ def _hook_compile_conditions(remove: bool):
                 model_conds["c_negpip_mask"] = condition.ConditionCrossAttn(
                     cond["c_negpip_mask"]
                 )
+            for key, value in cond.items():  # Anima-3.8B's connector inputs
+                if key not in ("crossattn", "c_negpip_mask") and isinstance(value, torch.Tensor):
+                    model_conds[key] = condition.Condition(value)
             return [dict(cross_attn=cross_attn, model_conds=model_conds)]
 
         return original(cond)

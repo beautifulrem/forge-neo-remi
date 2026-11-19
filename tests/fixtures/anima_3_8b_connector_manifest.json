@@ -1,0 +1,1125 @@
+{
+"source": "lylogummy/Anima-3.8B v1.1 (Anima-3.8B-v1.1.safetensors): the LLM adapter and Semantic Connector v2 tensors, and the block count",
+"metadata": {
+"architecture": "anima_3_8b_semantic_connector_v2_bundle",
+"anima_v2_adapter_architecture": "anima_qwen35_quality_anchored_semantic_connector_v2",
+"anima_v2_adapter_layer_indices": "[7, 15, 23, 31]",
+"anima_v2_adapter_semantic_resampler_heads": "16",
+"anima_v2_connector_prefix": "net.anima_v2_connector.",
+"new_block_count": "52",
+"old_block_count": "40",
+"insertion_positions": "[3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47]",
+"inserted_to_source": "{\"3\": 2, \"7\": 5, \"11\": 8, \"15\": 11, \"19\": 14, \"23\": 17, \"27\": 20, \"31\": 23, \"35\": 26, \"39\": 29, \"43\": 32, \"47\": 35}"
+},
+"blocks": 52,
+"tensors": {
+"anima_v2_connector.quality_anchor.layer_mix_logits": [
+6,
+4
+],
+"anima_v2_connector.quality_anchor.query_norms.0.weight": [
+1024
+],
+"anima_v2_connector.quality_anchor.query_norms.1.weight": [
+1024
+],
+"anima_v2_connector.quality_anchor.query_norms.2.weight": [
+1024
+],
+"anima_v2_connector.quality_anchor.query_norms.3.weight": [
+1024
+],
+"anima_v2_connector.quality_anchor.query_norms.4.weight": [
+1024
+],
+"anima_v2_connector.quality_anchor.query_norms.5.weight": [
+1024
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.0.k_norm.weight": [
+64
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.0.k_proj.weight": [
+1024,
+2560
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.0.o_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.0.q_norm.weight": [
+64
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.0.q_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.0.v_proj.weight": [
+1024,
+2560
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.1.k_norm.weight": [
+64
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.1.k_proj.weight": [
+1024,
+2560
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.1.o_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.1.q_norm.weight": [
+64
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.1.q_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.1.v_proj.weight": [
+1024,
+2560
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.2.k_norm.weight": [
+64
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.2.k_proj.weight": [
+1024,
+2560
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.2.o_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.2.q_norm.weight": [
+64
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.2.q_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.2.v_proj.weight": [
+1024,
+2560
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.3.k_norm.weight": [
+64
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.3.k_proj.weight": [
+1024,
+2560
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.3.o_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.3.q_norm.weight": [
+64
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.3.q_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.3.v_proj.weight": [
+1024,
+2560
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.4.k_norm.weight": [
+64
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.4.k_proj.weight": [
+1024,
+2560
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.4.o_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.4.q_norm.weight": [
+64
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.4.q_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.4.v_proj.weight": [
+1024,
+2560
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.5.k_norm.weight": [
+64
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.5.k_proj.weight": [
+1024,
+2560
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.5.o_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.5.q_norm.weight": [
+64
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.5.q_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.quality_anchor.semantic_attentions.5.v_proj.weight": [
+1024,
+2560
+],
+"anima_v2_connector.quality_anchor.source_norms.0.weight": [
+2560
+],
+"anima_v2_connector.quality_anchor.source_norms.1.weight": [
+2560
+],
+"anima_v2_connector.quality_anchor.source_norms.2.weight": [
+2560
+],
+"anima_v2_connector.quality_anchor.source_norms.3.weight": [
+2560
+],
+"anima_v2_connector.quality_anchor.source_norms.4.weight": [
+2560
+],
+"anima_v2_connector.quality_anchor.source_norms.5.weight": [
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.0.cross_attention.k_proj.weight": [
+2048,
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.0.cross_attention.o_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.0.cross_attention.q_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.0.cross_attention.v_proj.weight": [
+2048,
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.0.mlp_in.weight": [
+11264,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.0.mlp_out.weight": [
+2048,
+5632
+],
+"anima_v2_connector.semantic_resampler.blocks.0.self_attention.k_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.0.self_attention.o_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.0.self_attention.q_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.0.self_attention.v_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.0.source_norm.bias": [
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.0.source_norm.weight": [
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.0.time_modulation.bias": [
+12288
+],
+"anima_v2_connector.semantic_resampler.blocks.0.time_modulation.weight": [
+12288,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.1.cross_attention.k_proj.weight": [
+2048,
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.1.cross_attention.o_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.1.cross_attention.q_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.1.cross_attention.v_proj.weight": [
+2048,
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.1.mlp_in.weight": [
+11264,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.1.mlp_out.weight": [
+2048,
+5632
+],
+"anima_v2_connector.semantic_resampler.blocks.1.self_attention.k_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.1.self_attention.o_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.1.self_attention.q_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.1.self_attention.v_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.1.source_norm.bias": [
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.1.source_norm.weight": [
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.1.time_modulation.bias": [
+12288
+],
+"anima_v2_connector.semantic_resampler.blocks.1.time_modulation.weight": [
+12288,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.2.cross_attention.k_proj.weight": [
+2048,
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.2.cross_attention.o_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.2.cross_attention.q_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.2.cross_attention.v_proj.weight": [
+2048,
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.2.mlp_in.weight": [
+11264,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.2.mlp_out.weight": [
+2048,
+5632
+],
+"anima_v2_connector.semantic_resampler.blocks.2.self_attention.k_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.2.self_attention.o_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.2.self_attention.q_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.2.self_attention.v_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.2.source_norm.bias": [
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.2.source_norm.weight": [
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.2.time_modulation.bias": [
+12288
+],
+"anima_v2_connector.semantic_resampler.blocks.2.time_modulation.weight": [
+12288,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.3.cross_attention.k_proj.weight": [
+2048,
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.3.cross_attention.o_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.3.cross_attention.q_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.3.cross_attention.v_proj.weight": [
+2048,
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.3.mlp_in.weight": [
+11264,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.3.mlp_out.weight": [
+2048,
+5632
+],
+"anima_v2_connector.semantic_resampler.blocks.3.self_attention.k_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.3.self_attention.o_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.3.self_attention.q_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.3.self_attention.v_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.3.source_norm.bias": [
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.3.source_norm.weight": [
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.3.time_modulation.bias": [
+12288
+],
+"anima_v2_connector.semantic_resampler.blocks.3.time_modulation.weight": [
+12288,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.4.cross_attention.k_proj.weight": [
+2048,
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.4.cross_attention.o_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.4.cross_attention.q_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.4.cross_attention.v_proj.weight": [
+2048,
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.4.mlp_in.weight": [
+11264,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.4.mlp_out.weight": [
+2048,
+5632
+],
+"anima_v2_connector.semantic_resampler.blocks.4.self_attention.k_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.4.self_attention.o_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.4.self_attention.q_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.4.self_attention.v_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.4.source_norm.bias": [
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.4.source_norm.weight": [
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.4.time_modulation.bias": [
+12288
+],
+"anima_v2_connector.semantic_resampler.blocks.4.time_modulation.weight": [
+12288,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.5.cross_attention.k_proj.weight": [
+2048,
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.5.cross_attention.o_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.5.cross_attention.q_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.5.cross_attention.v_proj.weight": [
+2048,
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.5.mlp_in.weight": [
+11264,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.5.mlp_out.weight": [
+2048,
+5632
+],
+"anima_v2_connector.semantic_resampler.blocks.5.self_attention.k_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.5.self_attention.o_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.5.self_attention.q_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.5.self_attention.v_proj.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.blocks.5.source_norm.bias": [
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.5.source_norm.weight": [
+2560
+],
+"anima_v2_connector.semantic_resampler.blocks.5.time_modulation.bias": [
+12288
+],
+"anima_v2_connector.semantic_resampler.blocks.5.time_modulation.weight": [
+12288,
+2048
+],
+"anima_v2_connector.semantic_resampler.layer_embeddings": [
+4,
+1,
+2560
+],
+"anima_v2_connector.semantic_resampler.output_norm.bias": [
+2048
+],
+"anima_v2_connector.semantic_resampler.output_norm.weight": [
+2048
+],
+"anima_v2_connector.semantic_resampler.output_projection.weight": [
+1024,
+2048
+],
+"anima_v2_connector.semantic_resampler.query_tokens": [
+1,
+64,
+2048
+],
+"anima_v2_connector.semantic_resampler.time_mlp.0.bias": [
+2048
+],
+"anima_v2_connector.semantic_resampler.time_mlp.0.weight": [
+2048,
+2048
+],
+"anima_v2_connector.semantic_resampler.time_mlp.2.bias": [
+2048
+],
+"anima_v2_connector.semantic_resampler.time_mlp.2.weight": [
+2048,
+2048
+],
+"anima_v2_connector.v2_attentions.0.k_norm.weight": [
+64
+],
+"anima_v2_connector.v2_attentions.0.k_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.0.o_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.0.q_norm.weight": [
+64
+],
+"anima_v2_connector.v2_attentions.0.q_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.0.v_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.1.k_norm.weight": [
+64
+],
+"anima_v2_connector.v2_attentions.1.k_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.1.o_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.1.q_norm.weight": [
+64
+],
+"anima_v2_connector.v2_attentions.1.q_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.1.v_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.2.k_norm.weight": [
+64
+],
+"anima_v2_connector.v2_attentions.2.k_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.2.o_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.2.q_norm.weight": [
+64
+],
+"anima_v2_connector.v2_attentions.2.q_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.2.v_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.3.k_norm.weight": [
+64
+],
+"anima_v2_connector.v2_attentions.3.k_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.3.o_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.3.q_norm.weight": [
+64
+],
+"anima_v2_connector.v2_attentions.3.q_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.3.v_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.4.k_norm.weight": [
+64
+],
+"anima_v2_connector.v2_attentions.4.k_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.4.o_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.4.q_norm.weight": [
+64
+],
+"anima_v2_connector.v2_attentions.4.q_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.4.v_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.5.k_norm.weight": [
+64
+],
+"anima_v2_connector.v2_attentions.5.k_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.5.o_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.5.q_norm.weight": [
+64
+],
+"anima_v2_connector.v2_attentions.5.q_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_attentions.5.v_proj.weight": [
+1024,
+1024
+],
+"anima_v2_connector.v2_query_norms.0.weight": [
+1024
+],
+"anima_v2_connector.v2_query_norms.1.weight": [
+1024
+],
+"anima_v2_connector.v2_query_norms.2.weight": [
+1024
+],
+"anima_v2_connector.v2_query_norms.3.weight": [
+1024
+],
+"anima_v2_connector.v2_query_norms.4.weight": [
+1024
+],
+"anima_v2_connector.v2_query_norms.5.weight": [
+1024
+],
+"anima_v2_connector.v2_semantic_norms.0.weight": [
+1024
+],
+"anima_v2_connector.v2_semantic_norms.1.weight": [
+1024
+],
+"anima_v2_connector.v2_semantic_norms.2.weight": [
+1024
+],
+"anima_v2_connector.v2_semantic_norms.3.weight": [
+1024
+],
+"anima_v2_connector.v2_semantic_norms.4.weight": [
+1024
+],
+"anima_v2_connector.v2_semantic_norms.5.weight": [
+1024
+],
+"llm_adapter.blocks.0.cross_attn.k_norm.weight": [
+64
+],
+"llm_adapter.blocks.0.cross_attn.k_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.0.cross_attn.o_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.0.cross_attn.q_norm.weight": [
+64
+],
+"llm_adapter.blocks.0.cross_attn.q_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.0.cross_attn.v_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.0.mlp.0.bias": [
+4096
+],
+"llm_adapter.blocks.0.mlp.0.weight": [
+4096,
+1024
+],
+"llm_adapter.blocks.0.mlp.2.bias": [
+1024
+],
+"llm_adapter.blocks.0.mlp.2.weight": [
+1024,
+4096
+],
+"llm_adapter.blocks.0.norm_cross_attn.weight": [
+1024
+],
+"llm_adapter.blocks.0.norm_mlp.weight": [
+1024
+],
+"llm_adapter.blocks.0.norm_self_attn.weight": [
+1024
+],
+"llm_adapter.blocks.0.self_attn.k_norm.weight": [
+64
+],
+"llm_adapter.blocks.0.self_attn.k_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.0.self_attn.o_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.0.self_attn.q_norm.weight": [
+64
+],
+"llm_adapter.blocks.0.self_attn.q_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.0.self_attn.v_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.1.cross_attn.k_norm.weight": [
+64
+],
+"llm_adapter.blocks.1.cross_attn.k_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.1.cross_attn.o_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.1.cross_attn.q_norm.weight": [
+64
+],
+"llm_adapter.blocks.1.cross_attn.q_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.1.cross_attn.v_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.1.mlp.0.bias": [
+4096
+],
+"llm_adapter.blocks.1.mlp.0.weight": [
+4096,
+1024
+],
+"llm_adapter.blocks.1.mlp.2.bias": [
+1024
+],
+"llm_adapter.blocks.1.mlp.2.weight": [
+1024,
+4096
+],
+"llm_adapter.blocks.1.norm_cross_attn.weight": [
+1024
+],
+"llm_adapter.blocks.1.norm_mlp.weight": [
+1024
+],
+"llm_adapter.blocks.1.norm_self_attn.weight": [
+1024
+],
+"llm_adapter.blocks.1.self_attn.k_norm.weight": [
+64
+],
+"llm_adapter.blocks.1.self_attn.k_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.1.self_attn.o_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.1.self_attn.q_norm.weight": [
+64
+],
+"llm_adapter.blocks.1.self_attn.q_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.1.self_attn.v_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.2.cross_attn.k_norm.weight": [
+64
+],
+"llm_adapter.blocks.2.cross_attn.k_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.2.cross_attn.o_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.2.cross_attn.q_norm.weight": [
+64
+],
+"llm_adapter.blocks.2.cross_attn.q_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.2.cross_attn.v_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.2.mlp.0.bias": [
+4096
+],
+"llm_adapter.blocks.2.mlp.0.weight": [
+4096,
+1024
+],
+"llm_adapter.blocks.2.mlp.2.bias": [
+1024
+],
+"llm_adapter.blocks.2.mlp.2.weight": [
+1024,
+4096
+],
+"llm_adapter.blocks.2.norm_cross_attn.weight": [
+1024
+],
+"llm_adapter.blocks.2.norm_mlp.weight": [
+1024
+],
+"llm_adapter.blocks.2.norm_self_attn.weight": [
+1024
+],
+"llm_adapter.blocks.2.self_attn.k_norm.weight": [
+64
+],
+"llm_adapter.blocks.2.self_attn.k_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.2.self_attn.o_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.2.self_attn.q_norm.weight": [
+64
+],
+"llm_adapter.blocks.2.self_attn.q_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.2.self_attn.v_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.3.cross_attn.k_norm.weight": [
+64
+],
+"llm_adapter.blocks.3.cross_attn.k_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.3.cross_attn.o_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.3.cross_attn.q_norm.weight": [
+64
+],
+"llm_adapter.blocks.3.cross_attn.q_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.3.cross_attn.v_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.3.mlp.0.bias": [
+4096
+],
+"llm_adapter.blocks.3.mlp.0.weight": [
+4096,
+1024
+],
+"llm_adapter.blocks.3.mlp.2.bias": [
+1024
+],
+"llm_adapter.blocks.3.mlp.2.weight": [
+1024,
+4096
+],
+"llm_adapter.blocks.3.norm_cross_attn.weight": [
+1024
+],
+"llm_adapter.blocks.3.norm_mlp.weight": [
+1024
+],
+"llm_adapter.blocks.3.norm_self_attn.weight": [
+1024
+],
+"llm_adapter.blocks.3.self_attn.k_norm.weight": [
+64
+],
+"llm_adapter.blocks.3.self_attn.k_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.3.self_attn.o_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.3.self_attn.q_norm.weight": [
+64
+],
+"llm_adapter.blocks.3.self_attn.q_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.3.self_attn.v_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.4.cross_attn.k_norm.weight": [
+64
+],
+"llm_adapter.blocks.4.cross_attn.k_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.4.cross_attn.o_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.4.cross_attn.q_norm.weight": [
+64
+],
+"llm_adapter.blocks.4.cross_attn.q_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.4.cross_attn.v_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.4.mlp.0.bias": [
+4096
+],
+"llm_adapter.blocks.4.mlp.0.weight": [
+4096,
+1024
+],
+"llm_adapter.blocks.4.mlp.2.bias": [
+1024
+],
+"llm_adapter.blocks.4.mlp.2.weight": [
+1024,
+4096
+],
+"llm_adapter.blocks.4.norm_cross_attn.weight": [
+1024
+],
+"llm_adapter.blocks.4.norm_mlp.weight": [
+1024
+],
+"llm_adapter.blocks.4.norm_self_attn.weight": [
+1024
+],
+"llm_adapter.blocks.4.self_attn.k_norm.weight": [
+64
+],
+"llm_adapter.blocks.4.self_attn.k_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.4.self_attn.o_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.4.self_attn.q_norm.weight": [
+64
+],
+"llm_adapter.blocks.4.self_attn.q_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.4.self_attn.v_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.5.cross_attn.k_norm.weight": [
+64
+],
+"llm_adapter.blocks.5.cross_attn.k_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.5.cross_attn.o_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.5.cross_attn.q_norm.weight": [
+64
+],
+"llm_adapter.blocks.5.cross_attn.q_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.5.cross_attn.v_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.5.mlp.0.bias": [
+4096
+],
+"llm_adapter.blocks.5.mlp.0.weight": [
+4096,
+1024
+],
+"llm_adapter.blocks.5.mlp.2.bias": [
+1024
+],
+"llm_adapter.blocks.5.mlp.2.weight": [
+1024,
+4096
+],
+"llm_adapter.blocks.5.norm_cross_attn.weight": [
+1024
+],
+"llm_adapter.blocks.5.norm_mlp.weight": [
+1024
+],
+"llm_adapter.blocks.5.norm_self_attn.weight": [
+1024
+],
+"llm_adapter.blocks.5.self_attn.k_norm.weight": [
+64
+],
+"llm_adapter.blocks.5.self_attn.k_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.5.self_attn.o_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.5.self_attn.q_norm.weight": [
+64
+],
+"llm_adapter.blocks.5.self_attn.q_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.blocks.5.self_attn.v_proj.weight": [
+1024,
+1024
+],
+"llm_adapter.embed.weight": [
+32128,
+1024
+],
+"llm_adapter.norm.weight": [
+1024
+],
+"llm_adapter.out_proj.bias": [
+1024
+],
+"llm_adapter.out_proj.weight": [
+1024,
+1024
+]
+}
+}

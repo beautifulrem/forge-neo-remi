@@ -113,3 +113,34 @@ def test_zh_cn_covers_the_panel(multidiffusion):
 
 def test_imports_standalone():
     harness.assert_imports_standalone([SCRIPT], preimport=PREIMPORT)
+
+
+def test_each_tile_gets_the_anima_tensors_of_its_prompts(multidiffusion, monkeypatch):
+    """Tiles are batched (x, timesteps and the context repeated per tile): Anima-3.8B's connector
+    inputs and NegPiP's mask must be repeated the same way, or the DiT gets the untiled batch."""
+    import torch
+    from lib_multidiffusion import tiled_diffusion
+
+    monkeypatch.setattr(tiled_diffusion, "opt_f", 8)  # set by the script when it runs
+    diffusion = tiled_diffusion.MultiDiffusion()
+    diffusion.tile_width = diffusion.tile_height = 16
+    diffusion.tile_overlap, diffusion.tile_batch_size = 0, 4
+    device = tiled_diffusion._dev  # where the tile weights live
+    x = torch.randn(2, 16, 1, 32, 32, device=device)
+    c = {
+        "c_crossattn": torch.randn(2, 8, 4, device=device),
+        "anima_ids": torch.arange(10, device=device).reshape(2, 5),
+        "anima_semantic": torch.randn(2, 4, 3, 6, device=device),
+        "c_negpip_mask": torch.ones(2, 8, 1, device=device),
+    }
+    seen = []
+
+    def model(x_tile, t_tile, **c_tile):
+        seen.append({key: value.shape[0] for key, value in c_tile.items()} | {"x": x_tile.shape[0]})
+        for key in ("anima_ids", "c_crossattn"):
+            assert torch.equal(c_tile[key][: len(c[key])], c[key])  # the prompts' order, per tile
+        return x_tile
+
+    diffusion(model, {"input": x, "timestep": torch.ones(2, device=device), "c": c, "cond_or_uncond": [0, 1]})
+
+    assert seen and all(len(set(batch.values())) == 1 for batch in seen), seen

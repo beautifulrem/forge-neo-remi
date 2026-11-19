@@ -191,8 +191,13 @@ def has_untagged_patches(patcher) -> bool:
     )
 
 
+_WEIGHT_EXTENSIONS = (".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".gguf")
+
+
 def _normalized_name(value: str) -> str:
-    return os.path.splitext(os.path.basename(str(value).strip()))[0].casefold()
+    # Only a weight file's extension: "v0.2" in "anima-turbo-lora-v0.2" is part of the name
+    name = os.path.basename(str(value).strip()).casefold()
+    return next((name[: -len(ext)] for ext in _WEIGHT_EXTENSIONS if name.endswith(ext)), name)
 
 
 def _selector_matches(selector: str, filename: str | None) -> bool:

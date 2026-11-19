@@ -112,3 +112,30 @@ def test_a_locked_sampler_keeps_its_scheduler_when_the_user_hides_it(monkeypatch
     assert torch.equal(sigmas, _GRID)
     assert p.extra_generation_params["Schedule type"] == "Anima FlowMatch"
     assert caplog.records == []
+
+
+@pytest.mark.parametrize(("prediction", "scheduler", "noted"), [("const", "Karras", True), ("const", "Anima FlowMatch", False), ("epsilon", "Karras", False), (None, "Karras", False)])
+def test_a_ve_scheduler_on_a_flow_model_leaves_a_note(prediction, scheduler, noted):
+    # Karras & co. space their steps for SD's noise scale (up to ~14.6); a flow model's runs to 1,
+    # so most steps land at tiny sigmas and the image washes out: the job says so
+    comments = []
+    p = SimpleNamespace(is_hr_pass=False, scheduler=scheduler, extra_generation_params={}, sampler_noise_scheduler_override=None, comment=comments.append)
+    model_wrap = SimpleNamespace(sigmas=torch.tensor([0.003, 1.0]))
+    if prediction is not None:
+        model_wrap.predictor = SimpleNamespace(prediction_type=prediction)
+
+    get_sigmas(SimpleNamespace(config=SimpleNamespace(options={}), model_wrap=model_wrap), p, 2)
+
+    assert len(comments) == int(noted)
+    if noted:
+        assert "Karras" in comments[0] and "flow-matching" in comments[0]
+
+
+def test_every_ve_scheduler_is_a_registered_label():
+    import re
+
+    from modules.anima_feature_conflicts import VE_SCHEDULERS
+
+    source = (_SOURCE.parent / "sd_schedulers.py").read_text(encoding="utf-8")
+    labels = set(re.findall(r'Scheduler\("\w+", "([^"]+)"', source))
+    assert VE_SCHEDULERS and VE_SCHEDULERS <= labels

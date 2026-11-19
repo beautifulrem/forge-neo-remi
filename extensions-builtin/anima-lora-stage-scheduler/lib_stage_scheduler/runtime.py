@@ -6,7 +6,7 @@ import weakref
 import uuid
 from dataclasses import dataclass, field
 
-from modules.anima_lora_files import adapter_kind_for_file, is_anima_adapter_file, lora_coverage
+from modules.anima_lora_files import adapter_kind_for_file, is_anima_adapter_file, lora_file_depth
 from modules.anima_online_lora import acquire_online_lora, online_lora_leased_by_other_than, release_online_lora, user_online_lora
 from modules.anima_lora_support import (
     LORA_TAG_RE,
@@ -25,7 +25,6 @@ from modules.anima_lora_support import (
     parse_targets as _parse_targets,
     resolve_network,
     active_template_parts,
-    anima_lora_block_count,
     current_sampling_position,
     model_key as _model_key,
 )
@@ -125,7 +124,7 @@ def _lora_block_count(filename) -> int | None:
     """The Anima depth (28/40/52) a LoRA file was trained for."""
     if not filename:
         return None
-    return anima_lora_block_count(lora_coverage(filename, adapter_kind_for_file(filename) or "lora").blocks)
+    return lora_file_depth(filename)
 
 
 def _resolve_lora_filename(name: str, misses: set[str] | None = None):

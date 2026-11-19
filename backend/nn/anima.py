@@ -6,7 +6,7 @@
 # References: https://github.com/nvidia-cosmos/cosmos-predict2
 
 import math
-from typing import Callable, Final, Optional
+from typing import Callable, Optional
 
 import torch
 from einops import rearrange, repeat
@@ -17,6 +17,7 @@ from torchvision.transforms import InterpolationMode, functional
 from backend.args import dynamic_args
 from backend.attention import attention_function
 from backend.memory_management import is_device_mps
+from backend.nn import anima_layout
 from backend.nn.anima_attention import ANIMA_ATTENTION_MODIFIERS, ANIMA_PROJECT_KV, run_anima_attention
 from backend.operations import (
     main_stream_worker,
@@ -26,11 +27,8 @@ from backend.operations import (
 from backend.quant_ops import ck
 from backend.utils import pad_to_patch_size
 
-BLOCK_MAPPINGS: Final[dict[tuple[int, int], list[int]]] = {
-    (28, 40): [0, 1, 1, 2, 3, 3, 4, 5, 5, 6, 7, 7, 8, 9, 9, 10, 11, 11, 12, 13, 14, 14, 15, 16, 16, 17, 18, 18, 19, 20, 20, 21, 22, 22, 23, 24, 24, 25, 26, 27],
-    (28, 52): [0, 1, 1, 1, 2, 3, 3, 3, 4, 5, 5, 5, 6, 7, 7, 7, 8, 9, 9, 9, 10, 11, 11, 11, 12, 13, 14, 14, 14, 15, 16, 16, 16, 17, 18, 18, 18, 19, 20, 20, 20, 21, 22, 22, 22, 23, 24, 24, 24, 25, 26, 27],
-    (40, 52): [0, 1, 2, 2, 3, 4, 5, 5, 6, 7, 8, 8, 9, 10, 11, 11, 12, 13, 14, 14, 15, 16, 17, 17, 18, 19, 20, 20, 21, 22, 23, 23, 24, 25, 26, 26, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 35, 35, 36, 37, 38, 39],
-}
+# Expanded Anima depths (2.9B, 3.8B): see backend.nn.anima_layout
+BLOCK_MAPPINGS = anima_layout.BLOCK_MAPPINGS
 
 
 _FUSED_ADALN_BACKENDS: dict[tuple, bool] = {}
@@ -238,6 +236,12 @@ class SelfCrossAttention(nn.Module):
         """Cross-attention K/V for ``context``; compute_qkv takes its K/V from here
         (``value_context`` as there: V from another context, for NegPiP)."""
         heads = (self.n_heads, self.head_dim)
+        # Remi: a stack of per-prompt contexts is [B, 1, tokens, dim] (see Anima.forward); NAG and
+        # NegPiP project their own contexts through here
+        if context.ndim == 4:
+            context = context.flatten(1, 2)
+        if value_context is not None and value_context.ndim == 4:
+            value_context = value_context.flatten(1, 2)
         k = self.k_norm(self.k_proj(context).unflatten(-1, heads))
         v = self.v_norm(self.v_proj(context if value_context is None else value_context).unflatten(-1, heads))
         return k, v
@@ -489,6 +493,7 @@ class Anima(nn.Module):
         rope_w_extrapolation_ratio: float = 1.0,
         rope_t_extrapolation_ratio: float = 1.0,
         mlp_ratio: float = 4.0,
+        semantic_connector: Optional[dict] = None,
     ):
         super().__init__()
 
@@ -540,6 +545,44 @@ class Anima(nn.Module):
 
         self.t_embedding_norm = nn.RMSNorm(model_channels, eps=1e-6)
 
+        # Remi: Anima-3.8B's Semantic Connector v2 (backend.nn.anima_connector) runs the LLM
+        # adapter at every step, so the DiT keeps a copy of it; the text encoder keeps its
+        # own for contexts encoded without the connector (negatives, Regional, NAG).
+        if semantic_connector:
+            from backend.nn.anima_connector import SemanticConnector
+
+            self.llm_adapter = LLMAdapter()
+            self.anima_v2_connector = SemanticConnector(**semantic_connector)
+        else:
+            self.llm_adapter = self.anima_v2_connector = None
+
+    def semantic_context(self, context: torch.Tensor, timesteps: torch.Tensor, kwargs: dict) -> torch.Tensor:
+        """Anima-3.8B: the context of the rows encoded for the connector, recomputed for
+        this step's ``timesteps`` (``anima_semantic`` and co. come from the conditioning,
+        see ``backend.text_processing.anima_engine``); other contexts pass through."""
+
+        semantic = kwargs.get("anima_semantic")
+        if semantic is None:
+            return context
+        if self.anima_v2_connector is None:
+            raise RuntimeError("This prompt was encoded for Anima-3.8B's semantic connector, but the loaded model has none")
+        expanded = self.anima_v2_connector(
+            self.llm_adapter,
+            kwargs["anima_source"],
+            kwargs["anima_ids"].long(),
+            semantic,
+            timesteps.reshape(-1).float(),
+            kwargs.get("anima_semantic_mask"),
+            dtype=context.dtype,
+        )
+        expanded = expanded * kwargs["anima_weights"].unsqueeze(-1).to(expanded)
+        if expanded.shape[1] < context.shape[1]:
+            expanded = nn.functional.pad(expanded, (0, 0, 0, context.shape[1] - expanded.shape[1]))
+        if (negpip := kwargs.get("c_negpip_mask")) is not None and negpip.shape[1] == expanded.shape[1]:
+            # NegPiP sign-restores the encoded context and negates V instead
+            expanded = expanded * negpip.to(expanded)
+        return expanded.to(context.dtype)
+
     def prepare_embedded_sequence(self, x_B_C_T_H_W: torch.Tensor, padding_mask: Optional[torch.Tensor] = None) -> tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
         if padding_mask is None:
             padding_mask = torch.zeros(x_B_C_T_H_W.shape[0], 1, x_B_C_T_H_W.shape[3], x_B_C_T_H_W.shape[4], dtype=x_B_C_T_H_W.dtype, device=x_B_C_T_H_W.device)
@@ -577,7 +620,11 @@ class Anima(nn.Module):
         x = pad_to_patch_size(x, (self.patch_temporal, self.patch_spatial, self.patch_spatial))
         x_B_C_T_H_W = x
         timesteps_B_T = timesteps
-        crossattn_emb = context
+        if context.ndim == 4:
+            # Remi: each prompt's context is [1, tokens, dim], so a stacked batch is [B, 1, tokens, dim];
+            # upstream's attention op flattened the middle dims, Remi's run_anima_attention does not
+            context = context.flatten(1, 2)
+        crossattn_emb = self.semantic_context(context, timesteps, kwargs)
 
         x_B_T_H_W_D, rope_emb_L_1_1_D, extra_pos_emb_None = self.prepare_embedded_sequence(x_B_C_T_H_W, padding_mask=padding_mask)
 

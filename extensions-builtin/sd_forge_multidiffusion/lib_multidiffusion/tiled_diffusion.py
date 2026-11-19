@@ -336,6 +336,10 @@ class MultiDiffusion(AbstractDiffusion):
                 cond_tile = self.repeat_tensor(c_crossattn, n_rep)
                 c_tile = c_in.copy()
                 c_tile["c_crossattn"] = cond_tile
+                # Remi: Anima's per-prompt tensors (3.8B's connector inputs, NegPiP's mask) follow the prompts
+                for key, value in c_in.items():
+                    if key.startswith("anima_") or key == "c_negpip_mask":
+                        c_tile[key] = self.repeat_tensor(value, n_rep)
                 if "time_context" in c_in:
                     c_tile["time_context"] = self.repeat_tensor(c_in["time_context"], n_rep)
                 for key in c_tile:
@@ -457,6 +461,10 @@ class MixtureOfDiffusers(AbstractDiffusion):
                 tcond_tile = self.repeat_tensor(c_crossattn, n_rep)
                 c_tile = c_in.copy()
                 c_tile["c_crossattn"] = tcond_tile
+                # Remi: Anima's per-prompt tensors (3.8B's connector inputs, NegPiP's mask) follow the prompts
+                for key, value in c_in.items():
+                    if key.startswith("anima_") or key == "c_negpip_mask":
+                        c_tile[key] = self.repeat_tensor(value, n_rep)
                 if "time_context" in c_in:
                     c_tile["time_context"] = self.repeat_tensor(c_in["time_context"], n_rep)
                 for key in c_tile:

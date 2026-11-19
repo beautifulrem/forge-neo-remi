@@ -62,6 +62,41 @@ def get_controlnet_filename(controlnet_name: str) -> str:
     return controlnet_filename_dict[controlnet_name]
 
 
+_FAMILY_CACHE: dict[tuple, str] = {}
+
+
+def control_model_family(filename: str | None) -> str:
+    """"anima" for the control models that go on the Anima DiT
+    (ControlNet-LLLite for Anima, Anima control-LoRA), "unet" for the rest
+    (SD / SDXL / Flux ControlNets, T2I adapters, SD LLLite): read from the
+    tensor names of a .safetensors file, cached per file version."""
+
+    if not filename or os.path.splitext(filename)[1].lower() != ".safetensors":
+        return "unet"
+    try:
+        stat = os.stat(filename)
+    except OSError:
+        return "unet"
+    key = (filename, stat.st_mtime_ns, stat.st_size)
+    if (family := _FAMILY_CACHE.get(key)) is None:
+        try:
+            from safetensors import safe_open
+
+            with safe_open(filename, framework="pt", device="cpu") as f:
+                keys = list(f.keys())
+        except Exception:
+            keys = []
+        anima = any(k.startswith("lllite_dit") or k.endswith("control_embedder.proj.weight") for k in keys)
+        family = _FAMILY_CACHE[key] = "anima" if anima else "unet"
+    return family
+
+
+def model_is_anima() -> bool:
+    from backend.args import dynamic_args
+
+    return bool(getattr(dynamic_args, "anima", False))
+
+
 def get_filtered_controlnet_names(tag: str) -> list[str]:
     filename_filters = ["union", "promax", "unicontrol", tag.lower()]
 
@@ -69,7 +104,11 @@ def get_filtered_controlnet_names(tag: str) -> list[str]:
     for p in filtered_preprocessors.values():
         filename_filters.extend(p.model_filename_filters)
 
-    return [cnet for cnet in controlnet_names if cnet == "None" or any(f.lower() in cnet.lower() for f in filename_filters)]
+    names = [cnet for cnet in controlnet_names if cnet == "None" or any(f.lower() in cnet.lower() for f in filename_filters)]
+    # Only the control models the loaded checkpoint can take: an SD ControlNet does nothing on
+    # the Anima DiT, and an Anima LLLite has no blocks to go on in a UNet
+    wanted = "anima" if model_is_anima() else "unet"
+    return [cnet for cnet in names if cnet == "None" or control_model_family(controlnet_filename_dict.get(cnet)) == wanted]
 
 
 def get_all_preprocessor_tags() -> list[str]:

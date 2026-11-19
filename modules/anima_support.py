@@ -227,6 +227,27 @@ def preserved_reference_latents(sd_model):
             sd_model.ini_latent = initial
 
 
+NATIVE_TEXT_ONLY_ATTRIBUTE = "anima_native_text_only"
+
+
+@contextmanager
+def native_text_encoding(sd_model):
+    """Encode with Anima's own text encoder only: Anima-3.8B's semantic connector
+    takes the main prompt (its per-step inputs are a dict, not a context), while
+    the extra prompts of Regional and Artist Mixer are plain contexts."""
+
+    missing = object()
+    previous = getattr(sd_model, NATIVE_TEXT_ONLY_ATTRIBUTE, missing)
+    setattr(sd_model, NATIVE_TEXT_ONLY_ATTRIBUTE, True)
+    try:
+        yield
+    finally:
+        if previous is missing:
+            delattr(sd_model, NATIVE_TEXT_ONLY_ATTRIBUTE)
+        else:
+            setattr(sd_model, NATIVE_TEXT_ONLY_ATTRIBUTE, previous)
+
+
 def conditioning_cache_key(process) -> tuple:
     """What encoding an extra prompt depends on besides its text, for caches
     that outlive one pass (``forge_objects`` is a fresh copy every pass)."""
@@ -264,7 +285,7 @@ def encode_extra_prompts(process, texts):
         height=getattr(process, "height", None),
         distilled_cfg_scale=getattr(process, "distilled_cfg_scale", None),
     )
-    with preserved_reference_latents(process.sd_model):
+    with preserved_reference_latents(process.sd_model), native_text_encoding(process.sd_model):
         conds = process.sd_model.get_learned_conditioning(conditioning)
     if isinstance(conds, (list, tuple)):  # one (1, tokens, dim) tensor per prompt
         conds = _stack_tiled([cond.reshape(-1, cond.shape[-1]) for cond in conds])

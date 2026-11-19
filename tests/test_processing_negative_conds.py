@@ -22,3 +22,14 @@ def test_skips_negative_conds(cfg, keep, skips):
 
     p = types.SimpleNamespace() if keep is None else types.SimpleNamespace(keep_negative_conds=keep)
     assert StableDiffusionProcessing.skips_negative_conds(p, cfg) is skips
+
+
+@pytest.mark.parametrize(("sampler", "skips"), [("Euler", True), ("Euler CFG++", False), ("Euler a CFG++", False), ("DPM++ 2M CFG++", False)])
+def test_cfg_pp_samplers_keep_the_negative_prompt_at_cfg_1(sampler, skips):
+    # CFG++ takes the noise direction from the unconditional prediction at every scale (it
+    # disables the CFG 1 optimisation): without the negative it got zeros, a washed-out image
+    from modules import sd_samplers
+    from modules.processing import StableDiffusionProcessing
+
+    config = sd_samplers.find_sampler_config(sampler)
+    assert StableDiffusionProcessing.skips_negative_conds(types.SimpleNamespace(), 1, config) is skips

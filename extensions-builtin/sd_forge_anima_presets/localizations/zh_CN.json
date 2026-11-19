@@ -7,6 +7,10 @@
  "**Base / Aesthetic:** ER SDE · 36 steps · CFG 4.5 · Automatic scheduler.": "**Base / Aesthetic：**ER SDE · 36 步 · CFG 4.5 · 自动调度器。",
  "**Turbo (distilled):** Euler · 10 steps · CFG 1 · Automatic scheduler. Use only with Anima-Turbo checkpoints; CFG above 1 or extra guidance over-cooks distilled models. CFG 1 ignores the negative prompt: enable NAG (Anima Guidance) to apply it without a second model pass.": "**Turbo（蒸馏）：**Euler · 10 步 · CFG 1 · 自动调度器。仅用于 Anima-Turbo 模型；CFG 高于 1 或额外引导会让蒸馏模型过曝。CFG 1 会忽略负向提示词：启用 NAG（Anima 引导）即可在不增加第二次模型计算的情况下应用它。",
  "**Turbo + NAG:** the Turbo settings with Normalized Attention Guidance on (scale 2, first half of the schedule), so the negative prompt applies at CFG 1. Costs extra cross-attention only, not a second model pass. For Anima-Turbo checkpoints.": "**Turbo + NAG：**在 Turbo 设置基础上开启归一化注意力引导（强度 2，调度的前半段），使负向提示词在 CFG 1 下生效。只增加交叉注意力开销，不需要第二次模型计算。适用于 Anima-Turbo 模型。",
+ "Anima-2.9B (Euler · SGM Uniform · 30 steps · CFG 4)": "Anima-2.9B（Euler · SGM Uniform · 30 步 · CFG 4）",
+ "Anima-3.8B (Res Multistep · Beta · 32 steps · CFG 5)": "Anima-3.8B（Res Multistep · Beta · 32 步 · CFG 5）",
+ "**Anima-2.9B:** Euler · SGM Uniform · 30 steps · CFG 4, the 40-block model's recommended settings (28-50 steps, CFG 3.5-5).": "**Anima-2.9B：**Euler · SGM Uniform · 30 步 · CFG 4，即 40 块模型的推荐设置（28-50 步，CFG 3.5-5）。",
+ "**Anima-3.8B:** Res Multistep · Beta · 32 steps · CFG 5, the 52-block model's recommended settings (28-50 steps, CFG 4-7, about one megapixel). Needs qwen35_4b.safetensors among the text encoder modules.": "**Anima-3.8B：**Res Multistep · Beta · 32 步 · CFG 5，即 52 块模型的推荐设置（28-50 步，CFG 4-7，约 100 万像素）。需要在文本编码器模块中加入 qwen35_4b.safetensors。",
  "Optional guidance, DAVE, Cross-Attention Boost, cache, spatial, Hires, Refiner and post-processing stacks start disabled. Applying a preset preserves prompt text, model paths and LoRA/artist names.": "可选的引导、DAVE、交叉注意力增强、缓存、空间控制、高分辨率修复、精炼器与后处理功能默认均为关闭。应用预设会保留提示词文本、模型路径以及 LoRA/画师名称。",
  "Apply preset": "应用预设"
 }

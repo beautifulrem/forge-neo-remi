@@ -141,7 +141,7 @@ def test_a_3_8b_lora_keeps_its_own_block_numbers(module):
 
 def test_all_weights_the_dit_keys_outside_the_blocks(module, monkeypatch):
     # <lora:x:0.6> runs at 1.0, so all=0.6 must carry the DiT's whole strength
-    monkeypatch.setattr(module, "_lora_coverage", lambda *args: SimpleNamespace(blocks={0, 1}, modules={"mlp"}, text_layers={2}))
+    monkeypatch.setattr(module, "_lora_coverage", lambda *args: SimpleNamespace(blocks={0, 1}, modules={"mlp"}, text_layers={2}, declared_blocks=None))
     monkeypatch.setattr(module, "_names_for_lora_file", lambda filename: {"cat"})
     monkeypatch.setattr(module, "_adapter_kind_for_file", lambda filename: "lora")
     rule = _lora_rule(module, [True, "cat", True, "0=0.3,all=0.6", False, "", True, "2=0.5,all=0.8"])
@@ -157,7 +157,7 @@ def test_all_weights_the_dit_keys_outside_the_blocks(module, monkeypatch):
     assert rule.factor_for_key("qwen3_06b.model.embed_tokens.weight", decision, 28) == 1.0
 
     # A targeted file with no trained blocks keeps the all= default too
-    monkeypatch.setattr(module, "_lora_coverage", lambda *args: SimpleNamespace(blocks=set(), modules=set(), text_layers=set()))
+    monkeypatch.setattr(module, "_lora_coverage", lambda *args: SimpleNamespace(blocks=set(), modules=set(), text_layers=set(), declared_blocks=None))
     decision = rule.decision_for_lora("cat.safetensors")
     assert rule.factor_for_key("diffusion_model.final_layer.linear.weight", decision, 28) == 0.6
 

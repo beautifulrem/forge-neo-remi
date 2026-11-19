@@ -171,7 +171,9 @@ def beta57_scheduler(n, sigma_min, sigma_max, inner_model, device):
 def turbo_scheduler(n, sigma_min, sigma_max, inner_model, device):
     unet = inner_model.inner_model.forge_objects.unet
     timesteps = torch.flip(torch.arange(1, n + 1) * float(1000.0 / n) - 1, (0,)).round().long().clip(0, 999)
-    sigmas = unet.model.predictor.sigma(timesteps)
+    # Remi: the schedule's sigmas at those indices, not ``sigma(index)``: a flow predictor's
+    # timesteps are not the indices (Anima's run to 1, and index 999 gave sigma 1.5: noise)
+    sigmas = unet.model.predictor.sigmas[timesteps].float()
     sigmas = torch.cat([sigmas, sigmas.new_zeros([1])])
     return sigmas.to(device)
 

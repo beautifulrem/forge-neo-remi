@@ -57,6 +57,10 @@ class ControlNetCachedParameters:
         self.control_mask_for_hr_fix = None
 
 
+# The units that patched the text encoder for the prompts last encoded (see process_batch)
+_text_patches: tuple = ()
+
+
 class ControlNetForForgeOfficial(scripts.Script):
     sorting_priority = 10
 
@@ -442,6 +446,9 @@ class ControlNetForForgeOfficial(scripts.Script):
             if params.model is None:
                 logger.error(f"Failed to load Control Model: {model_filename}")
                 return
+            if global_state.model_is_anima() != params.model.anima_compatible:
+                needed = "ControlNet-LLLite or control-LoRA models made for Anima" if global_state.model_is_anima() else "ControlNet models for this checkpoint's architecture (it is not Anima)"
+                raise ValueError(f'ControlNet model "{unit.model}" does not fit the loaded checkpoint: it takes {needed}')
 
         params.preprocessor = preprocessor
 
@@ -568,6 +575,21 @@ class ControlNetForForgeOfficial(scripts.Script):
             self.current_params[i] = params
             if params.model is None:  # its model failed to load: the unit does not run
                 p.extra_generation_params.pop(Infotext.unit_prefix(i), None)
+
+    @torch.no_grad()
+    def process_batch(self, p, *args, **kwargs):
+        """Before the prompts are encoded: units whose model changes the text side patch it. The
+        prompt cache does not see that, so it is cleared whenever the set of such units changes."""
+        global _text_patches
+        patched = []
+        if not getattr(p, "control_net_disabled", False):
+            for i, unit in enumerate(self.get_enabled_units(args)):
+                params = (getattr(self, "current_params", None) or {}).get(i)
+                if params is not None and params.model is not None and params.model.process_before_conditioning(p):
+                    patched.append(unit.model)
+        if tuple(patched) != _text_patches:
+            _text_patches = tuple(patched)
+            p.clear_prompt_cache()
 
     @torch.no_grad()
     def process_before_every_sampling(self, p, *args, **kwargs):

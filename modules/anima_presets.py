@@ -196,6 +196,27 @@ TURBO_NAG_OVERRIDES: dict[str, object] = {
     "guidance.nag_enabled": True,
 }
 
+ANIMA_2_9B_LABEL = "Anima-2.9B (Euler · SGM Uniform · 30 steps · CFG 4)"
+
+# The depth-expanded models' cards: Anima-2.9B (Gazingstars123) recommends Euler with
+# SGM Uniform, 28-50 steps and CFG 3.5-5; Anima-3.8B (lylogummy) Res Multistep with Beta,
+# 28-50 steps and CFG 4-7, at about one megapixel.
+ANIMA_2_9B_OVERRIDES: dict[str, object] = {
+    "native.sampler": "Euler",
+    "native.scheduler": "SGM Uniform",
+    "native.steps": 30,
+    "native.cfg": 4.0,
+}
+
+ANIMA_3_8B_LABEL = "Anima-3.8B (Res Multistep · Beta · 32 steps · CFG 5)"
+
+ANIMA_3_8B_OVERRIDES: dict[str, object] = {
+    "native.sampler": "Res Multistep",
+    "native.scheduler": "Beta",
+    "native.steps": 32,
+    "native.cfg": 5.0,
+}
+
 # Label -> overrides applied on top of SAFE_BASE_AESTHETIC_PRESET, in menu
 # order. Overrides only name fields of the base preset.
 PRESETS: dict[str, dict[str, object]] = dict(
@@ -203,6 +224,8 @@ PRESETS: dict[str, dict[str, object]] = dict(
         (SAFE_BASE_AESTHETIC_LABEL, {}),
         (TURBO_LABEL, TURBO_OVERRIDES),
         (TURBO_NAG_LABEL, TURBO_NAG_OVERRIDES),
+        (ANIMA_2_9B_LABEL, ANIMA_2_9B_OVERRIDES),
+        (ANIMA_3_8B_LABEL, ANIMA_3_8B_OVERRIDES),
     )
 )
 
@@ -221,6 +244,15 @@ PRESET_DESCRIPTIONS: dict[str, str] = {
         "on (scale 2, first half of the schedule), so the negative prompt "
         "applies at CFG 1. Costs extra cross-attention only, not a second "
         "model pass. For Anima-Turbo checkpoints."
+    ),
+    ANIMA_2_9B_LABEL: (
+        "**Anima-2.9B:** Euler · SGM Uniform · 30 steps · CFG 4, the 40-block model's "
+        "recommended settings (28-50 steps, CFG 3.5-5)."
+    ),
+    ANIMA_3_8B_LABEL: (
+        "**Anima-3.8B:** Res Multistep · Beta · 32 steps · CFG 5, the 52-block model's "
+        "recommended settings (28-50 steps, CFG 4-7, about one megapixel). Needs "
+        "qwen35_4b.safetensors among the text encoder modules."
     ),
 }
 

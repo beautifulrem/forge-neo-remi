@@ -35,6 +35,29 @@ def test_anima_output_matches_reference():
     assert torch.allclose(stats, torch.tensor(EXPECTED), rtol=1e-4, atol=1e-5), stats.tolist()
 
 
+def test_a_stacked_prompt_context_gives_the_same_output():
+    """The text engine returns [1, tokens, dim] per prompt, so the sampler hands the model
+    [B, 1, tokens, dim]. On CUDA the cross-attention went to SDPA with a 5D K and failed (the CPU
+    backend reshapes it away, so the K the attention gets is checked too)."""
+    model, generator = _model()
+    x = torch.randn(2, 4, 1, 16, 12, generator=generator)
+    t = torch.tensor([0.3, 0.7])
+    context = torch.randn(2, 7, 64, generator=generator)
+    shapes = set()
+
+    def modifier(next_attention, q, k, v, *, mask=None, transformer_options, is_self_attention):
+        if not is_self_attention:
+            shapes.add(tuple(k.shape))
+        return next_attention(q, k, v, mask=mask)
+
+    options = {"anima_attention_modifiers": (modifier,)}
+    with torch.inference_mode():
+        flat = model(x, t, context, transformer_options=options)
+        stacked = model(x, t, context.unsqueeze(1), transformer_options=options)
+    assert torch.equal(stacked, flat)
+    assert shapes == {(2, 7, 2, 128)}  # [batch, tokens, heads, head dim]
+
+
 def test_cross_attention_projects_other_contexts_like_its_own():
     model, generator = _model()
     attention = model.blocks[0].cross_attn
@@ -53,6 +76,20 @@ def test_cross_attention_projects_other_contexts_like_its_own():
 
     assert torch.equal(k, k2) and torch.equal(v, v2)
     assert seen["project"] is not None
+
+
+def test_cross_attention_projects_a_stacked_prompt_context_like_a_flat_one():
+    """NAG projects the stashed negative context through compute_kv itself, so the [B, 1, tokens,
+    dim] stack of the text engine reaches it unflattened (on 3.8B the positive-only calls failed)."""
+    model, generator = _model()
+    attention = model.blocks[0].cross_attn
+    context = torch.randn(2, 7, 64, generator=generator)
+    value = torch.randn(2, 7, 64, generator=generator)
+    with torch.inference_mode():
+        flat = attention.compute_kv(context, value_context=value)
+        stacked = attention.compute_kv(context.unsqueeze(1), value_context=value.unsqueeze(1))
+    assert [tuple(t.shape) for t in stacked] == [(2, 7, 2, 128)] * 2
+    assert all(torch.equal(a, b) for a, b in zip(stacked, flat))
 
 
 def test_one_reference_latent_serves_a_cfg_batch_of_several_images():

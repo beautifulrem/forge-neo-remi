@@ -1478,6 +1478,15 @@
        "prompt": false
       },
       {
+       "type": "toggle",
+       "name": "anima_semantic_negative",
+       "label": "[Anima 3.8B] Semantic connector for the negative prompt",
+       "default": false,
+       "notes": [
+        "off: the negative prompt uses only Anima's own text encoder, as in the model's reference workflow"
+       ]
+      },
+      {
        "type": "separator"
       },
       {
@@ -2730,6 +2739,10 @@
         {
          "value": "anima_i2i_width",
          "label": "anima_i2i_width"
+        },
+        {
+         "value": "anima_semantic_negative",
+         "label": "anima_semantic_negative"
         },
         {
          "value": "anima_show_shift",
@@ -14243,6 +14256,7 @@
   "slg_end_percent": 0.5,
   "neta_template_positive": "You are an assistant designed to generate anime images with the highest degree of image-text alignment based on danbooru tags. <Prompt Start>",
   "neta_template_negative": "You are an assistant designed to generate low-quality images based on textual prompts. <Prompt Start>",
+  "anima_semantic_negative": false,
   "reference_max_side": 1024,
   "klein_do_reference": true,
   "qwen21_do_reference": true,
@@ -14826,6 +14840,7 @@
   "slg_end_percent": 0.5,
   "neta_template_positive": "You are an assistant designed to generate anime images with the highest degree of image-text alignment based on danbooru tags. <Prompt Start>",
   "neta_template_negative": "You are an assistant designed to generate low-quality images based on textual prompts. <Prompt Start>",
+  "anima_semantic_negative": false,
   "reference_max_side": 1024,
   "klein_do_reference": true,
   "qwen21_do_reference": true,

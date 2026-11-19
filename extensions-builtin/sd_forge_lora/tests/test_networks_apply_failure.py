@@ -39,7 +39,7 @@ def networks(webui, monkeypatch):
     monkeypatch.setattr(networks, "failed_networks", {})
     monkeypatch.setattr(networks, "loaded_networks", [])
     monkeypatch.setattr(networks, "load_network", lambda name, disk: SimpleNamespace(network_on_disk=disk, mentioned_name=name))
-    monkeypatch.setattr(networks, "load_torch_file", lambda filename: {"file": filename})
+    monkeypatch.setattr(networks, "load_torch_file", lambda filename, return_metadata=False: ({"file": filename}, {}) if return_metadata else {"file": filename})
 
     def apply(unet, clip, lora_sd, *args, **kwargs):
         if "broken" in lora_sd["file"]:
@@ -69,7 +69,7 @@ def test_the_same_set_again_reports_the_failure_without_reloading(networks, monk
     module, model = networks
     reads = []
     read = module.load_torch_file
-    monkeypatch.setattr(module, "load_torch_file", lambda filename: reads.append(filename) or read(filename))
+    monkeypatch.setattr(module, "load_torch_file", lambda filename, **kwargs: reads.append(filename) or read(filename, **kwargs))
 
     module.load_networks(["good", "broken"], [1.0, 1.0], [1.0, 1.0])
     failed = module.load_networks(["good", "broken"], [1.0, 1.0], [1.0, 1.0])
@@ -100,3 +100,88 @@ def test_the_same_set_under_another_alias_names_the_failure_as_this_prompt_does(
 
     assert failed == {"broken-alias": "division by zero"}
     assert [net.mentioned_name for net in module.loaded_networks] == ["good"]
+
+
+def test_a_lora_that_does_not_fit_is_reported_without_a_traceback(networks, monkeypatch):
+    module, model = networks
+    reports = []
+    monkeypatch.setattr(module.errors, "report", lambda *args, **kwargs: reports.append(args))
+
+    def apply(unet, clip, lora_sd, *args, **kwargs):
+        if "broken" in lora_sd["file"]:
+            raise module.LoraNotApplied("40 of 40 keys match nothing")
+        kwargs["notes"].update(depth=28, remap="28→40")
+        return f"{unet}+good", f"{clip}+good"
+
+    monkeypatch.setattr(module, "load_lora_for_models", apply)
+    failed = module.load_networks(["good", "broken"], [1.0, 1.0], [1.0, 1.0])
+
+    assert failed == {"broken": "40 of 40 keys match nothing"}
+    assert reports == []
+    assert module.remap_notes == {"good": "28→40"}
+    # The same set again: the note comes back without re-applying
+    failed = module.load_networks(["good", "broken"], [1.0, 1.0], [1.0, 1.0])
+    assert module.remap_notes == {"good": "28→40"}
+    assert failed == {"broken": "40 of 40 keys match nothing"}
+
+
+def test_src_override_reaches_the_loader(networks, monkeypatch):
+    module, model = networks
+    seen = {}
+
+    def apply(unet, clip, lora_sd, *args, anima_declared_blocks=None, **kwargs):
+        seen[lora_sd["file"]] = anima_declared_blocks
+        return unet, clip
+
+    monkeypatch.setattr(module, "load_lora_for_models", apply)
+    module.load_networks(["good"], [1.0], [1.0], [40])
+    assert seen == {"/loras/good.safetensors": 40}
+
+
+def test_changing_the_inserted_blocks_policy_reapplies_the_set(networks, monkeypatch):
+    """The same LoRA set with another ``anima_lora_inserted_blocks`` value is merged again
+    (with that value), not taken from the previous generation's cache."""
+    module, _model = networks
+    seen = []
+
+    def apply(unet, clip, lora_sd, *args, anima_inserted=None, **kwargs):
+        seen.append(anima_inserted)
+        return unet, clip
+
+    monkeypatch.setattr(module, "load_lora_for_models", apply)
+    for policy in ("copy", "copy", "skip"):
+        monkeypatch.setattr(module, "anima_inserted_blocks_policy", lambda policy=policy: policy)
+        module.load_networks(["good"], [1.0], [1.0])
+    assert seen == ["copy", "skip"]
+
+
+class _Patcher:
+    def __init__(self, diffusion_model=None, patches=None):
+        self.model = SimpleNamespace(diffusion_model=diffusion_model)
+        self.cond_stage_model = None
+        self.patches = dict(patches or {})
+
+    def clone(self):
+        return _Patcher(self.model.diffusion_model, self.patches)
+
+    def add_patches(self, filename, patches, strength_patch, online_mode=False):
+        for key, patch in patches.items():
+            self.patches[key] = (patch, strength_patch)
+        return list(patches)
+
+
+def test_anima_3_8b_adapter_patches_reach_the_dit_copy_too(webui, monkeypatch):
+    """Anima-3.8B runs a copy of the LLM adapter in the DiT: a LoRA on the adapter must patch
+    both copies (at the text-encoder strength), or the connector ignores it."""
+    import networks as module
+
+    adapter_key = "qwen3_06b.llm_adapter.blocks.0.cross_attn.q_proj.weight"
+    monkeypatch.setattr(module.dynamic_args, "anima", False)
+    monkeypatch.setattr(module, "model_lora_keys_unet", lambda model, key_map: {"unet": True})
+    monkeypatch.setattr(module, "model_lora_keys_clip", lambda model, key_map: {"clip": True})
+    monkeypatch.setattr(module, "load_lora", lambda lora, keys: ({adapter_key: "patch"}, {}) if "clip" in keys else ({}, lora))
+
+    for dit, want in ((SimpleNamespace(llm_adapter=object()), {"diffusion_model.llm_adapter.blocks.0.cross_attn.q_proj.weight": ("patch", 0.5)}), (SimpleNamespace(llm_adapter=None), {})):
+        unet, clip = module.load_lora_for_models(_Patcher(dit), _Patcher(), {"x": 1}, 1.0, 0.5)
+        assert unet.patches == want
+        assert clip.patches == {adapter_key: ("patch", 0.5)}

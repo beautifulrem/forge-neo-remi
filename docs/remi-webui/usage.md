@@ -49,7 +49,7 @@ Below 72 rem the history becomes a strip; on phones the stage comes first and th
 | Spatial control | Regional Conditioning, FreeFuse multi-LoRA routing, Artist Scheduled Mixer |
 | Diversity | DAVE (early-step DC attenuation for same-prompt layout diversity across seeds) |
 | Prompt adherence | Cross-Attention Boost (positive-prompt cross-attention gain in the high-noise steps, norm-matched, for weak tags and bindings) |
-| LoRA workflow | Layer weights, stage scheduling, 2B LoRAs on 2.9B/3.8B (28/40/52 blocks), prompt rescaling |
+| LoRA workflow | Layer weights, stage scheduling, LoRAs across 2B/2.9B/3.8B (28/40/52 blocks), prompt rescaling |
 | Reliability | Feature conflict resolver, Hires Guard, generation metadata, safe fallbacks |
 | Acceleration | Spectrum forecasting and Anima per-block `torch.compile` (after the first recompile, a changed resolution or batch size reuses one dynamic-shape graph; batch 1 (CFG 1, or steps outside the CFG range) and reference frames still get graphs of their own) |
 | Low-bit loading | **Diffusion in Low Bits**: `float8-e4m3fn (Anima scaled)` (per-tensor scaled FP8, same VRAM as plain FP8, more precise) and `int8 (Anima ConvRot)` (INT8 GEMMs; CUDA 13 or `--enable-triton-backend`, SM 8.0+) |
@@ -58,10 +58,21 @@ Read the [Remi Anima generation and parameter guide](../remi-anima-generation-gu
 
 ### Anima 2.9B and 3.8B checkpoints
 
-**28/40/52-block support:** detects original, 2.9B and 3.8B Anima DiT layouts; 28-block LoRAs and Anima ControlLLLite models are remapped onto the expanded models, and Layer Weight, stage-scheduler block weights and FreeFuse's collect block keep following the 28-block layout there. 3.8B needs an external conditioning extension (see the note below).
+**28/40/52-block support:** detects original (28 blocks), 2.9B (40) and 3.8B (52) Anima DiT layouts. Layer Weight, stage-scheduler block weights and FreeFuse's collect block keep following the 28-block layout on the deeper models.
 
-> [!NOTE]
-> Remi only covers the 3.8B **diffusion model** (52-block DiT layout, LoRA mapping). Anima 3.8B is conditioned on Qwen3.5 4B: the v1.1 checkpoint bundles a timestep-aware Semantic Connector (v2) that runs at every denoising step and needs the separate `qwen35_4b` text encoder next to the native Qwen3 0.6B one. Remi contains no Qwen3.5 conditioning or connector code; as in upstream Forge Neo, that path requires the [forge-anima-3.8B](https://github.com/GumGum10/forge-anima-3.8B) extension, which Remi does not bundle and has not tested (it must also be ported to the Remi UI). See the [Anima 3.8B model card](https://huggingface.co/lylogummy/Anima-3.8B).
+| Model | Files | Preset |
+|---|---|---|
+| Anima 2B (preview, base, aesthetic, turbo) | checkpoint in `models/Stable-diffusion`; `qwen_image_vae` and `qwen_3_06b_base` as VAE / Text Encoder modules | Anima presets |
+| [Anima-2.9B](https://huggingface.co/Gazingstars123/Anima-2.9B) preview-v1 | the same modules | Anima-2.9B (Euler, SGM Uniform, 30 steps, CFG 4) |
+| [Anima-3.8B](https://huggingface.co/lylogummy/Anima-3.8B) v1.1 | the same modules **plus `qwen35_4b.safetensors`** (in `models/text_encoder`, selected as a third module) | Anima-3.8B (Res Multistep, Beta, 32 steps, CFG 5) |
+
+**Anima-3.8B.** The v1.1 checkpoint bundles a Semantic Connector (v2) that rewrites the text conditioning at every denoising step from the Qwen3.5 4B encoder's hidden states (layers 7, 15, 23, 31), around the model's own LLM adapter. Remi runs it natively: the connector stays in the diffusion model, the Qwen3.5 encoder (FP8 weights, kept as stored) encodes the prompt once, and the context is recomputed at each step. Without `qwen35_4b` selected, a 3.8B generation stops with a message naming the file; selecting it with another model only logs a warning. As in the model's reference workflow, the negative prompt uses only Anima's own encoder; **Settings → Stable Diffusion → [Anima 3.8B] Semantic connector for the negative prompt** sends it through the connector too. NegPiP and MultiDiffusion work on the connector's output; the extra prompts of Regional and Artist Mixer are encoded by Anima's own encoder only (the main prompt still goes through the connector). The v1 preview's separate progressive adapter, MXFP8 and GGUF 3.8B files are not supported.
+
+**LoRA across depths.** A LoRA trained on one depth is re-mapped onto another; the infotext records it (`Lora remap: name 28→40`). The depth it was trained on comes from the file's metadata, then from its block indices; when that guess is wrong (a 40-block LoRA that only touches early blocks reads as 28), name it in the tag: `<lora:name:1:src=40>`. On a deeper model, **Settings → Extra Networks → Anima LoRA on a deeper model: inserted blocks** decides whether the inserted blocks receive the LoRA of the block they were copied from (`copy`, the default) or nothing (`skip`). On a shallower model the inserted blocks' weights are dropped. A LoRA that cannot be placed at all is listed in the job's warnings instead of being silently ignored. LoRA weights on the LLM adapter also reach the 3.8B connector's copy of the adapter.
+
+**Control.** For Anima the ControlNet model list only holds what runs on its DiT: ControlNet-LLLite models (re-mapped across depths, like LoRAs) and control-LoRAs.
+
+- **Control-LoRA** ([Anima-Control-Pose](https://huggingface.co/Claquasse/Anima-Control-Pose), `anima_pose_preview2.safetensors` in `models/ControlNet`): give the unit a skeleton image (an OpenPose render on black, or the openpose preprocessor) and pick the model. The control image is VAE-encoded and added to the DiT's patch embedding, scaled by the unit's **weight** (0 = no control, 1 follows the skeleton, up to 2) within its start / end. The LoRA trained with it is applied at 1.0 to the DiT for the whole pass and to the LLM adapter before the prompts are encoded, so start / end and weight do not change it. It follows best at about 1024 px with weight 1 to 1.5, legs more readily than raised arms, and it was trained on its own thin skeleton (COCO body points, white joints, face and hand dots on black): a skeleton without the face dots can come out as a back view. The model card asks for detailed prompts; its weights are for non-commercial use.
 
 ## Quick Start
 
@@ -324,4 +335,5 @@ By default the server listens on `127.0.0.1` only.
 - Experimental guidance methods can alter image character as well as quality; preserve a baseline seed when comparing them.
 - Torch compile (whole-model presets and **Anima per-block**) runs the affected steps uncompiled while NAG, NegPiP, Regional, FreeFuse, Artist Mixer, DAVE or Cross-Attention Boost (during their window steps), or Sparse Attention are active, so these features are never silently ignored by a cached graph; expect no compile speed-up for those runs.
 - **Anima FlowMatch** is only meaningful for flow-matching models; on other models (e.g. left selected after switching from an Anima Flow sampler) it falls back to the Simple schedule.
+- On flow-matching models (Anima, Flux): Karras, Exponential, Polyexponential, KL Optimal and Align Your Steps are made for SD's noise scale and wash the image out, so the job finishes with a warning (use Simple, Beta, SGM Uniform or Normal); DDIM, PLMS and Kohaku LoNyu Yog are refused with a message. The CFG++ samplers keep the negative prompt at CFG 1, where they are meant to run.
 - Real checkpoint output remains the final compatibility test. Startup or unit tests do not prove generation quality for every checkpoint or quantization.

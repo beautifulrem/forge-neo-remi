@@ -42,6 +42,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import remi_port_harness as harness
+import torch
 from PIL import Image
 
 EXTENSION = Path(__file__).resolve().parents[1]
@@ -880,7 +881,7 @@ def test_anima_lllite_follows_a_hires_checkpoint_to_its_dit(cn, monkeypatch):
             self.restored += 1
 
     monkeypatch.setattr(lllite, "ControlNetLLLiteDiT", Net)
-    monkeypatch.setattr(lllite, "map_blocks", lambda dit, state_dict: dit)
+    monkeypatch.setattr(lllite, "map_blocks", lambda dit, state_dict: (dit, state_dict))
     monkeypatch.setattr(lllite, "infer_anima_config", lambda state_dict: {})
     monkeypatch.setattr(lllite, "load_lllite_weights_from_dict", lambda net, state_dict: None)
 
@@ -943,7 +944,7 @@ def test_anima_lllite_skips_a_hires_checkpoint_it_does_not_fit(cn, monkeypatch):
     def map_blocks(dit, state_dict):
         if dit == "sdxl-unet":
             raise AttributeError("'UNet' object has no attribute 'blocks'")
-        return dit
+        return dit, state_dict
 
     monkeypatch.setattr(lllite, "ControlNetLLLiteDiT", Net)
     def load_weights(net, state_dict):
@@ -1241,4 +1242,81 @@ def test_a_generation_that_raised_releases_the_reference_recordings(cn, monkeypa
     script.cleanup(SimpleNamespace())
 
     assert preprocessor.recorded_attn1 == {} and preprocessor.recorded_h == {} and preprocessor.is_recording_style is False
+
+
+
+class _Block(torch.nn.Module):
+    def __init__(self, width):
+        super().__init__()
+        self.self_attn = torch.nn.Module()
+        self.self_attn.q_proj = torch.nn.Linear(width, width, bias=False)
+
+
+def _dit(blocks, width=8):
+    dit = torch.nn.Module()
+    dit.blocks = torch.nn.ModuleList(_Block(width) for _ in range(blocks))
+    return dit
+
+
+def _lllite_weights(blocks, width=8):
+    return {f"lllite_dit_blocks_{i}_self_attn_q_proj.down.weight": torch.zeros(4, width) for i in range(blocks)}
+
+
+@pytest.mark.parametrize("trained, model", [(28, 40), (28, 52), (40, 52)])
+def test_anima_lllite_goes_on_the_original_blocks_of_a_deeper_model(cn, monkeypatch, trained, model):
+    from backend.nn import anima_layout
+
+    _, lllite, _ = _lllite_libs(monkeypatch)
+    dit = _dit(model)
+    view, weights = lllite.map_blocks(dit, _lllite_weights(trained))
+    assert weights.keys() == _lllite_weights(trained).keys()
+    originals = anima_layout.original_blocks(trained, model)
+    for block in range(trained):
+        assert view.blocks[str(block)] is dit.blocks[originals[block]]
+    # The LLLite names its modules by these keys, as its file does
+    assert {name.split(".")[1] for name, _ in view.named_modules() if name.count(".") == 1} == {str(i) for i in range(trained)}
+
+
+def test_anima_lllite_from_a_deeper_model_drops_the_inserted_blocks(cn, monkeypatch):
+    _, lllite, _ = _lllite_libs(monkeypatch)
+    dit = _dit(28)
+    view, weights = lllite.map_blocks(dit, _lllite_weights(40))
+    assert len(view.blocks) == 28 and len(weights) == 28
+    assert "lllite_dit_blocks_2_self_attn_q_proj.down.weight" not in weights  # 2.9B block 2 is an inserted copy
+    assert view.blocks["3"] is dit.blocks[2]
+
+
+def test_anima_lllite_of_another_width_fails_by_name(cn, monkeypatch):
+    _, lllite, _ = _lllite_libs(monkeypatch)
+    with pytest.raises(NotImplementedError, match="width 16"):
+        lllite.map_blocks(_dit(28, width=8), _lllite_weights(28, width=16))
+    with pytest.raises(NotImplementedError, match="Cannot map"):
+        lllite.map_blocks(_dit(30), _lllite_weights(28))
+
+
+def test_the_model_list_only_holds_control_models_for_the_loaded_architecture(cn, monkeypatch, tmp_path):
+    """The list was filtered by file name only: an SD ControlNet named "depth" was offered for
+    Anima, whose DiT ignores it, and Anima's LLLite / control-LoRA for SD. The family is read from
+    the tensor names."""
+    from lib_controlnet import global_state
+    from safetensors.torch import save_file
+
+    from backend.args import dynamic_args
+
+    files = {
+        "control_sd15_depth": {"input_blocks.0.0.weight": torch.zeros(1)},
+        "anima-lllite-depth-1": {"lllite_dit_blocks_0_self_attn_q_proj.down.weight": torch.zeros(1)},
+        "anima_pose_depth": {"diffusion_model.control_embedder.proj.weight": torch.zeros(1)},
+    }
+    paths = {}
+    for name, tensors in files.items():
+        save_file(tensors, tmp_path / f"{name}.safetensors")
+        paths[name] = str(tmp_path / f"{name}.safetensors")
+    monkeypatch.setattr(global_state, "controlnet_names", ["None", *files])
+    monkeypatch.setattr(global_state, "controlnet_filename_dict", {"None": None, **paths})
+
+    monkeypatch.setattr(dynamic_args, "anima", True, raising=False)
+    assert global_state.get_filtered_controlnet_names("depth") == ["None", "anima-lllite-depth-1", "anima_pose_depth"]
+    monkeypatch.setattr(dynamic_args, "anima", False, raising=False)
+    assert global_state.get_filtered_controlnet_names("depth") == ["None", "control_sd15_depth"]
 

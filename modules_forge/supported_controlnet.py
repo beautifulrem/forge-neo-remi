@@ -54,6 +54,9 @@ _CONTROL_MODEL_CACHE = ModelCache()
 
 
 class ControlModelPatcher:
+    # Whether the model goes on the Anima DiT (Anima ControlNet-LLLite, control-LoRA);
+    # the others patch a UNet's blocks and have nothing to act on in Anima
+    anima_compatible: bool = False
 
     @staticmethod
     def try_build_from_state_dict(state_dict, ckpt_path):
@@ -72,6 +75,11 @@ class ControlModelPatcher:
 
     def process_after_running_preprocessors(self, process, params, *args, **kwargs):
         return
+
+    def process_before_conditioning(self, process) -> bool:
+        """Remi: before the prompts are encoded (each batch), for a model that changes the text
+        side (an Anima control-LoRA's LLM adapter LoRA); True when it did."""
+        return False
 
     def process_before_every_sampling(self, process, cond, mask, *args, **kwargs):
         return
