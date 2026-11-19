@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from remi import model_selection
 from remi.server import launch, runtime
 from remi.testing import webui_state
 
@@ -163,6 +164,7 @@ def test_selection_changes_go_through_the_main_entry_with_the_preset(webui, monk
 
     fake = FakeMainEntry(module_list={})
     monkeypatch.setattr(runtime, "_main_entry", lambda: fake)
+    monkeypatch.setattr(model_selection, "_main_entry", lambda: fake)  # the selections apply through it
     monkeypatch.setattr(shared.opts, "forge_preset", "anima", raising=False)
     assert runtime.select_checkpoint("anima.safetensors") is True
     assert runtime.select_modules(["qwen.safetensors"]) is True

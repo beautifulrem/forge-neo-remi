@@ -313,12 +313,14 @@ class Page:
 
     # region Tasks
 
-    def start_task(self, ctx: ui.ActionContext, name: str, work: Callable[[Task], Mapping[str, Any] | None], *, gpu: bool = False) -> dict[str, Any]:
+    def start_task(self, ctx: ui.ActionContext, name: str, work: Callable[[Task], Mapping[str, Any] | None], *, gpu: bool = False, prepare: Callable[[Task], None] | None = None) -> dict[str, Any]:
         """Run ``work(task)`` on a thread (``gpu``: behind generation, holding
         the generation lock while it runs) and answer the task's status
         (``__outputs__`` ``task:<name>``). One task per page, name and user
         runs at a time: starting it again while it runs answers its status
-        with a warning."""
+        with a warning. ``prepare(task)`` runs first, before the task waits
+        for the lock: work that needs no GPU (a download) without holding
+        generation up; it can be cancelled like ``work`` (``task.check()``)."""
 
         key = (self.id, name, ctx.user)
         with _tasks_lock:
@@ -332,6 +334,9 @@ class Page:
         def run() -> None:
             held = False
             try:
+                if prepare is not None:
+                    task.state = "running"
+                    prepare(task)
                 if lock is not None:
                     if not lock.acquire(blocking=False):
                         task.progress(text="Waiting for the current generation to finish…")

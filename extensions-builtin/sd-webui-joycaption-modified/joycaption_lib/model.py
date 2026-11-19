@@ -64,35 +64,97 @@ def is_model_downloaded() -> bool:
     return any(f.suffix == ".safetensors" for f in p.glob("*.safetensors"))
 
 
-def ensure_model_downloaded(progress_print=print) -> Path:
-    """Download the JoyCaption weights into <webui>/models/joycaption/ if not already there."""
+ALLOW_PATTERNS = [
+    "*.json",
+    "*.txt",
+    "*.safetensors",
+    "*.model",
+    "tokenizer*",
+    "special_tokens_map.json",
+    "preprocessor_config.json",
+    "processor_config.json",
+    "chat_template*",
+    "generation_config.json",
+]
+"""The files of the repository the engine needs (optional / unused ones are left out to save disk)."""
+
+_DOWNLOAD_CODE = (
+    "import json, sys\n"
+    "from huggingface_hub import snapshot_download\n"
+    "snapshot_download(repo_id=sys.argv[1], local_dir=sys.argv[2], allow_patterns=json.loads(sys.argv[3]))\n"
+)
+
+
+def ensure_model_downloaded(progress_print=print, check=None) -> Path:
+    """Download the JoyCaption weights into <webui>/models/joycaption/ if not already there.
+
+    ``check``: called while downloading, raises to stop it (a page task's
+    ``check``, which raises once the user cancels). The download then runs in
+    a child process that is stopped on the spot (huggingface_hub resumes its
+    partial files next time): ``snapshot_download`` itself cannot be
+    interrupted, and ~17 GB can take hours."""
     target = model_local_path()
     if is_model_downloaded():
         return target
 
     progress_print(f"[JoyCaption] Downloading {MODEL_REPO} to {target} (~17 GB, one-time)…")
 
-    from huggingface_hub import snapshot_download
-    snapshot_download(
-        repo_id=MODEL_REPO,
-        local_dir=str(target),
-        local_dir_use_symlinks=False,
-        # Filter out optional / unused files to save disk
-        allow_patterns=[
-            "*.json",
-            "*.txt",
-            "*.safetensors",
-            "*.model",
-            "tokenizer*",
-            "special_tokens_map.json",
-            "preprocessor_config.json",
-            "processor_config.json",
-            "chat_template*",
-            "generation_config.json",
-        ],
-    )
+    if check is None:
+        from huggingface_hub import snapshot_download
+
+        snapshot_download(repo_id=MODEL_REPO, local_dir=str(target), allow_patterns=ALLOW_PATTERNS)
+    else:
+        _download_in_child(target, check, progress_print)
     progress_print("[JoyCaption] Download complete.")
     return target
+
+
+def _downloaded_bytes(folder: Path) -> int:
+    total = 0
+    for path in folder.rglob("*"):
+        try:
+            if path.is_file():
+                total += path.stat().st_size
+        except OSError:  # renamed while counting
+            pass
+    return total
+
+
+def _download_in_child(target: Path, check, progress_print) -> None:
+    import json
+    import subprocess
+    import sys
+    import tempfile
+    import time
+
+    target.mkdir(parents=True, exist_ok=True)
+    command = [sys.executable, "-c", _DOWNLOAD_CODE, MODEL_REPO, str(target), json.dumps(ALLOW_PATTERNS)]
+    with tempfile.TemporaryFile() as errors:
+        child = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=errors)
+        reported = time.monotonic()
+        try:
+            while True:
+                try:
+                    child.wait(timeout=0.5)
+                    break
+                except subprocess.TimeoutExpired:
+                    pass
+                check()
+                if time.monotonic() - reported >= 5:
+                    reported = time.monotonic()
+                    progress_print(f"[JoyCaption] Downloading… {_downloaded_bytes(target) / 1e9:.1f} GB so far")
+        except BaseException:
+            child.terminate()
+            try:
+                child.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait()
+            raise
+        if child.returncode != 0:
+            errors.seek(0)
+            tail = errors.read()[-2000:].decode("utf-8", "replace").strip()
+            raise RuntimeError(f"JoyCaption download failed: {tail.splitlines()[-1] if tail else f'exit code {child.returncode}'}")
 
 
 class JoyCaptionEngine:

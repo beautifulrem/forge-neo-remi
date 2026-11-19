@@ -566,6 +566,8 @@ class ControlNetForForgeOfficial(scripts.Script):
             params = ControlNetCachedParameters()
             self.process_unit_after_click_generate(p, unit, params, *args, **kwargs)
             self.current_params[i] = params
+            if params.model is None:  # its model failed to load: the unit does not run
+                p.extra_generation_params.pop(Infotext.unit_prefix(i), None)
 
     @torch.no_grad()
     def process_before_every_sampling(self, p, *args, **kwargs):
@@ -584,9 +586,12 @@ class ControlNetForForgeOfficial(scripts.Script):
         # A generation that raised never reached postprocess_batch_list: a model that patched the
         # model's own modules (Anima ControlNet-LLLite) would keep its control in every later
         # generation. The models' after-sampling hook undoes it and is idempotent.
+        # A reference preprocessor's recordings (GPU tensors) are released the same way.
         for params in (getattr(self, "current_params", None) or {}).values():
             if params.model is not None:
                 params.model.process_after_every_sampling(p, params)
+            if (release := getattr(params.preprocessor, "release", None)) is not None:
+                release()
         self.current_params = {}
 
 

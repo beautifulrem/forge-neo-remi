@@ -119,10 +119,13 @@ def builtin_tabs() -> list[str]:
 
 
 def models_summary() -> dict[str, Any]:
+    from remi import model_selection
     from remi.networks import module_roots
 
     options = opts()
-    modules = [path for path in getattr(options, "forge_additional_modules", []) or [] if isinstance(path, str)]
+    held = model_selection.held()  # picked during the running job: shown as selected
+    selected = lambda key: held[key] if key in held else getattr(options, key, None)  # noqa: E731
+    modules = [path for path in selected("forge_additional_modules") or [] if isinstance(path, str)]
     roots = module_roots()
 
     def under(path: str, kind: str) -> bool:
@@ -131,12 +134,12 @@ def models_summary() -> dict[str, Any]:
 
     vae = [os.path.basename(path) for path in modules if under(path, "vae")]
     return {
-        "checkpoint": getattr(options, "sd_model_checkpoint", None) or None,
+        "checkpoint": selected("sd_model_checkpoint") or None,
         "vae": vae[0] if vae else None,
         "text_encoders": [os.path.basename(path) for path in modules if not under(path, "vae")],
         "modules": [os.path.basename(path) for path in modules],
         "preset": getattr(options, "forge_preset", None),
-        "unet_dtype": getattr(options, "forge_unet_storage_dtype", None),
+        "unet_dtype": selected("forge_unet_storage_dtype"),
     }
 
 
@@ -144,10 +147,12 @@ def models_summary() -> dict[str, Any]:
 def bootstrap(request: Request, services: ServicesDep, user: UserDep) -> dict[str, Any]:
     from modules import shared
     from modules_forge import forge_version
+    from remi import model_selection
     from remi.server.routes.system import user_assets
     from remi.server.runtime import not_ported
 
     options = opts()
+    held = model_selection.held()  # picked during the running job
     auth = request.app.state.auth
     features = list(FEATURES)
     if auth.required:
@@ -166,7 +171,7 @@ def bootstrap(request: Request, services: ServicesDep, user: UserDep) -> dict[st
         "pages": pages,
         "locales": i18n.locales(),
         "locale": i18n.default_locale(),
-        "options": {key: options.data.get(key, info.default) for key in BOOTSTRAP_OPTIONS if (info := options.data_labels.get(key)) is not None},
+        "options": {key: held[key] if key in held else options.data.get(key, info.default) for key in BOOTSTRAP_OPTIONS if (info := options.data_labels.get(key)) is not None},
         "models": models_summary(),
         "not_ported": not_ported(),
         "auth": {"required": auth.required, "user": user},
@@ -500,11 +505,12 @@ def token_count(text: str, steps: int, styles: list[str], *, positive: bool = Tr
 
 def _settings_schema() -> dict[str, Any]:
     from modules import shared
+    from remi import model_selection
     from remi.server.options import frozen_reason
     from remi.ui.settings import settings_schema
 
     options = opts()
-    return settings_schema(options, locked=lambda key: frozen_reason(options, key, shared.cmd_opts))
+    return settings_schema(options, locked=lambda key: frozen_reason(options, key, shared.cmd_opts), held=model_selection.held())
 
 
 @router.get("/options", response_model=m.SettingsSchema, summary="Settings layout and values (schema-format.md §6)")

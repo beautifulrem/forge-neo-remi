@@ -177,12 +177,15 @@ def _setting_extras(info) -> dict:
     return data
 
 
-def settings_schema(opts, ctx: Context | None = None, *, categories=None, quicksettings: list[str] | None = None, locked: Callable[[str], str | None] | None = None) -> dict:
+def settings_schema(opts, ctx: Context | None = None, *, categories=None, quicksettings: list[str] | None = None, locked: Callable[[str], str | None] | None = None, held: Mapping[str, Any] | None = None) -> dict:
     """The settings page: categories -> sections -> items, plus values.
 
     ``locked(key)``: why the server refuses changes to ``key`` (None: it
     accepts them); a locked setting is ``enabled_if: false`` with ``locked``
-    set to that reason."""
+    set to that reason. ``held``: values picked but not applied yet (a model
+    selection made while a job runs), shown instead of the stored ones."""
+
+    held = held or {}
 
     from modules import options as options_module
 
@@ -208,7 +211,7 @@ def settings_schema(opts, ctx: Context | None = None, *, categories=None, quicks
             open_rows[section] = None
         items = by_section[section]["items"]
 
-        value = getattr(opts, key)  # the stored value, else the default
+        value = held[key] if key in held else getattr(opts, key)  # the stored value, else the default
         try:
             node = setting_node(key, info, value)
         except Exception as error:  # an extension option this exporter cannot read
@@ -238,7 +241,7 @@ def settings_schema(opts, ctx: Context | None = None, *, categories=None, quicks
         "version": SCHEMA_VERSION,
         "categories": result_categories,
         "quicksettings": list(quicksettings if quicksettings is not None else getattr(opts, "quicksettings_list", []) or []),
-        "values": {key: jsonable(opts.data.get(key, info.default)) for key, info in stored.items()},
+        "values": {key: jsonable(held[key] if key in held else opts.data.get(key, info.default)) for key, info in stored.items()},
         "defaults": {key: jsonable(info.default) for key, info in stored.items()},
     }
 

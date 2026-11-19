@@ -72,9 +72,10 @@ def server_status() -> dict[str, Any]:
 
 @router.post("/models/reload", response_model=m.Ok, responses={422: {"model": m.Detail}}, summary="Load the selected model now (behind generation; also after an unload; `force` loads it again)")
 def reload_model(services: ServicesDep, body: m.ModelReloadRequest | None = None) -> dict[str, Any]:
+    from remi import model_selection
     from remi.server import runtime
 
-    model = getattr(opts(), "sd_model_checkpoint", None) or None
+    model = model_selection.held().get("sd_model_checkpoint") or getattr(opts(), "sd_model_checkpoint", None) or None
     force = bool(body and body.force)
 
     services.bus.publish("model.loading", stage="loading", model=model)

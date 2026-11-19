@@ -452,6 +452,34 @@ def test_queued_jobs_can_be_cancelled_deleted_and_retried(server):
     assert server.services.store.get(new_id).status == COMPLETED
 
 
+@pytest.mark.parametrize("action", ["interrupt", "delete"])
+def test_a_cancel_racing_the_worker_claiming_the_job_still_stops_it(webui, tmp_path, action):
+    """The job was queued when the request read it and claimed by the worker before the store
+    cancelled (or deleted) it: the request stops it as the running job instead of doing nothing."""
+    lock = threading.Lock()
+    state = FakeState()
+    with server_app(tmp_path, state=state, executor=StubExecutor(state), lock=lock) as server:
+        queue, store = server.services.queue, server.services.store
+        queue.set_paused(True)
+        job_id = submit(server)["job_id"]
+        claim = store.cancel_queued if action == "interrupt" else store.delete
+
+        def claimed_first(job_id):
+            queue.set_paused(False)
+            assert wait_until(lambda: queue.busy)  # claimed; it waits for the generation lock
+            return claim(job_id)
+
+        with lock:
+            setattr(store, claim.__name__, claimed_first)
+            if action == "interrupt":
+                assert server.client.post(f"/api/v2/jobs/{job_id}/interrupt").status_code == 200
+            else:
+                assert server.client.delete(f"/api/v2/jobs/{job_id}").status_code == 204
+        assert queue.wait_idle()
+        assert server.executor.calls == []
+        assert store.get(job_id).status == (INTERRUPTED if action == "interrupt" else CANCELLED)
+
+
 def test_interrupt_all_can_clear_the_queue(webui, tmp_path):
     with blocked_server(tmp_path) as server:
         running = submit(server)["job_id"]

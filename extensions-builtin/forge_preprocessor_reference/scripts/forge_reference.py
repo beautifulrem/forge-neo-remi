@@ -193,8 +193,13 @@ class PreprocessorReference(Preprocessor):
         return cond, mask
 
     def process_after_every_sampling(self, process, params, *args, **kwargs):
+        self.release()
+
+    def release(self):
         # The recorded keys/values (GPU tensors of every self-attention layer) would otherwise stay
-        # allocated until the next reference run, through every generation in between
+        # allocated until the next reference run, through every generation in between. ControlNet's
+        # cleanup calls this too, for a generation that raised before its after-sampling hooks.
+        self.is_recording_style = False
         self.recorded_attn1 = {}
         self.recorded_h = {}
 

@@ -651,7 +651,18 @@ class Api:
         unknown = sorted(str(key) for key, value in req.items() if key not in shared.opts.data_labels and value != shared.opts.data.get(key))
         if unknown:
             raise HTTPException(status_code=422, detail=f"unknown settings: {', '.join(unknown)}"[:1000])
+        # Remi: the model selection goes through remi.model_selection, held while a generation runs
+        # (set here it switched the running job's model between its batches)
+        from remi import model_selection
+
+        req = dict(req)
+        picks = {key: req.pop(key) for key in model_selection.MODEL_OPTIONS if key in req}
+        if (name := picks.get("sd_model_checkpoint")) is not None and name not in sd_models.checkpoint_aliases:
+            raise HTTPException(status_code=422, detail=f"unknown checkpoint: {name}"[:1000])
         set_config(req, is_api=True)  # restrict_api settings (URL fetching) stay out of the API's reach
+        for key, value in picks.items():
+            if value is not None:
+                model_selection.select(key, value)  # applied now (and saved) when no generation runs
 
     def get_cmd_flags(self):
         from modules import redact

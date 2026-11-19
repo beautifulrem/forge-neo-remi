@@ -158,7 +158,9 @@ def load_selected_model(*, force: bool = False) -> None:
     worker). ``force``: load again even when they are already loaded."""
 
     from modules import sd_models
+    from remi import model_selection
 
+    model_selection.apply_held()  # the caller holds the generation lock
     _main_entry().refresh_model_loading_parameters()
     if force:
         sd_models.model_data.forge_hash = ""
@@ -177,24 +179,21 @@ def unet_dtypes() -> list[str]:
 
 
 def select_checkpoint(name: str) -> bool:
-    from modules import shared
+    from remi import model_selection
 
-    return _main_entry().checkpoint_change(name, shared.opts.forge_preset)
+    return model_selection.select("sd_model_checkpoint", name)
 
 
 def select_modules(names: list[str]) -> bool:
-    from modules import shared
+    from remi import model_selection
 
-    main_entry = _main_entry()
-    if not main_entry.module_list:
-        main_entry.refresh_models()
-    return main_entry.modules_change(names, shared.opts.forge_preset)
+    return model_selection.select("forge_additional_modules", names)
 
 
 def select_unet_dtype(dtype: str) -> bool:
-    from modules import shared
+    from remi import model_selection
 
-    return _main_entry().dtype_change(dtype, shared.opts.forge_preset)
+    return model_selection.select("forge_unet_storage_dtype", dtype)
 
 
 def refresh_models() -> None:

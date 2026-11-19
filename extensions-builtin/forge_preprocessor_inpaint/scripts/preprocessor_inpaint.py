@@ -50,6 +50,10 @@ class PreprocessorInpaintOnly(PreprocessorInpaint):
         mask = mask.round()
         self.image = cond
         self.mask = mask
+        if (params := kwargs.get("params")) is not None:
+            # Remi: this preprocessor is one object for every unit; the blend after sampling reads
+            # the unit's own image and mask (with two inpaint_only units both blended with the last one's)
+            params.inpaint_only_image, params.inpaint_only_mask = cond, mask
 
         vae: "VAE" = process.sd_model.forge_objects.vae
 
@@ -89,8 +93,11 @@ class PreprocessorInpaintOnly(PreprocessorInpaint):
         a1111_batch_result = args[0]
         new_results = []
 
+        own = getattr(params, "inpaint_only_image", None), getattr(params, "inpaint_only_mask", None)
+        if own[0] is None and self.image is None:
+            return  # this unit never sampled (interrupted before it): nothing to blend
         for img in a1111_batch_result.images:
-            image, image_mask = self.image, self.mask
+            image, image_mask = own if own[0] is not None else (self.image, self.mask)
             hr_image, hr_mask = getattr(params, "control_cond_for_hr_fix", None), getattr(params, "control_mask_for_hr_fix", None)
             if image_mask.shape[2:] != img.shape[1:] and isinstance(hr_image, torch.Tensor) and isinstance(hr_mask, torch.Tensor) and hr_mask.shape[2:] == img.shape[1:]:
                 # A unit that sat out the hires pass ("Low res only"): the hires image takes the

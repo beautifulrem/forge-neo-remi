@@ -201,6 +201,19 @@ def test_moving_many_times_between_the_same_neighbours_keeps_the_order(tmp_path)
         store.close()
 
 
+def test_jobs_added_after_the_same_job_many_times_keep_their_order(tmp_path):
+    """Each job queued right after ``a`` halves the gap to the one queued before it; after about 50
+    the halves tie (upstream-style float positions) and later ones sorted after ``b`` instead of
+    next to ``a``. The queue is renumbered as moves do."""
+    store = JobStore(tmp_path / "jobs.db")
+    try:
+        a, b = (store.add("txt2img", {}, {}) for _ in range(2))
+        added = [store.add("txt2img", {}, {}, after=a.id) for _ in range(80)]
+        assert [job.id for job in store.queued()] == [a.id, *[job.id for job in reversed(added)], b.id]
+    finally:
+        store.close()
+
+
 def test_the_store_adds_the_new_columns_to_an_old_database(tmp_path):
     path = tmp_path / "jobs.db"
     db = sqlite3.connect(path)

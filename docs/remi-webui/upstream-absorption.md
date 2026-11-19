@@ -124,6 +124,54 @@ python tools/upstream_forks.py review    # commits after the merge base and diff
 When Remi forks another upstream file, add its row here and its path to
 `FORKED` in `tools/upstream_forks.py` in the same commit.
 
+### 1.2 Upstream bugs Remi fixes (divergences)
+
+**Policy: deterministic upstream bugs are fixed in Remi and recorded as
+divergences; report them upstream when practical.** Remi does not inherit a
+bug it can reproduce (a fixed input that fails or gives a wrong result every
+time) just to stay close to upstream. Each fix keeps upstream's code around it
+and is small enough to merge through; it gets a regression test and a row
+here.
+
+These files are not forks: a merge takes upstream's changes to them as usual,
+and `tools/upstream_forks.py restore` never touches them (it lists §1.1 only).
+`tools/upstream_forks.py review` lists the upstream commits on them
+(`DIVERGED`, kept equal to the first column below by
+`tests/test_remi_upstream_forks.py`). On a conflict there, keep Remi's fix and
+take the rest of upstream's change; if upstream fixed the same bug, take
+upstream's fix, keep the test, and drop the row once nothing of Remi's is left.
+A clean merge can still undo a fix (upstream rewrites the function around it):
+the test the row names fails then, so run it after every sync.
+
+| upstream file | Remi's fix | pinning test |
+|---|---|---|
+| `backend/memory_management.py` | `discard_cuda_async_error` only on CUDA: on MPS its `torch.cuda.synchronize()` raised inside `is_oom`, so an out-of-memory error skipped the tiled-VAE fallback and left the job running | `tests/test_memory_management_oom.py` |
+| `backend/sampling/sampling_function.py` | `transformer_options["batch_indices"]`: the image rows of a call, for per-image state in model wrappers; on MPS and CPU the cond / uncond chunks are never merged by free memory (`merges_by_free_memory`): "free" there is the system's available RAM, so the same request ran as one batch-2 or two batch-1 calls from run to run and gave a different image (batch-2 kernels round differently in bf16, CFG amplifies it) | `tests/test_sampling_batch_indices.py` |
+| `backend/text_processing/anima_engine.py` | `BREAK` (the parser's chunk marker) is a space for Anima's single chunk, not the text "BREAK" at weight -1 | `tests/test_anima_text_engine_compat.py` |
+| `extensions-builtin/forge_preprocessor_inpaint/scripts/preprocessor_inpaint.py` | inpaint_only with Hires fix: a unit that sat out the hires pass blends with the hires original instead of scaling the image back down; two inpaint_only units each blend with their own image and mask (the state is per unit, not on the one shared preprocessor) | `extensions-builtin/sd_forge_controlnet/tests/test_controlnet_params.py` |
+| `extensions-builtin/forge_preprocessor_reference/scripts/forge_reference.py` | an error while recording no longer leaves it recording for every later run; the recorded tensors are released after sampling, and by ControlNet's `cleanup` after an error (`release()`) | `extensions-builtin/sd_forge_controlnet/tests/test_controlnet_params.py` |
+| `extensions-builtin/forge_preprocessor_tile/scripts/preprocessor_tile.py` | tile_colorfix scales each row by its own image's sigma (a batch of 2+ failed) | `extensions-builtin/sd_forge_controlnet/tests/test_controlnet_params.py` |
+| `extensions-builtin/sd_forge_controlllite/scripts/forge_controllllite.py` | Anima LLLite follows a Hires checkpoint's DiT, skips one it does not fit, restores after an error; the step window counts sampler steps (`sampler_progress`), not forward calls; the mask multiplies a copy of the unit's control image, not the cached one (a soft mask compounded over batches and the hires pass) | `extensions-builtin/sd_forge_controlnet/tests/test_controlnet_params.py` |
+| `extensions-builtin/sd_forge_controlnet/scripts/controlnet.py` | `cleanup` runs each model's after-sampling hook (a generation that raised no longer keeps LLLite's patch in every later one) and releases a reference preprocessor's recordings; a unit whose control model fails to load is removed from the infotext (it never ran) | `extensions-builtin/sd_forge_controlnet/tests/test_controlnet_params.py` |
+| `extensions-builtin/sd_forge_controlllite/lib_controllllite/lib_controllllite.py` | LLLite runs in its window of sampler steps (`step_active`; img2img, hires and second-order samplers counted forward calls instead) | `extensions-builtin/sd_forge_controlnet/tests/test_controlnet_params.py` |
+| `extensions-builtin/sd_forge_controlllite/lib_controllllite/lib_controllllite_anima.py` | two units on the same Linear restore in any order (the second restore put the first's wrapper back, and the next apply recursed); sampler-step window as above | `extensions-builtin/sd_forge_controlnet/tests/test_controlnet_params.py` |
+| `extensions-builtin/sd_forge_image_stitch/scripts/image_stitch.py` | the encoded references are cached per engine: after an unload or reload they are encoded again | `extensions-builtin/sd_forge_image_stitch/tests/test_image_stitch_params.py` |
+| `extensions-builtin/sd_forge_lora/networks.py` | a failed LoRA apply no longer leaves the previous set active; the failure is reported again for the same set without a reload, named by the alias this prompt uses | `extensions-builtin/sd_forge_lora/tests/test_networks_apply_failure.py` |
+| `extensions-builtin/sd_forge_lora_schedule/scripts/control.py` | a malformed schedule is rejected whole; before its first point a LoRA takes that point's weight; the step is found with a batch of timesteps | `extensions-builtin/sd_forge_lora_schedule/tests/test_lora_schedule_params.py` |
+| `extensions-builtin/sd_forge_radial/scripts/forge_radial.py` | Wan's global attention is put back in `cleanup` (no dense last step, or an error, left radial attention for the next Wan run) | `extensions-builtin/sd_forge_radial/tests/test_radial_params.py` |
+| `extensions-builtin/soft-inpainting/scripts/soft_inpainting.py` | `apply_masks` (samples a script already decoded) appends each image's mask; it indexed an empty list (IndexError). No built-in path reaches it today | `extensions-builtin/soft-inpainting/tests/test_soft_inpainting_params.py` |
+| `modules/api/api.py` | a pasted value that overflows (`Steps: 1e999`) is ignored instead of failing the request; `POST /sdapi/v1/options` holds a model pick while a generation runs (`tests/test_remi_model_selection.py`) | `tests/test_api_pasted_value.py` |
+| `modules/extras.py` | the Merger refuses an output name that is one of the models it reads | `tests/test_remi_merger.py` |
+| `modules/images.py` | PNG Info never lets piexif open an EXIF chunk as a file name on the server | `tests/test_remi_security.py` |
+| `modules/img2img.py` | a batch image whose infotext fails to parse no longer leaves `infotext_styles` at "Ignore" | `tests/test_img2img_batch_png_info.py` |
+| `modules/infotext_utils.py` | pasting "Hires Module 1" ("Built-in", "Use same choices", modules not installed here) | `tests/test_infotext_paste_roundtrip.py` |
+| `modules/processing.py` | the prompt cache (the hires conds too) is cleared after a model reload; edit models: an `ini_latent` an earlier run left is cleared before `init()`, and the input-image reference is restored before each batch's `setup_conds()` (these two need an edit model and have no unit test: check them by reading after a merge) | `tests/test_prompt_cache_clear.py` |
+| `modules/processing_scripts/refiner.py` | `cleanup` puts the base weights back after a generation that raised after the fast swap | `tests/test_refiner_switch.py` |
+| `modules_forge/supported_controlnet.py` | the built ControlNet cache is keyed on the file's contents (real path, mtime, size) and the dtypes, not the path (a replaced file kept its old weights until a restart); the setting's 0 caches nothing | `tests/test_controlnet_model_cache.py` |
+
+When Remi fixes another upstream bug, add its row here and its path to
+`DIVERGED` in the same commit.
+
 ## 2. Translating each kind of change
 
 ### 2.1 A script or extension changes its `ui()`
@@ -298,7 +346,8 @@ git diff "$BASE" upstream/neo -- scripts modules/processing_scripts 'extensions-
 git diff "$BASE" upstream/neo -G'gradio|gr\.|def ui\(|on_ui_tabs|ui_components' -- extensions-builtin \
     ':(exclude)extensions-builtin/*/scripts/*'                                                       # UI built in lib_* code
 git diff --name-status --diff-filter=A "$BASE" upstream/neo                                          # new files
-python tools/upstream_forks.py review                                # files Remi forked (§1.1): port, never merge
+python tools/upstream_forks.py review                                # files Remi forked (§1.1): port, never merge;
+                                                                     # files with Remi's upstream-bug fixes (§1.2): merge, keep each fix
 ```
 
 Record the legacy snapshot of every new upstream `Script` class that has a
@@ -424,6 +473,9 @@ note, because the merge base does not move.
       are ported with tests, and each upstream commit that
       `tools/upstream_forks.py review` lists is in the sync note's "Adapted
       for Remi" table. A new fork is in §1.1 and in `FORKED`.
+- [ ] Remi's fixes of upstream bugs (§1.2) survived the merge: the test
+      each row names passes; a row whose bug upstream fixed itself is
+      dropped (the test stays). A new fix is in §1.2 and in `DIVERGED`.
 - [ ] No Gradio: the `ruff --select TID251` check above reports nothing;
       `requirements.txt` and `modules/launch_utils.py` install no Gradio.
 - [ ] Line endings: `tools/check_line_endings.py` passes, and

@@ -211,6 +211,39 @@ class NAGTests(unittest.TestCase):
         modifier(attention, self.q[:1], self.k[:1], self.v[:1], transformer_options=options, is_self_attention=False)
         self.assertEqual(seen[-1], [5.0])
 
+    def test_negatives_of_different_lengths_still_guide_the_positive_only_call(self):
+        # stack_conditioning keeps the images' negatives as a list when they encode to different
+        # lengths (a prompt over 512 tokens): NAG was then off for the whole generation.
+        reports = []
+        modifier = NAGAttentionModifier(scale=1.5, tau=2.0, alpha=0.7, sigma_start=0.0, sigma_end=1.0, on_unbatched=lambda: reports.append(True))
+        modifier.set_negative_context([torch.tensor([[1.0]]), torch.tensor([[5.0], [5.0]])])  # image 0: 1 token, image 1: 2
+        seen = []
+
+        def attention(q, k, v, *, mask=None):
+            seen.append(k.flatten().tolist())
+            return fake_attention(q, k, v, mask=mask)
+
+        options = {
+            "cond_or_uncond": [0],
+            "batch_indices": [1],
+            "sigmas": torch.tensor([0.5]),
+            "anima_project_kv": lambda context: (context, torch.zeros_like(context)),
+        }
+        q = torch.ones(1, 1, 1)
+        base = fake_attention(q, q, q)
+        guided = modifier(attention, q, q, q, transformer_options=options, is_self_attention=False)
+        self.assertEqual(reports, [])
+        self.assertEqual(seen[-1], [5.0, 5.0])  # image 1's own negative (tiled to the common length)
+        self.assertFalse(torch.equal(guided, base))
+
+        negpip = NAGAttentionModifier(scale=1.5, tau=2.0, alpha=0.7, sigma_start=0.0, sigma_end=1.0)
+        negpip.set_negative_context([
+            {"crossattn": torch.ones(1, 1), "c_negpip_mask": -torch.ones(1, 1)},
+            {"crossattn": torch.ones(2, 1), "c_negpip_mask": torch.ones(2, 1)},
+        ])
+        self.assertEqual(tuple(negpip.negative_context.shape), (2, 2, 1))
+        self.assertEqual(negpip.negative_mask[0].flatten().tolist(), [-1.0, -1.0])
+
     def test_all_positive_rows_skip_the_copy_of_the_attention_output(self):
         # CFG 1 / Turbo: every row is positive, so the blend is the result;
         # copying ``base`` first would only be overwritten. A CFG batch
