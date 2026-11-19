@@ -268,6 +268,11 @@ def test_assets_never_fall_back_to_the_shell(webui, tmp_path):
             assert response.status_code in (401, 404) and "__REMI_ROOT__" not in response.text, path
         logged_in = server.client.get("/assets/foo", headers=basic("ann", "1"))
         assert logged_in.status_code == 404 and "__REMI_ROOT__" not in logged_in.text
+        # other build files are not reachable through the public prefix, and odd paths are a plain 404
+        (dist / "other.json").write_text("{}")
+        for path in ("/assets/%2e%2e/other.json", "/assets/%2E%2E/index.html", "/assets/%00.js", "/assets/..%5Cother.json"):
+            response = server.client.get(path)
+            assert response.status_code in (401, 404) and "__REMI_ROOT__" not in response.text, path
 
 
 @contextlib.contextmanager
@@ -630,3 +635,24 @@ def test_wrong_webui_basic_credentials_count_once_per_request(options):
     client = sdapi_app(locked)
     client.post("/sdapi/v1/interrupt", headers=basic("ann", "wrong"))
     assert len(locked.throttle._failures["testclient"]) == 1
+
+
+def test_an_images_exif_chunk_is_never_opened_as_a_file_name(webui, tmp_path):
+    # piexif.load opens any bytes without an EXIF/TIFF/JPEG header as a path:
+    # an uploaded WebP's EXIF chunk naming a server file must not be read,
+    # and malformed EXIF reads as no comment instead of a 500.
+    import piexif
+    import piexif.helper
+    from PIL import Image
+
+    from modules.images import read_info_from_image
+
+    secret = tmp_path / "secret.tif"
+    secret.write_bytes(piexif.dump({"Exif": {piexif.ExifIFD.UserComment: piexif.helper.UserComment.dump("secret")}})[6:])  # a TIFF file
+    for exif in (str(secret).encode(), b"abc\x00def", b"II*\x00garbage"):
+        buffer = io.BytesIO()
+        Image.new("RGB", (8, 8)).save(buffer, "WEBP", exif=exif)
+        with Image.open(io.BytesIO(buffer.getvalue())) as image:
+            assert image.info.get("exif") == exif
+            geninfo, _ = read_info_from_image(image)
+        assert geninfo != "secret"

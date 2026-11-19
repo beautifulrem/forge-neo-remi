@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from remi import network_metadata as nm
-from remi.files import FileStore, decode_cursor, encode_cursor
+from remi.files import FileStore, decode_offset, encode_cursor
 
 log = logging.getLogger(__name__)
 
@@ -1092,8 +1092,7 @@ class NetworkIndex:
         else:
             matches = by_name[::-1] if descending else by_name
         if offset is None:
-            position = decode_cursor(cursor, 1)
-            offset = int(position[0]) if position and position[0].isdigit() else 0
+            offset = decode_offset(cursor)
         offset = max(0, int(offset))
         limit = min(max(int(limit), 1), 500)
         page = matches[offset : offset + limit]

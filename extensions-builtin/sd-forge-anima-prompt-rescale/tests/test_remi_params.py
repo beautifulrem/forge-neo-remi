@@ -120,3 +120,10 @@ def test_standalone():
 
 def test_zh_cn_catalog_covers_the_panel():
     harness.assert_localized(ROOT, [_layout("txt2img"), _layout("img2img")])
+
+
+def test_a_rescaled_images_paste_turns_auto_rescale_off():
+    # Its infotext's prompt is the rescaled one: rescaling it again would move the switch points
+    paste = _layout("img2img").by_name["auto_enable"].paste
+    assert paste({"Prompt": "[cat:dog:10]", "Anima schedule rescale": "src35->tgt20@d0.5"}) is False
+    assert paste({"Prompt": "[cat:dog:10]"}) is None  # other infotexts leave the switch as it is

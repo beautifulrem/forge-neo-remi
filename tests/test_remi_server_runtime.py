@@ -190,6 +190,7 @@ def test_bind_host_and_ports(monkeypatch):
         busy.listen()
         port = busy.getsockname()[1]
         assert not launch.port_free("127.0.0.1", port)
+        assert not launch.port_free("0.0.0.0", port)  # the wildcard bind would succeed next to it (SO_REUSEADDR)
         assert launch.pick_port("127.0.0.1", None, port) != port
         assert launch.pick_port("127.0.0.1", 1234, port) == 1234
 
@@ -205,6 +206,7 @@ def test_the_server_thread_serves_and_stops(webui_tmp):
         thread.start()
         try:
             assert thread.url == f"http://127.0.0.1:{port}/sub/"
+            assert launch.ServerThread(server.app, host="::1", port=port).url == f"http://[::1]:{port}/"
             with httpx.Client(trust_env=False, timeout=5) as client:  # no proxy for loopback
                 # behind a proxy that keeps the prefix, and one that strips it
                 assert set(client.get(f"http://127.0.0.1:{port}/sub/internal/ping").json()) == {"instance"}
@@ -309,6 +311,17 @@ def test_restart_answers_and_leaves_the_exit_to_the_serve_loop(webui_tmp, monkey
         assert server.client.post("/api/v2/server/restart").json()["ok"] is True
         assert not exited
         assert shared.state.wait_for_server_command(1) == launch.RESTART_PROGRAM
+
+
+def test_reload_asks_the_serve_loop_without_interrupting_the_running_job(webui_tmp, monkeypatch):
+    from modules import shared
+    from modules.shared_state import State
+
+    monkeypatch.setattr(shared, "state", State())
+    with server_app(webui_tmp) as server:
+        assert server.client.post("/api/v2/server/reload").json()["ok"] is True
+        assert shared.state.wait_for_server_command(1) == "restart"
+        assert not shared.state.interrupted  # the reload waits for the job (queue.hold) instead
 
 
 def test_reload_holds_a_job_that_waits_for_the_lock(webui_tmp):

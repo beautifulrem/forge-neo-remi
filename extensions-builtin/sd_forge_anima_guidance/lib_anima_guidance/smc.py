@@ -12,7 +12,7 @@ from typing import Optional
 
 import torch
 
-from lib_anima_guidance.advanced import effective_cfg_scale, sigma_broadcast
+from lib_anima_guidance.advanced import effective_cfg_scale, scale_value, sigma_broadcast
 from modules.anima_support import is_anima_auxiliary_denoiser
 
 
@@ -31,7 +31,7 @@ class SMCCFGState:
         self,
         cond: torch.Tensor,
         uncond: torch.Tensor,
-        guidance_scale: float,
+        guidance_scale: float | torch.Tensor,
         *,
         update_state: bool = True,
     ) -> torch.Tensor:
@@ -46,7 +46,7 @@ class SMCCFGState:
         correction = -gain * torch.sign(surface)
         if update_state:
             self._e_prev = e.detach()
-        return uncond + float(guidance_scale) * (e + correction)
+        return uncond + scale_value(guidance_scale) * (e + correction)
 
 
 def make_smc_cfg_function(state: SMCCFGState, process=None):

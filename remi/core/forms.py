@@ -118,7 +118,48 @@ def _paste_styles(params: dict):
 
 
 def _paste_enable_hr(params: dict) -> bool:
-    return "Denoising strength" in params and ("Hires upscale" in params or "Hires upscaler" in params or "Hires resize-1" in params)
+    """A hires pass writes ``Denoising strength`` with its scale or target
+    size; the parser fills ``Hires resize-1`` with 0 in every infotext, so
+    only a size counts (an img2img infotext has the strength alone)."""
+
+    if "Denoising strength" not in params:
+        return False
+    try:
+        resized = int(params.get("Hires resize-1") or 0) > 0
+    except (TypeError, ValueError):
+        resized = False
+    return resized or "Hires upscale" in params or "Hires upscaler" in params
+
+
+def _paste_hr_checkpoint(params: dict):
+    """``Hires checkpoint`` records the short title (``name [hash]``): the
+    choices are file names unless short names are on, so it is matched as the
+    Refiner's checkpoint is."""
+
+    title = params.get("Hires checkpoint")
+    if title is None or title == SAME_CHECKPOINT:
+        return title
+    from modules.processing_scripts.refiner import lookup_checkpoint
+
+    return lookup_checkpoint(title) or title  # unknown: validation reports the recorded name
+
+
+INPAINT_KEYS = ("Inpaint area", "Mask blur", "Mask mode", "Masked content")
+"""Keys only an inpaint run writes (``Inpaint area`` always, since the round-trip fix)."""
+
+
+def _paste_inpaint_default(key: str, default):
+    """Paste of an inpaint setting processing writes only away from its
+    default (``Mask blur`` above 0, the inverted ``Mask mode``, ``Masked
+    content`` other than original): absent from an inpaint infotext, it was
+    the default, not whatever the form holds."""
+
+    def paste(params: dict):
+        if key in params:
+            return params[key]
+        return default if any(name in params for name in INPAINT_KEYS) else None
+
+    return paste
 
 
 def _paste_inpaint_area(params: dict):
@@ -258,7 +299,7 @@ def _hires_fix() -> ui.Node:
             ),
             ui.Group(
                 ui.Row(
-                    ui.Choice("hr_checkpoint_name", _hr_checkpoints, SAME_CHECKPOINT, same=ui.without_model_hash, label="Hires Checkpoint", infotext="Hires checkpoint"),
+                    ui.Choice("hr_checkpoint_name", _hr_checkpoints, SAME_CHECKPOINT, same=ui.without_model_hash, label="Hires Checkpoint", infotext="Hires checkpoint", paste=_paste_hr_checkpoint),
                     ui.MultiChoice("hr_additional_modules", _hr_modules, [SAME_MODULES], label="Hires VAE / Text Encoder", infotext="Hires VAE/TE"),
                 ),
                 ui.Row(
@@ -366,9 +407,9 @@ def _img2img_image() -> ui.Node:
 
 def _img2img_inpaint() -> ui.Node:
     return ui.Group(
-        ui.Slider("mask_blur", 0, 64, 4, 4, label="Mask blur", hint=hints.MASK_BLUR, infotext="Mask blur"),
-        ui.Choice("inpainting_mask_invert", MASK_MODES, "Inpaint masked", type="index", style="radio", label="Mask mode", infotext="Mask mode"),
-        ui.Choice("inpainting_fill", MASKED_CONTENT, "original", type="index", style="radio", label="Masked content", hints=hints.MASKED_CONTENT, infotext="Masked content"),
+        ui.Slider("mask_blur", 0, 64, 4, 4, label="Mask blur", hint=hints.MASK_BLUR, infotext="Mask blur", paste=_paste_inpaint_default("Mask blur", 0)),
+        ui.Choice("inpainting_mask_invert", MASK_MODES, "Inpaint masked", type="index", style="radio", label="Mask mode", infotext="Mask mode", paste=_paste_inpaint_default("Mask mode", "Inpaint masked")),
+        ui.Choice("inpainting_fill", MASKED_CONTENT, "original", type="index", style="radio", label="Masked content", hints=hints.MASKED_CONTENT, infotext="Masked content", paste=_paste_inpaint_default("Masked content", "original")),
         ui.Row(
             ui.Choice("inpaint_full_res", INPAINT_AREAS, "Only masked", type="index", style="radio", label="Inpaint area", infotext="Inpaint area", paste=_paste_inpaint_area),
             ui.Slider("inpaint_full_res_padding", 0, 256, 32, 8, label="Only masked padding, pixels", infotext="Masked area padding"),

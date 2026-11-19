@@ -80,8 +80,9 @@ class PatchRadialAttn:
             c = kwargs["c"]
             sigmas = c["transformer_options"]["sampling_sigmas"]
 
-            if len(matched_step_index := (sigmas == timestep).nonzero()) > 0:
-                current_step_index = matched_step_index.item()
+            # timestep holds one value per row (cond + uncond, batch size): the step is the first's
+            if len(matched_step_index := (sigmas == timestep[0]).nonzero()) > 0:
+                current_step_index = int(matched_step_index[0])
             else:
                 for i in range(len(sigmas) - 1):
                     if (sigmas[i] - timestep[0]) * (sigmas[i + 1] - timestep[0]) <= 0:
@@ -168,3 +169,10 @@ class RadialAttentionForForge(scripts.ScriptBuiltinUI):
         unet = PatchRadialAttn.patch_radial_attn(unet, *args)
 
         p.sd_model.forge_objects.unet = unet
+
+    def cleanup(self, p, enable: bool = False, *args, **kwargs):
+        # The wrapper swaps the module-global wan.attention and puts it back only on a dense step:
+        # with no dense last step, or after an error, the next Wan generation (Radial off, or another
+        # size) would run this run's radial attention
+        if enable:
+            wan.attention = ORIG_ATTENTION

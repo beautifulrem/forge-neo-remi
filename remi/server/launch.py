@@ -60,6 +60,12 @@ def exposure_warnings(cmd_opts: Any) -> list[str]:
 
 
 def port_free(host: str, port: int) -> bool:
+    """Whether the server can take ``port`` on ``host``. The bind probe uses
+    SO_REUSEADDR (as uvicorn binds; a port left in TIME_WAIT by the previous
+    app is free), which lets it succeed next to a listener on the wildcard or
+    loopback counterpart (and on Windows on a port in use), so a port that
+    accepts connections is busy too."""
+
     family = socket.AF_INET6 if ":" in host else socket.AF_INET
     with socket.socket(family, socket.SOCK_STREAM) as probe:
         probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -67,7 +73,18 @@ def port_free(host: str, port: int) -> bool:
             probe.bind((host, port))
         except OSError:
             return False
-    return True
+    return not _accepts(host, port)
+
+
+def _accepts(host: str, port: int) -> bool:
+    target = {"": "127.0.0.1", "0.0.0.0": "127.0.0.1", "::": "::1"}.get(host, host)
+    family = socket.AF_INET6 if ":" in target else socket.AF_INET
+    with socket.socket(family, socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.5)
+        try:
+            return probe.connect_ex((target, port)) == 0
+        except OSError:
+            return False
 
 
 def wait_port_free(host: str, port: int, timeout: float = 15) -> bool:
@@ -148,7 +165,8 @@ class ServerThread:
         self.graceful_shutdown = graceful_shutdown
         self.server = uvicorn.Server(config)
         self.thread = threading.Thread(target=self.server.run, name="remi-uvicorn", daemon=True)
-        self.url = f"{'https' if ssl_certfile else 'http'}://{'127.0.0.1' if host in ('0.0.0.0', '::') else host}:{port}{root}/"
+        shown = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+        self.url = f"{'https' if ssl_certfile else 'http'}://{f'[{shown}]' if ':' in shown else shown}:{port}{root}/"
 
     def start(self, timeout: float = 60) -> None:
         self.thread.start()

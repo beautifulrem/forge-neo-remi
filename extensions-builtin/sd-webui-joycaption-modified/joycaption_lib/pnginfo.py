@@ -19,7 +19,6 @@ PNG info tab. We just need the positive prompt as plain text.
 
 from __future__ import annotations
 
-from typing import Optional
 
 try:
     from PIL import Image

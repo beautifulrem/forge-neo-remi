@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from remi.files import decode_cursor, encode_cursor
+from remi.files import decode_offset, encode_cursor
 
 SCHEMA_VERSION = 1
 FAVORITE_KINDS = ("prompt", "negative", "tags")
@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS favorites (
     position REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS favorites_collection ON favorites (collection_id, position);
+CREATE INDEX IF NOT EXISTS favorites_text ON favorites (collection_id, kind, text);
 CREATE TABLE IF NOT EXISTS translations (
     provider TEXT NOT NULL,
     target TEXT NOT NULL,
@@ -110,6 +111,8 @@ class PromptToolsStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._db = sqlite3.connect(self.path, check_same_thread=False, isolation_level=None, timeout=30)
+        # the searches lower-case the terms in Python; SQLite's lower() folds ASCII letters only
+        self._db.create_function("py_lower", 1, lambda text: text.lower() if isinstance(text, str) else text, deterministic=True)
         self._db.row_factory = sqlite3.Row
         with self._lock:
             self._db.execute("PRAGMA journal_mode=WAL")
@@ -220,7 +223,7 @@ class PromptToolsStore:
     @staticmethod
     def _trim_history(db: sqlite3.Connection, limit: int) -> None:
         if limit > 0:
-            db.execute("DELETE FROM history WHERE name = '' AND id NOT IN (SELECT id FROM history ORDER BY last_used DESC LIMIT ?)", (limit,))
+            db.execute("DELETE FROM history WHERE name = '' AND id NOT IN (SELECT id FROM history WHERE name = '' ORDER BY last_used DESC LIMIT ?)", (limit,))
 
     def record_history(self, prompt: str, negative: str = "", tab: str = "", *, when: float | None = None, limit: int = 0, name: str = "") -> dict[str, Any] | None:
         """Adds a prompt pair, or moves an identical one to the top (``uses``
@@ -264,11 +267,10 @@ class PromptToolsStore:
             params.append(tab)
         haystack = {"prompt": "prompt || ' ' || name", "negative": "negative || ' ' || name"}.get(field or "", "prompt || ' ' || negative || ' ' || name")
         for term in _like_terms(query):
-            where.append(f"lower({haystack}) LIKE ? ESCAPE '\\'")
+            where.append(f"py_lower({haystack}) LIKE ? ESCAPE '\\'")
             params.append(term)
         clause = f"WHERE {' AND '.join(where)}" if where else ""
-        position = decode_cursor(cursor, 1)
-        offset = int(position[0]) if position and position[0].isdigit() else 0
+        offset = decode_offset(cursor)
         limit = min(max(int(limit), 1), 200)
         if field in ("prompt", "negative"):
             column = "prompt" if field == "prompt" else "negative"
@@ -383,7 +385,7 @@ class PromptToolsStore:
             where.append(f"kind IN ({','.join('?' * len(wanted))})")
             params.extend(wanted)
         for term in _like_terms(query):
-            where.append("lower(text || ' ' || name) LIKE ? ESCAPE '\\'")
+            where.append("py_lower(text || ' ' || name) LIKE ? ESCAPE '\\'")
             params.append(term)
         return (f"WHERE {' AND '.join(where)}" if where else ""), params
 
@@ -401,8 +403,7 @@ class PromptToolsStore:
         the next cursor and the number of matches."""
 
         clause, params = self._favorite_query(collection_id=collection_id, all_collections=all_collections, kinds=kinds, query=query)
-        position = decode_cursor(cursor, 1)
-        offset = int(position[0]) if position and position[0].isdigit() else 0
+        offset = decode_offset(cursor)
         limit = min(max(int(limit), 1), 500)
         total = int(self._one(f"SELECT COUNT(*) AS n FROM favorites {clause}", params)["n"])
         rows = self._all(f"SELECT * FROM favorites {clause} ORDER BY position, created LIMIT ? OFFSET ?", (*params, limit, offset))

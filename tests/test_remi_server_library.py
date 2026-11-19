@@ -266,6 +266,21 @@ def test_old_exports_are_pruned_with_their_index_rows(library, server):
     index.close()
 
 
+def test_pruning_exports_keeps_a_zip_saved_outside_the_exports_folder(library, server, tmp_path):
+    files = server.services.files
+    saved = tmp_path / "save-folder" / "kept.zip"
+    saved.parent.mkdir()
+    saved.write_bytes(b"PK\x05\x06" + b"\0" * 18)
+    record = files.register_path(saved, kind="export")
+    old = time.time() - 7200
+    os.utime(saved, (old, old))
+    files._db.execute("UPDATE files SET created = ? WHERE id = ?", (old, record.id))
+    index = GalleryIndex(files)
+    index.prune_exports()
+    assert saved.exists() and files.get(record.id) is None  # the download link expires, the user's zip stays
+    index.close()
+
+
 def test_reveal_is_guarded(library, server, monkeypatch):
     from modules import shared
     from remi import library as library_module

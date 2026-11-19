@@ -59,3 +59,17 @@ def test_zh_cn_covers_the_panel(radial):
 
 def test_imports_standalone():
     harness.assert_imports_standalone([SCRIPT])
+
+
+def test_cleanup_puts_back_wan_attention(radial):
+    """The wrapper swaps the module-global wan.attention and restores it only on a dense step: a run
+    ending on a radial step, or raising, must not leave it to the next Wan generation."""
+    radial.wan.attention = lambda *args, **kwargs: "radial"
+    try:
+        script = radial.RadialAttentionForForge()
+        script.cleanup(object(), False)  # a run without Radial leaves it to whoever set it
+        assert radial.wan.attention is not radial.ORIG_ATTENTION
+        script.cleanup(object(), True)
+        assert radial.wan.attention is radial.ORIG_ATTENTION
+    finally:
+        radial.wan.attention = radial.ORIG_ATTENTION

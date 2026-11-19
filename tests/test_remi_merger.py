@@ -152,6 +152,15 @@ def test_weighted_sum_and_add_difference_merge_with_progress(models):
     assert "model.diffusion_model.v" not in weights  # discarded
 
 
+def test_the_merge_never_writes_over_one_of_its_inputs(models):
+    from modules import extras
+
+    before = (models.folder / "a.safetensors").read_bytes()
+    result = extras.run_modelmerger(None, "a.safetensors", "", "", "No Interpolation", 0.5, "", "^model\\.diffusion_model\\.v$", False, [], False)
+    assert result == "Failed: The filename is one of the models being merged"
+    assert (models.folder / "a.safetensors").read_bytes() == before
+
+
 def test_a_failing_progress_stops_the_merge_and_ends_the_state(models):
     from modules import extras, shared
 
@@ -225,6 +234,8 @@ def test_the_page_checks_its_inputs_before_starting(server, models):
         ({**base, "discard_weights": "(["}, "Layers to Discard is not a valid regular expression"),
         ({**base, "custom_name": "../outside"}, "The filename must stay inside the checkpoint folder"),
         ({**base, "custom_name": "b"}, "The filename is one of the models being merged; choose another"),
+        # a blank No Interpolation name is model A's own name
+        ({"primary_model_name": "a.safetensors", "interp_method": "No Interpolation"}, "The filename is one of the models being merged; choose another"),
     ]
     for values, message in cases:
         answer = _act(server, "merge", values)

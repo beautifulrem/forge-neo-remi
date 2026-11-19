@@ -1,4 +1,4 @@
-from modules import script_callbacks, scripts
+from modules import script_callbacks, scripts, spectrum_force
 from modules.anima_lora_support import restore_batch_prompts, restore_run_prompts
 from lib_stage_scheduler.options import _arguments, _t
 from lib_stage_scheduler.params import bind, params_root, shift_of, templates_patch
@@ -99,6 +99,13 @@ class Script(scripts.Script):
     # endregion
 
     def process(self, p, *values):
+        state = getattr(p, "_anima_lora_stage_scheduler_state", None)
+        if state is not None and state.p is not p and getattr(state.p, "_anima_lora_stage_scheduler_state", None) is state:
+            # A copy of the running generation (ADetailer re-runs process()
+            # on one after a batch's last image and never cleans it up): the
+            # run is in place, and a run of the copy's own would take it over
+            # and hold an online-LoRA lease nothing releases.
+            return
         args = _arguments(values)
         if not args.enabled:
             _cleanup_runtime(p)
@@ -120,6 +127,13 @@ class Script(scripts.Script):
             return
 
         state.set_factor(0.0)
+        if state.live_wrappers():
+            # The strengths follow the sampler's progress, which Spectrum
+            # cannot forecast: actual forwards for the pass (as the artist
+            # mixer), on a patcher of the pass's own
+            objects = p.sd_model.forge_objects
+            objects.unet = objects.unet.clone()
+            spectrum_force.request(objects.unet, "anima_lora_stage_scheduler")
 
     def postprocess_batch_list(self, p, pp, *args, **kwargs):
         # The batch's infotexts record the LoRA weights as written, not the

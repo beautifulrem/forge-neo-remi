@@ -213,7 +213,16 @@ def load_networks(names: list[str], te_multipliers: list[float] = None, unet_mul
 
     compiled_lora_targets_hash = str(compiled_lora_targets)
     if current_sd.current_lora_hash == compiled_lora_targets_hash:
+        # The same set again (the next batch, the hires pass, a rerun): reported again, not reloaded
+        failed_hash, apply_failures = getattr(current_sd, "lora_apply_failures", None) or (None, {})
+        if failed_hash != compiled_lora_targets_hash:  # the hash was reset (Refiner) and rebuilt since
+            apply_failures = {}
+        failed.update({name: error for name, (_filename, error) in apply_failures.items()})
+        failed_files = {filename for filename, _error in apply_failures.values()}
+        loaded_networks[:] = [item for item in loaded_networks if item.network_on_disk.filename not in failed_files]
         return failed
+
+    current_sd.lora_apply_failures = (compiled_lora_targets_hash, {})  # failures of this set (above)
 
     current_sd.current_lora_hash = compiled_lora_targets_hash
     current_sd.forge_objects.unet = current_sd.forge_objects_original.unet
@@ -232,7 +241,16 @@ def load_networks(names: list[str], te_multipliers: list[float] = None, unet_mul
             continue
         if any(key.startswith("lora_unet__") for key in lora_sd):
             lora_sd = state_dict_prefix_replace(lora_sd, {"lora_unet__": "lora_unet_"})
-        current_sd.forge_objects.unet, current_sd.forge_objects.clip = load_lora_for_models(current_sd.forge_objects.unet, current_sd.forge_objects.clip, lora_sd, strength_model, strength_clip, filename=filename, online_mode=online_mode)
+        try:
+            current_sd.forge_objects.unet, current_sd.forge_objects.clip = load_lora_for_models(current_sd.forge_objects.unet, current_sd.forge_objects.clip, lora_sd, strength_model, strength_clip, filename=filename, online_mode=online_mode)
+        except Exception as e:
+            # Reported for this generation (not remembered: it may load onto another model); the
+            # LoRAs applied so far stay, and the objects below are refreshed, or the hash set above
+            # would keep the previous LoRA set
+            errors.report(f'Failed to apply LoRA: "{filename}"', exc_info=True)
+            failed[name] = str(e) or type(e).__name__
+            loaded_networks[:] = [item for item in loaded_networks if item.network_on_disk.filename != filename]
+            current_sd.lora_apply_failures[1][name] = (filename, failed[name])  # for the same set again (above)
 
     current_sd.forge_objects_after_applying_lora = current_sd.forge_objects.shallow_copy()
     return failed

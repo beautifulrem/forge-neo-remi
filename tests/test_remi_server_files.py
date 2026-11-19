@@ -1,5 +1,6 @@
 """Uploads, files and thumbnails by id, the outputs gallery and networks."""
 
+import dataclasses
 import io
 import os
 from pathlib import Path
@@ -85,6 +86,38 @@ def test_a_chunked_upload_without_content_length_is_cut_off(server):
 
     response = server.client.post("/api/v2/uploads", content=body(), headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
     assert response.status_code == 413
+
+
+def test_a_cancelled_upload_is_a_client_error_and_closes_its_spooled_file(server, monkeypatch):
+    import asyncio
+
+    from fastapi import HTTPException
+    from starlette.formparsers import MultiPartParser
+    from starlette.requests import Request
+
+    from remi.server.routes.files import upload as upload_route
+
+    boundary = "remiboundary"
+    head = f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="big.png"\r\nContent-Type: image/png\r\n\r\n'.encode()
+    messages = [{"type": "http.request", "body": head + os.urandom(2 * 1024 * 1024), "more_body": True}, {"type": "http.disconnect"}]
+
+    async def receive():
+        return messages.pop(0)
+
+    parsers = []
+    real_init = MultiPartParser.__init__
+
+    def init(self, *args, **kwargs):
+        real_init(self, *args, **kwargs)
+        parsers.append(self)
+
+    monkeypatch.setattr(MultiPartParser, "__init__", init)
+    scope = {"type": "http", "method": "POST", "path": "/api/v2/uploads", "headers": [(b"content-type", f"multipart/form-data; boundary={boundary}".encode())]}
+    with pytest.raises(HTTPException) as cancelled:
+        asyncio.run(upload_route(Request(scope, receive), server.services))
+    assert cancelled.value.status_code == 400
+    [parser] = parsers
+    assert parser._files_to_close_on_error and all(spooled.closed for spooled in parser._files_to_close_on_error)
 
 
 def test_the_upload_stream_limit_stops_reading_early():
@@ -257,6 +290,67 @@ def test_unsaved_outputs_are_temporary(tmp_path):
     assert store.prune_unsaved(3600) == 1
     assert store.get(unsaved.id) is None and not Path(unsaved.path).exists()
     assert store.get(saved.id) is not None
+    store.close()
+
+
+def test_unsaved_outputs_a_queued_job_reads_are_kept(tmp_path):
+    import time
+
+    store = FileStore(tmp_path)
+    needed = store.save_output_image(Image.new("RGB", (8, 8)), None)
+    other = store.save_output_image(Image.new("RGB", (8, 8)), None)
+    store._db.execute("UPDATE files SET created = ?", (time.time() - 7200,))
+    assert store.prune_unsaved(3600, keep={needed.id}) == 1
+    assert store.get(needed.id) is not None and store.get(other.id) is None
+    store.close()
+
+
+def test_a_data_folder_reached_through_a_symlink_still_owns_its_unsaved_outputs(tmp_path):
+    import time
+
+    (tmp_path / "real").mkdir()
+    (tmp_path / "link").symlink_to(tmp_path / "real", target_is_directory=True)
+    store = FileStore(tmp_path / "link")
+    unsaved = store.save_output_image(Image.new("RGB", (8, 8)), None)
+    store._db.execute("UPDATE files SET created = ?", (time.time() - 7200,))
+    assert store.prune_unsaved(3600) == 1 and not Path(unsaved.path).exists()
+    store.close()
+
+
+def test_deleting_a_file_removes_its_thumbnails(tmp_path):
+    store = FileStore(tmp_path)
+    record = store.save_output_image(Image.new("RGB", (300, 300)), None)
+    thumbs = [store.thumbnail(record, width) for width in (64, 300)]
+    other = store.save_output_image(Image.new("RGB", (300, 300)), None)
+    kept = store.thumbnail(other, 64)
+    assert all(thumb.exists() for thumb in thumbs)
+    store.delete(record.id)
+    assert not any(thumb.exists() for thumb in thumbs) and kept.exists()
+    store.close()
+
+
+def test_an_output_the_scan_indexed_during_its_job_gets_the_job(tmp_path):
+    from remi.library import GalleryIndex
+
+    folder = tmp_path / "saved"
+    folder.mkdir()
+    (folder / "1.png").write_bytes(png())
+    store = FileStore(tmp_path / "data")
+    index = GalleryIndex(store, folders=list)
+    scanned = store.register_output(folder / "1.png", infotext="from the file")
+    index.sync()
+    assert index._db.execute("SELECT category FROM gallery_meta WHERE file_id = ?", (scanned.id,)).fetchone() == ("other",)
+    claimed = store.register_output(folder / "1.png", job_id="job1", tab="img2img", infotext="from the job")
+    assert claimed.id == scanned.id and (claimed.job_id, claimed.tab, claimed.infotext) == ("job1", "img2img", "from the job")
+    assert store.get(scanned.id).job_id == "job1"
+    index.sync()
+    assert index._db.execute("SELECT category FROM gallery_meta WHERE file_id = ?", (scanned.id,)).fetchone() == ("img2img",)
+    # a later scan does not take it over again; a later job registers the path only after writing
+    # over it ("Override"), so that image gets a record of its own
+    assert store.register_output(folder / "1.png").job_id == "job1"
+    rewritten = store.register_output(folder / "1.png", job_id="job2", tab="txt2img")
+    assert rewritten.job_id == "job2" and rewritten.id != scanned.id
+    index.close()
     store.close()
 
 
@@ -435,3 +529,84 @@ def test_file_store_rejects_unreadable_images(tmp_path):
 
 
 # endregion
+
+
+def test_a_prune_never_deletes_an_upload_re_uploaded_meanwhile(tmp_path):
+    # The hourly prune lists the old uploads, then deletes them one by one: a
+    # re-upload of the same content in between keeps its record and file.
+    import time
+
+    store = FileStore(tmp_path)
+    first = store.add_upload_bytes(png(color=(7, 7, 7)))
+    store._db.execute("UPDATE files SET created = ? WHERE id = ?", (time.time() - 30 * 86400, first.id))
+    delete = store.delete
+
+    def reupload_then_delete(file_id, **kwargs):
+        assert store.add_upload_bytes(png(color=(7, 7, 7))).id == first.id
+        return delete(file_id, **kwargs)
+
+    store.delete = reupload_then_delete
+    assert store.prune_uploads(86400) == 0
+    assert store.get(first.id) is not None and Path(first.path).exists()
+    store.close()
+
+
+def test_an_output_a_scan_indexes_during_the_insert_is_claimed_by_its_job(tmp_path, monkeypatch):
+    folder = tmp_path / "outputs"
+    folder.mkdir()
+    (folder / "1.png").write_bytes(png())
+    store = FileStore(tmp_path / "data")
+    insert = store._insert
+
+    def scan_first(record, *args):  # the folder scan wins the insert race
+        insert(dataclasses.replace(record, id="scannedScannedScanned", job_id=None, tab=None, infotext=None), *args)
+        return insert(record, *args)
+
+    monkeypatch.setattr(store, "_insert", scan_first)
+    claimed = store.register_output(folder / "1.png", job_id="job1", tab="txt2img", infotext="from the job")
+    assert (claimed.id, claimed.job_id, claimed.tab, claimed.infotext) == ("scannedScannedScanned", "job1", "txt2img", "from the job")
+    assert store.get("scannedScannedScanned").job_id == "job1"
+    store.close()
+
+
+def test_a_job_writing_over_another_jobs_output_gets_a_record_of_its_own(tmp_path):
+    # A fixed file name ([seed], no number) with "Override": the second job's image replaces the
+    # first's on disk. It must not come back as the first job's record (old size, infotext, date),
+    # nor share its id, or deleting the old job with its files would delete the new image.
+    folder = tmp_path / "outputs"
+    folder.mkdir()
+    path = folder / "123.png"
+    path.write_bytes(png(size=(64, 64)))
+    store = FileStore(tmp_path / "data")
+    old = store.register_output(path, job_id="job1", infotext="seed 123 old", created=1_000_000.0)
+
+    path.write_bytes(png(size=(128, 96)))
+    new = store.register_output(path, job_id="job2", infotext="seed 123 new")
+
+    assert new.id != old.id and store.get(old.id) is None
+    assert (new.job_id, new.infotext, new.width, new.height) == ("job2", "seed 123 new", 128, 96)
+    assert new.created > 1_000_000.0 and path.exists()
+    assert store.register_output(path, job_id="job2").id == new.id  # the same job again: idempotent
+    store.close()
+
+
+def test_a_claimed_output_takes_its_files_time(tmp_path):
+    # The scan indexed an older file at this path (its time); the job then wrote over it
+    folder = tmp_path / "outputs"
+    folder.mkdir()
+    path = folder / "1.png"
+    path.write_bytes(png())
+    store = FileStore(tmp_path / "data")
+    scanned = store.register_output(path, created=1_000_000.0)
+    assert scanned.job_id is None and scanned.created == 1_000_000.0
+
+    claimed = store.register_output(path, job_id="job3")
+    assert claimed.id == scanned.id and claimed.created == os.stat(path).st_mtime
+    assert store.get(scanned.id).created == claimed.created
+    store.close()
+
+
+def test_a_cursor_too_long_for_int_starts_at_the_first_page():
+    from remi.files import decode_offset, encode_cursor
+
+    assert decode_offset(encode_cursor("1" * 5000)) == 0

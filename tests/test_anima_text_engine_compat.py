@@ -76,6 +76,12 @@ class AnimaTextCompatibilityTests(unittest.TestCase):
         self.assertEqual(chunk.t5_tokens[-1], 1)
         self.assertEqual(self.t5.calls[-1][1], {"truncation": False, "add_special_tokens": False})
 
+    def test_break_is_a_separator_not_a_negative_word(self):
+        chunk, = self.engine.tokenize_line("a cat BREAK a dog")
+        self.assertEqual(chunk.t5_tokens, [ord(char) for char in "acatadog"] + [1])
+        self.assertTrue(all(weight == 1 for weight in chunk.t5_multipliers))
+        self.assertEqual(chunk.qwen_tokens, [ord(char) for char in "acatadog"])
+
     def test_empty_prompt_keeps_qwen_padding_and_t5_eos(self):
         chunk, = self.engine.tokenize_line("")
         self.assertEqual(chunk.qwen_tokens, [151643])

@@ -215,6 +215,14 @@ class TestValues:
                 with pytest.raises(ui.ParamError, match="finite"):
                     node.coerce(bad, ctx)
 
+    def test_an_integer_beyond_the_float_range_is_a_param_error(self):
+        ctx = ui.Context()
+        huge = 10**400
+        for node in (ui.Number("n", 0.5, precision=4), ui.Number("m", 0), ui.Slider("s", 0.0, 1.0, 0.5)):
+            for bad in (huge, -huge, str(huge)):
+                with pytest.raises(ui.ParamError, match="finite"):
+                    node.coerce(bad, ctx)
+
     def test_multichoice_index_type(self):
         ctx = ui.Context()
         layout = ui.ScriptLayout(ui.MultiChoice("parts", ["Prompt", "Seed", "Steps"], ["Seed"], type="index"))

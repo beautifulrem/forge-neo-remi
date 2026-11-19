@@ -31,7 +31,9 @@ def _known_flags() -> tuple[str, ...]:
     return tuple(option for action in parser._actions for option in action.option_strings if option.startswith("--"))
 
 SECRET_KEY_RE = re.compile(r"(?:^|[_.-])(api_?key|key|token|secret|password|passwd|credentials?|auth)(?:$|[_.-])", re.I)
-_URL_CREDENTIALS_RE = re.compile(r"(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*://)[^\s/@]+@")
+# up to the last "@" before the path: a password may hold an unencoded "@", "#" or "?" (an "@" in a
+# query before any "/" is hidden too, the safe side)
+_URL_CREDENTIALS_RE = re.compile(r"(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*://)[^\s/]+@")
 
 
 def _is_secret_flag(token: str) -> bool:

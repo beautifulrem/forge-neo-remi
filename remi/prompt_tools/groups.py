@@ -79,6 +79,8 @@ class TagGroups:
         self._cache: dict[str, tuple[tuple, list[dict[str, Any]]]] = {}
         self._tables: dict[str, tuple[list[dict[str, Any]], dict[str, str]]] = {}
         """``dictionary()`` per locale, with the groups it was built from"""
+        self._custom: tuple[tuple, bool] | None = None
+        """``(stat stamp, has groups)`` of custom.yaml"""
 
     def _path(self, name: str) -> str | None:
         for directory in self.directories:
@@ -87,9 +89,23 @@ class TagGroups:
                 return path
         return None
 
+    def _custom_used(self, custom: str) -> bool:
+        """Whether ``custom.yaml`` has groups (parsed again only when it changes:
+        every lookup, translation and completion keystroke asks)."""
+
+        stat = os.stat(custom)
+        stamp = (custom, stat.st_mtime_ns, stat.st_size)
+        with self._lock:
+            if self._custom is not None and self._custom[0] == stamp:
+                return self._custom[1]
+        used = stat.st_size > 0 and bool(_read(custom))
+        with self._lock:
+            self._custom = (stamp, used)
+        return used
+
     def _files(self, locale: str | None) -> list[str]:
         custom = self._path("custom")
-        if custom and os.path.getsize(custom) > 0 and _read(custom):
+        if custom and self._custom_used(custom):
             main = custom
         else:
             name = locale_file(locale)

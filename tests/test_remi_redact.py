@@ -24,3 +24,11 @@ def test_an_unparsable_command_line_is_hidden_when_it_may_hold_a_secret():
     assert redact.command_line("--listen --auth 'a:b") == redact.HIDDEN  # unbalanced quote
     assert redact.command_line("--ckpt 'https://u:tok@host/m") == f"--ckpt 'https://{redact.HIDDEN}@host/m"
     assert redact.command_line("--listen 'x") == "--listen 'x"
+
+
+def test_a_password_holding_an_at_sign_is_hidden_whole():
+    for password in ("p@ss", "p#ss", "p?ss", "p@s#s?"):
+        assert redact.url(f"clone https://user:{password}@host/repo.git now") == f"clone https://{redact.HIDDEN}@host/repo.git now"
+    # an "@" in the path is no credential
+    for text in ("https://host/a@b", "https://host/x and a@b"):
+        assert redact.url(text) == text

@@ -18,6 +18,7 @@ from lib_artist_mixer.contexts import (
     context_token_dim as _context_token_dim,
     concat_contexts as _concat_contexts,
     artist_mask_like as _artist_mask_like,
+    image_rows as _image_rows,
     joined_mask as _joined_mask,
     norm_limited_delta as _norm_limited_delta,
 )
@@ -353,8 +354,10 @@ def _artist_kv(state, artist, plan, base_fusion):
     if key in cache:
         return cache[key]
     context = cache["context"]
-    artist_context = _to_context_like(artist.cond_like(context, state.prompt_step), context)
-    artist_mask = _artist_mask_like(artist.mask_like(artist_context, state.prompt_step), artist_context)
+    indices = plan.options.get("batch_indices") if isinstance(plan.options, dict) else None
+    artist_context = _to_context_like(_image_rows(artist.cond_like(context, state.prompt_step), indices), context)
+    mask = artist.mask_like(artist_context, state.prompt_step)
+    artist_mask = _artist_mask_like(None if mask is None else _image_rows(mask, indices), artist_context)
     artist_context = plan.branch.select(artist_context)
     artist_mask = None if artist_mask is None else plan.branch.select(artist_mask)
     if base_fusion:

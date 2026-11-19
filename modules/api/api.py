@@ -383,7 +383,7 @@ class Api:
                 return
             try:
                 setattr(request, field, pasted_value(value, target_type) if isinstance(target_type, type) else value)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):  # OverflowError: "Steps: 1e999"
                 pass
 
         for name, value in parsed["core"].items():

@@ -34,7 +34,7 @@ extend-immutable-calls = ["fastapi.Query", "fastapi.Body", "fastapi.Depends", "f
 "{tests/**,extensions-builtin/*/tests/**}" = ["S102"] # tests exec isolated module sources
 # Upstream-origin runtime code and the extensions report to the console with print (startup, install,
 # model loading messages): T20 stays on for remi/ and the strict files, which use logging.
-"{modules/**,modules_forge/**,backend/**,scripts/**,launch.py,webui.py,extensions-builtin/*/scripts/**,extensions-builtin/*/lib_*/**}" = ["T20"]
+"{modules/**,modules_forge/**,backend/**,scripts/**,launch.py,webui.py,extensions-builtin/*/scripts/**,extensions-builtin/*/lib_*/**,extensions-builtin/*/install.py,extensions-builtin/*/joycaption_lib/**}" = ["T20"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 # The WebUI is Gradio-free (remi/ui params, remi/server REST + WebSocket, webui/ SPA).

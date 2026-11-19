@@ -276,6 +276,31 @@ def test_batch_can_be_cancelled_and_is_refused_with_hidden_folders(page, engine,
     assert harness.run_action(page, "batch", ctx, {"folder": str(folder)})["__toast__"]["level"] == "error"
 
 
+def test_keep_loaded_off_unloads_after_a_cancel_or_an_error(page, engine, tmp_path, monkeypatch):
+    folder = tmp_path / "set"
+    folder.mkdir()
+    for index in range(3):
+        Image.new("RGB", (8, 8)).save(folder / f"{index}.png")
+    ctx = harness.fake_ctx(page)
+    engine.gate.clear()
+    harness.run_action(page, "batch", ctx, {"folder": str(folder), "keep_loaded": False})
+    harness.run_action(page, "__cancel__", ctx, task="batch")
+    engine.gate.set()
+    done = harness.wait_task(page, ctx, "batch")
+    assert "Cancelled." in done["__outputs__"]["log"] and not engine.is_loaded()
+    assert done["__outputs__"]["status"] == {"text": "⚪ Weights present, model not loaded"}
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("out of memory")
+
+    monkeypatch.setattr(engine, "generate", fail)
+    files = harness.FakeFiles(tmp_path)
+    ctx = harness.fake_ctx(page, files)
+    harness.run_action(page, "caption", ctx, {"image": files.add_image(Image.new("RGB", (8, 8))), "keep_loaded": False})
+    harness.wait_task(page, ctx, "caption")
+    assert engine.unloads == 2 and not engine.is_loaded()
+
+
 def test_load_task_reports_the_download_phase(page, engine, jc, monkeypatch):
     monkeypatch.setattr(jc.jcm, "is_model_downloaded", lambda: False)
     seen = []

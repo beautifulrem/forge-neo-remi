@@ -669,3 +669,20 @@ def test_non_finite_row_values_fall_back_to_the_defaults():
     assert row[2] == 1.0 and 0.0 <= row[4] <= row[5] <= 1.0
     assert mixer._row_count(nan) == mixer._row_count(inf) == 1
     assert len(mixer._normalize_rows([], nan)) == 1
+
+
+@pytest.mark.parametrize("batched", [False, True])
+def test_a_call_on_some_images_attends_with_their_artist_rows(batched):
+    # Prompts of different lengths: the backend calls the model once per
+    # conditioning shape, with that call's images in batch_indices. Image 1
+    # alone must get its own artist row, not image 0's (or a disabled mixer).
+    state = _state(batched=batched, weights=(1.0,))
+    rows = torch.stack([torch.full((3, 4), 1.0), torch.full((3, 4), 2.0)])  # one artist row per image
+    state.artists[0].cond = rows
+    attention = _Attention()
+    x, context = _inputs(batch=2)
+    options = {"cond_or_uncond": [0, 1], "batch_indices": [1]}
+    runtime._dispatch_cross_attn(attention, 0, state, x, context=context, transformer_options=options)
+    assert state.enabled
+    artist_contexts = [call_context for _, call_context, call_options in attention.calls if call_context is not context]
+    assert artist_contexts and all(torch.equal(ctx.unique(), torch.tensor([2.0])) for ctx in artist_contexts)

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from fastapi.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
 from starlette.formparsers import MultiPartException, MultiPartParser
+from starlette.requests import ClientDisconnect
 from starlette.responses import FileResponse
 
 from remi.files import FileError, FileRecord
@@ -67,7 +68,11 @@ async def upload(request: Request, services: ServicesDep) -> dict[str, Any]:
     parser = MultiPartParser(request.headers, limited(request.stream(), limit + FORM_OVERHEAD), max_files=1, max_fields=8)
     try:
         form = await parser.parse()
-    except BodyTooLarge as error:
+    except (BodyTooLarge, ClientDisconnect) as error:
+        for spooled in parser._files_to_close_on_error:  # Starlette closes them on MultiPartException only
+            spooled.close()
+        if isinstance(error, ClientDisconnect):  # the browser cancelled the upload: not a server error
+            raise HTTPException(status_code=400, detail="the upload was cancelled") from error
         raise too_large from error
     except MultiPartException as error:
         raise HTTPException(status_code=400, detail=f"malformed upload: {error.message}") from error

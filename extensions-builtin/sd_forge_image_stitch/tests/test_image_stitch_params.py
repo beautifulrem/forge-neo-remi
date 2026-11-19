@@ -91,3 +91,27 @@ def test_help_names_the_edit_models(env, tab, verb):
     (text,) = [string for string in env.kit.schema_strings(layout.schema()) if string.startswith("For **Edit Models**")]
     assert text.startswith(f"For **Edit Models** (Flux.1-Kontext, Flux.2-Klein, Qwen-Image-Edit, Qwen-Image-2.1, Anima Edit, Krea2 Edit, Moss Image Edit): Use in {verb}")
     assert "<" not in text and "paste images straight into the list" in text
+
+
+def test_references_are_encoded_again_into_a_reloaded_model(env, monkeypatch):
+    """An unload or reload (out of memory, Unload, a forced reload) builds a new engine without the
+    encoded references but keeps the loading parameters: the same request must encode them again."""
+    module = env.module
+    encoded = []
+    monkeypatch.setattr(module.dynamic_args, "can_reference", lambda: True, raising=False)
+    monkeypatch.setattr(module.dynamic_args, "wan", False, raising=False)
+    monkeypatch.setattr(module, "images_tensor_to_samples", lambda image, approximation, model: encoded.append(model))
+    monkeypatch.setattr(module.ImageStitch, "reset_references", staticmethod(lambda p: None))
+    monkeypatch.setattr(module.ImageStitch, "cached_parameters", None)
+    monkeypatch.setattr(module.ImageStitch, "cached_model", None)
+
+    class Engine:
+        pass
+
+    reference = Image.new("RGB", (32, 32), "red")
+    first, reloaded = Engine(), Engine()
+    script = module.ImageStitch()
+    for model in (first, first, reloaded):
+        script.process(SimpleNamespace(sd_model=model, width=64, height=64, batch_size=1), True, [reference])
+
+    assert encoded == [first, reloaded]

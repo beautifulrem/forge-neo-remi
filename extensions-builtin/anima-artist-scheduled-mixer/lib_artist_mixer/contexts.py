@@ -23,6 +23,15 @@ def to_context(tensor, context):
     return tensor.to(device=context.device, dtype=context.dtype, non_blocking=True)
 
 
+def image_rows(tensor, indices):
+    """``tensor``'s rows (one per image) of a model call's images:
+    ``indices`` (transformer_options ``batch_indices``) when the backend
+    splits the batch by conditioning shape; one row serves every image."""
+    if indices is None or tensor.shape[0] <= 1:
+        return tensor
+    return tensor[list(indices)]
+
+
 def broadcast_batch(tensor, batch_size):
     """``tensor`` (one row per prompt) tiled to the attention batch."""
     if tensor.shape[0] == batch_size:

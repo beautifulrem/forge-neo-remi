@@ -413,6 +413,30 @@ def test_a_failed_import_resumes_the_queue_it_paused(server, tmp_path, monkeypat
     assert report.skipped == 1 and report.paused is False and not queue.paused
 
 
+def test_imports_run_one_at_a_time(server, tmp_path, monkeypatch):
+    import threading
+
+    path = tmp_path / "queue.json"
+    path.write_text(json.dumps({"items": [{"id": f"x{index}", "prompt": f"p{index}", "status": "pending"} for index in range(20)]}), encoding="utf-8")
+    monkeypatch.setattr(importers, "prompt_queue_paths", lambda: [str(path)])
+    queue = server.services.queue
+    queue.set_paused(True)
+    barrier = threading.Barrier(2)
+    reports = []
+
+    def run():
+        barrier.wait()
+        reports.append(importers.Importer(queue).run(importers.PROMPT_QUEUE))
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(30)
+    assert sorted(report.queued for report in reports) == [0, 20]
+    assert server.services.store.count() == 20
+
+
 # endregion
 
 

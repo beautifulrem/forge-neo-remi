@@ -817,6 +817,10 @@ def manage_model_and_prompt_cache(p: StableDiffusionProcessing):
     if need_global_unload and not just_reloaded:
         memory_management.unload_all_models()
         p.clear_prompt_cache()
+    elif just_reloaded:
+        # A new engine (also after an unload: same loading parameters, so the cache key matches)
+        # has none of the reference latents a cached conditioning's encode set up: encode again
+        p.clear_prompt_cache()
 
     need_global_unload = False
 
@@ -947,9 +951,18 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
     infotexts = []
     output_images = []
+    # Edit models: the input-image reference is this generation's, set by init(); one an earlier
+    # img2img left unconsumed (a cached conditioning skips the encode that consumes it) must not
+    # become the reference of this one
+    if getattr(p.sd_model, "ini_latent", None) is not None:
+        p.sd_model.ini_latent = None
+
     with torch.inference_mode():
         with devices.autocast():
             p.init(p.all_prompts, p.all_seeds, p.all_subseeds)
+            # Edit models: the positive prompt's encode consumes it; a later batch whose prompts differ
+            # (wildcards) encodes again and needs it too, or it samples without the input image
+            edit_reference = getattr(p.sd_model, "ini_latent", None)
 
             # for OSX, loading the model during sampling changes the generated picture, so it is loaded here
             if shared.opts.live_previews_enable and opts.show_progress_type == "Approx NN":
@@ -971,7 +984,9 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
 
             if not getattr(p, "txt2img_upscale", False) or p.hr_checkpoint_name is None:
                 # hiresfix quickbutton may not need reload of firstpass model
-                sd_models.forge_model_reload()  # model can be changed for example by refiner, hiresfix
+                _, reloaded = sd_models.forge_model_reload()  # model can be changed for example by refiner, hiresfix
+                if reloaded:  # a new engine: encode again (reference latents, as above)
+                    p.clear_prompt_cache()
 
             p.sd_model.forge_objects = p.sd_model.forge_objects_original.shallow_copy()
             p.prompts = p.all_prompts[n * p.batch_size : (n + 1) * p.batch_size]
@@ -1003,6 +1018,8 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
             if p.scripts is not None:
                 p.scripts.process_batch(p, batch_number=n, prompts=p.prompts, seeds=p.seeds, subseeds=p.subseeds)
 
+            if edit_reference is not None:
+                p.sd_model.ini_latent = edit_reference
             p.setup_conds()
 
             p.extra_generation_params.update(p.sd_model.extra_generation_params)
@@ -1588,6 +1605,14 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
 
         self.is_hr_pass = False
         return decoded_samples
+
+    def clear_prompt_cache(self):
+        super().clear_prompt_cache()
+        # The hires conds too: their key does not see what clearing is for (ImageStitch's new
+        # references, which edit models encode into the conds; a reloaded engine)
+        # (the same lists, as __post_init__ shares them: what this run encodes is kept for the next)
+        self.cached_hr_c = StableDiffusionProcessingTxt2Img.cached_hr_c = [None, None, None]
+        self.cached_hr_uc = StableDiffusionProcessingTxt2Img.cached_hr_uc = [None, None, None]
 
     def close(self):
         super().close()

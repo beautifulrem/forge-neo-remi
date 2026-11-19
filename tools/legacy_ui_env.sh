@@ -21,7 +21,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_DIR="${1:-$ROOT/../remi-gradio-env}"
 BASE_PYTHON="${LEGACY_PYTHON:-python3.13}"
 
-case "$(cd "$(dirname "$ENV_DIR")" 2>/dev/null && pwd)/" in
+# absolute (the steps below run from $ROOT), and checked once its parent exists
+mkdir -p "$(dirname "$ENV_DIR")"
+ENV_DIR="$(cd "$(dirname "$ENV_DIR")" && pwd)/$(basename "$ENV_DIR")"
+
+case "$(dirname "$ENV_DIR")/" in
   "$ROOT"/*) echo "$ENV_DIR is inside the checkout: pick a folder outside it" >&2; exit 2 ;;
 esac
 

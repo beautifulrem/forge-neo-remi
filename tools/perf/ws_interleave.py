@@ -149,6 +149,9 @@ def run_job(api: Callable[..., dict], args: argparse.Namespace, mute: Path, trac
     job = api("POST", "/api/v2/jobs", job_request(args.size, args.steps))["job_id"]
     started = time.time()
     while not read_steps(trace, started):
+        status = api("GET", f"/api/v2/jobs/{job}")["status"]
+        if status not in ("queued", "running"):  # failed (or was cancelled) before its first step
+            raise SystemExit(f"job {job} ended {status} before its first step")
         time.sleep(0.5)
     windows: list[Window] = []
     while api("GET", f"/api/v2/jobs/{job}")["status"] in ("queued", "running"):
@@ -174,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", type=Path, help="write the pairs and pooled statistics here")
     args = parser.parse_args(argv)
 
-    mute = Path(os.environ.get("REMI_PERF_MUTE", "/tmp/remi-perf-mute"))
+    mute = Path(os.environ.get("REMI_PERF_MUTE", "/tmp/remi-perf-mute")).resolve()  # relative to the working directory, as serve_traced.py reads it
     trace = Path(os.environ.get("REMI_PERF_TRACE", "/tmp/remi-perf-trace.jsonl"))
     api = Api(args.base)
     frames = [0]

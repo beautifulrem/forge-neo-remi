@@ -271,6 +271,9 @@ def calc_cond_uncond_batch(model, cond, uncond, x_in, timestep, model_options):
                 transformer_options["patches"] = patches
 
         transformer_options["cond_or_uncond"] = cond_or_uncond[:]
+        # The image rows of this call (None: all of them), for per-image state
+        # in model wrappers when the rows have different conditioning shapes
+        transformer_options["batch_indices"] = batch_indices
         transformer_options["sigmas"] = batch_timestep
 
         transformer_options["cond_mark"] = compute_cond_mark(cond_or_uncond=cond_or_uncond, sigmas=batch_timestep)

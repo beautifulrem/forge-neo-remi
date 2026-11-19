@@ -79,11 +79,11 @@ class PreprocessorReference(Preprocessor):
                 return model, x, timestep, uncond, cond, cond_scale, model_options, seed
 
             self.is_recording_style = True
-
-            xt = latent_image.to(x) + torch.randn(x.size(), dtype=x.dtype, generator=gen_cpu).to(x) * sigma
-            sampling_function_inner(model, xt, timestep, uncond, cond, 1, model_options, seed)
-
-            self.is_recording_style = False
+            try:  # an error here (out of memory) must not leave every later run only recording
+                xt = latent_image.to(x) + torch.randn(x.size(), dtype=x.dtype, generator=gen_cpu).to(x) * sigma
+                sampling_function_inner(model, xt, timestep, uncond, cond, 1, model_options, seed)
+            finally:
+                self.is_recording_style = False
 
             return model, x, timestep, uncond, cond, cond_scale, model_options, seed
 
@@ -191,6 +191,12 @@ class PreprocessorReference(Preprocessor):
         process.sd_model.forge_objects.unet = unet
 
         return cond, mask
+
+    def process_after_every_sampling(self, process, params, *args, **kwargs):
+        # The recorded keys/values (GPU tensors of every self-attention layer) would otherwise stay
+        # allocated until the next reference run, through every generation in between
+        self.recorded_attn1 = {}
+        self.recorded_h = {}
 
 
 add_supported_preprocessor(PreprocessorReference(

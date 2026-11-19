@@ -30,6 +30,22 @@ def test_coverage_lists_trained_blocks_modules_and_text_layers(tmp_path):
     assert anima_lora_block_count(coverage.blocks) == 28
 
 
+def test_kohya_text_encoder_keys_are_text_layers(tmp_path):
+    """The Anima key map loads kohya's ``lora_te_layers_<n>_<module>`` keys into Qwen layer n: text-layer
+    weights filtered by this coverage would otherwise drop every layer of such a file."""
+    lora = _save(
+        tmp_path / "kohya.safetensors",
+        [
+            "lora_unet_blocks_2_mlp_layer1.lora_down.weight",
+            "lora_te_layers_5_self_attn_q_proj.lora_down.weight",
+            "lora_te_layers_11_mlp_down_proj.lora_up.weight",
+        ],
+    )
+    coverage = lora_coverage(lora)
+
+    assert coverage.text_layers == {5, 11} and coverage.blocks == {2}
+
+
 def test_lokr_and_text_encoder_only_files(tmp_path):
     lokr = _save(tmp_path / "a.safetensors", ["lycoris_blocks_3_mlp_layer1.lokr_w1"])
     text_only = _save(tmp_path / "b.safetensors", ["text_encoders.qwen3_06b.model.layers.1.mlp.lora_up.weight"])

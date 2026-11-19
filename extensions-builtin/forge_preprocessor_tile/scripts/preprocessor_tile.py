@@ -50,17 +50,22 @@ class PreprocessorTileColorFix(PreprocessorTile):
         else:
             k = int(self.variation)
 
+        def row_sigmas(h, transformer_options):
+            # one sigma per image; h holds the call's chunks (cond, uncond) of those images in turn
+            sigmas = transformer_options['sigmas'].to(h)
+            return sigmas.repeat(h.shape[0] // sigmas.shape[0])[:, None, None, None]
+
         def block_proc(h, flag, transformer_options):
             location, block_id = transformer_options['block']
             cond_mark = transformer_options['cond_mark'][:, None, None, None]  # cond is 0
 
             if location == 'input' and block_id == 0 and flag == 'before':
-                sigma = transformer_options['sigmas'].to(h)
+                sigma = row_sigmas(h, transformer_options)
                 self.x_input = h[:, :4]  # Inpaint fix
                 self.x_input_sigma_space = self.x_input * (sigma ** 2 + sigma_data ** 2) ** 0.5
 
             if location == 'last' and block_id == 0 and flag == 'after':
-                sigma = transformer_options['sigmas'].to(h)
+                sigma = row_sigmas(h, transformer_options)
                 eps_estimation = h[:, :4]
                 denoised = self.x_input_sigma_space - eps_estimation * sigma
 

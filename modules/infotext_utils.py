@@ -223,6 +223,7 @@ def parse_generation_parameters(x: str, skip_fields: list[str] | None = None):
     from modules_forge import main_entry
 
     _keys = list(res.keys())
+    hr_first = res.get("Hires Module 1")  # popped below
     known_modules = {os.path.splitext(m)[0]: m for m in main_entry.module_list.keys()}
 
     for key in _keys:
@@ -243,14 +244,11 @@ def parse_generation_parameters(x: str, skip_fields: list[str] | None = None):
             res["VAE/TE"] = modules
 
     # processing.py/StableDiffusionProcessingTxt2Img/init()
-    if "Hires Module 1" in res:
-        if res["Hires Module 1"] == "Use same choices":
-            hr_modules = ["Use same choices"]
-        elif res["Hires Module 1"] == "Built-in":
-            hr_modules = []
-
+    if hr_first == "Built-in":
+        res["Hires VAE/TE"] = []
+    elif hr_first is not None and hr_first != "Use same choices" and hr_modules:
         res["Hires VAE/TE"] = hr_modules
-    else:
+    else:  # none of the recorded modules is installed here either
         res["Hires VAE/TE"] = ["Use same choices"]
 
     return res

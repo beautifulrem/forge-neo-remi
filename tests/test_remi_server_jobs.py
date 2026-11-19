@@ -277,6 +277,42 @@ def test_history_is_paged_newest_first(server):
     assert server.client.get("/api/v2/jobs", params={"status": "completed"}).json()["total"] == 0
 
 
+def test_a_new_job_goes_after_jobs_moved_to_the_end(tmp_path):
+    store = JobStore(tmp_path / "jobs.db")
+    a, b, c = (store.add("txt2img", {"prompt": name}, {}).id for name in "abc")
+    assert store.move(a, after=c) and store.move(b, after=a)
+    d = store.add("txt2img", {"prompt": "d"}, {}).id
+    assert [job.id for job in store.queued()] == [c, a, b, d]
+    store.close()
+
+
+def test_a_cursor_beyond_sqlite_integers_reads_the_first_page(tmp_path):
+    from remi.files import FileStore, encode_cursor
+    from remi.library import GalleryIndex, _cursor
+
+    store = JobStore(tmp_path / "jobs.db")
+    job = store.add("txt2img", {"prompt": "cat"}, {})
+    jobs, _next, _total = store.history(cursor=encode_cursor(1.0, 10**20))
+    assert [item.id for item in jobs] == [job.id]
+    store.close()
+    files = FileStore(tmp_path / "data")
+    assert files.list_outputs(cursor=encode_cursor(1.0, 10**20))[0] == []
+    index = GalleryIndex(files, folders=list)
+    assert index.list(cursor=_cursor(1.0, 10**20))[0] == []
+    index.close()
+    files.close()
+
+
+def test_history_search_finds_non_ascii_words_in_the_parameters(tmp_path):
+    store = JobStore(tmp_path / "jobs.db")
+    job = store.add("txt2img", {"prompt": "cat", "negative_prompt": "低品質, lowres"}, {}, summary="cat", meta={"name": "猫の絵"})
+    store.add("txt2img", {"prompt": "dog"}, {}, summary="dog")
+    for query in ("低品質", "lowres", "猫の絵", '"cat"'):
+        jobs, _cursor, total = store.history(query=query)
+        assert [item.id for item in jobs] == [job.id] and total == 1, query
+    store.close()
+
+
 # endregion
 
 # region Interrupt, skip, cancel, delete, retry

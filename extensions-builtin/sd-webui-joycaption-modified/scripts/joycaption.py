@@ -468,14 +468,17 @@ class JoyCaptionPage(pages.Page):
         image_prompt = _image_prompt(ctx, values.get("image"))
 
         def work(task):
-            _ensure_loaded(task, resolved["quant"])
             eng = jcm.get_engine()
             prompt = _build_prompt(resolved)
-            task.check()
-            task.progress(0.5, "Generating…")
-            caption = _caption(eng, image, prompt, resolved)
-            if not resolved["keep_loaded"]:
-                eng.unload()
+            try:
+                _ensure_loaded(task, resolved["quant"])
+                task.check()
+                task.progress(0.5, "Generating…")
+                caption = _caption(eng, image, prompt, resolved)
+            finally:
+                # Also on an error or Cancel: the model holds gigabytes
+                if not resolved["keep_loaded"]:
+                    eng.unload()
             # The combined box is rebuilt from scratch on each caption: the
             # image's own prompt, then the new caption.
             return {
@@ -502,10 +505,20 @@ class JoyCaptionPage(pages.Page):
             return ui.toast(ui.message("❗ No images found in: {{folder}}", folder=folder), "warning")
 
         def work(task):
+            eng = jcm.get_engine()
+            try:
+                result = run(task, eng)
+            finally:
+                # Also on an error or Cancel: the model holds gigabytes
+                if not resolved["keep_loaded"]:
+                    eng.unload()
+            result["__outputs__"]["status"] = _status()
+            return result
+
+        def run(task, eng):
             from PIL import Image
 
             _ensure_loaded(task, resolved["quant"])
-            eng = jcm.get_engine()
             prompt = _build_prompt(resolved)
             log_lines = [f"Found {len(images)} image(s). Prompt:\n{prompt}\n"]
             task.publish(log="\n".join(log_lines))
@@ -533,13 +546,11 @@ class JoyCaptionPage(pages.Page):
             except pages.TaskCancelled:
                 log_lines.append("")
                 log_lines.append(f"Cancelled. Captioned {done}, skipped {skipped}, errors {errors}.")
-                return {"__outputs__": {"log": "\n".join(log_lines[-400:]), "status": _status()}, **ui.toast("Cancelled", "info")}
-            if not resolved["keep_loaded"]:
-                eng.unload()
+                return {"__outputs__": {"log": "\n".join(log_lines[-400:])}, **ui.toast("Cancelled", "info")}
             log_lines.append("")
             log_lines.append(f"Done. Captioned {done}, skipped {skipped}, errors {errors}.")
             summary = ui.message("Done. Captioned {{done}}, skipped {{skipped}}, errors {{errors}}.", done=done, skipped=skipped, errors=errors)
-            return {"__outputs__": {"log": "\n".join(log_lines[-400:]), "status": _status()}, **ui.toast(summary, "success" if not errors else "warning")}
+            return {"__outputs__": {"log": "\n".join(log_lines[-400:])}, **ui.toast(summary, "success" if not errors else "warning")}
 
         return self.start_task(ctx, "batch", work, gpu=True)
 

@@ -97,9 +97,15 @@ def _overwrites_input(values: dict[str, Any]) -> bool:
 
     from modules import extras, sd_models
 
-    if not values["custom_name"].strip():
-        return False
-    target = extras.merge_output_path(values["custom_name"])
+    name = values["custom_name"].strip()
+    if not name:
+        if values["interp_method"] != NO_INTERPOLATION:
+            return False  # the generated "0.3(a) + 0.7(b)" names are not inputs (extras still checks)
+        primary = sd_models.checkpoint_aliases.get(values["primary_model_name"])
+        if primary is None:
+            return False
+        name = primary.model_name  # what run_modelmerger names a blank No Interpolation save
+    target = extras.merge_output_path(name)
     for name in _inputs(values):
         info = sd_models.checkpoint_aliases.get(name)
         if info is not None and os.path.realpath(info.filename) == target:

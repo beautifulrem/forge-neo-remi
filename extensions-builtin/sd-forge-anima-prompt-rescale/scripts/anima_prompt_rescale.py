@@ -94,6 +94,11 @@ AUTO_PARAMS = ("auto_enable", "auto_source", "auto_fraction")
 MANUAL_PARAMS = ("manual_prompt", "manual_source", "manual_target", "manual_denoise", "manual_fraction")
 
 
+def _paste_auto_enable(infotext: dict):
+    """A rescaled image's infotext holds the prompt as rescaled: generating it again must not
+    rescale it a second time (the switch points would move). Other infotexts leave the switch."""
+    return False if "Anima schedule rescale" in infotext else None
+
 class AnimaPromptRescaleScript(scripts.Script):
     section = "accordions"
     sorting_priority = 17
@@ -117,7 +122,7 @@ class AnimaPromptRescaleScript(scripts.Script):
             self.title(),
             ui.Markdown(_INTRO),
             manual_tool(),
-            ui.Toggle("auto_enable", False, label="Auto-rescale this img2img generation's schedules", preset="prompt_rescale.enabled", hidden=txt2img),
+            ui.Toggle("auto_enable", False, label="Auto-rescale this img2img generation's schedules", preset="prompt_rescale.enabled", hidden=txt2img, paste=_paste_auto_enable),
             ui.Slider(
                 "auto_source",
                 1,

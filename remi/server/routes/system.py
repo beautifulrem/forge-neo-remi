@@ -66,7 +66,8 @@ def logout(request: Request) -> Response:
 def reload_server() -> dict[str, Any]:
     from modules import shared
 
-    shared.state.request_restart()
+    # not request_restart(): that interrupts the running job, which the reload waits for (queue.hold)
+    shared.state.server_command = "restart"
     return {"ok": True, "message": "reloading"}
 
 
