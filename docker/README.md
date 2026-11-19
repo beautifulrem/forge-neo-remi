@@ -47,7 +47,7 @@ docker run --device /dev/kfd --device /dev/dri --group-add video \
 Open `http://localhost:7860/`. Extra launch options go after the image name or
 in `COMMANDLINE_ARGS` (for example `-e COMMANDLINE_ARGS="--auth user:password"`);
 the container always adds `--listen` and `--data-dir /home/remi/data`. Read
-[Security and Remote Access](../README.md#security-and-remote-access) before
+[Security and Remote Access](../docs/remi-webui/usage.md#security-and-remote-access) before
 exposing the port beyond your machine.
 
 ## Data
