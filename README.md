@@ -8,7 +8,7 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
 [![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Branch: remi](https://img.shields.io/badge/branch-remi-8A2BE2)](https://github.com/beautifulrem/sd-webui-forge-classic/tree/remi)
+[![Branch: remi](https://img.shields.io/badge/branch-remi-8A2BE2)](https://github.com/beautifulrem/forge-neo-remi/tree/remi)
 [![Upstream: Forge Neo](https://img.shields.io/badge/upstream-Forge%20Neo-2ea44f)](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo)
 
 <img src="docs/images/readme/hero-en.webp" alt="The Generate view of Forge Neo Remi with a generated Forge Remi logo" width="100%">
@@ -48,7 +48,7 @@ The [usage guide](docs/remi-webui/usage.md#the-remi-webui) describes every page.
 You need [Git](https://git-scm.com/downloads), [Python 3.13](https://www.python.org/downloads/) or [uv](https://docs.astral.sh/uv/), a PyTorch device (an NVIDIA GPU is the most widely tested; Apple Silicon works through MPS) and [Node.js](https://nodejs.org/) 20.19+ or 22.12+ to build the web interface.
 
 ```bash
-git clone --branch remi https://github.com/beautifulrem/sd-webui-forge-classic.git forge-neo-remi
+git clone --branch remi https://github.com/beautifulrem/forge-neo-remi.git forge-neo-remi
 cd forge-neo-remi
 ```
 
@@ -100,7 +100,7 @@ Before opening an issue, reproduce it on the current `remi` branch with third-pa
 - Launch arguments and relevant generation parameters
 - Full console traceback, the browser console for interface problems, or a minimal reproduction
 
-Use the [Remi issue tracker](https://github.com/beautifulrem/sd-webui-forge-classic/issues) for Remi-specific behavior. Upstream-only issues should be reproduced against [Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo) before being reported there.
+Use the [Remi issue tracker](https://github.com/beautifulrem/forge-neo-remi/issues) for Remi-specific behavior. Upstream-only issues should be reproduced against [Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo) before being reported there.
 
 Contributions should keep features isolated, preserve non-Anima behavior, add regression coverage for shared sampling/model-loading paths, and document GUI/runtime conflict semantics. `tools/check.sh` runs every check (Python and frontend tests, lint, types, build).
 

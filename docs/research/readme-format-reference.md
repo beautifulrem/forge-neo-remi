@@ -96,7 +96,7 @@ README 的职责应限制为项目定位、核心差异、安装和文档入口�
 只放能落到真实页面、不会制造虚假质量信号的徽章：
 
 - `License: AGPL-3.0` → 根目录 `LICENSE`；
-- `Branch: remi` → `beautifulrem/sd-webui-forge-classic/tree/remi`；
+- `Branch: remi` → `beautifulrem/forge-neo-remi/tree/remi`；
 - `Upstream: Forge Neo` → `Haoming02/sd-webui-forge-classic/tree/neo`；
 - `Python` → README 中实际支持的 Python 版本说明；
 - 若仓库以后有稳定 Release 或 CI，再加入 Release/Tests 徽章。
