@@ -369,6 +369,9 @@ def apply_refiner(cfg_denoiser: "CFGDenoiser", x: torch.Tensor, sigma: torch.Ten
         cfg_denoiser.p.extra_network_data["lora"] = apply_lora_for_refiner(loras)
         extra_networks.activate(cfg_denoiser.p, cfg_denoiser.p.extra_network_data)
 
+    # Remi: the conds must come from the refiner (an Anima-3.8B prompt is encoded for its connector);
+    # the cache key cannot tell, the loading parameters are the base model's again
+    cfg_denoiser.p.clear_prompt_cache()
     cfg_denoiser.p.setup_conds()
     cfg_denoiser.update_inner_model()
 

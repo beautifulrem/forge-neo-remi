@@ -26,7 +26,7 @@ Forge Neo Remi 是 [Forge Neo](https://github.com/Haoming02/sd-webui-forge-class
 - **全新的网页界面。** 用侧边导航栏取代 Gradio 标签页：三栏式生成页、真正的图像编辑器、图库、模型网络浏览器和任务队列；支持浅色与深色主题、手机布局、完整的键盘操作，English / 简体中文无需刷新即可切换。
 - **所有生成共用一个队列。** 每次生成都是持久化队列中的一个任务，重启后仍在；可在界面或 API 中排队、调整顺序、设置优先级、编辑和重复任务。
 - **Anima 优先推理：** 内置采样器、引导方法、空间控制、LoRA 管理、高分辨率保护和加速路径（[包含的功能](docs/remi-webui/usage.zh-CN.md#anima-集成)）。
-- **28/40/52 层架构兼容：** 自动识别原始 Anima、2.9B 和 3.8B 的 DiT 结构，并把 28 层 LoRA 和 Anima ControlLLLite 模型重映射到扩展模型上（[细节与 3.8B 的限制](docs/remi-webui/usage.zh-CN.md#anima-29b-与-38b-checkpoint)）。
+- **完整的 Anima 系列：** 支持 2B、2.9B 和 3.8B（原生运行其 Qwen3.5 语义连接器）；LoRA 和 ControlNet-LLLite 模型可在 28/40/52 层之间通用，Anima-Control-Pose 的 control-LoRA 可作为 ControlNet 单元使用（[细节](docs/remi-webui/usage.zh-CN.md#anima-29b-与-38b-checkpoint)）。
 - **界面与运行时冲突管理：** 互斥功能会在组成未定义采样链之前被锁定或自动解决，浏览器中和 API 任务都一样。
 - **一键安全基线：** **Anima Remi 预设** 提供保守的推荐起点，不会覆盖提示词、LoRA 名称或模型路径。
 - **常用功能内置：** 常用扩展作为[内置扩展](docs/remi-webui/usage.zh-CN.md#内置扩展)随 Remi 发布，并已移植到新界面。
@@ -65,7 +65,7 @@ cd forge-neo-remi
 
 Remi 保留 Forge Neo 对现代模型的支持重点，并对 Anima 提供更深入的集成。
 
-- Anima 和 Anima Edit：2B（28 层）、2.9B（40 层）与 3.8B（52 层）checkpoint（3.8B 还需要[外部条件编码扩展](docs/remi-webui/usage.zh-CN.md#anima-29b-与-38b-checkpoint)）
+- Anima 和 Anima Edit：2B（28 层）、2.9B（40 层）与 3.8B（52 层）checkpoint（3.8B 需另备 `qwen35_4b` 文本编码器，[细节](docs/remi-webui/usage.zh-CN.md#anima-29b-与-38b-checkpoint)）
 - SD 1.x 和高级 SDXL 变体
 - Krea 2 和 Krea 2 Identity Edit
 - FLUX Kontext 和 FLUX.2 Klein

@@ -128,7 +128,10 @@ def _sample(refiner_info, switch_at=0.5):
         enable_hr=False,
         disable_extra_networks=True,
         extra_generation_params={},
-        setup_conds=lambda: conds.append(True),
+        # the cache key does not name the loaded model (forge_loading_parameters are the base's
+        # again by then): without the clear, Anima-3.8B conds reached a 2B refiner
+        clear_prompt_cache=lambda: conds.append("clear"),
+        setup_conds=lambda: conds.append("setup"),
     )
     denoiser = _Denoiser(p)
     sigmas = torch.linspace(1.0, 0.0, STEPS + 1)
@@ -151,8 +154,8 @@ def test_a_different_refiner_checkpoint_changes_the_image_from_the_switch_on(che
     # the second half of the steps ran on the refiner checkpoint
     assert models == ["anima-base"] * 4 + ["anima-refiner"] * 4
     assert not torch.equal(refined, plain)
-    # the conds were rebuilt and the run recorded the refiner (with its hash)
-    assert conds == [True]
+    # the conds were encoded again with the refiner and the run recorded it (with its hash)
+    assert conds == ["clear", "setup"]
     assert refiner.shorthash and p.extra_generation_params == {"Refiner": f"anima-refiner [{refiner.shorthash}]", "Refiner switch at": 0.5}
     # the selected checkpoint is the base again (the refiner is loaded for this job only)
     assert shared.opts.sd_model_checkpoint == base.title

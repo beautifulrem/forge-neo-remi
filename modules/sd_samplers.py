@@ -31,6 +31,19 @@ def find_sampler_config(name):
     return config
 
 
+# DDIM / PLMS: CompVis epsilon samplers (alphas_cumprod from 1 / (sigma^2 + 1)); Kohaku LoNyu Yog:
+# variance-exploding renoise, without the rectified-flow branch Euler a has
+FLOW_UNSUPPORTED = frozenset({"DDIM", "PLMS", "Kohaku LoNyu Yog"})
+
+
+def _is_flow_model(model) -> bool:
+    try:
+        predictor = model.forge_objects.unet.model.predictor
+    except AttributeError:
+        return False
+    return getattr(predictor, "prediction_type", None) == "const"
+
+
 def create_sampler(name, model):
     config = find_sampler_config(name)
 
@@ -38,6 +51,10 @@ def create_sampler(name, model):
 
     if model.is_sdxl and config.options.get("no_sdxl", False):
         raise Exception(f"Sampler {config.name} is not supported for SDXL")
+
+    # Remi: these assume a variance-preserving / exploding schedule and garble a flow model's image
+    if config.name in FLOW_UNSUPPORTED and _is_flow_model(model):
+        raise Exception(f"Sampler {config.name} does not support flow-matching models (Anima, Flux, ...): use Euler or another sampler")
 
     sampler = config.constructor(model)
     sampler.config = config

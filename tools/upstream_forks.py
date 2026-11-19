@@ -57,6 +57,7 @@ DIVERGED = (
     "extensions-builtin/sd_forge_controlllite/lib_controllllite/lib_controllllite.py",
     "extensions-builtin/sd_forge_controlllite/lib_controllllite/lib_controllllite_anima.py",
     "extensions-builtin/sd_forge_controlllite/scripts/forge_controllllite.py",
+    "extensions-builtin/sd_forge_controlnet/lib_controlnet/global_state.py",
     "extensions-builtin/sd_forge_controlnet/scripts/controlnet.py",
     "extensions-builtin/sd_forge_image_stitch/scripts/image_stitch.py",
     "extensions-builtin/sd_forge_lora/networks.py",
@@ -70,6 +71,11 @@ DIVERGED = (
     "modules/infotext_utils.py",
     "modules/processing.py",
     "modules/processing_scripts/refiner.py",
+    "modules/sd_samplers.py",
+    "modules/sd_samplers_common.py",
+    "modules/sd_schedulers.py",
+    "modules_forge/packages/comfy/lora.py",
+    "modules_forge/packages/k_diffusion/external.py",
     "modules_forge/supported_controlnet.py",
 )
 """Upstream files that keep upstream's code but carry Remi's fixes of upstream bugs

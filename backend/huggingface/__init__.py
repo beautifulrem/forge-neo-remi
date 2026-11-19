@@ -27,6 +27,10 @@ class Token:
     moss_compress = os.path.join(folder, "moss.tokenizer.json.xz")
     moss = os.path.join(folder, "OpenMOSS-Team", "MOSS-Image-SFT", "tokenizer", "tokenizer.json")
 
+    # Remi: Anima-3.8B's second text encoder
+    qwen35_compress = os.path.join(folder, "qwen35.tokenizer.json.xz")
+    qwen35 = os.path.join(folder, "Qwen", "Qwen3.5-4B", "tokenizer", "tokenizer.json")
+
 
 class sha256:
     wan = "20a46ac256746594ed7e1e3ef733b83fbc5a6f0922aa7480eda961743de080ef"
@@ -46,6 +50,9 @@ class sha256:
 
     moss = "0a04a9fd30a9fd98e9ce0328986f698c66329c3e4367bed61586f2be0a9b2bec"
     # https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT/blob/main/tokenizer/tokenizer.json
+
+    qwen35 = "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42"
+    # https://huggingface.co/Qwen/Qwen3.5-4B/blob/main/tokenizer.json
 
 
 def decompress(source: str, target: str):
@@ -95,6 +102,10 @@ def process():
     if not os.path.isfile(Token.moss):
         decompress(Token.moss_compress, Token.moss)
         compare_sha256(Token.moss, sha256.moss)
+    if not os.path.isfile(Token.qwen35):
+        os.makedirs(os.path.dirname(Token.qwen35), exist_ok=True)
+        decompress(Token.qwen35_compress, Token.qwen35)
+        compare_sha256(Token.qwen35, sha256.qwen35)
 
     # if not os.path.isfile(Token.wan_compress):
     #     compress(Token.wan_t2v, Token.wan_compress)

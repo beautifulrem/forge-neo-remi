@@ -262,14 +262,14 @@ class AdapterRule:
         coverage = _lora_coverage(filename, self.adapter_kind)
         text_layer_weights = _filter_layer_weights(self.text_layer_weights, coverage.text_layers) if self.text_layer_enabled else LayerWeights()
         if inline_rule is not None:
-            return LoraDecision(True, _filter_layer_weights(inline_rule.block_weights, coverage.blocks), _filter_module_weights(inline_rule.module_weights, coverage.modules), text_layer_weights, anima_lora_block_count(coverage.blocks))
+            return LoraDecision(True, _filter_layer_weights(inline_rule.block_weights, coverage.blocks), _filter_module_weights(inline_rule.module_weights, coverage.modules), text_layer_weights, anima_lora_block_count(coverage.blocks, filename=filename, declared=coverage.declared_blocks))
 
         if self.targets:
             if not any(name in self.targets for name in names):
                 return LoraDecision(False, self.block_weights, self.module_weights, self.text_layer_weights)
         elif not _is_anima_adapter_file(filename, self.adapter_kind):
             return LoraDecision(False, self.block_weights, self.module_weights, self.text_layer_weights)
-        return LoraDecision(True, _filter_layer_weights(self.block_weights, coverage.blocks), _filter_module_weights(self.module_weights, coverage.modules), text_layer_weights, anima_lora_block_count(coverage.blocks))
+        return LoraDecision(True, _filter_layer_weights(self.block_weights, coverage.blocks), _filter_module_weights(self.module_weights, coverage.modules), text_layer_weights, anima_lora_block_count(coverage.blocks, filename=filename, declared=coverage.declared_blocks))
 
 
 class ActiveRule:

@@ -899,5 +899,7 @@
   "Enable the cost system for X/Y/Z Plot": "为 X/Y/Z 图表启用开销排序",
   "swap expensive axis (e.g. Checkpoint) the least number of times ; may generate images out of the order specified in the UI": "尽量少地切换开销大的轴（如模型）；生成顺序可能与界面中指定的顺序不同",
   "VAE (\"state_dict\" only)": "VAE（仅 state_dict）",
-  "Text Encoder": "文本编码器"
+  "Text Encoder": "文本编码器",
+  "[Anima 3.8B] Semantic connector for the negative prompt": "[Anima 3.8B] 负面提示词也使用语义连接器",
+  "off: the negative prompt uses only Anima's own text encoder, as in the model's reference workflow": "关闭：负面提示词只使用 Anima 自身的文本编码器，与模型参考工作流一致"
 }

@@ -8,6 +8,24 @@ import networks
 from modules import extra_networks, shared
 
 
+_ANIMA_SIZES = {"2b": 28, "2.9b": 40, "3.8b": 52}
+
+
+def anima_source_blocks(value) -> int | None:
+    """The ``src=`` of a ``<lora:…>`` tag: the Anima depth the LoRA was trained
+    for, as blocks (28/40/52) or the model size (2b/2.9b/3.8b); None when
+    absent. Raises ValueError for anything else."""
+
+    text = str(value).strip().lower() if value is not None else ""
+    if not text:
+        return None
+    if text in _ANIMA_SIZES:
+        return _ANIMA_SIZES[text]
+    if text.isdigit() and int(text) in _ANIMA_SIZES.values():
+        return int(text)
+    raise ValueError(f"src={value}: expected 28, 40 or 52 (or 2b, 2.9b, 3.8b)")
+
+
 class ExtraNetworkLora(extra_networks.ExtraNetwork):
     remove_symbols = str.maketrans("", "", ":,")
 
@@ -23,6 +41,7 @@ class ExtraNetworkLora(extra_networks.ExtraNetwork):
         names: list[str] = []
         te_multipliers: list[float] = []
         unet_multipliers: list[float] = []
+        anima_sources: list = []
 
         for params in params_list:
             assert params.items
@@ -37,14 +56,23 @@ class ExtraNetworkLora(extra_networks.ExtraNetwork):
 
             te_multipliers.append(te_multiplier)
             unet_multipliers.append(unet_multiplier)
+            try:
+                anima_sources.append(anima_source_blocks(params.named.get("src")))
+            except ValueError as e:
+                p.comment(f"LoRA {params.positional[0]}: {e}")
+                anima_sources.append(None)
 
-        failed = networks.load_networks(names, te_multipliers, unet_multipliers)
+        failed = networks.load_networks(names, te_multipliers, unet_multipliers, anima_sources)
         if failed:
             # a job warning (and a note under the image), not just a console line; a LoRA
             # that was found but could not be read also names the reason
             summary = ", ".join(name if reason == "not found" else f"{name} ({reason})" for name, reason in failed.items())
             networks.logger.warning(f"Skipped LoRAs: {summary}")
             p.comment("LoRA not found or failed to load: " + summary)
+
+        if networks.remap_notes:
+            # Read back by the infotext paste, so the same image re-maps the same way
+            p.extra_generation_params["Lora remap"] = ", ".join(f"{name.translate(self.remove_symbols)}: {note.split(',')[0]}" for name, note in networks.remap_notes.items())
 
         if shared.opts.lora_add_hashes_to_infotext:
             if not getattr(p, "is_hr_pass", False) or not hasattr(p, "lora_hashes"):

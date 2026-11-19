@@ -28,8 +28,12 @@ class ForgeScheduleLinker(nn.Module):
     def get_sigmas(self, n=None):
         if n is None:
             return sampling.append_zero(self.sigmas.flip(0))
-        t_max = len(self.sigmas) - 1
-        t = torch.linspace(t_max, 0, n, device=self.sigmas.device)
+        # Remi: the predictor's own timesteps from sigma_max to sigma_min (as ComfyUI's "normal"
+        # scheduler), not the indices 999..0: for a flow predictor index 0 is sigma 0, and the
+        # step from it to the appended zero divides by zero (a black image)
+        start = float(self.sigma_to_t(self.sigmas[-1]))
+        end = float(self.sigma_to_t(self.sigmas[0]))
+        t = torch.linspace(start, end, n, device=self.sigmas.device)
         return sampling.append_zero(self.t_to_sigma(t))
 
     def sigma_to_t(self, sigma, quantize=None):

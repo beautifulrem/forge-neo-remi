@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from modules.anima_artifacts import file_version
-from modules.anima_lora_support import block_index_from_key, module_from_key, qwen_layer_index
+from backend.nn.anima_layout import declared_depth
+from modules.anima_lora_support import anima_lora_block_count, block_index_from_key, module_from_key, qwen_layer_index
 
 LORA_MARKERS = (".lora_a.weight", ".lora_b.weight", ".lora_down.weight", ".lora_up.weight")
 LOKR_MARKERS = (".lokr_",)
@@ -24,6 +25,8 @@ class LoraCoverage:
     blocks: frozenset[int] = frozenset()
     modules: frozenset[str] = frozenset()
     text_layers: frozenset[int] = frozenset()
+    # The Anima depth the file's metadata names (2.9B / 3.8B trainers), if any
+    declared_blocks: int | None = None
 
 
 _KIND_CACHE: dict[tuple, str | None] = {}
@@ -43,10 +46,14 @@ def lora_cache_key(filename) -> tuple | None:
 
 
 def _safetensors_keys(filename) -> list[str]:
+    return _safetensors_header(filename)[0]
+
+
+def _safetensors_header(filename) -> tuple[list[str], dict]:
     from safetensors import safe_open
 
     with safe_open(str(filename), framework="pt", device="cpu") as f:
-        return list(f.keys())
+        return list(f.keys()), f.metadata() or {}
 
 
 def is_adapter_weight_key(key: str, adapter_kind: str) -> bool:
@@ -81,9 +88,9 @@ def lora_coverage(filename, adapter_kind: str = "lora") -> LoraCoverage:
     coverage_key = (cache_key, adapter_kind)
     if coverage_key not in _COVERAGE_CACHE:
         try:
-            keys = _safetensors_keys(filename)
+            keys, metadata = _safetensors_header(filename)
         except Exception:
-            keys = []
+            keys, metadata = [], {}
         blocks, modules, text_layers = set(), set(), set()
         for key in keys:
             if not is_adapter_weight_key(key, adapter_kind):
@@ -98,8 +105,19 @@ def lora_coverage(filename, adapter_kind: str = "lora") -> LoraCoverage:
                 module = module_from_key(key)
                 if module:
                     modules.add(module)
-        _COVERAGE_CACHE[coverage_key] = LoraCoverage(frozenset(blocks), frozenset(modules), frozenset(text_layers))
+        _COVERAGE_CACHE[coverage_key] = LoraCoverage(frozenset(blocks), frozenset(modules), frozenset(text_layers), declared_depth(metadata))
     return _COVERAGE_CACHE[coverage_key]
+
+
+def lora_file_depth(filename, adapter_kind: str | None = None) -> int | None:
+    """The Anima depth (28/40/52) a LoRA file's DiT weights were trained for,
+    as the LoRA loader places them: the depth it resolved for this file, else
+    the file's metadata, else its trained block indices."""
+
+    if not filename:
+        return None
+    coverage = lora_coverage(filename, adapter_kind or adapter_kind_for_file(filename) or "lora")
+    return anima_lora_block_count(coverage.blocks, filename=filename, declared=coverage.declared_blocks)
 
 
 def is_anima_adapter_file(filename, adapter_kind: str = "lora") -> bool:

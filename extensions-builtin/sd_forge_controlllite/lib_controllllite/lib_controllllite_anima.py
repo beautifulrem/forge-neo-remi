@@ -11,7 +11,8 @@ import torch.nn.functional as F
 
 from backend.args import dynamic_args
 from backend.misc.image_resize import adaptive_resize
-from backend.nn.anima import BLOCK_MAPPINGS, Anima
+from backend.nn import anima_layout
+from backend.nn.anima import Anima
 from backend.state_dict import load_state_dict
 from lib_controllllite.lib_controllllite import step_active
 
@@ -162,6 +163,7 @@ class LLLiteModuleDiT(nn.Module):
         self.org_forward = None
         self.layer_idx: int = -1
         self._depth_embeds_ref: list[nn.Parameter] = []
+        self._skip_warned: list[bool] = [False]  # shared by a net's modules: one warning per sampling
 
         self.num_steps: int = 0
         self.start_step: int = 0
@@ -197,6 +199,11 @@ class LLLiteModuleDiT(nn.Module):
                 above.org_forward = self.org_forward
         self.org_forward = None
 
+    def _warn_skip(self, why: str) -> None:
+        if not self._skip_warned[0]:
+            self._skip_warned[0] = True
+            logger.warning(f"Control-LLLite (Anima) has no effect on this pass: {why} (reference frames or a tile size it was not prepared for)")
+
     @torch.compiler.disable
     @torch.inference_mode()
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -228,10 +235,12 @@ class LLLiteModuleDiT(nn.Module):
 
         if x.shape[0] != cx.shape[0]:
             if x.shape[0] % cx.shape[0] != 0:
+                self._warn_skip(f"batch {x.shape[0]} is not a multiple of the control's {cx.shape[0]}")
                 return self.org_forward(x.reshape(orig_shape) if is_5d else x)
             cx = cx.repeat(x.shape[0] // cx.shape[0], 1, 1)
 
         if x.shape[1] != cx.shape[1]:
+            self._warn_skip(f"{x.shape[1]} image tokens, the control image has {cx.shape[1]}")
             return self.org_forward(x.reshape(orig_shape) if is_5d else x)
 
         param_dtype = self.down.weight.dtype
@@ -289,9 +298,11 @@ class ControlNetLLLiteDiT(nn.Module):
 
         n = len(self.lllite_modules)
         self.depth_embeds = nn.Parameter(torch.zeros(n, cond_emb_dim))
+        self._skip_warned: list[bool] = [False]
         for i, m in enumerate(self.lllite_modules):
             m.layer_idx = i
             m._depth_embeds_ref = [self.depth_embeds]
+            m._skip_warned = self._skip_warned
 
         self._cond_image_original: torch.Tensor = None
         self._lllite_tiled_cache: dict[tuple, dict[int, torch.Tensor]] = {}
@@ -432,6 +443,7 @@ class ControlNetLLLiteDiT(nn.Module):
             m.progress, m.start_percent, m.end_percent = progress, start_percent, end_percent
 
     def apply_to(self):
+        self._skip_warned[0] = False
         for m in self.lllite_modules:
             m.apply_to()
 
@@ -455,24 +467,56 @@ class ControlNetLLLiteDiT(nn.Module):
 
 
 class MappedModule(nn.Module):
-    def __init__(self, dit: nn.Module, layout: list[int]):
+    """The model blocks a Control-LLLite trained for another depth goes on,
+    under the block indices it was trained with (``layout``: trained block ->
+    model block). Trained blocks with no place on the model are left out."""
+
+    def __init__(self, dit: nn.Module, layout: dict[int, int]):
         super().__init__()
-        self.blocks = nn.ModuleList(dit.blocks[i] for i in layout)
+        self.blocks = nn.ModuleDict({str(trained): dit.blocks[model] for trained, model in sorted(layout.items())})
 
 
-def map_blocks(dit: Anima, state_dict: dict[str, torch.Tensor]) -> nn.Module:
+def map_blocks(dit: Anima, state_dict: dict[str, torch.Tensor]) -> tuple[nn.Module, dict[str, torch.Tensor]]:
+    """The DiT (or a view of it) to build the Control-LLLite on, and the
+    weights that fit it. An LLLite trained on 2B goes on the original blocks
+    of 2.9B / 3.8B (not their inserted copies); one trained on a deeper model
+    drops the blocks a shallower one lacks."""
+
     blocks: int = len(dit.blocks)
-    trained: int = 1 + max((int(m.group(1)) for k in state_dict if (m := _SAVED_BLOCK_RE.match(k))), default=-1)
+    trained_blocks = {int(m.group(1)) for k in state_dict if (m := _SAVED_BLOCK_RE.match(k))}
+    _check_width(dit, state_dict)
+    try:
+        trained, _ = anima_layout.trained_depth(trained_blocks)
+    except anima_layout.AnimaDepthError as e:
+        raise NotImplementedError(f"Control-LLLite: {e}") from None
 
     if trained == blocks:
-        return dit
+        return dit, state_dict
 
-    if (mapping := BLOCK_MAPPINGS.get((trained, blocks))) is None:
+    if (mapping := anima_layout.block_map(trained, blocks, "skip")) is None:
         raise NotImplementedError(f"Cannot map Control-LLLite ({trained}) to Model ({blocks})")
+    targets, dropped = mapping
 
-    layout = [mapping.index(i) for i in range(trained)]
-    logger.info(f"Re-Mapping Anima Control-LLLite ({trained} to {blocks})")
-    return MappedModule(dit, layout)
+    layout = {block: model_blocks[0] for block, model_blocks in targets.items()}
+    if dropped:
+        prefixes = tuple(f"lllite_dit_blocks_{block}_" for block in dropped)
+        state_dict = {k: v for k, v in state_dict.items() if not k.startswith(prefixes)}
+        logger.warning(f"Re-Mapping Anima Control-LLLite ({trained} to {blocks}): the {len(dropped)} blocks the smaller model lacks are dropped")
+    else:
+        logger.info(f"Re-Mapping Anima Control-LLLite ({trained} to {blocks})")
+    return MappedModule(dit, layout), state_dict
+
+
+def _check_width(dit: Anima, state_dict: dict[str, torch.Tensor]) -> None:
+    """A Control-LLLite made for another DiT width fails here, by name, not in a size mismatch later."""
+
+    width = getattr(getattr(dit.blocks[0], "self_attn", None), "q_proj", None)
+    width = getattr(width, "in_features", None)
+    for k, v in state_dict.items():
+        if k.startswith("lllite_dit_blocks_") and k.endswith(".down.weight") and "_self_attn_q_proj" in k:
+            if width is not None and v.shape[-1] != width:
+                raise NotImplementedError(f"Control-LLLite made for a DiT of width {v.shape[-1]}, this model's is {width}")
+            return
 
 
 # region Weight Loading

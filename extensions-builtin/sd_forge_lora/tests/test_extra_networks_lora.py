@@ -18,10 +18,11 @@ def lora(monkeypatch):
     fake: Any = types.ModuleType("networks")  # a stand-in with the attributes the script reads
     fake.available_networks = {}
     fake.loaded_networks = []
+    fake.remap_notes = {}
     fake.calls = []
     fake.logger = types.SimpleNamespace(warning=lambda *_: None)
 
-    def load_networks(names, te, unet):
+    def load_networks(names, te, unet, sources=None):
         fake.calls.append(names)
         reasons = {"missing": "not found", "broken": "bad header"}
         return {name: reasons[name.split("_")[0]] for name in names if name.split("_")[0] in reasons}

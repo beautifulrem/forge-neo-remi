@@ -55,7 +55,10 @@ export function editAttention(
     if (openAfter !== -1 && openAfter < closeAt) return false
     const content = text.slice(openAt + 1, start + closeAt)
     start = openAt + 1
-    end = /.*:-?[\d.]+/s.test(content) ? start + content.lastIndexOf(":") : start + content.length
+    // A network tag's weight is its third field, before any named ones (`<lora:name:1:src=40>`)
+    const fields = open === "<" ? content.split(":") : []
+    if (fields.length > 3 && /^-?[\d.]+$/.test(fields[2]!)) end = start + fields[0]!.length + 1 + fields[1]!.length
+    else end = /.*:-?[\d.]+/s.test(content) ? start + content.lastIndexOf(":") : start + content.length
     return true
   }
 
@@ -97,7 +100,7 @@ export function editAttention(
   }
 
   if (text[end] !== ":") return null
-  const weightLength = text.slice(end + 1).indexOf(close) + 1
+  const weightLength = text.slice(end + 1).search(close === ">" ? /[:>]/ : /\)/) + 1
   const parsed = Number.parseFloat(text.slice(end + 1, end + weightLength))
   if (Number.isNaN(parsed)) return null
 

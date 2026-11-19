@@ -11,6 +11,7 @@ import os
 import re
 from dataclasses import dataclass, field
 
+from backend.nn import anima_layout as _anima_layout
 from modules.anima_support import block_index_token, clamp, fold_weight_text, is_plain_number, parse_block_list, plain_number, sigma_value, to_float
 
 logger = logging.getLogger(__name__)
@@ -305,23 +306,28 @@ def merge_consistent_rules(target: dict, incoming: dict, *, label: str) -> None:
 
 # Block layouts of the depth-expanded Anima models (2B = 28 blocks, 2.9B = 40,
 # 3.8B = 52): each entry is the source block a target block was copied from.
-# Kept identical to backend.nn.anima.BLOCK_MAPPINGS (upstream code: the LoRA and
-# ControlLLLite loaders re-map weights with it), which this module does not import
-# to stay free of the backend; tests/test_anima_lora_support.py checks it.
-ANIMA_BLOCK_MAPPINGS = {
-    (28, 40): (0, 1, 1, 2, 3, 3, 4, 5, 5, 6, 7, 7, 8, 9, 9, 10, 11, 11, 12, 13, 14, 14, 15, 16, 16, 17, 18, 18, 19, 20, 20, 21, 22, 22, 23, 24, 24, 25, 26, 27),
-    (28, 52): (0, 1, 1, 1, 2, 3, 3, 3, 4, 5, 5, 5, 6, 7, 7, 7, 8, 9, 9, 9, 10, 11, 11, 11, 12, 13, 14, 14, 14, 15, 16, 16, 16, 17, 18, 18, 18, 19, 20, 20, 20, 21, 22, 22, 22, 23, 24, 24, 24, 25, 26, 27),
-    (40, 52): (0, 1, 2, 2, 3, 4, 5, 5, 6, 7, 8, 8, 9, 10, 11, 11, 12, 13, 14, 14, 15, 16, 17, 17, 18, 19, 20, 20, 21, 22, 23, 23, 24, 25, 26, 26, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 35, 35, 36, 37, 38, 39),
-}
+# backend.nn.anima_layout is pure Python and the one table every loader uses.
+ANIMA_BLOCK_MAPPINGS = {pair: tuple(mapping) for pair, mapping in _anima_layout.BLOCK_MAPPINGS.items()}
+
+# Depths the LoRA loader resolved for files it applied, by absolute path (it
+# reads the file's metadata and the prompt's ``src=`` override): per-block
+# weights must follow the same layout the weights were placed with.
+RESOLVED_LORA_DEPTHS: dict[str, int] = {}
 
 
-def anima_lora_block_count(trained_blocks) -> int | None:
-    """The Anima depth a LoRA was trained for, from its block indices."""
+def anima_lora_block_count(trained_blocks, *, filename=None, declared: int | None = None) -> int | None:
+    """The Anima depth a LoRA was trained for: the depth the LoRA loader
+    resolved for ``filename``, else ``declared`` (file metadata), else the
+    smallest depth its trained block indices fit."""
 
-    if not trained_blocks:
+    if filename is not None:
+        resolved = RESOLVED_LORA_DEPTHS.get(os.path.abspath(str(filename)))
+        if resolved is not None:
+            return resolved
+    try:
+        return _anima_layout.trained_depth(trained_blocks, declared=declared)[0]
+    except _anima_layout.AnimaDepthError:
         return None
-    needed = max(trained_blocks) + 1
-    return next((size for size in (28, 40, 52) if needed <= size), None)
 
 
 def anima_source_block(index: int, lora_blocks: int | None, model_blocks: int | None) -> int:

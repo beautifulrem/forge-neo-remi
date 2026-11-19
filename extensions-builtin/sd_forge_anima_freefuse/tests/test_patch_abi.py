@@ -769,3 +769,11 @@ def test_untagged_patches_are_detected_offline_and_online():
         patcher = ModelPatcher(_Model(), torch.device("cpu"), torch.device("cpu"))
         patcher.add_patches({"layer.weight": ("diff", (torch.ones(2, 2),))}, online_mode=online)
         assert runtime.has_untagged_patches(patcher)
+
+
+def test_selectors_match_lora_names_with_dots():
+    # "v0.2" is part of the name, not an extension: the official Anima turbo LoRA never matched
+    runtime, _, _ = _load()
+    assert runtime._selector_matches("anima-turbo-lora-v0.2", "/models/Lora/anima-turbo-lora-v0.2.safetensors")
+    assert runtime._selector_matches("Anima-Turbo-LoRA-v0.2.safetensors", "anima-turbo-lora-v0.2.safetensors")
+    assert not runtime._selector_matches("anima-turbo-lora-v0", "anima-turbo-lora-v0.2.safetensors")

@@ -54,6 +54,11 @@ describe("editAttention", () => {
     expect(edit("<lora:st|yle:1.0>", -1)).toBe("<[lora:style]:0.95>")
   })
 
+  it("steps a network tag's weight and keeps its named arguments", () => {
+    expect(edit("<lora:st|yle:1:src=40>", 1)).toBe("<[lora:style]:1.05:src=40>")
+    expect(edit("<lora:style:0.8:sr|c=40>", -1)).toBe("<[lora:style]:0.75:src=40>")
+  })
+
   it("keeps integers formatted as x.0", () => {
     expect(edit("(s|ky:1.9)", 1)).toBe("([sky]:2.0)")
   })

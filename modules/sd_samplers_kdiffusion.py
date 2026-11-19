@@ -133,6 +133,12 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
         else:
             sigmas_kwargs = {"sigma_min": m_sigma_min, "sigma_max": m_sigma_max}
 
+            # Remi: a VE-only scheduler (Karras, ...) washes a flow model's image out: say so
+            from modules.anima_feature_conflicts import flow_scheduler_note
+
+            if note := flow_scheduler_note(scheduler.label, getattr(self.model_wrap, "predictor", None)):
+                p.comment(note)
+
             if scheduler.label != "Automatic" and not p.is_hr_pass:
                 p.extra_generation_params["Schedule type"] = scheduler.label
             elif scheduler.label != p.extra_generation_params.get("Schedule type"):

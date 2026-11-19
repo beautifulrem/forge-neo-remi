@@ -256,6 +256,25 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             load_state_dict(model, state_dict, log_name=cls_name)
             return model
+        if cls_name == "AnimaQwen35":  # Remi: Anima-3.8B's second text encoder (no config folder)
+            from backend.nn.anima_qwen35 import AnimaQwen35
+
+            if state_dict_dtype == "gguf" or detect_quantization(state_dict) is not None:
+                raise NotImplementedError("Anima-3.8B's Qwen3.5 4B is supported as the released safetensors only")
+            # The release stores the linear layers in FP8 and the embedding and norms in BF16:
+            # every tensor keeps its own dtype (assigned, not converted), the layers cast to
+            # the compute dtype as they run
+            with no_init_weights():
+                with using_forge_operations(device=torch.device("meta"), dtype=memory_management.text_encoder_dtype(), manual_cast_enabled=True):
+                    model = AnimaQwen35()
+            model.requires_grad_(False)
+            expected = set(model.state_dict())
+            missing, unexpected = sorted(expected - state_dict.keys()), sorted(state_dict.keys() - expected)
+            if missing or unexpected:
+                raise ValueError(f"Not Anima-3.8B's qwen35_4b.safetensors: missing {missing[:5]}, unexpected {unexpected[:5]}")
+            model.load_state_dict(state_dict, strict=True, assign=True)
+            logger.info(f"Anima-3.8B Qwen3.5 4B: {', '.join(sorted({str(t.dtype).removeprefix('torch.') for t in state_dict.values()}))} weights")
+            return model
         if cls_name in ["Qwen3Model", "Qwen3ForCausalLM", "Qwen3VLModel", "Qwen3VLForConditionalGeneration"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have Qwen3 state dict!"
 
@@ -508,6 +527,12 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 # layer, first blocks and norms at full precision.
                 kept = keep_sensitive_weights_precise(model, computation_dtype)
                 logger.info(f"Anima: kept {kept} precision-sensitive parameters in {computation_dtype}")
+            if getattr(model, "anima_v2_connector", None) is not None:
+                # Remi: a connector loaded with missing (zero-filled) weights would silently
+                # do nothing; a quantized 3.8B that dropped it is refused instead
+                expected = {f"{name}.{key}" for name in ("anima_v2_connector", "llm_adapter") for key in getattr(model, name).state_dict()}
+                if missing := sorted(expected - state_dict.keys()):
+                    raise ValueError(f"Anima-3.8B checkpoint without its semantic connector weights: missing {len(missing)} ({', '.join(missing[:3])}...)")
             load_state_dict(model, state_dict)
             # model = post_func(model)
 
@@ -736,9 +761,17 @@ def replace_state_dict(sd: dict[str, torch.Tensor], asd: dict[str, torch.Tensor]
 
     if "model.language_model.layers.0.linear_attn.A_log" in asd and "model.language_model.layers.0.input_layernorm.weight" in asd:
         weight = asd["model.language_model.layers.0.input_layernorm.weight"]
+        # Remi: a 2560-wide one is Qwen3.5 4B in the Hugging Face layout; Anima-3.8B was
+        # trained with the release's own file (layers only, and a projection head)
+        assert weight.shape[0] != 2560, f"{os.path.basename(path)} is Qwen3.5 4B in the Hugging Face layout: Anima-3.8B needs qwen35_4b.safetensors from lylogummy/Anima-3.8B"
         assert weight.shape[0] == 4096
         for k, v in asd.items():
             sd[f"{text_encoder_key_prefix}qwen35_9b.transformer.{k}"] = v
+
+    elif "layers.0.linear_attn.A_log" in asd and "norm.0.weight" in asd:
+        # Remi: Anima-3.8B's Qwen3.5 4B (backend.nn.anima_qwen35)
+        for k, v in asd.items():
+            sd[f"{text_encoder_key_prefix}qwen35_4b.transformer.{k}"] = v
 
     elif "model.layers.0.post_feedforward_layernorm.weight" in asd:
         assert "model.layers.0.self_attn.q_norm.weight" not in asd
@@ -791,13 +824,14 @@ def preprocess_state_dict(sd: dict[str, torch.Tensor]) -> dict[str, torch.Tensor
     return sd
 
 
-def process_anima(dit: dict[str, torch.Tensor], enc: dict[str, torch.Tensor]):
+def process_anima(dit: dict[str, torch.Tensor], enc: dict[str, torch.Tensor], keep_in_dit: bool = False):
     # move LLMAdapter from transformer to text_encoder
+    # (Remi: copy it with ``keep_in_dit``: Anima-3.8B's connector runs it at every step)
 
     keys = list(dit.keys())
     for k in keys:
         if k.startswith("llm_adapter"):
-            value = dit.pop(k)
+            value = dit[k] if keep_in_dit else dit.pop(k)
             # A GGUF DiT quantizes the adapter too; dequantize it (it is small)
             # so the text encoder is not switched to GGUF ops just for it.
             if hasattr(value, "dequantize_as_pytorch_parameter"):
@@ -884,6 +918,8 @@ def split_state_dict(path: os.PathLike, additional_state_dicts: list[os.PathLike
             del _asd
 
     guess.clip_target = guess.clip_target(sd)
+    if "Anima" in guess.huggingface_repo and any(k.startswith(f"{guess.text_encoder_key_prefix[0]}qwen35_4b.") for k in sd):
+        guess.clip_target["qwen35_4b.transformer"] = "text_encoder_2"  # Remi: Anima-3.8B's Qwen3.5 4B
     guess.model_type = guess.model_type(sd)
     guess.ztsnr = "ztsnr" in sd
 
@@ -899,7 +935,12 @@ def split_state_dict(path: os.PathLike, additional_state_dicts: list[os.PathLike
     state_dict["ignore"] = sd
 
     if "Anima" in guess.huggingface_repo:
-        process_anima(state_dict["transformer"], state_dict["text_encoder"])
+        from backend.nn.anima_connector import connector_config
+
+        # Remi: Anima-3.8B (a Semantic Connector v2 bundle) keeps its LLM adapter in the DiT too
+        if connector := connector_config(state_dict["transformer"], metadata=metadata):
+            guess.unet_config["semantic_connector"] = connector
+        process_anima(state_dict["transformer"], state_dict["text_encoder"], keep_in_dit=connector is not None)
     if "PiD" in guess.huggingface_repo:
         process_pid(state_dict["transformer"])
         state_dict["vae"]["_dim"] = guess.unet_config["lq_latent_channels"]
@@ -950,6 +991,10 @@ def forge_loader(sd: os.PathLike, additional_state_dicts: list[os.PathLike] = No
                 del component_sd
             if component is not None:
                 huggingface_components[component_name] = component
+
+    if "Anima" in repo_name and (qwen35 := state_dicts.pop("text_encoder_2", None)):
+        # Remi: Anima-3.8B's Qwen3.5 4B, chosen with the other modules (not in Anima's model_index)
+        huggingface_components["text_encoder_2"] = load_huggingface_component(estimated_config, "text_encoder_2", "transformers", "AnimaQwen35", local_path, qwen35)
 
     del state_dicts
 

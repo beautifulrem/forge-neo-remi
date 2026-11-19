@@ -17,6 +17,9 @@ _PRECISION_SENSITIVE_PREFIXES = (
     "final_layer.",
     "blocks.0.",
     "blocks.1.adaln_modulation_",
+    # Anima-3.8B's own LLM adapter and Semantic Connector v2 (small, and run on every step)
+    "llm_adapter.",
+    "anima_v2_connector.",
 )
 _FP8_DTYPES = (torch.float8_e4m3fn, torch.float8_e5m2)
 

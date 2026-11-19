@@ -2,7 +2,8 @@ import logging
 
 import torch
 import torch.nn.functional as F
-from lib_controllllite.lib_controllllite import LLLiteLoader, sampler_progress
+from lib_controllllite.anima_control_lora import ControlEmbedder, ControlInjection, is_control_lora, split_control_lora
+from lib_controllllite.lib_controllllite import LLLiteLoader, sampler_progress, step_active
 from lib_controllllite.lib_controllllite_anima import (
     ControlNetLLLiteDiT,
     infer_anima_config,
@@ -18,6 +19,7 @@ logger = logging.getLogger("ControlNet")
 
 
 class ControlLLLiteAnimaPatcher(ControlModelPatcher):
+    anima_compatible = True
 
     @staticmethod
     def try_build_from_state_dict(state_dict, ckpt_path):
@@ -63,8 +65,9 @@ class ControlLLLiteAnimaPatcher(ControlModelPatcher):
 
         if self._lllite_net is None:
             try:
-                net = ControlNetLLLiteDiT(map_blocks(dit, self.state_dict), **infer_anima_config(self.state_dict))
-                load_lllite_weights_from_dict(net, self.state_dict)  # other layer widths: size mismatch
+                view, weights = map_blocks(dit, self.state_dict)
+                net = ControlNetLLLiteDiT(view, **infer_anima_config(weights))
+                load_lllite_weights_from_dict(net, weights)
             except (AttributeError, NotImplementedError, RuntimeError) as e:
                 if not getattr(process, "is_hr_pass", False):
                     raise
@@ -135,6 +138,81 @@ class ControlLLLitePatcher(ControlModelPatcher):
         process.sd_model.forge_objects.unet = unet
 
 
+class AnimaControlLoraPatcher(ControlModelPatcher):
+    """Anima control-LoRA (``lib_controllllite.anima_control_lora``): the unit's weight scales the
+    control image's embedding and its start / end bound it; the LoRA trained with it is applied
+    at 1.0 for the whole pass, to the DiT and (before the prompts are encoded) the LLM adapter."""
+
+    anima_compatible = True
+
+    @staticmethod
+    def try_build_from_state_dict(state_dict, ckpt_path):
+        if not is_control_lora(state_dict):
+            return None
+        return AnimaControlLoraPatcher(state_dict, ckpt_path)
+
+    def __init__(self, state_dict: dict[str, torch.Tensor], ckpt_path: str):
+        super().__init__()
+        embedder, self.lora = split_control_lora(state_dict)
+        self.embedder = ControlEmbedder.from_state_dict(embedder)
+        self.filename = str(ckpt_path)
+        self._injection: ControlInjection = None
+
+    def _patched(self, unet, clip):
+        import networks  # sd_forge_lora: depth re-mapping, LLM adapter routing, 3.8B mirroring
+
+        if not self.lora:
+            return unet, clip
+        try:
+            return networks.load_lora_for_models(unet, clip, dict(self.lora), 1.0, 1.0, filename=self.filename)
+        except networks.LoraNotApplied as error:
+            raise ValueError(f"Anima control-LoRA {self.filename}: its LoRA does not fit this model ({error})") from error
+
+    def process_before_conditioning(self, process) -> bool:
+        objects = process.sd_model.forge_objects
+        _, patched = self._patched(objects.unet, objects.clip)
+        changed = patched is not objects.clip
+        objects.clip = patched
+        return changed
+
+    def process_before_every_sampling(self, process, cond, mask, *args, **kwargs):
+        objects = process.sd_model.forge_objects
+        objects.unet, _ = self._patched(objects.unet, objects.clip)
+        unet = objects.unet
+
+        if mask is not None:
+            if getattr(process, "inpainting_mask_invert", False):
+                mask = 1.0 - mask
+            cond = cond * mask  # not in place: cond is the unit's cached control, used by every pass
+
+        # The Wan VAE takes a 4D batch as the frames of one video: one image at a time
+        images = cond.movedim(1, -1)
+        latent = torch.cat([objects.vae.encode(images[i : i + 1]) for i in range(images.shape[0])])
+        device, dtype = unet.load_device, unet.model.computation_dtype
+        with torch.inference_mode():
+            tokens = self.embedder.to(device=device, dtype=dtype)(latent.to(device=device, dtype=dtype))
+
+        progress = sampler_progress(process)
+        start, end, hires = self.start_percent, self.end_percent, getattr(process, "is_hr_pass", False)
+
+        def active() -> bool:
+            if getattr(process, "is_hr_pass", False) != hires:
+                return False  # a pass the unit does not run in (its Hires option)
+            return step_active(progress, start, end) is not False
+
+        if self._injection is not None:
+            self._injection.detach()
+        self._injection = ControlInjection(tokens, self.strength, active)
+        self._injection.attach(unet.model.diffusion_model)
+
+    def process_after_every_sampling(self, *args, **kwargs):
+        if self._injection is not None:
+            self._injection.detach()
+            self._injection = None
+
+
 add_supported_control_model(ControlLLLitePatcher)
 
 add_supported_control_model(ControlLLLiteAnimaPatcher)
+
+add_supported_control_model(AnimaControlLoraPatcher)

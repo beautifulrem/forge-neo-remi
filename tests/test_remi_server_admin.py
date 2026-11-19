@@ -538,7 +538,7 @@ def test_licenses_are_structured_from_the_html_file(env):
     titles = [group["title"] for group in data["groups"]]
     assert titles == ["Special Thanks", "Diffusion Engine", "Misc. Components"]
     entries = [item for group in data["groups"] for item in group["items"]]
-    assert len(entries) == 14 and all(item["license_url"].startswith("https://raw.githubusercontent.com/") for item in entries)
+    assert len(entries) == 15 and all(item["license_url"].startswith("https://raw.githubusercontent.com/") for item in entries)
     comfy = entries[0]
     assert comfy == {"id": "comfy", "name": "ComfyUI", "url": "https://github.com/Comfy-Org/ComfyUI", "description": "Many inference code and structural optimizations were taken from this repository", "license_url": "https://raw.githubusercontent.com/Comfy-Org/ComfyUI/master/LICENSE"}
 

@@ -49,7 +49,7 @@
 | 空间控制 | Regional Conditioning、FreeFuse 多 LoRA 路由、Artist Scheduled Mixer |
 | 多样性 | DAVE（前段 DC 衰减，提升同一提示词不同 seed 的构图多样性） |
 | 提示词遵循 | Cross-Attention Boost（高噪声前段放大正向提示词的 cross-attention 并做范数匹配，改善弱标签与多主体绑定） |
-| LoRA 工作流 | 分层权重、阶段调度、2B LoRA 用于 2.9B/3.8B（28/40/52 层）、提示词缩放 |
+| LoRA 工作流 | 分层权重、阶段调度、LoRA 在 2B/2.9B/3.8B（28/40/52 层）之间通用、提示词缩放 |
 | 稳定性 | 功能冲突解析、Hires Guard、生成元数据、安全回退 |
 | 加速 | Spectrum 预测，以及 Anima per-block `torch.compile`（首次重新编译后，改变的分辨率或 batch size 复用同一个动态形状图；batch 1（CFG 1，或 CFG 区间外的步）和参考帧仍各自编译独立的图） |
 | 低比特加载 | **低精度扩散**（Diffusion in Low Bits）中的 `float8-e4m3fn (Anima scaled)`（按张量缩放的 FP8，显存与普通 FP8 相同、精度更高）和 `int8 (Anima ConvRot)`（INT8 矩阵乘；需要 CUDA 13 或 `--enable-triton-backend`，SM 8.0+） |
@@ -58,10 +58,21 @@
 
 ### Anima 2.9B 与 3.8B checkpoint
 
-**28/40/52 层架构兼容：** 自动识别原始 Anima、2.9B 和 3.8B 的 DiT 结构；28 层 LoRA 和 Anima ControlLLLite 模型会重映射到扩展模型上，分层权重、阶段调度器的 block 权重和 FreeFuse 的采集层在扩展模型上仍按 28 层布局解释。3.8B 还需要外部条件编码扩展（见下方说明）。
+**28/40/52 层架构兼容：** 自动识别原始 Anima（28 层）、2.9B（40 层）和 3.8B（52 层）的 DiT 结构。在更深的模型上，分层权重、阶段调度器的 block 权重和 FreeFuse 的采集层仍按 28 层布局解释。
 
-> [!NOTE]
-> Remi 只覆盖 3.8B 的**扩散模型**部分（52 层 DiT 结构与 LoRA 映射）。Anima 3.8B 以 Qwen3.5 4B 为条件：v1.1 checkpoint 内置一个随时间步变化、每个去噪步都参与计算的 Semantic Connector（v2），并需要在原生 Qwen3 0.6B 之外另备 `qwen35_4b` 文本编码器。Remi 没有 Qwen3.5 条件编码或 connector 代码；与上游 Forge Neo 相同，这条路径需要 [forge-anima-3.8B](https://github.com/GumGum10/forge-anima-3.8B) 扩展，Remi 未内置也未测试它（它也需要先移植到 Remi 界面）。详见 [Anima 3.8B 模型卡](https://huggingface.co/lylogummy/Anima-3.8B)。
+| 模型 | 文件 | 预设 |
+|---|---|---|
+| Anima 2B（preview、base、aesthetic、turbo） | checkpoint 放在 `models/Stable-diffusion`；`qwen_image_vae` 和 `qwen_3_06b_base` 作为 VAE / 文本编码器模块 | Anima 预设 |
+| [Anima-2.9B](https://huggingface.co/Gazingstars123/Anima-2.9B) preview-v1 | 同上 | Anima-2.9B（Euler、SGM Uniform、30 步、CFG 4） |
+| [Anima-3.8B](https://huggingface.co/lylogummy/Anima-3.8B) v1.1 | 同上，**另加 `qwen35_4b.safetensors`**（放在 `models/text_encoder`，作为第三个模块选中） | Anima-3.8B（Res Multistep、Beta、32 步、CFG 5） |
+
+**Anima-3.8B。** v1.1 checkpoint 内置 Semantic Connector（v2）：它包在模型自带的 LLM adapter 外面，每个去噪步都根据 Qwen3.5 4B 编码器第 7、15、23、31 层的隐状态重写文本条件。Remi 原生运行它：connector 留在扩散模型里，Qwen3.5 编码器（FP8 权重，按文件原样保留）对提示词编码一次，context 每一步重新计算。没有选中 `qwen35_4b` 时，3.8B 的生成会停止并提示所需文件名；在其他模型上选中它只会记一条警告。与模型的参考工作流一致，负面提示词只使用 Anima 自身的编码器；**设置 → Stable Diffusion → [Anima 3.8B] 负面提示词也使用语义连接器** 可以让负面提示词也走 connector。NegPiP 和 MultiDiffusion 作用于 connector 的输出；Regional 与 Artist Mixer 的附加提示词只由 Anima 自身的编码器编码（主提示词仍经过 connector）。不支持 v1 预览版单独的 progressive adapter、MXFP8 和 GGUF 版 3.8B。
+
+**LoRA 跨深度使用。** 在一种深度上训练的 LoRA 会被重映射到另一种深度，并写入生成信息（`Lora remap: name 28→40`）。LoRA 的训练深度先看文件元数据，再看其中的块编号；猜错时（例如只训练了前段块的 40 层 LoRA 会被读成 28 层），可以在标签里写明：`<lora:name:1:src=40>`。在更深的模型上，**设置 → 附加网络 → 更深的 Anima 模型上的 LoRA：插入块** 决定插入块是使用其复制来源块的 LoRA（`copy`，默认），还是不使用（`skip`）。用于更浅的模型时，插入块上的权重会被丢弃。完全无法套用的 LoRA 会列在任务警告里，不会被悄悄忽略。作用在 LLM adapter 上的 LoRA 权重也会同步到 3.8B connector 使用的那份 adapter。
+
+**控制。** 对 Anima，ControlNet 模型列表只列出能在其 DiT 上运行的模型：ControlNet-LLLite（与 LoRA 一样跨深度重映射）和 control-LoRA。
+
+- **Control-LoRA**（[Anima-Control-Pose](https://huggingface.co/Claquasse/Anima-Control-Pose)，把 `anima_pose_preview2.safetensors` 放进 `models/ControlNet`）：给单元一张骨架图（黑底 OpenPose 渲染图，或使用 openpose 预处理器），再选中该模型。控制图经 VAE 编码后加到 DiT 的 patch embedding 上，强度由单元的**权重**决定（0 为无控制，1 跟随骨架，最高 2），并受起止步数限制。与它一起训练的 LoRA 以 1.0 在整个采样过程中作用于 DiT，并在提示词编码前作用于 LLM adapter，因此起止步数和权重不影响这部分。在 1024 px 左右、权重 1 到 1.5 时跟随效果最好，腿部比举起的手臂更容易跟上；它是用自家的细骨架训练的（COCO 身体关键点、白色关节，加上脸部和手部的点，黑底），没有脸部点的骨架可能被画成背影。模型卡建议使用详细的提示词；其权重仅限非商业用途。
 
 ## 快速开始
 
@@ -324,4 +335,5 @@ Agent Scheduler、Prompt Queue 和 Repeat Generate 已成为核心的队列功�
 - 实验性引导方法可能同时改变画面风格和质量；对比时请保留固定 seed 的基准图。
 - Torch compile（整模型预设和 **Anima per-block**）在 NAG、NegPiP、Regional、FreeFuse、Artist Mixer、DAVE 或 Cross-Attention Boost（各自生效区间内）以及 Sparse Attention 启用时，相关步以未编译方式运行，确保这些功能不会被缓存的计算图静默忽略；这类运行不会获得编译加速。
 - **Anima FlowMatch** 只对 flow-matching 模型有意义；在其他模型上（例如从 Anima Flow 采样器切换模型后仍保留该选项），会回退为 Simple 调度。
+- 在 flow-matching 模型（Anima、Flux）上：Karras、Exponential、Polyexponential、KL Optimal 和 Align Your Steps 是按 SD 的噪声尺度设计的，会让画面发白，任务完成时会给出警告（请改用 Simple、Beta、SGM Uniform 或 Normal）；DDIM、PLMS 和 Kohaku LoNyu Yog 会直接报错拒绝。CFG++ 采样器在 CFG 1（它们的推荐用法）下会保留负向提示词。
 - 真实 checkpoint 的生成结果才是最终兼容性检验。启动测试或单元测试不能证明每种 checkpoint 与量化格式的出图质量。

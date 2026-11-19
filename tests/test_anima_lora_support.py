@@ -77,16 +77,61 @@ def test_conflicting_inline_rules_in_one_batch_are_rejected():
         )
 
 
-def test_block_mappings_match_the_lora_loader():
-    import ast
-    import pathlib
+def test_block_mappings_follow_the_published_manifests():
+    from backend.nn import anima_layout
 
-    # The LoRA loader (and the Anima ControlLLLite loader) read backend.nn.anima.BLOCK_MAPPINGS
-    source = (pathlib.Path(__file__).parents[1] / "backend" / "nn" / "anima.py").read_text(encoding="utf-8")
-    (table,) = (node.value for node in ast.walk(ast.parse(source)) if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "BLOCK_MAPPINGS")
-    assert {pair: tuple(mapping) for pair, mapping in ast.literal_eval(table).items()} == ANIMA_BLOCK_MAPPINGS
+    # Upstream's hand-written table, which the layout module now derives from the manifests
+    upstream = {
+        (28, 40): (0, 1, 1, 2, 3, 3, 4, 5, 5, 6, 7, 7, 8, 9, 9, 10, 11, 11, 12, 13, 14, 14, 15, 16, 16, 17, 18, 18, 19, 20, 20, 21, 22, 22, 23, 24, 24, 25, 26, 27),
+        (40, 52): (0, 1, 2, 2, 3, 4, 5, 5, 6, 7, 8, 8, 9, 10, 11, 11, 12, 13, 14, 14, 15, 16, 17, 17, 18, 19, 20, 20, 21, 22, 23, 23, 24, 25, 26, 26, 27, 28, 29, 29, 30, 31, 32, 32, 33, 34, 35, 35, 36, 37, 38, 39),
+    }
+    for pair, mapping in upstream.items():
+        assert ANIMA_BLOCK_MAPPINGS[pair] == mapping
     for (src, dst), mapping in ANIMA_BLOCK_MAPPINGS.items():
         assert len(mapping) == dst and set(mapping) == set(range(src))
+    # 3.8B metadata: inserted_to_source {"3": 2, "7": 5, ...}
+    assert all(ANIMA_BLOCK_MAPPINGS[(40, 52)][pos] == src for pos, src in anima_layout.INSERTIONS[(40, 52)].items())
+    # The composed 28 -> 52 table is the two steps one after the other
+    first, second = ANIMA_BLOCK_MAPPINGS[(28, 40)], ANIMA_BLOCK_MAPPINGS[(40, 52)]
+    assert ANIMA_BLOCK_MAPPINGS[(28, 52)] == tuple(first[block] for block in second)
+
+
+def test_block_map_round_trips_through_the_original_blocks():
+    from backend.nn import anima_layout
+
+    for small, big in ((28, 40), (28, 52), (40, 52)):
+        up, dropped_up = anima_layout.block_map(small, big, "skip")
+        down, dropped = anima_layout.block_map(big, small)
+        assert dropped_up == () and len(dropped) == big - small
+        for block in range(small):
+            (target,) = up[block]
+            assert down[target] == (block,)
+    assert anima_layout.block_map(28, 30) is None
+
+
+def test_declared_depth_from_file_metadata():
+    from backend.nn.anima_layout import declared_depth
+
+    assert declared_depth({"new_block_count": "52"}) == 52
+    assert declared_depth({"ss_num_blocks": "40"}) == 40
+    assert declared_depth({"ss_sd_model_name": "Anima-2.9B-preview-v1.safetensors"}) == 40
+    assert declared_depth({"ss_sd_model_name": "anima-3.8b-v1.1"}) == 52
+    assert declared_depth({"ss_sd_model_name": "anima-base-v1.0"}) is None
+    assert declared_depth({"ss_sd_model_name": "sdxl 2.9b"}) is None  # not an Anima name
+    assert declared_depth(None) is None
+
+
+def test_the_loader_resolved_depth_is_what_layer_weights_follow(tmp_path):
+    from modules import anima_lora_support
+
+    path = tmp_path / "x.safetensors"
+    anima_lora_support.RESOLVED_LORA_DEPTHS[str(path.resolve())] = 40
+    try:
+        assert anima_lora_block_count({0, 20}, filename=path) == 40
+    finally:
+        anima_lora_support.RESOLVED_LORA_DEPTHS.clear()
+    assert anima_lora_block_count({0, 20}, filename=path) == 28
+    assert anima_lora_block_count({0, 20}, declared=40) == 40
 
 
 def test_layer_weights_follow_the_lora_layout_on_expanded_models():

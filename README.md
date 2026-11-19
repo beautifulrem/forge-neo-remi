@@ -25,7 +25,7 @@ Forge Neo Remi is a downstream distribution of [Forge Neo](https://github.com/Ha
 - **A new web interface.** One app with a navigation rail instead of Gradio tabs: a three-pane Generate view, a real image editor, a gallery, a networks browser and a queue; light and dark themes, phone layouts, full keyboard operation, and English / 简体中文 switchable without a reload.
 - **One queue for everything.** Every generation is a job in a persistent queue that survives restarts; queue, reorder, prioritize, edit and repeat jobs from the UI or the API.
 - **Anima-first inference.** Native samplers, guidance methods, spatial conditioning, LoRA controls, Hires safeguards and acceleration paths ([what is included](docs/remi-webui/usage.md#anima-integration)).
-- **28/40/52-block support.** Detects original, 2.9B and 3.8B Anima DiT layouts and remaps 28-block LoRAs and Anima ControlLLLite models onto the expanded models ([details and the 3.8B limits](docs/remi-webui/usage.md#anima-29b-and-38b-checkpoints)).
+- **The whole Anima family.** 2B, 2.9B and 3.8B (with its Qwen3.5 semantic connector, run natively); LoRAs and ControlNet-LLLite models move between the 28/40/52-block depths, and the Anima-Control-Pose control-LoRA runs as a ControlNet unit ([details](docs/remi-webui/usage.md#anima-29b-and-38b-checkpoints)).
 - **Conflict-aware UI and runtime.** Mutually exclusive features are locked or resolved before they can form undefined sampling stacks, in the browser and for API jobs alike.
 - **One-click safe baseline.** **Anima Remi Presets** provides a conservative starting profile without replacing prompts, LoRA names or model paths.
 - **Batteries included.** Frequently used extensions ship as [built-ins](docs/remi-webui/usage.md#built-in-extensions), ported to the new UI.
@@ -64,7 +64,7 @@ The usage guide has the rest: [installation in detail](docs/remi-webui/usage.md#
 
 Remi retains Forge Neo's modern-model focus and adds deeper Anima integration.
 
-- Anima and Anima Edit: 2B (28 blocks), 2.9B (40) and 3.8B (52) checkpoints (3.8B also needs an [external conditioning extension](docs/remi-webui/usage.md#anima-29b-and-38b-checkpoints))
+- Anima and Anima Edit: 2B (28 blocks), 2.9B (40) and 3.8B (52) checkpoints (3.8B with its `qwen35_4b` text encoder, [details](docs/remi-webui/usage.md#anima-29b-and-38b-checkpoints))
 - SD 1.x and advanced SDXL variants
 - Krea 2 and Krea 2 Identity Edit
 - FLUX Kontext and FLUX.2 Klein

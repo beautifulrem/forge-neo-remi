@@ -245,6 +245,19 @@ def resolve_guidance_conflicts(
     )
 
 
+# Schedulers that space their steps for SD's variance-exploding noise scale (sigma up to ~14.6):
+# on a flow-matching model (sigma up to 1) most steps land at tiny sigmas and the image washes out
+VE_SCHEDULERS = frozenset({"Karras", "Exponential", "Polyexponential", "KL Optimal", "Align Your Steps"})
+
+
+def flow_scheduler_note(scheduler: str, predictor: Any) -> str | None:
+    """The job note for a VE-only ``scheduler`` on a flow-matching ``predictor`` (Anima), else None."""
+
+    if scheduler not in VE_SCHEDULERS or getattr(predictor, "prediction_type", None) != "const":
+        return None
+    return f"{scheduler} is made for SD's noise scale and washes out flow-matching models such as Anima: use Simple, Beta, SGM Uniform or Normal"
+
+
 # Label of the scheduler the Flow samplers lock to (their "scheduler" option in
 # sd_samplers_kdiffusion; tests/test_anima_feature_conflicts.py keeps them equal)
 FLOW_SCHEDULER = "Anima FlowMatch"

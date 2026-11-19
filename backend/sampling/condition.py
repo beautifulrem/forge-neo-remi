@@ -87,6 +87,15 @@ def compile_conditions(cond):
         return [result]
 
     cross_attn = cond["crossattn"]
+    if "vector" not in cond:
+        # Remi: per-prompt tensors besides the context (NegPiP's mask, Anima-3.8B's connector
+        # inputs) go to the model as keyword arguments, batched like the context
+        model_conds = {"c_crossattn": ConditionCrossAttn(cross_attn)}
+        for key, value in cond.items():
+            if key != "crossattn" and isinstance(value, torch.Tensor):
+                model_conds[key] = Condition(value)
+        return [dict(cross_attn=cross_attn, model_conds=model_conds)]
+
     pooled_output = cond["vector"]
 
     result = dict(

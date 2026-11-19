@@ -259,6 +259,42 @@ def test_extra_prompts_are_encoded_as_one_cpu_batch(monkeypatch):
     assert context.shape == (1, 2, 3) and mask[0, :, 0].tolist() == [1.0, -1.0]
 
 
+def test_extra_prompts_skip_the_semantic_connector(monkeypatch):
+    # Anima-3.8B encodes the main prompt for its connector (a dict of per-step inputs);
+    # the extra prompts of Regional and Artist Mixer use Anima's own encoder only
+    from backend import memory_management
+    from backend.args import dynamic_args
+    from backend.diffusion_engine import anima
+    from modules import prompt_parser
+    from modules.anima_support import encode_extra_prompts
+
+    calls = []
+
+    class Engine:
+        def uses_semantic(self, negative=False):
+            return not negative
+
+        def __call__(self, prompt, semantic=False):
+            calls.append(semantic)
+            return [torch.ones(1, 2, 3) for _ in prompt]
+
+    model = SimpleNamespace(
+        text_processing_engine_anima=Engine(),
+        forge_objects=SimpleNamespace(clip=SimpleNamespace(patcher=None)),
+        ref_latents=[],
+        ini_latent=None,
+    )
+    model.get_learned_conditioning = lambda prompt: anima.Anima.get_learned_conditioning(model, prompt)
+    monkeypatch.setattr(memory_management, "load_model_gpu", lambda *args: None)
+    monkeypatch.setattr(dynamic_args, "ref_latents", [])
+    monkeypatch.setattr(anima, "opts", SimpleNamespace(anima_do_reference=False))
+
+    context, _ = encode_extra_prompts(SimpleNamespace(sd_model=model), ["a cat"])
+    model.get_learned_conditioning(prompt_parser.SdConditioning(["main"]))
+
+    assert calls == [False, True] and context.shape == (1, 2, 3)
+
+
 def test_conditioning_cache_key_follows_what_the_encoding_depends_on(monkeypatch):
     import modules
     from modules.anima_support import conditioning_cache_key

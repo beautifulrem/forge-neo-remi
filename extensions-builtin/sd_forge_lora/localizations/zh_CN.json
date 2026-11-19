@@ -5,5 +5,7 @@
     "Filename": "文件名",
     "Add Lora hashes to infotext": "在生成信息中写入 LoRA 哈希值",
     "Filter Lora based on selected Preset": "按所选预设筛选 LoRA",
-    "the network browser starts with its \"compatible\" filter on": "网络浏览器默认开启“兼容”筛选"
+    "the network browser starts with its \"compatible\" filter on": "网络浏览器默认开启“兼容”筛选",
+    "Anima LoRA on a deeper model (2B LoRA on 2.9B / 3.8B): inserted blocks": "更深的 Anima 模型上的 LoRA（2B LoRA 用于 2.9B / 3.8B）：插入块",
+    "copy: an inserted block gets the LoRA of the block it was copied from; skip: only the original blocks get it.": "copy：插入块使用其复制来源块的 LoRA；skip：只有原有块使用 LoRA。"
 }
