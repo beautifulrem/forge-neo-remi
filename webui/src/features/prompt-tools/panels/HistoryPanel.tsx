@@ -177,7 +177,7 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
                     >
                       {item.name ? <span className="block truncate text-xs font-semibold">{item.name}</span> : null}
                       <span className="line-clamp-3 text-xs break-words whitespace-pre-wrap">{textOf(item)}</span>
-                      <span className="mt-0.5 block text-[0.65rem] text-muted-foreground">
+                      <span className="mt-0.5 block text-[0.625rem] text-muted-foreground">
                         {timeAgo(item.last_used, locale)}
                         {item.uses > 1 ? ` · ${t("{{count}} generations", { count: item.uses })}` : ""}
                         {item.tab ? ` · ${t(item.tab)}` : ""}

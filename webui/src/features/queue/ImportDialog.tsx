@@ -47,7 +47,7 @@ function Report({ report }: { report: ImportReport }) {
         {counts.map(([label, value]) => (
           <div key={label} className="rounded-lg bg-muted px-2 py-1.5 text-center">
             <dd className="text-lg font-semibold tabular-nums">{value}</dd>
-            <dt className="text-[0.7rem] text-muted-foreground">{label}</dt>
+            <dt className="text-[0.6875rem] text-muted-foreground">{label}</dt>
           </div>
         ))}
       </dl>

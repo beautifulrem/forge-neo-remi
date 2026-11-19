@@ -42,7 +42,7 @@ function ViewSwitch({ view, onChange }: { view: "source" | "result"; onChange: (
           className={cn(
             "flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none select-none",
             "hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60",
-            "aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm dark:aria-selected:bg-accent",
+            "aria-selected:bg-card aria-selected:text-foreground dark:aria-selected:bg-accent",
           )}
         >
           <Icon className="size-3.5" aria-hidden />

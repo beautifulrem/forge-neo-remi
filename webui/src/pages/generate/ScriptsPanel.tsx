@@ -4,7 +4,7 @@
  * reset, followed by the selectable-script choice and the chosen script.
  */
 import { Collapsible } from "@base-ui/react/collapsible"
-import { ChevronRight, ListFilter, RotateCcw, Search } from "@/components/icons"
+import { ChevronDown, ListFilter, RotateCcw, Search } from "@/components/icons"
 import { useId, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Badge } from "@/components/ui/badge"
@@ -18,6 +18,7 @@ import { OwnerProvider } from "@/ui/context"
 import { DEFAULT_SLOT, inputsIn, scriptsForSlot } from "@/ui/form-index"
 import { anyModified, type FormState } from "@/ui/form-store"
 import { useForm, useFormState } from "@/ui/hooks"
+import { PanelDepthContext, panelClass, panelTitleClass, usePanelDepth } from "@/ui/layout/panel"
 import { RenderLayout, RenderNode } from "@/ui/Renderer"
 import type { ChoiceNode, Node, ScriptSchema, TabSchema } from "@/ui/schema"
 
@@ -38,6 +39,7 @@ function ScriptCard({ script }: { script: ScriptSchema }) {
   const names = scriptNames(script)
   const modified = useFormState((s) => anyModified(s, script.id, names))
   const visible = useFormState((s) => evaluate(script.visible_if, script.id, (o, n) => s.values[o]?.[n]))
+  const depth = usePanelDepth()
   if (!visible || !script.layout) return null
   const layout = script.layout
   const titled = layout.type === "section" || (layout.type === "group" && Boolean(layout.title))
@@ -52,9 +54,9 @@ function ScriptCard({ script }: { script: ScriptSchema }) {
         ) : collapsed ? (
           <RenderLayout layout={collapsed} />
         ) : (
-          <div role="group" aria-label={t(script.title)} className="flex flex-col gap-3 rounded-md bg-card p-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">{t(script.title)}</span>
+          <div role="group" aria-label={t(script.title)} className={cn("flex flex-col gap-3", panelClass(depth))}>
+            <div className="flex min-h-8 items-center gap-2">
+              <span className={panelTitleClass(depth)}>{t(script.title)}</span>
               {modified ? (
                 <Button
                   variant="ghost"
@@ -103,21 +105,21 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
   return (
     <div className="flex flex-col gap-3">
       {listed.length > 0 ? (
-        <Collapsible.Root open={open} onOpenChange={setOpen} render={<section aria-labelledby={`${id}-title`} />} className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <Collapsible.Trigger className="group/trigger flex min-w-0 items-center gap-1.5 rounded-md text-sm font-semibold outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-              <ChevronRight aria-hidden className="size-4 text-muted-foreground transition-transform group-data-[panel-open]/trigger:rotate-90" />
+        <Collapsible.Root open={open} onOpenChange={setOpen} render={<section aria-labelledby={`${id}-title`} />} className={cn("flex flex-col gap-2", panelClass(0))}>
+          <div className="flex min-h-8 items-center gap-2">
+            <Collapsible.Trigger className={cn("group/trigger flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50", panelTitleClass(0))}>
               <span id={`${id}-title`}>{t("Extensions")}</span>
+              <Badge variant="secondary" className="tabular-nums">
+                {listed.length}
+              </Badge>
+              {activeCount > 0 ? <Badge className="tabular-nums">{t("{{count}} on", { count: activeCount })}</Badge> : null}
+              <ChevronDown aria-hidden className="ml-auto size-4 shrink-0 -rotate-90 text-muted-foreground transition-transform duration-150 group-data-[panel-open]/trigger:rotate-0" />
             </Collapsible.Trigger>
-            <Badge variant="secondary" className="tabular-nums">
-              {listed.length}
-            </Badge>
-            {activeCount > 0 ? <Badge className="tabular-nums">{t("{{count}} on", { count: activeCount })}</Badge> : null}
             {modifiedSet.size > 0 ? (
               <Button
                 variant="ghost"
                 size="xs"
-                className="ml-auto text-muted-foreground"
+                className="text-muted-foreground"
                 onClick={() =>
                   resetOwners(
                     { store, tab: formId },
@@ -155,10 +157,12 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
                 <span className="hidden sm:inline">{t("Modified")}</span>
               </Toggle>
             </div>
-            <div className="flex flex-col gap-2">
-              {shown.map((script) => (
-                <ScriptCard key={script.id} script={script} />
-              ))}
+            <div className="flex flex-col gap-3">
+              <PanelDepthContext value={1}>
+                {shown.map((script) => (
+                  <ScriptCard key={script.id} script={script} />
+                ))}
+              </PanelDepthContext>
               {shown.length === 0 ? (
                 <p className={cn("rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground")}>{t("No extension matches")}</p>
               ) : null}
@@ -168,13 +172,15 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
       ) : null}
 
       {scriptChoice ? (
-        <section aria-label={t("Script")} className="flex flex-col gap-3 rounded-md bg-card p-3">
+        <section aria-label={t("Script")} className={cn("flex flex-col gap-3", panelClass(0))}>
           <OwnerProvider owner="core">
             <RenderNode node={scriptChoice} />
           </OwnerProvider>
-          {selectable.map((script) => (
-            <ScriptCard key={script.id} script={script} />
-          ))}
+          <PanelDepthContext value={1}>
+            {selectable.map((script) => (
+              <ScriptCard key={script.id} script={script} />
+            ))}
+          </PanelDepthContext>
         </section>
       ) : null}
     </div>

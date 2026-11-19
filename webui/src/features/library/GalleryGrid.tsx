@@ -147,7 +147,7 @@ const Tile = memo(function Tile({ item, width, height, selected, selecting, inde
           className={cn("size-full object-cover transition-transform duration-200", selected ? "scale-[0.94] rounded-sm" : "group-hover/tile:scale-[1.02]")}
         />
       </button>
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-1 bg-gradient-to-b from-black/45 to-transparent p-1.5 opacity-0 transition-opacity group-focus-within/tile:opacity-100 group-hover/tile:opacity-100 data-[shown]:opacity-100" data-shown={selecting || selected || undefined}>
+      <div className="group/overlay pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-1 bg-gradient-to-b from-black/45 to-transparent p-1.5 opacity-0 transition-opacity group-focus-within/tile:opacity-100 group-hover/tile:opacity-100 data-[shown]:opacity-100" data-shown={selecting || selected || undefined}>
         <button
           type="button"
           role="checkbox"
@@ -156,7 +156,9 @@ const Tile = memo(function Tile({ item, width, height, selected, selecting, inde
           aria-label={t("Select {{name}}", { name: item.name })}
           onClick={(event) => onToggleSelect(item, event)}
           className={cn(
-            "pointer-events-auto grid size-5 place-items-center rounded-full border-2 border-white/90 text-primary-foreground shadow outline-none focus-visible:ring-3 focus-visible:ring-ring",
+            // 20 px circle centred on the 24 px star; the after: area makes it a 32 px target.
+            // Hidden (opacity 0), the corner controls take no taps: a tap there opens the image.
+            "pointer-events-none group-hover/tile:pointer-events-auto group-focus-within/tile:pointer-events-auto group-data-[shown]/overlay:pointer-events-auto relative m-0.5 grid size-5 place-items-center rounded-full border-2 border-white/90 after:absolute after:-inset-1.5 after:rounded-full text-primary-foreground shadow outline-none focus-visible:ring-3 focus-visible:ring-ring",
             selected ? "border-primary bg-primary" : "bg-black/20 hover:bg-black/40",
           )}
         >
@@ -168,7 +170,7 @@ const Tile = memo(function Tile({ item, width, height, selected, selecting, inde
           aria-pressed={item.starred}
           aria-label={item.starred ? t("Unstar") : t("Star")}
           onClick={() => onStar(item)}
-          className="pointer-events-auto grid size-6 place-items-center rounded-full text-white outline-none hover:bg-black/30 focus-visible:ring-3 focus-visible:ring-ring"
+          className="pointer-events-none group-hover/tile:pointer-events-auto group-focus-within/tile:pointer-events-auto group-data-[shown]/overlay:pointer-events-auto grid size-6 place-items-center rounded-full text-white outline-none hover:bg-black/30 focus-visible:ring-3 focus-visible:ring-ring"
         >
           <Star className={cn("size-4 drop-shadow", item.starred && "fill-amber-400 text-amber-400")} aria-hidden />
         </button>

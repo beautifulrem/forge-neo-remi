@@ -52,7 +52,7 @@ export function SizeTools({ className }: { className?: string }) {
                 <span className="text-sm font-medium tabular-nums">
                   {aspect[0]}:{aspect[1]}
                 </span>
-                <span className="text-[0.65rem] text-muted-foreground tabular-nums">
+                <span className="text-[0.625rem] text-muted-foreground tabular-nums">
                   {size.width}×{size.height}
                 </span>
               </Button>

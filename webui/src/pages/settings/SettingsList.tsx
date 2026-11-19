@@ -47,7 +47,7 @@ function RowView({ row, first }: { row: SettingsRowItem; first: boolean }) {
   }
   if (row.kind === "section") {
     return (
-      <h3 id={`settings-section-${row.id}`} className="flex items-baseline gap-2 pt-4 pb-2 text-[0.95rem] font-semibold text-muted-foreground">
+      <h3 id={`settings-section-${row.id}`} className="flex items-baseline gap-2 pt-4 pb-2 text-[0.9375rem] font-semibold text-muted-foreground">
         {t(row.label)}
       </h3>
     )

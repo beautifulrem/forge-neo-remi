@@ -18,6 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { FIELD_BUTTON_CLASS } from "@/components/ui/select-styles"
 import { cn } from "@/lib/utils"
 import { checkpointLabel, fileName, formatBytes, MODEL_OPTION_KEYS, presetLabel, useApplyPreset, useOptionWrite, writeModules } from "./model-options"
 
@@ -71,6 +72,8 @@ function CheckpointPicker({ className }: { className?: string }) {
       aria-label={t("Checkpoint")}
       size="sm"
       className={className}
+      // checkpoint file names are long and each row adds its architecture and size: room for both
+      popupMinWidth="28rem"
       options={options}
       value={write.isPending ? (write.variables ?? null) : current}
       placeholder={models.isPending ? t("Loading…") : t("Select a checkpoint")}
@@ -137,12 +140,12 @@ function ModulesPicker({ className }: { className?: string }) {
     <Popover onOpenChange={(open) => !open && commit()}>
       <PopoverTrigger
         render={
-          <Button variant="outline" size="sm" className={cn("gap-1.5 font-normal", className)} aria-label={t("VAE / Text encoders")} />
+          <Button variant="ghost" size="sm" className={cn(FIELD_BUTTON_CLASS, "gap-1.5 font-normal", className)} aria-label={t("VAE / Text encoders")} />
         }
       >
         <Layers className="text-muted-foreground" aria-hidden />
         <span className="hidden 2xl:inline">{t("VAE / TE")}</span>
-        <Badge variant={selected.length > 0 ? "default" : "secondary"} className="h-4 min-w-4 px-1 text-[0.65rem] tabular-nums">
+        <Badge variant={selected.length > 0 ? "default" : "secondary"} className="h-4 min-w-4 px-1 text-[0.625rem] tabular-nums">
           {selected.length}
         </Badge>
       </PopoverTrigger>

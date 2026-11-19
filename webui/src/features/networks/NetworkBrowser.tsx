@@ -19,6 +19,7 @@ import {
   LayoutGrid,
   List,
   Loader2,
+  MoreHorizontal,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -37,6 +38,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -48,6 +50,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsTrigger } from "@/components/ui/tabs"
+import { Toggle } from "@/components/ui/toggle"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { presetLabel } from "@/features/model-bar/model-options"
 import { useDebouncedValue } from "@/features/prompt-editor/use-debounced-value"
@@ -156,7 +159,7 @@ function SearchBox({ value, onChange, inputRef, count }: { value: string; onChan
   const placeholder = useFittingPlaceholder(inputRef, [t("Search names, folders, tags…"), t("Search…")])
   return (
     // on a phone the search takes its own row and the view controls wrap below it
-    <div className="relative min-w-48 flex-1 basis-48">
+    <div className="relative min-w-32 flex-1 basis-48">
       <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
       <input
         ref={inputRef}
@@ -176,13 +179,13 @@ function SearchBox({ value, onChange, inputRef, count }: { value: string; onChan
         className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent pr-16 pl-8 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 [&::-webkit-search-cancel-button]:hidden"
       />
       <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-1">
-        {count !== null ? <span className="text-[0.7rem] text-muted-foreground tabular-nums">{count.toLocaleString()}</span> : null}
+        {count !== null ? <span className="text-[0.6875rem] text-muted-foreground tabular-nums">{count.toLocaleString()}</span> : null}
         {value ? (
           <Button variant="ghost" size="icon-xs" aria-label={t("Clear search")} onClick={() => onChange("")}>
             <X />
           </Button>
         ) : (
-          <kbd className="hidden h-5 items-center rounded border px-1.5 font-mono text-[0.65rem] text-muted-foreground sm:inline-flex touch-only:hidden!" aria-hidden>
+          <kbd className="hidden h-5 items-center rounded border px-1.5 font-mono text-[0.625rem] text-muted-foreground sm:inline-flex touch-only:hidden!" aria-hidden>
             /
           </kbd>
         )}
@@ -244,13 +247,15 @@ type BrowserProps = {
   form: string
   /** Extra controls at the end of the toolbar (target switches). */
   toolbarEnd?: ReactNode
+  /** Controls at the end of the kinds row (the Networks page's insert targets). */
+  tabsEnd?: ReactNode
   /** Announce applied cards with a toast (the page, where the prompt is not visible). */
   toastOnApply?: boolean
   className?: string
   ref?: Ref<BrowserHandle>
 }
 
-export function NetworkBrowser({ surface, form, toolbarEnd, toastOnApply, className, ref }: BrowserProps) {
+export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnApply, className, ref }: BrowserProps) {
   const { t } = useTranslation()
   const kindTitle = useKindTitle()
   const state = useSurface(surface)
@@ -432,28 +437,31 @@ export function NetworkBrowser({ surface, form, toolbarEnd, toastOnApply, classN
   return (
     <div onKeyDown={onKeyDown} className={cn("@container/browser flex min-h-0 flex-col", className)}>
       <div className="flex flex-col gap-2 border-b px-3 pt-2 pb-2">
-        {kindList.length > 0 ? (
-          <Tabs value={kindId} onValueChange={(value) => update(surface, { kind: String(value) })}>
-            {/* a narrow drawer or phone shows the kinds as a select rather than cutting labels */}
-            <FitTabsList
-              aria-label={t("Network kinds")}
-              variant="line"
-              className="h-8"
-              options={kindList.map((candidate) => ({ value: candidate.id, label: kindTitle(candidate) }))}
-              value={kindId}
-              onValueChange={(value) => update(surface, { kind: value })}
-            >
-              {kindList.map((candidate) => (
-                <TabsTrigger key={candidate.id} value={candidate.id} className="flex-none px-2 text-[0.8rem]">
-                  {kindTitle(candidate)}
-                </TabsTrigger>
-              ))}
-            </FitTabsList>
-          </Tabs>
-        ) : (
-          <Skeleton className="h-8 w-64" />
-        )}
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="flex min-w-0 items-center gap-3">
+          {kindList.length > 0 ? (
+            <Tabs value={kindId} onValueChange={(value) => update(surface, { kind: String(value) })} className="min-w-0 flex-1">
+              {/* a narrow drawer or phone shows the kinds as a select rather than cutting labels */}
+              <FitTabsList
+                aria-label={t("Network kinds")}
+                variant="line"
+                className="h-8"
+                options={kindList.map((candidate) => ({ value: candidate.id, label: kindTitle(candidate) }))}
+                value={kindId}
+                onValueChange={(value) => update(surface, { kind: value })}
+              >
+                {kindList.map((candidate) => (
+                  <TabsTrigger key={candidate.id} value={candidate.id} className="flex-none px-2 text-[0.8rem]">
+                    {kindTitle(candidate)}
+                  </TabsTrigger>
+                ))}
+              </FitTabsList>
+            </Tabs>
+          ) : (
+            <Skeleton className="h-8 w-64" />
+          )}
+          {tabsEnd}
+        </div>
+        <div className="flex items-center gap-1">
           <SearchBox value={search} onChange={setSearch} inputRef={searchRef} count={list.isPending ? null : total} />
           <SortMenu sort={sort} order={order} onChange={(sort, order) => update(surface, { sort, order })} />
           <ToggleGroup
@@ -470,26 +478,10 @@ export function NetworkBrowser({ surface, form, toolbarEnd, toastOnApply, classN
               <List />
             </ToggleGroupItem>
           </ToggleGroup>
-          {state.view === "grid" ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t("Card size")} title={t("Card size")} />}>
-                <span className="font-mono text-[0.7rem] font-semibold uppercase">{state.size}</span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40">
-                <DropdownMenuRadioGroup value={state.size} onValueChange={(value) => update(surface, { size: value as CardSize })}>
-                  {sizes.map((size) => (
-                    <DropdownMenuRadioItem key={size.value} value={size.value}>
-                      {size.label}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
           {surface === "page" && wide ? (
-            <Button variant="ghost" size="icon-sm" aria-label={t("Folder tree")} title={t("Folder tree")} aria-pressed={state.tree} onClick={() => update(surface, { tree: !state.tree })}>
+            <Toggle size="sm" className="px-0" aria-label={t("Folder tree")} title={t("Folder tree")} pressed={state.tree} onPressedChange={(tree) => update(surface, { tree })}>
               <FolderTreeIcon />
-            </Button>
+            </Toggle>
           ) : (
             <Popover>
               <PopoverTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t("Folders")} title={t("Folders")} className={cn(folder && "text-primary")} />}>
@@ -500,9 +492,33 @@ export function NetworkBrowser({ surface, form, toolbarEnd, toastOnApply, classN
               </PopoverContent>
             </Popover>
           )}
-          <Button variant="ghost" size="icon-sm" aria-label={t("Refresh")} title={t("Refresh")} disabled={refresh.isPending} onClick={() => refresh.mutate()}>
-            <RefreshCw className={cn(refresh.isPending && "animate-spin")} />
-          </Button>
+          {/* Card size and refresh, the rarer view actions, share one menu: the row never wraps on a phone. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t("View options")} title={t("View options")} />}>
+              {refresh.isPending ? <Loader2 className="animate-spin" /> : <MoreHorizontal />}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              {state.view === "grid" ? (
+                <>
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>{t("Card size")}</DropdownMenuLabel>
+                    <DropdownMenuRadioGroup value={state.size} onValueChange={(value) => update(surface, { size: value as CardSize })}>
+                      {sizes.map((size) => (
+                        <DropdownMenuRadioItem key={size.value} value={size.value}>
+                          {size.label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                </>
+              ) : null}
+              <DropdownMenuItem disabled={refresh.isPending} onClick={() => refresh.mutate()}>
+                <RefreshCw />
+                {t("Refresh")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {toolbarEnd}
         </div>
         {kind && (archFacets.length > 1 || folder || compatible || (archFacets.length === 1 && archFacets[0]!.id !== "unknown")) ? (

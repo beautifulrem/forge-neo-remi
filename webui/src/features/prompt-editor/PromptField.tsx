@@ -131,7 +131,7 @@ export function PromptField({ node, kind = "positive", steps, styles, actions, o
         fieldId={id}
         main
       >
-        <Suspense fallback={<div aria-hidden className="rounded-sm bg-field shadow-[inset_0_-1px_0_var(--input)]" style={{ minHeight: `${lines * LINE_REM + 0.9}rem` }} />}>
+        <Suspense fallback={<div aria-hidden className="rounded-sm bg-field" style={{ minHeight: `${lines * LINE_REM + 0.9}rem` }} />}>
           <LazyPromptEditor
             ref={handle}
             id={id}

@@ -57,7 +57,7 @@ function RailLink({ item, active }: { item: NavItem; active: boolean }) {
             className={cn(
               "group/rail relative grid size-10 place-items-center rounded-md text-rail-muted outline-none",
               "hover:text-rail-foreground focus-visible:ring-3 focus-visible:ring-rail-foreground/60",
-              active && "text-rail-foreground",
+              active && "text-rail-current hover:text-rail-current",
             )}
           />
         }
@@ -70,7 +70,7 @@ function RailLink({ item, active }: { item: NavItem; active: boolean }) {
           <span
             aria-hidden
             className={cn(
-              "absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-rail-foreground px-1 text-[0.6rem] leading-none font-semibold text-rail tabular-nums ring-2 ring-rail",
+              "absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-rail-foreground px-1 text-[0.625rem] leading-none font-semibold text-rail tabular-nums ring-2 ring-rail",
             )}
           >
             {queued > 99 ? "99+" : queued}
@@ -141,11 +141,11 @@ export function BottomBar({ items, route }: { items: NavItem[]; route: Route }) 
         onClick={() => setMore(true)}
         aria-haspopup="dialog"
         className={cn(
-          "flex flex-1 flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[0.68rem] text-rail-muted outline-none focus-visible:ring-3 focus-visible:ring-rail-foreground/60",
+          "flex flex-1 flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[0.6875rem] text-rail-muted outline-none focus-visible:ring-3 focus-visible:ring-rail-foreground/60",
           restActive && "text-rail-foreground",
         )}
       >
-        <Ellipsis className="size-5" weight={restActive ? "bold" : "regular"} aria-hidden />
+        <Ellipsis className={cn("size-5", restActive && "text-primary")} weight={restActive ? "bold" : "regular"} aria-hidden />
         <span>{t("More")}</span>
       </button>
       {more ? (
@@ -157,7 +157,7 @@ export function BottomBar({ items, route }: { items: NavItem[]; route: Route }) 
   )
 }
 
-/** `onRail`: on the ink-blue bar (otherwise on a sheet's own surface). */
+/** `onRail`: on the bottom bar (otherwise on a sheet's own surface). */
 export function BottomTab({ item, active, onClick, onRail = false }: { item: NavItem; active: boolean; onClick?: () => void; onRail?: boolean }) {
   const { t } = useTranslation()
   const Icon = item.icon
@@ -167,12 +167,12 @@ export function BottomTab({ item, active, onClick, onRail = false }: { item: Nav
       onClick={onClick}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[0.68rem] outline-none focus-visible:ring-3",
+        "flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[0.6875rem] outline-none focus-visible:ring-3",
         onRail ? "text-rail-muted focus-visible:ring-rail-foreground/60" : "text-muted-foreground focus-visible:ring-ring/60",
         active && (onRail ? "text-rail-foreground" : "text-foreground"),
       )}
     >
-      <Icon className={cn("size-5", active && !onRail && "text-primary")} weight={active ? "fill" : "regular"} aria-hidden />
+      <Icon className={cn("size-5", active && "text-primary")} weight={active ? "fill" : "regular"} aria-hidden />
       <span className="max-w-full truncate">{t(item.label)}</span>
     </a>
   )

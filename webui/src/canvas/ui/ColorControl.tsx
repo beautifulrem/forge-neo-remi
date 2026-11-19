@@ -20,7 +20,7 @@ function Swatch({ color, selected, onPick, label }: { color: string; selected: b
       aria-pressed={selected}
       onClick={() => onPick(color)}
       className={cn(
-        "size-6 rounded-md border border-black/10 shadow-xs outline-none transition-transform hover:scale-110 focus-visible:ring-3 focus-visible:ring-ring/50 dark:border-white/15",
+        "size-6 rounded-md border border-black/10 outline-none transition-transform hover:scale-110 focus-visible:ring-3 focus-visible:ring-ring/50 dark:border-white/15",
         selected && "ring-2 ring-primary ring-offset-1 ring-offset-popover",
       )}
       style={{ backgroundColor: color }}
@@ -47,7 +47,7 @@ export function ColorControl({ color, recent, onChange, onEyedropper }: { color:
         <PopoverTrigger
           render={
             <Button variant="ghost" size="icon-sm" aria-label={t("Brush color")}>
-              <span className="size-4.5 rounded-full border border-black/15 shadow-xs dark:border-white/20" style={{ backgroundColor: color }} />
+              <span className="size-4.5 rounded-full border border-black/15 dark:border-white/20" style={{ backgroundColor: color }} />
             </Button>
           }
         />

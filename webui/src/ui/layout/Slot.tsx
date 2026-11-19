@@ -6,6 +6,8 @@ import { useFormState } from "../hooks"
 import { scriptsForSlot } from "../form-index"
 import { RenderLayout } from "../Renderer"
 import type { Node, ScriptSchema } from "../schema"
+import { cn } from "@/lib/utils"
+import { panelClass, panelTitleClass, usePanelDepth } from "./panel"
 
 /** Scripts of the tab being rendered; core-form `slot` nodes place them. */
 const ScriptsContext = createContext<readonly ScriptSchema[]>([])
@@ -16,6 +18,7 @@ export function ScriptsProvider({ scripts, children }: { scripts: readonly Scrip
 
 function ScriptView({ script }: { script: ScriptSchema }) {
   const { t } = useTranslation()
+  const depth = usePanelDepth()
   const visible = useFormState((s) => evaluate(script.visible_if, script.id, (o, n) => s.values[o]?.[n]))
   if (!visible || !script.layout) return null
   const layout = script.layout
@@ -31,8 +34,8 @@ function ScriptView({ script }: { script: ScriptSchema }) {
           <RenderLayout layout={layout} />
         ) : (
           // A bare layout gets a light frame so scripts stay distinguishable.
-          <div role="group" aria-label={t(script.title)} className="flex flex-col gap-3 rounded-md bg-card p-3">
-            <h2 className="text-[1.0625rem] font-semibold tracking-[-0.01em]">{t(script.title)}</h2>
+          <div role="group" aria-label={t(script.title)} className={cn("flex flex-col gap-3", panelClass(depth))}>
+            <h2 className={panelTitleClass(depth)}>{t(script.title)}</h2>
             <RenderLayout layout={body} />
           </div>
         )}

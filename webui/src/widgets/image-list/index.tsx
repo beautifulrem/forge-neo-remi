@@ -192,7 +192,7 @@ export default function ImageListWidget({ value, onChange, props, disabled, id, 
                 )}
               >
                 <Thumb id={imageId} />
-                <span aria-hidden className="absolute top-1 left-1 rounded bg-background/80 px-1 text-[0.65rem] font-medium tabular-nums">
+                <span aria-hidden className="absolute top-1 left-1 rounded bg-background/80 px-1 text-[0.625rem] font-medium tabular-nums">
                   {index + 1}
                 </span>
                 <Button

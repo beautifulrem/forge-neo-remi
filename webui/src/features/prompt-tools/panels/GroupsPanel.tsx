@@ -42,7 +42,7 @@ function TagButton({ item, pressed, disabled, onToggle }: { item: FlatTag; press
       )}
     >
       <span className="max-w-full truncate font-medium">{shown ?? item.tag}</span>
-      {shown ? <span className="max-w-full truncate text-[0.65rem] text-muted-foreground">{item.tag}</span> : null}
+      {shown ? <span className="max-w-full truncate text-[0.625rem] text-muted-foreground">{item.tag}</span> : null}
     </button>
   )
 }

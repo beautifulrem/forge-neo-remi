@@ -108,7 +108,7 @@ function ChipItem({
           onFocus={onFocus}
           onPointerDown={onPointerDown}
           disabled={disabled}
-          className="rounded px-1.5 text-[0.65rem] font-semibold tracking-widest text-muted-foreground outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="rounded px-1.5 text-[0.625rem] font-semibold tracking-widest text-muted-foreground outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           {chip.text}
         </button>
@@ -138,7 +138,7 @@ function ChipItem({
               onPointerDown={onPointerDown}
               disabled={disabled}
               className={cn(
-                "group/chip flex max-w-full touch-pan-y items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 text-left text-xs leading-tight shadow-xs transition-colors outline-none select-none",
+                "group/chip flex max-w-full touch-pan-y items-center gap-1 rounded-md border bg-background px-1.5 py-0.5 text-left text-xs leading-tight transition-colors outline-none select-none",
                 "hover:border-foreground/25 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:border-primary/60",
                 chip.kind === "network" && "border-chart-2/40 bg-chart-2/8",
                 chip.kind === "wildcard" && "border-chart-5/40 bg-chart-5/8 italic",
@@ -156,10 +156,10 @@ function ChipItem({
             <span className={cn("max-w-64 truncate font-medium", chip.disabled && "line-through decoration-muted-foreground/60")} style={color ? { color } : undefined}>
               {text}
             </span>
-            {translation ? <span className="max-w-64 truncate text-[0.65rem] font-normal text-muted-foreground">{translation}</span> : null}
+            {translation ? <span className="max-w-64 truncate text-[0.625rem] font-normal text-muted-foreground">{translation}</span> : null}
           </span>
           {weighted ? (
-            <span className="tabular shrink-0 rounded bg-primary/10 px-1 text-[0.65rem] font-semibold text-primary">{weightLabel(chip.weight)}</span>
+            <span className="tabular shrink-0 rounded bg-primary/10 px-1 text-[0.625rem] font-semibold text-primary">{weightLabel(chip.weight)}</span>
           ) : null}
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72" aria-label={t("Edit “{{tag}}”", { tag: text })}>

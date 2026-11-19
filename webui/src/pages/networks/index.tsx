@@ -12,32 +12,49 @@ import { NetworkBrowser } from "@/features/networks/NetworkBrowser"
 import { useNetworksUi } from "@/features/networks/store"
 import { FormTargetSwitch, PromptTargetSwitch } from "@/features/networks/TargetSwitch"
 
+/** Where a prompt card goes: the form, the prompt, and a link to that form. */
+function InsertTargets() {
+  const { t } = useTranslation()
+  const form = useNetworksUi((s) => s.pageForm)
+  return (
+    <>
+      <span className="shrink-0 text-xs text-muted-foreground">{t("Insert into")}</span>
+      <FormTargetSwitch className="shrink-0" />
+      <PromptTargetSwitch className="shrink-0" />
+      <Button variant="ghost" size="sm" render={<a href={routeHref({ name: "generate", tab: form })} />} nativeButton={false} className="hidden shrink-0 text-muted-foreground sm:inline-flex">
+        {t("Open {{form}}", { form: t(form) })}
+      </Button>
+    </>
+  )
+}
+
 export default function NetworksPage() {
   const { t } = useTranslation()
   const form = useNetworksUi((s) => s.pageForm)
   return (
     <>
       <HeaderSlot>
-        <div className="hidden items-center gap-2 2xl:flex">
-          <span className="shrink-0 text-xs text-muted-foreground">{t("Insert into")}</span>
-          <FormTargetSwitch className="shrink-0" />
-          <PromptTargetSwitch className="shrink-0" />
-          <Button variant="ghost" size="sm" render={<a href={routeHref({ name: "generate", tab: form })} />} nativeButton={false} className="text-muted-foreground">
-            {t("Open {{form}}", { form: t(form) })}
-          </Button>
+        <div className="hidden items-center gap-2 2xl:flex" role="group" aria-label={t("Insert into")}>
+          <InsertTargets />
         </div>
       </HeaderSlot>
       <div className="flex h-full min-h-0 flex-col">
-        {/* below 2xl the header (model bar, quick settings) has no room: the targets get their own row */}
-        <div className="flex items-center gap-2 overflow-x-auto border-b px-3 py-1.5 2xl:hidden" role="group" aria-label={t("Insert into")}>
-          <span className="shrink-0 text-xs text-muted-foreground">{t("Insert into")}</span>
-          <FormTargetSwitch className="shrink-0" />
-          <PromptTargetSwitch className="shrink-0" />
-          <Button variant="ghost" size="sm" render={<a href={routeHref({ name: "generate", tab: form })} />} nativeButton={false} className="hidden shrink-0 text-muted-foreground sm:inline-flex">
-            {t("Open {{form}}", { form: t(form) })}
-          </Button>
+        {/* Below 2xl the header (model bar, quick settings) has no room: the targets end the kinds row, and on
+            a phone, where the kinds are a full-width select, they get a row of their own. */}
+        <div className="flex items-center gap-2 overflow-x-auto border-b px-3 py-1.5 md:hidden" role="group" aria-label={t("Insert into")}>
+          <InsertTargets />
         </div>
-        <NetworkBrowser surface="page" form={form} toastOnApply className="min-h-0 flex-1" />
+        <NetworkBrowser
+          surface="page"
+          form={form}
+          toastOnApply
+          tabsEnd={
+            <div className="hidden shrink-0 items-center gap-2 md:flex 2xl:hidden" role="group" aria-label={t("Insert into")}>
+              <InsertTargets />
+            </div>
+          }
+          className="min-h-0 flex-1"
+        />
       </div>
     </>
   )

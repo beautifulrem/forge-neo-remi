@@ -185,7 +185,7 @@ export default function Editor(props: ImageEditorProps) {
       role="group"
       aria-label={props.label ?? t("Image editor")}
       data-fill={props.fill ? "" : undefined}
-      className={cn("relative min-h-0 overflow-hidden rounded-md border bg-canvas", props.error && "border-destructive/60", props.className)}
+      className={cn("relative min-h-0 overflow-hidden rounded-md border border-transparent bg-canvas", props.error && "border-destructive/60", props.className)}
       style={props.fill ? undefined : { height: props.height ?? canvasHeight }}
     >
       {maximized ? (

@@ -71,7 +71,7 @@ function Pending({ status }: { status: QueueStatus | undefined }) {
         {items.isPending ? (
           <Skeleton className="h-24 w-full" />
         ) : jobs.length === 0 ? (
-          <p className="py-4 text-sm text-muted-foreground">
+          <p className="py-6 text-center text-sm text-balance text-muted-foreground">
             {t("No jobs are waiting. Use “Add to queue” next to Generate to line jobs up.")}
           </p>
         ) : (
@@ -112,7 +112,7 @@ function History({ onView }: { onView: (job: Job, index: number) => void }) {
           <Input type="search" value={text} onChange={(event) => setText(event.target.value)} placeholder={t("Search prompts and parameters…")} aria-label={t("Search the history")} className="h-7 pl-7 text-[0.8rem]" />
         </div>
         <Toggle size="sm" variant="outline" pressed={starred} onPressedChange={setStarred} aria-label={t("Starred only")} title={t("Starred only")}>
-          <Star className={cn(starred && "fill-amber-400 text-amber-400")} aria-hidden />
+          <Star className={cn(starred && "fill-star text-star")} aria-hidden />
         </Toggle>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
@@ -152,7 +152,7 @@ function History({ onView }: { onView: (job: Job, index: number) => void }) {
           {errorText(history.error)}
         </p>
       ) : jobs.length === 0 ? (
-        <p className="py-4 text-sm text-muted-foreground">
+        <p className="py-6 text-center text-sm text-balance text-muted-foreground">
           {q || starred || filter !== "all" || tab !== ALL_TABS ? t("No jobs match.") : t("Finished jobs appear here.")}
         </p>
       ) : (

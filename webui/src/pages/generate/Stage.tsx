@@ -4,7 +4,7 @@
  * result), with step / percent / ETA over the image, the result actions and
  * the generation parameters.
  */
-import { ChevronDown, Expand, Radio } from "@/components/icons"
+import { ChevronDown, Expand, Radio, Wand } from "@/components/icons"
 import * as m from "motion/react-m"
 import { type ReactNode, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -20,13 +20,15 @@ import { formatShortcut } from "@/app/commands"
 import { ExposureSheet } from "@/features/progress/ExposureSheet"
 import { formatEta, stepText } from "@/features/progress/effects"
 import type { GenerateTab } from "@/features/progress/run-controller"
+import { useShowsStageProgress } from "@/features/progress/stage-overlay"
 import { ResultActions } from "@/features/send-to/ResultActions"
 import { Img2imgStage } from "@/canvas"
 import { useOwnRunningJob } from "./hooks"
 import { LivePreview } from "./LivePreview"
 
-function ProgressOverlay({ job }: { job: RunningJob }) {
+function ProgressOverlay({ job, tab }: { job: RunningJob; tab: GenerateTab }) {
   const { t } = useTranslation()
+  useShowsStageProgress(tab)
   const fraction = progressFraction(job) ?? 0
   const eta = formatEta(job.eta)
   return (
@@ -154,9 +156,10 @@ export function Stage({ tab, onOpenViewer, className, leading, trailing, toolbar
           )}
         </button>
       ) : (
-        <p className="max-w-[28ch] p-6 text-center text-sm text-balance text-muted-foreground">
-          {job ? t("Waiting for the first preview…") : t("Write a prompt, then press {{shortcut}} to generate", { shortcut: formatShortcut("Mod+Enter") })}
-        </p>
+        <div className="flex max-w-[28ch] flex-col items-center gap-2 p-6 text-center text-sm text-balance text-muted-foreground">
+          <Wand className="size-7 opacity-50" aria-hidden />
+          <p>{job ? t("Waiting for the first preview…") : t("Write a prompt, then press {{shortcut}} to generate", { shortcut: formatShortcut("Mod+Enter") })}</p>
+        </div>
       )}
       {job && !follow ? (
         <Button
@@ -169,7 +172,7 @@ export function Stage({ tab, onOpenViewer, className, leading, trailing, toolbar
           {t("Show live preview")}
         </Button>
       ) : null}
-      {job && showProgress ? <ProgressOverlay job={job} /> : null}
+      {job && showProgress ? <ProgressOverlay job={job} tab={tab} /> : null}
       <LiveAnnouncer running={job !== null} />
     </div>
   )
@@ -205,7 +208,7 @@ export function Stage({ tab, onOpenViewer, className, leading, trailing, toolbar
 
   if (tab === "img2img") {
     return (
-      <section ref={section} aria-label={t("Image area")} className={cn("flex min-h-0 flex-col gap-2", className)}>
+      <section ref={section} aria-label={t("Image area")} className={cn("@container/actions flex min-h-0 flex-col gap-2", className)}>
         {toolbarRow}
         <Img2imgStage
           className="min-h-0 flex-1"
@@ -224,7 +227,7 @@ export function Stage({ tab, onOpenViewer, className, leading, trailing, toolbar
   }
 
   return (
-    <section ref={section} aria-label={t("Result")} className={cn("flex min-h-0 flex-col gap-2", className)}>
+    <section ref={section} aria-label={t("Result")} className={cn("@container/actions flex min-h-0 flex-col gap-2", className)}>
       {toolbarRow}
       <div className="flex min-h-7 flex-wrap items-center gap-1">
         {toolbar ? null : leading}

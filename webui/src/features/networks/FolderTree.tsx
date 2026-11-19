@@ -127,7 +127,7 @@ export function FolderTree({ folders, total, selected, onSelect, className }: { 
             <span className="min-w-0 flex-1 truncate" title={row.path || undefined}>
               {row.name}
             </span>
-            <span className="shrink-0 text-[0.7rem] text-muted-foreground tabular-nums">{row.count.toLocaleString()}</span>
+            <span className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums">{row.count.toLocaleString()}</span>
           </li>
         )
       })}

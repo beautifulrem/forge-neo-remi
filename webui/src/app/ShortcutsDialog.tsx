@@ -102,9 +102,9 @@ export default function ShortcutsDialog() {
           <DialogTitle>{t("Keyboard shortcuts")}</DialogTitle>
           <DialogDescription>{t("The image editor lists its own: press ? while it is in use.")}</DialogDescription>
         </DialogHeader>
-        <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
+        <div className="gap-x-8 sm:columns-2">
           {SHORTCUT_GROUPS.map(({ group, entries }) => (
-            <section key={group} aria-label={t(group)} className="flex flex-col gap-1.5">
+            <section key={group} aria-label={t(group)} className="mb-5 flex break-inside-avoid flex-col gap-1.5">
               <h3 className="text-xs font-medium text-muted-foreground">{t(group)}</h3>
               <dl className="flex flex-col gap-1">
                 {entries.map((entry) => (

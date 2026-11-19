@@ -88,7 +88,8 @@ function LayoutView({ node }: { node: Exclude<Node, InputNode> }) {
       // Catalogs key help markup by its exact text, like Markdown
       return <SafeHtml html={t(node.text)} />
     case "separator":
-      return <Separator className="my-1" />
+      // last in its column, the next panel's hairline already divides
+      return <Separator className="my-1 last:hidden" />
     case "button":
       return <ActionButton node={node} />
     case "gallery":

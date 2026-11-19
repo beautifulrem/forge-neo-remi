@@ -81,7 +81,7 @@ function RunBar() {
     <div className="flex flex-col gap-2">
       <QueueEditBanner tab="extras" />
       <div className="flex items-center gap-1.5">
-        <Button variant="glow" size="lg" className="h-11 min-w-0 flex-1 gap-2 text-[0.95rem] font-semibold" onClick={() => void runExtras()} disabled={submitting} aria-keyshortcuts="Control+Enter Meta+Enter">
+        <Button variant="glow" size="lg" className="h-11 min-w-0 flex-1 gap-2 text-[0.9375rem] font-semibold" onClick={() => void runExtras()} disabled={submitting} aria-keyshortcuts="Control+Enter Meta+Enter">
           {submitting ? <Loader2 className="animate-spin" aria-hidden /> : null}
           <span className="truncate">{busy ? t("Queue another") : t("Process")}</span>
           <Kbd className="ml-1 hidden border border-glow-foreground/30 bg-transparent font-normal text-glow-foreground/75 sm:inline-flex touch-only:hidden!">{formatShortcut("Mod+Enter")}</Kbd>
@@ -150,7 +150,7 @@ function ResultStage() {
   } else if (!item) {
     view = (
       <div className="flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
-        <ImageUpscale className="size-8" aria-hidden />
+        <ImageUpscale className="size-7 opacity-50" aria-hidden />
         <p>{result ? t("This run made no image (a folder run saves to its output folder).") : t("Results appear here, next to their source.")}</p>
       </div>
     )
@@ -199,7 +199,7 @@ function ResultStage() {
           <ResultActions item={item} tab="txt2img" removable={false} />
         </div>
       </div>
-      <div className="relative flex min-h-0 flex-1 items-center justify-center rounded-md border bg-canvas/40 p-2">{view}</div>
+      <div className="relative flex min-h-0 flex-1 items-center justify-center rounded-md bg-canvas p-2">{view}</div>
       {items.length > 1 ? (
         <div role="listbox" aria-label={t("Images of this run")} className="flex gap-1.5 overflow-x-auto pb-1">
           {items.map((entry) => (
@@ -209,7 +209,12 @@ function ResultStage() {
               role="option"
               aria-selected={entry.key === item?.key}
               onClick={() => setCurrent(entry.key)}
-              className={cn("size-16 shrink-0 overflow-hidden rounded-md bg-checker outline-none focus-visible:ring-3 focus-visible:ring-ring", entry.key === item?.key && "ring-2 ring-primary")}
+              className={cn(
+                "relative size-16 shrink-0 overflow-hidden rounded-md bg-checker outline-none focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-inset",
+                // drawn inside: an outer ring is cut by the strip's scroll box
+                "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit]",
+                entry.key === item?.key && "after:shadow-[inset_0_0_0_2px_var(--primary),inset_0_0_0_3px_var(--background)]",
+              )}
             >
               <img src={api.thumbUrl(entry.fileId, 128)} alt="" className="size-full object-cover" />
             </button>
@@ -281,6 +286,10 @@ function useExtrasShortcuts() {
 export default function ExtrasPage() {
   const { t } = useTranslation()
   const desktop = useIsDesktop()
+  // nothing run yet: on a phone the result area stays a short box under the form instead of a screen of empty canvas
+  const noResults = useExtrasRuns((s) => s.results.length === 0)
+  const running = useProgress((s) => runningFor(s, "extras") !== null)
+  const idle = noResults && !running
   useExtrasShortcuts()
   return (
     <div className={cn("h-full", desktop ? "grid grid-cols-[minmax(22rem,30rem)_minmax(0,1fr)]" : "overflow-y-auto")}>
@@ -294,7 +303,7 @@ export default function ExtrasPage() {
           </Suspense>
         </div>
       </div>
-      <section aria-label={t("Result")} className={cn("p-3", desktop ? "min-h-0" : "h-[80dvh]")}>
+      <section aria-label={t("Result")} className={cn("p-3", desktop ? "min-h-0" : idle ? "h-64" : "h-[80dvh]")}>
         <ResultStage />
       </section>
     </div>

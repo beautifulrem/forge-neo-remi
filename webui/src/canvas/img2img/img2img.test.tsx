@@ -91,8 +91,8 @@ describe("img2img source panel (real schema)", { timeout: 30_000 }, () => {
 
   it("lays the mode out in balanced rows, labels whole", () => {
     renderPanel()
-    // Six modes: three per row in a narrow pane (never four and two), six in a wide one.
-    expect(modes().style.getPropertyValue("--cols")).toBe("3")
+    // Six modes: three per row in a narrow pane (never four and two; two tracks per mode), six in a wide one.
+    expect(modes().style.getPropertyValue("--cols")).toBe("6")
     expect(modes().style.getPropertyValue("--cols-wide")).toBe("6")
     expect(within(modes()).getByRole("radio", { name: "Inpaint sketch" })).toHaveTextContent("Inpaint sketch")
   })

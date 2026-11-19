@@ -211,7 +211,7 @@ export default function RegionBoxes({ props, disabled, id, label }: WidgetProps<
                 aria-keyshortcuts={KEYSHORTCUTS}
                 aria-hidden={region.active ? undefined : true}
                 className={cn(
-                  "absolute flex min-h-0 min-w-0 flex-col items-start gap-0.5 overflow-hidden rounded-sm border-2 p-1 text-[0.65rem] leading-tight outline-none",
+                  "absolute flex min-h-0 min-w-0 flex-col items-start gap-0.5 overflow-hidden rounded-sm border-2 p-1 text-[0.625rem] leading-tight outline-none",
                   color.box,
                   region.active ? "z-1 cursor-move focus-visible:ring-3 focus-visible:ring-ring/50" : "pointer-events-none z-0 border-dashed opacity-35",
                   region.active && unused(region) && "border-dashed",

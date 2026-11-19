@@ -1,39 +1,53 @@
 /*
- * Recursive (OFL), self-hosted Latin subsets only: CJK text uses the system
- * faces. One superfamily in three cuts, so the UI, the prompt and the machine
- * strings share their letters: "Remi Sans" is the linear cut (weight axis,
- * 56 KB); "Remi Hand" is the casual cut (CASL axis, 109 KB) for the prompt
- * editor; "Remi Mono" is the fixed-pitch cut (MONO axis, 72 KB) for setting
- * keys, hashes, seeds, key caps and code. Each file loads only where its face
- * is rendered.
+ * Self-hosted (OFL, @fontsource-variable, no CDN), each face split by unicode
+ * range so a browser downloads only the slices a page renders:
+ * - "Remi Sans": Geist, the UI's Latin letters (weight axis; latin 28 KB,
+ *   latin-ext when an accented name needs it).
+ * - "Remi Mono": Geist Mono, its fixed-pitch twin, for setting keys, hashes,
+ *   seeds, key caps, code and JSON.
+ * - "Noto Sans SC Variable": the Han and CJK punctuation after them, so
+ *   Chinese reads the same with the same weights on every system (Microsoft
+ *   YaHei has two). About 100 slices of 20 to 70 KB; a page in Chinese loads
+ *   a handful.
  */
+@import "@fontsource-variable/noto-sans-sc/wght.css";
+
 @font-face {
   font-family: "Remi Sans";
   font-style: normal;
   font-display: swap;
-  font-weight: 300 1000;
-  src: url("../../node_modules/@fontsource-variable/recursive/files/recursive-latin-wght-normal.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  src: url("../../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2") format("woff2-variations");
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* The MONO axis is set where the face is used (`--font-mono--font-variation-settings`). */
+@font-face {
+  font-family: "Remi Sans";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../../node_modules/@fontsource-variable/geist/files/geist-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF,
+    U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 @font-face {
   font-family: "Remi Mono";
   font-style: normal;
   font-display: swap;
-  font-weight: 300 1000;
-  src: url("../../node_modules/@fontsource-variable/recursive/files/recursive-latin-mono-normal.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  src: url("../../node_modules/@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2") format("woff2-variations");
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: "Remi Hand";
+  font-family: "Remi Mono";
   font-style: normal;
   font-display: swap;
-  font-weight: 300 1000;
-  src: url("../../node_modules/@fontsource-variable/recursive/files/recursive-latin-casl-normal.woff2") format("woff2-variations");
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  font-weight: 100 900;
+  src: url("../../node_modules/@fontsource-variable/geist-mono/files/geist-mono-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF,
+    U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }

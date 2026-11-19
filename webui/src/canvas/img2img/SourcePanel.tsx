@@ -41,10 +41,18 @@ const MODES: Record<string, { icon: IconComponent; label: string; description: s
   Batch: { icon: Images, label: "Batch", description: "Processes many images with the same settings." },
 }
 
-/** Columns of the mode grid: one row when there is room, otherwise balanced rows (3 + 3, not 4 + 2). */
+/**
+ * The mode grid: one row when there is room, otherwise two balanced rows (3 + 3; 3 + 2 with the
+ * short row centred, never an empty cell). Two tracks per mode, so an odd last row can start
+ * half a mode in.
+ */
 function modeColumns(count: number): CSSProperties {
-  return { "--cols": count > 4 ? Math.ceil(count / 2) : count, "--cols-wide": count } as CSSProperties
+  const perRow = count > 4 ? Math.ceil(count / 2) : count
+  return { "--cols": perRow * 2, "--cols-wide": count } as CSSProperties
 }
+
+/** The mode that opens a short second row (odd counts above 4), which starts one track in to centre the row. */
+const centredIndex = (count: number) => (count > 4 && count % 2 === 1 ? Math.ceil(count / 2) : -1)
 
 function ModePicker({ tabs, modeNode }: { tabs: TabsNode; modeNode: InputNode }) {
   const { t } = useTranslation()
@@ -64,9 +72,13 @@ function ModePicker({ tabs, modeNode }: { tabs: TabsNode; modeNode: InputNode })
         aria-labelledby={labelId}
         disabled={!param.enabled}
         style={modeColumns(options.length)}
-        className="grid grid-cols-[repeat(var(--cols),minmax(0,1fr))] gap-1 rounded-md bg-muted p-1 @[34rem]:grid-cols-[repeat(var(--cols-wide),minmax(0,1fr))]"
+        // one row from 22rem for up to five modes (the parameter column is wider than that), from 30rem for more
+        className={cn(
+          "grid grid-cols-[repeat(var(--cols),minmax(0,1fr))] gap-1 rounded-md bg-muted p-1",
+          options.length <= 5 ? "@[22rem]:grid-cols-[repeat(var(--cols-wide),minmax(0,1fr))]" : "@[30rem]:grid-cols-[repeat(var(--cols-wide),minmax(0,1fr))]",
+        )}
       >
-        {options.map((tab) => {
+        {options.map((tab, index) => {
           const value = String(tab.value)
           const mode = MODES[value]
           const Icon = mode?.icon ?? ImageIcon
@@ -78,13 +90,18 @@ function ModePicker({ tabs, modeNode }: { tabs: TabsNode; modeNode: InputNode })
               nativeButton
               render={<button type="button" title={label} />}
               className={cn(
-                "group/mode flex min-w-0 flex-col items-center justify-start gap-1 rounded-lg px-1 py-1.5 text-muted-foreground transition-colors outline-none select-none",
+                "group/mode col-span-2 flex min-w-0 flex-col items-center justify-start gap-1 rounded-lg px-0.5 py-1.5 text-muted-foreground transition-colors outline-none select-none",
+                options.length <= 5 ? "@[22rem]:col-span-1" : "@[30rem]:col-span-1",
+                index === centredIndex(options.length) && (options.length <= 5 ? "col-start-2 @[22rem]:col-start-auto" : "col-start-2 @[30rem]:col-start-auto"),
                 "hover:bg-background/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60",
-                "data-checked:bg-background data-checked:text-foreground data-checked:shadow-sm dark:data-checked:bg-accent",
+                "data-checked:bg-card data-checked:text-foreground dark:data-checked:bg-accent",
               )}
             >
               <Icon className="size-4 shrink-0 group-data-checked/mode:text-primary" aria-hidden />
-              <span className="line-clamp-2 w-full text-center text-xs leading-tight font-medium break-words">{label}</span>
+              {/* the tiles of a row share its height: a one-line label sits centred in the room a two-line one takes */}
+              <span className="flex w-full flex-1 items-center justify-center">
+                <span className="line-clamp-2 w-full text-center text-xs leading-tight font-medium break-words">{label}</span>
+              </span>
             </Radio.Root>
           )
         })}
@@ -152,7 +169,7 @@ function ImageRow({ label, id, error, emptyText, mask, onFile, onRemove, busy, e
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm font-medium">{label}</span>
-        <span id={errorId} className={cn("truncate text-xs tabular-nums", error ? "text-destructive" : "text-muted-foreground")} role={error ? "alert" : undefined}>
+        <span id={errorId} className={cn("line-clamp-2 text-xs break-words tabular-nums", error ? "text-destructive" : "text-muted-foreground")} role={error ? "alert" : undefined}>
           {error ? t(error) : busy ? t("Uploading…") : id ? (known ? `${known.width}×${known.height}` : "…") : emptyText}
         </span>
       </div>

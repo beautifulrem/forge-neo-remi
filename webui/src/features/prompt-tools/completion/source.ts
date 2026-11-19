@@ -114,7 +114,7 @@ function decoration(item: CompletionItem): Node {
   if (item.translation) box.append(element("span", "max-w-40 truncate", item.translation))
   if (item.uses) box.append(element("span", "size-1.5 shrink-0 rounded-full bg-primary/70"))
   const kind = TYPE_LABELS[item.type]?.()
-  if (kind) box.append(element("span", "rounded bg-muted px-1 py-px text-[0.65rem] leading-tight font-medium", kind))
+  if (kind) box.append(element("span", "rounded bg-muted px-1 py-px text-[0.625rem] leading-tight font-medium", kind))
   if (item.count) box.append(element("span", "tabular w-10 text-right", compactCount(item.count)))
   return box
 }
@@ -148,7 +148,7 @@ function info(item: CompletionItem, config: PromptToolsConfig): (() => Node) | u
       box.append(image)
     }
     if (item.description) box.append(element("p", "line-clamp-4 text-muted-foreground", item.description))
-    if (chant) box.append(element("p", "line-clamp-6 font-mono text-[0.7rem] break-words", chant))
+    if (chant) box.append(element("p", "line-clamp-6 font-mono text-[0.6875rem] break-words", chant))
     if (rows.length) {
       const list = element("dl", "grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5")
       for (const [term, value] of rows) list.append(element("dt", "text-muted-foreground", term), element("dd", "min-w-0 break-words", value))

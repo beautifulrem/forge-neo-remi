@@ -1,5 +1,5 @@
 /** Header menu: theme, density, accent colour, language, and signing out (with a login). */
-import { Check, Keyboard, Languages, LogOut, Monitor, Moon, Palette, Rows3, Rows4, Sun } from "@/components/icons"
+import { Check, Keyboard, LogOut, Monitor, Moon, Palette, Rows3, Rows4, Sun } from "@/components/icons"
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
 import { useTranslation } from "react-i18next"
 import { useSession } from "@/api/session"
@@ -60,7 +60,7 @@ export default function AppearanceMenu({ locales }: { locales: LocaleInfo[] }) {
       <Tooltip {...tip.tooltip}>
         <TooltipTrigger
           render={
-            <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label={t("Appearance")} {...tip.trigger} />} />
+            <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t("Appearance")} {...tip.trigger} />} />
           }
         >
           <Palette />
@@ -110,13 +110,12 @@ export default function AppearanceMenu({ locales }: { locales: LocaleInfo[] }) {
           <>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuLabel className="flex items-center gap-1.5">
-                <Languages className="size-3.5" aria-hidden />
-                {t("Language")}
-              </DropdownMenuLabel>
+              <DropdownMenuLabel>{t("Language")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={locale} onValueChange={(v) => setLocale(String(v))}>
                 {locales.map((item) => (
                   <DropdownMenuRadioItem key={item.id} value={item.id} lang={toBcp47(item.id)}>
+                    {/* the icon slot of the items above, so the names line up with theirs */}
+                    <span aria-hidden className="size-4 shrink-0" />
                     {localeName(item.id, item.name)}
                   </DropdownMenuRadioItem>
                 ))}
