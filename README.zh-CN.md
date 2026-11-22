@@ -70,7 +70,7 @@ Remi 保留 Forge Neo 对现代模型的支持重点，并对 Anima 提供更深
 - Krea 2 和 Krea 2 Identity Edit
 - FLUX.3 Image Klein（Base 与步数蒸馏版；多参考图编辑；支持 BFL / ComfyUI 单文件、Diffusers 目录、FP8 / INT8 量化包与 GGUF；可在 JSON Builder 页面生成布局提示词）
 - FLUX Kontext 和 FLUX.2 Klein
-- Qwen-Image、Qwen-Image-Edit 和 Qwen-Image-2.1
+- Qwen-Image、Qwen-Image-Edit 和 Qwen-Image-2.1（Base 与 8 步 Turbo；支持 Diffusers 目录、Unsloth FP8 / INT8-ConvRot 与 GGUF；跨步零损前缀 KV 缓存、融合/拆分 MLP 双向 LoRA 映射、`Qwen-2.1 per-block` 逐块编译、Spectrum 头前特征预测、原生 4 通道 RGBA 透明出图与蒙版编辑）
 - Moss-Image 和 Moss-Image-Edit，配套 [JSON Builder 页面](docs/remi-webui/usage.zh-CN.md)用于编写 MOSS-Image 结构化提示词
 - Anima RGBA（透明图像；需要其 [LoRA 与 VAE](https://huggingface.co/localai0301/Anima-RGBA)；对透明图做图生图时请把 `img2img_background_color` 设为 `(255, 255, 255)`）
 - GGUF checkpoint 与文本编码器（使用 `gguf` 包，可用时以 Triton 反量化 K-quant）；GGUF 原生层在（重复）加载 state dict 时保持量化权重，普通层在加载时反量化

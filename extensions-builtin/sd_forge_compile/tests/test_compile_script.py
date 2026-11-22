@@ -28,9 +28,15 @@ class _KModel:
 
 
 class _Process:
-    def __init__(self, kmodel, anima=True, moss=False, krea2=False):
+    def __init__(self, kmodel, anima=True, moss=False, krea2=False, qwen21=False):
         unet = SimpleNamespace(model=kmodel)
-        self.sd_model = SimpleNamespace(is_anima_engine=anima, is_moss_engine=moss, is_krea2_engine=krea2, forge_objects=SimpleNamespace(unet=unet))
+        self.sd_model = SimpleNamespace(
+            is_anima_engine=anima,
+            is_moss_engine=moss,
+            is_krea2_engine=krea2,
+            is_qwen21_engine=qwen21,
+            forge_objects=SimpleNamespace(unet=unet),
+        )
         self.extra_generation_params = {}
 
 
@@ -186,5 +192,37 @@ def test_krea2_per_block_installs_only_on_krea2_and_tracks_automatic_fallbacks()
     assert third.extra_generation_params["Torch compile"] == "Krea-2 per-block using eager fallback: BackendCompilerFailed"
 
     script.process_batch(_Process(kmodel, anima=False, krea2=True), "Disable")
+    assert not AnimaBlockCompileManager.is_installed(kmodel)
+    assert _config(kmodel) is None
+
+
+def test_qwen21_per_block_installs_only_on_qwen21_and_tracks_automatic_fallbacks():
+    kmodel = SimpleNamespace(
+        diffusion_model=SimpleNamespace(transformer_blocks=torch.nn.ModuleList([torch.nn.Identity()])),
+        apply_model=lambda value: value,
+    )
+    script = _script()
+
+    p_non_qwen21 = _Process(kmodel, anima=True, qwen21=False)
+    script.process_batch(p_non_qwen21, "Qwen-2.1 per-block")
+    assert not AnimaBlockCompileManager.is_installed(kmodel)
+    assert p_non_qwen21.extra_generation_params["Torch compile"] == "Qwen-2.1 per-block ignored: non-Qwen-Image-2.1 model"
+
+    p_qwen21 = _Process(kmodel, anima=False, qwen21=True)
+    script.process_batch(p_qwen21, "Qwen-2.1 per-block")
+    assert AnimaBlockCompileManager.is_installed(kmodel)
+    assert _config(kmodel) == "Qwen-2.1 per-block"
+
+    second = _Process(kmodel, anima=False, qwen21=True)
+    script.process_batch(second, "Automatic")
+    getattr(kmodel, _FALLBACK_HANDLER_KEY)(RuntimeError("boom"))
+    assert second.extra_generation_params["Torch compile"] == "Qwen-2.1 per-block fell back to eager: RuntimeError"
+
+    setattr(kmodel, _FALLBACK_REASON_KEY, "BackendCompilerFailed")
+    third = _Process(kmodel, anima=False, qwen21=True)
+    script.process_batch(third, "Automatic")
+    assert third.extra_generation_params["Torch compile"] == "Qwen-2.1 per-block using eager fallback: BackendCompilerFailed"
+
+    script.process_batch(_Process(kmodel, anima=False, qwen21=True), "Disable")
     assert not AnimaBlockCompileManager.is_installed(kmodel)
     assert _config(kmodel) is None

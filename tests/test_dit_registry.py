@@ -46,21 +46,23 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 
 def test_builtin_capabilities_cover_anima_moss_and_krea2():
     names = [cap.name for cap in all_dit_capabilities()]
-    assert names[:4] == ["anima", "moss", "krea2", "flux3"]
+    assert names[:5] == ["anima", "moss", "krea2", "flux3", "qwen21"]
 
     assert capability_for_dit_cls("CosmosTransformer3DModel") is get_dit_capability("anima")
     assert capability_for_dit_cls("MOSSImageTransformer") is get_dit_capability("moss")
     assert capability_for_dit_cls("Krea2Transformer2DModel") is get_dit_capability("krea2")
     assert capability_for_dit_cls("Flux3Transformer2DModel") is get_dit_capability("flux3")
+    assert capability_for_dit_cls("QwenImage21Transformer2DModel") is get_dit_capability("qwen21")
     assert capability_for_dit_cls("Flux") is None
 
-    assert per_block_compile_presets() == ("Anima per-block", "MOSS-Image per-block", "Krea-2 per-block", "FLUX.3 per-block")
+    assert per_block_compile_presets() == ("Anima per-block", "MOSS-Image per-block", "Krea-2 per-block", "FLUX.3 per-block", "Qwen-2.1 per-block")
     assert capability_for_compile_preset("Anima per-block").name == "anima"
     assert capability_for_compile_preset("MOSS-Image per-block").name == "moss"
     assert capability_for_compile_preset("Krea-2 per-block").name == "krea2"
     assert capability_for_compile_preset("FLUX.3 per-block").name == "flux3"
+    assert capability_for_compile_preset("Qwen-2.1 per-block").name == "qwen21"
     assert capability_for_compile_preset("guard_filter_fn") is None
-    assert "blocks" in registered_block_attrs() and "layers" in registered_block_attrs()
+    assert {"blocks", "layers", "single_blocks", "transformer_blocks"} <= set(registered_block_attrs())
 
 
 def test_registering_a_fourth_dit_flows_through_every_consumer(tmp_path):
