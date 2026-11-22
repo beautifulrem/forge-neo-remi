@@ -512,4 +512,10 @@ def sampling_cleanup(unet: "UnetPatcher"):
     for cnet in unet.list_controlnets():
         cnet.cleanup()
 
+    # Release MOSS-Image cached reference KV (~2+ GB VRAM) & step caches before VAE decode / Hires.
+    dynamic_args.moss_ref_kv = None
+    dit = getattr(getattr(unet, "model", None), "diffusion_model", None)
+    if callable(clear := getattr(dit, "clear_caches", None)):
+        clear()
+
     memory_management.soft_empty_cache()

@@ -23,6 +23,7 @@ REFERENCE_METHODS = {
 
 
 class MOSSImage(ForgeDiffusionEngine):
+    is_moss_engine = True
     matched_guesses = [model_list.MOSSImage]
 
     def __init__(self, estimated_config, huggingface_components):
@@ -68,6 +69,14 @@ class MOSSImage(ForgeDiffusionEngine):
 
     @torch.inference_mode()
     def get_learned_conditioning_with_image(self, prompt: list[str], images: list[torch.Tensor], method: str, vision: bool):
+        if vision:
+            te = getattr(getattr(self.forge_objects.clip, "cond_stage_model", None), "qwen35_9b", None)
+            if te is not None and not getattr(te, "has_vision", True):
+                raise ValueError(
+                    "MOSS-Image 'ai-toolkit' reference mode needs Qwen3.5-9B vision weights (e.g. OpenMOSS/Comfy-Org "
+                    "Qwen3.5-9B or a matching mmproj GGUF). Load vision weights or switch [Moss-Image] Reference Method "
+                    "to 'Moss-Image-Edit' (which does not use the vision tower)."
+                )
         images_vl, ref_latents = [], []
         for image in images:
             v, r = self.encode_vision(image)
@@ -80,9 +89,16 @@ class MOSSImage(ForgeDiffusionEngine):
         dynamic_args.moss_ref_kv = None
         return self.text_processing_engine_qwen(prompt, images=images_vl)
 
+    def clear_references(self):
+        dynamic_args.moss_ref_kv = None
+        dynamic_args.moss_reference_method = None
+        super().clear_references()
+
     @torch.inference_mode()
     def encode_vision(self, image: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         samples = image.movedim(-1, 1)
+        if samples.shape[1] == 1:
+            samples = samples.expand(-1, 3, -1, -1)
 
         _vision = resize_reference(samples, 1, 384).movedim(1, -1)[:, :, :, :3]
 
