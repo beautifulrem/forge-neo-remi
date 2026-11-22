@@ -42,6 +42,7 @@ PRESETS = (
     "Anima per-block",
     "MOSS-Image per-block",
     "Krea-2 per-block",
+    "FLUX.3 per-block",
     "guard_filter_fn",
     "dynamic",
     "max-autotune",
@@ -65,6 +66,7 @@ PRESET_HELP = rf"""
 - **Anima per-block:** Compile each Anima transformer block separately; a changed Resolution / Batch Size recompiles once into a dynamic-shape graph, but Batch Size 1 (CFG 1, or steps outside the CFG range) and reference images still compile graphs of their own ; lower graph-break risk than whole-model compile
 - **MOSS-Image per-block:** Compile each MOSS-Image transformer layer separately; stays compiled with Skip Layer Guidance (SLG) and cached reference KV while keeping one-shot reference preprocessing eager ; lower graph-break risk than whole-model compile
 - **Krea-2 per-block:** Compile each Krea 2 single-stream transformer block separately; keeps cached text fusion and RoPE outside the compiled blocks and stays compiled with Skip Layer Guidance (SLG) and Edit reference latents ; lower graph-break risk than whole-model compile
+- **FLUX.3 per-block:** Compile each FLUX.3 joint single block separately; the text and reference per-mode blocks run once per prompt outside the compiled blocks ; lower graph-break risk than whole-model compile
 """.strip()
 
 

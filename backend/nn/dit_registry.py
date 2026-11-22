@@ -242,6 +242,12 @@ def fast_forward_krea2(dit, predictor, sigma, input_x, feature):
     return predictor.calculate_denoised(sigma, model_output.float(), input_x)
 
 
+def fast_forward_flux3(dit, predictor, sigma, input_x, feature):
+    internal_timestep = predictor.timestep(sigma).float()
+    model_output = dit.compute_final(feature, internal_timestep, tuple(input_x.shape))
+    return predictor.calculate_denoised(sigma, model_output.float(), input_x)
+
+
 def match_spectrum_capability(dit) -> DiTCapability | None:
     """Return the capability whose Spectrum pre-head seam ``dit`` satisfies."""
 
@@ -257,6 +263,9 @@ def resolve_spectrum_capture_module(target_module):
     """If ``target_module`` is a DiT exposing a registered Spectrum capture attr,
     return that submodule; otherwise return ``target_module`` unchanged."""
 
+    cap = match_spectrum_capability(target_module)
+    if cap is not None:
+        return getattr(target_module, cap.spectrum_capture_attr)
     for cap in _REGISTRY.values():
         attr = cap.spectrum_capture_attr
         if attr and hasattr(target_module, attr):
@@ -374,6 +383,53 @@ def krea2_workflow_advice(p, *, opts=None) -> list[str]:
         advice.append(
             "Krea 2 Edit LoRA detected while [Krea2] Enable Reference is off; "
             "enable [Krea2] Enable Reference in Settings when supplying reference images."
+        )
+    return advice
+
+
+FLUX3_MAX_REFERENCES = 10
+
+
+def flux3_workflow_advice(p, *, opts=None) -> list[str]:
+    """Non-blocking hints for FLUX.3 Image Klein (Base vs step-distilled, references, captions)."""
+
+    from backend.args import dynamic_args
+
+    if not dynamic_args.flux3:
+        return []
+
+    active_opts = _resolve_opts(opts)
+    advice: list[str] = []
+    sd_model = getattr(p, "sd_model", None)
+    distilled = bool(getattr(sd_model, "is_flux3_distilled", False))
+    steps = getattr(p, "steps", None)
+    cfg = getattr(p, "cfg_scale", None)
+    if distilled:
+        if isinstance(cfg, (int, float)) and cfg > 1.0:
+            advice.append(
+                f"FLUX.3 Klein (step-distilled) with cfg={cfg}: the distilled flow-map model samples without classifier-free "
+                "guidance; use CFG 1.0 (the negative prompt is then skipped) and about 16 steps."
+            )
+    elif (isinstance(steps, (int, float)) and steps < 28) or (isinstance(cfg, (int, float)) and cfg <= 1.0):
+        advice.append(
+            f"FLUX.3 Klein Base with steps={steps}, cfg={cfg}: the undistilled base typically needs about 50 steps with "
+            "CFG around 3.5 (use the distilled Klein checkpoint for 16-step CFG 1 sampling)."
+        )
+
+    refs = [*(getattr(sd_model, "ref_latents", None) or ())]
+    if getattr(sd_model, "ini_latent", None) is not None:
+        refs.append(sd_model.ini_latent)
+    if refs and not bool(getattr(active_opts, "flux3_do_reference", True)):
+        advice.append("FLUX.3: reference images are attached while [FLUX.3] Enable Reference is off; they are ignored (plain img2img).")
+    if len(refs) > FLUX3_MAX_REFERENCES:
+        advice.append(f"FLUX.3 was trained with at most {FLUX3_MAX_REFERENCES} reference images; {len(refs)} are attached.")
+
+    prompt = getattr(p, "prompt", None)
+    if isinstance(prompt, str) and len(re.findall(r"[\w']+", prompt)) < 8 and "[" not in prompt:
+        advice.append(
+            "FLUX.3 is trained on long, detailed captions (about 100-350 words, as written by its prompt upsampler); a short "
+            "prompt leaves the scene under-specified. Describe medium, scene, subjects and layout, or place elements with the "
+            "FLUX.3 Layout panel."
         )
     return advice
 
@@ -631,6 +687,75 @@ register_dit_capability(
         spectrum_capture_attr="last_input",
         spectrum_fast_forward=fast_forward_krea2,
         workflow_advice=krea2_workflow_advice,
+    )
+)
+
+
+_FLUX3_BLOCK_PREFIXES = ("content_mode_blocks.", "txt_mode_blocks.", "single_blocks.")
+_FLUX3_INT8_LINEAR_SUFFIXES = (".q_proj.weight", ".k_proj.weight", ".v_proj.weight", ".qkv.weight", ".attn_out.weight", ".mlp_in.weight", ".mlp_out.weight")
+
+
+def _is_flux3_state_dict(sd: dict[str, torch.Tensor]) -> bool:
+    return "single_stream_modulations.txt.lin.weight" in sd or "content_mode_blocks.image.0.attn_out.weight" in sd
+
+
+def _is_flux3_dir(path: os.PathLike | str) -> bool:
+    from backend.nn.flux3_diffusers import is_flux3_checkpoint_dir
+
+    return is_flux3_checkpoint_dir(path)
+
+
+def _flux3_primary_file(path: os.PathLike | str) -> str | None:
+    from backend.nn.flux3_diffusers import flux3_diffusers_primary_file
+
+    return flux3_diffusers_primary_file(path)
+
+
+def _load_flux3_dir(path: os.PathLike | str) -> tuple[dict[str, torch.Tensor], dict]:
+    from backend.nn.flux3_diffusers import load_flux3_diffusers_dir
+
+    return load_flux3_diffusers_dir(path)
+
+
+def _is_flux3_single_file(sd: dict[str, torch.Tensor]) -> bool:
+    from backend.nn.flux3_diffusers import is_diffusers_flux3_transformer
+
+    return is_diffusers_flux3_transformer(sd)
+
+
+def _convert_flux3_single_file(sd: dict[str, torch.Tensor], output_prefix: str) -> dict[str, torch.Tensor]:
+    from backend.nn.flux3_diffusers import convert_diffusers_flux3_transformer
+
+    return convert_diffusers_flux3_transformer(sd, output_prefix=output_prefix)
+
+
+register_dit_capability(
+    DiTCapability(
+        name="flux3",
+        dit_cls_name="Flux3Transformer2DModel",
+        model_type_name="Flux3",
+        engine_label="FLUX.3",
+        # embedders, time MLPs, every per-mode / joint modulation head and the output layer
+        sensitive_prefixes=("emb_in.", "txt_in.", "time_in.", "ref_time_in.", "early_stream_modulations.", "single_stream_modulations.", "final_layer."),
+        sensitive_module_types=("RMSNorm",),
+        matches_state_dict=_is_flux3_state_dict,
+        block_linear_filter=lambda k: k.startswith(_FLUX3_BLOCK_PREFIXES) and k.endswith(".weight"),
+        fp8_rowwise=True,
+        int8_convrot_filter=lambda k: k.startswith(_FLUX3_BLOCK_PREFIXES) and k.endswith(_FLUX3_INT8_LINEAR_SUFFIXES),
+        diffusers_arch="flux-3/diffusers",
+        is_diffusers_dir=_is_flux3_dir,
+        diffusers_primary_file=_flux3_primary_file,
+        load_diffusers_dir=_load_flux3_dir,
+        is_diffusers_single_file=_is_flux3_single_file,
+        convert_diffusers_single_file=_convert_flux3_single_file,
+        block_attr="single_blocks",
+        compile_preset="FLUX.3 per-block",
+        matches_engine=lambda model: bool(getattr(model, "is_flux3_engine", False)),
+        non_matching_engine_reason="FLUX.3 per-block ignored: non-FLUX.3 model",
+        spectrum_required_attrs=("final_input", "final_layer", "compute_final"),
+        spectrum_capture_attr="final_input",
+        spectrum_fast_forward=fast_forward_flux3,
+        workflow_advice=flux3_workflow_advice,
     )
 )
 

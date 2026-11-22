@@ -227,7 +227,7 @@ def model_lora_keys_unet(model, key_map=None):
 
     _model_name: str = model.config.huggingface_repo.lower()
 
-    if "flux" in _model_name or "chroma" in _model_name:  # Diffusers lora Flux
+    if ("flux" in _model_name and "flux.3" not in _model_name) or "chroma" in _model_name:  # Diffusers lora Flux
         diffusers_keys = flux_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
         for k in diffusers_keys:
             if k.endswith(".weight"):
@@ -353,5 +353,10 @@ def model_lora_keys_unet(model, key_map=None):
                 to = diffusers_keys[k]
                 key_lora = k[: -len(".weight")]
                 _register_krea2_prefixes(key_lora, to)
+
+    if "flux.3" in _model_name:  # Remi: FLUX.3 Image Klein (native, Diffusers / PEFT, fused-qkv slices)
+        from backend.nn.flux3_diffusers import flux3_lora_key_map
+
+        key_map.update(flux3_lora_key_map(sd))
 
     return key_map

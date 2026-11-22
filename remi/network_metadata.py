@@ -28,7 +28,7 @@ _ANIMA_DEPTH_LABELS: dict[int, str] = {
     52: "3.8B (52 blocks)",
 }
 
-ARCHS = ("sd", "xl", "flux", "klein", "qwen", "lumina", "zit", "wan", "anima", "ernie", "pid", "krea", "qwen21", "moss")
+ARCHS = ("sd", "xl", "flux", "klein", "qwen", "lumina", "zit", "wan", "anima", "ernie", "pid", "krea", "qwen21", "moss", "flux3")
 """``modules_forge.presets.PresetArch`` names (kept in sync by a test)."""
 SD_VERSIONS = ("Unknown", *ARCHS)
 """Values of the user-metadata ``sd version`` key (sd_forge_lora's ``network.SD_VERSION``)."""
@@ -206,6 +206,7 @@ _ARCH_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
     for arch, pattern in (
         ("qwen21", r"qwen[-_ ]?image[-_ ]?2\.?1"),
         ("qwen", r"qwen[-_ ]?image"),
+        ("flux3", r"flux[-_. ]?3"),
         ("klein", r"flux[-_. ]?2|klein"),
         # FLUX.1 Krea [dev] is a Flux.1 model; "krea" alone is Krea 2
         ("flux", r"flux.*krea|krea[-_. ]?flux"),

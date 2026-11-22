@@ -16,6 +16,7 @@ class PresetArch(Enum):
     krea = 12  # Krea2
     qwen21 = 13  # Qwen-Image-2.1
     moss = 14  # MOSS-Image
+    flux3 = 15  # FLUX.3 Image Klein
 
     @staticmethod
     def choices() -> list[str]:
@@ -37,6 +38,7 @@ SAMPLERS = {
     PresetArch.krea: "Euler",
     PresetArch.qwen21: "Euler",
     PresetArch.moss: "Euler",
+    PresetArch.flux3: "Euler",
 }
 
 SCHEDULERS = {
@@ -54,6 +56,7 @@ SCHEDULERS = {
     PresetArch.krea: "Simple",
     PresetArch.qwen21: "Simple",
     PresetArch.moss: "Simple",
+    PresetArch.flux3: "Simple",
 }
 
 STEPS = {
@@ -71,6 +74,7 @@ STEPS = {
     PresetArch.krea: 8,
     PresetArch.qwen21: 32,
     PresetArch.moss: 50,
+    PresetArch.flux3: 16,
 }
 
 CFG = {
@@ -88,6 +92,7 @@ CFG = {
     PresetArch.krea: 1.0,
     PresetArch.qwen21: 2.5,
     PresetArch.moss: 3.0,
+    PresetArch.flux3: 1.0,
 }
 
 DISTILL = {

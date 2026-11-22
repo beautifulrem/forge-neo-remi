@@ -781,7 +781,7 @@ export const models: Models = {
     "float8-e4m3fn (Anima scaled)",
     "int8 (Anima ConvRot)",
   ],
-  presets: ["sd", "xl", "flux", "klein", "qwen", "lumina", "zit", "wan", "anima", "ernie", "pid", "krea", "qwen21", "moss"],
+  presets: ["sd", "xl", "flux", "klein", "qwen", "lumina", "zit", "wan", "anima", "ernie", "pid", "krea", "qwen21", "moss", "flux3"],
   samplers: SAMPLERS.map((s) => ({ name: String(s.value), aliases: [] })),
   schedulers: SCHEDULERS.map((s) => ({ name: String(s.value) })),
   upscalers: [{ name: "Latent" }, { name: "R-ESRGAN 4x+" }],
