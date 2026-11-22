@@ -37,6 +37,52 @@ class WeightAdapterBase:
         raise NotImplementedError
 
 
+class SlicedWeightAdapter(WeightAdapterBase):
+    """Applies a contiguous slice of a fused adapter (e.g. fused ``proj.qkv``
+    LoRA / LoKr) onto a split target weight (e.g. ``proj.q`` / ``proj.k`` / ``proj.v``)."""
+
+    name = "sliced"
+
+    def __init__(self, adapter: WeightAdapterBase, slice_dim: int, start: int, length: int, full_dim: int):
+        self.adapter = adapter
+        self.slice_dim = slice_dim
+        self.start = start
+        self.length = length
+        self.full_dim = full_dim
+        self.loaded_keys = adapter.loaded_keys
+        self.weights = adapter.weights
+
+    def calculate_weight(
+        self,
+        weight,
+        key,
+        strength,
+        strength_model,
+        offset,
+        function,
+        intermediate_dtype=torch.float32,
+        original_weight=None,
+    ):
+        full_shape = list(weight.shape)
+        full_shape[self.slice_dim] = self.full_dim
+        zeros = torch.zeros(full_shape, dtype=weight.dtype, device=weight.device)
+        delta = self.adapter.calculate_weight(
+            zeros,
+            key,
+            strength,
+            1.0,
+            None,
+            lambda x: x,
+            intermediate_dtype=intermediate_dtype,
+            original_weight=None,
+        )
+        if delta is None:
+            return weight
+        sliced = delta.narrow(self.slice_dim, self.start, self.length)
+        weight += function(sliced)
+        return weight
+
+
 def weight_decompose(dora_scale, weight, lora_diff, alpha, strength, intermediate_dtype, function):
     dora_scale = memory_management.cast_to_device(dora_scale, weight.device, intermediate_dtype)
     lora_diff *= alpha

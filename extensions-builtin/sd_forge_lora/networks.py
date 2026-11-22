@@ -1,3 +1,4 @@
+import json
 import logging
 import os.path
 import re
@@ -120,7 +121,95 @@ def process_anima(lora: dict[str, torch.Tensor], blocks: int, *, declared: Optio
     return note
 
 
-def load_lora_for_models(model: "UnetPatcher", clip: "CLIP", lora: dict[str, torch.Tensor], strength_model: float, strength_clip: float, filename: str = "default", online_mode: bool = False, *, anima_declared_blocks: Optional[int] = None, anima_inserted: Optional[str] = None, notes: Optional[dict[str, str]] = None):
+def process_moss(lora: dict[str, torch.Tensor], metadata: Optional[dict] = None) -> None:
+    """Normalize MOSS-Image community LoRA/LoKr quirks in place:
+
+    1. ``ai-toolkit`` fused-QKV LoKrs (e.g. ``pmczip/MOSS_Image_LoRAs``) store
+       ``*.proj.qkv.lokr_w1/w2`` alongside orphan ``*.proj.{q,k,v}.alpha`` keys:
+       promote ``q.alpha`` to ``qkv.alpha`` and drop the duplicate split alphas
+       so they do not trip the unmatched-key guard.
+    2. ``moss-edit-lora`` (``chinoll`` / ``akhaliq``) stores per-module ``alpha``
+       in ``metadata["adapter_config"]``, and ``hayate_lora_format`` (Comfy-Org
+       color/depth control) stores a top-level ``metadata["alpha"]`` without
+       embedding ``.alpha`` tensors: inject the scalar ``.alpha`` tensors when
+       absent so non-unit ``alpha / rank`` adapters scale faithfully.
+    """
+
+    # 1. Consolidate orphan split proj.{q,k,v}.alpha next to fused proj.qkv.*
+    qkv_stems: set[str] = set()
+    for key in lora:
+        if ".proj.qkv." in key:
+            qkv_stems.add(key.split(".proj.qkv.", 1)[0])
+    for stem in qkv_stems:
+        has_split_weights = any(
+            k.startswith(f"{stem}.proj.{p}.") and not k.endswith(".alpha")
+            for p in ("q", "k", "v")
+            for k in lora
+        )
+        if has_split_weights:
+            continue
+        qkv_alpha = f"{stem}.proj.qkv.alpha"
+        for p in ("q", "k", "v"):
+            split_alpha = f"{stem}.proj.{p}.alpha"
+            if split_alpha in lora:
+                val = lora.pop(split_alpha)
+                if qkv_alpha not in lora:
+                    lora[qkv_alpha] = val
+
+    # 2. Metadata alpha injection when explicit .alpha tensors are absent
+    if not isinstance(metadata, dict):
+        return
+    module_alphas: dict[str, float] = {}
+    raw_cfg = metadata.get("adapter_config")
+    if isinstance(raw_cfg, str):
+        try:
+            raw_cfg = json.loads(raw_cfg)
+        except ValueError:
+            raw_cfg = None
+    if isinstance(raw_cfg, dict) and isinstance(raw_cfg.get("modules"), dict):
+        for mod_name, spec in raw_cfg["modules"].items():
+            if isinstance(spec, dict) and spec.get("alpha") is not None:
+                try:
+                    module_alphas[str(mod_name)] = float(spec["alpha"])
+                except (TypeError, ValueError):
+                    pass
+
+    global_alpha: Optional[float] = None
+    if metadata.get("hayate_lora_format") and metadata.get("alpha") is not None:
+        try:
+            global_alpha = float(metadata["alpha"])
+        except (TypeError, ValueError):
+            global_alpha = None
+
+    if not module_alphas and global_alpha is None:
+        return
+
+    lora_bases: set[str] = set()
+    for key in list(lora.keys()):
+        for suffix in (".lora_B.weight", ".lora_B", ".lora_up.weight"):
+            if key.endswith(suffix):
+                lora_bases.add(key[: -len(suffix)])
+                break
+
+    for base in lora_bases:
+        alpha_key = f"{base}.alpha"
+        if alpha_key in lora:
+            continue
+        bare = base
+        for prefix in ("diffusion_model.", "transformer.", "base_model.model."):
+            if bare.startswith(prefix):
+                bare = bare[len(prefix) :]
+                break
+        alpha_val = module_alphas.get(base)
+        if alpha_val is None:
+            alpha_val = module_alphas.get(bare)
+        if alpha_val is None:
+            alpha_val = global_alpha
+        if alpha_val is not None:
+            lora[alpha_key] = torch.tensor(alpha_val, dtype=torch.float32)
+
+
+def load_lora_for_models(model: "UnetPatcher", clip: "CLIP", lora: dict[str, torch.Tensor], strength_model: float, strength_clip: float, filename: str = "default", online_mode: bool = False, *, anima_declared_blocks: Optional[int] = None, anima_inserted: Optional[str] = None, notes: Optional[dict[str, str]] = None, metadata: Optional[dict] = None):
     """Patch ``lora`` onto ``model`` / ``clip``; returns the patched pair.
 
     Raises ``LoraNotApplied`` when the LoRA does not fit the model (most of
@@ -135,6 +224,8 @@ def load_lora_for_models(model: "UnetPatcher", clip: "CLIP", lora: dict[str, tor
         note = process_anima(lora, len(model.model.diffusion_model.blocks), declared=anima_declared_blocks, inserted=anima_inserted, notes=notes)
         if note and notes is not None:
             notes["remap"] = note
+    if dynamic_args.moss:
+        process_moss(lora, metadata=metadata)
 
     model_flag: str = type(model.model).__name__ if model is not None else "default"
 
@@ -308,7 +399,7 @@ def load_networks(names: list[str], te_multipliers: list[float] = None, unet_mul
         notes: dict = {}
         try:
             declared = source_blocks if source_blocks is not None else anima_layout.declared_depth(metadata)
-            current_sd.forge_objects.unet, current_sd.forge_objects.clip = load_lora_for_models(current_sd.forge_objects.unet, current_sd.forge_objects.clip, lora_sd, strength_model, strength_clip, filename=filename, online_mode=online_mode, anima_declared_blocks=declared, anima_inserted=inserted_policy, notes=notes)
+            current_sd.forge_objects.unet, current_sd.forge_objects.clip = load_lora_for_models(current_sd.forge_objects.unet, current_sd.forge_objects.clip, lora_sd, strength_model, strength_clip, filename=filename, online_mode=online_mode, anima_declared_blocks=declared, anima_inserted=inserted_policy, notes=notes, metadata=metadata)
         except LoraNotApplied as e:
             logger.warning(f'LoRA not applied: "{name}": {e}')
             failed[name] = str(e)

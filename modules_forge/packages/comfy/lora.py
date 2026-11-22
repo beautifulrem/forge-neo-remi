@@ -18,9 +18,14 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
+from collections import namedtuple
+
 import torch
 
 from modules_forge.packages.comfy import weight_adapter
+from modules_forge.packages.comfy.weight_adapter.base import SlicedWeightAdapter
+
+SplitTargets = namedtuple("SplitTargets", ["targets", "slice_dim", "full_dim"])
 
 from .utils import (
     flux_to_diffusers,
@@ -71,7 +76,12 @@ def load_lora(lora, to_load):
         for adapter_cls in weight_adapter.adapters:
             adapter = adapter_cls.load(x, lora, alpha, dora_scale, loaded_keys)
             if adapter is not None:
-                patch_dict[to_load[x]] = adapter
+                target = to_load[x]
+                if isinstance(target, SplitTargets):
+                    for sub_key, start, length in target.targets:
+                        patch_dict[sub_key] = SlicedWeightAdapter(adapter, target.slice_dim, start, length, target.full_dim)
+                else:
+                    patch_dict[target] = adapter
                 loaded_keys.update(adapter.loaded_keys)
                 continue
 
@@ -247,16 +257,39 @@ def model_lora_keys_unet(model, key_map=None):
                     key_map["lycoris_{}".format(key_lora.replace(".", "_"))] = to  # SimpleTuner lycoris format
 
     if "moss" in _model_name:
+        def _register_moss_prefixes(bare_name: str, target) -> None:
+            flat = bare_name.replace(".", "_")
+            key_map[bare_name] = target
+            key_map[f"diffusion_model.{bare_name}"] = target
+            key_map[f"transformer.{bare_name}"] = target
+            key_map[f"base_model.model.{bare_name}"] = target
+            key_map[f"lora_unet_{flat}"] = target
+            key_map[f"lycoris_{flat}"] = target
+            key_map[f"lora_transformer_{flat}"] = target
+
         for k in sdk:
             if k.startswith("diffusion_model.") and k.endswith(".weight"):
-                key_map[k[len("diffusion_model.") : -len(".weight")]] = k  # bare module paths
-            if k.endswith(".proj.qkv.weight"):  # fused q/k/v files; LoRAs address the separate projections
+                bare = k[len("diffusion_model.") : -len(".weight")]
+                _register_moss_prefixes(bare, k)
+            if k.endswith(".proj.qkv.weight"):  # fused q/k/v checkpoint; LoRAs address separate q/k/v
                 third = sd[k].shape[0] // 3
+                stem = k[len("diffusion_model.") : -len(".qkv.weight")]
                 for i, proj in enumerate(("q", "k", "v")):
-                    key_lora = "{}.{}".format(k[: -len(".qkv.weight")], proj)
-                    key_map[key_lora] = (k, (0, i * third, third))
-                    key_map[key_lora[len("diffusion_model.") :]] = (k, (0, i * third, third))
-                    key_map["lora_unet_{}".format(key_lora[len("diffusion_model.") :].replace(".", "_"))] = (k, (0, i * third, third))
+                    _register_moss_prefixes(f"{stem}.{proj}", (k, (0, i * third, third)))
+            elif k.endswith(".proj.q.weight"):  # split q/k/v checkpoint; ai-toolkit LoRAs/LoKrs address fused qkv
+                k_key = k[: -len(".q.weight")] + ".k.weight"
+                v_key = k[: -len(".q.weight")] + ".v.weight"
+                if k_key in sd and v_key in sd:
+                    q_dim, k_dim, v_dim = int(sd[k].shape[0]), int(sd[k_key].shape[0]), int(sd[v_key].shape[0])
+                    stem = k[len("diffusion_model.") : -len(".q.weight")]
+                    _register_moss_prefixes(
+                        f"{stem}.qkv",
+                        SplitTargets(
+                            targets=((k, 0, q_dim), (k_key, q_dim, k_dim), (v_key, q_dim + k_dim, v_dim)),
+                            slice_dim=0,
+                            full_dim=q_dim + k_dim + v_dim,
+                        ),
+                    )
 
     if "lumina" in _model_name or "z-image" in _model_name:
         diffusers_keys = z_image_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
@@ -290,14 +323,35 @@ def model_lora_keys_unet(model, key_map=None):
                 key_map["transformer.{}".format(key_lora)] = k
 
     if "krea-2" in _model_name:
+        def _register_krea2_prefixes(bare_name: str, target) -> None:
+            flat = bare_name.replace(".", "_")
+            key_map[bare_name] = target
+            key_map[f"diffusion_model.{bare_name}"] = target
+            key_map[f"transformer.{bare_name}"] = target
+            key_map[f"base_model.model.{bare_name}"] = target
+            key_map[f"base_model.model.diffusion_model.{bare_name}"] = target
+            key_map[f"base_model.model.transformer.{bare_name}"] = target
+            key_map[f"lora_unet_{flat}"] = target
+            key_map[f"lycoris_{flat}"] = target
+            key_map[f"lora_transformer_{flat}"] = target
+
+        for k in sdk:
+            if k.startswith("diffusion_model."):
+                if k.endswith(".weight"):
+                    bare = k[len("diffusion_model.") : -len(".weight")]
+                    _register_krea2_prefixes(bare, k)
+                else:
+                    bare = k[len("diffusion_model.") :]
+                    key_map[bare] = k
+                    key_map[f"transformer.{bare}"] = k
+                    key_map[f"base_model.model.{bare}"] = k
+                    key_map[f"base_model.model.diffusion_model.{bare}"] = k
+
         diffusers_keys = krea2_to_diffusers(model.diffusion_model.config, output_prefix="diffusion_model.")
         for k in diffusers_keys:
             if k.endswith(".weight"):
                 to = diffusers_keys[k]
                 key_lora = k[: -len(".weight")]
-                key_map["diffusion_model.{}".format(key_lora)] = to
-                key_map["transformer.{}".format(key_lora)] = to
-                key_map["lycoris_{}".format(key_lora.replace(".", "_"))] = to
-                key_map[key_lora] = to
+                _register_krea2_prefixes(key_lora, to)
 
     return key_map

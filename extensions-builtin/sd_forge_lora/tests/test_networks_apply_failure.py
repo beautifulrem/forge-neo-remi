@@ -185,3 +185,53 @@ def test_anima_3_8b_adapter_patches_reach_the_dit_copy_too(webui, monkeypatch):
         unet, clip = module.load_lora_for_models(_Patcher(dit), _Patcher(), {"x": 1}, 1.0, 0.5)
         assert unet.patches == want
         assert clip.patches == {adapter_key: ("patch", 0.5)}
+
+
+def test_process_moss_consolidates_orphan_qkv_alphas_and_injects_metadata_alphas(webui):
+    import json
+
+    import networks as module
+    import torch
+
+    # 1. ai-toolkit fused proj.qkv LoKr with orphan proj.{q,k,v}.alpha
+    lokr_sd = {
+        "diffusion_model.layers.0.proj.qkv.lokr_w1": torch.zeros(3, 3),
+        "diffusion_model.layers.0.proj.qkv.lokr_w2": torch.zeros(12, 4),
+        "diffusion_model.layers.0.proj.q.alpha": torch.tensor(1.0),
+        "diffusion_model.layers.0.proj.k.alpha": torch.tensor(1.0),
+        "diffusion_model.layers.0.proj.v.alpha": torch.tensor(1.0),
+    }
+    module.process_moss(lokr_sd, metadata=None)
+    assert "diffusion_model.layers.0.proj.qkv.alpha" in lokr_sd
+    assert not any(k.endswith((".q.alpha", ".k.alpha", ".v.alpha")) for k in lokr_sd)
+
+    # 2. moss-edit-lora per-module adapter_config JSON alpha (respects existing explicit .alpha)
+    edit_sd = {
+        "layers.0.proj.q.lora_A": torch.zeros(8, 12),
+        "layers.0.proj.q.lora_B": torch.zeros(12, 8),
+        "layers.0.proj.k.lora_A": torch.zeros(8, 12),
+        "layers.0.proj.k.lora_B": torch.zeros(12, 8),
+        "layers.0.proj.k.alpha": torch.tensor(16.0),
+    }
+    meta = {
+        "adapter_config": json.dumps(
+            {
+                "format": "moss-edit-lora",
+                "modules": {
+                    "layers.0.proj.q": {"rank": 8, "alpha": 4.0},
+                    "layers.0.proj.k": {"rank": 8, "alpha": 4.0},
+                },
+            }
+        )
+    }
+    module.process_moss(edit_sd, metadata=meta)
+    assert float(edit_sd["layers.0.proj.q.alpha"]) == pytest.approx(4.0)
+    assert float(edit_sd["layers.0.proj.k.alpha"]) == pytest.approx(16.0)
+
+    # 3. hayate_lora_format top-level metadata alpha
+    ctrl_sd = {
+        "diffusion_model.layers.0.proj.o.lora_up.weight": torch.zeros(12, 8),
+        "diffusion_model.layers.0.proj.o.lora_down.weight": torch.zeros(8, 12),
+    }
+    module.process_moss(ctrl_sd, metadata={"hayate_lora_format": "1", "alpha": "32"})
+    assert float(ctrl_sd["diffusion_model.layers.0.proj.o.alpha"]) == pytest.approx(32.0)
