@@ -67,6 +67,7 @@ Remi retains Forge Neo's modern-model focus and adds deeper Anima integration.
 - Anima and Anima Edit: 2B (28 blocks), 2.9B (40) and 3.8B (52) checkpoints (3.8B with its `qwen35_4b` text encoder, [details](docs/remi-webui/usage.md#anima-29b-and-38b-checkpoints))
 - SD 1.x and advanced SDXL variants
 - Krea 2 and Krea 2 Identity Edit
+- FLUX.3 Image Klein (Base and step-distilled; multi-reference editing; BFL / ComfyUI single files, Diffusers folders, FP8 / INT8 packages and GGUF; layout prompts from the JSON Builder page)
 - FLUX Kontext and FLUX.2 Klein
 - Qwen-Image, Qwen-Image-Edit and Qwen-Image-2.1
 - Moss-Image and Moss-Image-Edit, with a [JSON Builder page](docs/remi-webui/usage.md) for MOSS-Image structured prompts

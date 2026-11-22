@@ -91,3 +91,33 @@ A visual editor for MOSS-Image's structured ("Layout") prompts:
 - pytest, `extensions-builtin/sd_forge_json_builder/tests/`: the page
   registration (widget, no params, tab settings, unload), no Gradio /
   JavaScript / CSS in the extension, the SPA view and icon exist, zh_CN title.
+
+## FLUX.3 layout prompts (Remi)
+
+The Summary section's **Prompt format** switch (MOSS-Image / FLUX.3, kept
+with the draft) also compiles the same canvas for FLUX.3 Image Klein
+(`flux3.ts`). FLUX.3 is trained on the structured captions of its prompt
+upsampler (BFL `bbox.py`): one global caption that cites every element as
+`<id>`, one space, then one JSON array of `{"id", "bbox", "desc"}` rows with
+`[y_min, x_min, y_max, x_max]` integer boxes on a 0–1000 canvas (top-left
+origin, independent of the output size).
+
+- Ids are a class noun plus an index numbered left to right, then top to
+  bottom: `object_N`, `person_N` (characters), `En_Text_N` (text items, whose
+  `desc` opens with `Text reading "<wording>"`, line breaks as `\n`).
+- Elements the caption does not cite yet are listed after it
+  (`Elements: a barista in a green apron <person_1>, …`); meta tags become a
+  `Style: …` sentence; the canvas type is not used.
+- Parentheses are not escaped: the FLUX.3 text engine reads the prompt as
+  written. "Extra" goes on its own line after the table.
+- **Load prompt…** / **Load from txt2img / img2img** recognize a FLUX.3 layout
+  prompt (a caption closed by a table of box rows, including one written by
+  the BFL upsampler) and switch the format; ids, `Elements:` and `Style:` are
+  folded back into the fields.
+
+`backend/nn/flux3_layout.py` holds the same protocol on the server
+(`split_caption`, `reconcile_boxes`, `layout_problems`, the upsampler's system
+prompts); with FLUX.3 loaded, the prompt tools' **Generate** asks the
+OpenAI-compatible provider for an upsampler-style caption (for example
+`black-forest-labs/flux-3-image-klein-pup` served by vLLM or llama.cpp) unless
+custom instructions are set.

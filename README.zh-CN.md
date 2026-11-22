@@ -68,6 +68,7 @@ Remi 保留 Forge Neo 对现代模型的支持重点，并对 Anima 提供更深
 - Anima 和 Anima Edit：2B（28 层）、2.9B（40 层）与 3.8B（52 层）checkpoint（3.8B 需另备 `qwen35_4b` 文本编码器，[细节](docs/remi-webui/usage.zh-CN.md#anima-29b-与-38b-checkpoint)）
 - SD 1.x 和高级 SDXL 变体
 - Krea 2 和 Krea 2 Identity Edit
+- FLUX.3 Image Klein（Base 与步数蒸馏版；多参考图编辑；支持 BFL / ComfyUI 单文件、Diffusers 目录、FP8 / INT8 量化包与 GGUF；可在 JSON Builder 页面生成布局提示词）
 - FLUX Kontext 和 FLUX.2 Klein
 - Qwen-Image、Qwen-Image-Edit 和 Qwen-Image-2.1
 - Moss-Image 和 Moss-Image-Edit，配套 [JSON Builder 页面](docs/remi-webui/usage.zh-CN.md)用于编写 MOSS-Image 结构化提示词
