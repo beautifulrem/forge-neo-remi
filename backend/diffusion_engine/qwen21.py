@@ -16,7 +16,7 @@ from backend.patcher.clip import CLIP
 from backend.patcher.unet import UnetPatcher
 from backend.patcher.vae import VAE
 from backend.text_processing.qwen_image_21_engine import Qwen3VL8BEngine
-from modules.shared import opts
+from modules import shared
 
 
 class QwenImage21(ForgeDiffusionEngine):
@@ -42,7 +42,23 @@ class QwenImage21(ForgeDiffusionEngine):
         self.forge_objects_original = self.forge_objects.shallow_copy()
         self.forge_objects_after_applying_lora = self.forge_objects.shallow_copy()
 
+        self.is_qwen21_engine = True
+        self.use_dynamic_shifting = bool(estimated_config.sampling_settings.get("use_dynamic_shifting", True))
+        self._vision_cache: tuple[tuple, list[torch.Tensor], list[torch.Tensor]] | None = None
+
+    def clear_references(self):
+        self._vision_cache = None
+        dynamic_args.ref_latents.clear()
+        dynamic_args.image_slots = None
+        dit = getattr(getattr(getattr(self, "forge_objects", None), "unet", None), "model", None)
+        dit = getattr(dit, "diffusion_model", None)
+        if callable(clear := getattr(dit, "clear_caches", None)):
+            clear()
+        super().clear_references()
+
     def set_shift(self, shift: float, width: int, height: int):
+        if not self.use_dynamic_shifting:
+            return
         seq_len = width * height / (16 * 16)
 
         # shift = base_shift + (max_shift - base_shift) * (sequence_length - base_image_seq_len) / (max_image_seq_len - base_image_seq_len)
@@ -63,13 +79,15 @@ class QwenImage21(ForgeDiffusionEngine):
 
         _references = self._get_references()
 
-        if opts.qwen21_do_reference and bool(_references):
+        if shared.opts.qwen21_do_reference and bool(_references):
             if not prompt.is_negative_prompt:
                 self.ini_latent = None
 
             return self.get_learned_conditioning_with_image(prompt, _references)
 
         if not prompt.is_negative_prompt:
+            self.ini_latent = None
+            self._vision_cache = None
             dynamic_args.ref_latents.clear()
             dynamic_args.image_slots = None
 
@@ -77,11 +95,19 @@ class QwenImage21(ForgeDiffusionEngine):
 
     @torch.inference_mode()
     def get_learned_conditioning_with_image(self, prompt: list[str], images: list[torch.Tensor]):
-        images_vl, ref_latents = [], []
-        for image in images:
-            v, r = self.encode_vision(image)
-            images_vl.append(v)
-            ref_latents.append(r)
+        cache_key = (
+            getattr(shared.opts, "reference_max_side", 0),
+            tuple((id(img), img.data_ptr(), tuple(img.shape), img.dtype) for img in images),
+        )
+        if self._vision_cache is not None and self._vision_cache[0] == cache_key:
+            images_vl, ref_latents = self._vision_cache[1], self._vision_cache[2]
+        else:
+            images_vl, ref_latents = [], []
+            for image in images:
+                v, r = self.encode_vision(image)
+                images_vl.append(v)
+                ref_latents.append(r)
+            self._vision_cache = (cache_key, images_vl, ref_latents)
 
         dynamic_args.ref_latents = ref_latents.copy()
         return self.text_processing_engine_qwen(prompt, images=images_vl)
@@ -89,12 +115,20 @@ class QwenImage21(ForgeDiffusionEngine):
     @torch.inference_mode()
     def encode_vision(self, image: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         s = resize_reference(image[:1].movedim(-1, 1), 32, 1024).movedim(1, -1)
+        if s.shape[-1] == 1:
+            s = s.expand(-1, -1, -1, 3)
 
         rgb = s[:, :, :, :3]
         if s.shape[-1] > 3:
-            rgb = rgb * s[:, :, :, 3:] + (1.0 - s[:, :, :, 3:])
+            # Official Qwen-Image-2.1 recipe: composite alpha over white for
+            # Qwen3-VL vision encoder while passing all 4 RGBA channels to VAE.
+            alpha = s[:, :, :, 3:4]
+            rgb = rgb * alpha + (1.0 - alpha)
+            vae_input = s[:, :, :, :4]
+        else:
+            vae_input = torch.cat([rgb, torch.ones_like(rgb[:, :, :, :1])], dim=-1)
 
-        sample = self.forge_objects.vae.encode(s)
+        sample = self.forge_objects.vae.encode(vae_input)
         _latent = self.forge_objects.vae.first_stage_model.process_in(sample)
 
         return (rgb, _latent)
@@ -106,10 +140,12 @@ class QwenImage21(ForgeDiffusionEngine):
 
     @torch.inference_mode()
     def encode_first_stage(self, x: torch.Tensor):
+        if x.size(1) == 1:
+            x = x.expand(-1, 3, -1, -1)
         if x.size(1) == 3:
             x = torch.cat([x, torch.ones_like(x[:, :1])], dim=1)
 
-        if opts.qwen21_do_reference:
+        if shared.opts.qwen21_do_reference:
             self.store_reference(x[:1].movedim(1, -1).mul(0.5).add(0.5).cpu())
 
         if not dynamic_args.is_referencing:

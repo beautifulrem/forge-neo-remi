@@ -189,9 +189,13 @@ def attention_basic(q, k, v, heads, mask=None, attn_precision=None, skip_reshape
 
     if exists(mask):
         if mask.dtype == torch.bool:
-            mask = rearrange(mask, "b ... -> b (...)")
             max_neg_value = -torch.finfo(sim.dtype).max
-            mask = repeat(mask, "b j -> (b h) () j", h=h)
+            if mask.ndim >= 3 or (mask.ndim == 2 and mask.shape == (sim.shape[-2], sim.shape[-1]) and mask.shape[0] != b):
+                bs = 1 if mask.ndim == 2 else mask.shape[0]
+                mask = mask.reshape(bs, -1, mask.shape[-2], mask.shape[-1]).expand(b, heads, -1, -1).reshape(-1, mask.shape[-2], mask.shape[-1])
+            else:
+                mask = rearrange(mask, "b ... -> b (...)")
+                mask = repeat(mask, "b j -> (b h) () j", h=h)
             sim.masked_fill_(~mask, max_neg_value)
         else:
             if len(mask.shape) == 2:
