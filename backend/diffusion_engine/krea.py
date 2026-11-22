@@ -41,31 +41,51 @@ class Krea2(ForgeDiffusionEngine):
         self.forge_objects_after_applying_lora = self.forge_objects.shallow_copy()
 
         self.is_wan = True
+        self.is_krea2_engine = True
+        self._vision_cache: tuple[tuple[int, ...], list[torch.Tensor], list[torch.Tensor]] | None = None
+
+    def clear_references(self):
+        self._vision_cache = None
+        dynamic_args.ref_latents.clear()
+        super().clear_references()
+
+    def _get_references(self) -> list[torch.Tensor]:
+        _references = [*self.ref_latents]
+        if self.ini_latent is not None:
+            _references.insert(0, self.ini_latent)
+        return _references
 
     @torch.inference_mode()
     def get_learned_conditioning(self, prompt: "SdConditioning"):
         memory_management.load_model_gpu(self.forge_objects.clip.patcher)
 
-        if not prompt.is_negative_prompt:
-            _references = [*self.ref_latents]
-            if self.ini_latent is not None:
-                _references.insert(0, self.ini_latent)
+        _references = self._get_references()
+        if opts.krea2_do_reference and bool(_references):
+            # Grounded conditioning for both positive and negative prompts (matches comfyui-krea2edit
+            # and QwenImage21); clear ini_latent only once the positive prompt consumes it.
+            if not prompt.is_negative_prompt:
                 self.ini_latent = None
+            return self.get_learned_conditioning_with_image(prompt, _references)
 
-            if opts.krea2_do_reference and bool(_references):
-                return self.get_learned_conditioning_with_image(prompt, _references)
-            else:
-                dynamic_args.ref_latents.clear()
+        if not prompt.is_negative_prompt:
+            self.ini_latent = None
+            self._vision_cache = None
+            dynamic_args.ref_latents.clear()
 
         return self.text_processing_engine_qwen(prompt)
 
     @torch.inference_mode()
     def get_learned_conditioning_with_image(self, prompt: list[str], images: list[torch.Tensor]):
-        images_vl, ref_latents = [], []
-        for image in images:
-            v, r = self.encode_vision(image)
-            images_vl.append(v)
-            ref_latents.append(r.squeeze(2))
+        cache_key = tuple(id(img) for img in images)
+        if self._vision_cache is not None and self._vision_cache[0] == cache_key:
+            images_vl, ref_latents = self._vision_cache[1], self._vision_cache[2]
+        else:
+            images_vl, ref_latents = [], []
+            for image in images:
+                v, r = self.encode_vision(image)
+                images_vl.append(v)
+                ref_latents.append(r.squeeze(2))
+            self._vision_cache = (cache_key, images_vl, ref_latents)
 
         dynamic_args.ref_latents = ref_latents.copy()
         return self.text_processing_engine_qwen(prompt, images=images_vl)
@@ -73,6 +93,8 @@ class Krea2(ForgeDiffusionEngine):
     @torch.inference_mode()
     def encode_vision(self, image: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         samples = image.movedim(-1, 1)  # b, c, h, w
+        if samples.shape[1] == 1:
+            samples = samples.expand(-1, 3, -1, -1)
 
         _vision = resize_reference(samples, 1, 768).movedim(1, -1)[:, :, :, :3]
 

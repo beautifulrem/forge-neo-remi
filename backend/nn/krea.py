@@ -1,6 +1,7 @@
 # https://github.com/Comfy-Org/ComfyUI/blob/v0.26.1/comfy/ldm/krea2/model.py
 # https://github.com/lbouaraba/comfyui-krea2edit/blob/main/__init__.py
 
+import weakref
 from typing import Optional
 
 import torch
@@ -16,6 +17,20 @@ from backend.nn.flux import EmbedND, timestep_embedding
 from backend.operations import repeat_kv_for_gqa
 from backend.quant_ops import ck
 from backend.utils import pad_to_patch_size
+
+
+def _tensor_version(tensor: torch.Tensor) -> int:
+    return -1 if tensor.is_inference() else int(tensor._version)
+
+
+def _broadcast_ref_batch(ref: torch.Tensor, bs: int) -> torch.Tensor:
+    if ref.shape[0] == bs:
+        return ref
+    if ref.shape[0] == 1:
+        return ref.expand(bs, -1, -1, -1)
+    if bs % ref.shape[0] == 0:
+        return ref.repeat(bs // ref.shape[0], 1, 1, 1)
+    return ref[:1].expand(bs, -1, -1, -1)
 
 
 def _imgids(bs: int, frame: int, h_: int, w_: int, device: torch.device) -> torch.Tensor:
@@ -137,8 +152,8 @@ class TextFusionBlock(nn.Module):
         self.mlp = SwiGLU(features, multiplier, bias)
 
     def forward(self, x, mask=None, transformer_options={}):
-        x.add_(self.attn(self.prenorm(x), mask=mask, transformer_options=transformer_options))
-        x.add_(self.mlp(self.postnorm(x)))
+        x = x + self.attn(self.prenorm(x), mask=mask, transformer_options=transformer_options)
+        x = x + self.mlp(self.postnorm(x))
         return x
 
 
@@ -238,11 +253,141 @@ class SingleStreamDiT(nn.Module):
             nn.GELU(approximate="tanh"),
             nn.Linear(features, features),
         )
+        self.last_input = nn.Identity()
         self.last = LastLayer(features, patch, channels)
         self.tproj = nn.Sequential(
             nn.GELU(approximate="tanh"),
             nn.Linear(features, features * 6),
         )
+        # Step-invariant zero-loss caches (cleared on sampling_cleanup).
+        # Bounded to 4 entries so CFG cond + uncond both stay warm across steps.
+        self._txt_cache: dict[tuple, tuple[weakref.ReferenceType, torch.Tensor]] = {}
+        self._rope_cache: dict[tuple, torch.Tensor] = {}
+        self._ref_cache: dict[tuple, tuple[tuple[weakref.ReferenceType, ...], list[torch.Tensor], list[tuple[int, int]]]] = {}
+
+    def clear_caches(self) -> None:
+        self._txt_cache.clear()
+        self._rope_cache.clear()
+        self._ref_cache.clear()
+
+    def _encode_context_cached(self, context: torch.Tensor, target_dtype: torch.dtype, transformer_options: dict) -> torch.Tensor:
+        patches = transformer_options.get("patches")
+        has_dynamic_override = bool(transformer_options.get("optimized_attention_override")) or (isinstance(patches, dict) and any(patches.values()))
+        if torch.is_grad_enabled() or has_dynamic_override:
+            return self.txtmlp(self.txtfusion(context, mask=None, transformer_options=transformer_options))
+
+        proj_w = self.txtfusion.projector.weight
+        lw0_w = self.txtfusion.layerwise_blocks[0].attn.wq.weight
+        mlp_w = self.txtmlp[1].weight
+        cache_key = (
+            context.data_ptr(),
+            tuple(context.shape),
+            context.dtype,
+            context.device,
+            _tensor_version(context),
+            target_dtype,
+            proj_w.data_ptr(),
+            _tensor_version(proj_w),
+            lw0_w.data_ptr(),
+            _tensor_version(lw0_w),
+            mlp_w.data_ptr(),
+            _tensor_version(mlp_w),
+        )
+        entry = self._txt_cache.get(cache_key)
+        if entry is not None and entry[0]() is context:
+            return entry[1]
+
+        encoded = self.txtmlp(self.txtfusion(context, mask=None, transformer_options=transformer_options))
+        if len(self._txt_cache) >= 4:
+            self._txt_cache.pop(next(iter(self._txt_cache)))
+        self._txt_cache[cache_key] = (weakref.ref(context), encoded)
+        return encoded
+
+    def _encode_refs_cached(
+        self,
+        ref_latents: list[torch.Tensor],
+        bs: int,
+        H: int,
+        W: int,
+        target_dtype: torch.dtype,
+        target_device: torch.device,
+    ) -> tuple[list[torch.Tensor], list[tuple[int, int]]]:
+        patch = self.patch
+        first_w = self.first.weight
+        cache_key = (
+            tuple((r.data_ptr(), tuple(r.shape), r.dtype, r.device, _tensor_version(r)) for r in ref_latents),
+            bs,
+            H,
+            W,
+            target_dtype,
+            target_device,
+            first_w.data_ptr(),
+            _tensor_version(first_w),
+        )
+        if not torch.is_grad_enabled():
+            entry = self._ref_cache.get(cache_key)
+            if entry is not None and all(ref_w() is orig for ref_w, orig in zip(entry[0], ref_latents)):
+                return entry[1], entry[2]
+
+        refs: list[torch.Tensor] = []
+        ref_grids: list[tuple[int, int]] = []
+        for ref in ref_latents:
+            ref_b = _broadcast_ref_batch(ref, bs)
+            if ref_b.shape[-2:] != (H, W):
+                ref_b = adaptive_resize(ref_b, W, H, "area", "center")
+            ref_padded = pad_to_patch_size(ref_b.to(device=target_device, dtype=target_dtype), (patch, patch), padding_mode="replicate")
+            ref_grids.append((ref_padded.shape[-2] // patch, ref_padded.shape[-1] // patch))
+            ref_tokens = rearrange(ref_padded, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch)
+            refs.append(self.first(ref_tokens))
+
+        if not torch.is_grad_enabled():
+            if len(self._ref_cache) >= 4:
+                self._ref_cache.pop(next(iter(self._ref_cache)))
+            self._ref_cache[cache_key] = (tuple(weakref.ref(r) for r in ref_latents), refs, ref_grids)
+        return refs, ref_grids
+
+    def _compute_freqs_cached(
+        self,
+        bs: int,
+        txtlen: int,
+        h_: int,
+        w_: int,
+        ref_grids: list[tuple[int, int]],
+        device: torch.device,
+    ) -> torch.Tensor:
+        cache_key = (bs, txtlen, h_, w_, tuple(ref_grids), device)
+        if not torch.is_grad_enabled():
+            cached = self._rope_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+        txtpos = torch.zeros(bs, txtlen, 3, device=device, dtype=torch.float32)
+        if ref_grids:
+            refids = [_imgids(bs, i + 1, gh, gw, device) for i, (gh, gw) in enumerate(ref_grids)]
+            imgids = _imgids(bs, 0, h_, w_, device)
+            pos = torch.cat((txtpos, *refids, imgids), dim=1)
+        else:
+            imgpos = _imgids(bs, 0, h_, w_, device)
+            pos = torch.cat((txtpos, imgpos), dim=1)
+        freqs = self.pe_embedder(pos)
+
+        if not torch.is_grad_enabled():
+            if len(self._rope_cache) >= 4:
+                self._rope_cache.pop(next(iter(self._rope_cache)))
+            self._rope_cache[cache_key] = freqs
+        return freqs
+
+    def compute_last(self, feature: torch.Tensor, timesteps: torch.Tensor, orig_shape: tuple[int, ...]) -> torch.Tensor:
+        """Run timestep embedding + final head + unpatchify on a cached/forecast pre-head feature (Spectrum)."""
+        H_orig, W_orig = int(orig_shape[-2]), int(orig_shape[-1])
+        patch = self.patch
+        h_ = (H_orig + patch - 1) // patch
+        w_ = (W_orig + patch - 1) // patch
+        t = self.tmlp(timestep_embedding(timesteps, self.tdim).unsqueeze(1).to(feature.dtype))
+        out = self.last(feature, t)
+        out = rearrange(out, "b (h w) (c ph pw) -> b c (h ph) (w pw)", h=h_, w=w_, ph=patch, pw=patch, c=self.channels)
+        out = out[:, :, :H_orig, :W_orig]
+        return out.unsqueeze(2)
 
     def forward(self, x, timesteps, context, attention_mask=None, transformer_options={}, **kwargs):
         x = x.squeeze(2)
@@ -254,30 +399,20 @@ class SingleStreamDiT(nn.Module):
         h_, w_ = H // patch, W // patch
 
         ref_latents: list[torch.Tensor] = dynamic_args.ref_latents
-
-        if (_edit := bool(ref_latents)) is True:
-            refs = []
-            ref_grids = []
-            for ref in ref_latents:
-                if x.shape[0] == 2:  # batch_cond_uncond
-                    ref = torch.cat((ref, ref), dim=0)
-                if ref.shape != x.shape:
-                    ref = adaptive_resize(ref, W, H, "area", "center")
-                refs.append(pad_to_patch_size(ref.to(x), (patch, patch), padding_mode="replicate"))
-                ref_grids.append((ref.shape[-2] // patch, ref.shape[-1] // patch))
+        _edit = bool(ref_latents)
 
         img = rearrange(x, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch)
         img = self.first(img)
 
         if _edit:
-            refs = [rearrange(r, "b c (h ph) (w pw) -> b (h w) (c ph pw)", ph=patch, pw=patch) for r in refs]
-            refs = [self.first(r) for r in refs]
+            refs, ref_grids = self._encode_refs_cached(ref_latents, bs, H, W, x.dtype, x.device)
+        else:
+            refs, ref_grids = [], []
 
         t = self.tmlp(timestep_embedding(timesteps, self.tdim).unsqueeze(1).to(img.dtype))
         tvec = self.tproj(t)
 
-        context = self.txtfusion(context, mask=None, transformer_options=transformer_options)
-        context = self.txtmlp(context)
+        context = self._encode_context_cached(context, img.dtype, transformer_options)
 
         txtlen, imglen = context.shape[1], img.shape[1]
         if _edit:
@@ -287,26 +422,26 @@ class SingleStreamDiT(nn.Module):
             reflen = 0
             combined = torch.cat((context, img), dim=1)
 
-        device = combined.device
-        txtpos = torch.zeros(bs, txtlen, 3, device=device, dtype=torch.float32)
+        freqs = self._compute_freqs_cached(bs, txtlen, h_, w_, ref_grids, combined.device)
+        blocks_replace = transformer_options.get("patches_replace", {}).get("dit", {})
 
-        if _edit:
-            refids = [_imgids(bs, i + 1, gh, gw, device) for i, (gh, gw) in enumerate(ref_grids)]
-            imgids = _imgids(bs, 0, h_, w_, device)
-            pos = torch.cat((txtpos, *refids, imgids), dim=1)
-        else:
-            imgids = torch.zeros(h_, w_, 3, device=device, dtype=torch.float32)
-            imgids[..., 1] = torch.arange(h_, device=device, dtype=torch.float32)[:, None]
-            imgids[..., 2] = torch.arange(w_, device=device, dtype=torch.float32)[None, :]
-            imgpos = imgids.reshape(1, h_ * w_, 3).repeat(bs, 1, 1)
-            pos = torch.cat((txtpos, imgpos), dim=1)
+        for i, block in enumerate(self.blocks):
+            if ("single_block", i) in blocks_replace:
+                def block_wrap(args):
+                    out = {}
+                    out["img"] = block(args["img"], args["vec"], args["pe"], args["mask"], transformer_options=args["transformer_options"])
+                    return out
 
-        freqs = self.pe_embedder(pos)
+                out = blocks_replace[("single_block", i)](
+                    {"img": combined, "vec": tvec, "pe": freqs, "mask": None, "transformer_options": transformer_options},
+                    {"original_block": block_wrap},
+                )
+                combined = out["img"]
+            else:
+                combined = block(combined, tvec, freqs, None, transformer_options=transformer_options)
 
-        for block in self.blocks:
-            combined = block(combined, tvec, freqs, None, transformer_options=transformer_options)
-
-        out = self.last(combined[:, txtlen + reflen : txtlen + reflen + imglen], t)
+        img_tokens = self.last_input(combined[:, txtlen + reflen : txtlen + reflen + imglen])
+        out = self.last(img_tokens, t)
         out = rearrange(out, "b (h w) (c ph pw) -> b c (h ph) (w pw)", h=h_, w=w_, ph=patch, pw=patch, c=self.channels)
         out = out[:, :, :H_orig, :W_orig]
 

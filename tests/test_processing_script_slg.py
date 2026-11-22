@@ -221,3 +221,48 @@ def test_patches_a_clone_of_the_moss_unet(webui, slg, monkeypatch):
     assert p.sd_model.forge_objects.unet is clone and "sampler_calc_cond_batch_function" not in unet.model_options
     assert callable(clone.model_options["sampler_calc_cond_batch_function"])
     assert p.extra_generation_params == {"Skip Layer Guidance": True, "SLG Single Layers": "22, 26", "SLG Start Percent": 0.0, "SLG End Percent": 0.5}
+
+
+def test_cfg1_skips_slg_and_out_of_range_layers_are_filtered(webui, slg, monkeypatch):
+    from backend.args import dynamic_args
+
+    monkeypatch.setattr(dynamic_args, "moss", True)
+    monkeypatch.setattr(slg, "opts", webui.opts)
+    monkeypatch.setitem(webui.opts.data, "slg_enable", True)
+    monkeypatch.setitem(webui.opts.data, "slg_single_layers", "22, 99")
+
+    # CFG 1.0 (e.g. Turbo / DMD): skip SLG & do not claim it in infotext
+    p_cfg1, unet_cfg1 = _p()
+    p_cfg1.cfg_scale = 1.0
+    slg.SkipLayerGuidance().process_before_every_sampling(p_cfg1)
+    assert p_cfg1.sd_model.forge_objects.unet is unet_cfg1 and p_cfg1.extra_generation_params == {}
+
+    # Out-of-range block index (99 on 42-layer MOSS) is filtered cleanly
+    p_valid, unet_valid = _p()
+    p_valid.cfg_scale = 3.0
+    unet_valid.model.diffusion_model = SimpleNamespace(layers=[object()] * 42)
+    slg.SkipLayerGuidance().process_before_every_sampling(p_valid)
+    assert p_valid.extra_generation_params["SLG Single Layers"] == "22"
+
+
+def test_moss_workflow_advice_flags_common_pitfalls(webui, slg, monkeypatch):
+    from backend.args import dynamic_args
+
+    monkeypatch.setattr(dynamic_args, "moss", True)
+    monkeypatch.setattr(slg, "opts", webui.opts)
+    monkeypatch.setitem(webui.opts.data, "moss_do_reference", "Disable")
+
+    comments = []
+    p, _unet = _p()
+    p.sd_model.ref_latents = [object()]
+    p.sd_model.ini_latent = None
+    p.sd_model.sd_checkpoint_info = SimpleNamespace(name="moss_image_sft_turbo_int8_convrot.safetensors")
+    p.prompt = "a photo <lora:MOSS-Image-16step-cfg1-BF16:1>"
+    p.steps = 50
+    p.cfg_scale = 3.0
+    p.is_hr_pass = False
+    p.comment = comments.append
+
+    slg.SkipLayerGuidance().process_before_every_sampling(p)
+    assert any("Reference Method is 'Disable'" in c for c in comments)
+    assert any("Turbo/DMD" in c for c in comments)
