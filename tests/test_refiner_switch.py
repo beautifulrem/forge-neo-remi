@@ -111,7 +111,7 @@ class _Denoiser:
         return shared.sd_model.denoise(x, sigma)
 
 
-def _sample(refiner_info, switch_at=0.5):
+def _sample(refiner_info, switch_at=0.5, refiner_cfg=None):
     """Euler sampling of a fixed latent; the processing object and the
     names of the checkpoint used at every step."""
 
@@ -125,6 +125,7 @@ def _sample(refiner_info, switch_at=0.5):
     p = SimpleNamespace(
         refiner_switch_at=switch_at if refiner_info is not None else None,
         refiner_checkpoint_info=refiner_info,
+        refiner_cfg=refiner_cfg,
         enable_hr=False,
         disable_extra_networks=True,
         extra_generation_params={},
@@ -208,3 +209,20 @@ def test_a_generation_that_raises_after_the_fast_swap_restores_the_base_weights(
     script.postprocess(SimpleNamespace(), None)
     script.cleanup(SimpleNamespace())
     assert restored == ["base.safetensors"] * 2
+
+
+def test_refiner_cfg_is_recorded_in_infotext_and_cleared_when_disabled(checkpoints):
+    from modules.processing_scripts.refiner import ScriptRefiner
+
+    _, refiner = checkpoints
+    _, p, _, _ = _sample(refiner, switch_at=0.5, refiner_cfg=4.5)
+    assert p.extra_generation_params == {
+        "Refiner": f"anima-refiner [{refiner.shorthash}]",
+        "Refiner switch at": 0.5,
+        "Refiner CFG scale": 4.5,
+    }
+
+    # Disabling the refiner clears any stale refiner_cfg on p
+    stale = SimpleNamespace(refiner_checkpoint="anima-refiner", refiner_switch_at=0.5, refiner_cfg=4.5)
+    ScriptRefiner().setup(stale, False, "anima-refiner", 0.5, 4.5, "")
+    assert (stale.refiner_checkpoint, stale.refiner_switch_at, stale.refiner_cfg) == (None, None, None)

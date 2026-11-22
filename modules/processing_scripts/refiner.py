@@ -69,6 +69,7 @@ class ScriptRefiner(scripts.ScriptBuiltinUI):
         if not enable_refiner or refiner_checkpoint in (None, "", "None"):
             p.refiner_checkpoint = None
             p.refiner_switch_at = None
+            p.refiner_cfg = None
             return
 
         # actual implementation is in sd_samplers_common.py / apply_refiner()

@@ -60,11 +60,11 @@ def test_refiner_checkpoint_pastes_as_one_of_the_choices(webui, checkpoints, use
         choices = checkpoint_choices()
         for info in checkpoints:
             # sd_samplers_common.apply_refiner writes the short title
-            text = _infotext("cat", {"Steps": 20, "Sampler": "Euler", "Refiner": info.short_title, "Refiner switch at": 0.5})
+            text = _infotext("cat", {"Steps": 20, "Sampler": "Euler", "Refiner": info.short_title, "Refiner switch at": 0.5, "Refiner CFG scale": 4.5})
             result = parse_infotext(text, "txt2img")
             assert result["problems"] == []
             refiner = result["scripts"]["refiner"]
-            assert refiner["enable"] is True and refiner["switch_at"] == 0.5
+            assert refiner["enable"] is True and refiner["switch_at"] == 0.5 and refiner["cfg"] == 4.5
             assert refiner["checkpoint"] in choices
             assert refiner["checkpoint"] == (info.short_title if use_short else info.name)
             # ...and the pasted values validate for a new job

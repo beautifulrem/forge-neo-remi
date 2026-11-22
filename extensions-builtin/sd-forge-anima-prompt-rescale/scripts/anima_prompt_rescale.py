@@ -21,6 +21,7 @@ The rescaling math lives in ``lib_anima_rescale`` and is independent of Forge.
 from __future__ import annotations
 
 import os
+import re
 import sys
 
 from modules import prompt_rewrites, scripts, shared
@@ -94,10 +95,23 @@ AUTO_PARAMS = ("auto_enable", "auto_source", "auto_fraction")
 MANUAL_PARAMS = ("manual_prompt", "manual_source", "manual_target", "manual_denoise", "manual_fraction")
 
 
+_RESCALE_SRC_RE = re.compile(r"^src(\d+)->")
+
+
 def _paste_auto_enable(infotext: dict):
     """A rescaled image's infotext holds the prompt as rescaled: generating it again must not
     rescale it a second time (the switch points would move). Other infotexts leave the switch."""
     return False if "Anima schedule rescale" in infotext else None
+
+
+def _paste_auto_source(infotext: dict):
+    """Restore ``src<N>`` from ``Anima schedule rescale`` (``src35->tgt20@d0.5``) while
+    ``_paste_auto_enable`` keeps auto-rescale off."""
+    raw = infotext.get("Anima schedule rescale")
+    if not isinstance(raw, str):
+        return None
+    match = _RESCALE_SRC_RE.match(raw.strip())
+    return int(match.group(1)) if match else None
 
 class AnimaPromptRescaleScript(scripts.Script):
     section = "accordions"
@@ -132,6 +146,7 @@ class AnimaPromptRescaleScript(scripts.Script):
                 label="Source steps (txt2img steps the schedule was authored for)",
                 preset="prompt_rescale.source_steps",
                 hidden=txt2img,
+                paste=_paste_auto_source,
             ),
             ui.Toggle("auto_fraction", False, label="Rewrite as fractions", preset="prompt_rescale.fractions", hidden=txt2img),
             None if txt2img else ui.Markdown(_AUTO_INFO),

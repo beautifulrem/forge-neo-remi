@@ -284,6 +284,8 @@ def apply_refiner(cfg_denoiser: "CFGDenoiser", x: torch.Tensor, sigma: torch.Ten
     refiner_checkpoint_info.calculate_shorthash()
     cfg_denoiser.p.extra_generation_params["Refiner"] = refiner_checkpoint_info.short_title
     cfg_denoiser.p.extra_generation_params["Refiner switch at"] = refiner_switch_at
+    if getattr(cfg_denoiser.p, "refiner_cfg", None) is not None:
+        cfg_denoiser.p.extra_generation_params["Refiner CFG scale"] = cfg_denoiser.p.refiner_cfg
 
     if opts.refiner_fast_sd:
         sd_model: "ForgeDiffusionEngine" = shared.sd_model

@@ -122,8 +122,15 @@ def test_zh_cn_catalog_covers_the_panel():
     harness.assert_localized(ROOT, [_layout("txt2img"), _layout("img2img")])
 
 
-def test_a_rescaled_images_paste_turns_auto_rescale_off():
-    # Its infotext's prompt is the rescaled one: rescaling it again would move the switch points
-    paste = _layout("img2img").by_name["auto_enable"].paste
-    assert paste({"Prompt": "[cat:dog:10]", "Anima schedule rescale": "src35->tgt20@d0.5"}) is False
-    assert paste({"Prompt": "[cat:dog:10]"}) is None  # other infotexts leave the switch as it is
+def test_a_rescaled_images_paste_turns_auto_rescale_off_and_restores_source_steps():
+    # Its infotext's prompt is the rescaled one: rescaling it again would move the switch points,
+    # while Source steps restores src<N> from "Anima schedule rescale".
+    layout = _layout("img2img")
+    paste_enable = layout.by_name["auto_enable"].paste
+    paste_source = layout.by_name["auto_source"].paste
+    assert paste_enable({"Prompt": "[cat:dog:10]", "Anima schedule rescale": "src35->tgt20@d0.5"}) is False
+    assert paste_enable({"Prompt": "[cat:dog:10]"}) is None  # other infotexts leave the switch as it is
+    assert paste_source({"Prompt": "[cat:dog:10]", "Anima schedule rescale": "src35->tgt20@d0.5"}) == 35
+    assert paste_source({"Prompt": "[cat:dog:10]", "Anima schedule rescale": "src50->tgt25@fixed"}) == 50
+    assert paste_source({"Prompt": "[cat:dog:10]", "Anima schedule rescale": "malformed"}) is None
+    assert paste_source({"Prompt": "[cat:dog:10]"}) is None
