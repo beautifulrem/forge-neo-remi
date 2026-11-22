@@ -591,10 +591,14 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
 
             model = pre_func(model)
             if should_keep_sensitive_weights_precise(cls_name, storage_dtype, state_dict_dtype):
-                # On-the-fly FP8 storage: keep Anima's embedders, final
-                # layer, first blocks and norms at full precision.
+                # On-the-fly FP8 storage: keep the registered DiT's embedders,
+                # modulation, final layer and norms at full precision.
+                from backend.nn.dit_registry import capability_for_dit_cls
+
                 kept = keep_sensitive_weights_precise(model, computation_dtype)
-                logger.info(f"Anima: kept {kept} precision-sensitive parameters in {computation_dtype}")
+                cap = capability_for_dit_cls(cls_name)
+                label = cap.engine_label if cap is not None else "DiT"
+                logger.info(f"{label}: kept {kept} precision-sensitive parameters in {computation_dtype}")
             if getattr(model, "anima_v2_connector", None) is not None:
                 # Remi: a connector loaded with missing (zero-filled) weights would silently
                 # do nothing; a quantized 3.8B that dropped it is refused instead
@@ -628,13 +632,17 @@ def replace_state_dict(sd: dict[str, torch.Tensor], asd: dict[str, torch.Tensor]
 
     from backend.nn.anima_diffusers import convert_diffusers_wan_vae, is_diffusers_anima_text_conditioner, is_diffusers_wan_vae
     from backend.nn.anima_qwen35 import is_qwen35_4b_state_dict, qwen35_4b_needed_key
+    from backend.nn.qwen21_diffusers import convert_diffusers_qwen21_vae, is_diffusers_qwen21_vae
 
     #   flux 2
     if "decoder.post_quant_conv.weight" in asd:
         asd = state_dict_prefix_replace(asd, {"decoder.post_quant_conv.": "post_quant_conv.", "encoder.quant_conv.": "quant_conv."})
 
+    #   diffusers Qwen-Image-2.1 4ch RGBA VAE (e.g. Qwen/Qwen-Image-2.1/vae)
+    if is_diffusers_qwen21_vae(asd):
+        asd = convert_diffusers_qwen21_vae(asd)
     #   diffusers Wan / QwenImage 3D VAE (e.g. circlestone-labs/Anima-Base-v1.0-Diffusers/vae)
-    if is_diffusers_wan_vae(asd):
+    elif is_diffusers_wan_vae(asd):
         asd = convert_diffusers_wan_vae(asd)
 
     #   diffusers 2D VAE format
@@ -1022,6 +1030,9 @@ def _load_diffusers_dir(path: os.PathLike):
     sd, metadata = load_diffusers_checkpoint_dir(path)
     sd, metadata = convert_quantization(sd, metadata)
     guess = huggingface_guess.guess(sd)
+    if metadata and metadata.get("qwen21_dynamic_shifting") == "false":
+        guess.sampling_settings = dict(guess.sampling_settings)
+        guess.sampling_settings["use_dynamic_shifting"] = False
     return sd, metadata, guess
 
 

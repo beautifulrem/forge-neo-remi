@@ -241,20 +241,19 @@ def model_lora_keys_unet(model, key_map=None):
             if k.endswith(".weight") and ".linear1." in k:
                 key_map["{}".format(k.replace(".linear1.weight", ".linear1_qkv"))] = (k, (0, 0, hidden_size * 3))
 
-    if "qwen" in _model_name:
+    if "qwen-image-2.1" in _model_name:  # Remi: Qwen-Image-2.1 (bidirectional fused/unfused MLP + all trainer prefixes)
+        from backend.nn.qwen21_diffusers import qwen21_lora_key_map
+
+        key_map.update(qwen21_lora_key_map(sd))
+    elif "qwen" in _model_name:
         for k in sdk:
             if k.startswith("diffusion_model.") and k.endswith(".weight"):  # QwenImage lora format
                 key_lora = k[len("diffusion_model.") : -len(".weight")]
-                targets = [(key_lora, k)]
-                if key_lora.endswith(".img_mlp.gate_up"):  # Qwen Image 2.1 fuses gate_layer/proj at load; LoRAs address the halves
-                    half = sd[k].shape[0] // 2
-                    targets = [(key_lora.replace(".gate_up", ".gate_layer"), (k, (0, 0, half))), (key_lora.replace(".gate_up", ".proj"), (k, (0, half, half)))]
-                for key_lora, to in targets:
-                    # Direct mapping for transformer_blocks format (QwenImage LoRA format)
-                    key_map["{}".format(key_lora)] = to
-                    # Support transformer prefix format
-                    key_map["transformer.{}".format(key_lora)] = to
-                    key_map["lycoris_{}".format(key_lora.replace(".", "_"))] = to  # SimpleTuner lycoris format
+                # Direct mapping for transformer_blocks format (QwenImage LoRA format)
+                key_map["{}".format(key_lora)] = k
+                # Support transformer prefix format
+                key_map["transformer.{}".format(key_lora)] = k
+                key_map["lycoris_{}".format(key_lora.replace(".", "_"))] = k  # SimpleTuner lycoris format
 
     if "moss" in _model_name:
         def _register_moss_prefixes(bare_name: str, target) -> None:

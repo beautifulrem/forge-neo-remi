@@ -110,12 +110,16 @@ def is_diffusers_anima_text_conditioner(state_dict: dict) -> bool:
 
 
 def is_diffusers_wan_vae(state_dict: dict) -> bool:
-    """True for Diffusers ``AutoencoderKLWan`` / ``AutoencoderKLQwenImage`` weights."""
+    """True for Diffusers ``AutoencoderKLWan`` / ``AutoencoderKLQwenImage`` weights
+    (excludes ``AutoencoderKLQwenImage21``, which uses nested ``down_blocks.*.resnets``
+    and singular ``upsampler`` containers)."""
 
     return (
         "decoder.mid_block.resnets.0.norm1.gamma" in state_dict
         and "decoder.up_blocks.0.resnets.0.conv1.weight" in state_dict
         and "decoder.norm_out.gamma" in state_dict
+        and "encoder.down_blocks.0.resnets.0.conv1.weight" not in state_dict
+        and "decoder.up_blocks.0.upsampler.resample.1.weight" not in state_dict
     )
 
 
