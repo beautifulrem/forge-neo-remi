@@ -155,6 +155,8 @@ class dynamic_args(metaclass=_DynamicArgsMeta):
     """Krea 2"""
     moss: bool = False
     """Moss-Image"""
+    flux3: bool = False
+    """FLUX.3 Image Klein (Remi)"""
     ref_latents: list["torch.Tensor"] = []
     """Reference Latent(s) for Edit Models"""
     moss_reference_method: str = None
@@ -193,4 +195,4 @@ class dynamic_args(metaclass=_DynamicArgsMeta):
 
     @classmethod
     def can_reference(cls) -> bool:
-        return any(getattr(cls, key) for key in ("kontext", "edit", "qwen21", "klein", "wan", "anima", "krea2", "moss"))
+        return any(getattr(cls, key) for key in ("kontext", "edit", "qwen21", "klein", "wan", "anima", "krea2", "moss", "flux3"))

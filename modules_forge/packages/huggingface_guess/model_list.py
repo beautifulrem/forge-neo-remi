@@ -626,6 +626,38 @@ class MOSSImage(BASE):
         return ModelType.FLOW
 
 
+class Flux3Klein(BASE):
+    """FLUX.3 Image Klein (Remi): 5.6B flow transformer, Qwen3-VL-4B text, FLUX.2 VAE."""
+
+    huggingface_repo = "black-forest-labs/FLUX.3-Image-Klein"
+
+    unet_config = {
+        "image_model": "flux3",
+    }
+
+    sampling_settings = {
+        "shift": 1.93586,  # mu = ln(6.93): the reference constant timestep shift
+    }
+
+    unet_extra_config = {}
+    latent_format = latent.Flux2
+
+    memory_usage_factor = 14.6
+
+    supported_inference_dtypes = [torch.bfloat16, torch.float32]
+
+    vae_key_prefix = ["vae."]
+    text_encoder_key_prefix = ["text_encoders."]
+
+    unet_target = "transformer"
+
+    def clip_target(self, state_dict={}):
+        return {"qwen3vl_4b.transformer": "text_encoder"}
+
+    def model_type(self, state_dict):
+        return ModelType.FLUX
+
+
 class Krea2(BASE):
     huggingface_repo = "krea/Krea-2-Raw"
 
@@ -737,6 +769,7 @@ models = [
     QwenImage21,
     MOSSImage,
     Krea2,
+    Flux3Klein,
     ErnieImage,
     PiD,
 ]

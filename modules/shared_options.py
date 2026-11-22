@@ -279,6 +279,7 @@ options_templates.update(
             "anima_do_reference": OptionInfo(False, "[Anima] Enable Reference").info("enable Edit ; disable img2img").info("pin to <b>Quicksettings</b> is recommended if changed often").info("requires specfic Edit LoRA"),
             "krea2_do_reference": OptionInfo(False, "[Krea2] Enable Reference").info("enable Edit ; disable img2img").info("pin to <b>Quicksettings</b> is recommended if changed often").info("requires specfic Edit LoRA"),
             "moss_do_reference": OptionInfo("Disable", "[Moss-Image] Reference Method", ui.Choice, {"choices": ("Disable", "ai-toolkit", "Moss-Image-Edit")}).info("enable Edit ; disable img2img").info("pin to <b>Quicksettings</b> is recommended if changed often").info("requires specfic Edit LoRA"),
+            "flux3_do_reference": OptionInfo(True, "[FLUX.3] Enable Reference").info("enable Edit / multi-reference ; disable img2img").info("pin to <b>Quicksettings</b> is recommended if changed often"),
             "reference_explanation": OptionMarkdown("**Note:** Remember to change the setting before txt2img to clear the references"),
         },
     )

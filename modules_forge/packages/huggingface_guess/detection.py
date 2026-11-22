@@ -109,6 +109,18 @@ def detect_unet_config(state_dict: dict, key_prefix: str) -> dict:
         dit_config["guidance_embed"] = "{}time_text_embed.guidance_embedder.linear_1.weight".format(key_prefix) in state_dict_keys
         return dit_config
 
+    if "{}content_mode_blocks.image.0.attn_out.weight".format(key_prefix) in state_dict_keys and "{}single_stream_modulations.txt.lin.weight".format(key_prefix) in state_dict_keys:  # FLUX.3 (Remi)
+        dit_config = {"image_model": "flux3"}
+        dit_config["hidden_size"] = int(state_dict["{}content_mode_blocks.image.0.attn_out.weight".format(key_prefix)].shape[0])
+        dit_config["num_heads"] = dit_config["hidden_size"] // 128
+        dit_config["in_channels"] = int(state_dict["{}emb_in.image.weight".format(key_prefix)].shape[1])
+        dit_config["context_in_dim"] = int(state_dict["{}txt_in.weight".format(key_prefix)].shape[1])
+        dit_config["fused_qkv"] = "{}single_blocks.0.qkv.weight".format(key_prefix) in state_dict_keys
+        dit_config["flow_map"] = "{}ref_time_in.in_layer.weight".format(key_prefix) in state_dict_keys
+        dit_config["depth"] = count_blocks(state_dict_keys, "{}txt_mode_blocks.".format(key_prefix) + "{}.")
+        dit_config["depth_single_blocks"] = count_blocks(state_dict_keys, "{}single_blocks.".format(key_prefix) + "{}.")
+        return dit_config
+
     if ("{}double_blocks.0.img_attn.norm.key_norm.scale".format(key_prefix) in state_dict_keys or "{}double_blocks.0.img_attn.norm.key_norm.weight".format(key_prefix) in state_dict_keys) and ("{}img_in.weight".format(key_prefix) in state_dict_keys or f"{key_prefix}distilled_guidance_layer.norms.0.scale" in state_dict_keys):  # Flux.1 / Flux.2
         dit_config = {}
         if "{}double_stream_modulation_img.lin.weight".format(key_prefix) in state_dict_keys:

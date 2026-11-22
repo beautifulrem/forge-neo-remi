@@ -1573,6 +1573,16 @@
        ]
       },
       {
+       "type": "toggle",
+       "name": "flux3_do_reference",
+       "label": "[FLUX.3] Enable Reference",
+       "default": true,
+       "notes": [
+        "enable Edit / multi-reference ; disable img2img",
+        "pin to Quicksettings is recommended if changed often"
+       ]
+      },
+      {
        "type": "markdown",
        "text": "**Note:** Remember to change the setting before txt2img to clear the references"
       }
@@ -3041,6 +3051,74 @@
          "label": "face_restoration_unload"
         },
         {
+         "value": "flux3_do_reference",
+         "label": "flux3_do_reference"
+        },
+        {
+         "value": "flux3_i2i_batch_size",
+         "label": "flux3_i2i_batch_size"
+        },
+        {
+         "value": "flux3_i2i_cfg",
+         "label": "flux3_i2i_cfg"
+        },
+        {
+         "value": "flux3_i2i_height",
+         "label": "flux3_i2i_height"
+        },
+        {
+         "value": "flux3_i2i_sampler",
+         "label": "flux3_i2i_sampler"
+        },
+        {
+         "value": "flux3_i2i_scheduler",
+         "label": "flux3_i2i_scheduler"
+        },
+        {
+         "value": "flux3_i2i_step",
+         "label": "flux3_i2i_step"
+        },
+        {
+         "value": "flux3_i2i_width",
+         "label": "flux3_i2i_width"
+        },
+        {
+         "value": "flux3_t2i_batch_size",
+         "label": "flux3_t2i_batch_size"
+        },
+        {
+         "value": "flux3_t2i_cfg",
+         "label": "flux3_t2i_cfg"
+        },
+        {
+         "value": "flux3_t2i_height",
+         "label": "flux3_t2i_height"
+        },
+        {
+         "value": "flux3_t2i_hr_cfg",
+         "label": "flux3_t2i_hr_cfg"
+        },
+        {
+         "value": "flux3_t2i_hr_step",
+         "label": "flux3_t2i_hr_step"
+        },
+        {
+         "value": "flux3_t2i_sampler",
+         "label": "flux3_t2i_sampler"
+        },
+        {
+         "value": "flux3_t2i_scheduler",
+         "label": "flux3_t2i_scheduler"
+        },
+        {
+         "value": "flux3_t2i_step",
+         "label": "flux3_t2i_step"
+        },
+        {
+         "value": "flux3_t2i_width",
+         "label": "flux3_t2i_width"
+        },
+        {
          "value": "flux_i2i_batch_size",
          "label": "flux_i2i_batch_size"
         },
@@ -3137,6 +3215,10 @@
          "label": "forge_additional_modules_flux"
         },
         {
+         "value": "forge_additional_modules_flux3",
+         "label": "forge_additional_modules_flux3"
+        },
+        {
          "value": "forge_additional_modules_klein",
          "label": "forge_additional_modules_klein"
         },
@@ -3213,6 +3295,10 @@
          "label": "forge_checkpoint_flux"
         },
         {
+         "value": "forge_checkpoint_flux3",
+         "label": "forge_checkpoint_flux3"
+        },
+        {
          "value": "forge_checkpoint_klein",
          "label": "forge_checkpoint_klein"
         },
@@ -3275,6 +3361,10 @@
         {
          "value": "forge_unet_storage_dtype_flux",
          "label": "forge_unet_storage_dtype_flux"
+        },
+        {
+         "value": "forge_unet_storage_dtype_flux3",
+         "label": "forge_unet_storage_dtype_flux3"
         },
         {
          "value": "forge_unet_storage_dtype_klein",
@@ -14136,6 +14226,575 @@
        ]
       }
      ]
+    },
+    {
+     "id": "ui_flux3",
+     "label": "FLUX3",
+     "items": [
+      {
+       "type": "row",
+       "children": [
+        {
+         "type": "choice",
+         "name": "flux3_t2i_sampler",
+         "label": "txt2img Sampler",
+         "default": "Euler",
+         "choices": [
+          {
+           "value": "DPM++ 2M",
+           "label": "DPM++ 2M"
+          },
+          {
+           "value": "DPM++ SDE",
+           "label": "DPM++ SDE"
+          },
+          {
+           "value": "DPM++ 2M SDE",
+           "label": "DPM++ 2M SDE"
+          },
+          {
+           "value": "DPM++ 3M SDE",
+           "label": "DPM++ 3M SDE"
+          },
+          {
+           "value": "DPM++ 2s a RF",
+           "label": "DPM++ 2s a RF"
+          },
+          {
+           "value": "Euler a",
+           "label": "Euler a"
+          },
+          {
+           "value": "Euler",
+           "label": "Euler"
+          },
+          {
+           "value": "Anima Flow Euler",
+           "label": "Anima Flow Euler"
+          },
+          {
+           "value": "Anima Flow UniPC2",
+           "label": "Anima Flow UniPC2"
+          },
+          {
+           "value": "Anima Flow PC3",
+           "label": "Anima Flow PC3"
+          },
+          {
+           "value": "Anima SPEED",
+           "label": "Anima SPEED"
+          },
+          {
+           "value": "Anima FreeFuse Euler",
+           "label": "Anima FreeFuse Euler"
+          },
+          {
+           "value": "ER SDE",
+           "label": "ER SDE"
+          },
+          {
+           "value": "Anima ER SDE CNS",
+           "label": "Anima ER SDE CNS"
+          },
+          {
+           "value": "LCM",
+           "label": "LCM"
+          },
+          {
+           "value": "LMS",
+           "label": "LMS"
+          },
+          {
+           "value": "Heun",
+           "label": "Heun"
+          },
+          {
+           "value": "DPM2",
+           "label": "DPM2"
+          },
+          {
+           "value": "Res Multistep",
+           "label": "Res Multistep"
+          },
+          {
+           "value": "Kohaku LoNyu Yog",
+           "label": "Kohaku LoNyu Yog"
+          },
+          {
+           "value": "Restart",
+           "label": "Restart"
+          },
+          {
+           "value": "UniPC",
+           "label": "UniPC"
+          },
+          {
+           "value": "DDIM",
+           "label": "DDIM"
+          },
+          {
+           "value": "PLMS",
+           "label": "PLMS"
+          },
+          {
+           "value": "DPM++ 2M CFG++",
+           "label": "DPM++ 2M CFG++"
+          },
+          {
+           "value": "Euler a CFG++",
+           "label": "Euler a CFG++"
+          },
+          {
+           "value": "Euler CFG++",
+           "label": "Euler CFG++"
+          }
+         ],
+         "style": "dropdown",
+         "allow_custom": true
+        },
+        {
+         "type": "choice",
+         "name": "flux3_t2i_scheduler",
+         "label": "txt2img Scheduler",
+         "default": "Simple",
+         "choices": [
+          {
+           "value": "Automatic",
+           "label": "Automatic"
+          },
+          {
+           "value": "Karras",
+           "label": "Karras"
+          },
+          {
+           "value": "Exponential",
+           "label": "Exponential"
+          },
+          {
+           "value": "Polyexponential",
+           "label": "Polyexponential"
+          },
+          {
+           "value": "Normal",
+           "label": "Normal"
+          },
+          {
+           "value": "Simple",
+           "label": "Simple"
+          },
+          {
+           "value": "Uniform",
+           "label": "Uniform"
+          },
+          {
+           "value": "SGM Uniform",
+           "label": "SGM Uniform"
+          },
+          {
+           "value": "Linear Quadratic",
+           "label": "Linear Quadratic"
+          },
+          {
+           "value": "KL Optimal",
+           "label": "KL Optimal"
+          },
+          {
+           "value": "DDIM",
+           "label": "DDIM"
+          },
+          {
+           "value": "Align Your Steps",
+           "label": "Align Your Steps"
+          },
+          {
+           "value": "Beta",
+           "label": "Beta"
+          },
+          {
+           "value": "Beta57",
+           "label": "Beta57"
+          },
+          {
+           "value": "Turbo",
+           "label": "Turbo"
+          },
+          {
+           "value": "Bong Tangent",
+           "label": "Bong Tangent"
+          },
+          {
+           "value": "FlowMatchEulerDiscrete",
+           "label": "FlowMatchEulerDiscrete"
+          },
+          {
+           "value": "Anima FlowMatch",
+           "label": "Anima FlowMatch"
+          },
+          {
+           "value": "Flux2",
+           "label": "Flux2"
+          }
+         ],
+         "style": "dropdown",
+         "allow_custom": true
+        }
+       ]
+      },
+      {
+       "type": "row",
+       "children": [
+        {
+         "type": "choice",
+         "name": "flux3_i2i_sampler",
+         "label": "img2img Sampler",
+         "default": "Euler",
+         "choices": [
+          {
+           "value": "DPM++ 2M",
+           "label": "DPM++ 2M"
+          },
+          {
+           "value": "DPM++ SDE",
+           "label": "DPM++ SDE"
+          },
+          {
+           "value": "DPM++ 2M SDE",
+           "label": "DPM++ 2M SDE"
+          },
+          {
+           "value": "DPM++ 3M SDE",
+           "label": "DPM++ 3M SDE"
+          },
+          {
+           "value": "DPM++ 2s a RF",
+           "label": "DPM++ 2s a RF"
+          },
+          {
+           "value": "Euler a",
+           "label": "Euler a"
+          },
+          {
+           "value": "Euler",
+           "label": "Euler"
+          },
+          {
+           "value": "Anima Flow Euler",
+           "label": "Anima Flow Euler"
+          },
+          {
+           "value": "Anima Flow UniPC2",
+           "label": "Anima Flow UniPC2"
+          },
+          {
+           "value": "Anima Flow PC3",
+           "label": "Anima Flow PC3"
+          },
+          {
+           "value": "Anima SPEED",
+           "label": "Anima SPEED"
+          },
+          {
+           "value": "Anima FreeFuse Euler",
+           "label": "Anima FreeFuse Euler"
+          },
+          {
+           "value": "ER SDE",
+           "label": "ER SDE"
+          },
+          {
+           "value": "Anima ER SDE CNS",
+           "label": "Anima ER SDE CNS"
+          },
+          {
+           "value": "LCM",
+           "label": "LCM"
+          },
+          {
+           "value": "LMS",
+           "label": "LMS"
+          },
+          {
+           "value": "Heun",
+           "label": "Heun"
+          },
+          {
+           "value": "DPM2",
+           "label": "DPM2"
+          },
+          {
+           "value": "Res Multistep",
+           "label": "Res Multistep"
+          },
+          {
+           "value": "Kohaku LoNyu Yog",
+           "label": "Kohaku LoNyu Yog"
+          },
+          {
+           "value": "Restart",
+           "label": "Restart"
+          },
+          {
+           "value": "UniPC",
+           "label": "UniPC"
+          },
+          {
+           "value": "DDIM",
+           "label": "DDIM"
+          },
+          {
+           "value": "PLMS",
+           "label": "PLMS"
+          },
+          {
+           "value": "DPM++ 2M CFG++",
+           "label": "DPM++ 2M CFG++"
+          },
+          {
+           "value": "Euler a CFG++",
+           "label": "Euler a CFG++"
+          },
+          {
+           "value": "Euler CFG++",
+           "label": "Euler CFG++"
+          }
+         ],
+         "style": "dropdown",
+         "allow_custom": true
+        },
+        {
+         "type": "choice",
+         "name": "flux3_i2i_scheduler",
+         "label": "img2img Scheduler",
+         "default": "Simple",
+         "choices": [
+          {
+           "value": "Automatic",
+           "label": "Automatic"
+          },
+          {
+           "value": "Karras",
+           "label": "Karras"
+          },
+          {
+           "value": "Exponential",
+           "label": "Exponential"
+          },
+          {
+           "value": "Polyexponential",
+           "label": "Polyexponential"
+          },
+          {
+           "value": "Normal",
+           "label": "Normal"
+          },
+          {
+           "value": "Simple",
+           "label": "Simple"
+          },
+          {
+           "value": "Uniform",
+           "label": "Uniform"
+          },
+          {
+           "value": "SGM Uniform",
+           "label": "SGM Uniform"
+          },
+          {
+           "value": "Linear Quadratic",
+           "label": "Linear Quadratic"
+          },
+          {
+           "value": "KL Optimal",
+           "label": "KL Optimal"
+          },
+          {
+           "value": "DDIM",
+           "label": "DDIM"
+          },
+          {
+           "value": "Align Your Steps",
+           "label": "Align Your Steps"
+          },
+          {
+           "value": "Beta",
+           "label": "Beta"
+          },
+          {
+           "value": "Beta57",
+           "label": "Beta57"
+          },
+          {
+           "value": "Turbo",
+           "label": "Turbo"
+          },
+          {
+           "value": "Bong Tangent",
+           "label": "Bong Tangent"
+          },
+          {
+           "value": "FlowMatchEulerDiscrete",
+           "label": "FlowMatchEulerDiscrete"
+          },
+          {
+           "value": "Anima FlowMatch",
+           "label": "Anima FlowMatch"
+          },
+          {
+           "value": "Flux2",
+           "label": "Flux2"
+          }
+         ],
+         "style": "dropdown",
+         "allow_custom": true
+        }
+       ]
+      },
+      {
+       "type": "row",
+       "children": [
+        {
+         "type": "slider",
+         "name": "flux3_t2i_step",
+         "label": "txt2img Steps",
+         "default": 16,
+         "minimum": 0,
+         "maximum": 150,
+         "step": 1,
+         "integer": true
+        },
+        {
+         "type": "slider",
+         "name": "flux3_t2i_hr_step",
+         "label": "txt2img Hires. Steps",
+         "default": 16,
+         "minimum": 0,
+         "maximum": 150,
+         "step": 1,
+         "integer": true
+        },
+        {
+         "type": "slider",
+         "name": "flux3_i2i_step",
+         "label": "img2img Steps",
+         "default": 16,
+         "minimum": 0,
+         "maximum": 150,
+         "step": 1,
+         "integer": true
+        }
+       ]
+      },
+      {
+       "type": "row",
+       "children": [
+        {
+         "type": "slider",
+         "name": "flux3_t2i_cfg",
+         "label": "txt2img CFG",
+         "default": 1.0,
+         "minimum": 0,
+         "maximum": 24,
+         "step": 0.5,
+         "integer": false
+        },
+        {
+         "type": "slider",
+         "name": "flux3_t2i_hr_cfg",
+         "label": "txt2img Hires. CFG",
+         "default": 1.0,
+         "minimum": 0,
+         "maximum": 24,
+         "step": 0.5,
+         "integer": false
+        },
+        {
+         "type": "slider",
+         "name": "flux3_i2i_cfg",
+         "label": "img2img CFG",
+         "default": 1.0,
+         "minimum": 0,
+         "maximum": 24,
+         "step": 0.5,
+         "integer": false
+        }
+       ]
+      },
+      {
+       "type": "row",
+       "children": [
+        {
+         "type": "slider",
+         "name": "flux3_t2i_batch_size",
+         "label": "txt2img Batch Size",
+         "default": 1,
+         "minimum": 1,
+         "maximum": 8,
+         "step": 1,
+         "integer": true
+        },
+        {
+         "type": "slider",
+         "name": "flux3_i2i_batch_size",
+         "label": "img2img Batch Size",
+         "default": 1,
+         "minimum": 1,
+         "maximum": 8,
+         "step": 1,
+         "integer": true
+        }
+       ]
+      },
+      {
+       "type": "row",
+       "children": [
+        {
+         "type": "slider",
+         "name": "flux3_t2i_width",
+         "label": "txt2img Width",
+         "default": 0,
+         "minimum": 0,
+         "maximum": 2048,
+         "step": 64,
+         "integer": true
+        },
+        {
+         "type": "slider",
+         "name": "flux3_i2i_width",
+         "label": "img2img Width",
+         "default": 0,
+         "minimum": 0,
+         "maximum": 2048,
+         "step": 64,
+         "integer": true
+        }
+       ]
+      },
+      {
+       "type": "row",
+       "children": [
+        {
+         "type": "slider",
+         "name": "flux3_t2i_height",
+         "label": "txt2img Height",
+         "default": 0,
+         "minimum": 0,
+         "maximum": 2048,
+         "step": 64,
+         "integer": true
+        },
+        {
+         "type": "slider",
+         "name": "flux3_i2i_height",
+         "label": "img2img Height",
+         "default": 0,
+         "minimum": 0,
+         "maximum": 2048,
+         "step": 64,
+         "integer": true
+        }
+       ]
+      }
+     ]
     }
    ]
   }
@@ -14263,6 +14922,7 @@
   "anima_do_reference": false,
   "krea2_do_reference": false,
   "moss_do_reference": "Disable",
+  "flux3_do_reference": true,
   "sd_vae": "Automatic",
   "sd_vae_encode_method": "Full",
   "sd_vae_decode_method": "Full",
@@ -14717,6 +15377,25 @@
   "moss_i2i_width": 0,
   "moss_t2i_height": 0,
   "moss_i2i_height": 0,
+  "forge_checkpoint_flux3": null,
+  "forge_additional_modules_flux3": [],
+  "forge_unet_storage_dtype_flux3": "Automatic",
+  "flux3_t2i_sampler": "Euler",
+  "flux3_t2i_scheduler": "Simple",
+  "flux3_i2i_sampler": "Euler",
+  "flux3_i2i_scheduler": "Simple",
+  "flux3_t2i_step": 16,
+  "flux3_t2i_hr_step": 16,
+  "flux3_i2i_step": 16,
+  "flux3_t2i_cfg": 1.0,
+  "flux3_t2i_hr_cfg": 1.0,
+  "flux3_i2i_cfg": 1.0,
+  "flux3_t2i_batch_size": 1,
+  "flux3_i2i_batch_size": 1,
+  "flux3_t2i_width": 0,
+  "flux3_i2i_width": 0,
+  "flux3_t2i_height": 0,
+  "flux3_i2i_height": 0,
   "refiner_lora_replacement": "high_noise=low_noise\nhigh-noise=low-noise",
   "enable_prompt_comments": true,
   "save_prompt_comments": false,
@@ -14847,6 +15526,7 @@
   "anima_do_reference": false,
   "krea2_do_reference": false,
   "moss_do_reference": "Disable",
+  "flux3_do_reference": true,
   "sd_vae": "Automatic",
   "sd_vae_encode_method": "Full",
   "sd_vae_decode_method": "Full",
@@ -15301,6 +15981,25 @@
   "moss_i2i_width": 0,
   "moss_t2i_height": 0,
   "moss_i2i_height": 0,
+  "forge_checkpoint_flux3": null,
+  "forge_additional_modules_flux3": [],
+  "forge_unet_storage_dtype_flux3": "Automatic",
+  "flux3_t2i_sampler": "Euler",
+  "flux3_t2i_scheduler": "Simple",
+  "flux3_i2i_sampler": "Euler",
+  "flux3_i2i_scheduler": "Simple",
+  "flux3_t2i_step": 16,
+  "flux3_t2i_hr_step": 16,
+  "flux3_i2i_step": 16,
+  "flux3_t2i_cfg": 1.0,
+  "flux3_t2i_hr_cfg": 1.0,
+  "flux3_i2i_cfg": 1.0,
+  "flux3_t2i_batch_size": 1,
+  "flux3_i2i_batch_size": 1,
+  "flux3_t2i_width": 0,
+  "flux3_i2i_width": 0,
+  "flux3_t2i_height": 0,
+  "flux3_i2i_height": 0,
   "refiner_lora_replacement": "high_noise=low_noise\nhigh-noise=low-noise",
   "enable_prompt_comments": true,
   "save_prompt_comments": false,
