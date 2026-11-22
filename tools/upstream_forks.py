@@ -49,6 +49,7 @@ file or folder; ``tests/test_remi_upstream_forks.py`` keeps the two in step."""
 
 DIVERGED = (
     "backend/memory_management.py",
+    "backend/nn/krea.py",
     "backend/sampling/sampling_function.py",
     "backend/text_processing/anima_engine.py",
     "extensions-builtin/forge_preprocessor_inpaint/scripts/preprocessor_inpaint.py",
