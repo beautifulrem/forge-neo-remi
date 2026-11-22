@@ -76,7 +76,7 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
         def _detect_dtype(key: str, storage_dtype: torch.dtype, quant_config: dict = None) -> torch.dtype:
             if quant_config is not None:
                 logger.info(f"Using {quant_config.pop('layout')} for {key}")
-                return state_dict_dtype
+                return storage_dtype if state_dict_dtype in (torch.float8_e4m3fn, torch.float8_e5m2) else state_dict_dtype
             elif state_dict_dtype in (torch.float8_e4m3fn, torch.float8_e5m2, "gguf"):
                 _log = f"{state_dict_dtype}" + (" (pre-quant)" if state_dict_dtype == "gguf" else "")
                 logger.info(f"Using Detected {key} Data Type: {_log}")
@@ -358,10 +358,18 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                         model = QTE(config)
 
             if cls_name.startswith("Qwen3VL"):
+                if storage_dtype in (torch.float8_e4m3fn, torch.float8_e5m2) and quant_config is None:
+                    precise_dtype = memory_management.text_encoder_dtype()
+                    for module in model.modules():
+                        keep_module = isinstance(module, (torch.nn.Embedding, torch.nn.LayerNorm, torch.nn.RMSNorm, torch.nn.Conv3d)) or type(module).__name__ == "RMSNorm"
+                        for param_name, param in list(module.named_parameters(recurse=False)):
+                            if param.dtype in (torch.float8_e4m3fn, torch.float8_e5m2) and (keep_module or param_name == "bias"):
+                                setattr(module, param_name, torch.nn.Parameter(param.detach().to(precise_dtype), requires_grad=False))
                 state_dict = state_dict_prefix_replace(
                     state_dict,
                     {
                         "model.language_model.": "model.",
+                        "language_model.": "model.",
                         "model.visual.": "visual.",
                         "lm_head.": "model.lm_head.",
                     },
@@ -392,12 +400,17 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 state_dict,
                 {
                     "model.language_model.": "model.",
+                    "language_model.": "model.",
                     "model.visual.": "visual.",
                     "lm_head.": "model.lm_head.",
                 },
             )
+            has_vision = any(k.startswith("visual.") for k in state_dict)
 
             load_state_dict(model, state_dict, log_name=cls_name, ignore_start=["mtp", "model.lm_head"])
+            if storage_dtype == "gguf":
+                memory_management.bake_gguf_model(model)
+            model.has_vision = has_vision
             return model
         if cls_name in ["T5EncoderModel", "UMT5EncoderModel"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have T5 state dict!"
@@ -824,6 +837,8 @@ def replace_state_dict(sd: dict[str, torch.Tensor], asd: dict[str, torch.Tensor]
             sd[f"{text_encoder_key_prefix}t5xxl.transformer.{k}"] = True
         sd[f"{text_encoder_key_prefix}t5xxl.transformer.filename"] = str(path)
 
+    is_qwen35_9b = False
+    is_qwen3vl = False
     if is_qwen35_4b_state_dict(asd):
         # Remi: Anima-3.8B's Qwen3.5 4B (release safetensors, HF Qwen/Qwen3.5-4B, or GGUF)
         keys_to_delete = [k for k in sd if k.startswith(f"{text_encoder_key_prefix}qwen35_4b.")]
@@ -833,11 +848,19 @@ def replace_state_dict(sd: dict[str, torch.Tensor], asd: dict[str, torch.Tensor]
             if qwen35_4b_needed_key(k):
                 sd[f"{text_encoder_key_prefix}qwen35_4b.transformer.{k}"] = v
 
-    elif "model.language_model.layers.0.linear_attn.A_log" in asd and "model.language_model.layers.0.input_layernorm.weight" in asd:
-        weight = asd["model.language_model.layers.0.input_layernorm.weight"]
+    elif any(f"{prefix}layers.0.linear_attn.A_log" in asd and f"{prefix}layers.0.input_layernorm.weight" in asd for prefix in ("model.language_model.", "language_model.")):
+        # Qwen3.5-9B (Comfy-Org/HF "model.language_model.*" or OpenMOSS/Unsloth "language_model.*")
+        from backend.nn.moss_diffusers import normalize_qwen35_9b_key
+
+        prefix = "model.language_model." if "model.language_model.layers.0.input_layernorm.weight" in asd else "language_model."
+        weight = asd[f"{prefix}layers.0.input_layernorm.weight"]
         assert weight.shape[0] == 4096
+        is_qwen35_9b = True
+        keys_to_delete = [k for k in sd if k.startswith(f"{text_encoder_key_prefix}qwen35_9b.")]
+        for k in keys_to_delete:
+            del sd[k]
         for k, v in asd.items():
-            sd[f"{text_encoder_key_prefix}qwen35_9b.transformer.{k}"] = v
+            sd[f"{text_encoder_key_prefix}qwen35_9b.transformer.{normalize_qwen35_9b_key(k)}"] = v
 
     elif "model.layers.0.post_feedforward_layernorm.weight" in asd:
         assert "model.layers.0.self_attn.q_norm.weight" not in asd
@@ -846,10 +869,18 @@ def replace_state_dict(sd: dict[str, torch.Tensor], asd: dict[str, torch.Tensor]
                 continue
             sd[f"{text_encoder_key_prefix}gemma2_2b.{k}"] = v
 
-    elif "model.visual.deepstack_merger_list.0.norm.weight" in asd:
-        size: int = 4 if asd["model.visual.merger.linear_fc2.weight"].shape[0] == 2560 else 8
+    elif "model.visual.deepstack_merger_list.0.norm.weight" in asd or "visual.deepstack_merger_list.0.norm.weight" in asd:
+        # Qwen3-VL 4B/8B (Comfy-Org/HF "model.language_model.*" + "model.visual.*" or official Krea-2/Unsloth "language_model.*" + "visual.*")
+        from backend.nn.krea_diffusers import normalize_qwen3vl_key
+
+        merger_w = asd.get("model.visual.merger.linear_fc2.weight", asd.get("visual.merger.linear_fc2.weight"))
+        size: int = 4 if merger_w is not None and merger_w.shape[0] == 2560 else 8
+        is_qwen3vl = True
+        keys_to_delete = [k for k in sd if k.startswith(f"{text_encoder_key_prefix}qwen3vl_{size}b.")]
+        for k in keys_to_delete:
+            del sd[k]
         for k, v in asd.items():
-            sd[f"{text_encoder_key_prefix}qwen3vl_{size}b.transformer.{k}"] = v
+            sd[f"{text_encoder_key_prefix}qwen3vl_{size}b.transformer.{normalize_qwen3vl_key(k)}"] = v
 
     elif "model.layers.0.self_attn.k_proj.bias" in asd:
         weight = asd["model.layers.0.self_attn.k_proj.bias"]
@@ -886,11 +917,11 @@ def replace_state_dict(sd: dict[str, torch.Tensor], asd: dict[str, torch.Tensor]
                 continue
             sd[f"{text_encoder_key_prefix}ministral3_3b.transformer.{k}"] = v
 
-    if "visual.merger.linear_fc2.weight" in asd:
+    if not is_qwen35_9b and not is_qwen3vl and "visual.merger.linear_fc2.weight" in asd:
         for k, v in asd.items():
             if k.startswith("visual."):
                 sd[f"{text_encoder_key_prefix}qwen35_9b.transformer.model.{k}"] = v
-    elif "visual.blocks.0.attn.proj.weight" in asd:
+    elif not is_qwen35_9b and not is_qwen3vl and "visual.blocks.0.attn.proj.weight" in asd:
         for k, v in asd.items():
             sd[f"{text_encoder_key_prefix}qwen25_7b.{k}"] = v
 
@@ -989,6 +1020,28 @@ def _load_anima_diffusers_dir(path: os.PathLike):
     return sd, metadata, guess
 
 
+def _load_moss_diffusers_dir(path: os.PathLike):
+    import huggingface_guess
+
+    from backend.nn.moss_diffusers import load_moss_diffusers_dir
+
+    sd, metadata = load_moss_diffusers_dir(path)
+    sd, metadata = convert_quantization(sd, metadata)
+    guess = huggingface_guess.guess(sd)
+    return sd, metadata, guess
+
+
+def _load_krea2_diffusers_dir(path: os.PathLike):
+    import huggingface_guess
+
+    from backend.nn.krea_diffusers import load_krea2_diffusers_dir
+
+    sd, metadata = load_krea2_diffusers_dir(path)
+    sd, metadata = convert_quantization(sd, metadata)
+    guess = huggingface_guess.guess(sd)
+    return sd, metadata, guess
+
+
 def _additional_key_filter(path: os.PathLike, guess):
     """For Anima checkpoints, skip unused vision/MTP/layer-31-MLP shards when loading
     sharded HuggingFace ``Qwen/Qwen3.5-4B`` (keeps MOSS-Image's 9B vision weights intact)."""
@@ -1010,14 +1063,21 @@ def _additional_key_filter(path: os.PathLike, guess):
 
 def split_state_dict(path: os.PathLike, additional_state_dicts: list[os.PathLike] = None):
     from backend.nn.anima_diffusers import is_anima_diffusers_dir
+    from backend.nn.krea_diffusers import is_krea2_diffusers_dir, is_sharded_krea2_transformer_dir
+    from backend.nn.moss_diffusers import is_moss_diffusers_dir, is_sharded_moss_transformer_dir
 
     try:
         if is_anima_diffusers_dir(path):
             sd, metadata, guess = _load_anima_diffusers_dir(path)
+        elif is_moss_diffusers_dir(path) or is_sharded_moss_transformer_dir(path):
+            sd, metadata, guess = _load_moss_diffusers_dir(path)
+        elif is_krea2_diffusers_dir(path) or is_sharded_krea2_transformer_dir(path):
+            sd, metadata, guess = _load_krea2_diffusers_dir(path)
         else:
-            sd, metadata, guess = _load_unet(path)
-    except ModuleNotFoundError:
-        sd, metadata, guess = _load_diffuser(path)
+            try:
+                sd, metadata, guess = _load_unet(path)
+            except ModuleNotFoundError:
+                sd, metadata, guess = _load_diffuser(path)
     finally:
         memory_management.soft_empty_cache()
 

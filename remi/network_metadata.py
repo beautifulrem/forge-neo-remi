@@ -218,7 +218,7 @@ _ARCH_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
         ("anima", r"anima"),
         ("ernie", r"ernie"),
         ("pid", r"(?:^|[^a-z])pid(?:[^a-z]|$)"),
-        ("moss", r"moss[-_ ]?image"),
+        ("moss", r"moss[-_ ]?(?:image|base|edit)"),
         ("sd", r"stable-diffusion-v1|(?:^|[^a-z])sd[-_ ]?v?1(?:[-_.]?5)?(?:[^0-9]|$)"),
     )
 )
@@ -226,17 +226,26 @@ _ARCH_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
 
 def detect_arch(metadata: Mapping[str, Any]) -> str | None:
     """The ``PresetArch`` name from ``modelspec.architecture``,
-    ``ss_base_model_version`` or the network module; None when the header
-    does not say (SD 2.x, unknown trainers)."""
+    ``ss_base_model_version``, ``base_model``, ``adapter_config`` or the
+    network module; None when the header does not say (SD 2.x, unknown trainers)."""
 
     if str(metadata.get("ss_v2", "")).lower() == "true":
         return None
-    for key in ("modelspec.architecture", "ss_base_model_version", "ss_network_module"):
+    for key in ("modelspec.architecture", "ss_base_model_version", "base_model", "ss_network_module"):
         value = (_text(metadata.get(key)) or "").lower()
         if not value:
             continue
         for arch, pattern in _ARCH_PATTERNS:
             if pattern.search(value):
+                return arch
+    adapter_cfg = parse_json(metadata.get("adapter_config"))
+    if isinstance(adapter_cfg, Mapping) and "moss" in str(adapter_cfg.get("format", "")).lower():
+        return "moss"
+    unsloth_meta = parse_json(metadata.get("unsloth_metadata"))
+    if isinstance(unsloth_meta, Mapping):
+        family = str(unsloth_meta.get("family", "")).lower()
+        for arch, pattern in _ARCH_PATTERNS:
+            if pattern.search(family):
                 return arch
     if any(key == "anima_num_blocks" or key.startswith("anima_v2_adapter_") for key in metadata):
         return "anima"

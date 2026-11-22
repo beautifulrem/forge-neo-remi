@@ -48,10 +48,12 @@ class CheckpointInfo:
 
         self.is_diffusers_dir = os.path.isdir(filename)
         primary_file = filename
+        diffusers_arch = None
         if self.is_diffusers_dir:
-            from backend.nn.anima_diffusers import anima_diffusers_primary_file
+            from backend.nn.moss_diffusers import diffusers_checkpoint_info
 
-            primary_file = anima_diffusers_primary_file(filename) or filename
+            diffusers_arch, found_primary = diffusers_checkpoint_info(filename)
+            primary_file = found_primary or filename
 
         self._hash_file = primary_file
         self.is_safetensors = os.path.splitext(primary_file)[1].lower() == ".safetensors"
@@ -69,8 +71,8 @@ class CheckpointInfo:
         def read_metadata():
             metadata = read_metadata_from_safetensors(primary_file)
             metadata.pop("modelspec.thumbnail", None)
-            if self.is_diffusers_dir and "modelspec.architecture" not in metadata:
-                metadata["modelspec.architecture"] = "anima/diffusers"
+            if self.is_diffusers_dir and diffusers_arch and "modelspec.architecture" not in metadata:
+                metadata["modelspec.architecture"] = diffusers_arch
             return metadata
 
         self.metadata = {}
@@ -79,8 +81,8 @@ class CheckpointInfo:
                 self.metadata = cache.cached_data_for_file("safetensors-metadata", "checkpoint/" + name, primary_file, read_metadata)
             except Exception as e:
                 errors.display(e, f"reading metadata for {filename}")
-        elif self.is_diffusers_dir:
-            self.metadata = {"modelspec.architecture": "anima/diffusers"}
+        elif self.is_diffusers_dir and diffusers_arch:
+            self.metadata = {"modelspec.architecture": diffusers_arch}
 
         self.name = name
         self.name_for_extra = os.path.basename(filename) if self.is_diffusers_dir else os.path.splitext(os.path.basename(filename))[0]
@@ -144,7 +146,7 @@ def checkpoint_tiles(use_short=False):
 
 
 def list_models():
-    from backend.nn.anima_diffusers import is_anima_diffusers_dir
+    from backend.nn.moss_diffusers import is_diffusers_checkpoint_dir
 
     checkpoints_list.clear()
     checkpoint_aliases.clear()
@@ -154,7 +156,7 @@ def list_models():
     for _dir in (*cmd_opts.ckpt_dirs, model_path):
         if os.path.isdir(_dir):
             for current, dirs, _files in os.walk(_dir, followlinks=True):
-                if current != _dir and is_anima_diffusers_dir(current):
+                if current != _dir and is_diffusers_checkpoint_dir(current):
                     diffusers_dirs.append(os.path.abspath(current))
                     dirs[:] = []
         model_list.update(modelloader.load_models(model_path=_dir, ext_filter=[".ckpt", ".safetensors", ".gguf"], ext_blacklist=[".vae.ckpt", ".vae.safetensors"]))
