@@ -698,6 +698,8 @@ def _get_disabled_quants(device):
     if not memory_management.supports_fp8_compute(device):
         disabled.add("float8_e4m3fn")
         disabled.add("float8_e5m2")
+        disabled.add("float8_e4m3fn_rowwise")
+        disabled.add("float8_e5m2_rowwise")
     if not memory_management.supports_int8_compute(device):
         disabled.add("int8_tensorwise")
         disabled.add("convrot_w4a4")

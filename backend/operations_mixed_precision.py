@@ -108,8 +108,13 @@ def _load_quantized_module(module: torch.nn.Module, super_load, state_dict: dict
         module.layout_type = qconfig["comfy_tensor_layout"]
         layout_cls = get_layout_class(module.layout_type)
 
-        if module.quant_format in ("float8_e4m3fn", "float8_e5m2"):
-            scales = {"scale": pop_scale("weight_scale")}
+        if module.quant_format in ("float8_e4m3fn", "float8_e5m2", "float8_e4m3fn_rowwise", "float8_e5m2_rowwise"):
+            scale = pop_scale("weight_scale")
+            if module.quant_format.endswith("_rowwise"):
+                if scale is None:
+                    raise ValueError(f"Missing rowwise FP8 weight scale for layer {layer_name}")
+                module._per_row = scale.dim() == 2 and scale.shape[1] == 1
+            scales = {"scale": scale}
         elif module.quant_format == "mxfp8":
             bs = pop_scale("weight_scale", torch.float8_e8m0fnu)
             if bs is None:
@@ -346,7 +351,7 @@ def mixed_precision_ops(quant_config={}, compute_dtype=torch.bfloat16, full_prec
                 quant_format = layer_conf.get("format") if layer_conf is not None else None
                 manually_loaded_keys = []
 
-                if quant_format in ("float8_e4m3fn", "float8_e5m2", "int8_tensorwise") and weight_key in state_dict:
+                if quant_format in ("float8_e4m3fn", "float8_e5m2", "float8_e4m3fn_rowwise", "float8_e5m2_rowwise", "int8_tensorwise") and weight_key in state_dict:
                     self.quant_format = quant_format
                     qconfig = QUANT_ALGOS[quant_format]
                     self.layout_type = qconfig["comfy_tensor_layout"]
@@ -411,8 +416,11 @@ def mixed_precision_ops(quant_config={}, compute_dtype=torch.bfloat16, full_prec
 
                     target_dtype = weight._params.orig_dtype
                     x = x.to(dtype=target_dtype)
-                    if scale is not None and scale != 1.0:
-                        x = x * scale.to(dtype=target_dtype)
+                    if scale is not None:
+                        if scale.dim() >= 2 and scale.shape[0] == self.num_embeddings:
+                            x = x * torch.nn.functional.embedding(input, scale.to(device=x.device, dtype=target_dtype))
+                        elif scale.numel() != 1 or scale.item() != 1.0:
+                            x = x * scale.to(device=x.device, dtype=target_dtype)
 
                     return x
 
@@ -452,7 +460,7 @@ def _eager_input_act(x: torch.Tensor, input_act: str, act_weight: torch.Tensor =
 
 
 def _fp16_linear_wanted(x: torch.Tensor) -> bool:
-    return getattr(torch.backends.cuda.matmul, "allow_fp16_accumulation", False) and x.dtype == torch.float16 and x.is_cuda
+    return x.dtype == torch.float16 and x.is_cuda and getattr(torch.backends.cuda.matmul, "allow_fp16_accumulation", False)
 
 
 @torch.compiler.disable

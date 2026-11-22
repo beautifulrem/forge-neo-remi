@@ -8,8 +8,9 @@ from torch import nn
 
 
 # Parts of the DiT that low-bit storage hurts most (the layout comfy-quants
-# uses for its Anima FP8/NVFP4 checkpoints): patch/timestep embedders, the
-# final projection, block 0, block 1's modulation, and every norm.
+# uses for its Anima FP8/NVFP4 checkpoints, and Unsloth Studio's skip list for
+# MOSS-Image): patch/video/text/timestep embedders, shared/head modulations,
+# the final projection, Anima block 0 & block 1's modulation, and every norm.
 _PRECISION_SENSITIVE_PREFIXES = (
     "x_embedder.",
     "t_embedder.",
@@ -20,16 +21,37 @@ _PRECISION_SENSITIVE_PREFIXES = (
     # Anima-3.8B's own LLM adapter and Semantic Connector v2 (small, and run on every step)
     "llm_adapter.",
     "anima_v2_connector.",
+    # MOSS-Image embedders, shared AdaLN modulation and output head
+    "video_embedder.",
+    "text_embedder.",
+    "time_embedding.",
+    "shared_block_modulation.",
+    "final_norm_video.",
+    "final_linear_video.",
+    "video_head_modulation.",
+)
+# Krea 2 sensitive modules (matching Comfy-Org/Krea-2 & Unsloth skip lists:
+# patch/time/text projections, text-fusion projector, output head, norms, mod.lin;
+# blocks.0.* IS quantized on Krea 2, unlike Anima).
+_KREA2_SENSITIVE_PREFIXES = (
+    "first.",
+    "tmlp.",
+    "tproj.",
+    "txtfusion.projector.",
+    "txtmlp.",
+    "last.",
 )
 _FP8_DTYPES = (torch.float8_e4m3fn, torch.float8_e5m2)
+_SUPPORTED_DIT_CLASSES = ("CosmosTransformer3DModel", "MOSSImageTransformer", "Krea2Transformer2DModel")
 
 
 def should_keep_sensitive_weights_precise(cls_name: str, storage_dtype, state_dict_dtype) -> bool:
     """Whether the loader applies ``keep_sensitive_weights_precise``: only to an
-    Anima DiT stored in FP8 on the fly, not to a checkpoint already FP8 or GGUF
-    (its sensitive parts have no higher precision to keep)."""
+    Anima, MOSS-Image, or Krea 2 DiT stored in FP8 on the fly, not to a
+    checkpoint already FP8 or GGUF (its sensitive parts have no higher precision
+    to keep)."""
 
-    return cls_name == "CosmosTransformer3DModel" and storage_dtype in _FP8_DTYPES and state_dict_dtype not in (*_FP8_DTYPES, "gguf")
+    return cls_name in _SUPPORTED_DIT_CLASSES and storage_dtype in _FP8_DTYPES and state_dict_dtype not in (*_FP8_DTYPES, "gguf")
 
 
 def keep_sensitive_weights_precise(model: nn.Module, dtype: torch.dtype) -> int:
@@ -38,10 +60,16 @@ def keep_sensitive_weights_precise(model: nn.Module, dtype: torch.dtype) -> int:
     they receive the checkpoint's original precision. Returns how many
     parameters were kept."""
 
+    is_krea2 = type(model).__name__ == "SingleStreamDiT"
+    prefixes = _KREA2_SENSITIVE_PREFIXES if is_krea2 else _PRECISION_SENSITIVE_PREFIXES
     kept = 0
     for module_name, module in model.named_modules():
         name = module_name + "."
-        sensitive = name.startswith(_PRECISION_SENSITIVE_PREFIXES) or isinstance(module, (nn.LayerNorm, nn.RMSNorm, nn.GroupNorm))
+        sensitive = (
+            name.startswith(prefixes)
+            or isinstance(module, (nn.LayerNorm, nn.RMSNorm, nn.GroupNorm))
+            or type(module).__name__ in ("RMSNorm", "SimpleModulation", "DoubleSharedModulation")
+        )
         if not sensitive:
             continue
         converted = False
@@ -71,9 +99,31 @@ _INT8_LINEAR_SUFFIXES = (
     "attn.v_proj.weight",
     "attn.output_proj.weight",
     "mlp.layer1.weight",
+    # MOSS-Image block Linears (all 6 projections, matching Unsloth INT8-ConvRot)
+    ".proj.q.weight",
+    ".proj.k.weight",
+    ".proj.v.weight",
+    ".proj.qkv.weight",
+    ".proj.o.weight",
+    ".proj.ffn_up_gate.weight",
+    ".proj.ffn_down.weight",
+)
+_KREA2_INT8_LINEAR_SUFFIXES = (
+    ".attn.wq.weight",
+    ".attn.wk.weight",
+    ".attn.wv.weight",
+    ".attn.gate.weight",
+    ".attn.wo.weight",
+    ".mlp.gate.weight",
+    ".mlp.up.weight",
+    ".mlp.down.weight",
 )
 _FFN_DOWN_SUFFIX = "mlp.layer2.weight"
 _ADALN_MODULATION = ".adaln_modulation_"
+
+
+def _is_krea2_state_dict(state_dict: dict[str, torch.Tensor]) -> bool:
+    return "txtfusion.projector.weight" in state_dict or "first.weight" in state_dict
 
 
 def _comfy_quant_conf(conf: dict) -> torch.Tensor:
@@ -87,38 +137,54 @@ def _block_linear_weights(state_dict: dict[str, torch.Tensor]):
     the precision-sensitive parts. Lazily, over a fixed key list: callers
     replace each weight as they go, so the originals are freed one by one."""
 
-    for key in [k for k in state_dict if k.startswith("blocks.") and k.endswith(".weight")]:
+    if _is_krea2_state_dict(state_dict):
+        keys = [
+            k
+            for k in state_dict
+            if (k.startswith("blocks.") or k.startswith(("txtfusion.layerwise_blocks.", "txtfusion.refiner_blocks.")))
+            and k.endswith(".weight")
+        ]
+        sensitive = _KREA2_SENSITIVE_PREFIXES
+    else:
+        keys = [k for k in state_dict if (k.startswith("blocks.") or (k.startswith("layers.") and ".proj." in k)) and k.endswith(".weight")]
+        sensitive = _PRECISION_SENSITIVE_PREFIXES
+
+    for key in keys:
         weight = state_dict[key]
-        if weight.ndim != 2 or not weight.is_floating_point() or weight.dtype in _FP8_DTYPES or key.startswith(_PRECISION_SENSITIVE_PREFIXES):
+        if weight.ndim != 2 or not weight.is_floating_point() or weight.dtype in _FP8_DTYPES or key.startswith(sensitive):
             continue
         yield key, key[: -len("weight")], weight
 
 
 def scale_fp8_state_dict(state_dict: dict[str, torch.Tensor], *, fp8_matmul: bool, device: torch.device = None) -> int:
     """Quantize the block Linear weights of a full-precision state dict to
-    per-tensor scaled ``float8_e4m3fn`` in the ``comfy_quant`` layout, in place.
+    scaled ``float8_e4m3fn`` in the ``comfy_quant`` layout, in place.
 
-    A plain ``.to(float8)`` cast leaves most of FP8's range unused for small DiT
-    weights (many fall below e4m3's smallest normal); scaling each tensor by
-    ``absmax / 448`` keeps them at full relative precision for the same VRAM.
-    ``fp8_matmul`` keeps FP8 GEMMs (``--fast-fp8``) except for the FFN down
-    projection, whose input activations exceed FP8's range most, and the AdaLN
-    modulation (one row per image: quantizing its input costs kernels and
-    precision without a GEMM worth speeding up); otherwise every weight is
-    dequantized for a regular matmul. Scaling runs on ``device``
-    (the load device) and the results are stored on the CPU, as for INT8.
-    Returns how many weights were quantized."""
+    Anima uses per-tensor scaling; MOSS-Image (``layers.*.proj.*``) and Krea 2
+    use per-row ``float8_e4m3fn_rowwise`` scaling (matching Unsloth's FP8 scheme
+    with much higher fidelity than per-tensor scaling). Scaling runs on ``device``
+    (the load device) and results are stored on CPU. Returns how many weights were
+    quantized."""
 
     fp8_gemm = _comfy_quant_conf({"format": "float8_e4m3fn"})
     full_gemm = _comfy_quant_conf({"format": "float8_e4m3fn", "full_precision_matrix_mult": True})
+    rowwise_fp8_gemm = _comfy_quant_conf({"format": "float8_e4m3fn_rowwise"})
+    rowwise_full_gemm = _comfy_quant_conf({"format": "float8_e4m3fn_rowwise", "full_precision_matrix_mult": True})
+    is_krea2 = _is_krea2_state_dict(state_dict)
 
     quantized = 0
     for key, prefix, weight in _block_linear_weights(state_dict):
         weight = weight.to(device=device, dtype=torch.float32)
-        scale = weight.abs().amax().clamp_min(1e-12) / _FP8_E4M3_MAX
-        state_dict[key] = (weight / scale).clamp_(-_FP8_E4M3_MAX, _FP8_E4M3_MAX).to(torch.float8_e4m3fn).cpu()
-        state_dict[f"{prefix}weight_scale"] = scale.cpu()
-        state_dict[f"{prefix}comfy_quant"] = fp8_gemm if fp8_matmul and not key.endswith(_FFN_DOWN_SUFFIX) and _ADALN_MODULATION not in key else full_gemm
+        if is_krea2 or key.startswith("layers."):
+            scale = weight.abs().amax(dim=-1, keepdim=True).clamp_min(1e-12) / _FP8_E4M3_MAX
+            state_dict[key] = (weight / scale).clamp_(-_FP8_E4M3_MAX, _FP8_E4M3_MAX).to(torch.float8_e4m3fn).cpu()
+            state_dict[f"{prefix}weight_scale"] = scale.cpu()
+            state_dict[f"{prefix}comfy_quant"] = rowwise_fp8_gemm if fp8_matmul else rowwise_full_gemm
+        else:
+            scale = weight.abs().amax().clamp_min(1e-12) / _FP8_E4M3_MAX
+            state_dict[key] = (weight / scale).clamp_(-_FP8_E4M3_MAX, _FP8_E4M3_MAX).to(torch.float8_e4m3fn).cpu()
+            state_dict[f"{prefix}weight_scale"] = scale.cpu()
+            state_dict[f"{prefix}comfy_quant"] = fp8_gemm if fp8_matmul and not key.endswith(_FFN_DOWN_SUFFIX) and _ADALN_MODULATION not in key else full_gemm
         quantized += 1
     return quantized
 
@@ -137,9 +203,17 @@ def quantize_int8_convrot_state_dict(state_dict: dict[str, torch.Tensor], *, dev
     from backend.quant_ops import TensorWiseINT8Layout
 
     conf = _comfy_quant_conf({"format": "int8_tensorwise", "convrot": True, "convrot_groupsize": _INT8_CONVROT_GROUP})
+    is_krea2 = _is_krea2_state_dict(state_dict)
     quantized = 0
     for key, prefix, weight in _block_linear_weights(state_dict):
-        if not key.endswith(_INT8_LINEAR_SUFFIXES) or weight.shape[1] % _INT8_CONVROT_GROUP:
+        if is_krea2:
+            # Match Comfy-Org/Krea-2 INT8-ConvRot: quantize the 224 main blocks.*
+            # projections and keep the smaller text-fusion transformer in full precision.
+            if not key.startswith("blocks.") or not key.endswith(_KREA2_INT8_LINEAR_SUFFIXES):
+                continue
+        elif not key.endswith(_INT8_LINEAR_SUFFIXES):
+            continue
+        if weight.shape[1] % _INT8_CONVROT_GROUP:
             continue
         qdata, params = TensorWiseINT8Layout.quantize(
             weight.to(device=device, dtype=torch.float32),
@@ -157,11 +231,11 @@ def quantize_int8_convrot_state_dict(state_dict: dict[str, torch.Tensor], *, dev
 
 def should_quantize_on_load(mode, cls_name: str, quant_config, nunchaku: bool, state_dict_dtype) -> bool:
     """Whether the loader applies ``quantize_on_load`` (``mode`` is the chosen
-    "Diffusion in Low Bits" Anima mode, empty for none): only to an Anima DiT
-    stored at full precision, never to one already mixed-precision, Nunchaku,
+    "Diffusion in Low Bits" mode, empty for none): only to an Anima or MOSS-Image
+    DiT stored at full precision, never to one already mixed-precision, Nunchaku,
     FP8 or GGUF."""
 
-    return bool(mode) and cls_name == "CosmosTransformer3DModel" and quant_config is None and not nunchaku and state_dict_dtype in (torch.float16, torch.bfloat16, torch.float32)
+    return bool(mode) and cls_name in _SUPPORTED_DIT_CLASSES and quant_config is None and not nunchaku and state_dict_dtype in (torch.float16, torch.bfloat16, torch.float32)
 
 
 def quantize_on_load(state_dict: dict[str, torch.Tensor], mode: str, load_device: torch.device) -> None:

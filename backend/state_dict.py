@@ -164,10 +164,88 @@ def _detect_prefix(sd: list[str], meta: str) -> str:
     return name.replace(f"{meta}.weight", "")
 
 
+def _strip_model_prefix(stem: str) -> str:
+    for prefix in ("model.diffusion_model.", "diffusion_model.", "transformer."):
+        if stem.startswith(prefix):
+            return stem[len(prefix) :]
+    return stem
+
+
+def _convert_torchao_qdata(state_dict: dict[str, torch.Tensor], metadata: dict) -> dict[str, torch.Tensor]:
+    """Convert TorchAO / Unsloth Studio ``_weight_qdata`` safetensors checkpoints
+    (e.g. ``unsloth/MOSS-Image-SFT-FP8`` FP8 per-row, INT8 per-row, and
+    INT8-ConvRot Hadamard group-256) into Forge's native ``comfy_quant`` layout
+    without upcasting quantized weights to BF16."""
+
+    qdata_keys = [k for k in state_dict if k.endswith("._weight_qdata")]
+    if not qdata_keys:
+        return state_dict
+
+    unsloth_meta: dict = {}
+    if isinstance(metadata.get("unsloth_metadata"), str):
+        try:
+            parsed = json.loads(metadata["unsloth_metadata"])
+            if isinstance(parsed, dict):
+                unsloth_meta = parsed
+        except ValueError:
+            pass
+
+    act_rot = str(unsloth_meta.get("activation_rotation") or "").lower()
+    use_convrot = act_rot.startswith("convrot")
+    convrot_group = int(unsloth_meta.get("activation_rotation_group") or 256)
+    raw_fqns = unsloth_meta.get("activation_rotation_fqns")
+    convrot_fqns = set(raw_fqns) if isinstance(raw_fqns, list) and raw_fqns else None
+
+    def _is_convrot_layer(stem: str) -> bool:
+        if not use_convrot:
+            return False
+        if convrot_fqns is None:
+            return True
+        return stem in convrot_fqns or _strip_model_prefix(stem) in convrot_fqns
+
+    for qkey in qdata_keys:
+        stem = qkey[: -len("._weight_qdata")]
+        qdata = state_dict.pop(qkey)
+        scale = state_dict.pop(f"{stem}._weight_scale", None)
+        zero_point = state_dict.pop(f"{stem}._weight_zero_point", None)
+
+        if qdata.dtype == torch.int8 and scale is not None:
+            if zero_point is not None and bool((zero_point != 0).any()):
+                state_dict[f"{stem}.weight"] = ((qdata.float() - zero_point.float()) * scale.float()).to(torch.bfloat16)
+                continue
+            layer_conf: dict = {"format": "int8_tensorwise"}
+            if _is_convrot_layer(stem):
+                layer_conf["convrot"] = True
+                layer_conf["convrot_groupsize"] = convrot_group
+            state_dict[f"{stem}.weight"] = qdata
+            state_dict[f"{stem}.weight_scale"] = scale.float()
+            state_dict[f"{stem}.comfy_quant"] = torch.tensor(list(json.dumps(layer_conf).encode("utf-8")), dtype=torch.uint8)
+        elif qdata.dtype in (torch.float8_e4m3fn, torch.float8_e5m2) and scale is not None:
+            fmt_base = "float8_e4m3fn" if qdata.dtype == torch.float8_e4m3fn else "float8_e5m2"
+            if scale.numel() == 1:
+                state_dict[f"{stem}.weight"] = qdata
+                state_dict[f"{stem}.weight_scale"] = scale.reshape(()).float()
+                state_dict[f"{stem}.comfy_quant"] = torch.tensor(list(json.dumps({"format": fmt_base}).encode("utf-8")), dtype=torch.uint8)
+            elif scale.dim() == 2 and scale.shape == (qdata.shape[0], 1):
+                state_dict[f"{stem}.weight"] = qdata
+                state_dict[f"{stem}.weight_scale"] = scale.float()
+                state_dict[f"{stem}.comfy_quant"] = torch.tensor(list(json.dumps({"format": f"{fmt_base}_rowwise"}).encode("utf-8")), dtype=torch.uint8)
+            else:
+                state_dict[f"{stem}.weight"] = (qdata.float() * scale.float()).to(torch.bfloat16)
+        elif scale is not None:
+            state_dict[f"{stem}.weight"] = (qdata.float() * scale.float()).to(torch.bfloat16)
+        else:
+            state_dict[f"{stem}.weight"] = qdata
+
+    return state_dict
+
+
 def convert_quantization(state_dict: dict[str, torch.Tensor], metadata: dict) -> tuple[dict[str, torch.Tensor], dict]:
     # https://github.com/Comfy-Org/ComfyUI/blob/v0.19.0/comfy/utils.py#L1358
     if metadata is None:
         metadata = {}
+
+    state_dict = _convert_torchao_qdata(state_dict, metadata)
 
     if "_quantization_metadata" in metadata:
         quant_metadata = json.loads(metadata["_quantization_metadata"]) or {}
