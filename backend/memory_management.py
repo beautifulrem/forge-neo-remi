@@ -86,6 +86,10 @@ except Exception:
     torch_version_numeric = None
 
 
+import functools
+
+
+@functools.lru_cache(maxsize=1)
 def mac_version():
     try:
         return tuple(int(n) for n in platform.mac_ver()[0].split("."))

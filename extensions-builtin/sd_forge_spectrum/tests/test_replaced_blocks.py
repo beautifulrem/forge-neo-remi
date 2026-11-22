@@ -103,3 +103,170 @@ def test_skip_layer_guidance_window_does_not_leak_into_the_forecasts():
             assert [step for step in range(SLG_STEPS.stop, STEPS) if step not in actual[branch]], (policy, branch, actual)
         # The uncond branch rebuilds its history after the switch.
         assert [step for step in actual[UNCOND] if step >= SLG_STEPS.stop][: DEGREE + 2] == list(range(SLG_STEPS.stop, SLG_STEPS.stop + DEGREE + 2)), (policy, actual)
+
+
+@torch.inference_mode()
+def test_moss_image_uses_pre_head_feature_forecasting():
+    from backend.nn.moss_image import MOSSImage as MOSSDiT
+    from backend.operations import using_forge_operations
+
+    torch.manual_seed(0)
+    with using_forge_operations(device=torch.device("cpu"), dtype=torch.float32):
+        dit = MOSSDiT(dim=32, ffn_dim=64, num_heads=2, num_layers=2, text_dim=16, latent_channels=8).eval()
+    for p in dit.parameters():
+        torch.nn.init.normal_(p, std=0.02)
+
+    class _LinearFlowPredictor:
+        def timestep(self, sigma):
+            return sigma
+
+        def calculate_denoised(self, sigma, model_output, x):
+            return x - sigma.view(-1, 1, 1, 1) * model_output
+
+    predictor = _LinearFlowPredictor()
+
+    class _MossPatcher:
+        def __init__(self):
+            self.model = SimpleNamespace(diffusion_model=dit, predictor=predictor)
+            self.model_options = {}
+            self.wrapper = None
+
+        def clone(self):
+            return self
+
+        def set_model_unet_function_wrapper(self, wrapper):
+            self.wrapper = wrapper
+
+    patcher = SpectrumNode.patch(
+        _MossPatcher(),
+        steps=10,
+        weight=1.0,
+        degree=1,
+        lam=1e-6,
+        window_size=2,
+        flex_window=0.0,
+        warmup_steps=3,
+        stop_caching_step=1.0,
+        tail_actual_steps=1,
+        history_size=3,
+        schedule="Window",
+        refresh_ratio=0.0,
+        sea_beta=2.0,
+        compat_policy="Conservative",
+        verbose=False,
+        sea_cache_dir="unused",
+        sea_cache_context={},
+        process=SimpleNamespace(),
+    )
+    assert getattr(dit.video_head_input, "_forge_spectrum_hook_installed", False) is True
+
+    x = torch.randn(1, 8, 2, 2)
+    ctx = torch.randn(1, 4, 16)
+    actual_steps = []
+
+    def model_function(inp, sigma, **_kwargs):
+        actual_steps.append(float(sigma[0]))
+        out = dit(inp, predictor.timestep(sigma).float(), ctx)
+        return predictor.calculate_denoised(sigma, out.float(), inp)
+
+    for step in range(10):
+        sigma = torch.tensor([1.0 - step * 0.09])
+        c = {"c_crossattn": ctx, "transformer_options": {"cond_or_uncond": [0]}}
+        got = patcher.wrapper(model_function, {"input": x, "timestep": sigma, "c": c, "cond_or_uncond": [0]})
+        assert got.shape == x.shape and torch.isfinite(got).all()
+
+    # Verify Spectrum actually skipped steps via pre-head _fast_forward_moss
+    assert len(actual_steps) < 10
+
+    # Verify compute_video_head matches full forward head numerically
+    captured = {}
+
+    def grab(_m, args):
+        captured["tokens"] = args[0].detach().clone()
+
+    h = dit.video_head_input.register_forward_pre_hook(grab)
+    try:
+        full_out = dit(x, torch.tensor([0.5]), ctx)
+    finally:
+        h.remove()
+    head_out = dit.compute_video_head(captured["tokens"], torch.tensor([0.5]), tuple(x.shape))
+    assert torch.allclose(head_out, full_out, atol=1e-6)
+
+
+def test_spectrum_krea2_pre_head_feature_forecasting():
+    """Spectrum captures Krea 2's pre-head tokens (``dit.last_input``) and
+    evaluates ``compute_last`` on cached steps with fresh timesteps."""
+
+    from backend.modules.k_prediction import PredictionFlux
+    from backend.nn.krea import SingleStreamDiT
+
+    gen = torch.Generator().manual_seed(0)
+    dit = SingleStreamDiT(features=128, tdim=32, txtdim=64, heads=2, kvheads=2, multiplier=2, layers=2, patch=2, channels=16, txtlayers=12, txtheads=2, txtkvheads=2).eval()
+    dit.load_state_dict({k: torch.randn(v.shape, generator=gen) * 0.05 for k, v in dit.state_dict().items()})
+    predictor = PredictionFlux(SimpleNamespace(sampling_settings={"shift": 1.15}))
+
+    class _Patcher:
+        def __init__(self):
+            self.model = SimpleNamespace(diffusion_model=dit, predictor=predictor)
+            self.model_options = {}
+            self.wrapper = None
+
+        def clone(self):
+            return self
+
+        def set_model_unet_function_wrapper(self, fn):
+            self.wrapper = fn
+
+    patcher = _Patcher()
+    SpectrumNode.patch(
+        patcher,
+        steps=10,
+        weight=0.5,
+        degree=2,
+        lam=1e-3,
+        window_size=2,
+        flex_window=0.0,
+        warmup_steps=4,
+        stop_caching_step=0.9,
+        tail_actual_steps=1,
+        history_size=4,
+        schedule="Uniform",
+        refresh_ratio=0.5,
+        sea_beta=0.1,
+        compat_policy="Conservative",
+        verbose=False,
+        sea_cache_dir="",
+        sea_cache_context={},
+    )
+    assert getattr(dit.last_input, "_forge_spectrum_hook_installed", False) is True
+
+    x = torch.randn(1, 16, 1, 4, 4, generator=gen)
+    ctx = torch.randn(1, 4, 12, 64, generator=gen)
+    actual_steps: list[float] = []
+
+    def model_function(inp, sigma, **c):
+        actual_steps.append(float(sigma[0].item()))
+        t = predictor.timestep(sigma).float()
+        out = dit(inp, t, c["c_crossattn"], transformer_options=c.get("transformer_options", {}))
+        return predictor.calculate_denoised(sigma, out.float(), inp)
+
+    for step in range(10):
+        sigma = torch.tensor([1.0 - step * 0.09])
+        c = {"c_crossattn": ctx, "transformer_options": {"cond_or_uncond": [0]}}
+        got = patcher.wrapper(model_function, {"input": x, "timestep": sigma, "c": c, "cond_or_uncond": [0]})
+        assert got.shape == x.shape and torch.isfinite(got).all()
+
+    assert len(actual_steps) < 10
+
+    captured = {}
+
+    def grab(_m, args):
+        captured["tokens"] = args[0].detach().clone()
+
+    h = dit.last_input.register_forward_pre_hook(grab)
+    try:
+        full_out = dit(x, torch.tensor([0.5]), ctx)
+    finally:
+        h.remove()
+    head_out = dit.compute_last(captured["tokens"], torch.tensor([0.5]), tuple(x.shape))
+    assert torch.allclose(head_out, full_out, atol=1e-6)

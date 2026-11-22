@@ -152,13 +152,18 @@ def _capture_feature(module, args):
         state.captured_feature = args[0].detach()
 
 
-def _ensure_capture_hook(dit) -> None:
-    final_layer = dit.final_layer
-    if not hasattr(final_layer, "_forge_spectrum_local"):
-        final_layer._forge_spectrum_local = threading.local()
-    if not getattr(final_layer, "_forge_spectrum_hook_installed", False):
-        final_layer.register_forward_pre_hook(_capture_feature)
-        final_layer._forge_spectrum_hook_installed = True
+def _ensure_capture_hook(target_module) -> None:
+    if hasattr(target_module, "final_layer"):
+        target_module = target_module.final_layer
+    elif hasattr(target_module, "video_head_input"):
+        target_module = target_module.video_head_input
+    elif hasattr(target_module, "last_input"):
+        target_module = target_module.last_input
+    if not hasattr(target_module, "_forge_spectrum_local"):
+        target_module._forge_spectrum_local = threading.local()
+    if not getattr(target_module, "_forge_spectrum_hook_installed", False):
+        target_module.register_forward_pre_hook(_capture_feature)
+        target_module._forge_spectrum_hook_installed = True
 
 
 def _fast_forward(dit, predictor, sigma, input_x, feature):
@@ -175,6 +180,18 @@ def _fast_forward(dit, predictor, sigma, input_x, feature):
     model_output = dit.unpatchify(model_output)
     spatial = input_x.shape[-3:]
     model_output = model_output[:, :, : spatial[-3], : spatial[-2], : spatial[-1]]
+    return predictor.calculate_denoised(sigma, model_output.float(), input_x)
+
+
+def _fast_forward_moss(dit, predictor, sigma, input_x, feature):
+    internal_timestep = predictor.timestep(sigma).float()
+    model_output = dit.compute_video_head(feature, internal_timestep, tuple(input_x.shape))
+    return predictor.calculate_denoised(sigma, model_output.float(), input_x)
+
+
+def _fast_forward_krea2(dit, predictor, sigma, input_x, feature):
+    internal_timestep = predictor.timestep(sigma).float()
+    model_output = dit.compute_last(feature, internal_timestep, tuple(input_x.shape))
     return predictor.calculate_denoised(sigma, model_output.float(), input_x)
 
 
@@ -424,8 +441,22 @@ class SpectrumNode:
         kmodel = new_model.model
         dit = getattr(kmodel, "diffusion_model", None)
         predictor = getattr(kmodel, "predictor", None)
-        required = ("final_layer", "t_embedder", "t_embedding_norm", "unpatchify")
-        feature_cache = dit is not None and predictor is not None and all(hasattr(dit, name) for name in required)
+        anima_required = ("final_layer", "t_embedder", "t_embedding_norm", "unpatchify")
+        moss_required = ("video_head_input", "final_norm_video", "final_linear_video", "video_head_modulation", "time_embedding", "compute_video_head")
+        krea2_required = ("last_input", "last", "tmlp", "compute_last")
+        if dit is not None and predictor is not None and all(hasattr(dit, name) for name in anima_required):
+            feature_mode = "anima"
+            capture_module = dit.final_layer
+        elif dit is not None and predictor is not None and all(hasattr(dit, name) for name in moss_required):
+            feature_mode = "moss"
+            capture_module = dit.video_head_input
+        elif dit is not None and predictor is not None and all(hasattr(dit, name) for name in krea2_required):
+            feature_mode = "krea2"
+            capture_module = dit.last_input
+        else:
+            feature_mode = None
+            capture_module = None
+        feature_cache = feature_mode is not None
 
         # Every pass starts from forge_objects_after_applying_lora, so any
         # existing wrapper was installed in this pass (scripts run in load
@@ -467,7 +498,7 @@ class SpectrumNode:
             flow_sigmas=_is_flow_predictor(predictor),
         )
         if feature_cache:
-            _ensure_capture_hook(dit)
+            _ensure_capture_hook(capture_module)
         if process is not None:
             # Lets the script free the (GPU) feature history after generation.
             # Earlier passes are finished, so free their history right away
@@ -560,8 +591,12 @@ class SpectrumNode:
             # same branch would in one batch; it is not another cached step.
             if state.mode == "cached" and compatible and state.ready(keys):
                 feature = predict_branches([state.forecasters[key] for key in keys], state.step)
-                if feature_cache:
+                if feature_mode == "anima":
                     result = _fast_forward(dit, predictor, sigma, input_x, feature)
+                elif feature_mode == "moss":
+                    result = _fast_forward_moss(dit, predictor, sigma, input_x, feature)
+                elif feature_mode == "krea2":
+                    result = _fast_forward_krea2(dit, predictor, sigma, input_x, feature)
                 else:
                     result = feature.to(input_x.dtype)
                 if not branch_step:
@@ -574,7 +609,7 @@ class SpectrumNode:
             # cacheable step on.
             feeds = (new_step or branch_step) and compatible and state.feeds_forecasts
             if feature_cache and feeds:
-                capture_local = dit.final_layer._forge_spectrum_local
+                capture_local = capture_module._forge_spectrum_local
                 capture_local.state = state
                 state.captured_feature = None
                 feature = None

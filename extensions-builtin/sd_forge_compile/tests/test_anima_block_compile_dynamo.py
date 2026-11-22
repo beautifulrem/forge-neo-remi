@@ -234,5 +234,195 @@ class AnimaBlockCompileSizesTests(unittest.TestCase):
         self.assertEqual(runs[8:], [0] * (len(_SIZES) - 8))  # persistent eager after the fallback
 
 
+class MOSSImageBlockCompileDynamoTests(unittest.TestCase):
+    """Per-block compile traced by real Dynamo on MOSS-Image ``layers``:
+    zero FFN graph breaks, SLG ``patches_replace`` compatibility, eager
+    one-shot ``preprocess_refs`` + compiled ``ref_kv`` denoising, and dynamic
+    resolutions within ``RECOMPILE_LIMIT``."""
+
+    def setUp(self):
+        from backend.args import dynamic_args
+        from backend.nn.moss_image import MOSSImage as MOSSDiT
+
+        torch._dynamo.reset()
+        mac_version = memory_management.mac_version()
+        patcher = patch.object(memory_management, "mac_version", lambda: mac_version)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(torch._dynamo.reset)
+
+        for attr, val in (("ref_latents", []), ("moss_reference_method", None), ("moss_ref_kv", None)):
+            p_arg = patch.object(dynamic_args, attr, val)
+            p_arg.start()
+            self.addCleanup(p_arg.stop)
+
+        generator = torch.Generator().manual_seed(0)
+        with operations.using_forge_operations(device=torch.device("cpu"), dtype=torch.float32, manual_cast_enabled=True):
+            self.model = MOSSDiT(dim=128, ffn_dim=256, num_heads=2, num_layers=6, text_dim=32, latent_channels=16, fused_qkv=False).eval()
+        self.model.load_state_dict({k: torch.randn(v.shape, generator=generator) * 0.05 for k, v in self.model.state_dict().items()})
+        self.kmodel = _KModel(self.model)
+        self.backend = _CountingBackend()
+        self.fallbacks = []
+        config = {**block_compile_config(_guard_filter), "backend": self.backend}
+        AnimaBlockCompileManager.install(self.kmodel, config, on_fallback=self.fallbacks.append)
+
+    def test_zero_graph_breaks_slg_and_ref_kv_caching(self):
+        from backend.args import dynamic_args
+
+        gen = torch.Generator().manual_seed(1)
+        x = torch.randn(2, 16, 4, 4, generator=gen)
+        t = torch.tensor([0.8, 0.8])
+        ctx = torch.randn(2, 5, 32, generator=gen)
+
+        # Verify Block.forward has 0 graph breaks (linear_input_act bypass works!)
+        x_tok = torch.randn(2, 21, 128)
+        mod = tuple(torch.randn(2, 1, 128) for _ in range(6))
+        pe = self.model.rope(4, 4, 5, torch.device("cpu"))
+        with torch.inference_mode():
+            explained = torch._dynamo.explain(self.model.layers[0])(x_tok, mod, pe, {})
+        self.assertEqual(explained.graph_break_count, 0, [r.reason for r in explained.break_reasons])
+        torch._dynamo.reset()
+
+        with torch.inference_mode():
+            eager = self.model(x, t, ctx, transformer_options={})
+            compiled = self.kmodel.apply_model(x, t, ctx, transformer_options={})
+            frames_after_first = self.backend.frame_count
+            compiled_step2 = self.kmodel.apply_model(x, torch.tensor([0.3, 0.3]), ctx, transformer_options={})
+            self.assertEqual(self.backend.frame_count, frames_after_first)
+            torch.testing.assert_close(compiled, eager, rtol=1e-5, atol=1e-5)
+
+            # SLG skips layer 3 while the other 5 layers stay compiled
+            slg_opts = {"patches_replace": {"dit": {("single_block", 3): lambda a, _e: a}}}
+            eager_slg = self.model(x, t, ctx, transformer_options=slg_opts)
+            before_slg = self.backend.runs
+            comp_slg = self.kmodel.apply_model(x, t, ctx, transformer_options=slg_opts)
+            self.assertEqual(self.backend.runs - before_slg, 5)
+            torch.testing.assert_close(comp_slg, eager_slg, rtol=1e-5, atol=1e-5)
+
+            # Cached ref_kv: preprocess_refs stays eager, denoising layers compile and match eager
+            ref = torch.randn(1, 16, 2, 2, generator=gen)
+            dynamic_args.ref_latents = [ref]
+            dynamic_args.moss_reference_method = "index_timestep_zero_text_start"
+            dynamic_args.moss_ref_kv = None
+            eager_ref = self.model(x, t, ctx, transformer_options={})
+            dynamic_args.moss_ref_kv = None
+            before_ref = self.backend.runs
+            comp_ref = self.kmodel.apply_model(x, t, ctx, transformer_options={})
+            self.assertEqual(self.backend.runs - before_ref, 6)  # 6 denoising layers only; preprocess_refs bypassed compile
+            torch.testing.assert_close(comp_ref, eager_ref, rtol=1e-5, atol=1e-5)
+
+            # Multiple resolutions & batch=1 (CFG=1) stay inside RECOMPILE_LIMIT
+            dynamic_args.ref_latents = []
+            dynamic_args.moss_reference_method = None
+            dynamic_args.moss_ref_kv = None
+            for batch, h, w in ((1, 4, 4), (2, 6, 4), (1, 6, 4), (2, 4, 6), (2, 8, 6)):
+                self.kmodel.apply_model(torch.randn(batch, 16, h, w), torch.full((batch,), 0.5), torch.randn(batch, 5, 32), transformer_options={})
+
+        self.assertEqual(self.fallbacks, [])
+        self.assertLessEqual(self.backend.frame_count, RECOMPILE_LIMIT)
+        self.assertTrue(all(type(layer).__name__ != "OptimizedModule" for layer in self.model.layers))
+        del compiled_step2
+
+
+class Krea2BlockCompileDynamoTests(unittest.TestCase):
+    """Per-block compile traced by real Dynamo on Krea 2 ``blocks``:
+    zero graph breaks inside ``SingleStreamBlock``, SLG ``patches_replace``
+    compatibility, Edit-mode reference latents, and dynamic shapes within
+    ``RECOMPILE_LIMIT``."""
+
+    def setUp(self):
+        from backend import attention
+        from backend.args import dynamic_args
+        from backend.nn import krea as krea_mod
+
+        torch._dynamo.reset()
+        attn_patch = patch.object(krea_mod, "attention_function", attention.attention_pytorch)
+        attn_patch.start()
+        self.addCleanup(attn_patch.stop)
+        ref_patch = patch.object(dynamic_args, "ref_latents", [])
+        ref_patch.start()
+        self.addCleanup(ref_patch.stop)
+        self.addCleanup(torch._dynamo.reset)
+
+        generator = torch.Generator().manual_seed(0)
+        with operations.using_forge_operations(device=torch.device("cpu"), dtype=torch.float32, manual_cast_enabled=True):
+            self.model = krea_mod.SingleStreamDiT(
+                features=256,
+                tdim=64,
+                txtdim=128,
+                heads=2,
+                kvheads=2,
+                multiplier=2,
+                layers=4,
+                patch=2,
+                channels=16,
+                txtlayers=12,
+                txtheads=2,
+                txtkvheads=2,
+            ).eval()
+        self.model.load_state_dict({k: torch.randn(v.shape, generator=generator) * 0.05 for k, v in self.model.state_dict().items()})
+        self.kmodel = _KModel(self.model)
+        self.backend = _CountingBackend()
+        self.fallbacks = []
+        config = {**block_compile_config(_guard_filter), "backend": self.backend}
+        AnimaBlockCompileManager.install(self.kmodel, config, on_fallback=self.fallbacks.append)
+
+    def test_zero_graph_breaks_slg_edit_and_dynamic_shapes(self):
+        from backend.args import dynamic_args
+
+        gen = torch.Generator().manual_seed(2)
+        x = torch.randn(2, 16, 1, 4, 4, generator=gen)
+        t = torch.tensor([0.8, 0.8])
+        ctx = torch.randn(2, 5, 12, 128, generator=gen)
+
+        # Verify SingleStreamBlock.forward traces with 0 graph breaks
+        x_tok = torch.randn(2, 9, 256)
+        vec = torch.randn(2, 1, 256 * 6)
+        pe = self.model.pe_embedder(torch.zeros(2, 9, 3))
+        with torch.inference_mode():
+            explained = torch._dynamo.explain(self.model.blocks[0])(x_tok, vec, pe, None, transformer_options={})
+        self.assertEqual(explained.graph_break_count, 0, [r.reason for r in explained.break_reasons])
+        torch._dynamo.reset()
+
+        with torch.inference_mode():
+            eager = self.model(x, t, ctx, transformer_options={})
+            compiled = self.kmodel.apply_model(x, t, ctx, transformer_options={})
+            frames_after_first = self.backend.frame_count
+            compiled_step2 = self.kmodel.apply_model(x, torch.tensor([0.3, 0.3]), ctx, transformer_options={})
+            self.assertEqual(self.backend.frame_count, frames_after_first)
+            torch.testing.assert_close(compiled, eager, rtol=1e-5, atol=1e-5)
+
+            # SLG skips block 2 while the other 3 blocks stay compiled
+            slg_opts = {"patches_replace": {"dit": {("single_block", 2): lambda a, _e: a}}}
+            eager_slg = self.model(x, t, ctx, transformer_options=slg_opts)
+            before_slg = self.backend.runs
+            comp_slg = self.kmodel.apply_model(x, t, ctx, transformer_options=slg_opts)
+            self.assertEqual(self.backend.runs - before_slg, 3)
+            torch.testing.assert_close(comp_slg, eager_slg, rtol=1e-5, atol=1e-5)
+
+            # Edit mode with reference latents stays compiled and matches eager
+            dynamic_args.ref_latents = [torch.randn(1, 16, 4, 4, generator=gen)]
+            eager_edit = self.model(x, t, ctx, transformer_options={})
+            before_edit = self.backend.runs
+            comp_edit = self.kmodel.apply_model(x, t, ctx, transformer_options={})
+            self.assertEqual(self.backend.runs - before_edit, 4)
+            torch.testing.assert_close(comp_edit, eager_edit, rtol=1e-5, atol=1e-5)
+
+            # Multiple resolutions & batch=1 (Turbo CFG=1) stay inside RECOMPILE_LIMIT
+            dynamic_args.ref_latents = []
+            for batch, h, w in ((1, 4, 4), (2, 6, 4), (1, 6, 4), (2, 4, 6), (2, 8, 6)):
+                self.kmodel.apply_model(
+                    torch.randn(batch, 16, 1, h, w),
+                    torch.full((batch,), 0.5),
+                    torch.randn(batch, 5, 12, 128),
+                    transformer_options={},
+                )
+
+        self.assertEqual(self.fallbacks, [])
+        self.assertLessEqual(self.backend.frame_count, RECOMPILE_LIMIT)
+        self.assertTrue(all(type(block).__name__ != "OptimizedModule" for block in self.model.blocks))
+        del compiled_step2
+
+
 if __name__ == "__main__":
     unittest.main()

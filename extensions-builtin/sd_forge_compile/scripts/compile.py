@@ -39,12 +39,16 @@ PRESETS = (
     "Automatic",
     "Disable",
     "Anima per-block",
+    "MOSS-Image per-block",
+    "Krea-2 per-block",
     "guard_filter_fn",
     "dynamic",
     "max-autotune",
     "max-autotune-no-cudagraphs",
     "reduce-overhead",
 )
+
+_PER_BLOCK_PRESETS = ("Anima per-block", "MOSS-Image per-block", "Krea-2 per-block")
 
 _DYNAMIC = "Support any Resolution / Batch Size"
 _INDYNAMIC = "Require recompilation if Resolution / Batch Size is changed"
@@ -58,7 +62,17 @@ PRESET_HELP = rf"""
 - **max-autotune-no-cudagraphs:** {_DYNAMIC} ; Faster than **dynamic** ; Even Slower to Compile
 - **reduce-overhead:** Similar to **max-autotune** ; {_INDYNAMIC} ; {_NO_MALLOC}
 - **Anima per-block:** Compile each Anima transformer block separately; a changed Resolution / Batch Size recompiles once into a dynamic-shape graph, but Batch Size 1 (CFG 1, or steps outside the CFG range) and reference images still compile graphs of their own ; lower graph-break risk than whole-model compile
+- **MOSS-Image per-block:** Compile each MOSS-Image transformer layer separately; stays compiled with Skip Layer Guidance (SLG) and cached reference KV while keeping one-shot reference preprocessing eager ; lower graph-break risk than whole-model compile
+- **Krea-2 per-block:** Compile each Krea 2 single-stream transformer block separately; keeps cached text fusion and RoPE outside the compiled blocks and stays compiled with Skip Layer Guidance (SLG) and Edit reference latents ; lower graph-break risk than whole-model compile
 """.strip()
+
+
+def _is_moss_engine(model) -> bool:
+    return bool(getattr(model, "is_moss_engine", False))
+
+
+def _is_krea2_engine(model) -> bool:
+    return bool(getattr(model, "is_krea2_engine", False))
 
 
 def skip_torch_compile_dict(guard_entries):
@@ -100,8 +114,10 @@ class TorchCompileForForge(scripts.Script):
         # the finished generation (images, prompts) can be freed.
         process = process_ref(p)
 
+        active_label = prev_config if prev_config in _PER_BLOCK_PRESETS else (preset if preset in _PER_BLOCK_PRESETS else "Anima per-block")
+
         def compile_fallback(error):
-            message = f"Anima per-block fell back to eager: {type(error).__name__}"
+            message = f"{active_label} fell back to eager: {type(error).__name__}"
             try:
                 process.extra_generation_params["Torch compile"] = message
             except ReferenceError:  # the generation has ended
@@ -117,7 +133,7 @@ class TorchCompileForForge(scripts.Script):
             AnimaBlockCompileManager.update_fallback_handler(kmodel, compile_fallback)
             reason = AnimaBlockCompileManager.fallback_reason(kmodel)
             if reason is not None:
-                p.extra_generation_params["Torch compile"] = f"Anima per-block using eager fallback: {reason}"
+                p.extra_generation_params["Torch compile"] = f"{active_label} using eager fallback: {reason}"
 
         if preset == "Automatic":
             if AnimaBlockCompileManager.is_installed(kmodel):
@@ -133,9 +149,19 @@ class TorchCompileForForge(scripts.Script):
             p.extra_generation_params["Torch compile"] = "Anima per-block ignored: non-Anima model"
             return
 
-        if preset == "Anima per-block" and not _windows_cpp_compiler_available():
+        if preset == "MOSS-Image per-block" and not _is_moss_engine(p.sd_model):
+            logger.warning("MOSS-Image per-block compile was ignored because the active model is not MOSS-Image")
+            p.extra_generation_params["Torch compile"] = "MOSS-Image per-block ignored: non-MOSS-Image model"
+            return
+
+        if preset == "Krea-2 per-block" and not _is_krea2_engine(p.sd_model):
+            logger.warning("Krea-2 per-block compile was ignored because the active model is not Krea 2")
+            p.extra_generation_params["Torch compile"] = "Krea-2 per-block ignored: non-Krea-2 model"
+            return
+
+        if preset in _PER_BLOCK_PRESETS and not _windows_cpp_compiler_available():
             self._remove_compile_wrapper(kmodel)
-            message = "Anima per-block disabled: no C++ compiler found (install Visual Studio Build Tools)"
+            message = f"{preset} disabled: no C++ compiler found (install Visual Studio Build Tools)"
             logger.error(message)
             p.extra_generation_params["Torch compile"] = message
             return
@@ -148,7 +174,7 @@ class TorchCompileForForge(scripts.Script):
             getattr(kmodel, _ORIG_APPLY_KEY, None) is not None
             or AnimaBlockCompileManager.is_installed(kmodel)
         ):
-            if preset == "Anima per-block":
+            if preset in _PER_BLOCK_PRESETS:
                 keep_block_compile()
             return
 
@@ -156,7 +182,7 @@ class TorchCompileForForge(scripts.Script):
             self._remove_compile_wrapper(kmodel)
 
         match preset:
-            case "Anima per-block":
+            case "Anima per-block" | "MOSS-Image per-block" | "Krea-2 per-block":
                 config = block_compile_config(skip_torch_compile_dict)
             case "guard_filter_fn":
                 config = dict(backend="inductor", dynamic=False, fullgraph=False, options={"guard_filter_fn": skip_torch_compile_dict})
@@ -169,7 +195,7 @@ class TorchCompileForForge(scripts.Script):
             case "reduce-overhead":
                 config = dict(backend="inductor", mode="reduce-overhead", dynamic=False, fullgraph=False, options={"guard_filter_fn": skip_torch_compile_dict})
 
-        if preset == "Anima per-block":
+        if preset in _PER_BLOCK_PRESETS:
             AnimaBlockCompileManager.install(kmodel, config, on_fallback=compile_fallback)
         else:
             self._wrap_apply_model(kmodel, config)

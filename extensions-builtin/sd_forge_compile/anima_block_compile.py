@@ -82,7 +82,23 @@ def _needs_eager_blocks(args, kwargs) -> bool:
     if kwargs.get("c_negpip_mask") is not None:
         return True
     options = _transformer_options(args, kwargs)
-    return isinstance(options, dict) and any(options.get(key) is not None and options.get(key) != () for key in _EAGER_OPTION_KEYS)
+    if not isinstance(options, dict):
+        return False
+    if any(options.get(key) is not None and options.get(key) != () for key in _EAGER_OPTION_KEYS):
+        return True
+    patches = options.get("patches")
+    return isinstance(patches, dict) and any(patches.values())
+
+
+def _block_list(diffusion_model) -> torch.nn.ModuleList | None:
+    """Resolve the transformer block ModuleList for Anima / Krea 2 (``blocks``)
+    or MOSS-Image (``layers``)."""
+
+    for attr in ("blocks", "layers"):
+        candidate = getattr(diffusion_model, attr, None)
+        if isinstance(candidate, torch.nn.ModuleList) and candidate:
+            return candidate
+    return None
 
 
 def _is_compile_failure(error: Exception) -> bool:
@@ -134,7 +150,8 @@ def _recompile_limit_patch() -> tuple[object, dict]:
 
 
 class AnimaBlockCompileManager:
-    """Compile Anima transformer blocks and swap them only during inference."""
+    """Compile Anima (``blocks``) or MOSS-Image (``layers``) transformer blocks
+    and swap them only during inference."""
 
     @staticmethod
     def install(kmodel, compile_config: dict, on_fallback=None) -> None:
@@ -154,8 +171,8 @@ class AnimaBlockCompileManager:
             if getattr(kmodel, _FAILED_KEY, False):
                 return original_apply_model(*args, **kwargs)
             diffusion_model = kmodel.diffusion_model
-            blocks = getattr(diffusion_model, "blocks", None)
-            if not isinstance(blocks, torch.nn.ModuleList) or not blocks:
+            blocks = _block_list(diffusion_model)
+            if blocks is None:
                 return original_apply_model(*args, **kwargs)
             args, kwargs = without_inactive_modifiers(args, kwargs)
             if needs_eager(args, kwargs, blocks):

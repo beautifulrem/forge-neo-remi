@@ -28,9 +28,9 @@ class _KModel:
 
 
 class _Process:
-    def __init__(self, kmodel, anima=True):
+    def __init__(self, kmodel, anima=True, moss=False, krea2=False):
         unet = SimpleNamespace(model=kmodel)
-        self.sd_model = SimpleNamespace(is_anima_engine=anima, forge_objects=SimpleNamespace(unet=unet))
+        self.sd_model = SimpleNamespace(is_anima_engine=anima, is_moss_engine=moss, is_krea2_engine=krea2, forge_objects=SimpleNamespace(unet=unet))
         self.extra_generation_params = {}
 
 
@@ -124,3 +124,67 @@ def test_per_block_without_windows_compiler_removes_compile_and_reports(monkeypa
     assert kmodel.apply_model.__func__ is _KModel.apply_model
     assert _config(kmodel) is None
     assert "no C++ compiler found" in p.extra_generation_params["Torch compile"]
+
+
+def test_moss_per_block_installs_only_on_moss_and_tracks_automatic_fallbacks():
+    kmodel = SimpleNamespace(
+        diffusion_model=SimpleNamespace(layers=torch.nn.ModuleList([torch.nn.Identity()])),
+        apply_model=lambda value: value,
+    )
+    script = _script()
+
+    p_non_moss = _Process(kmodel, anima=True, moss=False)
+    script.process_batch(p_non_moss, "MOSS-Image per-block")
+    assert not AnimaBlockCompileManager.is_installed(kmodel)
+    assert p_non_moss.extra_generation_params["Torch compile"] == "MOSS-Image per-block ignored: non-MOSS-Image model"
+
+    p_moss = _Process(kmodel, anima=False, moss=True)
+    script.process_batch(p_moss, "MOSS-Image per-block")
+    assert AnimaBlockCompileManager.is_installed(kmodel)
+    assert _config(kmodel) == "MOSS-Image per-block"
+
+    second = _Process(kmodel, anima=False, moss=True)
+    script.process_batch(second, "Automatic")
+    getattr(kmodel, _FALLBACK_HANDLER_KEY)(RuntimeError("boom"))
+    assert second.extra_generation_params["Torch compile"] == "MOSS-Image per-block fell back to eager: RuntimeError"
+
+    setattr(kmodel, _FALLBACK_REASON_KEY, "BackendCompilerFailed")
+    third = _Process(kmodel, anima=False, moss=True)
+    script.process_batch(third, "Automatic")
+    assert third.extra_generation_params["Torch compile"] == "MOSS-Image per-block using eager fallback: BackendCompilerFailed"
+
+    script.process_batch(_Process(kmodel, anima=False, moss=True), "Disable")
+    assert not AnimaBlockCompileManager.is_installed(kmodel)
+    assert _config(kmodel) is None
+
+
+def test_krea2_per_block_installs_only_on_krea2_and_tracks_automatic_fallbacks():
+    kmodel = SimpleNamespace(
+        diffusion_model=SimpleNamespace(blocks=torch.nn.ModuleList([torch.nn.Identity()])),
+        apply_model=lambda value: value,
+    )
+    script = _script()
+
+    p_non_krea2 = _Process(kmodel, anima=True, krea2=False)
+    script.process_batch(p_non_krea2, "Krea-2 per-block")
+    assert not AnimaBlockCompileManager.is_installed(kmodel)
+    assert p_non_krea2.extra_generation_params["Torch compile"] == "Krea-2 per-block ignored: non-Krea-2 model"
+
+    p_krea2 = _Process(kmodel, anima=False, krea2=True)
+    script.process_batch(p_krea2, "Krea-2 per-block")
+    assert AnimaBlockCompileManager.is_installed(kmodel)
+    assert _config(kmodel) == "Krea-2 per-block"
+
+    second = _Process(kmodel, anima=False, krea2=True)
+    script.process_batch(second, "Automatic")
+    getattr(kmodel, _FALLBACK_HANDLER_KEY)(RuntimeError("boom"))
+    assert second.extra_generation_params["Torch compile"] == "Krea-2 per-block fell back to eager: RuntimeError"
+
+    setattr(kmodel, _FALLBACK_REASON_KEY, "BackendCompilerFailed")
+    third = _Process(kmodel, anima=False, krea2=True)
+    script.process_batch(third, "Automatic")
+    assert third.extra_generation_params["Torch compile"] == "Krea-2 per-block using eager fallback: BackendCompilerFailed"
+
+    script.process_batch(_Process(kmodel, anima=False, krea2=True), "Disable")
+    assert not AnimaBlockCompileManager.is_installed(kmodel)
+    assert _config(kmodel) is None

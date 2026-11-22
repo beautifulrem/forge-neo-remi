@@ -26,7 +26,8 @@ def _script(module):
 @pytest.mark.parametrize("tab", harness.TABS)
 def test_params_match_the_legacy_ui(compile_script, tab):
     layout = harness.script_layout(_script(compile_script), tab)
-    harness.assert_matches_snapshot(layout, harness.load_snapshot(SCRIPT, tab))
+    # Remi added "MOSS-Image per-block" and "Krea-2 per-block" alongside "Anima per-block" after the legacy ui() snapshot.
+    harness.assert_matches_snapshot(layout, harness.load_snapshot(SCRIPT, tab), {0: {"choices": list(compile_script.PRESETS)}})
 
 
 def test_arguments_are_the_processing_signature(compile_script):
