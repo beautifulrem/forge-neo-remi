@@ -7,8 +7,11 @@ import { createJSONStorage, persist } from "zustand/middleware"
 import { CANVAS_TYPES, LABELS } from "./compile"
 import type { Box, LayoutDraft } from "./decompile"
 import { ASPECT_RATIOS, type AspectRatio, type BuilderDraft, fromDraft, type Item, newItem, rescaleBox } from "./draft"
+import { PROMPT_FORMATS, type PromptFormat } from "./flux3"
 
 export type BuilderState = BuilderDraft & {
+  /** The model the prompt is compiled for. */
+  format: PromptFormat
   /** The size the boxes are laid out for (the last committed size; `width`/`height` can be a preview being typed). */
   committedWidth: number
   committedHeight: number
@@ -19,7 +22,7 @@ export type BuilderState = BuilderDraft & {
   ar: AspectRatio
   /** The last item id handed out. */
   lastId: number
-  set: (patch: Partial<Pick<BuilderState, "caption" | "meta" | "extra" | "canvas" | "mp" | "ar">>) => void
+  set: (patch: Partial<Pick<BuilderState, "caption" | "meta" | "extra" | "canvas" | "mp" | "ar" | "format">>) => void
   /** A new canvas size; when `rescale`, the boxes are scaled from the last committed size into it. */
   setSize: (width: number, height: number, rescale?: boolean) => void
   addItem: () => void
@@ -31,7 +34,7 @@ export type BuilderState = BuilderDraft & {
   load: (draft: LayoutDraft) => void
 }
 
-const INITIAL = { width: 1024, height: 1024, committedWidth: 1024, committedHeight: 1024, draftRevision: 0, caption: "", meta: "", extra: "", canvas: "single", mp: 1, ar: "1:1" } as const
+const INITIAL = { width: 1024, height: 1024, committedWidth: 1024, committedHeight: 1024, draftRevision: 0, caption: "", meta: "", extra: "", canvas: "single", mp: 1, ar: "1:1", format: "moss" } as const
 
 export const useBuilder = create<BuilderState>()(
   persist(
@@ -62,7 +65,7 @@ export const useBuilder = create<BuilderState>()(
       version: 1,
       storage: createJSONStorage(() => localStorage),
       // width/height persist the committed size: a preview being typed would otherwise reload boxes scaled for a size they don't have.
-      partialize: ({ committedWidth, committedHeight, caption, meta, extra, canvas, items, mp, ar, lastId }) => ({ width: committedWidth, height: committedHeight, caption, meta, extra, canvas, items, mp, ar, lastId }),
+      partialize: ({ committedWidth, committedHeight, caption, meta, extra, canvas, items, mp, ar, lastId, format }) => ({ width: committedWidth, height: committedHeight, caption, meta, extra, canvas, items, mp, ar, lastId, format }),
       // A stored draft from another build or edited by hand: keep only what is well formed.
       merge: (persisted, current) => ({ ...current, ...restore(persisted) }),
     },
@@ -96,6 +99,7 @@ export function restore(persisted: unknown): Partial<BuilderState> {
   if (str(p.meta)) out.meta = p.meta
   if (str(p.extra)) out.extra = p.extra
   if ((CANVAS_TYPES as readonly unknown[]).includes(p.canvas)) out.canvas = p.canvas as BuilderState["canvas"]
+  if ((PROMPT_FORMATS as readonly unknown[]).includes(p.format)) out.format = p.format as PromptFormat
   if (positive(p.mp)) out.mp = p.mp
   if ((ASPECT_RATIOS as readonly unknown[]).includes(p.ar)) out.ar = p.ar as AspectRatio
   const items = Array.isArray(p.items) ? p.items.map(restoreItem).filter((item): item is Item => item !== null) : []

@@ -171,6 +171,16 @@ def translation_endpoint() -> str:
     return f"{opt.option('prompt_tools_translation_provider') or 'none'} {str(opt.option('prompt_tools_translation_url') or '').strip()}"
 
 
+def _flux3_loaded() -> bool:
+    """Whether the loaded checkpoint is FLUX.3 Image Klein (its captions follow the upsampler's style)."""
+
+    try:
+        from backend.args import dynamic_args
+    except Exception:
+        return False
+    return bool(getattr(dynamic_args, "flux3", False))
+
+
 def translation_config(key: str = "") -> ProviderConfig:
     """The provider settings; ``key`` is the API key from the store."""
 
@@ -554,6 +564,12 @@ class PromptTools:
         if not registry.tools_enabled:
             raise TranslationError("the prompt tools are disabled", 409)
         instructions = str(opt.option("prompt_tools_generate_instructions") or "")
+        if not instructions.strip() and not negative and _flux3_loaded():
+            # FLUX.3 is trained on its prompt upsampler's long captions: write one (any OpenAI-compatible
+            # endpoint, e.g. black-forest-labs/flux-3-image-klein-pup served by vLLM / llama.cpp)
+            from backend.nn.flux3_layout import SYSTEM_PROMPTS
+
+            instructions = SYSTEM_PROMPTS["t2i"]
         return generate_prompt(self.translation_config(), description, current=current, negative=negative, instructions=instructions)
 
     def groups(self, locale: str | None) -> list[dict[str, Any]]:

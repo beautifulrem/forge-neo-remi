@@ -27,6 +27,7 @@ import { getFormStore } from "@/ui/form-store"
 import { CANVAS_TYPES, LABELS } from "./compile"
 import { type Box, type CanvasType, decompilePrompt, type Label, splitPrompt } from "./decompile"
 import { ASPECT_RATIOS, type AspectRatio, buildDraft, finalPrompt, type Item, LABEL_NAMES, type Missing, type EditableField, missingFields, resolutionFor, round16 } from "./draft"
+import { decompileFlux3Prompt, isFlux3Prompt, PROMPT_FORMAT_NAMES, PROMPT_FORMATS, type PromptFormat } from "./flux3"
 import { LayoutCanvas } from "./LayoutCanvas"
 import { sizeLimit } from "./size-limit"
 import { useBuilder } from "./store"
@@ -155,9 +156,15 @@ function LoadPromptDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
       return
     }
     try {
-      const { json, extra } = splitPrompt(text)
-      load(decompilePrompt(json, size.width, size.height))
-      if (extra) set({ extra })
+      if (isFlux3Prompt(text)) {
+        const { draft, extra } = decompileFlux3Prompt(text, size.width, size.height)
+        load(draft)
+        set(extra ? { format: "flux3", extra } : { format: "flux3" })
+      } else {
+        const { json, extra } = splitPrompt(text)
+        load(decompilePrompt(json, size.width, size.height))
+        set(extra ? { format: "moss", extra } : { format: "moss" })
+      }
       onOpenChange(false)
       toast.success(t("Prompt loaded"))
     } catch (err) {
@@ -169,7 +176,7 @@ function LoadPromptDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("Load prompt")}</DialogTitle>
-          <DialogDescription>{t("Paste a compiled MOSS-Image prompt (with the size it was made for) or a saved layout draft.")}</DialogDescription>
+          <DialogDescription>{t("Paste a compiled MOSS-Image or FLUX.3 prompt (with the size it was made for) or a saved layout draft.")}</DialogDescription>
         </DialogHeader>
         <form
           className="flex flex-col gap-3"
@@ -250,9 +257,15 @@ function FileSection() {
     if (prompt === "") return void toast.error(t("No prompt in {{target}} to load", { target }))
     if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(h) || h <= 0) return void toast.error(t("{{target}} has no usable size", { target }))
     try {
-      const { json, extra } = splitPrompt(prompt)
-      load(decompilePrompt(json, w, h))
-      if (extra) set({ extra })
+      if (isFlux3Prompt(prompt)) {
+        const { draft, extra } = decompileFlux3Prompt(prompt, w, h)
+        load(draft)
+        set(extra ? { format: "flux3", extra } : { format: "flux3" })
+      } else {
+        const { json, extra } = splitPrompt(prompt)
+        load(decompilePrompt(json, w, h))
+        set(extra ? { format: "moss", extra } : { format: "moss" })
+      }
       toast.success(t("Prompt loaded from {{target}}", { target }))
     } catch (err) {
       toast.error(t("Could not load the prompt of {{target}}", { target }), { description: message(err) })
@@ -309,16 +322,28 @@ function SummarySection({ missing, onEditField }: { missing: ReadonlySet<Missing
   const meta = useBuilder((s) => s.meta)
   const extra = useBuilder((s) => s.extra)
   const canvas = useBuilder((s) => s.canvas)
+  const format = useBuilder((s) => s.format)
   const set = useBuilder((s) => s.set)
   return (
     <Section title={t("Summary")}>
-      <Segmented<CanvasType>
-        aria-label={t("Canvas type")}
+      <Segmented<PromptFormat>
+        aria-label={t("Prompt format")}
         className="w-full"
-        options={CANVAS_TYPES.map((value) => ({ value, label: t(CANVAS_NAMES[value]) }))}
-        value={canvas}
-        onValueChange={(value) => set({ canvas: value })}
+        options={PROMPT_FORMATS.map((value) => ({ value, label: PROMPT_FORMAT_NAMES[value] }))}
+        value={format}
+        onValueChange={(value) => set({ format: value })}
       />
+      {format === "flux3" ? (
+        <p className="text-xs text-muted-foreground">{t("FLUX.3 layout: a caption citing every item as <id>, then the boxes on a 0-1000 grid (any output size).")}</p>
+      ) : (
+        <Segmented<CanvasType>
+          aria-label={t("Canvas type")}
+          className="w-full"
+          options={CANVAS_TYPES.map((value) => ({ value, label: t(CANVAS_NAMES[value]) }))}
+          value={canvas}
+          onValueChange={(value) => set({ canvas: value })}
+        />
+      )}
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-1">
           <FieldLabel htmlFor={`${id}-caption`}>{t("Caption")}</FieldLabel>

@@ -5,6 +5,7 @@
  */
 import { compilePrompt } from "./compile"
 import type { Box, CanvasType, Label, LayoutDraft } from "./decompile"
+import { finalFlux3Prompt, type PromptFormat } from "./flux3"
 
 export type Item = { id: number; label: Label; caption: string; text: string; bbox: Box }
 
@@ -19,6 +20,8 @@ export type BuilderDraft = {
   extra: string
   canvas: CanvasType
   items: Item[]
+  /** The model the prompt is compiled for (MOSS-Image Layout JSON by default). */
+  format?: PromptFormat
 }
 
 /** Display names of the item labels (the prompt keeps the lower-case values). */
@@ -141,6 +144,7 @@ export function missingFields(state: BuilderDraft): Set<Missing> {
  * own line. Throws a `DraftError` when the draft is not valid.
  */
 export function finalPrompt(state: BuilderDraft): string {
+  if (state.format === "flux3") return finalFlux3Prompt(state)
   const flatten = (text: string) => text.replace(/[\r\n]/g, " ")
   const prompt = compilePrompt(
     JSON.stringify(
