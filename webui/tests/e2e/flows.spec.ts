@@ -161,16 +161,65 @@ test.describe("extension pages", () => {
     console.assertClean()
   })
 
-  test("JSON Builder sends its compiled prompt and size to txt2img", async ({ page }) => {
+  test("JSON Builder: field editor, background, resize, direct load and expand", async ({ page }) => {
     const console = watchConsole(page)
     await openRoute(page, "ext/json-builder")
     const main = page.getByRole("main")
     await expect(main.getByTestId("json-builder-canvas")).toBeVisible()
     await main.getByLabel("Caption", { exact: true }).fill("A cat on a sofa")
-    await main.getByLabel("Caption of item 1").fill("an orange cat")
+    await main.getByRole("textbox", { name: "Caption of item 1" }).fill("an orange cat")
+
+    // the field editor: the real prompt editor writes the draft's field, a style applies into it
+    await main.getByRole("button", { name: "Edit the summary caption in the field editor" }).click()
+    const dialog = page.getByRole("dialog")
+    const editor = dialog.getByRole("textbox", { name: "Edit the summary caption" })
+    await expect(editor).toHaveText("A cat on a sofa")
+    await editor.fill("a quiet room")
+    await dialog.getByRole("combobox", { name: "Prompt styles" }).fill("Water")
+    await page.getByRole("option", { name: "Watercolor", exact: true }).click()
+    await dialog.getByRole("button", { name: "Apply styles", exact: true }).click()
+    await expect(editor).toHaveText("a quiet room, watercolor (medium), soft colors")
+    await page.keyboard.press("Escape")
+    await expect(dialog).not.toBeVisible()
+    await expect(main.getByLabel("Caption", { exact: true })).toHaveValue("a quiet room, watercolor (medium), soft colors")
+
+    // a file under the boxes as a drawing guide
+    await main.getByTestId("json-builder-background").setInputFiles({
+      name: "guide.svg",
+      mimeType: "image/svg+xml",
+      buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>'),
+    })
+    await expect(main.getByTestId("json-builder-canvas").locator("img")).toBeVisible()
+    await main.getByRole("button", { name: "Clear the background" }).click()
+
+    // committing a new size (Enter) rescales the boxes from the committed one
+    const before = await main.evaluate(() => JSON.parse(localStorage.getItem("remi-json-builder")!).state.items[0].bbox as number[])
+    // Base UI's number field commits on Enter or on leaving the field
+    await main.getByLabel("Width").click()
+    await main.getByLabel("Width").press("ControlOrMeta+a")
+    await main.getByLabel("Width").pressSequentially("512")
+    await main.getByLabel("Width").press("Tab")
+    const stored = await main.evaluate(() => JSON.parse(localStorage.getItem("remi-json-builder")!).state)
+    expect(stored.width).toBe(512)
+    const after = stored.items[0].bbox as number[]
+    expect(Math.abs(after[0]! - before[0]! / 2)).toBeLessThanOrEqual(1)
+    expect(Math.abs(after[2]! - before[2]! / 2)).toBeLessThanOrEqual(1)
+    await main.getByLabel("Width").click()
+    await main.getByLabel("Width").press("ControlOrMeta+a")
+    await main.getByLabel("Width").pressSequentially("1024")
+    await main.getByLabel("Width").press("Tab")
+
+    // send, come back, read the tab's prompt back in
     await main.getByRole("button", { name: "Send to txt2img" }).click()
     await expect(page).toHaveURL(/#\/txt2img$/)
-    await expect(page.getByRole("textbox", { name: "Prompt", exact: true })).toContainText('{"summary":{"canvas":"single","caption":"A cat on a sofa"}')
+    await expect(page.getByRole("textbox", { name: "Prompt", exact: true })).toContainText('"caption":"a quiet room, watercolor \\\(medium\\\), soft colors"')
+    await go(page, "#/ext/json-builder")
+    const builder = page.getByRole("main")
+    await builder.getByRole("button", { name: "Expand the item list" }).click()
+    await expect(builder.getByLabel("Caption", { exact: true })).not.toBeVisible()
+    await builder.getByRole("button", { name: "Collapse the item list" }).click()
+    await builder.getByRole("button", { name: "Load from txt2img" }).click()
+    await expect(builder.getByLabel("Caption", { exact: true })).toHaveValue("a quiet room, watercolor (medium), soft colors")
     console.assertClean()
   })
 

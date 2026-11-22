@@ -12,6 +12,7 @@ import {
   metaTags,
   missingFields,
   moveBox,
+  rescaleBox,
   resizeBox,
   resolutionFor,
   round16,
@@ -48,8 +49,22 @@ describe("resolution", () => {
 })
 
 describe("boxes", () => {
-  it("places a new box 10 % in, 30 % of the shorter side", () => {
+  it("places a new box 10 % in, 30 % of the shorter side; each index steps it down-right", () => {
     expect(defaultBbox(1024, 768)).toEqual([77, 77, 307, 307])
+    expect(defaultBbox(1024, 1024, 1)).toEqual([153, 153, 460, 460])
+    // the offset stops at the canvas edge
+    expect(defaultBbox(1024, 1024, 40)).toEqual([717, 717, 1024, 1024])
+    // a tiny canvas still leaves a 16 px box
+    expect(defaultBbox(16, 16)).toEqual([0, 0, 16, 16])
+  })
+
+  it("scales a box between canvas sizes, inside the new one at at least 16 px", () => {
+    expect(rescaleBox([800, 800, 1000, 1000], 1024, 1024, 512, 512)).toEqual([400, 400, 500, 500])
+    expect(rescaleBox([400, 400, 500, 500], 512, 512, 1024, 1024)).toEqual([800, 800, 1000, 1000])
+    // a box on the edge of a tiny canvas stays whole
+    expect(rescaleBox([0, 0, 16, 16], 1024, 1024, 16, 16)).toEqual([0, 0, 16, 16])
+    // wider than tall: each axis scales on its own
+    expect(rescaleBox([100, 200, 500, 700], 1024, 768, 512, 384)).toEqual([50, 100, 250, 350])
   })
 
   it("moves inside the canvas, keeping the size", () => {
@@ -95,11 +110,21 @@ describe("drafts", () => {
     expect(missingFields(state()).size).toBe(0)
   })
 
-  it("sends the compiled prompt and the extra text on one line", () => {
-    const prompt = finalPrompt(state({ extra: "<lora:moss:0.8>\nmore" }))
+  it("sends the compiled prompt, the extra text on its own line", () => {
+    const prompt = finalPrompt(state({ extra: "  <lora:moss:0.8>\n more  " }))
     expect(prompt.startsWith('{"summary":{"meta":["photo","soft light"]')).toBe(true)
-    expect(prompt.endsWith('"bbox_format":"yxyx"} <lora:moss:0.8> more')).toBe(true)
-    expect(prompt).not.toContain("\n")
+    expect(prompt.endsWith('"bbox_format":"yxyx"}\n<lora:moss:0.8> more')).toBe(true)
+    expect(prompt).not.toContain("\r")
+  })
+
+  it("flattens newlines inside the draft's fields; literal backslashes and quotes survive", () => {
+    const prompt = finalPrompt(state({ caption: "first line\nsecond line", items: [{ id: 1, label: "text", caption: 'say "hi" \\n literally', text: "A\nB", bbox: [0, 0, 16, 16] }] }))
+    const json = prompt.slice(0, prompt.indexOf("bbox_coord_space"))
+    expect(json).toContain("first line second line")
+    expect(json).toContain('say \\"hi\\" \\\\n literally')
+    expect(json).toContain("A B")
+    // the literal backslash-n is a JSON escape inside the string, not a newline
+    expect(decompilePrompt(prompt, 1024, 768).items[0]!.caption).toBe('say "hi" \\n literally')
   })
 
   it("throws the compiler's error for an invalid draft", () => {

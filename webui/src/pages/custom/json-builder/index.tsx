@@ -7,8 +7,8 @@
  * turns a compiled prompt back into a draft; drafts save to and load from
  * JSON files. The draft is kept in the browser (`./store`).
  */
-import { Braces, ClipboardCopy, FileDown, FileUp, Images, Plus, Ratio, Trash2, Wand, X } from "@/components/icons"
-import { useId, useRef, useState } from "react"
+import { Braces, ClipboardCopy, Expand, FileDown, FileInput, FileUp, Images, Pencil, Plus, Ratio, Trash2, Wand, X } from "@/components/icons"
+import { lazy, Suspense, useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import type { FormTab } from "@/api/types"
@@ -23,13 +23,18 @@ import { copyText } from "@/features/gallery/files"
 import { deliver } from "@/features/send-to/send-to"
 import { cn } from "@/lib/utils"
 import type { CustomPageProps } from "@/pages/ext"
+import { getFormStore } from "@/ui/form-store"
 import { CANVAS_TYPES, LABELS } from "./compile"
 import { type Box, type CanvasType, decompilePrompt, type Label, splitPrompt } from "./decompile"
-import { ASPECT_RATIOS, type AspectRatio, buildDraft, finalPrompt, type Item, LABEL_NAMES, type Missing, missingFields, resolutionFor, round16 } from "./draft"
+import { ASPECT_RATIOS, type AspectRatio, buildDraft, finalPrompt, type Item, LABEL_NAMES, type Missing, type EditableField, missingFields, resolutionFor, round16 } from "./draft"
 import { LayoutCanvas } from "./LayoutCanvas"
 import { sizeLimit } from "./size-limit"
 import { useBuilder } from "./store"
+import { itemColor } from "./view"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
+
+/** The field editor, a lazy chunk (it carries CodeMirror): mounted only while a field is open in it. */
+const FieldEditor = lazy(() => import("./FieldEditor").then((m) => ({ default: m.FieldEditor })))
 
 const CANVAS_NAMES: Record<CanvasType, string> = { single: "Single", multi_panel: "Multi-panel", collage: "Collage" }
 
@@ -210,6 +215,7 @@ function LoadPromptDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
 function FileSection() {
   const { t } = useTranslation()
   const load = useBuilder((s) => s.load)
+  const set = useBuilder((s) => s.set)
   const fileInput = useRef<HTMLInputElement>(null)
   const [dialog, setDialog] = useState(false)
 
@@ -234,12 +240,41 @@ function FileSection() {
     }
   }
 
+  /** Upstream's "Load from Prompt": the compiled prompt and the size of a generation form, back into the draft. */
+  const loadFrom = (tab: "txt2img" | "img2img") => {
+    const target = t(TARGET_NAMES[tab])
+    const core = getFormStore(tab).getState().values.core
+    const prompt = typeof core?.prompt === "string" ? core.prompt.trim() : ""
+    const w = Number(core?.width)
+    const h = Number(core?.height)
+    if (prompt === "") return void toast.error(t("No prompt in {{target}} to load", { target }))
+    if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(h) || h <= 0) return void toast.error(t("{{target}} has no usable size", { target }))
+    try {
+      const { json, extra } = splitPrompt(prompt)
+      load(decompilePrompt(json, w, h))
+      if (extra) set({ extra })
+      toast.success(t("Prompt loaded from {{target}}", { target }))
+    } catch (err) {
+      toast.error(t("Could not load the prompt of {{target}}", { target }), { description: message(err) })
+    }
+  }
+
   return (
     <Section title={t("Save / load")}>
       <Button variant="secondary" onClick={() => setDialog(true)}>
         <Braces aria-hidden />
         {t("Load prompt…")}
       </Button>
+      <div className="flex gap-2">
+        <Button variant="outline" className="flex-1" onClick={() => loadFrom("txt2img")}>
+          <FileInput aria-hidden />
+          {t("Load from txt2img")}
+        </Button>
+        <Button variant="outline" className="flex-1" onClick={() => loadFrom("img2img")}>
+          <FileInput aria-hidden />
+          {t("Load from img2img")}
+        </Button>
+      </div>
       <div className="flex gap-2">
         <Button variant="outline" className="flex-1" onClick={save}>
           <FileDown aria-hidden />
@@ -267,7 +302,7 @@ function FileSection() {
   )
 }
 
-function SummarySection({ missing }: { missing: ReadonlySet<Missing> }) {
+function SummarySection({ missing, onEditField }: { missing: ReadonlySet<Missing>; onEditField: (field: EditableField) => void }) {
   const { t } = useTranslation()
   const id = useId()
   const caption = useBuilder((s) => s.caption)
@@ -285,7 +320,12 @@ function SummarySection({ missing }: { missing: ReadonlySet<Missing> }) {
         onValueChange={(value) => set({ canvas: value })}
       />
       <div className="flex flex-col gap-1">
-        <FieldLabel htmlFor={`${id}-caption`}>{t("Caption")}</FieldLabel>
+        <div className="flex items-center gap-1">
+          <FieldLabel htmlFor={`${id}-caption`}>{t("Caption")}</FieldLabel>
+          <Button size="icon-xs" variant="ghost" aria-label={t("Edit the summary caption in the field editor")} title={t("Open in the field editor")} onClick={() => onEditField({ kind: "summary" })}>
+            <Pencil aria-hidden />
+          </Button>
+        </div>
         <Textarea
           id={`${id}-caption`}
           rows={2}
@@ -294,6 +334,7 @@ function SummarySection({ missing }: { missing: ReadonlySet<Missing> }) {
           aria-invalid={missing.has("caption") || undefined}
           value={caption}
           onChange={(event) => set({ caption: event.target.value })}
+          onDoubleClick={() => onEditField({ kind: "summary" })}
         />
       </div>
       <div className="flex gap-2">
@@ -312,11 +353,26 @@ function SummarySection({ missing }: { missing: ReadonlySet<Missing> }) {
 
 const CORNERS = ["x1", "y1", "x2", "y2"] as const
 
-function ItemRow({ item, index, active, missing, onActivate }: { item: Item; index: number; active: boolean; missing: ReadonlySet<Missing>; onActivate: (id: number) => void }) {
+function ItemRow({
+  item,
+  index,
+  active,
+  missing,
+  onActivate,
+  onEditField,
+}: {
+  item: Item
+  index: number
+  active: boolean
+  missing: ReadonlySet<Missing>
+  onActivate: (id: number) => void
+  onEditField: (field: EditableField) => void
+}) {
   const { t } = useTranslation()
   const id = useId()
   const updateItem = useBuilder((s) => s.updateItem)
   const removeItem = useBuilder((s) => s.removeItem)
+  const edit = (field: "caption" | "text") => onEditField({ kind: "item", id: item.id, field })
   return (
     <li
       data-item={item.id}
@@ -325,7 +381,9 @@ function ItemRow({ item, index, active, missing, onActivate }: { item: Item; ind
       className={cn("flex flex-col gap-1.5 rounded-md border border-transparent p-2 transition-colors hover:bg-muted/50", active && "border-primary/40 bg-primary/5 hover:bg-primary/5")}
     >
       <div className="flex items-center gap-1.5">
-        <span className="w-5 shrink-0 text-center text-xs text-muted-foreground tabular-nums">{index + 1}</span>
+        <span className="w-5 shrink-0 text-center text-xs font-medium tabular-nums" style={{ color: `color-mix(in oklch, ${itemColor(index)} 45%, var(--foreground))` }} aria-hidden>
+          {index + 1}
+        </span>
         <Segmented<Label>
           size="sm"
           aria-label={t("Item type")}
@@ -338,23 +396,36 @@ function ItemRow({ item, index, active, missing, onActivate }: { item: Item; ind
           <X aria-hidden />
         </Button>
       </div>
-      <Textarea
-        aria-label={t("Caption of item {{n}}", { n: index + 1 })}
-        placeholder={t("Caption")}
-        rows={1}
-        className="min-h-8 py-1.5"
-        aria-invalid={missing.has(`item:${item.id}:caption`) || undefined}
-        value={item.caption}
-        onChange={(event) => updateItem(item.id, { caption: event.target.value })}
-      />
-      {item.label === "text" ? (
-        <Input
-          aria-label={t("Text to render of item {{n}}", { n: index + 1 })}
-          placeholder={t("Text to render")}
-          aria-invalid={missing.has(`item:${item.id}:text`) || undefined}
-          value={item.text}
-          onChange={(event) => updateItem(item.id, { text: event.target.value })}
+      <div className="flex items-start gap-1">
+        <Textarea
+          aria-label={t("Caption of item {{n}}", { n: index + 1 })}
+          placeholder={t("Caption")}
+          rows={1}
+          className="min-h-8 min-w-0 flex-1 py-1.5"
+          aria-invalid={missing.has(`item:${item.id}:caption`) || undefined}
+          value={item.caption}
+          onChange={(event) => updateItem(item.id, { caption: event.target.value })}
+          onDoubleClick={() => edit("caption")}
         />
+        <Button size="icon-xs" variant="ghost" className="self-center" aria-label={t("Edit the caption of item {{n}} in the field editor", { n: index + 1 })} title={t("Open in the field editor")} onClick={() => edit("caption")}>
+          <Pencil aria-hidden />
+        </Button>
+      </div>
+      {item.label === "text" ? (
+        <div className="flex items-center gap-1">
+          <Input
+            aria-label={t("Text to render of item {{n}}", { n: index + 1 })}
+            className="min-w-0 flex-1"
+            placeholder={t("Text to render")}
+            aria-invalid={missing.has(`item:${item.id}:text`) || undefined}
+            value={item.text}
+            onChange={(event) => updateItem(item.id, { text: event.target.value })}
+            onDoubleClick={() => edit("text")}
+          />
+          <Button size="icon-xs" variant="ghost" aria-label={t("Edit the text of item {{n}} in the field editor", { n: index + 1 })} title={t("Open in the field editor")} onClick={() => edit("text")}>
+            <Pencil aria-hidden />
+          </Button>
+        </div>
       ) : null}
       <div className="grid grid-cols-4 gap-1.5" role="group" aria-label={t("Box of item {{n}}", { n: index + 1 })}>
         {CORNERS.map((corner, i) => (
@@ -383,7 +454,21 @@ function ItemRow({ item, index, active, missing, onActivate }: { item: Item; ind
   )
 }
 
-function ItemsSection({ activeId, onActivate, missing }: { activeId: number | null; onActivate: (id: number) => void; missing: ReadonlySet<Missing> }) {
+function ItemsSection({
+  activeId,
+  onActivate,
+  onEditField,
+  missing,
+  expanded,
+  onToggleExpand,
+}: {
+  activeId: number | null
+  onActivate: (id: number) => void
+  onEditField: (field: EditableField) => void
+  missing: ReadonlySet<Missing>
+  expanded: boolean
+  onToggleExpand: () => void
+}) {
   const { t } = useTranslation()
   const items = useBuilder((s) => s.items)
   const addItem = useBuilder((s) => s.addItem)
@@ -391,9 +476,9 @@ function ItemsSection({ activeId, onActivate, missing }: { activeId: number | nu
   return (
     <Section
       title={t("Items")}
-      className="lg:min-h-48 lg:flex-1"
+      className={cn("min-h-0", expanded ? "flex-1" : "lg:min-h-48 lg:flex-1")}
       actions={
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
           <Button size="sm" variant="secondary" onClick={addItem}>
             <Plus aria-hidden />
             {t("Add item")}
@@ -402,12 +487,22 @@ function ItemsSection({ activeId, onActivate, missing }: { activeId: number | nu
             <Trash2 aria-hidden />
             {t("Clear all")}
           </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-expanded={expanded}
+            aria-label={expanded ? t("Collapse the item list") : t("Expand the item list")}
+            title={expanded ? t("Collapse the item list") : t("Expand the item list")}
+            onClick={onToggleExpand}
+          >
+            <Expand aria-hidden />
+          </Button>
         </div>
       }
     >
-      <ul className="-mr-1 flex min-h-0 flex-col gap-2 overflow-y-auto pr-1 lg:flex-1" aria-label={t("Items")}>
+      <ul className="-mr-1 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1" aria-label={t("Items")}>
         {items.map((item, index) => (
-          <ItemRow key={item.id} item={item} index={index} active={item.id === activeId} missing={missing} onActivate={onActivate} />
+          <ItemRow key={item.id} item={item} index={index} active={item.id === activeId} missing={missing} onActivate={onActivate} onEditField={onEditField} />
         ))}
       </ul>
     </Section>
@@ -420,6 +515,8 @@ export default function JsonBuilderPage(_props: CustomPageProps) {
   const { t } = useTranslation()
   const [activeId, setActiveId] = useState<number | null>(null)
   const [showMissing, setShowMissing] = useState(false)
+  const [itemsExpanded, setItemsExpanded] = useState(false)
+  const [editField, setEditField] = useState<EditableField | null>(null)
   const state = useBuilder()
   const missing = showMissing ? missingFields(state) : new Set<Missing>()
 
@@ -427,6 +524,8 @@ export default function JsonBuilderPage(_props: CustomPageProps) {
   const compile = (): string | null => {
     const empty = missingFields(state)
     if (empty.size > 0) {
+      // a missing summary is hidden while the item list is expanded: reveal it
+      if (empty.has("caption")) setItemsExpanded(false)
       setShowMissing(true)
       toast.error(t("Fill in the highlighted fields"))
       return null
@@ -463,16 +562,20 @@ export default function JsonBuilderPage(_props: CustomPageProps) {
   return (
     <div className="h-full overflow-y-auto lg:overflow-hidden" data-scroll-root>
       <div className="flex min-h-full flex-col gap-3 p-3 sm:p-4 lg:h-full lg:flex-row">
-        <LayoutCanvas className="h-[60vh] max-h-[75vh] min-h-64 shrink-0 lg:h-auto lg:max-h-none lg:min-h-0 lg:flex-1 lg:shrink" activeId={activeId} onActivate={setActiveId} missing={missing} />
+        <LayoutCanvas className="h-[60vh] max-h-[75vh] min-h-64 shrink-0 lg:h-auto lg:max-h-none lg:min-h-0 lg:flex-1 lg:shrink" activeId={activeId} onActivate={setActiveId} onEditField={setEditField} missing={missing} />
         {/* lg: a scroller; 4 px of room either side (-mx-1 / px-1) keeps the fields' focus rings */}
         <div className="flex min-h-0 flex-col gap-3 lg:-mx-1 lg:w-[calc(26rem+0.5rem)] lg:shrink-0 lg:overflow-y-auto lg:px-1 xl:w-[calc(30rem+0.5rem)]">
-          {/* side by side only where the panel spans the page: the side column (lg+) is too narrow for two */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <ResolutionSection />
-            <FileSection />
-          </div>
-          <SummarySection missing={missing} />
-          <ItemsSection activeId={activeId} onActivate={setActiveId} missing={missing} />
+          {itemsExpanded ? null : (
+            <>
+              {/* side by side only where the panel spans the page: the side column (lg+) is too narrow for two */}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                <ResolutionSection />
+                <FileSection />
+              </div>
+              <SummarySection missing={missing} onEditField={setEditField} />
+            </>
+          )}
+          <ItemsSection activeId={activeId} onActivate={setActiveId} onEditField={setEditField} missing={missing} expanded={itemsExpanded} onToggleExpand={() => setItemsExpanded((v) => !v)} />
           {/* pinned to the bottom of the page (phone) or of the scrolling side column (lg+): the send buttons stay in reach */}
           <div className="sticky bottom-0 z-10 flex gap-2 border-t border-border/70 bg-background py-2 lg:border-t-0 lg:pt-2 lg:pb-0" data-toast-obstacle>
             <Button className="flex-1" onClick={() => send("txt2img")}>
@@ -489,6 +592,11 @@ export default function JsonBuilderPage(_props: CustomPageProps) {
           </div>
         </div>
       </div>
+      {editField ? (
+        <Suspense fallback={null}>
+          <FieldEditor key={editField.kind === "summary" ? "summary" : `${editField.id}:${editField.field}`} field={editField} onClose={() => setEditField(null)} />
+        </Suspense>
+      ) : null}
     </div>
   )
 }

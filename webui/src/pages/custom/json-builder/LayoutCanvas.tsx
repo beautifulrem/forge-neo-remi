@@ -2,19 +2,25 @@
  * The layout canvas: the draft's items as boxes on a stage of the draft's
  * aspect ratio. Drag a box to move it, its corner to resize it (arrow keys
  * move the focused box, Shift for 16 px); double-click its caption (or text)
- * to edit it in place. The wheel zooms at the cursor, the middle button (or
- * the left one on the background while zoomed in) pans, a double-click on the
- * background fits the stage again.
+ * to edit it in the field editor. The wheel zooms at the cursor, the middle
+ * button (or the left one on the background while zoomed in) pans, a
+ * double-click on the background fits the stage again. An image can be put
+ * under the boxes as a drawing guide (a file or the selected session
+ * result); it is decoration only, never part of the draft or the prompt.
  */
-import { Maximize, ZoomIn, ZoomOut } from "@/components/icons"
+import { Eraser, HelpCircle, Image as ImageIcon, ImagePlus, Maximize, ZoomIn, ZoomOut } from "@/components/icons"
 import { type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { toast } from "sonner"
+import { api } from "@/api/endpoints"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { selectedItem, useSession } from "@/features/gallery/session-store"
 import { useMediaQuery } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
-import { type Item, LABEL_NAMES, type Missing, moveBox, resizeBox } from "./draft"
+import { type EditableField, type Item, LABEL_NAMES, type Missing, moveBox, resizeBox } from "./draft"
 import { useBuilder } from "./store"
-import { clampView, fitStage, RESET_VIEW, type View, ZOOM_STEP, zoomAbout } from "./view"
+import { clampView, fitStage, itemColor, RESET_VIEW, type View, ZOOM_STEP, zoomAbout } from "./view"
 
 /** The stage's margin inside the canvas area, in CSS pixels (each side). */
 const INSET = 16
@@ -61,6 +67,7 @@ function BoxView({
   active,
   missing,
   onActivate,
+  onEditField,
 }: {
   item: Item
   /** Its position in the list (shown 1-based). */
@@ -69,15 +76,15 @@ function BoxView({
   active: boolean
   missing: ReadonlySet<Missing>
   onActivate: (id: number | null) => void
+  onEditField: (field: EditableField) => void
 }) {
   const { t } = useTranslation()
   const width = useBuilder((s) => s.width)
   const height = useBuilder((s) => s.height)
   const setBox = useBuilder((s) => s.setBox)
-  const updateItem = useBuilder((s) => s.updateItem)
-  const [editing, setEditing] = useState<Field | null>(null)
   const [dragging, setDragging] = useState(false)
   const [x1, y1, x2, y2] = item.bbox
+  const color = itemColor(index)
 
   /** Canvas pixels per client pixel (the stage's on-screen size includes the zoom). */
   const pixelScale = () => {
@@ -131,23 +138,14 @@ function BoxView({
       <textarea
         aria-label={name === "caption" ? t("Box {{n}} caption", { n: index + 1 }) : t("Box {{n}} text", { n: index + 1 })}
         aria-invalid={invalid || undefined}
-        readOnly={editing !== name}
+        readOnly
         spellCheck={false}
         placeholder={name === "caption" ? t("Caption") : t("Text to render")}
         value={name === "caption" ? item.caption : item.text}
-        onChange={(event) => updateItem(item.id, { [name]: event.target.value })}
-        onDoubleClick={(event) => {
-          setEditing(name)
-          event.currentTarget.focus()
-        }}
-        onBlur={() => setEditing(null)}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") event.currentTarget.blur()
-        }}
+        onDoubleClick={() => onEditField({ kind: "item", id: item.id, field: name })}
         className={cn(
           "m-1.5 min-h-0 min-w-0 flex-1 resize-none overflow-hidden rounded-sm bg-background/50 px-1.5 py-0.5 leading-normal text-foreground outline-none placeholder:text-muted-foreground",
-          "text-[length:calc(0.875rem*var(--jb-text-scale))]",
-          editing === name ? "cursor-text ring-2 ring-ring/60 select-text" : "cursor-move select-none",
+          "cursor-move text-[length:calc(0.875rem*var(--jb-text-scale))] select-none",
           invalid && "ring-2 ring-destructive",
         )}
       />
@@ -164,20 +162,29 @@ function BoxView({
       onKeyDown={onKeyDown}
       onPointerDown={(event) => {
         if (event.button !== 0) return
-        const target = event.target as HTMLElement
-        if (target instanceof HTMLTextAreaElement && !target.readOnly) return
         event.preventDefault()
         event.currentTarget.focus({ preventScroll: true })
         startDrag(event)
       }}
-      style={{ left: `${(x1 / width) * 100}%`, top: `${(y1 / height) * 100}%`, width: `${((x2 - x1) / width) * 100}%`, height: `${((y2 - y1) / height) * 100}%` }}
+      style={{
+        left: `${(x1 / width) * 100}%`,
+        top: `${(y1 / height) * 100}%`,
+        width: `${((x2 - x1) / width) * 100}%`,
+        height: `${((y2 - y1) / height) * 100}%`,
+        borderColor: color,
+        backgroundColor: `color-mix(in oklch, ${color} 14%, transparent)`,
+      }}
       className={cn(
-        "absolute flex min-h-5 min-w-5 touch-none flex-col overflow-hidden rounded border-[1.5px] border-primary/60 bg-primary/14 outline-none select-none",
-        "cursor-move transition-[border-color,box-shadow] hover:border-primary focus-visible:ring-3 focus-visible:ring-ring/50",
-        (active || dragging) && "z-10 border-primary shadow-lg ring-3 ring-primary/30",
+        "absolute flex min-h-5 min-w-5 touch-none flex-col overflow-hidden rounded border-[1.5px] outline-none select-none",
+        "cursor-move transition-[border-color,box-shadow] focus-visible:ring-3 focus-visible:ring-ring/50",
+        (active || dragging) && "z-10 shadow-lg ring-3 ring-primary/30",
       )}
     >
-      <div className="flex-none truncate bg-primary px-1.5 text-[length:calc(0.6875rem*var(--jb-text-scale))] leading-normal font-medium text-primary-foreground">
+      <div
+        className="flex-none truncate px-1.5 text-[length:calc(0.6875rem*var(--jb-text-scale))] leading-normal font-medium text-foreground"
+        style={{ backgroundColor: `color-mix(in oklch, ${color} 28%, var(--background))` }}
+        title={t(LABEL_NAMES[item.label])}
+      >
         {t(LABEL_NAMES[item.label])}
       </div>
       {field("caption")}
@@ -197,14 +204,45 @@ function BoxView({
   )
 }
 
+/** A background under the boxes; `owned` marks a blob URL this canvas made and revokes. */
+type Background = { url: string; owned: boolean }
+
+function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { t } = useTranslation()
+  const hints = [
+    t("Each item is one region: pick its label, write a caption, drag the box to place it and its bottom-right corner to resize it. Arrow keys move the focused box, Shift for 16 px."),
+    t("Double-click a caption or text field (here or in the list), or use its pencil button, to edit it in the field editor with prompt completions and styles."),
+    t("Scroll to zoom, middle-drag (or drag the empty space while zoomed in) to pan, double-click the empty space to fit the canvas again."),
+    t("The buttons at the top left put an image under the boxes as a drawing guide: a file or the selected session result. It is never saved or sent."),
+    t("“Send to” compiles the draft into a tab’s prompt and size; “Load prompt…” or “Load from txt2img / img2img” read one back. “Extra” is appended on its own line after the JSON."),
+  ]
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t("How to use the JSON Builder")}</DialogTitle>
+          <DialogDescription>{t("A visual editor for MOSS-Image's structured prompts")}</DialogDescription>
+        </DialogHeader>
+        <ul className="flex list-disc flex-col gap-2 pl-5 text-sm text-foreground/85">
+          {hints.map((hint, i) => (
+            <li key={i}>{hint}</li>
+          ))}
+        </ul>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function LayoutCanvas({
   activeId,
   onActivate,
+  onEditField,
   missing,
   className,
 }: {
   activeId: number | null
   onActivate: (id: number | null) => void
+  onEditField: (field: EditableField) => void
   missing: ReadonlySet<Missing>
   className?: string
 }) {
@@ -212,8 +250,30 @@ export function LayoutCanvas({
   const width = useBuilder((s) => s.width)
   const height = useBuilder((s) => s.height)
   const items = useBuilder((s) => s.items)
+  const selected = useSession((s) => selectedItem(s))
   const [area, setArea] = useState<HTMLDivElement | null>(null)
   const [stage, setStage] = useState<HTMLDivElement | null>(null)
+  const [help, setHelp] = useState(false)
+  const [bg, setBg] = useState<Background | null>(null)
+  const ownedUrl = useRef<string | null>(null)
+  const bgFileInput = useRef<HTMLInputElement>(null)
+
+  /** Sets (or clears) the background, giving back a blob URL it replaces. */
+  const setBackground = (url: string | null, owned = false) => {
+    if (ownedUrl.current) {
+      URL.revokeObjectURL(ownedUrl.current)
+      ownedUrl.current = null
+    }
+    if (url && owned) ownedUrl.current = url
+    setBg(url ? { url, owned } : null)
+  }
+  // The blob URL's lifetime is the canvas's.
+  useEffect(
+    () => () => {
+      if (ownedUrl.current) URL.revokeObjectURL(ownedUrl.current)
+    },
+    [],
+  )
   // Stacked above the form (below lg) the area takes the frame's aspect, plus the inset and the zoom bar's
   // strip, rather than a fixed height that leaves empty bands around a square frame.
   const stacked = !useMediaQuery("(min-width: 64rem)")
@@ -298,10 +358,52 @@ export function LayoutCanvas({
           } as CSSProperties
         }
       >
+        {bg ? (
+          <img
+            src={bg.url}
+            alt=""
+            aria-hidden
+            className="pointer-events-none absolute inset-0 size-full object-fill"
+            onError={() => {
+              setBackground(null)
+              toast.error(t("Could not load the background image"))
+            }}
+          />
+        ) : null}
         {items.map((item, index) => (
-          <BoxView key={item.id} item={item} index={index} stage={stage} active={item.id === activeId} missing={missing} onActivate={onActivate} />
+          <BoxView key={item.id} item={item} index={index} stage={stage} active={item.id === activeId} missing={missing} onActivate={onActivate} onEditField={onEditField} />
         ))}
       </div>
+      <div className="absolute top-2 left-2 flex items-center gap-0.5 rounded-lg bg-background/90 p-0.5 shadow-sm">
+        <Button
+          size="icon-xs"
+          variant="ghost"
+          disabled={!selected}
+          aria-label={t("Use the selected result as background")}
+          title={t("Use the selected result as background")}
+          onClick={() => selected && setBackground(api.fileUrl(selected.fileId))}
+        >
+          <ImageIcon aria-hidden />
+        </Button>
+        <Button size="icon-xs" variant="ghost" aria-label={t("Load a background image")} title={t("Load a background image")} onClick={() => bgFileInput.current?.click()}>
+          <ImagePlus aria-hidden />
+        </Button>
+        <Button size="icon-xs" variant="ghost" disabled={!bg} aria-label={t("Clear the background")} title={t("Clear the background")} onClick={() => setBackground(null)}>
+          <Eraser aria-hidden />
+        </Button>
+      </div>
+      <input
+        ref={bgFileInput}
+        type="file"
+        accept="image/*"
+        hidden
+        data-testid="json-builder-background"
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          event.target.value = ""
+          if (file) setBackground(URL.createObjectURL(file), true)
+        }}
+      />
       <div className="absolute right-2 bottom-2 flex items-center gap-0.5 rounded-lg bg-background/90 p-0.5 shadow-sm">
         <span className="px-1.5 text-xs text-muted-foreground tabular-nums">
           {width} × {height}
@@ -317,7 +419,12 @@ export function LayoutCanvas({
         <Button size="icon-xs" variant="ghost" aria-label={t("Fit to screen")} title={t("Fit to screen")} onClick={() => setView(RESET_VIEW)}>
           <Maximize aria-hidden />
         </Button>
+        <span aria-hidden className="h-4 w-px bg-border" />
+        <Button size="icon-xs" variant="ghost" aria-label={t("How to use the JSON Builder")} title={t("How to use the JSON Builder")} onClick={() => setHelp(true)}>
+          <HelpCircle aria-hidden />
+        </Button>
       </div>
+      <HelpDialog open={help} onOpenChange={setHelp} />
     </div>
   )
 }

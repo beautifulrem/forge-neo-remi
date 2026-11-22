@@ -13,6 +13,9 @@ export const MAX_ZOOM = 8
 export const ZOOM_STEP = 1.2
 export const RESET_VIEW: View = { scale: 1, panX: 0, panY: 0 }
 
+/** An item's colour (upstream's pastel per-item colours): the box's border/tag and its number in the list. */
+export const itemColor = (index: number) => `var(--chart-${(index % 5) + 1})`
+
 /** The largest `ratio` (width / height) rectangle inside `width` × `height`. */
 export function fitStage(width: number, height: number, ratio: number): { width: number; height: number } {
   const cw = Math.max(1, width)

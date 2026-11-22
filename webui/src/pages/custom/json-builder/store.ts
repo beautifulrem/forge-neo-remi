@@ -6,19 +6,22 @@ import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
 import { CANVAS_TYPES, LABELS } from "./compile"
 import type { Box, LayoutDraft } from "./decompile"
-import { ASPECT_RATIOS, type AspectRatio, type BuilderDraft, clampBox, fromDraft, type Item, newItem } from "./draft"
+import { ASPECT_RATIOS, type AspectRatio, type BuilderDraft, fromDraft, type Item, newItem, rescaleBox } from "./draft"
 
 export type BuilderState = BuilderDraft & {
+  /** The size the boxes are laid out for (the last committed size; `width`/`height` can be a preview being typed). */
+  committedWidth: number
+  committedHeight: number
+  /** Bumped by `load` so a field editing for the old draft drops its work. */
+  draftRevision: number
   /** The resolution tool's megapixels and aspect ratio. */
   mp: number
   ar: AspectRatio
   /** The last item id handed out. */
   lastId: number
   set: (patch: Partial<Pick<BuilderState, "caption" | "meta" | "extra" | "canvas" | "mp" | "ar">>) => void
-  /** A new canvas size; with `clampItems`, boxes are moved (and shrunk) to fit it. */
-  setSize: (width: number, height: number, clampItems?: boolean) => void
-  /** Moves every box inside the canvas. */
-  clampItems: () => void
+  /** A new canvas size; when `rescale`, the boxes are scaled from the last committed size into it. */
+  setSize: (width: number, height: number, rescale?: boolean) => void
   addItem: () => void
   updateItem: (id: number, patch: Partial<Omit<Item, "id">>) => void
   setBox: (id: number, bbox: Box) => void
@@ -28,7 +31,7 @@ export type BuilderState = BuilderDraft & {
   load: (draft: LayoutDraft) => void
 }
 
-const INITIAL = { width: 1024, height: 1024, caption: "", meta: "", extra: "", canvas: "single", mp: 1, ar: "1:1" } as const
+const INITIAL = { width: 1024, height: 1024, committedWidth: 1024, committedHeight: 1024, draftRevision: 0, caption: "", meta: "", extra: "", canvas: "single", mp: 1, ar: "1:1" } as const
 
 export const useBuilder = create<BuilderState>()(
   persist(
@@ -37,10 +40,13 @@ export const useBuilder = create<BuilderState>()(
       items: [newItem(1, INITIAL.width, INITIAL.height)],
       lastId: 1,
       set: (patch) => set(patch),
-      setSize: (width, height, clampItems = false) =>
-        set((s) => ({ width, height, items: clampItems ? s.items.map((item) => ({ ...item, bbox: clampBox(item.bbox, width, height) })) : s.items })),
-      clampItems: () => set((s) => ({ items: s.items.map((item) => ({ ...item, bbox: clampBox(item.bbox, s.width, s.height) })) })),
-      addItem: () => set((s) => ({ items: [...s.items, newItem(s.lastId + 1, s.width, s.height)], lastId: s.lastId + 1 })),
+      setSize: (width, height, rescale = false) =>
+        set((s) =>
+          rescale
+            ? { width, height, committedWidth: width, committedHeight: height, items: s.items.map((item) => ({ ...item, bbox: rescaleBox(item.bbox, s.committedWidth, s.committedHeight, width, height) })) }
+            : { width, height },
+        ),
+      addItem: () => set((s) => ({ items: [...s.items, newItem(s.lastId + 1, s.width, s.height, s.items.length)], lastId: s.lastId + 1 })),
       updateItem: (id, patch) => set((s) => ({ items: s.items.map((item) => (item.id === id ? { ...item, ...patch } : item)) })),
       setBox: (id, bbox) => set((s) => ({ items: s.items.map((item) => (item.id === id ? { ...item, bbox } : item)) })),
       removeItem: (id) =>
@@ -49,13 +55,14 @@ export const useBuilder = create<BuilderState>()(
           return items.length > 0 ? { items } : { items: [newItem(s.lastId + 1, s.width, s.height)], lastId: s.lastId + 1 }
         }),
       clearItems: () => set((s) => ({ items: [newItem(s.lastId + 1, s.width, s.height)], lastId: s.lastId + 1 })),
-      load: (draft) => set((s) => fromDraft(draft, s.lastId)),
+      load: (draft) => set((s) => ({ ...fromDraft(draft, s.lastId), committedWidth: draft.width, committedHeight: draft.height, draftRevision: s.draftRevision + 1 })),
     }),
     {
       name: "remi-json-builder",
       version: 1,
       storage: createJSONStorage(() => localStorage),
-      partialize: ({ width, height, caption, meta, extra, canvas, items, mp, ar, lastId }) => ({ width, height, caption, meta, extra, canvas, items, mp, ar, lastId }),
+      // width/height persist the committed size: a preview being typed would otherwise reload boxes scaled for a size they don't have.
+      partialize: ({ committedWidth, committedHeight, caption, meta, extra, canvas, items, mp, ar, lastId }) => ({ width: committedWidth, height: committedHeight, caption, meta, extra, canvas, items, mp, ar, lastId }),
       // A stored draft from another build or edited by hand: keep only what is well formed.
       merge: (persisted, current) => ({ ...current, ...restore(persisted) }),
     },
@@ -82,6 +89,8 @@ export function restore(persisted: unknown): Partial<BuilderState> {
   if (positive(p.width) && positive(p.height)) {
     out.width = p.width
     out.height = p.height
+    out.committedWidth = p.width
+    out.committedHeight = p.height
   }
   if (str(p.caption)) out.caption = p.caption
   if (str(p.meta)) out.meta = p.meta

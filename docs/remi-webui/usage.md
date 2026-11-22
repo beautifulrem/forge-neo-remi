@@ -34,7 +34,13 @@ Below 72 rem the history becomes a strip; on phones the stage comes first and th
 
 **Extensions.** Installed extensions (enable, disable, check for updates, update, uninstall), the extension index (by default the third-party [Forge Neo index](https://github.com/eduardoabreu81/forge-neo-extensions); verify an extension before installing it) with search, tag filters and a recent-updates filter ("2025+"), install from a git URL, and configuration backups you can restore.
 
-**Extension pages.** Extensions add their own pages: **JoyCaption** (image captioning, single or folder, with progress and cancel), **Prompt Workshop** and **JSON Builder** (lay out a MOSS-Image structured prompt as boxes on a canvas, then send it with its size to txt2img or img2img) ship with Remi.
+**Extension pages.** Extensions add their own pages: **JoyCaption** (image captioning, single or folder, with progress and cancel), **Prompt Workshop** and **JSON Builder** ship with Remi.
+
+The JSON Builder lays out a MOSS-Image structured prompt as boxes on a canvas: drag a box to place it, its corner to resize it (arrow keys nudge the focused box, Shift for 16 px), scroll to zoom and middle-drag to pan. Each item has its own colour, shared by its box and its number in the list. Changing the canvas size keeps every box at the same relative position and size. The item list can expand over the rest of the side panel for long layouts, and the ? button on the canvas shows a short manual.
+
+A caption or text field opens in a **field editor** — double-click it, or use its pencil button: the same prompt editor as the generation fields, with completions, plus a styles picker whose "Apply styles" writes the styled prompt into that field only. The buttons at the canvas's top left can put an image under the boxes as a drawing guide — a file or the selected session result; it is never saved or sent.
+
+"Send to" writes the compiled prompt — the JSON on one line, "Extra" on its own line — and the size into the tab; "Load prompt…" pastes one back, and "Load from txt2img / img2img" reads the tab's current prompt and size.
 
 **Prompt tools.** Under every prompt: a tag view (chips you can reorder, reweight, disable or delete), quick tag groups, prompt history, favorites in collections, optional translation through a provider you configure, and, with an OpenAI-compatible provider, "Write a prompt" (an LLM writes or changes the prompt from a description in any language). Nothing is sent anywhere until you choose a provider.
 

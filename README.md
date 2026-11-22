@@ -69,9 +69,9 @@ Remi retains Forge Neo's modern-model focus and adds deeper Anima integration.
 - Krea 2 and Krea 2 Identity Edit
 - FLUX Kontext and FLUX.2 Klein
 - Qwen-Image, Qwen-Image-Edit and Qwen-Image-2.1
-- Moss-Image and Moss-Image-Edit
+- Moss-Image and Moss-Image-Edit, with a [JSON Builder page](docs/remi-webui/usage.md) for MOSS-Image structured prompts
 - Anima RGBA (transparent images; needs its [LoRA and VAE](https://huggingface.co/localai0301/Anima-RGBA); for img2img of a transparent image set `img2img_background_color` to `(255, 255, 255)`)
-- GGUF checkpoints and text encoders (the `gguf` package, with Triton K-quant dequantization where available)
+- GGUF checkpoints and text encoders (the `gguf` package, with Triton K-quant dequantization where available); GGUF-native layers keep their quantized weights when a checkpoint's state dict is (re)loaded, ordinary layers dequantize on load
 - Ernie-Image, PiD 1.5, Z-Image, Mugen, Lumina Image 2, and Chroma
 - Wan 2.2 image/video workflows
 

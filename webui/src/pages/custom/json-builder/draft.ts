@@ -35,18 +35,27 @@ export const MIN_BOX = 16
 export const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 export const round16 = (v: number) => Math.max(16, Math.round(v / 16) * 16)
 
-/** A new item's box: 30 % of the shorter side, 10 % in from the top-left corner. */
-export function defaultBbox(width: number, height: number): Box {
-  const m = Math.round(Math.min(width, height) * 0.1)
-  const s = Math.round(Math.min(width, height) * 0.3)
-  return [m, m, m + s, m + s]
+/** A new item's box: 30 % of the shorter side, 10 % in from the top-left corner; each `index` steps it down-right so new items do not stack. */
+export function defaultBbox(width: number, height: number, index = 0): Box {
+  const side = Math.min(width, height)
+  const s = Math.min(side, Math.max(MIN_BOX, Math.round(side * 0.3)))
+  const m = Math.min(Math.round(side * 0.1), side - s)
+  const offset = Math.min(index * Math.max(16, Math.round(side * 0.05)), width - m - s, height - m - s)
+  return [m + offset, m + offset, m + s + offset, m + s + offset]
 }
 
 /** A new item's label (a prompt value, not a display text). */
 const NEW_LABEL: Label = "object"
 
-export function newItem(id: number, width: number, height: number): Item {
-  return { id, label: NEW_LABEL, caption: "", text: "", bbox: defaultBbox(width, height) }
+export function newItem(id: number, width: number, height: number, index = 0): Item {
+  return { id, label: NEW_LABEL, caption: "", text: "", bbox: defaultBbox(width, height, index) }
+}
+
+/** `bbox` scaled from an old canvas size to a new one, kept inside it at at least {@link MIN_BOX} a side. */
+export function rescaleBox(bbox: Box, oldWidth: number, oldHeight: number, width: number, height: number): Box {
+  const x1 = clamp(Math.round((bbox[0] * width) / oldWidth), 0, width - MIN_BOX)
+  const y1 = clamp(Math.round((bbox[1] * height) / oldHeight), 0, height - MIN_BOX)
+  return [x1, y1, clamp(Math.round((bbox[2] * width) / oldWidth), x1 + MIN_BOX, width), clamp(Math.round((bbox[3] * height) / oldHeight), y1 + MIN_BOX, height)]
 }
 
 /** Width and height (multiples of 16) for `mp` megapixels at aspect ratio `ar` ("16:9"). */
@@ -109,6 +118,9 @@ export function buildDraft(state: BuilderDraft) {
   }
 }
 
+/** One editable text field of the draft, for the field editor dialog. */
+export type EditableField = { kind: "summary" } | { kind: "item"; id: number; field: "caption" | "text" }
+
 /** A field left empty that the prompt needs. */
 export type Missing = "caption" | `item:${number}:caption` | `item:${number}:text`
 
@@ -124,14 +136,24 @@ export function missingFields(state: BuilderDraft): Set<Missing> {
 }
 
 /**
- * The prompt to send: the compiled draft, then the extra text, on one line
- * (newlines become spaces, as upstream writes it into the prompt box).
- * Throws a `DraftError` when the draft is not valid.
+ * The prompt to send: the compiled draft on one line (newlines in the
+ * captions, meta and text fields become spaces), then the extra text on its
+ * own line. Throws a `DraftError` when the draft is not valid.
  */
 export function finalPrompt(state: BuilderDraft): string {
-  let prompt = compilePrompt(JSON.stringify(buildDraft(state)))
-  if (state.extra.trim() !== "") prompt += `\n${state.extra}`
-  return prompt.replaceAll("\n", " ")
+  const flatten = (text: string) => text.replace(/[\r\n]/g, " ")
+  const prompt = compilePrompt(
+    JSON.stringify(
+      buildDraft({
+        ...state,
+        caption: flatten(state.caption),
+        meta: flatten(state.meta),
+        items: state.items.map((item) => ({ ...item, caption: flatten(item.caption), text: flatten(item.text) })),
+      }),
+    ),
+  )
+  const extra = state.extra.replace(/\s+/g, " ").trim()
+  return extra ? `${prompt}\n${extra}` : prompt
 }
 
 /**
