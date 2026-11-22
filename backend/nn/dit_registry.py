@@ -1,5 +1,5 @@
 """Declarative capability registry for DiT architectures (Anima, MOSS-Image,
-Krea 2, and future models such as Qwen-Image-2.1 / FLUX.3).
+Krea 2, FLUX.3, Qwen-Image-2.1, and future models).
 
 Centralizes per-architecture metadata and hooks so shared infrastructure
 (on-the-fly quantization, Diffusers/sharded checkpoint discovery and loading,
@@ -248,6 +248,12 @@ def fast_forward_flux3(dit, predictor, sigma, input_x, feature):
     return predictor.calculate_denoised(sigma, model_output.float(), input_x)
 
 
+def fast_forward_qwen21(dit, predictor, sigma, input_x, feature):
+    internal_timestep = predictor.timestep(sigma).float()
+    model_output = dit.compute_final(feature, internal_timestep, tuple(input_x.shape))
+    return predictor.calculate_denoised(sigma, model_output.float(), input_x)
+
+
 def match_spectrum_capability(dit) -> DiTCapability | None:
     """Return the capability whose Spectrum pre-head seam ``dit`` satisfies."""
 
@@ -430,6 +436,59 @@ def flux3_workflow_advice(p, *, opts=None) -> list[str]:
             "FLUX.3 is trained on long, detailed captions (about 100-350 words, as written by its prompt upsampler); a short "
             "prompt leaves the scene under-specified. Describe medium, scene, subjects and layout, or place elements with the "
             "FLUX.3 Layout panel."
+        )
+    return advice
+
+
+QWEN21_MAX_REFERENCES = 10
+_QWEN21_TURBO_RE = re.compile(r"(?:^|[-_ /])(?:turbo\d*|distill(?:ed)?|8[-_]?steps?)(?:$|[-_ /.])", re.IGNORECASE)
+_QWEN21_RGBA_PROMPT_RE = re.compile(r"(?:\brgba\b|\btransparent\b|\balpha\s+channel\b|透明背景|透明图|透明通道)", re.IGNORECASE)
+
+
+def qwen21_workflow_advice(p, *, opts=None) -> list[str]:
+    """Non-blocking hints for Qwen-Image-2.1 (Base vs Turbo, references, RGBA output)."""
+
+    from backend.args import dynamic_args
+
+    if not dynamic_args.qwen21:
+        return []
+
+    active_opts = _resolve_opts(opts)
+    advice: list[str] = []
+    sd_model = getattr(p, "sd_model", None)
+
+    ckpt_name, lora_names = _prompt_and_checkpoint_names(p)
+    combined = " ".join([ckpt_name, *lora_names]).strip()
+    is_turbo = bool(combined and _QWEN21_TURBO_RE.search(combined)) or not getattr(sd_model, "use_dynamic_shifting", True)
+
+    steps = getattr(p, "steps", None)
+    cfg = getattr(p, "cfg_scale", None)
+    if is_turbo:
+        if (isinstance(steps, (int, float)) and steps >= 16) or (isinstance(cfg, (int, float)) and cfg > 1.5):
+            advice.append(
+                f"Qwen-Image-2.1 Turbo detected with steps={steps}, cfg={cfg}: the 8-step distilled Turbo "
+                "checkpoint/LoRA works best at ~8 steps with CFG 1.0."
+            )
+    elif (isinstance(steps, (int, float)) and steps <= 12) and (isinstance(cfg, (int, float)) and cfg <= 1.0):
+        advice.append(
+            f"Qwen-Image-2.1 Base detected with steps={steps}, cfg={cfg}: the undistilled Base model typically "
+            "needs ~32-40 steps and CFG 2.5-4.0 (use Qwen-Image-2.1-Turbo or a Turbo LoRA for 8-step CFG 1.0)."
+        )
+
+    refs = [*(getattr(sd_model, "ref_latents", None) or ())]
+    if getattr(sd_model, "ini_latent", None) is not None:
+        refs.append(sd_model.ini_latent)
+    if refs and not bool(getattr(active_opts, "qwen21_do_reference", True)):
+        advice.append("Qwen-Image-2.1: reference images are attached while [Qwen 2.1] Enable Reference is off; they are ignored (plain img2img).")
+    if len(refs) > QWEN21_MAX_REFERENCES:
+        advice.append(f"Qwen-Image-2.1 was trained with at most {QWEN21_MAX_REFERENCES} reference images; {len(refs)} are attached.")
+
+    prompt = getattr(p, "prompt", None)
+    samples_format = str(getattr(active_opts, "samples_format", "png") or "png").lower()
+    if isinstance(prompt, str) and _QWEN21_RGBA_PROMPT_RE.search(prompt) and samples_format in ("jpg", "jpeg"):
+        advice.append(
+            f"Qwen-Image-2.1 RGBA transparent prompt detected while samples_format={samples_format!r}: "
+            "JPEG drops the alpha channel; switch the output format to PNG or WebP to keep transparency."
         )
     return advice
 
@@ -756,6 +815,75 @@ register_dit_capability(
         spectrum_capture_attr="final_input",
         spectrum_fast_forward=fast_forward_flux3,
         workflow_advice=flux3_workflow_advice,
+    )
+)
+
+
+_QWEN21_INT8_LINEAR_SUFFIXES = (
+    ".attn.to_q.weight",
+    ".attn.to_k.weight",
+    ".attn.to_v.weight",
+    ".attn.to_out.0.weight",
+    ".img_mlp.gate_up.weight",
+    ".img_mlp.gate_layer.weight",
+    ".img_mlp.proj.weight",
+    ".img_mlp.out.weight",
+)
+
+
+def _is_qwen21_state_dict(sd: dict[str, torch.Tensor]) -> bool:
+    return "txt_in.text_norm.weight" in sd and "modulation.1.weight" in sd
+
+
+def _is_qwen21_dir(path: os.PathLike | str) -> bool:
+    from backend.nn.qwen21_diffusers import is_qwen21_checkpoint_dir
+
+    return is_qwen21_checkpoint_dir(path)
+
+
+def _qwen21_primary_file(path: os.PathLike | str) -> str | None:
+    from backend.nn.qwen21_diffusers import qwen21_diffusers_primary_file
+
+    return qwen21_diffusers_primary_file(path)
+
+
+def _load_qwen21_dir(path: os.PathLike | str) -> tuple[dict[str, torch.Tensor], dict]:
+    from backend.nn.qwen21_diffusers import load_qwen21_diffusers_dir
+
+    return load_qwen21_diffusers_dir(path)
+
+
+register_dit_capability(
+    DiTCapability(
+        name="qwen21",
+        dit_cls_name="QwenImage21Transformer2DModel",
+        model_type_name="QwenImage21Transformer2DModel",
+        engine_label="Qwen-Image-2.1",
+        sensitive_prefixes=(
+            "img_in.",
+            "txt_in.",
+            "time_text_embed.",
+            "modulation.",
+            "norm_out.",
+            "proj_out.",
+        ),
+        sensitive_module_types=("RMSNorm", "ZeroCenteredRMSNorm"),
+        matches_state_dict=_is_qwen21_state_dict,
+        block_linear_filter=lambda k: k.startswith("transformer_blocks.") and k.endswith(".weight"),
+        fp8_rowwise=True,
+        int8_convrot_filter=lambda k: k.startswith("transformer_blocks.") and k.endswith(_QWEN21_INT8_LINEAR_SUFFIXES),
+        diffusers_arch="qwen-image-2.1/diffusers",
+        is_diffusers_dir=_is_qwen21_dir,
+        diffusers_primary_file=_qwen21_primary_file,
+        load_diffusers_dir=_load_qwen21_dir,
+        block_attr="transformer_blocks",
+        compile_preset="Qwen-2.1 per-block",
+        matches_engine=lambda model: bool(getattr(model, "is_qwen21_engine", False)),
+        non_matching_engine_reason="Qwen-2.1 per-block ignored: non-Qwen-Image-2.1 model",
+        spectrum_required_attrs=("final_input", "norm_out", "proj_out", "time_text_embed", "compute_final"),
+        spectrum_capture_attr="final_input",
+        spectrum_fast_forward=fast_forward_qwen21,
+        workflow_advice=qwen21_workflow_advice,
     )
 )
 

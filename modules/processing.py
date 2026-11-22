@@ -50,27 +50,31 @@ opt_f = 8
 
 
 def setup_color_correction(image: Image.Image) -> np.ndarray:
-    correction_target = cv2.cvtColor(np.asarray(image.copy(), dtype=np.uint8), cv2.COLOR_RGB2LAB)
+    correction_target = cv2.cvtColor(np.asarray(image.convert("RGB"), dtype=np.uint8), cv2.COLOR_RGB2LAB)
     return correction_target
 
 
 def apply_color_correction(correction_target: np.ndarray, original_image: Image.Image):
+    orig_alpha = original_image.getchannel("A") if original_image.mode == "RGBA" else None
     image = cv2.cvtColor(
         match_histograms(
-            cv2.cvtColor(np.asarray(original_image, dtype=np.uint8), cv2.COLOR_RGB2LAB),
+            cv2.cvtColor(np.asarray(original_image.convert("RGB"), dtype=np.uint8), cv2.COLOR_RGB2LAB),
             correction_target,
             channel_axis=2,
         ),
         cv2.COLOR_Lab2RGB,
     )
 
-    return Image.fromarray(image.astype("uint8")).convert("RGB")
+    corrected = Image.fromarray(image.astype("uint8")).convert("RGB")
+    if orig_alpha is not None:
+        return Image.merge("RGBA", (*corrected.split(), orig_alpha))
+    return corrected
 
 
 def uncrop(image, dest_size, paste_loc):
     x, y, w, h = paste_loc
     base_image = Image.new("RGBA", dest_size)
-    image = images.resize_image(1, image, w, h)
+    image = images.resize_image(1, image, w, h, force_RGBA=image.mode == "RGBA")
     base_image.paste(image, (x, y))
     image = base_image
 
@@ -81,7 +85,8 @@ def apply_overlay(image: Image.Image, paste_loc: tuple[int], overlay: Image.Imag
     if overlay is None:
         return image, image.copy()
 
-    high_prec: bool = opts.img2img_inpaint_precise_mask and isinstance(overlay, tuple)  # Extensions may override Overlay
+    preserve_alpha: bool = image.mode == "RGBA" or (isinstance(overlay, tuple) and overlay[0].mode == "RGBA")
+    high_prec: bool = isinstance(overlay, tuple)  # Extensions may override Overlay
 
     if high_prec:
         mask: np.ndarray = overlay[1]
@@ -94,23 +99,27 @@ def apply_overlay(image: Image.Image, paste_loc: tuple[int], overlay: Image.Imag
 
     if high_prec:
         mask = np.expand_dims(mask, axis=-1)
-        overlay_rgb = np.array(overlay, dtype=np.float32) / 255.0
-        image_np = np.array(image, dtype=np.float32) / 255.0
-        image_rgb = image_np[:, :, :3]
+        if preserve_alpha:
+            overlay_px = np.array(overlay.convert("RGBA"), dtype=np.float32) / 255.0
+            image_px = np.array(image.convert("RGBA"), dtype=np.float32) / 255.0
+        else:
+            overlay_px = np.array(overlay, dtype=np.float32) / 255.0
+            image_px = np.array(image, dtype=np.float32)[:, :, :3] / 255.0
 
         try:
-            final = image_rgb * mask + overlay_rgb * (1.0 - mask)
+            final = image_px * mask + overlay_px * (1.0 - mask)
         except ValueError:
             # shape mismatch on Interrupt
             return image, original_denoised_image
 
         _image = np.clip((final * 255.0).round(), 0, 255).astype(np.uint8)
-        image = Image.fromarray(_image)
+        image = Image.fromarray(_image, mode="RGBA" if preserve_alpha else None)
         return image, original_denoised_image
 
     image = image.convert("RGBA")
     image.alpha_composite(overlay)
-    image = image.convert("RGB")
+    if not preserve_alpha:
+        image = image.convert("RGB")
 
     return image, original_denoised_image
 
@@ -1844,11 +1853,12 @@ class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
             if opts.save_init_img:
                 images.save_image(img, path=opts.outdir_init_images, basename=None, forced_filename=self.init_img_hash, save_to_dirs=False, existing_info=img.info)
 
-            image = images.flatten(img, opts.img2img_background_color)
+            preserve_rgba = bool(args.dynamic_args.qwen21) and (img.mode in ("RGBA", "LA", "PA") or (img.mode == "P" and "transparency" in img.info))
+            image = img.convert("RGBA") if preserve_rgba else images.flatten(img, opts.img2img_background_color)
             _image_size: tuple[int, int] = image.size
 
             if crop_region is None and self.resize_mode != 3:  # Whole picture / img2img
-                image = images.resize_image(self.resize_mode, image, self.width, self.height)
+                image = images.resize_image(self.resize_mode, image, self.width, self.height, force_RGBA=preserve_rgba)
                 self.width, self.height = image.size
 
             if image_mask is not None:
@@ -1866,6 +1876,8 @@ class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
 
                 if opts.img2img_inpaint_precise_mask:
                     self.overlay_images.append((image.copy(), orig_mask))
+                elif preserve_rgba:
+                    self.overlay_images.append((image.copy(), np.array(self.mask_for_overlay.convert("L"), dtype=np.float32) / 255.0))
                 else:
                     image_masked = Image.new("RGBa", (image.width, image.height))
                     image_masked.paste(image.convert("RGBA").convert("RGBa"), mask=ImageOps.invert(self.mask_for_overlay.convert("L")))
@@ -1877,10 +1889,13 @@ class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
                     x1, y1, x2, y2 = crop_region
                     self.paste_to = (x1, y1, x2 - x1, y2 - y1)
                 image = image.crop(crop_region)
-                image = images.resize_image(2, image, self.width, self.height)
+                image = images.resize_image(2, image, self.width, self.height, force_RGBA=preserve_rgba)
 
             if image_mask is not None and self.inpainting_fill != 1:
+                orig_alpha = image.getchannel("A") if image.mode == "RGBA" else None
                 image = masking.fill(image, latent_mask)
+                if orig_alpha is not None:
+                    image = Image.merge("RGBA", (*image.split(), orig_alpha))
 
             if add_color_corrections:
                 self.color_corrections.append(setup_color_correction(image))

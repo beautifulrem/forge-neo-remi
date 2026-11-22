@@ -94,7 +94,11 @@ class ImageStitch(scripts.Script):
             for reference in reference_images:
                 if is_WanT2I:
                     reference = images.resize_image(1, reference, p.width, p.height)
-                image = images.flatten(reference, opts.img2img_background_color)
+                has_alpha = reference.mode in ("RGBA", "LA", "PA") or (reference.mode == "P" and "transparency" in reference.info)
+                if dynamic_args.qwen21 and has_alpha:
+                    image = reference.convert("RGBA")
+                else:
+                    image = images.flatten(reference, opts.img2img_background_color)
                 image = np.array(image, dtype=np.float32) / 255.0
                 image = np.moveaxis(image, 2, 0)
                 image = torch.from_numpy(image).unsqueeze(0)
@@ -120,4 +124,7 @@ class ImageStitch(scripts.Script):
 
     @staticmethod
     def hash_image(img: Image.Image) -> int:
+        if "A" in img.getbands() or (img.mode == "P" and "transparency" in img.info):
+            rgba = img.convert("RGBA")
+            return hash((img.mode, img.size, rgba.convert("L").tobytes(), rgba.getchannel("A").tobytes()))
         return hash((img.mode, img.size, img.convert("L").tobytes()))
