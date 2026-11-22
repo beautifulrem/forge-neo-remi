@@ -8,6 +8,7 @@ import torch
 
 from backend.args import dynamic_args
 from backend.nn.anima_attention import ANIMA_ATTENTION_MODIFIERS, active_attention_modifiers
+from backend.nn.dit_registry import registered_block_attrs
 from modules.anima_support import NEGPIP_CONTEXT_MASK_KEY, NEGPIP_MASK_KEY
 
 _COMPILED_BLOCKS_KEY = "_forge_anima_compiled_blocks"
@@ -91,10 +92,10 @@ def _needs_eager_blocks(args, kwargs) -> bool:
 
 
 def _block_list(diffusion_model) -> torch.nn.ModuleList | None:
-    """Resolve the transformer block ModuleList for Anima / Krea 2 (``blocks``)
-    or MOSS-Image (``layers``)."""
+    """Resolve the transformer block ``ModuleList`` using the block attribute
+    names declared in ``backend.nn.dit_registry`` (e.g. ``blocks``, ``layers``)."""
 
-    for attr in ("blocks", "layers"):
+    for attr in registered_block_attrs():
         candidate = getattr(diffusion_model, attr, None)
         if isinstance(candidate, torch.nn.ModuleList) and candidate:
             return candidate

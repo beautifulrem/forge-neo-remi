@@ -1009,34 +1009,12 @@ def _load_diffuser(path: os.PathLike):
     return sd, metadata, guess
 
 
-def _load_anima_diffusers_dir(path: os.PathLike):
+def _load_diffusers_dir(path: os.PathLike):
     import huggingface_guess
 
-    from backend.nn.anima_diffusers import load_anima_diffusers_dir
+    from backend.nn.dit_registry import load_diffusers_checkpoint_dir
 
-    sd, metadata = load_anima_diffusers_dir(path)
-    sd, metadata = convert_quantization(sd, metadata)
-    guess = huggingface_guess.guess(sd)
-    return sd, metadata, guess
-
-
-def _load_moss_diffusers_dir(path: os.PathLike):
-    import huggingface_guess
-
-    from backend.nn.moss_diffusers import load_moss_diffusers_dir
-
-    sd, metadata = load_moss_diffusers_dir(path)
-    sd, metadata = convert_quantization(sd, metadata)
-    guess = huggingface_guess.guess(sd)
-    return sd, metadata, guess
-
-
-def _load_krea2_diffusers_dir(path: os.PathLike):
-    import huggingface_guess
-
-    from backend.nn.krea_diffusers import load_krea2_diffusers_dir
-
-    sd, metadata = load_krea2_diffusers_dir(path)
+    sd, metadata = load_diffusers_checkpoint_dir(path)
     sd, metadata = convert_quantization(sd, metadata)
     guess = huggingface_guess.guess(sd)
     return sd, metadata, guess
@@ -1062,17 +1040,11 @@ def _additional_key_filter(path: os.PathLike, guess):
 
 
 def split_state_dict(path: os.PathLike, additional_state_dicts: list[os.PathLike] = None):
-    from backend.nn.anima_diffusers import is_anima_diffusers_dir
-    from backend.nn.krea_diffusers import is_krea2_diffusers_dir, is_sharded_krea2_transformer_dir
-    from backend.nn.moss_diffusers import is_moss_diffusers_dir, is_sharded_moss_transformer_dir
+    from backend.nn.dit_registry import is_diffusers_checkpoint_dir
 
     try:
-        if is_anima_diffusers_dir(path):
-            sd, metadata, guess = _load_anima_diffusers_dir(path)
-        elif is_moss_diffusers_dir(path) or is_sharded_moss_transformer_dir(path):
-            sd, metadata, guess = _load_moss_diffusers_dir(path)
-        elif is_krea2_diffusers_dir(path) or is_sharded_krea2_transformer_dir(path):
-            sd, metadata, guess = _load_krea2_diffusers_dir(path)
+        if is_diffusers_checkpoint_dir(path):
+            sd, metadata, guess = _load_diffusers_dir(path)
         else:
             try:
                 sd, metadata, guess = _load_unet(path)

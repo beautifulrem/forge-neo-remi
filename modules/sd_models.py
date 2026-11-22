@@ -50,7 +50,7 @@ class CheckpointInfo:
         primary_file = filename
         diffusers_arch = None
         if self.is_diffusers_dir:
-            from backend.nn.moss_diffusers import diffusers_checkpoint_info
+            from backend.nn.dit_registry import diffusers_checkpoint_info
 
             diffusers_arch, found_primary = diffusers_checkpoint_info(filename)
             primary_file = found_primary or filename
@@ -146,7 +146,7 @@ def checkpoint_tiles(use_short=False):
 
 
 def list_models():
-    from backend.nn.moss_diffusers import is_diffusers_checkpoint_dir
+    from backend.nn.dit_registry import is_diffusers_checkpoint_dir
 
     checkpoints_list.clear()
     checkpoint_aliases.clear()

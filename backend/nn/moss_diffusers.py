@@ -22,9 +22,8 @@ from backend.nn.anima_diffusers import (
     _SINGLE_WEIGHT_FILES,
     _load_component_sd,
     _read_json,
-    anima_diffusers_primary_file,
-    is_anima_diffusers_dir,
 )
+from backend.nn.dit_registry import diffusers_checkpoint_info, is_diffusers_checkpoint_dir  # noqa: F401 -- backward-compat re-export
 
 
 def _dir_primary_safetensors(directory: str) -> str | None:
@@ -96,34 +95,6 @@ def is_sharded_moss_transformer_dir(path: os.PathLike | str) -> bool:
         if has_mod and has_ffn and _dir_primary_safetensors(root) is not None:
             return True
     return False
-
-
-def is_diffusers_checkpoint_dir(path: os.PathLike | str) -> bool:
-    """True for any Diffusers/sharded checkpoint directory recognised by ``sd_models``."""
-
-    from backend.nn.krea_diffusers import is_krea2_diffusers_dir, is_sharded_krea2_transformer_dir
-
-    return (
-        is_anima_diffusers_dir(path)
-        or is_moss_diffusers_dir(path)
-        or is_sharded_moss_transformer_dir(path)
-        or is_krea2_diffusers_dir(path)
-        or is_sharded_krea2_transformer_dir(path)
-    )
-
-
-def diffusers_checkpoint_info(path: os.PathLike | str) -> tuple[str | None, str | None]:
-    """Return ``(modelspec_architecture, primary_safetensors_file)`` for a checkpoint dir."""
-
-    from backend.nn.krea_diffusers import is_krea2_diffusers_dir, is_sharded_krea2_transformer_dir, krea2_diffusers_primary_file
-
-    if is_anima_diffusers_dir(path):
-        return "anima/diffusers", anima_diffusers_primary_file(path)
-    if is_moss_diffusers_dir(path) or is_sharded_moss_transformer_dir(path):
-        return "moss-image/diffusers", moss_diffusers_primary_file(path)
-    if is_krea2_diffusers_dir(path) or is_sharded_krea2_transformer_dir(path):
-        return "krea-2/diffusers", krea2_diffusers_primary_file(path)
-    return None, None
 
 
 def normalize_qwen35_9b_key(key: str) -> str:

@@ -14,9 +14,10 @@ import torch
 
 from backend.args import args as cmd_args
 from backend.logging import setup_logger
+from backend.nn.dit_registry import capability_for_compile_preset, per_block_compile_presets
 from backend.utils import get_attr, set_attr_raw
 from modules import scripts
-from modules.anima_support import is_anima_engine, process_ref
+from modules.anima_support import process_ref
 from remi import ui
 from anima_block_compile import AnimaBlockCompileManager, block_compile_config, needs_eager, without_inactive_modifiers
 
@@ -48,7 +49,7 @@ PRESETS = (
     "reduce-overhead",
 )
 
-_PER_BLOCK_PRESETS = ("Anima per-block", "MOSS-Image per-block", "Krea-2 per-block")
+_PER_BLOCK_PRESETS = per_block_compile_presets()
 
 _DYNAMIC = "Support any Resolution / Batch Size"
 _INDYNAMIC = "Require recompilation if Resolution / Batch Size is changed"
@@ -65,14 +66,6 @@ PRESET_HELP = rf"""
 - **MOSS-Image per-block:** Compile each MOSS-Image transformer layer separately; stays compiled with Skip Layer Guidance (SLG) and cached reference KV while keeping one-shot reference preprocessing eager ; lower graph-break risk than whole-model compile
 - **Krea-2 per-block:** Compile each Krea 2 single-stream transformer block separately; keeps cached text fusion and RoPE outside the compiled blocks and stays compiled with Skip Layer Guidance (SLG) and Edit reference latents ; lower graph-break risk than whole-model compile
 """.strip()
-
-
-def _is_moss_engine(model) -> bool:
-    return bool(getattr(model, "is_moss_engine", False))
-
-
-def _is_krea2_engine(model) -> bool:
-    return bool(getattr(model, "is_krea2_engine", False))
 
 
 def skip_torch_compile_dict(guard_entries):
@@ -114,7 +107,9 @@ class TorchCompileForForge(scripts.Script):
         # the finished generation (images, prompts) can be freed.
         process = process_ref(p)
 
-        active_label = prev_config if prev_config in _PER_BLOCK_PRESETS else (preset if preset in _PER_BLOCK_PRESETS else "Anima per-block")
+        prev_cap = capability_for_compile_preset(prev_config)
+        preset_cap = capability_for_compile_preset(preset)
+        active_label = prev_config if prev_cap is not None else (preset if preset_cap is not None else "Anima per-block")
 
         def compile_fallback(error):
             message = f"{active_label} fell back to eager: {type(error).__name__}"
@@ -144,22 +139,12 @@ class TorchCompileForForge(scripts.Script):
             self._remove_compile_wrapper(kmodel)
             return
 
-        if preset == "Anima per-block" and not is_anima_engine(p.sd_model):
-            logger.warning("Anima per-block compile was ignored because the active model is not Anima")
-            p.extra_generation_params["Torch compile"] = "Anima per-block ignored: non-Anima model"
+        if preset_cap is not None and preset_cap.matches_engine is not None and not preset_cap.matches_engine(p.sd_model):
+            logger.warning(f"{preset} compile was ignored because the active model is not {preset_cap.engine_label}")
+            p.extra_generation_params["Torch compile"] = preset_cap.non_matching_engine_reason or f"{preset} ignored: non-{preset_cap.engine_label} model"
             return
 
-        if preset == "MOSS-Image per-block" and not _is_moss_engine(p.sd_model):
-            logger.warning("MOSS-Image per-block compile was ignored because the active model is not MOSS-Image")
-            p.extra_generation_params["Torch compile"] = "MOSS-Image per-block ignored: non-MOSS-Image model"
-            return
-
-        if preset == "Krea-2 per-block" and not _is_krea2_engine(p.sd_model):
-            logger.warning("Krea-2 per-block compile was ignored because the active model is not Krea 2")
-            p.extra_generation_params["Torch compile"] = "Krea-2 per-block ignored: non-Krea-2 model"
-            return
-
-        if preset in _PER_BLOCK_PRESETS and not _windows_cpp_compiler_available():
+        if preset_cap is not None and not _windows_cpp_compiler_available():
             self._remove_compile_wrapper(kmodel)
             message = f"{preset} disabled: no C++ compiler found (install Visual Studio Build Tools)"
             logger.error(message)
@@ -174,28 +159,29 @@ class TorchCompileForForge(scripts.Script):
             getattr(kmodel, _ORIG_APPLY_KEY, None) is not None
             or AnimaBlockCompileManager.is_installed(kmodel)
         ):
-            if preset in _PER_BLOCK_PRESETS:
+            if preset_cap is not None:
                 keep_block_compile()
             return
 
         if prev_config is not None:
             self._remove_compile_wrapper(kmodel)
 
-        match preset:
-            case "Anima per-block" | "MOSS-Image per-block" | "Krea-2 per-block":
-                config = block_compile_config(skip_torch_compile_dict)
-            case "guard_filter_fn":
-                config = dict(backend="inductor", dynamic=False, fullgraph=False, options={"guard_filter_fn": skip_torch_compile_dict})
-            case "dynamic":
-                config = dict(backend="inductor", dynamic=True, fullgraph=False, options={"guard_filter_fn": skip_torch_compile_dict})
-            case "max-autotune":
-                config = dict(backend="inductor", dynamic=False, fullgraph=False, options={"guard_filter_fn": skip_torch_compile_dict, "coordinate_descent_tuning": True, "max_autotune": True, "triton.cudagraphs": True})
-            case "max-autotune-no-cudagraphs":
-                config = dict(backend="inductor", dynamic=True, fullgraph=False, options={"guard_filter_fn": skip_torch_compile_dict, "coordinate_descent_tuning": True, "max_autotune": True})
-            case "reduce-overhead":
-                config = dict(backend="inductor", mode="reduce-overhead", dynamic=False, fullgraph=False, options={"guard_filter_fn": skip_torch_compile_dict})
+        if preset_cap is not None:
+            config = block_compile_config(skip_torch_compile_dict)
+        else:
+            match preset:
+                case "guard_filter_fn":
+                    config = dict(backend="inductor", dynamic=False, fullgraph=False, options={"guard_filter_fn": skip_torch_compile_dict})
+                case "dynamic":
+                    config = dict(backend="inductor", dynamic=True, fullgraph=False, options={"guard_filter_fn": skip_torch_compile_dict})
+                case "max-autotune":
+                    config = dict(backend="inductor", dynamic=False, fullgraph=False, options={"guard_filter_fn": skip_torch_compile_dict, "coordinate_descent_tuning": True, "max_autotune": True, "triton.cudagraphs": True})
+                case "max-autotune-no-cudagraphs":
+                    config = dict(backend="inductor", dynamic=True, fullgraph=False, options={"guard_filter_fn": skip_torch_compile_dict, "coordinate_descent_tuning": True, "max_autotune": True})
+                case "reduce-overhead":
+                    config = dict(backend="inductor", mode="reduce-overhead", dynamic=False, fullgraph=False, options={"guard_filter_fn": skip_torch_compile_dict})
 
-        if preset in _PER_BLOCK_PRESETS:
+        if preset_cap is not None:
             AnimaBlockCompileManager.install(kmodel, config, on_fallback=compile_fallback)
         else:
             self._wrap_apply_model(kmodel, config)
