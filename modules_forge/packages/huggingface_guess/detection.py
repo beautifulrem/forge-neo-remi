@@ -181,7 +181,10 @@ def detect_unet_config(state_dict: dict, key_prefix: str) -> dict:
 
     if "{}blocks.0.mlp.layer1.weight".format(key_prefix) in state_dict_keys:  # Anima
         dit_config = {}
-        assert "{}llm_adapter.blocks.0.cross_attn.q_proj.weight".format(key_prefix) in state_dict_keys
+        assert "{}llm_adapter.blocks.0.cross_attn.q_proj.weight".format(key_prefix) in state_dict_keys or (
+            "{}x_embedder.proj.1.weight".format(key_prefix) in state_dict_keys
+            and "{}blocks.0.adaln_modulation_self_attn.1.weight".format(key_prefix) in state_dict_keys
+        )
         dit_config["image_model"] = "anima"
         dit_config["in_channels"] = int(state_dict["{}x_embedder.proj.1.weight".format(key_prefix)].shape[1] / 4) - 1
         assert dit_config["in_channels"] == 16

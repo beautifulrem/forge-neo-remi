@@ -159,6 +159,9 @@ def test_training_tags_are_summed_and_sorted():
         ({"modelspec.architecture": "moss-image/lora"}, "moss"),
         ({"ss_base_model_version": "MOSS-Image-SFT"}, "moss"),
         ({"ss_network_module": "networks.lora_anima"}, "anima"),
+        ({"anima_num_blocks": "40"}, "anima"),
+        ({"anima_v2_adapter_layer_indices": "[7, 15, 23, 31]", "new_block_count": "52"}, "anima"),
+        ({"num_blocks": "40"}, None),  # generic num_blocks alone must not claim Anima
         ({"ss_base_model_version": "sd_v2", "ss_v2": "True"}, None),
         ({"ss_network_module": "networks.lora"}, None),
         ({}, None),
@@ -188,6 +191,9 @@ def test_training_info_and_network_type():
     assert nm.network_type({"ss_network_module": "lycoris.kohya"}) == "LyCORIS"
     assert nm.network_type({"ss_network_module": "networks.lora", "ss_network_args": json.dumps({"dora_wd": "True"})}) == "DoRA"
     assert nm.network_type({}) is None
+    assert nm.training_info({"modelspec.architecture": "anima/lora", "anima_num_blocks": "40"})["anima_depth"] == "2.9B (40 blocks)"
+    assert nm.training_info({"anima_v2_adapter_layer_indices": "[7, 15, 23, 31]", "new_block_count": "52"})["anima_depth"] == "3.8B (52 blocks)"
+    assert "anima_depth" not in nm.training_info({"modelspec.architecture": "flux/lora", "num_blocks": "40"})
 
 
 def test_user_metadata_edits_are_checked():
@@ -738,6 +744,33 @@ def test_embeddings_are_listed_from_the_database(server, tmp_path, monkeypatch):
     assert list(items) == ["easyneg", "xlstyle"]
     assert items["easyneg"]["prompt"] == "easyneg" and items["easyneg"]["folder"] == "neg" and items["easyneg"]["arch"] == "sd" and items["easyneg"]["hash"] == "abc123"
     assert items["xlstyle"]["arch"] == "xl" and items["xlstyle"]["editable"] is True
+
+
+def test_module_files_discovers_sharded_hf_text_encoder_folder_as_single_entry(tmp_path, monkeypatch):
+    from modules_forge.main_entry import find_files_with_extensions
+
+    te_root = tmp_path / "text_encoder"
+    sharded = te_root / "Qwen3.5-4B"
+    sharded.mkdir(parents=True)
+    (sharded / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {"model.language_model.embed_tokens.weight": "model-00001-of-00002.safetensors"}}), encoding="utf-8")
+    (sharded / "model-00001-of-00002.safetensors").write_bytes(b"")
+    (sharded / "model-00002-of-00002.safetensors").write_bytes(b"")
+    single = te_root / "qwen_3_06b_base.safetensors"
+    single.write_bytes(b"")
+
+    monkeypatch.setattr(module, "module_roots", lambda: {"vae": [], "text_encoders": [str(te_root)]})
+    files = module.module_files("text_encoders")
+    assert [(name, path) for name, path, _root in files] == [
+        ("Qwen3.5-4B", str(sharded)),
+        ("qwen_3_06b_base.safetensors", str(single)),
+    ]
+    entries = {entry.name: entry for entry in module.ModuleProvider("text_encoders").list()}
+    assert entries["Qwen3.5-4B"].title == "Qwen3.5-4B" and entries["Qwen3.5-4B"].base == str(sharded)
+    assert entries["qwen_3_06b_base.safetensors"].title == "qwen_3_06b_base"
+
+    found = find_files_with_extensions(str(te_root), {".safetensors", ".gguf"})
+    assert set(found) == {"Qwen3.5-4B", "qwen_3_06b_base.safetensors"}
+    assert found["Qwen3.5-4B"] == str(sharded)
 
 
 # endregion

@@ -49,6 +49,7 @@ function useTrainingRows(training: Training) {
     [t("Base model"), text(training.base_model)],
     [t("Base model version"), text(training.base_model_version)],
     [t("Architecture"), text(training.architecture)],
+    [t("Anima depth"), text(training.anima_depth)],
     [t("Dimension / alpha"), training.dim !== undefined ? `${String(training.dim)} / ${text(training.alpha) ?? "–"}` : null],
     [t("Clip skip"), text(training.clip_skip)],
     [t("Epochs"), text(training.epochs)],

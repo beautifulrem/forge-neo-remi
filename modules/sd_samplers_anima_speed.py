@@ -222,6 +222,10 @@ def fallback_reason(model, sigmas: list[float]) -> str | None:
 
     if getattr(dynamic_args, "ACTIVE_LLLITE_DIT", None):
         return "ControlNet-LLLite"
+    if getattr(dynamic_args, "ACTIVE_CONTROL_LORA", None):
+        return "Anima control-LoRA"
+    if getattr(dynamic_args, "ACTIVE_ANIMA_VACE", None):
+        return "Anima ControlNet-VACE"
     if dynamic_args.ref_latents:
         return "reference latents"
     return None

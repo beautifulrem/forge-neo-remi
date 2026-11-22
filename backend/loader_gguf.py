@@ -89,7 +89,7 @@ def gguf_remapping(state_dict: dict[str, torch.Tensor], metadata: dict) -> dict[
             new_sd[k] = v
         new_sd["model.language_model.embed_tokens.weight"] = new_sd["model.language_model.embed_tokens.weight"].dequantize_as_pytorch_parameter()
         state_dict.clear()
-        state_dict = _reverse_qwen35(new_sd, int(metadata["qwen35.ssm.group_count"]))
+        state_dict = _reverse_qwen35(new_sd, int(metadata.get("qwen35.ssm.group_count", 16)))
 
     if "enc.blk.0.attn_k.weight" in state_dict:
         gguf_t5_format = {

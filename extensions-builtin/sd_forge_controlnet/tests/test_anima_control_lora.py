@@ -99,8 +99,8 @@ def networks(monkeypatch):
         pass
 
     def load_lora_for_models(unet, clip, lora, strength_model, strength_clip, filename="default", **kwargs):
-        calls.append((set(lora), strength_model, strength_clip, filename))
-        return SimpleNamespace(patched=unet, model=getattr(unet, "model", None), load_device="cpu"), SimpleNamespace(patched=clip)
+        calls.append((set(lora), strength_model, strength_clip, filename, kwargs))
+        return SimpleNamespace(patched=unet, model=getattr(unet, "model", None), load_device="cpu", model_options=dict(getattr(unet, "model_options", {}))), SimpleNamespace(patched=clip)
 
     module.LoraNotApplied, module.load_lora_for_models = LoraNotApplied, load_lora_for_models
     monkeypatch.setitem(sys.modules, "networks", module)
@@ -124,9 +124,10 @@ def test_the_patcher_patches_the_text_side_then_the_dit_and_undoes_its_hook(llli
 
     assert patcher.process_before_conditioning(process) is True
     assert objects.clip.patched is clip and objects.unet is unet  # only the text side, before the prompts
-    files, strength_model, strength_clip, filename = networks[0]
+    files, strength_model, strength_clip, filename, kwargs = networks[0]
     assert "diffusion_model.llm_adapter.blocks.0.self_attn.q_proj.lora_A.weight" in files and not any("control_embedder" in key for key in files)
     assert (strength_model, strength_clip, filename) == (1.0, 1.0, "/models/ControlNet/anima_pose.safetensors")
+    assert kwargs.get("online_mode") is False
 
     objects.clip = clip
     patcher.strength = 0.75
@@ -139,6 +140,39 @@ def test_the_patcher_patches_the_text_side_then_the_dit_and_undoes_its_hook(llli
     patcher.process_after_every_sampling()
     patcher.process_after_every_sampling()  # cleanup runs it again: idempotent
     assert not dit.x_embedder(torch.zeros(4, 1, 2, 3, 32)).any()
+
+
+def test_bias_free_embedder_active_flag_online_lora_and_spectrum_window(lib, lllite, monkeypatch, networks):
+    from backend.args import dynamic_args
+    from modules import spectrum_force
+
+    # Bias-free community control-LoRAs load cleanly
+    sd = release_like()
+    sd.pop("diffusion_model.control_embedder.proj.bias")
+    embedder_sd, _ = lib.split_control_lora(sd)
+    embedder = lib.ControlEmbedder.from_state_dict(embedder_sd)
+    assert embedder.proj.bias is None and embedder(torch.zeros(1, 16, 1, 4, 6)).shape == (1, 1, 2, 3, 32)
+
+    # online_lora is forwarded to load_lora_for_models, ACTIVE_CONTROL_LORA tracks hook lifecycle,
+    # and windowed start/end notifies Spectrum so it does not forecast across the switch boundary.
+    monkeypatch.setattr(dynamic_args, "online_lora", True)
+    patcher = lllite.AnimaControlLoraPatcher(sd, "/models/ControlNet/anima_canny.safetensors")
+    patcher.start_percent, patcher.end_percent = 0.0, 0.5
+    dit = SimpleNamespace(x_embedder=torch.nn.Identity())
+    vae = SimpleNamespace(encode=lambda images: torch.ones(images.shape[0], 16, 1, images.shape[1] // 8, images.shape[2] // 8))
+    predictor = SimpleNamespace(percent_to_sigma=lambda p: 1.0 - p)
+    unet = SimpleNamespace(load_device="cpu", model=SimpleNamespace(computation_dtype=torch.float32, diffusion_model=dit, predictor=predictor), model_options={})
+    objects = SimpleNamespace(unet=unet, clip=SimpleNamespace(name="clip"), vae=vae)
+    process = SimpleNamespace(sd_model=SimpleNamespace(forge_objects=objects), steps=8)
+
+    patcher.process_before_every_sampling(process, torch.full((1, 3, 32, 48), 0.5), None)
+    assert networks[-1][4].get("online_mode") is True
+    assert patcher._injection in getattr(dynamic_args, "ACTIVE_CONTROL_LORA", set())
+    force = objects.unet.model_options["transformer_options"][spectrum_force.KEY]
+    assert spectrum_force.is_forced(force, 0.75) and not spectrum_force.is_forced(force, 0.2)
+
+    patcher.process_after_every_sampling()
+    assert not getattr(dynamic_args, "ACTIVE_CONTROL_LORA", set())
 
 
 def test_the_patcher_reports_a_lora_that_does_not_fit(lllite, monkeypatch, networks):

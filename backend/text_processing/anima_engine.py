@@ -172,7 +172,8 @@ class Qwen06Engine:
 
         device = memory_management.text_encoder_device()
         ids = torch.tensor([self.semantic_tokens(line)], dtype=torch.long, device=device)
-        layers = self.semantic_encoder(ids, self.semantic_layers, dtype=self.semantic_encoder.embed_tokens.weight.dtype)
+        dtype = getattr(self.semantic_encoder, "compute_dtype", None) or self.semantic_encoder.embed_tokens.weight.dtype
+        layers = self.semantic_encoder(ids, self.semantic_layers, dtype=dtype)
         semantic = torch.stack(layers, dim=1)[0]
         return {
             "anima_source": source.to(device),

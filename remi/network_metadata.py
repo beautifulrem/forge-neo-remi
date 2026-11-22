@@ -20,6 +20,14 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from backend.nn.anima_layout import declared_depth as anima_declared_depth
+
+_ANIMA_DEPTH_LABELS: dict[int, str] = {
+    28: "2B (28 blocks)",
+    40: "2.9B (40 blocks)",
+    52: "3.8B (52 blocks)",
+}
+
 ARCHS = ("sd", "xl", "flux", "klein", "qwen", "lumina", "zit", "wan", "anima", "ernie", "pid", "krea", "qwen21", "moss")
 """``modules_forge.presets.PresetArch`` names (kept in sync by a test)."""
 SD_VERSIONS = ("Unknown", *ARCHS)
@@ -159,6 +167,9 @@ def training_info(metadata: Mapping[str, Any]) -> dict[str, Any]:
             info[name] = int(number) if number.is_integer() else number
     if kind := network_type(metadata):
         info["network_type"] = kind
+    is_anima_meta = detect_arch(metadata) == "anima" or "anima" in (_text(metadata.get("ss_sd_model_name")) or "").lower()
+    if is_anima_meta and (depth := anima_declared_depth(metadata)) is not None:
+        info["anima_depth"] = _ANIMA_DEPTH_LABELS.get(depth, f"{depth} blocks")
 
     started = _number(metadata.get("ss_training_started_at")) or _number(metadata.get("ss_training_finished_at"))
     if started:
@@ -227,6 +238,8 @@ def detect_arch(metadata: Mapping[str, Any]) -> str | None:
         for arch, pattern in _ARCH_PATTERNS:
             if pattern.search(value):
                 return arch
+    if any(key == "anima_num_blocks" or key.startswith("anima_v2_adapter_") for key in metadata):
+        return "anima"
     return None
 
 

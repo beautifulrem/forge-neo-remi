@@ -148,6 +148,18 @@ class NeedsEagerTests(unittest.TestCase):
         self.assertTrue(_needs_eager_blocks((), {"c_negpip_mask": torch.ones(1)}))
         self.assertFalse(_needs_eager_blocks((), {"c_negpip_mask": None}))
 
+    def test_active_lllite_control_lora_or_vace_forces_eager(self):
+        from backend.args import dynamic_args
+
+        root = torch.nn.Linear(2, 2)
+        for attr in ("ACTIVE_LLLITE_DIT", "ACTIVE_CONTROL_LORA", "ACTIVE_ANIMA_VACE"):
+            with self.subTest(attr=attr):
+                with patch.object(dynamic_args, attr, {object()}, create=True):
+                    self.assertTrue(_needs_eager_blocks((), {}))
+                    self.assertTrue(needs_eager((), {}, root))
+                with patch.object(dynamic_args, attr, set(), create=True):
+                    self.assertFalse(_needs_eager_blocks((), {}))
+
     def test_patched_inside_sees_overrides_below_the_root_only(self):
         root = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.Sequential(torch.nn.Linear(2, 2)))
         inner = root[1][0]

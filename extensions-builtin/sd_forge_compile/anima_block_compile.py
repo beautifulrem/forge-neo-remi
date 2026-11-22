@@ -6,6 +6,7 @@ from functools import wraps
 
 import torch
 
+from backend.args import dynamic_args
 from backend.nn.anima_attention import ANIMA_ATTENTION_MODIFIERS, active_attention_modifiers
 from modules.anima_support import NEGPIP_CONTEXT_MASK_KEY, NEGPIP_MASK_KEY
 
@@ -66,6 +67,16 @@ def without_inactive_modifiers(args, kwargs):
 
 
 def _needs_eager_blocks(args, kwargs) -> bool:
+    # ControlNet-LLLite monkey-patches block Linear.forward directly (outside
+    # forward_override) with @torch.compiler.disable; Anima control-LoRA and
+    # Anima VACE register PyTorch forward hooks on the DiT. Run eager instead
+    # of hitting graph breaks / RECOMPILE_LIMIT.
+    if (
+        getattr(dynamic_args, "ACTIVE_LLLITE_DIT", None)
+        or getattr(dynamic_args, "ACTIVE_CONTROL_LORA", None)
+        or getattr(dynamic_args, "ACTIVE_ANIMA_VACE", None)
+    ):
+        return True
     # NegPiP's mask arrives as a conditioning kwarg; its DiT hook moves it
     # into transformer_options only after the compiled blocks are in place.
     if kwargs.get("c_negpip_mask") is not None:

@@ -21,6 +21,7 @@ from typing import Callable, Optional
 import torch
 import torch.nn as nn
 
+from backend.args import dynamic_args
 from backend.utils import pad_to_patch_size
 
 logger = logging.getLogger("ControlNet")
@@ -44,17 +45,17 @@ def split_control_lora(state_dict: dict[str, torch.Tensor]) -> tuple[dict[str, t
 class ControlEmbedder(nn.Module):
     """The control latent [B, C, T, H, W] -> tokens [B, T, H/2, W/2, width] (the DiT's patch layout)."""
 
-    def __init__(self, in_channels: int = 16, model_channels: int = 2048):
+    def __init__(self, in_channels: int = 16, model_channels: int = 2048, *, bias: bool = True):
         super().__init__()
         self.in_channels = in_channels
-        self.proj = nn.Linear(in_channels * PATCH * PATCH, model_channels)
+        self.proj = nn.Linear(in_channels * PATCH * PATCH, model_channels, bias=bias)
 
     @classmethod
     def from_state_dict(cls, state_dict: dict[str, torch.Tensor]) -> "ControlEmbedder":
         weight = state_dict.get("proj.weight")
         if weight is None or weight.ndim != 2 or weight.shape[1] % (PATCH * PATCH):
             raise ValueError(f"not an Anima control embedder: {sorted(state_dict)[:4]}")
-        embedder = cls(weight.shape[1] // (PATCH * PATCH), weight.shape[0])
+        embedder = cls(weight.shape[1] // (PATCH * PATCH), weight.shape[0], bias="proj.bias" in state_dict)
         embedder.load_state_dict(state_dict, strict=True)
         return embedder.eval().requires_grad_(False)
 
@@ -87,11 +88,17 @@ class ControlInjection:
     def attach(self, dit) -> None:
         self.detach()
         self.handle = dit.x_embedder.register_forward_hook(self._hook)
+        instances: set["ControlInjection"] = getattr(dynamic_args, "ACTIVE_CONTROL_LORA", set())
+        instances.add(self)
+        setattr(dynamic_args, "ACTIVE_CONTROL_LORA", instances)
 
     def detach(self) -> None:
         if self.handle is not None:
             self.handle.remove()
             self.handle = None
+        instances = getattr(dynamic_args, "ACTIVE_CONTROL_LORA", None)
+        if instances is not None:
+            instances.discard(self)
 
     def _hook(self, _module, _inputs, output: torch.Tensor) -> torch.Tensor:
         if self.strength == 0 or (self.active is not None and not self.active()):

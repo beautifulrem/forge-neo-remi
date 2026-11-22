@@ -58,18 +58,34 @@ def read_arbitrary_config(directory: os.PathLike) -> dict:
     return config_data
 
 
-def load_torch_file(ckpt: str, *, safe_load=True, device=None, return_metadata=False) -> dict[str, torch.Tensor]:
+def load_torch_file(ckpt: str, *, safe_load=True, device=None, return_metadata=False, key_filter=None) -> dict[str, torch.Tensor]:
     """https://github.com/Comfy-Org/ComfyUI/blob/v0.10.0/comfy/utils.py#L59"""
 
     # callers pass torch.device or str (e.g. map_location="cpu"); keep the index ("cuda:1")
     device = torch.device(device or "cpu")
     metadata = None
+    ckpt = os.fspath(ckpt)
+
+    from backend.nn.anima_diffusers import find_sharded_index, load_sharded_safetensors
+
+    if (shard_index := find_sharded_index(ckpt)) is not None:
+        sd, metadata = load_sharded_safetensors(shard_index, device=device, disable_mmap=DISABLE_MMAP, key_filter=key_filter)
+        return (sd, metadata) if return_metadata else sd
+
+    if os.path.isdir(ckpt):
+        for name in ("model.safetensors", "diffusion_pytorch_model.safetensors"):
+            candidate = os.path.join(ckpt, name)
+            if os.path.isfile(candidate):
+                ckpt = candidate
+                break
 
     if ckpt.lower().endswith((".safetensors", ".sft")):
         try:
             with safetensors.safe_open(ckpt, framework="pt", device=str(device)) as f:
                 sd = {}
                 for k in f.keys():
+                    if key_filter is not None and not key_filter(k):
+                        continue
                     tensor = f.get_tensor(k)
                     if DISABLE_MMAP:
                         tensor = tensor.to(device=device, copy=True)

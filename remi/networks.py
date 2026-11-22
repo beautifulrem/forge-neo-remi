@@ -115,7 +115,7 @@ class NetworkEntry:
 
     @property
     def base(self) -> str:
-        return os.path.splitext(self.filename)[0]
+        return self.filename if os.path.isdir(self.filename) else os.path.splitext(self.filename)[0]
 
     @property
     def on_disk(self) -> bool:
@@ -498,11 +498,18 @@ def module_roots() -> dict[str, list[str]]:
 def module_files(kind: str) -> list[tuple[str, str, str]]:
     """``(file name, path, folder)`` of the modules of ``kind``."""
 
+    from backend.nn.anima_diffusers import is_sharded_hf_dir
+
     found: dict[str, tuple[str, str, str]] = {}
     for root in map(os.path.abspath, module_roots()[kind]):
         if not os.path.isdir(root):
             continue
-        for current, _dirs, files in os.walk(root):
+        for current, dirs, files in os.walk(root):
+            if kind == "text_encoders" and os.path.abspath(current) != root and is_sharded_hf_dir(current):
+                name = os.path.basename(current)
+                found[name] = (name, current, root)
+                dirs[:] = []
+                continue
             for name in files:
                 if name.endswith(MODEL_EXTENSIONS):
                     found[name] = (name, os.path.join(current, name), root)
@@ -517,7 +524,7 @@ class ModuleProvider:
         pass  # listed from the folders on every refresh of the index
 
     def list(self) -> Iterable[NetworkEntry]:
-        return [NetworkEntry(self.kind, name, path, title=os.path.splitext(name)[0], root=root, value=name) for name, path, root in module_files(self.kind)]
+        return [NetworkEntry(self.kind, name, path, title=name if os.path.isdir(path) else os.path.splitext(name)[0], root=root, value=name) for name, path, root in module_files(self.kind)]
 
 
 _JS_TOKEN = re.compile(r'\s*(?:("(?:[^"\\]|\\.)*")|(opts\.\w+)|(-?\d+(?:\.\d+)?)|(\+))\s*')

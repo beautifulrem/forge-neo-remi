@@ -1393,5 +1393,6 @@
   "The buttons at the top left put an image under the boxes as a drawing guide: a file or the selected session result. It is never saved or sent.": "左上角的按钮可以在方框下放一张图作为绘制参考：本地文件或当前选中的会话结果。它不会被保存或发送。",
   "Use the selected result as background": "使用选中的结果作为背景",
   "{{target}} has no usable size": "{{target}} 没有可用的尺寸",
-  "“Send to” compiles the draft into a tab’s prompt and size; “Load prompt…” or “Load from txt2img / img2img” read one back. “Extra” is appended on its own line after the JSON.": "“发送到文生图/图生图”把草稿编译成该标签页的提示词和尺寸；“载入提示词…”或“从文生图 / 图生图载入”可以读回来。“Extra”会追加在 JSON 之后单独一行。"
+  "“Send to” compiles the draft into a tab’s prompt and size; “Load prompt…” or “Load from txt2img / img2img” read one back. “Extra” is appended on its own line after the JSON.": "“发送到文生图/图生图”把草稿编译成该标签页的提示词和尺寸；“载入提示词…”或“从文生图 / 图生图载入”可以读回来。“Extra”会追加在 JSON 之后单独一行。",
+  "Anima depth": "Anima 深度"
 }

@@ -57,6 +57,18 @@ def test_process_takes_the_param():
 
     SCRIPT_MODULE.AnimaRemiPresetScript().process(SimpleNamespace(sd_model=None), SCRIPT_MODULE.SAFE_BASE_AESTHETIC_LABEL)
 
+    # On Anima, actionable advice is surfaced via p.comment() as well as logged
+    comments = []
+    p = SimpleNamespace(
+        sd_model=SimpleNamespace(is_anima_engine=True, sd_checkpoint_info=SimpleNamespace(name="anima-turbo-v1.1.safetensors")),
+        cfg_scale=5.0,
+        steps=32,
+        prompt="1girl",
+        comment=comments.append,
+    )
+    SCRIPT_MODULE.AnimaRemiPresetScript().process(p, SCRIPT_MODULE.SAFE_BASE_AESTHETIC_LABEL)
+    assert len(comments) == 1 and "Turbo" in comments[0]
+
 
 def test_owner_relative_patch():
     patch = {"cfg_scale": {"value": 1.0}, "sampler.steps": {"value": 10}, "me.preset": {"value": "x"}, "__toast__": {"level": "info", "message": "m"}}

@@ -257,23 +257,73 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             load_state_dict(model, state_dict, log_name=cls_name)
             return model
         if cls_name == "AnimaQwen35":  # Remi: Anima-3.8B's second text encoder (no config folder)
-            from backend.nn.anima_qwen35 import AnimaQwen35
+            from backend.nn.anima_qwen35 import AnimaQwen35, normalize_qwen35_4b_state_dict
 
-            if state_dict_dtype == "gguf" or detect_quantization(state_dict) is not None:
-                raise NotImplementedError("Anima-3.8B's Qwen3.5 4B is supported as the released safetensors only")
-            # The release stores the linear layers in FP8 and the embedding and norms in BF16:
-            # every tensor keeps its own dtype (assigned, not converted), the layers cast to
-            # the compute dtype as they run
+            normalized, has_release_head = normalize_qwen35_4b_state_dict(state_dict)
+            quant_config = detect_quantization(normalized)
+            norm_dtype = utils.weight_dtype(normalized)
+            compute_dtype = memory_management.text_encoder_dtype()
+
+            if norm_dtype == "gguf":
+                storage_dtype = _detect_dtype("AnimaQwen35", compute_dtype, quant_config)
+                with no_init_weights():
+                    with using_forge_operations(device=memory_management.cpu, dtype=compute_dtype, manual_cast_enabled=True, extra_dtype=storage_dtype):
+                        model = AnimaQwen35(include_head=has_release_head)
+                model.requires_grad_(False)
+                expected = set(model.state_dict()) | {
+                    f"{name}.weight" for name, module in model.named_modules() if getattr(module, "weight", True) is None
+                }
+                if missing := sorted(expected - normalized.keys()):
+                    raise ValueError(f"Incomplete Qwen3.5 4B GGUF for Anima-3.8B: missing {len(missing)} keys ({missing[:5]})")
+                load_state_dict(model, normalized, log_name=cls_name)
+                memory_management.bake_gguf_model(model)
+                model.compute_dtype = compute_dtype
+                return model
+
+            if quant_config is not None:
+                storage_dtype = _detect_dtype("AnimaQwen35", compute_dtype, quant_config)
+                with no_init_weights():
+                    with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True, sd_dtype=norm_dtype, extra_dtype=quant_config):
+                        model = AnimaQwen35(include_head=has_release_head)
+                model.requires_grad_(False)
+                expected = set(model.state_dict())
+                if missing := sorted(expected - normalized.keys()):
+                    raise ValueError(f"Incomplete quantized Qwen3.5 4B for Anima-3.8B: missing {len(missing)} keys ({missing[:5]})")
+                load_state_dict(model, normalized, log_name=cls_name)
+                model.compute_dtype = compute_dtype
+                return model
+
+            dtypes = {t.dtype for t in normalized.values() if isinstance(t, torch.Tensor)}
+            # The community release mixes FP8 linears with BF16 norms/embeddings: keep each
+            # tensor's own dtype via assign=True. Uniform HF safetensors respect text_encoder_dtype().
+            preserve_mixed = has_release_head or len(dtypes) > 1 or norm_dtype in (torch.float8_e4m3fn, torch.float8_e5m2)
+            if preserve_mixed:
+                with no_init_weights():
+                    with using_forge_operations(device=torch.device("meta"), dtype=compute_dtype, manual_cast_enabled=True):
+                        model = AnimaQwen35(include_head=has_release_head)
+                model.requires_grad_(False)
+                expected = set(model.state_dict())
+                missing, unexpected = sorted(expected - normalized.keys()), sorted(normalized.keys() - expected)
+                if missing or unexpected:
+                    raise ValueError(f"Not Anima-3.8B's Qwen3.5 4B: missing {missing[:5]}, unexpected {unexpected[:5]}")
+                model.load_state_dict(normalized, strict=True, assign=True)
+                embed_dtype = model.embed_tokens.weight.dtype
+                model.compute_dtype = embed_dtype if embed_dtype in (torch.bfloat16, torch.float16, torch.float32) else compute_dtype
+                logger.info(f"Anima-3.8B Qwen3.5 4B: {', '.join(sorted({str(t.dtype).removeprefix('torch.') for t in normalized.values()}))} weights")
+                return model
+
+            storage_dtype = _detect_dtype("AnimaQwen35", compute_dtype)
             with no_init_weights():
-                with using_forge_operations(device=torch.device("meta"), dtype=memory_management.text_encoder_dtype(), manual_cast_enabled=True):
-                    model = AnimaQwen35()
+                with using_forge_operations(device=memory_management.cpu, dtype=storage_dtype, manual_cast_enabled=True, sd_dtype=norm_dtype):
+                    model = AnimaQwen35(include_head=has_release_head)
             model.requires_grad_(False)
             expected = set(model.state_dict())
-            missing, unexpected = sorted(expected - state_dict.keys()), sorted(state_dict.keys() - expected)
+            missing, unexpected = sorted(expected - normalized.keys()), sorted(normalized.keys() - expected)
             if missing or unexpected:
-                raise ValueError(f"Not Anima-3.8B's qwen35_4b.safetensors: missing {missing[:5]}, unexpected {unexpected[:5]}")
-            model.load_state_dict(state_dict, strict=True, assign=True)
-            logger.info(f"Anima-3.8B Qwen3.5 4B: {', '.join(sorted({str(t.dtype).removeprefix('torch.') for t in state_dict.values()}))} weights")
+                raise ValueError(f"Not Anima-3.8B's Qwen3.5 4B: missing {missing[:5]}, unexpected {unexpected[:5]}")
+            load_state_dict(model, normalized, log_name=cls_name)
+            model.compute_dtype = compute_dtype
+            logger.info(f"Anima-3.8B Qwen3.5 4B (HF): storage={storage_dtype}, compute={compute_dtype}")
             return model
         if cls_name in ["Qwen3Model", "Qwen3ForCausalLM", "Qwen3VLModel", "Qwen3VLForConditionalGeneration"]:
             assert isinstance(state_dict, dict) and len(state_dict) > 16, "You do not have Qwen3 state dict!"
@@ -553,22 +603,37 @@ def replace_state_dict(sd: dict[str, torch.Tensor], asd: dict[str, torch.Tensor]
     vae_key_prefix = guess.vae_key_prefix[0]
     text_encoder_key_prefix = guess.text_encoder_key_prefix[0]
 
-    if path.endswith("gguf"):
+    if str(path).lower().endswith(".gguf"):
         from backend.loader_gguf import gguf_remapping
 
         asd = gguf_remapping(asd, metadata)
+
+    from backend.nn.anima_diffusers import convert_diffusers_wan_vae, is_diffusers_anima_text_conditioner, is_diffusers_wan_vae
+    from backend.nn.anima_qwen35 import is_qwen35_4b_state_dict, qwen35_4b_needed_key
 
     #   flux 2
     if "decoder.post_quant_conv.weight" in asd:
         asd = state_dict_prefix_replace(asd, {"decoder.post_quant_conv.": "post_quant_conv.", "encoder.quant_conv.": "quant_conv."})
 
-    #   diffusers format
+    #   diffusers Wan / QwenImage 3D VAE (e.g. circlestone-labs/Anima-Base-v1.0-Diffusers/vae)
+    if is_diffusers_wan_vae(asd):
+        asd = convert_diffusers_wan_vae(asd)
+
+    #   diffusers 2D VAE format
     if "decoder.up_blocks.0.resnets.0.norm1.weight" in asd:
         from modules_forge.packages.huggingface_guess.diffusers_convert import (
             convert_vae_state_dict,
         )
 
         asd = convert_vae_state_dict(asd)
+
+    #   diffusers Anima text_conditioner (LLMAdapter standalone file)
+    if is_diffusers_anima_text_conditioner(asd):
+        unet_prefix = guess.unet_key_prefix[0]
+        for k, v in asd.items():
+            target = k if k.startswith("llm_adapter.") else f"llm_adapter.{k}"
+            sd[f"{unet_prefix}{target}"] = v
+        return sd
 
     #   sd / sdxl / wan                  # wan
     if "decoder.conv_in.weight" in asd or "decoder.middle.0.residual.0.gamma" in asd:
@@ -759,19 +824,20 @@ def replace_state_dict(sd: dict[str, torch.Tensor], asd: dict[str, torch.Tensor]
             sd[f"{text_encoder_key_prefix}t5xxl.transformer.{k}"] = True
         sd[f"{text_encoder_key_prefix}t5xxl.transformer.filename"] = str(path)
 
-    if "model.language_model.layers.0.linear_attn.A_log" in asd and "model.language_model.layers.0.input_layernorm.weight" in asd:
+    if is_qwen35_4b_state_dict(asd):
+        # Remi: Anima-3.8B's Qwen3.5 4B (release safetensors, HF Qwen/Qwen3.5-4B, or GGUF)
+        keys_to_delete = [k for k in sd if k.startswith(f"{text_encoder_key_prefix}qwen35_4b.")]
+        for k in keys_to_delete:
+            del sd[k]
+        for k, v in asd.items():
+            if qwen35_4b_needed_key(k):
+                sd[f"{text_encoder_key_prefix}qwen35_4b.transformer.{k}"] = v
+
+    elif "model.language_model.layers.0.linear_attn.A_log" in asd and "model.language_model.layers.0.input_layernorm.weight" in asd:
         weight = asd["model.language_model.layers.0.input_layernorm.weight"]
-        # Remi: a 2560-wide one is Qwen3.5 4B in the Hugging Face layout; Anima-3.8B was
-        # trained with the release's own file (layers only, and a projection head)
-        assert weight.shape[0] != 2560, f"{os.path.basename(path)} is Qwen3.5 4B in the Hugging Face layout: Anima-3.8B needs qwen35_4b.safetensors from lylogummy/Anima-3.8B"
         assert weight.shape[0] == 4096
         for k, v in asd.items():
             sd[f"{text_encoder_key_prefix}qwen35_9b.transformer.{k}"] = v
-
-    elif "layers.0.linear_attn.A_log" in asd and "norm.0.weight" in asd:
-        # Remi: Anima-3.8B's Qwen3.5 4B (backend.nn.anima_qwen35)
-        for k, v in asd.items():
-            sd[f"{text_encoder_key_prefix}qwen35_4b.transformer.{k}"] = v
 
     elif "model.layers.0.post_feedforward_layernorm.weight" in asd:
         assert "model.layers.0.self_attn.q_norm.weight" not in asd
@@ -794,8 +860,22 @@ def replace_state_dict(sd: dict[str, torch.Tensor], asd: dict[str, torch.Tensor]
     elif "model.layers.0.post_attention_layernorm.weight" in asd and "model.layers.0.self_attn.q_norm.weight" in asd:
         weight: torch.Tensor = asd["model.layers.0.post_attention_layernorm.weight"]
         size: str = "06b" if weight.shape[0] == 1024 else ("4b" if weight.shape[0] == 2560 else "8b")
+        keys_to_delete = [k for k in sd if k.startswith(f"{text_encoder_key_prefix}qwen3_{size}.")]
+        for k in keys_to_delete:
+            del sd[k]
         for k, v in asd.items():
             sd[f"{text_encoder_key_prefix}qwen3_{size}.transformer.{k}"] = v
+
+    elif "layers.0.post_attention_layernorm.weight" in asd and "layers.0.self_attn.q_norm.weight" in asd and "layers.0.linear_attn.A_log" not in asd:
+        # Diffusers Qwen3 text_encoder (e.g. Anima-Base-v1.0-Diffusers/text_encoder/model.safetensors: no "model." prefix)
+        weight: torch.Tensor = asd["layers.0.post_attention_layernorm.weight"]
+        size: str = "06b" if weight.shape[0] == 1024 else ("4b" if weight.shape[0] == 2560 else "8b")
+        keys_to_delete = [k for k in sd if k.startswith(f"{text_encoder_key_prefix}qwen3_{size}.")]
+        for k in keys_to_delete:
+            del sd[k]
+        for k, v in asd.items():
+            target = k if k.startswith(("model.", "lm_head.")) else f"model.{k}"
+            sd[f"{text_encoder_key_prefix}qwen3_{size}.transformer.{target}"] = v
 
     elif "model.layers.0.post_attention_layernorm.weight" in asd:
         weight: torch.Tensor = asd["model.layers.0.post_attention_layernorm.weight"]
@@ -883,15 +963,59 @@ def _load_diffuser(path: os.PathLike):
     sd, metadata = convert_quantization(sd, metadata)
     if (sd := convert_diffusers_mmdit(sd, "")) is None:
         raise ModuleNotFoundError("Failed to recognize model...")
+    # Standalone Anima Diffusers transformer file inside a Diffusers repo: pick up sibling text_conditioner.
+    if "blocks.0.mlp.layer1.weight" in sd and not any(k.startswith("llm_adapter.") for k in sd):
+        sibling = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(os.fspath(path)))), "text_conditioner")
+        if os.path.isdir(sibling):
+            from backend.nn.anima_diffusers import _load_component_sd
+
+            cond_sd, _ = _load_component_sd(sibling)
+            for k, v in cond_sd.items():
+                sd[k if k.startswith("llm_adapter.") else f"llm_adapter.{k}"] = v
     sd = preprocess_state_dict(sd)
     guess = huggingface_guess.guess(sd)
 
     return sd, metadata, guess
 
 
+def _load_anima_diffusers_dir(path: os.PathLike):
+    import huggingface_guess
+
+    from backend.nn.anima_diffusers import load_anima_diffusers_dir
+
+    sd, metadata = load_anima_diffusers_dir(path)
+    sd, metadata = convert_quantization(sd, metadata)
+    guess = huggingface_guess.guess(sd)
+    return sd, metadata, guess
+
+
+def _additional_key_filter(path: os.PathLike, guess):
+    """For Anima checkpoints, skip unused vision/MTP/layer-31-MLP shards when loading
+    sharded HuggingFace ``Qwen/Qwen3.5-4B`` (keeps MOSS-Image's 9B vision weights intact)."""
+
+    if "Anima" not in guess.huggingface_repo:
+        return None
+    from backend.nn.anima_diffusers import _read_json, find_sharded_index
+    from backend.nn.anima_qwen35 import qwen35_4b_needed_key
+
+    index_path = find_sharded_index(path)
+    if index_path is None:
+        return None
+    index = _read_json(index_path)
+    weight_map = index.get("weight_map") if index else None
+    if isinstance(weight_map, dict) and any(k.endswith("layers.0.linear_attn.A_log") for k in weight_map):
+        return qwen35_4b_needed_key
+    return None
+
+
 def split_state_dict(path: os.PathLike, additional_state_dicts: list[os.PathLike] = None):
+    from backend.nn.anima_diffusers import is_anima_diffusers_dir
+
     try:
-        sd, metadata, guess = _load_unet(path)
+        if is_anima_diffusers_dir(path):
+            sd, metadata, guess = _load_anima_diffusers_dir(path)
+        else:
+            sd, metadata, guess = _load_unet(path)
     except ModuleNotFoundError:
         sd, metadata, guess = _load_diffuser(path)
     finally:
@@ -912,7 +1036,7 @@ def split_state_dict(path: os.PathLike, additional_state_dicts: list[os.PathLike
 
     if isinstance(additional_state_dicts, list):
         for asd in additional_state_dicts:
-            _asd, _meta = load_torch_file(asd, return_metadata=True)
+            _asd, _meta = load_torch_file(asd, return_metadata=True, key_filter=_additional_key_filter(asd, guess))
             _asd, _meta = convert_quantization(_asd, _meta)
             sd = replace_state_dict(sd, _asd, _meta, guess, asd)
             del _asd

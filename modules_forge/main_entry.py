@@ -52,8 +52,15 @@ module_map: OrderedDict[str, str] = OrderedDict()
 
 
 def find_files_with_extensions(base_path: os.PathLike, extensions: list[str]) -> dict[str, os.PathLike]:
+    from backend.nn.anima_diffusers import is_sharded_hf_dir
+
     found_files = {}
-    for root, _, files in os.walk(base_path):
+    base_abs = os.path.abspath(base_path)
+    for root, dirs, files in os.walk(base_path):
+        if os.path.abspath(root) != base_abs and is_sharded_hf_dir(root):
+            found_files[os.path.basename(root)] = root
+            dirs[:] = []
+            continue
         for file in files:
             if any(file.endswith(ext) for ext in extensions):
                 full_path = os.path.join(root, file)

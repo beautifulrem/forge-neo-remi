@@ -1,17 +1,22 @@
 """Qwen3.5 4B, the second text encoder of Anima-3.8B (lylogummy/Anima-3.8B).
 
-The release's ``qwen35_4b.safetensors`` is Qwen3.5-4B's text backbone: 32 hybrid layers
-(Gated DeltaNet linear attention, with gated full attention at every fourth layer), the
-last of which has no MLP, and a small projection head in place of the final norm.
-Anima-3.8B's semantic connector reads the hidden states after layers 7, 15, 23 and 31;
-the head is loaded (so nothing in the file goes unchecked) but not run.
+Supports:
+- the community release ``qwen35_4b.safetensors`` (32 hybrid layers without
+  layer 31's MLP, plus its unused 2560->1024 projection head);
+- original HuggingFace ``Qwen/Qwen3.5-4B`` safetensors (single-file or sharded
+  via ``model.safetensors.index.json``), stripping the ``model.language_model.``
+  prefix and ignoring the unused vision tower, MTP layers, ``lm_head``, final
+  RMSNorm, and layer 31's MLP;
+- GGUF-quantized ``Qwen3.5-4B`` (remapped by ``backend.loader_gguf``).
 
-Built from the Qwen3.5 layers MOSS-Image already uses (``backend.nn.llm.llama``).
+Anima-3.8B's semantic connector reads the hidden states after layers 7, 15, 23
+and 31. Built from the Qwen3.5 layers MOSS-Image already uses
+(``backend.nn.llm.llama``).
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import torch
@@ -20,11 +25,62 @@ import torch.nn as nn
 from backend.nn.llm.llama import MLP, GatedAttention, GatedDeltaNet, Qwen35_9BConfig, attention_function, precompute_freqs_cis
 
 SEMANTIC_LAYERS = (7, 15, 23, 31)
+QWEN35_4B_HIDDEN_SIZE = 2560
+_STRIP_PREFIXES = ("model.language_model.", "language_model.", "model.")
+_IGNORE_PREFIXES = ("visual.", "model.visual.", "mtp.", "nextn.", "lm_head.", "layers.31.mlp.", "layers.31.post_attention_layernorm.")
+
+
+def _strip_qwen35_prefix(key: str) -> str:
+    for prefix in _STRIP_PREFIXES:
+        if key.startswith(prefix):
+            return key[len(prefix) :]
+    return key
+
+
+def qwen35_4b_needed_key(key: str) -> bool:
+    """Whether a raw safetensors key from ``Qwen/Qwen3.5-4B`` or ``qwen35_4b.safetensors``
+    belongs to Anima-3.8B's text backbone (used to skip vision/MTP shards on load)."""
+
+    if key.startswith(("model.visual.", "visual.", "mtp.", "nextn.", "lm_head.")):
+        return False
+    stripped = _strip_qwen35_prefix(key)
+    if stripped.startswith(_IGNORE_PREFIXES) or stripped == "norm.weight":
+        return False
+    return stripped == "embed_tokens.weight" or stripped.startswith(("layers.", "norm."))
+
+
+def is_qwen35_4b_state_dict(state_dict: Mapping[str, torch.Tensor]) -> bool:
+    """True when ``state_dict`` holds Qwen3.5 4B (hidden_size 2560) in release,
+    HuggingFace, or GGUF-remapped layout."""
+
+    for prefix in ("", "model.language_model.", "language_model.", "model."):
+        if f"{prefix}layers.0.linear_attn.A_log" in state_dict and (norm := state_dict.get(f"{prefix}layers.0.input_layernorm.weight")) is not None:
+            if norm.shape[0] == QWEN35_4B_HIDDEN_SIZE:
+                return True
+    return False
+
+
+def normalize_qwen35_4b_state_dict(state_dict: Mapping[str, torch.Tensor]) -> tuple[dict[str, torch.Tensor], bool]:
+    """Normalize release / HF / GGUF-remapped Qwen3.5 4B weights to ``AnimaQwen35`` keys.
+
+    Returns ``(normalized_state_dict, has_release_head)``.
+    """
+
+    normalized: dict[str, torch.Tensor] = {}
+    for raw_key, value in state_dict.items():
+        if not qwen35_4b_needed_key(raw_key):
+            continue
+        key = _strip_qwen35_prefix(raw_key)
+        if key.startswith(_IGNORE_PREFIXES) or key == "norm.weight":
+            continue
+        normalized[key] = value
+    has_release_head = "norm.0.weight" in normalized
+    return normalized, has_release_head
 
 
 @dataclass
 class Qwen35_4BConfig(Qwen35_9BConfig):
-    hidden_size: int = 2560
+    hidden_size: int = QWEN35_4B_HIDDEN_SIZE
     intermediate_size: int = 9216
     final_norm: bool = False
     transformer_type: str = "qwen35_4b"
@@ -63,20 +119,23 @@ class Qwen35Layer(nn.Module):
 class AnimaQwen35(nn.Module):
     """Qwen3.5 4B backbone: ``forward`` returns the hidden states after the given layers."""
 
-    def __init__(self, config_dict: dict | None = None):
+    def __init__(self, config_dict: dict | None = None, *, include_head: bool = True):
         super().__init__()
         config = Qwen35_4BConfig()
         self.config = config
         self.num_layers = config.num_hidden_layers
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size)
         self.layers = nn.ModuleList([Qwen35Layer(config, index) for index in range(config.num_hidden_layers)])
-        width = HEAD_WIDTH
-        self.norm = nn.Sequential(
-            nn.Linear(config.hidden_size, width, bias=True),
-            nn.RMSNorm(width, eps=config.rms_norm_eps, add=True),
-            nn.SiLU(),
-            nn.Linear(width, width, bias=True),
-        )
+        if include_head:
+            width = HEAD_WIDTH
+            self.norm = nn.Sequential(
+                nn.Linear(config.hidden_size, width, bias=True),
+                nn.RMSNorm(width, eps=config.rms_norm_eps, add=True),
+                nn.SiLU(),
+                nn.Linear(width, width, bias=True),
+            )
+        else:
+            self.norm = None
 
     def forward(self, input_ids: torch.Tensor, layers: Sequence[int] = SEMANTIC_LAYERS, dtype: torch.dtype | None = None) -> list[torch.Tensor]:
         layers = tuple(int(layer) for layer in layers)

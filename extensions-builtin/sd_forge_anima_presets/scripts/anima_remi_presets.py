@@ -6,7 +6,7 @@ import logging
 
 from backend.logging import setup_logger
 from modules import scripts
-from modules.anima_presets import PRESET_DESCRIPTIONS, PRESETS, SAFE_BASE_AESTHETIC_LABEL, turbo_settings_advice
+from modules.anima_presets import PRESET_DESCRIPTIONS, PRESETS, SAFE_BASE_AESTHETIC_LABEL, anima_workflow_advice
 from modules.anima_support import is_anima_engine
 from remi import ui
 
@@ -73,7 +73,7 @@ class AnimaRemiPresetScript(scripts.Script):
     def process(self, p, *args):
         if not is_anima_engine(getattr(p, "sd_model", None)):
             return
-        checkpoint = getattr(getattr(p.sd_model, "sd_checkpoint_info", None), "name", "")
-        advice = turbo_settings_advice(checkpoint, float(p.cfg_scale), int(p.steps))
-        if advice is not None:
+        for advice in anima_workflow_advice(p):
             logger.warning(advice)
+            if hasattr(p, "comment"):
+                p.comment(advice)

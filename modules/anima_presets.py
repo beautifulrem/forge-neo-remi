@@ -10,6 +10,9 @@ without importing extension modules or coupling their runtimes together.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable
+
 
 
 SAFE_BASE_AESTHETIC_LABEL = "Official Base/Aesthetic — Safe (Recommended)"
@@ -257,9 +260,86 @@ PRESET_DESCRIPTIONS: dict[str, str] = {
 }
 
 
-def turbo_settings_advice(checkpoint: str, cfg_scale: float, steps: int) -> str | None:
+_LORA_TAG_RE = re.compile(r"<(?:lora|lyco):([^:>]+)(?::([^:>]*))?", re.IGNORECASE)
+_DISTILLED_LORA_RE = re.compile(r"(?:^|[^a-z0-9])(?:turbo|lightning|lcm|hyper|dmd2?)(?:[^a-z0-9]|$)", re.IGNORECASE)
+_EDIT_HINT_RE = re.compile(r"(?:^|[^a-z0-9])edit(?:[^a-z0-9]|$)", re.IGNORECASE)
+
+
+def _iter_prompt_texts(prompts: Iterable[str] | str | None) -> list[str]:
+    if prompts is None:
+        return []
+    if isinstance(prompts, str):
+        return [prompts]
+    return [str(text) for text in prompts if text]
+
+
+def _active_lora_names(prompts: Iterable[str] | str | None) -> list[str]:
+    names: list[str] = []
+    for prompt in _iter_prompt_texts(prompts):
+        for match in _LORA_TAG_RE.finditer(prompt):
+            name = match.group(1).strip()
+            raw_weight = (match.group(2) or "").strip()
+            if raw_weight:
+                try:
+                    if float(raw_weight) == 0.0:
+                        continue
+                except ValueError:
+                    pass
+            if name:
+                names.append(name)
+    return names
+
+
+def has_distilled_lora(prompts: Iterable[str] | str | None) -> bool:
+    """Whether any active LoRA tag in ``prompts`` names a step/CFG-distilled LoRA."""
+
+    return any(_DISTILLED_LORA_RE.search(name) for name in _active_lora_names(prompts))
+
+
+def _has_edit_hint(checkpoint: str, prompts: Iterable[str] | str | None) -> bool:
+    return bool(_EDIT_HINT_RE.search(str(checkpoint or ""))) or any(_EDIT_HINT_RE.search(name) for name in _active_lora_names(prompts))
+
+
+def _has_transparent_alpha(image: object) -> bool:
+    getbands = getattr(image, "getbands", None)
+    getchannel = getattr(image, "getchannel", None)
+    if not callable(getbands) or not callable(getchannel):
+        return False
+    try:
+        if "A" not in getbands():
+            return False
+        extrema = getchannel("A").getextrema()
+    except Exception:
+        return False
+    return isinstance(extrema, tuple) and len(extrema) >= 1 and extrema[0] < 255
+
+
+def _is_white_background(value: object) -> bool:
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"#fff", "#ffffff", "#ffffffff", "fff", "ffffff", "white"}:
+            return True
+        if text.startswith("rgb"):
+            nums = [int(n) for n in re.findall(r"\d+", text)[:3]]
+            return len(nums) == 3 and nums == [255, 255, 255]
+        return False
+    if isinstance(value, (tuple, list)) and len(value) >= 3:
+        try:
+            return all(int(c) == 255 for c in value[:3])
+        except (TypeError, ValueError):
+            return False
+    return False
+
+
+def turbo_settings_advice(
+    checkpoint: str,
+    cfg_scale: float,
+    steps: int,
+    *,
+    prompts: Iterable[str] | str | None = None,
+) -> str | None:
     """A hint when the settings clearly do not match the Anima checkpoint
-    (distilled Turbo vs Base/Aesthetic), judged by its file name."""
+    (distilled Turbo vs Base/Aesthetic), judged by its file name and active LoRAs."""
 
     name = str(checkpoint or "").lower()
     is_turbo = "turbo" in name
@@ -269,11 +349,75 @@ def turbo_settings_advice(checkpoint: str, cfg_scale: float, steps: int) -> str 
             "CFG 1 and 8-12 steps (see the Official Turbo preset); higher values over-cook it"
         )
     if not is_turbo and "anima" in name and cfg_scale <= 1.0 and steps <= 12:
+        if has_distilled_lora(prompts):
+            return None
         return (
             f"Non-Turbo Anima checkpoint with CFG {cfg_scale:g} / {steps} steps: Base/Aesthetic need "
             "about 30-50 steps and CFG 4-5 (Turbo checkpoints are meant for these settings)"
         )
     return None
+
+
+def anima_workflow_advice(p, *, opts=None) -> list[str]:
+    """Collect actionable setup hints for an Anima generation pass (Turbo/Base
+    mismatch, Anima Edit without Reference enabled, RGBA 4ch VAE transparent
+    img2img with a non-white fill background)."""
+
+    if opts is None:
+        try:
+            from modules import shared
+
+            opts = getattr(shared, "opts", None)
+        except Exception:
+            opts = None
+
+    sd_model = getattr(p, "sd_model", None)
+    checkpoint = getattr(getattr(sd_model, "sd_checkpoint_info", None), "name", "")
+    prompts: list[str] = []
+    for attr in ("prompt", "hr_prompt"):
+        if value := getattr(p, attr, None):
+            prompts.append(str(value))
+    for attr in ("prompts", "hr_prompts"):
+        if values := getattr(p, attr, None):
+            prompts.extend(str(v) for v in values if v)
+
+    messages: list[str] = []
+    cfg_scale = getattr(p, "cfg_scale", None)
+    steps = getattr(p, "steps", None)
+    if cfg_scale is not None and steps is not None:
+        if advice := turbo_settings_advice(checkpoint, float(cfg_scale), int(steps), prompts=prompts):
+            messages.append(advice)
+
+    init_images = getattr(p, "init_images", None) or ()
+    has_ref_latents = False
+    try:
+        from backend.args import dynamic_args
+
+        has_ref_latents = bool(getattr(dynamic_args, "ref_latents", None))
+    except Exception:
+        has_ref_latents = False
+
+    if (
+        opts is not None
+        and not bool(getattr(opts, "anima_do_reference", False))
+        and _has_edit_hint(checkpoint, prompts)
+        and (bool(init_images) or has_ref_latents)
+    ):
+        messages.append(
+            "Anima Edit model/LoRA detected with an input or reference image while '[Anima] Enable Reference' "
+            "(anima_do_reference) is off: enable it so Anima stacks the reference frame instead of running plain img2img"
+        )
+
+    vae = getattr(getattr(sd_model, "forge_objects", None), "vae", None)
+    if getattr(vae, "output_channels", 3) == 4 and init_images and any(_has_transparent_alpha(img) for img in init_images):
+        bg = getattr(opts, "img2img_background_color", "#808080") if opts is not None else "#808080"
+        if not _is_white_background(bg):
+            messages.append(
+                f"Anima RGBA (4-channel) VAE with a transparent img2img input and img2img_background_color={bg!r}: "
+                "set img2img_background_color to #ffffff (white) to avoid dark-fringe alpha artifacts"
+            )
+
+    return messages
 
 
 def preset_value(label: str, name: str, registered: object) -> object:

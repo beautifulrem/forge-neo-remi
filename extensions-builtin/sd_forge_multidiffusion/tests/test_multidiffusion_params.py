@@ -131,14 +131,16 @@ def test_each_tile_gets_the_anima_tensors_of_its_prompts(multidiffusion, monkeyp
         "c_crossattn": torch.randn(2, 8, 4, device=device),
         "anima_ids": torch.arange(10, device=device).reshape(2, 5),
         "anima_semantic": torch.randn(2, 4, 3, 6, device=device),
+        "anima_semantic_rows": [{"id": 0}, None],
         "c_negpip_mask": torch.ones(2, 8, 1, device=device),
     }
     seen = []
 
     def model(x_tile, t_tile, **c_tile):
-        seen.append({key: value.shape[0] for key, value in c_tile.items()} | {"x": x_tile.shape[0]})
+        seen.append({key: len(value) if isinstance(value, list) else value.shape[0] for key, value in c_tile.items()} | {"x": x_tile.shape[0]})
         for key in ("anima_ids", "c_crossattn"):
             assert torch.equal(c_tile[key][: len(c[key])], c[key])  # the prompts' order, per tile
+        assert c_tile["anima_semantic_rows"][:2] == c["anima_semantic_rows"]
         return x_tile
 
     diffusion(model, {"input": x, "timestep": torch.ones(2, device=device), "c": c, "cond_or_uncond": [0, 1]})

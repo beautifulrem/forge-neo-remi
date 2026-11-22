@@ -46,7 +46,15 @@ class CheckpointInfo:
         abspath: str = os.path.abspath(filename)
         abs_ckpt_dirs: list[str] = [os.path.abspath(_dir) for _dir in (*cmd_opts.ckpt_dirs, model_path)]
 
-        self.is_safetensors = os.path.splitext(filename)[1].lower() == ".safetensors"
+        self.is_diffusers_dir = os.path.isdir(filename)
+        primary_file = filename
+        if self.is_diffusers_dir:
+            from backend.nn.anima_diffusers import anima_diffusers_primary_file
+
+            primary_file = anima_diffusers_primary_file(filename) or filename
+
+        self._hash_file = primary_file
+        self.is_safetensors = os.path.splitext(primary_file)[1].lower() == ".safetensors"
 
         # Initial fallback to prevent UnboundLocalError if no directory matches
         name: str = os.path.basename(filename)
@@ -59,23 +67,27 @@ class CheckpointInfo:
         name = name.strip("/").strip("\\")
 
         def read_metadata():
-            metadata = read_metadata_from_safetensors(filename)
+            metadata = read_metadata_from_safetensors(primary_file)
             metadata.pop("modelspec.thumbnail", None)
+            if self.is_diffusers_dir and "modelspec.architecture" not in metadata:
+                metadata["modelspec.architecture"] = "anima/diffusers"
             return metadata
 
         self.metadata = {}
-        if self.is_safetensors:
+        if self.is_safetensors and os.path.isfile(primary_file):
             try:
-                self.metadata = cache.cached_data_for_file("safetensors-metadata", "checkpoint/" + name, filename, read_metadata)
+                self.metadata = cache.cached_data_for_file("safetensors-metadata", "checkpoint/" + name, primary_file, read_metadata)
             except Exception as e:
                 errors.display(e, f"reading metadata for {filename}")
+        elif self.is_diffusers_dir:
+            self.metadata = {"modelspec.architecture": "anima/diffusers"}
 
         self.name = name
-        self.name_for_extra = os.path.splitext(os.path.basename(filename))[0]
-        self.model_name = os.path.splitext(name.replace("/", "_").replace("\\", "_"))[0]
-        self.hash = model_hash(filename)
+        self.name_for_extra = os.path.basename(filename) if self.is_diffusers_dir else os.path.splitext(os.path.basename(filename))[0]
+        self.model_name = name.replace("/", "_").replace("\\", "_") if self.is_diffusers_dir else os.path.splitext(name.replace("/", "_").replace("\\", "_"))[0]
+        self.hash = model_hash(primary_file) if os.path.isfile(primary_file) else "DIR"
 
-        self.sha256 = hashes.sha256_from_cache(self.filename, f"checkpoint/{name}")
+        self.sha256 = hashes.sha256_from_cache(primary_file, f"checkpoint/{name}") if os.path.isfile(primary_file) else None
         self.shorthash = self.sha256[0:10] if self.sha256 else None
 
         self.title = name if self.shorthash is None else f"{name} [{self.shorthash}]"
@@ -91,7 +103,10 @@ class CheckpointInfo:
             checkpoint_aliases[id] = self
 
     def calculate_shorthash(self):
-        self.sha256 = hashes.sha256(self.filename, f"checkpoint/{self.name}")
+        hash_target = getattr(self, "_hash_file", self.filename)
+        if not os.path.isfile(hash_target):
+            return None
+        self.sha256 = hashes.sha256(hash_target, f"checkpoint/{self.name}")
         if self.sha256 is None:
             return
 
@@ -129,12 +144,25 @@ def checkpoint_tiles(use_short=False):
 
 
 def list_models():
+    from backend.nn.anima_diffusers import is_anima_diffusers_dir
+
     checkpoints_list.clear()
     checkpoint_aliases.clear()
     model_list: set[str] = set()
+    diffusers_dirs: list[str] = []
 
     for _dir in (*cmd_opts.ckpt_dirs, model_path):
+        if os.path.isdir(_dir):
+            for current, dirs, _files in os.walk(_dir, followlinks=True):
+                if current != _dir and is_anima_diffusers_dir(current):
+                    diffusers_dirs.append(os.path.abspath(current))
+                    dirs[:] = []
         model_list.update(modelloader.load_models(model_path=_dir, ext_filter=[".ckpt", ".safetensors", ".gguf"], ext_blacklist=[".vae.ckpt", ".vae.safetensors"]))
+
+    if diffusers_dirs:
+        prefixes = tuple(d + os.sep for d in diffusers_dirs)
+        model_list = {p for p in model_list if not os.path.abspath(p).startswith(prefixes)}
+        model_list.update(diffusers_dirs)
 
     for filename in sorted(model_list, key=shared.natural_sort_key):
         try:

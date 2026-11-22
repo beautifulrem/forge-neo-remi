@@ -406,6 +406,10 @@ def convert_diffusers_mmdit(state_dict, output_prefix=""):
         hidden_size = state_dict["x_embedder.bias"].shape[0]
         sd_map = flux_to_diffusers({"depth": depth, "depth_single_blocks": depth_single_blocks, "hidden_size": hidden_size}, output_prefix=output_prefix)
     else:
+        from backend.nn.anima_diffusers import convert_diffusers_anima_transformer, is_diffusers_anima_transformer
+
+        if is_diffusers_anima_transformer(state_dict):
+            return convert_diffusers_anima_transformer(state_dict, output_prefix=output_prefix)
         return None
 
     for k in sd_map:

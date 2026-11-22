@@ -311,6 +311,20 @@ def test_controlnet_lllite_falls_back(monkeypatch):
     assert speed.fallback_reason(_RecordingModel(), _anima_sigmas(10).tolist()) == "ControlNet-LLLite"
 
 
+def test_anima_control_lora_falls_back(monkeypatch):
+    from backend.args import dynamic_args
+
+    monkeypatch.setattr(dynamic_args, "ACTIVE_CONTROL_LORA", {object()}, raising=False)
+    assert speed.fallback_reason(_RecordingModel(), _anima_sigmas(10).tolist()) == "Anima control-LoRA"
+
+
+def test_anima_vace_falls_back(monkeypatch):
+    from backend.args import dynamic_args
+
+    monkeypatch.setattr(dynamic_args, "ACTIVE_ANIMA_VACE", {object()}, raising=False)
+    assert speed.fallback_reason(_RecordingModel(), _anima_sigmas(10).tolist()) == "Anima ControlNet-VACE"
+
+
 def test_small_or_single_step_passes_fall_back():
     assert speed.plan_speed(_anima_sigmas(10).tolist(), 96, 96)[0] is None  # 48 x 48 coarse < 512 x 384 px
     assert speed.plan_speed(_anima_sigmas(1).tolist(), 128, 128)[0] is None

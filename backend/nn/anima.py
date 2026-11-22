@@ -556,10 +556,91 @@ class Anima(nn.Module):
         else:
             self.llm_adapter = self.anima_v2_connector = None
 
+    @staticmethod
+    def _finalize_semantic_context(
+        expanded: torch.Tensor,
+        weights: torch.Tensor,
+        target_length: int,
+        negpip: Optional[torch.Tensor],
+        dtype: torch.dtype,
+    ) -> torch.Tensor:
+        expanded = expanded * weights.unsqueeze(-1).to(expanded)
+        if expanded.shape[1] < target_length:
+            expanded = nn.functional.pad(expanded, (0, 0, 0, target_length - expanded.shape[1]))
+        if negpip is not None and negpip.shape[1] == expanded.shape[1]:
+            # NegPiP sign-restores the encoded context and negates V instead
+            expanded = expanded * negpip.to(expanded)
+        return expanded.to(dtype)
+
     def semantic_context(self, context: torch.Tensor, timesteps: torch.Tensor, kwargs: dict) -> torch.Tensor:
         """Anima-3.8B: the context of the rows encoded for the connector, recomputed for
         this step's ``timesteps`` (``anima_semantic`` and co. come from the conditioning,
         see ``backend.text_processing.anima_engine``); other contexts pass through."""
+
+        rows = kwargs.get("anima_semantic_rows")
+        if rows is not None:
+            if not any(row is not None for row in rows):
+                return context
+            if self.anima_v2_connector is None:
+                raise RuntimeError("This prompt was encoded for Anima-3.8B's semantic connector, but the loaded model has none")
+            if len(rows) != context.shape[0]:
+                raise ValueError(f"anima_semantic_rows has {len(rows)} entries for batch size {context.shape[0]}")
+            flat_timesteps = timesteps.reshape(-1).float()
+            if flat_timesteps.shape[0] == 1 and context.shape[0] > 1:
+                flat_timesteps = flat_timesteps.expand(context.shape[0])
+            out = context.clone()
+            negpip = kwargs.get("c_negpip_mask")
+            # Group positions by source chunk so each unique chunk runs on its original
+            # tensors (preserving SemanticConnector's static KV cache across steps and tiles).
+            groups: dict[int, tuple[dict[str, torch.Tensor], list[tuple[int, int]]]] = {}
+            for out_idx, entry in enumerate(rows):
+                if entry is None:
+                    continue
+                chunk, row_idx = entry if isinstance(entry, tuple) else (entry, 0)
+                group = groups.get(id(chunk))
+                if group is None:
+                    groups[id(chunk)] = (chunk, [(out_idx, row_idx)])
+                else:
+                    group[1].append((out_idx, row_idx))
+            for chunk, placements in groups.values():
+                chunk_batch = chunk["anima_semantic"].shape[0]
+                full_order = list(range(chunk_batch))
+                pos = 0
+                while pos < len(placements):
+                    batch_slice = placements[pos : pos + chunk_batch]
+                    if len(batch_slice) == chunk_batch and [row_idx for _, row_idx in batch_slice] == full_order:
+                        out_indices = [out_idx for out_idx, _ in batch_slice]
+                        source = chunk["anima_source"].to(device=context.device)
+                        ids = chunk["anima_ids"].to(device=context.device, dtype=torch.long)
+                        semantic = chunk["anima_semantic"].to(device=context.device)
+                        mask = chunk.get("anima_semantic_mask")
+                        if mask is not None:
+                            mask = mask.to(device=context.device)
+                        weights = chunk["anima_weights"]
+                        pos += chunk_batch
+                    else:
+                        out_indices = [out_idx for out_idx, _ in placements[pos:]]
+                        row_indices = [row_idx for _, row_idx in placements[pos:]]
+                        source = chunk["anima_source"][row_indices].to(device=context.device)
+                        ids = chunk["anima_ids"][row_indices].to(device=context.device, dtype=torch.long)
+                        semantic = chunk["anima_semantic"][row_indices].to(device=context.device)
+                        mask = chunk.get("anima_semantic_mask")
+                        if mask is not None:
+                            mask = mask[row_indices].to(device=context.device)
+                        weights = chunk["anima_weights"][row_indices]
+                        pos = len(placements)
+                    expanded = self.anima_v2_connector(
+                        self.llm_adapter,
+                        source,
+                        ids,
+                        semantic,
+                        flat_timesteps[out_indices],
+                        mask,
+                        dtype=context.dtype,
+                    )
+                    row_negpip = negpip[out_indices] if negpip is not None else None
+                    out[out_indices] = Anima._finalize_semantic_context(expanded, weights, context.shape[1], row_negpip, context.dtype)
+            return out
 
         semantic = kwargs.get("anima_semantic")
         if semantic is None:
@@ -575,13 +656,7 @@ class Anima(nn.Module):
             kwargs.get("anima_semantic_mask"),
             dtype=context.dtype,
         )
-        expanded = expanded * kwargs["anima_weights"].unsqueeze(-1).to(expanded)
-        if expanded.shape[1] < context.shape[1]:
-            expanded = nn.functional.pad(expanded, (0, 0, 0, context.shape[1] - expanded.shape[1]))
-        if (negpip := kwargs.get("c_negpip_mask")) is not None and negpip.shape[1] == expanded.shape[1]:
-            # NegPiP sign-restores the encoded context and negates V instead
-            expanded = expanded * negpip.to(expanded)
-        return expanded.to(context.dtype)
+        return Anima._finalize_semantic_context(expanded, kwargs["anima_weights"], context.shape[1], kwargs.get("c_negpip_mask"), context.dtype)
 
     def prepare_embedded_sequence(self, x_B_C_T_H_W: torch.Tensor, padding_mask: Optional[torch.Tensor] = None) -> tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
         if padding_mask is None:

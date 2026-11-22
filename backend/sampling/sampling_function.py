@@ -92,12 +92,23 @@ def get_area_and_mult(conds, x_in, timestep_in):
     return cond_obj(input_x, mult, conditioning, area, control, patches, batch_indices)
 
 
+_ANIMA_SEMANTIC_KEYS = frozenset({"anima_source", "anima_ids", "anima_weights", "anima_semantic", "anima_semantic_mask"})
+_ANIMA_SEMANTIC_REQUIRED = frozenset({"anima_source", "anima_ids", "anima_weights", "anima_semantic"})
+
+
 def cond_equal_size(c1, c2):
     if c1 is c2:
         return True
-    if c1.keys() != c2.keys():
+    keys1 = c1.keys() - _ANIMA_SEMANTIC_KEYS
+    keys2 = c2.keys() - _ANIMA_SEMANTIC_KEYS
+    if keys1 != keys2:
         return False
-    for k in c1:
+    # Anima-3.8B's semantic connector inputs only accompany c_crossattn, and
+    # cond / uncond often differ on whether they carry them (or on token length).
+    # Allowing them to share one DiT call avoids splitting every CFG step in two.
+    if (c1.keys() != c2.keys() or any(not c1[k].can_concat(c2[k]) for k in c1.keys() & _ANIMA_SEMANTIC_KEYS)) and "c_crossattn" not in keys1:
+        return False
+    for k in keys1:
         if not c1[k].can_concat(c2[k]):
             return False
     return True
@@ -130,10 +141,21 @@ def can_concat_cond(c1, c2):
     return cond_equal_size(c1.conditioning, c2.conditioning)
 
 
+def _anima_semantic_chunk(chunk):
+    if not (_ANIMA_SEMANTIC_REQUIRED <= chunk.keys()):
+        return None
+    return {k: chunk[k].cond for k in _ANIMA_SEMANTIC_KEYS if k in chunk}
+
+
 def cond_cat(c_list):
+    has_semantic = any(_ANIMA_SEMANTIC_REQUIRED <= x.keys() for x in c_list)
+    use_semantic_rows = has_semantic and len(c_list) > 1
+
     temp = {}
     for x in c_list:
         for k in x:
+            if use_semantic_rows and k in _ANIMA_SEMANTIC_KEYS:
+                continue
             cur = temp.get(k, [])
             cur.append(x[k])
             temp[k] = cur
@@ -141,7 +163,22 @@ def cond_cat(c_list):
     out = {}
     for k in temp:
         conds = temp[k]
-        out[k] = conds[0].concat(conds[1:])
+        if len(conds) == 1 and k in _ANIMA_SEMANTIC_KEYS:
+            # Avoid copying static Anima-3.8B connector inputs on single-chunk calls so the connector cache hits.
+            out[k] = conds[0].cond
+        else:
+            out[k] = conds[0].concat(conds[1:])
+
+    if use_semantic_rows:
+        rows = []
+        for x in c_list:
+            batch = x["c_crossattn"].cond.shape[0]
+            chunk = _anima_semantic_chunk(x)
+            if chunk is None:
+                rows.extend([None] * batch)
+            else:
+                rows.extend((chunk, row) for row in range(batch))
+        out["anima_semantic_rows"] = rows
 
     return out
 

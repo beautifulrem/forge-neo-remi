@@ -14,6 +14,10 @@ from modules.anima_feature_conflicts import (
     resolve_schedule_conflicts,
 )
 from modules.anima_lora_support import ANIMA_BLOCK_MAPPINGS, model_block_set
+from types import SimpleNamespace
+
+from PIL import Image
+
 from modules.anima_presets import (
     PRESET_CONFLICT_CONTROLS,
     PRESET_DESCRIPTIONS,
@@ -22,6 +26,7 @@ from modules.anima_presets import (
     SAFE_BASE_AESTHETIC_PRESET,
     TURBO_LABEL,
     TURBO_NAG_LABEL,
+    anima_workflow_advice,
     preset_value,
     turbo_settings_advice,
 )
@@ -206,6 +211,43 @@ class TurboAdviceTests(unittest.TestCase):
         self.assertIn("Non-Turbo", turbo_settings_advice("anima-base-v1.0", 1.0, 10))
         self.assertIsNone(turbo_settings_advice("anima-aesthetic-v1.1", 4.5, 36))
         self.assertIsNone(turbo_settings_advice("my-merge", 1.0, 10))  # unknown: no guess
+        # Distilled LoRA on a non-Turbo checkpoint must not trigger a false warning
+        self.assertIsNone(turbo_settings_advice("Anima-3.8B-v1.1.safetensors", 1.0, 8, prompts="1girl <lora:anima-turbo-lora-v0.2:1>"))
+        self.assertIsNone(turbo_settings_advice("anima-base-v1.0", 1.0, 8, prompts="1girl <lyco:anima_lightning_8step:0.8>"))
+        self.assertIn("Non-Turbo", turbo_settings_advice("anima-base-v1.0", 1.0, 8, prompts="1girl <lora:anima-turbo:0>"))
+
+    def test_workflow_advice_covers_edit_and_rgba_setups(self):
+        sd_model = SimpleNamespace(
+            sd_checkpoint_info=SimpleNamespace(name="anima-base-v1.0.safetensors"),
+            forge_objects=SimpleNamespace(vae=SimpleNamespace(output_channels=4)),
+        )
+        rgba_transparent = Image.new("RGBA", (8, 8), (255, 0, 0, 0))
+        rgba_opaque = Image.new("RGBA", (8, 8), (255, 0, 0, 255))
+        p = SimpleNamespace(
+            sd_model=sd_model,
+            cfg_scale=4.5,
+            steps=36,
+            prompt="edit background <lora:anima-edit-v1:1.0>",
+            init_images=[rgba_transparent],
+        )
+        opts_off = SimpleNamespace(anima_do_reference=False, img2img_background_color="#808080")
+        advice = anima_workflow_advice(p, opts=opts_off)
+        self.assertTrue(any("anima_do_reference" in msg for msg in advice), advice)
+        self.assertTrue(any("#ffffff" in msg for msg in advice), advice)
+
+        # Properly configured: no warnings
+        opts_ok = SimpleNamespace(anima_do_reference=True, img2img_background_color="#ffffff")
+        self.assertEqual(anima_workflow_advice(p, opts=opts_ok), [])
+
+        # Opaque RGBA input and non-edit word ("credit") do not trigger false warnings
+        p_clean = SimpleNamespace(
+            sd_model=sd_model,
+            cfg_scale=4.5,
+            steps=36,
+            prompt="1girl <lora:credit_style:1.0>",
+            init_images=[rgba_opaque],
+        )
+        self.assertEqual(anima_workflow_advice(p_clean, opts=opts_off), [])
 
 
 if __name__ == "__main__":

@@ -40,7 +40,10 @@ class Anima(ForgeDiffusionEngine):
         semantic_layers = transformer.config.get("semantic_connector", {}).get("layers") if getattr(transformer, "anima_v2_connector", None) is not None else None
         qwen35 = huggingface_components.get("text_encoder_2")
         if semantic_layers and qwen35 is None:
-            raise ValueError("Anima-3.8B needs its Qwen3.5 4B text encoder: add qwen35_4b.safetensors (from lylogummy/Anima-3.8B, in models/text_encoder) to the VAE / Text Encoder modules")
+            raise ValueError(
+                "Anima-3.8B needs its Qwen3.5 4B text encoder: add qwen35_4b.safetensors (from lylogummy/Anima-3.8B), "
+                "HuggingFace Qwen/Qwen3.5-4B, or a Qwen3.5-4B GGUF (in models/text_encoder) to the VAE / Text Encoder modules"
+            )
         if qwen35 is not None and not semantic_layers:
             logger.warning("Qwen3.5 4B is only used by Anima-3.8B: ignored for this model")
             qwen35 = None
