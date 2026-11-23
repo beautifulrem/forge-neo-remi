@@ -152,13 +152,19 @@ export default function FavoritesPanel({ value, setValue, kind, disabled, close 
   }
 
   const importFile = async (file: File) => {
+    let data: FavoritesExport
     try {
-      const data = JSON.parse(await file.text()) as FavoritesExport
+      data = JSON.parse(await file.text()) as FavoritesExport
+    } catch {
+      toast.error(t("Not a favorites file"), { description: t("This file is not a favorites export.") })
+      return
+    }
+    try {
       const { added } = await promptToolsApi.favorites.import(data)
       await refresh()
       toast.success(t("Favorites imported: {{count}}", { count: added }))
     } catch (error) {
-      toast.error(t("Not a favorites file"), { description: error instanceof Error ? error.message : String(error) })
+      toast.error(t("Could not import favorites"), { description: failureText(error) })
     }
   }
 

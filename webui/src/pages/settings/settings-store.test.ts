@@ -89,6 +89,8 @@ describe("settings editor store", () => {
     edit("save", false)
     const result = await applyChanges()
     expect(result.errors).toEqual(body.errors)
+    // the same messages as under the fields, without the setting ids
+    expect(result.message).toBe("too high")
     // Both stay edits until the server's values arrive; the rejected one shows its message.
     expect(pendingChanges()).toEqual({ quality: 99, save: false })
     expect(settingsForm.getState().errors[SETTINGS_OWNER]).toEqual({ quality: "too high" })
@@ -104,5 +106,7 @@ describe("settings editor store", () => {
     const result = await applyChanges()
     expect(result.applied).toEqual([])
     expect(pendingChanges()).toEqual({ quality: 33 })
+    // said in the UI language, not the server's English text
+    expect(result.message).toBe("The server ran into an error (500).")
   })
 })

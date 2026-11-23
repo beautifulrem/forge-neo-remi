@@ -2,6 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query"
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { ApiError } from "@/api/http"
 import { queryClient } from "@/api/queries"
 import { type Favorite, type FavoritesPage, promptToolsApi } from "../api"
 import { TEST_CONFIG } from "../testing"
@@ -120,6 +121,20 @@ describe("favorites", () => {
     const file = new File([JSON.stringify(data)], "favorites.json", { type: "application/json" })
     fireEvent.change(input, { target: { files: [file] } })
     await waitFor(() => expect(imported).toHaveBeenCalledWith(data))
+  }, 20_000)
+
+  it("tells a file that is not a favorites export from an import the server refused", async () => {
+    const { toast } = await import("sonner")
+    const error = vi.spyOn(toast, "error")
+    setup()
+    const imported = vi.spyOn(promptToolsApi.favorites, "import").mockRejectedValue(new ApiError(413, "Request Entity Too Large"))
+    await screen.findByText("first prompt")
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]')!
+    fireEvent.change(input, { target: { files: [new File(["abc"], "notes.txt")] } })
+    await waitFor(() => expect(error).toHaveBeenCalledWith("Not a favorites file", { description: "This file is not a favorites export." }))
+    expect(imported).not.toHaveBeenCalled()
+    fireEvent.change(input, { target: { files: [new File([JSON.stringify({ version: 1, favorites: [] })], "favorites.json")] } })
+    await waitFor(() => expect(error).toHaveBeenLastCalledWith("Could not import favorites", { description: "The file is too large." }))
   }, 20_000)
 })
 

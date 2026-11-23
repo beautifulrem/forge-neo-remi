@@ -13,6 +13,7 @@ import { create } from "zustand"
 import { api } from "@/api/endpoints"
 import { validationErrors } from "@/api/http"
 import { keys, queryClient } from "@/api/queries"
+import { failureText, validationText } from "@/features/errors/error-text"
 import { jsonEqual } from "@/ui/conditions"
 import { createFormStore, type FormStore } from "@/ui/form-store"
 import type { GroupNode, SettingNode, SettingsSchema, ValidationError } from "@/ui/schema"
@@ -133,7 +134,7 @@ export async function applyChanges(): Promise<ApplyResult> {
     // edit; the refetch below (syncSchema) then drops those the server stored.
     useSettingsEditor.setState((s) => ({ saved: { ...s.saved, ...previous } }))
     if (errors.length > 0) settingsForm.getState().setErrors(errors.map((e) => ({ ...e, owner: SETTINGS_OWNER })))
-    return { applied: [], errors, message: error instanceof Error ? error.message : String(error) }
+    return { applied: [], errors, message: errors.length > 0 ? validationText(errors) : failureText(error) }
   } finally {
     useSettingsEditor.setState({ applying: false })
     void queryClient.invalidateQueries({ queryKey: keys.options })
