@@ -285,8 +285,8 @@ export function PipelineBuilder() {
     followRun(chain)
   }
 
-  const templateItems = templates.data && templates.data.length > 0 ? templates.data : STARTER_PIPELINES
-  const savedTemplates = (templates.data ?? []).filter((tpl) => "created_at" in tpl)
+  // the built-in starters always, then the templates the server keeps (only saved ones)
+  const savedTemplates = (templates.data ?? []).filter((tpl) => !STARTER_IDS.has(tpl.id))
 
   return (
     <div className="flex flex-col gap-5">
@@ -306,11 +306,15 @@ export function PipelineBuilder() {
             {t("Templates")}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-64">
-            {templateItems.map((tpl) => (
-              <DropdownMenuItem key={tpl.id} onClick={() => loadTemplate(tpl)} title={templateLabel(tpl)}>
-                <span title={templateLabel(tpl)} className="truncate">{templateLabel(tpl)}</span>
-              </DropdownMenuItem>
-            ))}
+            {[...STARTER_PIPELINES, ...(savedTemplates.length > 0 ? [null] : []), ...savedTemplates].map((tpl) =>
+              tpl === null ? (
+                <DropdownMenuSeparator key="saved" />
+              ) : (
+                <DropdownMenuItem key={tpl.id} onClick={() => loadTemplate(tpl)} title={templateLabel(tpl)}>
+                  <span title={templateLabel(tpl)} className="truncate">{templateLabel(tpl)}</span>
+                </DropdownMenuItem>
+              ),
+            )}
             {savedTemplates.length > 0 ? (
               <>
                 <DropdownMenuSeparator />

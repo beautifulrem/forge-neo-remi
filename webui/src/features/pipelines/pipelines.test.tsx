@@ -267,4 +267,24 @@ describe("starter pipelines", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "提示词扩写 → 生成 → 精修 → 收尾" }))
     expect(screen.getByRole("textbox", { name: "管线名称" })).toHaveValue("提示词扩写 → 生成 → 精修 → 收尾")
   })
+
+  it("keeps the built-in starters in the menu next to saved templates", async () => {
+    const saved = { id: "t1", name: "My chain", description: "", model_family: "universal", stages: [], tags: [], created_at: "2026-11-20T10:00:00Z", updated_at: "2026-11-20T10:00:00Z" }
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (url.includes("/chains/templates")) return new Response(JSON.stringify({ items: [saved] }), { status: 200 })
+      if (url.includes("/chains/preview")) return new Response(JSON.stringify({ stages: [] }), { status: 200 })
+      if (url.includes("/chains")) return new Response(JSON.stringify({ items: [], total: 0 }), { status: 200 })
+      return new Response("{}", { status: 200 })
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PipelineBuilder />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Templates" }))
+    expect(await screen.findByRole("menuitem", { name: "My chain" })).toBeInTheDocument()
+    expect(screen.getByRole("menuitem", { name: "Generate → Refine → Upscale" })).toBeInTheDocument()
+    expect(screen.getByRole("menuitem", { name: "Generate → Upscale" })).toBeInTheDocument()
+  })
 })

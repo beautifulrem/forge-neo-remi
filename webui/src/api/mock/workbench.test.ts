@@ -155,7 +155,7 @@ describe("mock workbench routes", () => {
   it("supports multi-stage Chains with deterministic stage caching, rerun, lifecycle, and templates", async () => {
     const tpls = await call("GET", "/chains/templates")
     expect(tpls.status).toBe(200)
-    expect(tpls.data.items.length).toBeGreaterThanOrEqual(3)
+    expect(tpls.data.items).toEqual([]) // like the server: saved templates only (the starters live in the SPA)
 
     const stages = [
       { kind: "prompt_upsample", name: "PUP", enabled: true, core: { prompt: "red fox" } },

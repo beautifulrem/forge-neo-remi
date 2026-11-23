@@ -10,7 +10,7 @@
  * - Rules / Advice derivation (`/rules/derive`)
  */
 import { diffInfotext } from "@/features/compare/param-diff"
-import { computeStageHashes, STAGE_META, STARTER_PIPELINES } from "@/features/pipelines/cache-hash"
+import { computeStageHashes, STAGE_META } from "@/features/pipelines/cache-hash"
 import type { ChainTemplate, JobChain, StageRun, StageSpec } from "@/features/pipelines/types"
 import type { Recipe } from "@/features/recipes/types"
 import { mockAdviceFor, mockCapabilitiesForPreset, normalizeMockPreset } from "./capabilities"
@@ -82,19 +82,6 @@ let chains: JobChain[] = []
 let templates: ChainTemplate[] = []
 const stageCache = new Map<string, { outputs: string[]; prompt: string | null; infotext: string | null }>()
 
-function seedTemplates(): ChainTemplate[] {
-  const now = "2026-11-20T10:00:00.000Z"
-  return STARTER_PIPELINES.map((item) => ({
-    id: item.id,
-    name: item.name,
-    description: item.description,
-    model_family: "universal",
-    stages: structuredClone(item.stages),
-    tags: ["starter"],
-    created_at: now,
-    updated_at: now,
-  }))
-}
 
 function executeMockStages(
   specs: readonly StageSpec[],
@@ -423,7 +410,7 @@ export function resetMockWorkbench() {
   chainSeq = 0
   templateSeq = 0
   stageCache.clear()
-  templates = seedTemplates()
+  templates = [] // the server lists saved templates only; the built-in starters live in the SPA
   chains = []
   boardSeq = 0
   boardStoreVersion++
