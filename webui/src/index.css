@@ -127,6 +127,10 @@
   --material-float: color-mix(in oklch, var(--popover) 84%, transparent);
   --material-float-edge: oklch(0.20 0.014 255 / 12%);
   --material-float-shadow: 0 6px 20px -8px oklch(0.16 0.014 255 / 28%);
+  /* the lit top edge of the sheet; daylight paper takes a brighter one */
+  --material-float-highlight: oklch(1 0 0 / 60%);
+  /* a light sheet washes a picture out, so it lifts the colour back; the dark sheet lifts it less */
+  --material-float-filter: blur(14px) saturate(1.35);
 }
 
 .dark {
@@ -186,6 +190,8 @@
   --material-float: color-mix(in oklch, var(--popover) 88%, transparent);
   --material-float-edge: oklch(0.95 0.006 255 / 11%);
   --material-float-shadow: 0 8px 24px -8px oklch(0 0 0 / 55%);
+  --material-float-highlight: oklch(1 0 0 / 7%);
+  --material-float-filter: blur(16px) saturate(1.15);
 }
 
 /* Accent presets: hue, chroma, and the light-mode lightness that keeps every
@@ -498,14 +504,15 @@
   }
 }
 
-/* Floating material: one surface, one hairline and one soft shadow (see --material-float). */
+/* Floating material: one surface, one hairline with a lit top edge, and one soft shadow
+   (see --material-float). Without backdrop-filter it stays the solid popover sheet. */
 @utility material-float {
   background-color: var(--popover);
-  box-shadow: 0 0 0 1px var(--material-float-edge), var(--material-float-shadow);
+  box-shadow: inset 0 1px 0 var(--material-float-highlight), 0 0 0 1px var(--material-float-edge), var(--material-float-shadow);
   @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
     background-color: var(--material-float);
-    -webkit-backdrop-filter: blur(14px) saturate(1.35);
-    backdrop-filter: blur(14px) saturate(1.35);
+    -webkit-backdrop-filter: var(--material-float-filter);
+    backdrop-filter: var(--material-float-filter);
   }
 }
 

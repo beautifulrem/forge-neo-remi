@@ -305,10 +305,15 @@ generated interfaces (sources: Linear's
   never a pill. Overlays fade in 150 ms.
   Floating chrome that sits over a still picture (the image editor's panels
   and the candidate bar) uses `material-float`: a translucent popover
-  surface with a backdrop blur and an edge plus a shadow, tuned separately
-  for light and dark (`--material-float*`). Nothing else is glass: not the
-  header, menus, the progress overlay or the live preview (a blur over a
-  surface that redraws every step costs sampling time).
+  surface with a backdrop blur, a 1 px top highlight, and an edge plus a
+  shadow, tuned separately for light and dark (`--material-float*`). It is
+  the one exception to "never an edge and a shadow together": over a busy
+  picture the shadow alone does not hold the outline. The panel stays
+  opaque enough that its text keeps its contrast over pure black or white.
+  Nothing else is glass: not the header, menus, popovers, the command
+  palette, the mobile bottom bar or its More sheet, the progress overlay or
+  the live preview (a blur over a surface that redraws every step costs
+  sampling time).
   Motion moves `transform` and `opacity` only (a meter fills with
   `scaleX`, not `width`), 120 to 250 ms. A lone small control (a badge's
   ×, the advice bar's buttons) keeps its look and gets
