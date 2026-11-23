@@ -15,6 +15,16 @@ describe("the ? shortcut", () => {
     vi.useRealTimers()
   })
 
+  it("opens the dialog while a non-modal panel (the Networks drawer) is open", () => {
+    vi.useFakeTimers()
+    const drawer = document.body.appendChild(document.createElement("aside"))
+    drawer.setAttribute("role", "dialog")
+    drawer.setAttribute("aria-modal", "false")
+    press(document.body)
+    vi.runAllTimers()
+    expect(useShortcutsHelp.getState().open).toBe(true)
+  })
+
   it("opens the dialog outside text fields and dialogs, unless a handler used the key", () => {
     vi.useFakeTimers()
     press(document.body)

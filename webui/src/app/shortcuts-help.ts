@@ -18,7 +18,8 @@ function isTyping(target: EventTarget | null): boolean {
  */
 export function onShortcutsKey(event: KeyboardEvent) {
   if (event.key !== "?" || event.ctrlKey || event.metaKey || event.altKey || event.repeat || isTyping(event.target)) return
-  if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return
+  // a modal dialog has the keyboard; a non-modal panel (the Networks drawer) does not
+  if (document.querySelector('[role="dialog"]:not([aria-modal="false"]), [role="alertdialog"]')) return
   setTimeout(() => {
     if (!event.defaultPrevented) useShortcutsHelp.getState().setOpen(true)
   })
