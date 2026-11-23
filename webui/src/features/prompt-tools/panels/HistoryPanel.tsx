@@ -180,7 +180,7 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
                       className="min-w-0 flex-1 rounded-md px-1 py-0.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
                     >
                       {item.name ? <span title={item.name} className="block truncate text-xs font-semibold">{item.name}</span> : null}
-                      <span className="line-clamp-3 text-xs break-words whitespace-pre-wrap">{textOf(item)}</span>
+                      <span title={textOf(item)} className="line-clamp-3 text-xs break-words whitespace-pre-wrap">{textOf(item)}</span>
                       <span className="mt-0.5 block text-[0.625rem] text-muted-foreground">
                         {timeAgo(item.last_used, locale)}
                         {item.uses > 1 ? ` · ${t("{{count}} generations", { count: item.uses })}` : ""}

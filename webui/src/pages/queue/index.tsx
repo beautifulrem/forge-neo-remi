@@ -36,6 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Toggle } from "@/components/ui/toggle"
 import { useMediaQuery } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
+import { FIELD_BUTTON_CLASS } from "@/components/ui/select-styles"
 import type { ResultItem } from "@/features/gallery/session-store"
 import { HistoryList } from "@/features/queue/HistoryList"
 import { ImportDialog } from "@/features/queue/ImportDialog"
@@ -123,7 +124,7 @@ function History({ onView }: { onView: (job: Job, index: number) => void }) {
           <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input type="search" value={text} onChange={(event) => setText(event.target.value)} placeholder={t("Search prompts and parameters…")} aria-label={t("Search the history")} className="h-7 pl-7 text-[0.8rem]" />
         </div>
-        <Toggle size="sm" variant="outline" pressed={starred} onPressedChange={setStarred} aria-label={t("Starred only")} title={t("Starred only")}>
+        <Toggle size="sm" className={FIELD_BUTTON_CLASS} pressed={starred} onPressedChange={setStarred} aria-label={t("Starred only")} title={t("Starred only")}>
           <Star className={cn(starred && "fill-star text-star")} aria-hidden />
         </Toggle>
       </div>

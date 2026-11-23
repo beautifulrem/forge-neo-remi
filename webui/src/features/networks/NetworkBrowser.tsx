@@ -34,6 +34,7 @@ import type { NetworkItem, NetworkKind } from "@/api/types"
 import { FadeStrip } from "@/components/FadeStrip"
 import { FitTabsList } from "@/components/FitTabsList"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -162,7 +163,7 @@ function SearchBox({ value, onChange, inputRef, count }: { value: string; onChan
     // on a phone the search takes its own row and the view controls wrap below it
     <div className="relative min-w-32 flex-1 basis-48">
       <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
-      <input
+      <Input
         ref={inputRef}
         type="search"
         value={value}
@@ -177,7 +178,8 @@ function SearchBox({ value, onChange, inputRef, count }: { value: string; onChan
         placeholder={placeholder}
         aria-label={t("Search networks")}
         aria-keyshortcuts="/"
-        className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent pr-16 pl-8 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 [&::-webkit-search-cancel-button]:hidden"
+        // the toolbar's field: a flat fill at the 28 px toolbar height
+        className="h-7 pr-16 pl-8 [&::-webkit-search-cancel-button]:hidden"
       />
       <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-1">
         {count !== null ? <span className="text-[0.6875rem] text-muted-foreground tabular-nums">{count.toLocaleString(i18n.language)}</span> : null}
@@ -515,7 +517,6 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
                 </>
               ) : null}
               <DropdownMenuItem disabled={refresh.isPending} onClick={() => refresh.mutate()}>
-                <RefreshCw />
                 {t("Refresh")}
               </DropdownMenuItem>
             </DropdownMenuContent>

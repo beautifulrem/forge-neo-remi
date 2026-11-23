@@ -303,7 +303,7 @@ export function PendingList({ jobs }: { jobs: readonly Job[] }) {
                   </p>
                 </div>
                 {priority ? (
-                  <Badge variant={job.priority > 0 ? "default" : "outline"} className="shrink-0">
+                  <Badge variant={job.priority > 0 ? "secondary" : "outline"} className="shrink-0">
                     {t(priority)}
                   </Badge>
                 ) : null}

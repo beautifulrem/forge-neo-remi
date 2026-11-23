@@ -9,7 +9,7 @@ export function PagePlaceholder(props: { icon: IconComponent; title: string; des
   const Icon = props.icon
   return (
     <div className="flex h-full items-center justify-center overflow-y-auto p-6">
-      <Empty className="max-w-md border">
+      <Empty className="max-w-md">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <Icon aria-hidden />

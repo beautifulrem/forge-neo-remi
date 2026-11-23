@@ -52,13 +52,13 @@ function Report({ report }: { report: ImportReport }) {
         ))}
       </dl>
       {report.paused ? (
-        <p className="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/8 px-3 py-2 text-sm">
+        <p className="flex items-start gap-2 rounded-lg bg-primary/8 px-3 py-2 text-sm">
           <CircleAlert className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
           {t("The queue was paused so you can review the imported jobs first.")}
         </p>
       ) : null}
       {report.items.length > 0 ? (
-        <ul aria-label={t("Imported tasks")} className="max-h-72 min-h-0 overflow-y-auto rounded-lg border">
+        <ul aria-label={t("Imported tasks")} className="max-h-72 min-h-0 overflow-y-auto rounded-lg bg-background">
           {report.items.map((item) => (
             <li key={item.source_id} className="flex flex-col gap-0.5 border-b px-3 py-2 last:border-0">
               <div className="flex items-center gap-2">
@@ -135,7 +135,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         ) : (
           <ul className="flex flex-col gap-2">
             {(sources.data ?? []).map((source) => (
-              <li key={source.id} className="flex items-center gap-3 rounded-lg border p-3">
+              <li key={source.id} className="flex items-center gap-3 rounded-lg bg-background p-3">
                 <DatabaseZap className="size-5 shrink-0 text-muted-foreground" aria-hidden />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{t(source.label)}</p>
@@ -147,7 +147,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                         : t("Records: {{count}}", { count: source.count })}
                   </p>
                 </div>
-                <Button size="sm" disabled={!source.available || run.isPending} onClick={() => run.mutate(source.id)}>
+                <Button size="sm" variant="secondary" disabled={!source.available || run.isPending} onClick={() => run.mutate(source.id)}>
                   {run.isPending && run.variables === source.id ? <Loader2 className="animate-spin" aria-hidden /> : null}
                   {t("Import")}
                 </Button>

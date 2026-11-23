@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Toggle } from "@/components/ui/toggle"
 import { requestServerCommand } from "@/features/server-control/server-control"
 import { cn } from "@/lib/utils"
+import { FIELD_BUTTON_CLASS } from "@/components/ui/select-styles"
 import {
   adminErrorMessage,
   DEFAULT_HIDDEN_TAGS,
@@ -50,7 +51,7 @@ function EntryRow({ entry, tags, access, installing, onInstall }: { entry: Index
           {entry.name}
           <ExternalLink className="size-3 text-muted-foreground" aria-hidden />
         </a>
-        {entry.description ? <p className="mt-0.5 line-clamp-2 text-[0.8rem] text-muted-foreground">{entry.description}</p> : null}
+        {entry.description ? <p title={entry.description} className="mt-0.5 line-clamp-2 text-[0.8rem] text-muted-foreground">{entry.description}</p> : null}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           {entryTags(entry).map((tag) => (
             <Badge key={tag} variant="outline" className="h-4.5 px-1.5 text-[0.6875rem] font-normal" title={tags[tag] || undefined}>
@@ -278,7 +279,7 @@ export function AvailableView() {
                 ))}
               </SelectContent>
             </Select>
-            <Toggle size="sm" variant="outline" pressed={recentOnly} onPressedChange={setRecentOnly} title={t("Only extensions updated after {{date}}", { date: RECENT_SINCE })} className="h-7 px-2 text-xs">
+            <Toggle size="sm" pressed={recentOnly} onPressedChange={setRecentOnly} title={t("Only extensions updated after {{date}}", { date: RECENT_SINCE })} className={cn(FIELD_BUTTON_CLASS, "h-7 px-2 text-xs")}>
               {t("2025+")}
             </Toggle>
             <span className="ml-auto text-xs text-muted-foreground tabular-nums" role="status" aria-live="polite">

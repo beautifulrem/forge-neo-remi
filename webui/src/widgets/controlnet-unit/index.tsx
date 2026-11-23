@@ -58,6 +58,7 @@ import {
   type UnitProps,
   type UnitValue,
 } from "./unit"
+import { panelClass } from "@/ui/layout/panel"
 
 type Layer = "image_fg" | "sketch"
 type Region = { subjects: number; vertical: number; randomize: number; shape: string }
@@ -278,7 +279,7 @@ export default function ControlNetUnitWidget({ value, onChange, props, disabled,
           </div>
 
           {isRegion ? (
-            <div role="group" aria-label={tw("Region canvas")} className="flex flex-col gap-2 rounded-lg border p-2.5">
+            <div role="group" aria-label={tw("Region canvas")} className={cn("flex flex-col gap-2", panelClass(1))}>
               <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
                 {(["subjects", "vertical", "randomize"] as const).map((key) => {
                   const control = controls[`region_${key}`]

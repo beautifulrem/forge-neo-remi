@@ -269,7 +269,9 @@ generated interfaces (sources: Linear's
   shows a card's menu button only, not its row of hover shortcuts. A screen
   has one filled (`default`) button: in a generate form that is Generate, so
   an extension's `primary` button renders `secondary` there
-  (`ui/layout/ActionButton.tsx`); status badges are neutral.
+  (`ui/layout/ActionButton.tsx`); status badges are neutral. A two-step
+  tool (write a prompt, then use it) hands the filled look to the second
+  step once there is a result.
 - **Structure is felt, not seen.** Group with space and surface tone before
   borders; one border tone (`--border`); no card inside a card. Radii follow
   hierarchy (controls `sm`/`md`, panels `lg`), not one radius everywhere;
@@ -294,7 +296,8 @@ generated interfaces (sources: Linear's
   extension in the Extensions list) is a level down, with a fainter hairline
   and a 14 px title. Lists (the queue history) are rows with a hairline
   between them. Section and pane titles are 15 px semibold, below the 20 px
-  page title. The slider is a fader: a recessed groove filled with
+  page title; the settings list's category headings take the 20 px size,
+  because each category reads as a page of its own in one long scroller. The slider is a fader: a recessed groove filled with
   `--primary` up to the value and a squared cap with a centre notch (the
   switch's shape family; `--slider-*` tokens).
   Radii are concentric: a child's radius is its parent's minus the padding

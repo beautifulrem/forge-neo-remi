@@ -219,7 +219,7 @@ export default function RegionBoxes({ props, disabled, id, label }: WidgetProps<
                   color.box,
                   region.active ? "z-1 cursor-move focus-visible:ring-3 focus-visible:ring-ring/50" : "pointer-events-none z-0 border-dashed opacity-35",
                   region.active && unused(region) && "border-dashed",
-                  isSelected && region.active && "z-10 shadow-md",
+                  isSelected && region.active && "z-10 ring-3 ring-primary/30",
                 )}
                 style={{ left: percent(region.box.x), top: percent(region.box.y), width: percent(Math.min(region.box.width, 1 - region.box.x)), height: percent(Math.min(region.box.height, 1 - region.box.y)) }}
                 onPointerDown={(event) => begin(event, index, "move")}

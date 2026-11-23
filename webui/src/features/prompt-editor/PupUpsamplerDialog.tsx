@@ -257,7 +257,7 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
                 }
               }}
             />
-            <Button type="button" size="sm" onClick={() => void run()} disabled={disabled || busy || !value.trim()}>
+            <Button type="button" size="sm" variant={result ? "secondary" : "default"} onClick={() => void run()} disabled={disabled || busy || !value.trim()}>
               {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
               {busy ? t("Upsampling…") : t("Upsample")}
             </Button>

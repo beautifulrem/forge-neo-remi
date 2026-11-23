@@ -48,8 +48,8 @@ export function GalleryView({ node }: { node: GalleryNode }) {
     <div className="flex flex-col gap-1.5">
       <OutputLabel label={node.label} />
       {images.length === 0 ? (
-        <div className="flex aspect-[3/2] max-h-60 flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-sm text-muted-foreground">
-          <ImageOff className="size-5" aria-hidden />
+        <div className="flex aspect-[3/2] max-h-60 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+          <ImageOff className="size-5 opacity-60" aria-hidden />
           {t("No images yet")}
         </div>
       ) : (
@@ -96,7 +96,7 @@ export function OutputView({ node }: { node: OutputNode }) {
   return (
     <div className="flex flex-col gap-1.5" aria-live="polite">
       <OutputLabel label={node.label} />
-      {body ?? <div className="rounded-md border border-dashed px-2.5 py-2 text-sm text-muted-foreground">{t("No output yet")}</div>}
+      {body ?? <div className="py-2 text-sm text-muted-foreground">{t("No output yet")}</div>}
     </div>
   )
 }

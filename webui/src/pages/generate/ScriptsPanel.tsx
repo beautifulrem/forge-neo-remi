@@ -69,7 +69,7 @@ function ScriptCard({ script, reason }: { script: ScriptSchema; reason?: string 
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  className="ml-auto"
+                  className="relative after:absolute after:-inset-2 ml-auto"
                   aria-label={t("Reset {{label}} to default", { label: t(script.title) })}
                   onClick={() => resetParams({ store, tab: formId }, script.id, names)}
                 >
@@ -179,7 +179,7 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
                 ))}
               </PanelDepthContext>
               {listed.length > 0 && shown.length === 0 ? (
-                <p className={cn("rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground")}>{t("No extension matches")}</p>
+                <p className="p-4 text-center text-xs text-muted-foreground">{t("No extension matches")}</p>
               ) : null}
             </div>
 

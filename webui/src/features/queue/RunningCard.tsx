@@ -80,7 +80,7 @@ export function RunningCard({ paused, queued, loading = false }: { paused: boole
               </span>
             ) : null}
           </div>
-          <p className="line-clamp-2 text-sm break-words">{job ? jobTitle(job) : t("Untitled job")}</p>
+          <p title={job ? jobTitle(job) : undefined} className="line-clamp-2 text-sm break-words">{job ? jobTitle(job) : t("Untitled job")}</p>
           <div className="mt-auto flex flex-col gap-1">
             <Progress value={fraction * 100} aria-label={t("Generation progress")} className="h-1.5" />
             <p className="flex flex-wrap gap-x-2 text-xs text-muted-foreground tabular-nums">

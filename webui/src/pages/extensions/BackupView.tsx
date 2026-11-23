@@ -226,7 +226,7 @@ export function BackupView({ access }: { access: boolean }) {
                 <h2 className="truncate text-[0.9375rem] font-semibold" title={detail.data.name}>{detail.data.name}</h2>
                 <p className="text-xs text-muted-foreground">{formatDate(detail.data.created_at, i18n.language)}</p>
               </div>
-              <Button disabled={!access} onClick={() => setConfirm("restore")}>
+              <Button variant="secondary" disabled={!access} onClick={() => setConfirm("restore")}>
                 <RotateCcw aria-hidden />
                 {t("Restore extensions")}
               </Button>

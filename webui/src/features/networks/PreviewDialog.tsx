@@ -71,7 +71,7 @@ function Thumbs({ ids, selected, onSelect, label }: { ids: readonly string[]; se
 }
 
 function Empty({ text }: { text: string }) {
-  return <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">{text}</p>
+  return <p className="px-4 py-10 text-center text-sm text-muted-foreground">{text}</p>
 }
 
 const galleryQuery = {

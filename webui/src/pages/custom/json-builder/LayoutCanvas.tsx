@@ -139,6 +139,8 @@ function BoxView({
         aria-label={name === "caption" ? t("Box {{n}} caption", { n: index + 1 }) : t("Box {{n}} text", { n: index + 1 })}
         aria-invalid={invalid || undefined}
         readOnly
+        // the box itself takes focus (and its keys); the read-only text inside it is not a stop of its own
+        tabIndex={-1}
         spellCheck={false}
         placeholder={name === "caption" ? t("Caption") : t("Text to render")}
         value={name === "caption" ? item.caption : item.text}
@@ -177,7 +179,9 @@ function BoxView({
       className={cn(
         "absolute flex min-h-5 min-w-5 touch-none flex-col overflow-hidden rounded-sm border-[1.5px] outline-none select-none",
         "cursor-move transition-[border-color,box-shadow] focus-visible:ring-3 focus-visible:ring-ring/50",
-        (active || dragging) && "z-10 shadow-lg ring-3 ring-primary/30",
+        // the selection is a ring; the shadow only while a drag holds the box (shadows are for what floats)
+        (active || dragging) && "z-10 ring-3 ring-primary/30",
+        dragging && "shadow-lg",
       )}
     >
       <div
@@ -379,7 +383,7 @@ export function LayoutCanvas({
           <BoxView key={item.id} item={item} index={index} stage={stage} active={item.id === activeId} missing={missing} onActivate={onActivate} onEditField={onEditField} />
         ))}
       </div>
-      <div className="absolute top-2 left-2 flex items-center gap-0.5 rounded-lg bg-background/90 p-0.5 shadow-sm">
+      <div className="absolute top-2 left-2 flex items-center gap-0.5 rounded-lg bg-popover p-0.5 shadow-sm">
         <Button
           size="icon-xs"
           variant="ghost"
@@ -409,7 +413,7 @@ export function LayoutCanvas({
           if (file) setBackground(URL.createObjectURL(file), true)
         }}
       />
-      <div className="absolute right-2 bottom-2 flex items-center gap-0.5 rounded-lg bg-background/90 p-0.5 shadow-sm">
+      <div className="absolute right-2 bottom-2 flex items-center gap-0.5 rounded-lg bg-popover p-0.5 shadow-sm">
         <span className="px-1.5 font-mono text-xs text-muted-foreground tabular-nums">
           {width} × {height}
         </span>

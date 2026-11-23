@@ -162,6 +162,8 @@ function CardView({ item, kind, id, index, active, cursor, mismatch, width, onAp
         role="option"
         aria-selected={active}
         aria-label={label}
+        // the caption sits under a pointer-events-none overlay and clamps: the full name and folder on hover
+        title={item.folder ? `${item.title}\n${item.folder}` : item.title}
         data-index={index}
         data-cursor={cursor || undefined}
         data-active={active || undefined}
@@ -177,7 +179,7 @@ function CardView({ item, kind, id, index, active, cursor, mismatch, width, onAp
         <Preview item={item} width={width} className={cn("absolute inset-0 transition-[filter]", mismatch && "opacity-70 saturate-50")} />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 via-black/40 to-transparent px-2.5 pt-8 pb-2 text-white">
           <p className="line-clamp-2 text-[0.8rem] leading-snug font-medium [overflow-wrap:anywhere] drop-shadow-sm">{item.title}</p>
-          {item.folder ? <p title={item.folder} className="truncate text-[0.6875rem] leading-4 text-white/70">{item.folder}</p> : null}
+          {item.folder ? <p className="truncate text-[0.6875rem] leading-4 text-white/70">{item.folder}</p> : null}
         </div>
         <div className="pointer-events-none absolute top-1.5 left-1.5 flex max-w-[70%] flex-wrap gap-1">
           {item.arch ? (

@@ -222,7 +222,7 @@ function ResultStage() {
           ))}
         </div>
       ) : null}
-      {result?.info ? <p className="line-clamp-3 text-xs break-words text-muted-foreground select-text">{result.info}</p> : null}
+      {result?.info ? <p title={result.info} className="line-clamp-3 text-xs break-words text-muted-foreground select-text">{result.info}</p> : null}
       <RecentRuns />
       {viewer && item ? (
         <Suspense fallback={null}>

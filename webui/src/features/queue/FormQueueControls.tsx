@@ -52,7 +52,7 @@ export function QueueEditBanner({ tab, className }: { tab: FormTab; className?: 
   const saving = useQueueEdit((s) => s.saving[tab] ?? false)
   if (!session) return null
   return (
-    <div role="status" className={cn("flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/8 px-2.5 py-1.5 text-sm", className)}>
+    <div role="status" className={cn("flex items-center gap-2 rounded-lg bg-primary/8 px-2.5 py-1.5 text-sm", className)}>
       <PencilLine className="size-4 shrink-0 text-primary" aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="font-medium">{t("Editing queued job #{{seq}}", { seq: session.seq })}</p>

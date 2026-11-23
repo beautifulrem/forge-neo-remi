@@ -71,7 +71,7 @@ function TokenDiffRow({ title, diff }: { title: string; diff: TokenDiff }) {
           ))}
         </div>
       ) : diff.a ? (
-        <p className="line-clamp-2 font-mono text-xs text-muted-foreground">{diff.a}</p>
+        <p title={diff.a} className="line-clamp-2 font-mono text-xs text-muted-foreground">{diff.a}</p>
       ) : null}
     </div>
   )

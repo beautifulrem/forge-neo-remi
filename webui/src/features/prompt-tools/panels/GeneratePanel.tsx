@@ -79,7 +79,7 @@ export default function GeneratePanel({ value, setValue, kind, disabled, close }
           </Label>
         ) : null}
         <div className="flex items-center gap-2">
-          <Button type="submit" size="sm" disabled={!description.trim() || busy}>
+          <Button type="submit" size="sm" variant={result !== null ? "secondary" : "default"} disabled={!description.trim() || busy}>
             {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
             {t("Write")}
           </Button>

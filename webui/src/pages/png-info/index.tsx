@@ -24,6 +24,8 @@ import { ChunksTable, EntriesTable, ParametersTable } from "@/features/pnginfo/M
 import { applyParameters, sendWithFeedback } from "@/features/send-to/result-actions"
 import { PageSendButtons } from "@/pages/ext/send-targets"
 import { DropZone } from "@/ui/inputs/DropZone"
+import { panelClass, panelTitleClass } from "@/ui/layout/panel"
+import { cn } from "@/lib/utils"
 
 const ACCEPT = "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp,image/tiff"
 
@@ -121,9 +123,10 @@ function Details({ fileId }: { fileId: string }) {
   const data = info.data
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-md bg-card p-4">
+      {/* inspector panels (`ui/layout/panel.ts`), not cards */}
+      <section className={panelClass(0)} aria-label={data.name}>
         <div className="mb-3 flex items-baseline justify-between gap-2">
-          <h2 className="truncate text-sm font-semibold" title={data.name}>
+          <h2 className={cn("truncate", panelTitleClass(0))} title={data.name}>
             {data.name}
           </h2>
           <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
@@ -138,8 +141,8 @@ function Details({ fileId }: { fileId: string }) {
         <div className="mt-4 border-t pt-4">
           <Actions fileId={fileId} infotext={data.infotext ?? null} />
         </div>
-      </div>
-      <Tabs defaultValue="params" className="rounded-md bg-card p-3">
+      </section>
+      <Tabs defaultValue="params" className={panelClass(0)}>
         <TabsList variant="line" className="w-full justify-start border-b pb-px">
           <TabsTrigger value="params" className="flex-none px-2.5">
             <SlidersHorizontal aria-hidden />

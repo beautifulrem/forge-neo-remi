@@ -129,7 +129,7 @@ export function WorkerHealthPill({ className }: { className?: string }) {
                       {typeof worker.jobs_completed === "number" ? <span>{t("{{count}} done", { count: worker.jobs_completed })}</span> : null}
                     </div>
                     {usedRatio !== null ? (
-                      <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                      <div className="h-1 w-full overflow-hidden rounded-full bg-background">
                         <div className="h-full rounded-full bg-primary/85" style={{ width: `${Math.round(usedRatio * 100)}%` }} />
                       </div>
                     ) : null}

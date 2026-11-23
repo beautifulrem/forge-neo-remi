@@ -40,7 +40,7 @@ export function HistoryPane({ onOpen, orientation = "grid", className }: { onOpe
           <Button
             variant="ghost"
             size="icon-xs"
-            className="ml-auto text-muted-foreground"
+            className="relative after:absolute after:-inset-2 ml-auto text-muted-foreground"
             aria-label={t("Clear history")}
             onPointerEnter={preloadConfirmDialog}
             onFocus={preloadConfirmDialog}

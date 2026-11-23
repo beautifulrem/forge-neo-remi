@@ -112,7 +112,7 @@ function HistoryRow({ job, onView }: { job: Job; onView: (job: Job, index: numbe
             </Badge>
           ) : null}
         </p>
-        {job.error ? <p className="line-clamp-2 text-xs break-words text-destructive">{job.error}</p> : null}
+        {job.error ? <p title={job.error} className="line-clamp-2 text-xs break-words text-destructive">{job.error}</p> : null}
         {job.warnings.length > 0 ? (
           <ul className="flex flex-col gap-0.5 text-xs break-words text-warning" aria-label={t("Warnings")}>
             {job.warnings.map((warning, index) => (

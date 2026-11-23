@@ -59,7 +59,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.props.fallback !== undefined) return this.props.fallback
     if (this.props.inline) {
       return (
-        <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
+        <div role="alert" className="rounded-lg bg-destructive/5 p-2 text-xs text-destructive">
           {t("This control failed to render")}: {error.message}
         </div>
       )

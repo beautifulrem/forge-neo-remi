@@ -12,6 +12,8 @@ import { errorTextId } from "@/ui/a11y"
 import { FieldError } from "@/ui/Field"
 import { NS } from "./i18n"
 import { parsePose, poseText } from "./pose"
+import { panelClass } from "@/ui/layout/panel"
+import { cn } from "@/lib/utils"
 
 type PosePanelProps = {
   pose: unknown
@@ -59,7 +61,7 @@ export function PosePanel({ pose, busy, disabled, onApply }: PosePanelProps) {
   }
 
   return (
-    <div role="group" aria-labelledby={`${id}-title`} className="flex flex-col gap-2 rounded-lg border p-2.5">
+    <div role="group" aria-labelledby={`${id}-title`} className={cn("flex flex-col gap-2", panelClass(1))}>
       <div className="flex flex-wrap items-center gap-1.5">
         <span id={`${id}-title`} className="mr-auto text-[0.8rem] font-medium">
           {tw("Pose (OpenPose JSON)")}

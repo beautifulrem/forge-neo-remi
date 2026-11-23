@@ -13,6 +13,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
     <Button
       variant="ghost"
       size="icon-xs"
+      className="relative after:absolute after:-inset-2"
       aria-label={label}
       title={label}
       onClick={() =>

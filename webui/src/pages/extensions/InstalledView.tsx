@@ -76,8 +76,8 @@ function StatusBadge({ ext, checking }: { ext: ExtensionInfo; checking: boolean 
   }
   if (ext.can_update) {
     return (
-      <Badge className="gap-1">
-        <ArrowUpCircle aria-hidden />
+      <Badge variant="secondary" className="gap-1">
+        <ArrowUpCircle className="text-primary" aria-hidden />
         {t(ext.status === "behind HEAD" ? "Behind HEAD" : "Update available")}
       </Badge>
     )

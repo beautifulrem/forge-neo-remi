@@ -102,12 +102,12 @@ function RawMetadata({ metadata }: { metadata: Record<string, unknown> }) {
           {t("Copy JSON")}
         </Button>
       </div>
-      <div className="max-h-80 overflow-auto rounded-lg border">
+      <div className="max-h-80 overflow-auto rounded-lg bg-background">
         <table className="w-full text-xs">
           <tbody>
             {entries.map(([key, value]) => (
               <tr key={key} className="border-b align-top last:border-0">
-                <th scope="row" className="w-1/3 bg-muted/40 px-2 py-1.5 text-left font-mono font-normal text-muted-foreground [overflow-wrap:anywhere]">
+                <th scope="row" className="w-1/3 px-2 py-1.5 text-left font-mono font-normal text-muted-foreground [overflow-wrap:anywhere]">
                   {key}
                 </th>
                 <td className="px-2 py-1.5">
