@@ -496,6 +496,15 @@ function usePanelRef() {
   return React.useRef<PanelImperativeHandle | null>(null)
 }
 
+/** `localStorage`, or nothing where there is none or the browser blocks it (reading it then throws). */
+function siteStorage(): Storage | undefined {
+  try {
+    return typeof localStorage === "undefined" ? undefined : localStorage
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * The layout kept for a group (react-resizable-panels' `useDefaultLayout`: the same storage key
  * and format, so layouts saved before carry over): pass `defaultLayout` and `onLayoutChanged` to
@@ -503,7 +512,7 @@ function usePanelRef() {
  */
 function useDefaultLayout({ id, panelIds, storage }: { id: string; panelIds: string[]; storage?: Pick<Storage, "getItem" | "setItem"> }) {
   const key = `react-resizable-panels:${[id, ...panelIds].join(":")}`
-  const store = storage ?? (typeof localStorage === "undefined" ? undefined : localStorage)
+  const store = storage ?? siteStorage()
   const defaultLayout = React.useMemo(() => {
     try {
       const saved = JSON.parse(store?.getItem(key) ?? "null") as unknown

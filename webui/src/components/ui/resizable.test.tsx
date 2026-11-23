@@ -136,4 +136,17 @@ describe("useDefaultLayout", () => {
     const { result } = renderHook(() => useDefaultLayout({ id: "page", panelIds: ["a", "b"] }))
     expect(result.current.defaultLayout).toBeUndefined()
   })
+
+  it("works without a layout when the browser blocks site storage", () => {
+    const blocked = vi.spyOn(window, "localStorage", "get").mockImplementation(() => {
+      throw new DOMException("The operation is insecure.", "SecurityError")
+    })
+    try {
+      const { result } = renderHook(() => useDefaultLayout({ id: "page", panelIds: ["a", "b"] }))
+      expect(result.current.defaultLayout).toBeUndefined()
+      expect(() => result.current.onLayoutChanged({ a: 40, b: 60 })).not.toThrow()
+    } finally {
+      blocked.mockRestore()
+    }
+  })
 })

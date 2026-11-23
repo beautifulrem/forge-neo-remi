@@ -6,6 +6,7 @@ import { api } from "@/api/endpoints"
 import { queryClient } from "@/api/queries"
 import { useSession } from "@/api/session"
 import { App } from "@/app/App"
+import { BOOT_WAIT, settleWithin } from "@/app/boot"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { AuthGate } from "@/features/auth/SignIn"
 import { activateLocale, i18n, initialLocale } from "@/i18n"
@@ -34,8 +35,9 @@ const session = api.auth
   .catch(() => {})
 
 // Load the stored/browser locale first so the shell never flashes English;
-// a failure only means English, so render either way.
-await Promise.all([session, activateLocale(initialLocale()).catch(() => {})])
+// a failure only means English, so render either way. A server that never
+// answers holds the first render for BOOT_WAIT at most.
+await settleWithin(Promise.all([session, activateLocale(initialLocale()).catch(() => {})]), BOOT_WAIT)
 
 root.render(
   <StrictMode>
