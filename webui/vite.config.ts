@@ -7,6 +7,7 @@ import babel from "@rolldown/plugin-babel"
 import tailwindcss from "@tailwindcss/vite"
 import react, { reactCompilerPreset } from "@vitejs/plugin-react"
 import { defineConfig, loadEnv, type Plugin } from "vite"
+import { collectNotices, formatNotices } from "./tools/notices.mjs"
 
 // The WebUI server (python launch.py) serves the built app from webui/dist;
 // `pnpm dev` proxies its API and WebSocket to that server.
@@ -74,6 +75,28 @@ function precompress(): Plugin {
           await Promise.all([writeFile(`${file}.br`, br), writeFile(`${file}.gz`, gz)])
         }),
       )
+    },
+  }
+}
+
+/**
+ * THIRD-PARTY-NOTICES.txt next to index.html: minification drops the dependencies' license
+ * comments, so the build lists every package it bundles (code, styles and fonts) with its
+ * license text (tools/notices.mjs). Settings → Licenses links to it.
+ */
+function thirdPartyNotices(): Plugin {
+  return {
+    name: "remi-third-party-notices",
+    apply: "build",
+    async generateBundle(_options, bundle) {
+      const ids = new Set<string>()
+      for (const output of Object.values(bundle)) {
+        if (output.type === "chunk") for (const id of output.moduleIds) ids.add(id)
+        else for (const name of output.originalFileNames) ids.add(path.resolve(import.meta.dirname, name))
+      }
+      const notices = await collectNotices(ids)
+      if (notices.length === 0) this.error("no bundled package found for THIRD-PARTY-NOTICES.txt")
+      this.emitFile({ type: "asset", fileName: "THIRD-PARTY-NOTICES.txt", source: formatNotices(notices) })
     },
   }
 }
@@ -153,7 +176,7 @@ function phosphorWeights(): Plugin {
 export default defineConfig(({ mode }) => {
   const mock = loadEnv(mode, process.cwd(), "VITE_").VITE_MOCK === "1"
   return {
-    plugins: [phosphorWeights(), react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss(), mock && mockFiles(), apiDocs(), precompress()],
+    plugins: [phosphorWeights(), react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss(), mock && mockFiles(), apiDocs(), thirdPartyNotices(), precompress()],
     resolve: { alias: { "@": path.resolve(import.meta.dirname, "./src") } },
     server: {
       proxy: mock

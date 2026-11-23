@@ -1657,5 +1657,6 @@
   "Export this recipe": "导出此配方",
   "Generate → Refine → Upscale": "生成 → 精修 → 放大",
   "PUP → Generate → Refine → Finish": "提示词扩写 → 生成 → 精修 → 收尾",
-  "Generate → Upscale": "生成 → 放大"
+  "Generate → Upscale": "生成 → 放大",
+  "Web interface libraries and their licenses": "网页界面使用的库及其许可证"
 }

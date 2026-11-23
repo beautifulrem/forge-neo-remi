@@ -8,6 +8,7 @@ import { ChevronRight, ExternalLink } from "@/components/icons"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
+import { ROOT } from "@/api/http"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
@@ -81,6 +82,13 @@ export function LicensesView() {
       <header>
         <h1 className="font-heading text-xl font-semibold tracking-tight">{t("Licenses")}</h1>
         <p className="text-sm text-muted-foreground">{t("Code from these projects is used or adapted in this WebUI.")}</p>
+        {/* written by the build (webui/tools/notices.mjs): every package bundled into the web interface */}
+        <p className="mt-1 text-sm">
+          <a href={`${ROOT}/THIRD-PARTY-NOTICES.txt`} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 underline-offset-2 hover:underline">
+            {t("Web interface libraries and their licenses")}
+            <ExternalLink className="size-3 text-muted-foreground" aria-hidden />
+          </a>
+        </p>
       </header>
       {licenses.isPending ? (
         <div className="flex flex-col gap-2" aria-busy="true">
