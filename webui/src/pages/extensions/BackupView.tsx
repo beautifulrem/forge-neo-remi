@@ -206,7 +206,7 @@ export function BackupView({ access }: { access: boolean }) {
       </div>
       <div className="min-w-0">
         {current === null ? (
-          <Empty className="border">
+          <Empty>
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <Archive aria-hidden />

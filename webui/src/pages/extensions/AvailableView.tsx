@@ -146,7 +146,7 @@ function IndexList({ items, tags, access }: { items: IndexEntry[]; tags: Record<
 
   if (empty) {
     return (
-      <Empty className="border">
+      <Empty>
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <PackageSearch aria-hidden />
@@ -239,7 +239,7 @@ export function AvailableView() {
       </form>
 
       {!access ? null : url === null ? (
-        <Empty className="border">
+        <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <PackageSearch aria-hidden />
@@ -279,7 +279,7 @@ export function AvailableView() {
                 ))}
               </SelectContent>
             </Select>
-            <Toggle size="sm" pressed={recentOnly} onPressedChange={setRecentOnly} title={t("Only extensions updated after {{date}}", { date: RECENT_SINCE })} className={cn(FIELD_BUTTON_CLASS, "h-7 px-2 text-xs")}>
+            <Toggle size="sm" pressed={recentOnly} onPressedChange={setRecentOnly} title={t("Only extensions updated after {{date}}", { date: RECENT_SINCE })} className={cn(FIELD_BUTTON_CLASS, "h-7 px-2 text-xs aria-pressed:bg-primary/15 aria-pressed:text-primary dark:aria-pressed:bg-primary/20")}>
               {t("2025+")}
             </Toggle>
             <span className="ml-auto text-xs text-muted-foreground tabular-nums" role="status" aria-live="polite">

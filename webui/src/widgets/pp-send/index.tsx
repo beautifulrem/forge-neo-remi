@@ -69,7 +69,7 @@ export default function PpSend({ props, disabled, id }: WidgetProps<null, Props>
           loading="lazy"
         />
       ) : null}
-      <Button id={id} variant="default" disabled={disabled || busy || !item} aria-busy={busy || undefined} onClick={() => void send()}>
+      <Button id={id} variant="secondary" disabled={disabled || busy || !item} aria-busy={busy || undefined} onClick={() => void send()}>
         {busy ? <Loader2 className="animate-spin" aria-hidden /> : <ImageUp aria-hidden />}
         {inpaint ? tw("Apply PP → Send to inpaint") : tw("Apply PP → Send to img2img")}
       </Button>
