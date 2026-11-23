@@ -6,7 +6,7 @@
  * localization template.
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { Bell, BookOpen, Box, Download, ExternalLink, FileUp, Fingerprint, HardDriveDownload, Languages, ListTree, Loader2, Power, RefreshCw, Upload } from "@/components/icons"
+import { Bell, BookOpen, Download, ExternalLink, FileUp, Fingerprint, HardDriveDownload, Hourglass, ListTree, Loader2, Power, RefreshCw, Upload } from "@/components/icons"
 import { type ReactNode, useId, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
@@ -20,23 +20,21 @@ import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { requestServerCommand } from "@/features/server-control/server-control"
 import { cn } from "@/lib/utils"
+import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import { adminErrorMessage } from "../../extensions/extensions-model"
 import { downloadLocalizationTemplate } from "../localization-template"
 import { hashProgressQuery, loadedModelsQuery, serverStatusQuery } from "../queries"
 import { useSettingsEditor } from "../settings-store"
 
-function Panel(props: { icon: typeof Box; title: string; description: string; children: ReactNode; aside?: ReactNode; footer?: ReactNode }) {
+/** An inspector panel (`ui/layout/panel.ts`), not a card: a hairline above, the title on the column's edge. */
+function Panel(props: { title: string; description: string; children: ReactNode; aside?: ReactNode; footer?: ReactNode }) {
   const { t } = useTranslation()
   const headingId = useId()
-  const Icon = props.icon
   return (
-    <section className="flex flex-col gap-3 rounded-md bg-card p-4" aria-labelledby={headingId}>
+    <section className={cn("flex flex-col gap-3", panelClass(0))} aria-labelledby={headingId}>
       <div className="flex items-start gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
-          <Icon className="size-4.5" aria-hidden />
-        </span>
         <div className="min-w-0 flex-1">
-          <h2 id={headingId} className="text-sm font-semibold">
+          <h2 id={headingId} className={panelTitleClass(0)}>
             {t(props.title)}
           </h2>
           <p className="text-[0.8rem] text-muted-foreground">{t(props.description)}</p>
@@ -73,7 +71,7 @@ function LoadedWeights() {
     )
   }
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 p-2" aria-live="polite" aria-busy={loaded.isFetching}>
+    <div className="flex flex-col gap-1.5 rounded-lg bg-muted/50 p-2" aria-live="polite" aria-busy={loaded.isFetching}>
       <div className="flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
         <span className="flex-1">{t("Weights in memory")}</span>
         <Button variant="ghost" size="icon-xs" aria-label={t("Refresh")} disabled={loaded.isFetching} onClick={() => void loaded.refetch()}>
@@ -157,7 +155,6 @@ function CheckpointHashes() {
   const running = state?.running ?? false
   return (
     <Panel
-      icon={Fingerprint}
       title="Checkpoint hashes"
       description="Calculate the hash of every checkpoint that has none yet (used in infotexts and to match models). Large files take a while."
       footer={
@@ -187,7 +184,7 @@ function CheckpointHashes() {
         </SelectContent>
       </Select>
       <Button variant="outline" disabled={running || start.isPending} onClick={() => start.mutate()}>
-        {running || start.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Fingerprint aria-hidden />}
+        {running ? <Hourglass aria-hidden /> : start.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Fingerprint aria-hidden />}
         {t("Hash all checkpoints")}
       </Button>
     </Panel>
@@ -218,9 +215,9 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
   const loadAction = loaded ? "reload" : "load"
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-6 sm:px-6">
       <header>
-        <h1 className="text-lg font-semibold tracking-tight">{t("Server and models")}</h1>
+        <h1 className="font-heading text-xl font-semibold tracking-tight">{t("Server and models")}</h1>
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
           <span>{status.data ? t("Version {{version}}", { version: status.data.version }) : " "}</span>
           <a href={`${ROOT}/docs`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline-offset-4 hover:text-foreground hover:underline">
@@ -230,7 +227,7 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
         </p>
       </header>
 
-      <Panel icon={RefreshCw} title="Reload UI" description="Reloads scripts and extensions and rebuilds the app in this process. Use it after enabling, installing or updating extensions, or after editing a script.">
+      <Panel title="Reload UI" description="Reloads scripts and extensions and rebuilds the app in this process. Use it after enabling, installing or updating extensions, or after editing a script.">
         <Button onClick={() => requestServerCommand("reload")}>
           <RefreshCw aria-hidden />
           {t("Reload UI")}
@@ -238,7 +235,6 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
       </Panel>
 
       <Panel
-        icon={Power}
         title="Restart server"
         description="Stops the WebUI process and starts it again (needed for settings marked “Requires restart”)."
         aside={!status.isPending && !restartable ? <Badge variant="outline">{t("Not available")}</Badge> : null}
@@ -253,7 +249,6 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
       </Panel>
 
       <Panel
-        icon={Box}
         title="Model memory"
         description="Unload the model to free RAM and VRAM; load the selected model now instead of at the next generation, or load it again from disk."
         aside={
@@ -281,7 +276,6 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
       <CheckpointHashes />
 
       <Panel
-        icon={Bell}
         title="Browser notifications"
         description="Notify when a job finishes while this tab is in the background."
         aside={
@@ -303,7 +297,7 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
         {notifications.permission === "denied" ? <p className="text-xs text-muted-foreground">{t("Allow them in the browser's site settings.")}</p> : null}
       </Panel>
 
-      <Panel icon={FileUp} title="Settings file" description="Back up your settings as a JSON file, or bring settings over from another installation.">
+      <Panel title="Settings file" description="Back up your settings as a JSON file, or bring settings over from another installation.">
         <Button variant="outline" onClick={() => onExport(false)}>
           <Download aria-hidden />
           {t("Export changed settings")}
@@ -318,7 +312,6 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
       </Panel>
 
       <Panel
-        icon={Languages}
         title="Localization template"
         description="Every English string of the UI as JSON, with the current language's translations filled in: a start for a new localizations/<language>.json."
       >

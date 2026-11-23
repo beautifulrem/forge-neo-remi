@@ -10,6 +10,7 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
+import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 
 /** Short scalar entries shown as a summary; everything else is a collapsible section. */
 const SUMMARY_KEYS = ["Platform", "Python", "Version", "Git status", "Script path", "Data path", "Extensions dir"]
@@ -30,15 +31,16 @@ function Section({ name, value }: { name: string; value: unknown }) {
   const [open, setOpen] = useState(false)
   const hint = sizeHint(value)
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="rounded-lg border bg-card">
-      <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/60">
-        <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")} aria-hidden />
+    // an inspector panel (`ui/layout/panel.ts`), not a card: the title on the column's edge, the chevron at the row's end
+    <Collapsible open={open} onOpenChange={setOpen} className={panelClass(0)}>
+      <CollapsibleTrigger className={cn("flex min-h-8 w-full items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50", panelTitleClass(0))}>
         <span className="flex-1">{t(name)}</span>
-        {hint ? <span className="text-xs text-muted-foreground tabular-nums">{hint}</span> : null}
+        {hint ? <span className="text-xs font-normal text-muted-foreground tabular-nums">{hint}</span> : null}
+        <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")} aria-hidden />
       </CollapsibleTrigger>
       <CollapsibleContent>
         {open ? (
-          <pre className="max-h-96 overflow-auto border-t px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all">{formatValue(value)}</pre>
+          <pre className="max-h-96 overflow-auto pt-2 pb-1 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all">{formatValue(value)}</pre>
         ) : null}
       </CollapsibleContent>
     </Collapsible>
@@ -108,7 +110,7 @@ export function SysinfoView() {
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6">
       <header className="flex flex-wrap items-end gap-3">
         <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-semibold tracking-tight">{t("System info")}</h1>
+          <h1 className="font-heading text-xl font-semibold tracking-tight">{t("System info")}</h1>
           <p className="text-sm text-muted-foreground">{t("Attach the downloaded file when you report a problem.")}</p>
         </div>
         <a href={api.system.sysinfoDownloadUrl()} download className={buttonVariants({ size: "sm" })}>
@@ -133,7 +135,7 @@ export function SysinfoView() {
         </p>
       ) : (
         <>
-          <dl className="grid gap-x-4 gap-y-2 rounded-md bg-card p-4 text-sm sm:grid-cols-[max-content_1fr]">
+          <dl className={cn("grid gap-x-4 gap-y-2 text-sm sm:grid-cols-[max-content_1fr]", panelClass(0))}>
             {summary.map((key) => (
               <div key={key} className="contents">
                 <dt className="text-muted-foreground">{t(key)}</dt>
@@ -141,7 +143,7 @@ export function SysinfoView() {
               </div>
             ))}
           </dl>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             {sections.map((key) => (
               <Section key={key} name={key} value={data?.[key]} />
             ))}

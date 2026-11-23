@@ -1,8 +1,8 @@
 /**
- * Extensions Health Diagnostics & Worker / Multi-GPU / MLX Monitor view:
- * Linear / Apple Activity Monitor-inspired instrument panel with zero badge
- * clutter — hairline telemetry strip, precision worker monitor, and a crisp
- * tabular extension health matrix. Lazily loaded on `#/extensions?tab=diagnostics`.
+ * Extensions Health Diagnostics & Worker / Multi-GPU / MLX Monitor view: a
+ * telemetry strip, then two inspector panels (`ui/layout/panel.ts`) — the
+ * worker monitor and the tabular extension health matrix, rows with a
+ * hairline between them. Lazily loaded on `#/extensions?tab=diagnostics`.
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { RefreshCw, RotateCw, Search } from "@/components/icons"
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { errorText } from "@/features/errors/error-text"
 import { cn } from "@/lib/utils"
+import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import {
   type ExtensionDiagnosticItem,
   extensionDiagnosticsQuery,
@@ -117,8 +118,8 @@ export function DiagnosticsView() {
 
   return (
     <div className="flex flex-col gap-5 pb-12">
-      {/* Borderless hairline telemetry strip */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2.5">
+      {/* Telemetry strip: the panel below draws the hairline under it */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground tabular-nums">
           {diag.data ? (
             <span className="font-mono text-foreground">
@@ -169,22 +170,22 @@ export function DiagnosticsView() {
         </Button>
       </div>
 
-      {/* Worker / Multi-GPU / MLX precision instrument panel */}
-      <section className="overflow-hidden rounded-lg border border-border bg-card" aria-label={t("Runtime & workers")}>
-        <div className="flex items-center justify-between border-b border-border/70 px-4 py-2.5">
-          <h2 className="text-xs font-semibold tracking-wide text-foreground">{t("Runtime & workers")}</h2>
+      {/* Worker / Multi-GPU / MLX monitor: an inspector panel, not a card */}
+      <section className={cn("flex flex-col gap-1", panelClass(0))} aria-label={t("Runtime & workers")}>
+        <div className="flex min-h-8 items-center justify-between">
+          <h2 className={panelTitleClass(0)}>{t("Runtime & workers")}</h2>
         </div>
 
         {workers.isPending ? (
-          <div className="p-4">
+          <div className="py-2">
             <Skeleton className="h-20 w-full" />
           </div>
         ) : workers.isError ? (
-          <p className="px-4 py-4 text-sm text-muted-foreground">{t("Workers status unavailable on this server.")}</p>
+          <p className="py-2 text-sm text-muted-foreground">{t("Workers status unavailable on this server.")}</p>
         ) : (
           <div className="divide-y divide-border/70">
             {workers.data.workers.length === 0 ? (
-              <p className="px-4 py-4 text-sm text-muted-foreground">{t("No workers reported")}</p>
+              <p className="py-2 text-sm text-muted-foreground">{t("No workers reported")}</p>
             ) : (
               workers.data.workers.map((worker) => {
                 const usedMb =
@@ -193,7 +194,7 @@ export function DiagnosticsView() {
                     : null
                 const usedPct = usedMb != null && worker.vram_total_mb ? Math.min(100, (usedMb / worker.vram_total_mb) * 100) : null
                 return (
-                  <div key={worker.worker_id} className="flex flex-col gap-2.5 px-4 py-3">
+                  <div key={worker.worker_id} className="flex flex-col gap-2.5 py-3">
                     {/* Row 1: identity, backend/device, live status dot, restart action */}
                     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
                       <span className="font-mono text-sm font-semibold text-foreground">{worker.worker_id}</span>
@@ -264,9 +265,9 @@ export function DiagnosticsView() {
               })
             )}
 
-            {/* MLX sidecar sleek inline sub-row */}
+            {/* MLX sidecar sub-row */}
             {workers.data.mlx ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 bg-muted/25 px-4 py-2.5 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-xs">
                 <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                   <span className="font-medium text-foreground">{t("Apple Silicon MLX sidecar")}</span>
                   {sep}
@@ -299,10 +300,10 @@ export function DiagnosticsView() {
         )}
       </section>
 
-      {/* Linear-style Extension Health Matrix */}
-      <section className="overflow-hidden rounded-lg border border-border bg-card" aria-label={t("Extension health & API")}>
-        <div className="flex flex-wrap items-center gap-2 border-b border-border/70 px-4 py-2">
-          <h2 className="mr-2 text-xs font-semibold tracking-wide text-foreground">{t("Extension health & API")}</h2>
+      {/* Extension health matrix: an inspector panel, not a card */}
+      <section className={cn("flex flex-col gap-1", panelClass(0))} aria-label={t("Extension health & API")}>
+        <div className="flex min-h-8 flex-wrap items-center gap-2">
+          <h2 className={cn("mr-2", panelTitleClass(0))}>{t("Extension health & API")}</h2>
 
           <div className="flex flex-wrap items-center gap-0.5" role="group" aria-label={t("Filter diagnostics…")}>
             {filterButtons.map((btn) => (
@@ -337,22 +338,22 @@ export function DiagnosticsView() {
         </div>
 
         {diag.isPending ? (
-          <div className="flex flex-col gap-2 p-4" aria-busy="true">
+          <div className="flex flex-col gap-2 py-2" aria-busy="true">
             {Array.from({ length: 4 }, (_, i) => (
               <Skeleton key={i} className="h-10 w-full" />
             ))}
           </div>
         ) : diag.isError && diag.error instanceof ApiError && diag.error.status === 404 ? (
-          <p className="px-4 py-4 text-sm text-muted-foreground">{t("Diagnostics unavailable on this server.")}</p>
+          <p className="py-2 text-sm text-muted-foreground">{t("Diagnostics unavailable on this server.")}</p>
         ) : diag.isError && !diag.data ? (
-          <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-4 text-sm">
+          <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
             <span className="text-destructive">{errorText(diag.error)}</span>
             <Button variant="outline" size="sm" onClick={() => void diag.refetch()}>
               {t("Retry")}
             </Button>
           </div>
         ) : items.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("No extension diagnostics match.")}</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">{t("No extension diagnostics match.")}</p>
         ) : (
           <ul className="divide-y divide-border/70">
             {items.map((item) => {
@@ -372,7 +373,7 @@ export function DiagnosticsView() {
               const caps = item.manifest?.requires_capabilities ?? []
 
               return (
-                <li key={item.name} className="px-4 py-2.5 transition-colors hover:bg-muted/25">
+                <li key={item.name} className="py-2.5">
                   <div className="grid grid-cols-1 items-center gap-x-3 gap-y-1 md:grid-cols-[minmax(12rem,1.4fr)_6.25rem_5.25rem_5.5rem_minmax(0,1fr)_11rem]">
                     <span className="truncate font-mono text-[0.8rem] font-medium text-foreground" title={item.name}>
                       {item.name}

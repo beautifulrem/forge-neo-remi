@@ -1,8 +1,9 @@
 /**
  * Non-Node Multi-Stage Linear Pipeline Builder & Runner:
- * connected tactile studio modules (`Prompt Upsample` -> `Base Generate` ->
- * `Refine / Inpaint` -> `Finish / Upscale / PiD`), whisper-quiet inline cache
- * status, `--glow` lamp CTA, and recent runs matrix. Lazily loaded.
+ * connected stages (`Prompt Upsample` -> `Base Generate` -> `Refine / Inpaint`
+ * -> `Finish / Upscale / PiD`), each an inspector panel (`ui/layout/panel.ts`),
+ * whisper-quiet inline cache status, `--glow` lamp CTA, and recent runs.
+ * Lazily loaded.
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
@@ -43,6 +44,7 @@ import { Switch } from "@/components/ui/switch"
 import { errorText } from "@/features/errors/error-text"
 import { captureFormOverrides } from "@/features/recipes/capture"
 import { cn } from "@/lib/utils"
+import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import {
   cancelChainApi,
   chainKeys,
@@ -283,8 +285,8 @@ export function PipelineBuilder() {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Instrument command bar */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-border/70 pb-3">
+      {/* Command bar: the stages' hairlines separate it from them */}
+      <div className="flex flex-wrap items-center gap-2">
         <Input
           value={name}
           onChange={(event) => setName(event.target.value)}
@@ -401,7 +403,7 @@ export function PipelineBuilder() {
       </div>
 
       {/* Connected linear stage track */}
-      <ol className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:flex xl:items-stretch xl:gap-0">
+      <ol className="grid grid-cols-1 gap-x-4 gap-y-5 lg:grid-cols-2 xl:flex xl:items-stretch xl:gap-0">
         {stages.map((stage, index) => {
           const planned = plan[index]!
           // the run's stage at this place only while this card still is that stage (not after a move or an edit)
@@ -417,16 +419,18 @@ export function PipelineBuilder() {
                 data-stage-index={index}
                 data-cache-decision={planned.decision}
                 className={cn(
-                  "flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card transition-opacity",
+                  // an inspector panel, not a card: a hairline above, no box or fill
+                  "flex min-w-0 flex-1 flex-col gap-2 transition-opacity",
+                  panelClass(0),
                   !enabled && "opacity-55",
                 )}
               >
-                {/* Stage module header */}
-                <div className="flex items-center gap-2 border-b border-border/70 bg-muted/25 px-3 py-2">
+                {/* Stage header */}
+                <div className="flex min-h-7 items-center gap-2">
                   <span className="shrink-0 font-mono text-[0.6875rem] font-semibold tracking-wider text-muted-foreground tabular-nums">
                     {stepNumber(index)}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-[0.8rem] font-semibold text-foreground" title={t(STAGE_META[stage.kind].label)}>
+                  <span className={cn("min-w-0 flex-1 truncate", panelTitleClass(0))} title={t(STAGE_META[stage.kind].label)}>
                     {t(STAGE_META[stage.kind].label)}
                   </span>
                   <Switch
@@ -437,7 +441,7 @@ export function PipelineBuilder() {
                 </div>
 
                 {/* Whisper-quiet inline cache/execution status */}
-                <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
+                <div className="flex items-center justify-between gap-2">
                   {planned.decision === "cached" ? (
                     <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success">
                       <span className="size-1.5 shrink-0 rounded-full bg-success" aria-hidden />
@@ -461,7 +465,7 @@ export function PipelineBuilder() {
                 </div>
 
                 {/* Stage parameters & cached preview */}
-                <div className="flex flex-1 flex-col gap-2.5 px-3 py-2.5 text-xs">
+                <div className="flex flex-1 flex-col gap-2.5 text-xs">
                   {planned.cached_outputs.length > 0 || (runStage?.output_file_ids?.length ?? 0) > 0 ? (
                     <div className="flex items-center gap-1.5">
                       {(planned.cached_outputs.length > 0 ? planned.cached_outputs : (runStage?.output_file_ids ?? []))
@@ -640,8 +644,8 @@ export function PipelineBuilder() {
                   ) : null}
                 </div>
 
-                {/* Recessed studio footer bar */}
-                <div className="mt-auto flex flex-wrap items-center gap-1 border-t border-border/70 bg-muted/20 px-2 py-1.5">
+                {/* Stage actions */}
+                <div className="mt-auto flex flex-wrap items-center gap-1">
                   {stage.kind !== "prompt_upsample" ? (
                     <Button variant="ghost" size="sm" className="h-7 shrink-0 gap-1 px-1.5 text-xs text-muted-foreground hover:text-foreground" disabled={!enabled} onClick={() => pullFromForm(index)}>
                       <ClipboardPaste className="size-3" aria-hidden />
@@ -695,10 +699,10 @@ export function PipelineBuilder() {
                 </div>
               </li>
 
-              {/* Crisp architectural horizontal flow connector on desktop */}
+              {/* Horizontal flow connector on desktop, level with the stage headers */}
               {index < stages.length - 1 ? (
-                <li aria-hidden className="hidden w-7 shrink-0 items-center justify-center xl:flex">
-                  <div className="flex w-full items-center">
+                <li aria-hidden className="hidden w-7 shrink-0 justify-center pt-3 xl:flex">
+                  <div className="flex h-7 w-full items-center">
                     <span className="h-px flex-1 bg-border" />
                     <ChevronRight className="-ml-1.5 size-3.5 shrink-0 text-muted-foreground/60" />
                   </div>
@@ -710,29 +714,29 @@ export function PipelineBuilder() {
       </ol>
 
       {/* Recent pipeline runs */}
-      <section className="overflow-hidden rounded-lg border border-border bg-card" aria-label={t("Recent pipeline runs")}>
-        <div className="flex items-center justify-between border-b border-border/70 px-4 py-2.5">
-          <h3 className="text-xs font-semibold tracking-wide text-foreground">
+      <section className={cn("flex flex-col gap-1", panelClass(0))} aria-label={t("Recent pipeline runs")}>
+        <div className="flex min-h-8 items-center justify-between">
+          <h3 className={panelTitleClass(0)}>
             {t("Recent pipeline runs")}
-            <span className="ml-2 font-mono font-normal text-muted-foreground tabular-nums">{chains.data?.items.length ?? 0}</span>
+            <span className="ml-2 font-mono text-xs font-normal text-muted-foreground tabular-nums">{chains.data?.items.length ?? 0}</span>
           </h3>
         </div>
         {chains.isError && !chains.data ? (
-          <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-4 text-xs">
+          <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-xs">
             <span className="text-destructive">{errorText(chains.error)}</span>
             <Button variant="outline" size="sm" className="h-7" onClick={() => void chains.refetch()}>
               {t("Retry")}
             </Button>
           </div>
         ) : (chains.data?.items.length ?? 0) === 0 ? (
-          <p className="px-4 py-5 text-xs text-muted-foreground">{t("No pipeline runs yet")}</p>
+          <p className="py-3 text-xs text-muted-foreground">{t("No pipeline runs yet")}</p>
         ) : (
           <ul className="divide-y divide-border/70">
             {chains.data!.items.map((chain) => {
               const reused = chain.stages.filter((s) => s.cached).length
               const outputs = chain.stages.flatMap((s) => s.output_file_ids ?? []).slice(-4)
               return (
-                <li key={chain.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/25">
+                <li key={chain.id} className="flex flex-wrap items-center gap-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       <span title={chain.name} className="truncate text-[0.8rem] font-medium text-foreground">{chain.name}</span>

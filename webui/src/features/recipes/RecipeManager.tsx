@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { errorText } from "@/features/errors/error-text"
 import { cn } from "@/lib/utils"
 import { getFormStore } from "@/ui/form-store"
+import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import { applyRecipeApi, createRecipeApi, deleteRecipeApi, exportRecipesApi, importRecipesApi, recipesQuery, refreshRecipes } from "./api"
 import { applyRecipeEntries, captureFormOverrides, countRecipeParams, recipeHighlights } from "./capture"
 import type { Recipe } from "./types"
@@ -156,7 +157,8 @@ export function RecipeManager() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border/70 pb-3">
+      {/* the toolbar sits above the panel; the panel's hairline separates them */}
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-44 flex-1 sm:max-w-xs">
           <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
@@ -219,26 +221,27 @@ export function RecipeManager() {
         </div>
       </div>
 
-      <section className="overflow-hidden rounded-lg border border-border bg-card" aria-label={t("Cross-model parameter recipes")}>
-        <div className="flex items-center justify-between border-b border-border/70 px-4 py-2.5">
-          <h2 className="text-xs font-semibold tracking-wide text-foreground">
+      {/* an inspector panel (`ui/layout/panel.ts`), not a card */}
+      <section className={cn("flex flex-col gap-1", panelClass(0))} aria-label={t("Cross-model parameter recipes")}>
+        <div className="flex min-h-8 items-center justify-between">
+          <h2 className={panelTitleClass(0)}>
             {t("Cross-model parameter recipes")}
-            {!list.isPending ? <span className="ml-2 font-mono font-normal text-muted-foreground tabular-nums">{recipes.length}</span> : null}
+            {!list.isPending ? <span className="ml-2 font-mono text-xs font-normal text-muted-foreground tabular-nums">{recipes.length}</span> : null}
           </h2>
         </div>
 
         {list.isPending ? (
-          <div className="flex flex-col gap-2 p-4" aria-busy="true">
+          <div className="flex flex-col gap-2 py-2" aria-busy="true">
             {Array.from({ length: 3 }, (_, i) => (
               <Skeleton key={i} className="h-14 w-full" />
             ))}
           </div>
         ) : list.isError ? (
-          <p role="alert" className="px-4 py-4 text-sm text-destructive">
+          <p role="alert" className="py-2 text-sm text-destructive">
             {errorText(list.error)}
           </p>
         ) : recipes.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
+          <div className="flex flex-col items-center gap-2 py-10 text-center">
             <BookOpen className="size-7 text-muted-foreground/45" aria-hidden />
             <p className="text-sm font-medium">{t("No recipes yet")}</p>
             <p className="max-w-md text-xs text-balance text-muted-foreground">
@@ -254,7 +257,7 @@ export function RecipeManager() {
               const detailParts = [...highlights, ...recipe.capabilities, ...recipe.tags.map((tag) => `#${tag}`)]
 
               return (
-                <li key={recipe.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-muted/25">
+                <li key={recipe.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
                   <div className="min-w-0 flex-1 basis-64">
                     <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
                       <span className="truncate text-[0.8rem] font-semibold text-foreground" title={recipe.name}>
