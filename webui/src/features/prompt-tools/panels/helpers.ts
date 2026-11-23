@@ -15,24 +15,29 @@ export type PanelProps = {
 
 /** "3 minutes ago" in the UI language. */
 export function timeAgo(seconds: number, locale: string): string {
-  const diff = seconds - Date.now() / 1000
+  const now = Date.now()
+  const diff = seconds - now / 1000
   const format = new Intl.RelativeTimeFormat(locale, { numeric: "auto" })
-  const steps: [number, Intl.RelativeTimeFormatUnit][] = [
-    [60, "second"],
-    [3600, "minute"],
-    [86400, "hour"],
-    [604800, "day"],
-    [2629800, "week"],
-    [31557600, "month"],
+  // half away from zero (Math.round(-59.5) is -59: "59 minutes ago" for 59.5 minutes)
+  const round = (value: number) => Math.sign(value) * Math.round(Math.abs(value))
+  // under a day: the rounded count, moving up a unit when it reaches the next one (59.6 s is a minute)
+  const units: [number, number, Intl.RelativeTimeFormatUnit][] = [
+    [1, 60, "second"],
+    [60, 60, "minute"],
+    [3600, 24, "hour"],
   ]
-  const abs = Math.abs(diff)
-  for (const [limit, unit] of steps) {
-    if (abs < limit) {
-      const size = unit === "second" ? 1 : unit === "minute" ? 60 : unit === "hour" ? 3600 : unit === "day" ? 86400 : unit === "week" ? 604800 : 2629800
-      return format.format(Math.round(diff / size), unit)
-    }
+  for (const [size, limit, unit] of units) {
+    const value = round(diff / size)
+    if (Math.abs(value) < limit) return format.format(value, unit)
   }
-  return format.format(Math.round(diff / 31557600), "year")
+  // a day or more: calendar days, so "yesterday" is the day before today whatever the hour
+  const midnight = (ms: number) => new Date(ms).setHours(0, 0, 0, 0)
+  const days = round((midnight(seconds * 1000) - midnight(now)) / 86_400_000)
+  if (Math.abs(days) < 7) return format.format(days, "day")
+  if (Math.abs(days) < 30) return format.format(round(days / 7), "week")
+  const months = round(days / 30.44)
+  if (Math.abs(months) < 12) return format.format(months, "month")
+  return format.format(round(days / 365.25), "year")
 }
 
 /** Appends text to a prompt with a comma between (no doubled separators). */
