@@ -10,6 +10,7 @@ import { api } from "@/api/endpoints"
 import { bootstrapQuery, keys, queryClient } from "@/api/queries"
 import type { Bootstrap, OptionsResponse } from "@/api/types"
 import { t } from "@/i18n"
+import { failureText } from "@/features/errors/error-text"
 
 export const QUICKSETTINGS_KEY = "quicksettings_list"
 
@@ -50,7 +51,7 @@ export async function setPinned(key: string, pinned: boolean): Promise<void> {
     await api.patchOptions({ [QUICKSETTINGS_KEY]: next })
   } catch (error) {
     writeList(before)
-    toast.error(t("Could not change the quick settings"), { description: error instanceof Error ? error.message : String(error) })
+    toast.error(t("Could not change the quick settings"), { description: failureText(error) })
   } finally {
     void queryClient.invalidateQueries({ queryKey: keys.app })
     void queryClient.invalidateQueries({ queryKey: keys.options })

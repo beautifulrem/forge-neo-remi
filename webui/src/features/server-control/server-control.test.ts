@@ -75,6 +75,12 @@ describe("server control", () => {
     expect(server.reloadPage).not.toHaveBeenCalled()
   })
 
+  it("explains a refused command in the UI language", async () => {
+    const server = fakeServer(["old"], { send: async () => Promise.reject(new ApiError(500, "Internal Server Error")) })
+    await runServerCommand("restart", server.deps)
+    expect(useServerControl.getState()).toMatchObject({ phase: "failed", error: "The server ran into an error (500)." })
+  })
+
   it("gives up after the timeout and can keep waiting", async () => {
     const down = fakeServer(["old", null])
     await runServerCommand("reload", down.deps)

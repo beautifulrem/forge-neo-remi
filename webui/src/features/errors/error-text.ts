@@ -39,6 +39,15 @@ export function errorText(error: unknown, texts: StatusTexts = {}): string {
 }
 
 /**
+ * A failure that is either a request (explained by its status, as `errorText`) or the app's own
+ * error, whose message is already a sentence in the UI language. A `TypeError` is `fetch` failing
+ * to reach the server.
+ */
+export function failureText(error: unknown, texts: StatusTexts = {}): string {
+  return error instanceof Error && !(error instanceof ApiError) && !(error instanceof TypeError) ? error.message : errorText(error, texts)
+}
+
+/**
  * Rejected values in the UI language: each distinct message translated with
  * the same key as the inline error under its field (the server's messages
  * are catalog keys, see `core.required`).

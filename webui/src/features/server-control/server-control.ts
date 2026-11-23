@@ -13,6 +13,7 @@
 import { create } from "zustand"
 import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
+import { errorText } from "@/features/errors/error-text"
 import { askBeforeLeaving, leaveWithoutAsking, unsavedTotal } from "./unsaved"
 
 export type ServerCommand = "reload" | "restart"
@@ -113,7 +114,7 @@ export async function runServerCommand(command: ServerCommand, deps: ServerContr
   } catch (error) {
     // The connection dropping mid-request means the server is already going down.
     if (error instanceof ApiError) {
-      set({ phase: "failed", error: error.status === 501 ? "This server cannot restart itself; restart it from its console." : error.message })
+      set({ phase: "failed", error: error.status === 501 ? "This server cannot restart itself; restart it from its console." : errorText(error) })
       return
     }
   }

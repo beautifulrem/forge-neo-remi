@@ -9,6 +9,7 @@ import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
 import { ROOT } from "@/api/http"
+import { LoadFailed } from "@/components/LoadFailed"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
@@ -96,10 +97,8 @@ export function LicensesView() {
             <Skeleton key={i} className="h-14 w-full" />
           ))}
         </div>
-      ) : licenses.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          {licenses.error.message}
-        </p>
+      ) : licenses.isError && !licenses.data ? (
+        <LoadFailed error={licenses.error} onRetry={() => void licenses.refetch()} />
       ) : (
         licenses.data.groups.map((group) => (
           <section key={group.title} aria-label={t(group.title)} className={cn("flex flex-col gap-2.5", group.title && panelClass(0))}>

@@ -1,6 +1,7 @@
 /** The result actions without UI: their requests and their progress / result toasts. */
 import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { ApiError } from "@/api/http"
 import { tabSchema } from "@/api/mock/fixtures"
 import { recordFetch } from "@/test/fetch-recorder"
 import { getFormStore } from "@/ui/form-store"
@@ -54,7 +55,7 @@ describe("using a result's parameters", () => {
     await vi.waitFor(() => expect(failure).toHaveBeenCalledWith("Could not read the parameters", { id: "toast-1", description: "not a generation" }))
     sent.mockRejectedValue("offline")
     applyParameters("txt2img", "garbage")
-    await vi.waitFor(() => expect(failure).toHaveBeenLastCalledWith("Could not read the parameters", { id: "toast-1", description: "offline" }))
+    await vi.waitFor(() => expect(failure).toHaveBeenLastCalledWith("Could not read the parameters", { id: "toast-1", description: "The server cannot be reached." }))
   })
 })
 
@@ -71,6 +72,12 @@ describe("sending a result", () => {
     sent.mockRejectedValue(new Error("the image was deleted"))
     sendWithFeedback("extras", { fileId: "gone" })
     await vi.waitFor(() => expect(failure).toHaveBeenCalledWith("Could not send to Extras", { id: "toast-1", description: "the image was deleted" }))
+  })
+
+  it("explains a refused request in the UI language, not the server's English detail", async () => {
+    sent.mockRejectedValue(new ApiError(404, "file not found: gone", { detail: "file not found: gone" }))
+    sendWithFeedback("extras", { fileId: "gone" })
+    await vi.waitFor(() => expect(failure).toHaveBeenCalledWith("Could not send to Extras", { id: "toast-1", description: "It is no longer there." }))
   })
 })
 
@@ -98,7 +105,7 @@ describe("saving results", () => {
   it("explains a failed save", async () => {
     recordFetch(() => ({ status: 403, body: { detail: "saving is disabled" } }))
     await saveResults(["f1"])
-    expect(failure).toHaveBeenCalledWith("Could not save", { id: "toast-1", description: "saving is disabled" })
+    expect(failure).toHaveBeenCalledWith("Could not save", { id: "toast-1", description: "The server does not allow this." })
     expect(success).not.toHaveBeenCalled()
   })
 })

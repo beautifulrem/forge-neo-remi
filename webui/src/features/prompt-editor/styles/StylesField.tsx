@@ -14,6 +14,7 @@ import { useForm, useFormState } from "@/ui/hooks"
 import { RenderNode } from "@/ui/Renderer"
 import type { MultiChoiceNode } from "@/ui/schema"
 import { retryableLazy } from "@/lib/retryable-lazy"
+import { failureText } from "@/features/errors/error-text"
 
 type StylesFieldProps = {
   node: MultiChoiceNode
@@ -57,7 +58,7 @@ export function StylesField({ node, prompt = "prompt", negative = "negative_prom
       const next = await api.styles.apply({ prompt: current.prompt, negative_prompt: current.negative, styles: names })
       store.getState().setValues("core", { [prompt]: next.prompt, [negative]: next.negative_prompt, [node.name]: [] })
     } catch (error) {
-      toast.error(t("Could not apply the styles"), { description: error instanceof Error ? error.message : String(error) })
+      toast.error(t("Could not apply the styles"), { description: failureText(error) })
     }
   }
 

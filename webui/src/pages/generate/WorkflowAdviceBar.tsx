@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 import { applyAdvicePatch } from "@/ui/actions"
 import { getFormStore } from "@/ui/form-store"
 import type { AdviceItem } from "@/ui/schema"
+import { failureText } from "@/features/errors/error-text"
 
 const COLLAPSED_LIMIT = 2
 
@@ -44,7 +45,7 @@ export function WorkflowAdviceBar({ tab }: { tab: GenerateTab }) {
       await applyAdvicePatch({ store, tab }, item)
       toast.success(item.action_label ? t("Applied: {{action}}", { action: t(item.action_label) }) : t("Parameter fix applied"))
     } catch (error) {
-      toast.error(t("Could not apply fix"), { description: error instanceof Error ? error.message : String(error) })
+      toast.error(t("Could not apply fix"), { description: failureText(error) })
     } finally {
       setFixing(null)
     }

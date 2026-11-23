@@ -19,6 +19,7 @@ import { toolKeys } from "../queries"
 import { appendText, type PanelProps, timeAgo } from "./helpers"
 import { PanelHeader, SearchBox } from "./panel"
 import { LoadFailed } from "@/components/LoadFailed"
+import { failureText } from "@/features/errors/error-text"
 
 function Action({ label, onClick, children, disabled }: { label: string; onClick: () => void; children: ReactNode; disabled?: boolean }) {
   return (
@@ -30,7 +31,7 @@ function Action({ label, onClick, children, disabled }: { label: string; onClick
 
 /** A failed action's toast: what failed (`title`, translated) and the server's reason. */
 function failed(title: string, error: unknown) {
-  toast.error(title, { description: error instanceof Error ? error.message : String(error) })
+  toast.error(title, { description: failureText(error) })
 }
 
 export default function HistoryPanel({ value, setValue, kind, disabled, close }: PanelProps) {

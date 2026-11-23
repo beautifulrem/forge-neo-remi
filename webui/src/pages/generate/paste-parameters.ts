@@ -5,6 +5,7 @@ import { api } from "@/api/endpoints"
 import type { FormTab, InfotextParsed } from "@/api/types"
 import { applyPaste, pastePlan } from "@/features/infotext/paste"
 import { useForm } from "@/ui/hooks"
+import { failureText } from "@/features/errors/error-text"
 
 /**
  * Parameters into the form: `text` is parsed by the server for this form
@@ -27,7 +28,7 @@ export function usePasteParameters() {
     }
   }
   const fail = (id: string | number, error: unknown) =>
-    toast.error(t("Could not read the parameters"), { id, description: error instanceof Error ? error.message : String(error) })
+    toast.error(t("Could not read the parameters"), { id, description: failureText(error) })
 
   const fromText = async (text: string) => {
     const id = toast.loading(t("Reading parameters…"))

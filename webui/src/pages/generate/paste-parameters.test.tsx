@@ -1,6 +1,7 @@
 import { renderHook } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { ApiError } from "@/api/http"
 import type { InfotextParsed } from "@/api/types"
 import { FormProvider } from "@/ui/context"
 import { createFormStore } from "@/ui/form-store"
@@ -59,12 +60,12 @@ describe("usePasteParameters", () => {
   })
 
   it("turns a failed request into an error toast", async () => {
-    mocks.api.parseInfotext.mockRejectedValue(new Error("HTTP 500"))
+    mocks.api.parseInfotext.mockRejectedValue(new ApiError(500, "Internal Server Error"))
     await hook().fromText("x")
-    expect(mocks.toast.error).toHaveBeenCalledWith("Could not read the parameters", { id: "toast-1", description: "HTTP 500" })
+    expect(mocks.toast.error).toHaveBeenCalledWith("Could not read the parameters", { id: "toast-1", description: "The server ran into an error (500)." })
     mocks.api.parseInfotext.mockRejectedValue("offline")
     await hook().fromText("x")
-    expect(mocks.toast.error).toHaveBeenLastCalledWith("Could not read the parameters", { id: "toast-1", description: "offline" })
+    expect(mocks.toast.error).toHaveBeenLastCalledWith("Could not read the parameters", { id: "toast-1", description: "The server cannot be reached." })
   })
 
   it("reads an image's parameters in the browser first", async () => {

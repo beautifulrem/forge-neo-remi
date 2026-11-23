@@ -12,6 +12,7 @@ import { t } from "@/i18n"
 import { jsonEqual } from "@/ui/conditions"
 import { createFormStore, type FormStore } from "@/ui/form-store"
 import type { GroupNode, SettingNode, SettingsSchema } from "@/ui/schema"
+import { failureText } from "@/features/errors/error-text"
 
 export const QUICK_OWNER = "settings"
 const CONTINUOUS = new Set(["slider", "number", "text", "color", "json"])
@@ -65,7 +66,7 @@ export function createQuickForm(write: Writer = (values) => api.patchOptions(val
       loading = false
       const errors = validationErrors(error)
       if (errors) store.getState().setErrors(errors.map((e) => ({ ...e, owner: QUICK_OWNER })))
-      toast.error(t("Could not change the setting"), { description: error instanceof Error ? error.message : String(error) })
+      toast.error(t("Could not change the setting"), { description: failureText(error) })
     }
   }
 

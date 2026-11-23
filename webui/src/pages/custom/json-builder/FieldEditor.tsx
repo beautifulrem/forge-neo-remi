@@ -20,6 +20,7 @@ import { LazyPromptEditor } from "@/features/prompt-editor"
 import { ChipsSelect } from "@/ui/inputs/ChipsSelect"
 import type { EditableField } from "./draft"
 import { useBuilder } from "./store"
+import { failureText } from "@/features/errors/error-text"
 
 /** The draft value of `field`, or null when its item is gone. */
 function fieldValue(field: EditableField): string | null {
@@ -86,7 +87,7 @@ export function FieldEditor({ field, onClose }: { field: EditableField; onClose:
       toast.success(t("Styles applied"))
     },
     onError: (error) => {
-      if (alive.current) toast.error(t("Could not apply the styles"), { description: error.message })
+      if (alive.current) toast.error(t("Could not apply the styles"), { description: failureText(error) })
     },
   })
 

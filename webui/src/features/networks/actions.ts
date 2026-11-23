@@ -16,6 +16,7 @@ import { isInPrompt } from "./prompt-insert"
 import { planInsertion, readPrompts, useFormPrompts, writePrompts } from "./prompt-target"
 import type { SortKey, SortOrder } from "./queries"
 import type { PromptTarget } from "./store"
+import { failureText } from "@/features/errors/error-text"
 
 /** A bootstrap option the shared client-option table does not list. */
 function bootstrapOption(options: Bootstrap["options"] | undefined, key: string): Bootstrap["options"][string] {
@@ -68,7 +69,7 @@ export function selectCheckpoint(title: string, modules: readonly string[] = [])
   queryClient.setQueryData<Bootstrap>(keys.app, (data) => (data ? { ...data, options: { ...data.options, ...patch } } : data))
   void api
     .patchOptions(patch)
-    .catch((error: unknown) => toast.error(t("Could not change the model settings"), { description: error instanceof Error ? error.message : String(error) }))
+    .catch((error: unknown) => toast.error(t("Could not change the model settings"), { description: failureText(error) }))
     .finally(() => void queryClient.invalidateQueries({ queryKey: keys.app }))
 }
 
@@ -135,6 +136,6 @@ export async function openFolder(item: NetworkItem) {
   try {
     await api.networks.openFolder(item.kind, item.name)
   } catch (error) {
-    toast.error(t("Could not open the folder"), { description: error instanceof Error ? error.message : String(error) })
+    toast.error(t("Could not open the folder"), { description: failureText(error) })
   }
 }

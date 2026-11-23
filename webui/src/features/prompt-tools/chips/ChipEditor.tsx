@@ -11,6 +11,7 @@ import { Slider } from "@/components/ui/slider"
 import { type PromptToolsConfig, promptToolsApi, type TagInfo } from "../api"
 import { categoryName, compactCount } from "../completion/colors"
 import { canToggle, formatChip, type PromptDoc, removeChip, setChipText, setChipWeight, toggleChip } from "./parse"
+import { failureText } from "@/features/errors/error-text"
 
 type ChipEditorProps = {
   doc: PromptDoc
@@ -70,7 +71,7 @@ export function ChipEditor({ doc, index, info, translation, config, setValue, cl
       await client.invalidateQueries({ queryKey: ["prompt-tools", "collections"] })
       toast.success(t("Saved to favorites"))
     } catch (error) {
-      toast.error(t("Could not save to favorites"), { description: error instanceof Error ? error.message : String(error) })
+      toast.error(t("Could not save to favorites"), { description: failureText(error) })
     }
   }
 

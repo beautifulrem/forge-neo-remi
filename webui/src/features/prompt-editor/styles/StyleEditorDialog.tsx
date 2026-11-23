@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { LazyPromptEditor } from "../index"
 import { recountStyledTokens } from "../use-token-count"
+import { failureText } from "@/features/errors/error-text"
 
 type StyleEditorDialogProps = {
   open: boolean
@@ -64,7 +65,7 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
       refreshStyles()
       toast.success(t("Style “{{name}}” saved", { name: saved?.name ?? draft.name }))
     },
-    onError: (error) => toast.error(t("Could not save the style"), { description: error.message }),
+    onError: (error) => toast.error(t("Could not save the style"), { description: failureText(error) }),
   })
   const remove = useMutation({
     mutationFn: () => api.styles.remove(draft.name),
@@ -73,7 +74,7 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
       toast.success(t("Style “{{name}}” deleted", { name: draft.name }))
       setDraft({ name: "", prompt: "", negative_prompt: "" })
     },
-    onError: (error) => toast.error(t("Could not delete the style"), { description: error.message }),
+    onError: (error) => toast.error(t("Could not delete the style"), { description: failureText(error) }),
   })
 
   const options = (styles.data ?? []).map((style) => ({ value: style.name, label: style.name }))

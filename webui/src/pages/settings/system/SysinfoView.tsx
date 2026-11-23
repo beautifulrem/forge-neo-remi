@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Skeleton } from "@/components/ui/skeleton"
+import { errorText } from "@/features/errors/error-text"
 import { cn } from "@/lib/utils"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import { LoadFailed } from "@/components/LoadFailed"
@@ -83,7 +84,7 @@ function CheckFile() {
             </Badge>
           )
         ) : check.error ? (
-          <span className="text-sm text-destructive">{check.error.message}</span>
+          <span className="text-sm text-destructive">{errorText(check.error)}</span>
         ) : null}
       </span>
     </div>

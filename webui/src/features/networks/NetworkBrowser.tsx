@@ -33,6 +33,7 @@ import { queryClient } from "@/api/queries"
 import type { NetworkItem, NetworkKind } from "@/api/types"
 import { FadeStrip } from "@/components/FadeStrip"
 import { FitTabsList } from "@/components/FitTabsList"
+import { LoadFailed } from "@/components/LoadFailed"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -53,6 +54,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsTrigger } from "@/components/ui/tabs"
 import { Toggle } from "@/components/ui/toggle"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { errorText, failureText } from "@/features/errors/error-text"
 import { presetLabel } from "@/features/model-bar/model-options"
 import { useDebouncedValue } from "@/features/prompt-editor/use-debounced-value"
 import { useFittingPlaceholder } from "@/lib/use-fitting-placeholder"
@@ -231,7 +233,7 @@ function ErrorState({ title, error, onRetry }: { title: string; error: Error | n
             <CircleAlert aria-hidden />
           </EmptyMedia>
           <EmptyTitle>{title}</EmptyTitle>
-          {error?.message ? <EmptyDescription className="line-clamp-3 [overflow-wrap:anywhere]">{error.message}</EmptyDescription> : null}
+          {error ? <EmptyDescription className="line-clamp-3 [overflow-wrap:anywhere]">{errorText(error)}</EmptyDescription> : null}
         </EmptyHeader>
         <EmptyContent>
           <Button variant="outline" size="sm" onClick={onRetry}>
@@ -326,11 +328,11 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
   const refresh = useMutation({
     mutationFn: () => api.networks.refresh(kindId),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["networks"] }),
-    onError: (error) => toast.error(t("Could not refresh"), { description: error.message }),
+    onError: (error) => toast.error(t("Could not refresh"), { description: failureText(error) }),
   })
   const retry = () => {
     if (kinds.isError) void kinds.refetch()
-    else list.refetch()
+    if (list.isError || !kinds.isError) list.refetch()
   }
 
   const filtered = Boolean(query.trim() || folder || archs.length || compatible)
@@ -403,7 +405,7 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
 
   const results = (
     <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
-      {kinds.isError ? (
+      {kinds.isError && !kinds.data ? (
         <ErrorState title={t("Could not load the network kinds")} error={kinds.error} onRetry={retry} />
       ) : list.isPending || !kind ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2.5 p-2" role="status" aria-busy="true" aria-label={t("Loading…")}>
@@ -411,27 +413,31 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
             <Skeleton key={i} className="aspect-3/4 rounded-md" />
           ))}
         </div>
-      ) : list.isError ? (
+      ) : list.isError && total === 0 ? (
         <ErrorState title={t("Could not load {{kind}}", { kind: kindTitle(kind) })} error={list.error} onRetry={retry} />
       ) : total === 0 ? (
         <EmptyState filtered={filtered} kindTitle={kindTitle(kind)} onClear={clearFilters} />
       ) : (
-        <NetworkGrid
-          key={gridKey}
-          ref={gridRef}
-          items={items}
-          total={total}
-          kind={kind}
-          view={state.view}
-          size={state.size}
-          isActive={isActive}
-          currentArch={currentArch}
-          onRangeChange={(next) => setSeen((old) => (old.key === gridKey && old.start === next.start && old.end === next.end ? old : { key: gridKey, ...next }))}
-          onApply={apply}
-          onAction={onAction}
-          label={kindTitle(kind)}
-          className="flex-1 pt-0"
-        />
+        <>
+          {/* a refresh that failed keeps the cards it already showed */}
+          {list.isError || kinds.isError ? <LoadFailed error={list.error ?? kinds.error} onRetry={retry} className="shrink-0 px-3 py-1.5" /> : null}
+          <NetworkGrid
+            key={gridKey}
+            ref={gridRef}
+            items={items}
+            total={total}
+            kind={kind}
+            view={state.view}
+            size={state.size}
+            isActive={isActive}
+            currentArch={currentArch}
+            onRangeChange={(next) => setSeen((old) => (old.key === gridKey && old.start === next.start && old.end === next.end ? old : { key: gridKey, ...next }))}
+            onApply={apply}
+            onAction={onAction}
+            label={kindTitle(kind)}
+            className="flex-1 pt-0"
+          />
+        </>
       )}
       {list.isFetching && !list.isPending ? <Loader2 className="pointer-events-none absolute top-2 right-3 size-4 animate-spin text-muted-foreground" aria-hidden /> : null}
     </div>

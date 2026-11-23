@@ -31,6 +31,7 @@ import { Kbd } from "@/components/ui/kbd"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useFittingPlaceholder } from "@/lib/use-fitting-placeholder"
+import { errorText } from "@/features/errors/error-text"
 import { requestServerCommand } from "@/features/server-control/server-control"
 import { useUnsaved } from "@/features/server-control/unsaved"
 import { QUICKSETTINGS_KEY } from "@/features/quicksettings/pinned"
@@ -245,7 +246,7 @@ export default function SettingsPage({ route }: { route: Route }) {
 
   if (options.isError && !schema) {
     return (
-      <PagePlaceholder icon={SettingsIcon} title="Settings unavailable" description={options.error.message}>
+      <PagePlaceholder icon={SettingsIcon} title="Settings unavailable" description={errorText(options.error)}>
         <Button variant="outline" size="sm" onClick={() => void options.refetch()}>
           {t("Retry")}
         </Button>

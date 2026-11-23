@@ -28,6 +28,7 @@ import { toolKeys } from "../queries"
 import { appendText, type PanelProps } from "./helpers"
 import { PanelHeader, SearchBox } from "./panel"
 import { LoadFailed } from "@/components/LoadFailed"
+import { failureText } from "@/features/errors/error-text"
 
 /** Every collection, the unsorted favorites, or a collection id. */
 type Filter = string
@@ -129,7 +130,7 @@ export default function FavoritesPanel({ value, setValue, kind, disabled, close 
       await refresh()
       if (success) toast.success(success)
     } catch (error) {
-      toast.error(t("Could not update the favorites"), { description: error instanceof Error ? error.message : String(error) })
+      toast.error(t("Could not update the favorites"), { description: failureText(error) })
     }
   }
 

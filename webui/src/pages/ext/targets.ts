@@ -9,6 +9,7 @@ import { bootstrapQuery, pageSchemaQuery } from "@/api/queries"
 import { t } from "@/i18n"
 import type { PageSchema } from "@/ui/schema"
 import { sendToPage } from "./deliver"
+import { failureText } from "@/features/errors/error-text"
 
 export type PageSendTarget = { kind: "image"; param: string; label: string }
 export type PageTarget = { pageId: string; target: PageSendTarget }
@@ -45,6 +46,6 @@ export function sendImageToPage({ pageId, target }: PageTarget, fileId: string):
       else toast.error(t("Could not send to {{target}}", { target: where }), { id })
     })
     .catch((error: unknown) => {
-      toast.error(t("Could not send to {{target}}", { target: where }), { id, description: error instanceof Error ? error.message : String(error) })
+      toast.error(t("Could not send to {{target}}", { target: where }), { id, description: failureText(error) })
     })
 }

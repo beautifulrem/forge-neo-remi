@@ -263,9 +263,29 @@ describe("network browser: windows, filters, errors", { timeout: 60_000 }, () =>
     renderBrowser()
     const alert = await screen.findByRole("alert", {}, slow)
     expect(alert).toHaveTextContent("Could not load LoRA")
+    // the server's English detail is for logs: the page says what happened in the UI language
+    expect(alert).not.toHaveTextContent("the server had a problem")
+    expect(alert).toHaveTextContent("The server ran into an error (500).")
     broken = false
     fireEvent.click(within(alert).getByRole("button", { name: "Retry" }))
     await within(await listbox()).findAllByRole("option", {}, slow)
+  })
+
+  it("keeps the cards on screen when refreshing the list fails, with a Retry", async () => {
+    seedBootstrap()
+    let broken = false
+    mockApi({ fail: (call) => broken && call.path.startsWith("/networks") })
+    layout(1200, 800)
+    renderBrowser()
+    const list = await listbox()
+    await within(list).findAllByRole("option", {}, slow)
+    broken = true
+    await act(() => queryClient.refetchQueries({ queryKey: ["networks"] }))
+    const alert = await screen.findByRole("alert", {}, slow)
+    expect(within(screen.getByRole("listbox", { name: "LoRA" })).getAllByRole("option").length).toBeGreaterThan(0)
+    broken = false
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }))
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull(), slow)
   })
 
   it("does not pretend there are no networks when the kinds fail to load", async () => {

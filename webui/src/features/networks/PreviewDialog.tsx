@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSession } from "@/features/gallery/session-store"
 import { cn } from "@/lib/utils"
+import { failureText } from "@/features/errors/error-text"
 
 const ARROWS: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }
 
@@ -113,7 +114,7 @@ export function PreviewDialog({ item, open, onOpenChange }: { item: NetworkItem 
       toast.success(t("Preview updated"))
       onOpenChange(false)
     },
-    onError: (error) => toast.error(t("Could not set the preview"), { description: error.message }),
+    onError: (error) => toast.error(t("Could not set the preview"), { description: failureText(error) }),
   })
 
   const galleryIds = (gallery.data?.pages ?? []).flatMap((page) => page.items).filter((output) => output.kind === "image").map((output) => output.id)

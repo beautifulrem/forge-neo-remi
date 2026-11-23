@@ -9,6 +9,7 @@ import { currentRoute } from "@/app/router"
 import { t } from "@/i18n"
 import { runAction } from "@/ui/actions"
 import { getFormStore } from "@/ui/form-store"
+import { failureText } from "@/features/errors/error-text"
 
 export const MODEL_OPTION_KEYS = {
   checkpoint: "sd_model_checkpoint",
@@ -67,7 +68,7 @@ export function useOptionWrite<T>(key: string) {
       queryClient.setQueryData<Bootstrap>(keys.app, (data) => (data ? { ...data, options: { ...data.options, [key]: value } } : data))
     },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: keys.app }),
-    onError: (error) => toast.error(t("Could not change the model settings"), { description: error.message }),
+    onError: (error) => toast.error(t("Could not change the model settings"), { description: failureText(error) }),
   })
 }
 
@@ -84,7 +85,7 @@ export function writeModules(next: readonly string[]) {
   queryClient.setQueryData<Bootstrap>(keys.app, (data) => (data ? { ...data, options: { ...data.options, [key]: [...next] } } : data))
   void api
     .patchOptions({ [key]: next })
-    .catch((error: unknown) => toast.error(t("Could not change the model settings"), { description: error instanceof Error ? error.message : String(error) }))
+    .catch((error: unknown) => toast.error(t("Could not change the model settings"), { description: failureText(error) }))
     .finally(() => void queryClient.invalidateQueries({ queryKey: keys.app }))
 }
 

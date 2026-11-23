@@ -29,6 +29,7 @@ import { TagChips } from "./TagChips"
 import { hasTag, randomPrompt, toggleTag } from "./tags"
 import { type Draft, draftFrom, PREFERRED_WEIGHT_LIMIT, patchFrom } from "./metadata-draft"
 import { LoadFailed } from "@/components/LoadFailed"
+import { failureText } from "@/features/errors/error-text"
 
 function Field({ id, label, info, children }: { id: string; label: string; info?: string; children: React.ReactNode }) {
   return (
@@ -105,7 +106,7 @@ function Editor({ meta, kind, onDone }: { meta: NetworkMeta; kind: NetworkKind; 
       toast.success(t("Saved"))
       onDone()
     },
-    onError: (error) => toast.error(t("Could not save the metadata"), { description: error.message }),
+    onError: (error) => toast.error(t("Could not save the metadata"), { description: failureText(error) }),
   })
 
   const versions = ["Unknown", ...Object.keys(PRESET_LABELS)].map((value) => ({ value, label: value === "Unknown" ? t("Unknown") : archLabel(value) }))

@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { promptToolsApi } from "./api"
 import { toolKeys } from "./queries"
+import { failureText } from "@/features/errors/error-text"
 
 type TranslationKeyDialogProps = {
   open: boolean
@@ -37,7 +38,7 @@ export function TranslationKeyDialog({ open, onOpenChange, configured }: Transla
       setKey("")
       onOpenChange(false)
     } catch (error) {
-      toast.error(t("Could not save the API key"), { description: error instanceof Error ? error.message : String(error) })
+      toast.error(t("Could not save the API key"), { description: failureText(error) })
     } finally {
       setBusy(false)
     }

@@ -21,6 +21,7 @@ import { useForm, useRunAction } from "@/ui/hooks"
 import type { WidgetProps } from "@/ui/widgets"
 import { registerWidgetCatalogs } from "../_lib/i18n"
 import { sourceItem } from "./source"
+import { failureText } from "@/features/errors/error-text"
 
 const NS = registerWidgetCatalogs("pp-send", import.meta.glob("./locales/*.json", { eager: true, import: "default" }))
 
@@ -52,7 +53,7 @@ export default function PpSend({ props, disabled, id }: WidgetProps<null, Props>
       if (delivered > 0) toast.success(inpaint ? tw("Post-processed image sent to inpaint") : tw("Post-processed image sent to img2img"), { id: progress })
       else toast.error(tw("Could not send the post-processed image"), { id: progress })
     } catch (error) {
-      toast.error(tw("Could not send the post-processed image"), { id: progress, description: error instanceof Error ? error.message : String(error) })
+      toast.error(tw("Could not send the post-processed image"), { id: progress, description: failureText(error) })
     } finally {
       setBusy(false)
     }

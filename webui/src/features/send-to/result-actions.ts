@@ -9,6 +9,7 @@ import type { FormIndex } from "@/ui/form-index"
 import { getFormStore } from "@/ui/form-store"
 import { infotextValue } from "@/ui/infotext"
 import { type SendItem, type SendTarget, sendTo, sendToReference } from "./send-to"
+import { failureText } from "@/features/errors/error-text"
 
 /** The `[owner, name]` of the input that reads infotext key `key` ("Seed" → the seed script's `seed`). */
 export function findByInfotext(index: FormIndex, key: string): [owner: string, name: string] | null {
@@ -43,7 +44,7 @@ export function applyParameters(tab: SendTarget, infotext: string) {
   sendTo(tab, { infotext }, {})
     .then((count) => toast.success(t("Parameters applied: {{count}}", { count }), { id }))
     .catch((error: unknown) =>
-      toast.error(t("Could not read the parameters"), { id, description: error instanceof Error ? error.message : String(error) }),
+      toast.error(t("Could not read the parameters"), { id, description: failureText(error) }),
     )
 }
 
@@ -54,7 +55,7 @@ export function sendWithFeedback(target: SendTarget, item: SendItem) {
   sendTo(target, item)
     .then(() => toast.success(t("Sent to {{target}}", { target: where }), { id }))
     .catch((error: unknown) =>
-      toast.error(t("Could not send to {{target}}", { target: where }), { id, description: error instanceof Error ? error.message : String(error) }),
+      toast.error(t("Could not send to {{target}}", { target: where }), { id, description: failureText(error) }),
     )
 }
 
@@ -71,7 +72,7 @@ export function sendToReferenceWithFeedback(items: readonly SendItem[], preferre
       }
     })
     .catch((error: unknown) => {
-      toast.error(t("Could not send to Reference Images"), { description: error instanceof Error ? error.message : String(error) })
+      toast.error(t("Could not send to Reference Images"), { description: failureText(error) })
     })
 }
 
@@ -83,6 +84,6 @@ export async function saveResults(fileIds: readonly string[], zip = false) {
     if (zip && result.zip) downloadFile(result.zip)
     toast.success(t("Saved: {{count}}", { count: result.saved.length }), { id })
   } catch (error) {
-    toast.error(t("Could not save"), { id, description: error instanceof Error ? error.message : String(error) })
+    toast.error(t("Could not save"), { id, description: failureText(error) })
   }
 }

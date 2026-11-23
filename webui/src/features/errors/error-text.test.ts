@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { ApiError } from "@/api/http"
-import { errorText, validationText } from "./error-text"
+import { errorText, failureText, validationText } from "./error-text"
 
 const failed = (status: number) => new ApiError(status, `HTTP ${status}`, { detail: "English detail for the logs" })
 
@@ -58,5 +58,15 @@ describe("validationText", () => {
     } finally {
       await i18n.changeLanguage("en")
     }
+  })
+})
+
+describe("failureText", () => {
+  it("explains a request by its status and keeps the app's own (translated) message", () => {
+    expect(failureText(failed(500))).toBe("The server ran into an error (500).")
+    expect(failureText(failed(404), { 404: "The image was deleted." })).toBe("The image was deleted.")
+    expect(failureText(new TypeError("Failed to fetch"))).toBe("The server cannot be reached.")
+    expect(failureText("offline")).toBe("The server cannot be reached.")
+    expect(failureText(new Error("The preset was not applied"))).toBe("The preset was not applied")
   })
 })
