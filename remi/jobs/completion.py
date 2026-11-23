@@ -94,7 +94,12 @@ def perform_later(action: str, delay: float = DELAY, *, still_done: Callable[[],
     action back, to run when the queue is done again."""
 
     def fire() -> None:
-        if still_done is not None and not still_done():
+        try:
+            done = still_done is None or still_done()
+        except Exception:  # the store failed (a locked database): keep the action for the next run
+            log.exception("checking that the queue is still done before %s", action)
+            done = False
+        if not done:
             log.info("A job started before the queue completion action %s: it waits for the queue again", action)
             if rearm is not None:
                 rearm(action)

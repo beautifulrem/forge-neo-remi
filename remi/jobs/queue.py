@@ -525,8 +525,14 @@ class JobQueue:
 
         for _attempt in range(3):
             job = self.get(job_id)
-            if job.status == RUNNING and self._signal(job_id, self._cancelled):
-                return
+            if job.status == RUNNING:
+                if self._signal(job_id, self._cancelled):
+                    return
+                # not on the worker, yet still running in the store: the worker's end of it was
+                # never saved (the store failed). It is over; record it so it can go.
+                if self.get(job_id).status == RUNNING:
+                    log.warning("job %s was left running by a store failure; it is marked interrupted", job_id)
+                    self.store.finish(job_id, INTERRUPTED, error="the job's end could not be saved")
             if self.store.delete(job_id):
                 if job.status == QUEUED:
                     self._pending_done(job)
@@ -858,8 +864,19 @@ class JobQueue:
 
         def rearm(action: str) -> None:
             with self._done_lock:
+                if str(self.option("queue_completion_action", completion.NOTHING)) != completion.NOTHING:
+                    return  # the user picked an action meanwhile: theirs stands
                 self._spent_action = None
                 self.set_option("queue_completion_action", action)
+            # the job that kept it waiting may have ended before the action was back: nothing
+            # would run it then, so look again
+            try:
+                idle = self._idle()
+            except Exception:
+                log.exception("checking whether the queue is done")
+                return
+            if idle:
+                self._queue_done()
 
         completion.perform_later(action, still_done=self._idle, rearm=rearm)
 

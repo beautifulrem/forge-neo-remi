@@ -1,5 +1,6 @@
 """The persistent job queue and its routes (stub executor, no model)."""
 
+import sqlite3
 import threading
 import time
 
@@ -642,6 +643,52 @@ def test_a_delayed_completion_action_waits_when_a_job_starts_meanwhile(monkeypat
     completion.perform_later("Shut down", delay=0.01, still_done=lambda: False, rearm=lambda action: (rearmed.append(action), fired.set()))
     assert fired.wait(5)
     assert performed == [] and rearmed == ["Shut down"]
+
+
+def test_a_store_failure_before_the_delayed_action_keeps_it_for_the_next_run(monkeypatch):
+    from remi.jobs import completion
+
+    performed, rearmed = [], []
+    monkeypatch.setattr(completion, "perform", performed.append)
+    fired = threading.Event()
+
+    def locked():
+        raise sqlite3.OperationalError("database is locked")
+
+    completion.perform_later("Shut down", delay=0.01, still_done=locked, rearm=lambda action: (rearmed.append(action), fired.set()))
+    assert fired.wait(5)
+    assert performed == [] and rearmed == ["Shut down"]
+
+
+def _rearm_of(queue, monkeypatch):
+    """Starts ``queue``'s delayed completion action and returns the callback that puts it back."""
+
+    from remi.jobs import completion
+
+    calls = []
+    monkeypatch.setattr(completion, "perform_later", lambda action, **kwargs: calls.append(kwargs))
+    queue._perform_later("Shut down")
+    [kwargs] = calls
+    return kwargs["rearm"]
+
+
+def test_putting_the_completion_action_back_keeps_one_the_user_picked_meanwhile(webui, tmp_path, monkeypatch):
+    with server_app(tmp_path) as server:
+        queue = server.services.queue
+        rearm = _rearm_of(queue, monkeypatch)
+        changed, ran = settings(queue, queue_completion_action="Sleep")
+        rearm("Shut down")
+        assert changed == {} and ran == []
+
+
+def test_a_completion_action_put_back_after_the_queue_emptied_still_runs(webui, tmp_path, monkeypatch):
+    with server_app(tmp_path) as server:
+        queue = server.services.queue
+        rearm = _rearm_of(queue, monkeypatch)
+        _changed, ran = settings(queue)
+        assert queue.wait_idle()
+        rearm("Shut down")  # the job that held it back ended before the action was back
+        assert ran == ["Shut down"]
 
 
 def test_completion_actions_run_the_systems_commands():

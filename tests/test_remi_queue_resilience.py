@@ -56,3 +56,18 @@ def test_a_store_error_while_claiming_does_not_end_the_worker(tmp_path, monkeypa
         queue.stop()
         jobs.close()
         files.close()
+
+
+def test_a_job_left_running_by_a_store_failure_can_be_deleted(tmp_path):
+    files = FileStore(tmp_path / "files")
+    jobs = JobStore(tmp_path / "jobs.db")
+    queue = JobQueue(jobs, files, EventBus(), executor=lambda job, ctx: None, dispatch=run_inline, lock=threading.Lock(), validate=lambda *a: None, state=FakeState, hash_layout=lambda tab: "h")
+    try:
+        [job] = queue.submit(Submission(tab="txt2img", core={"prompt": "fox"}, scripts={}))
+        # the worker claimed it, then could not save its end: running in the store, on no worker
+        assert jobs.claim_next().id == job.id
+        queue.delete(job.id)
+        assert jobs.get(job.id) is None
+    finally:
+        jobs.close()
+        files.close()
