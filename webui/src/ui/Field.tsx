@@ -52,7 +52,7 @@ export function ModifiedDot(props: { onReset: () => void; defaultValue?: unknown
             aria-label={what}
             disabled={props.disabled}
             onClick={props.onReset}
-            className="group/dot relative grid size-4 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none"
+            className="group/dot relative grid size-4 shrink-0 place-items-center rounded-full outline-none after:absolute after:-inset-3 after:rounded-full focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none"
           />
         }
       >

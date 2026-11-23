@@ -56,9 +56,9 @@ export function QueueEditBanner({ tab, className }: { tab: FormTab; className?: 
       <PencilLine className="size-4 shrink-0 text-primary" aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="font-medium">{t("Editing queued job #{{seq}}", { seq: session.seq })}</p>
-        {session.title ? <p className="truncate text-xs text-muted-foreground">{session.title}</p> : null}
+        {session.title ? <p title={session.title} className="truncate text-xs text-muted-foreground">{session.title}</p> : null}
       </div>
-      <Button size="sm" onClick={() => void saveEdit(tab)} disabled={saving}>
+      <Button size="sm" variant="secondary" onClick={() => void saveEdit(tab)} disabled={saving}>
         {saving ? <Loader2 className="animate-spin" aria-hidden /> : null}
         {t("Update job")}
       </Button>

@@ -767,15 +767,15 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
           ) : null}
 
           {editor.error ? (
-            <p role="alert" className={cn(PANEL, "absolute top-14 left-1/2 max-w-[calc(100%-7rem)] -translate-x-1/2 border-destructive/40 px-3 py-1.5 text-sm text-destructive")}>
+            <p role="alert" className={cn(PANEL, "absolute top-14 left-1/2 max-w-[calc(100%-7rem)] -translate-x-1/2 px-3 py-1.5 text-sm text-destructive")}>
               {t(editor.error)}
             </p>
           ) : null}
 
           {frameLabel || areaLabel ? (
             <div className="absolute top-14 right-2 flex flex-col items-end gap-1" aria-live="polite">
-              {frameLabel ? <span className={cn(PANEL, "px-2 py-1 text-xs tabular-nums")}>{frameLabel}</span> : null}
-              {areaLabel ? <span className={cn(PANEL, "px-2 py-1 text-xs text-primary tabular-nums")}>{areaLabel}</span> : null}
+              {frameLabel ? <span className={cn(PANEL, "rounded-lg px-2 py-1 text-xs tabular-nums")}>{frameLabel}</span> : null}
+              {areaLabel ? <span className={cn(PANEL, "rounded-lg px-2 py-1 text-xs text-primary tabular-nums")}>{areaLabel}</span> : null}
             </div>
           ) : null}
 

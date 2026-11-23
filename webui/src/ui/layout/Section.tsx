@@ -77,7 +77,7 @@ export function Section({ node }: { node: SectionNode }) {
             {title}
           </span>
           {summary ? (
-            <span className="min-w-0 shrink truncate text-xs font-normal text-primary">{summary}</span>
+            <span title={summary} className="min-w-0 shrink truncate text-xs font-normal text-primary">{summary}</span>
           ) : null}
           {/* at the row's end: the title keeps the column's left edge */}
           <ChevronDown

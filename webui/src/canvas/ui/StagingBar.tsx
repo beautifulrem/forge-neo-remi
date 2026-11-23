@@ -51,7 +51,7 @@ export function StagingBar({
       data-toast-obstacle
       className={cn(
         PANEL,
-        "pointer-events-auto flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-1 rounded-lg border-border/90 bg-popover/95 px-2 py-1 shadow-xl backdrop-blur-md",
+        "flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-1 px-2 py-1",
       )}
     >
       <IconButton label={t("Previous candidate")} keys={["←"]} onClick={onPrev} disabled={count <= 1 || busy}>
@@ -79,7 +79,7 @@ export function StagingBar({
                 <span
                   aria-hidden
                   className={cn(
-                    "block h-1.5 rounded-full transition-all",
+                    "block h-1.5 rounded-full transition-colors duration-150",
                     idx === session.index ? "w-4 bg-foreground" : "w-1.5 bg-muted-foreground/45 group-hover:bg-muted-foreground",
                   )}
                 />
@@ -130,7 +130,9 @@ export function StagingBar({
 
       <Button
         size="sm"
-        className="h-7 gap-1 border border-border/60 bg-glow px-2.5 text-xs font-medium text-glow-foreground shadow-xs hover:bg-glow hover:opacity-90"
+        // the editor sits beside Generate (the screen's lamp): accepting is the bar's lead, not a second lamp
+        variant="secondary"
+        className="h-7 gap-1 px-2.5 text-xs font-medium"
         disabled={busy}
         onClick={() => onAccept(active)}
       >

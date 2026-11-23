@@ -175,11 +175,11 @@ const Tile = memo(function Tile({ item, width, height, selected, selecting, inde
           onClick={() => onStar(item)}
           className="pointer-events-none group-hover/tile:pointer-events-auto group-focus-within/tile:pointer-events-auto group-data-[shown]/overlay:pointer-events-auto grid size-6 place-items-center rounded-full text-white outline-none hover:bg-black/30 focus-visible:ring-3 focus-visible:ring-ring"
         >
-          <Star className={cn("size-4 drop-shadow", item.starred && "fill-amber-400 text-amber-400")} aria-hidden />
+          <Star className={cn("size-4 drop-shadow", item.starred && "fill-star text-star")} aria-hidden />
         </button>
       </div>
       {item.starred && !selecting ? (
-        <Star className="pointer-events-none absolute top-2 right-2 size-4 fill-amber-400 text-amber-400 drop-shadow group-hover/tile:opacity-0 group-focus-within/tile:opacity-0" aria-hidden />
+        <Star className="pointer-events-none absolute top-2 right-2 size-4 fill-star text-star drop-shadow group-hover/tile:opacity-0 group-focus-within/tile:opacity-0" aria-hidden />
       ) : null}
     </div>
   )

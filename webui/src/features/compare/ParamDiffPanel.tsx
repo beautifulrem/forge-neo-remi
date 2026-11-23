@@ -45,7 +45,7 @@ function TokenDiffRow({ title, diff }: { title: string; diff: TokenDiff }) {
         )}
       </div>
       {changed ? (
-        <div className="flex flex-wrap gap-1 font-mono text-[0.71875rem] leading-relaxed">
+        <div className="flex flex-wrap gap-1 font-mono text-[0.6875rem] leading-relaxed">
           {diff.removed.map((token, idx) => (
             <span
               key={`r-${idx}-${token}`}
@@ -134,7 +134,7 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
               <span className="text-muted-foreground/50 select-none" aria-hidden>
                 ·
               </span>
-              <span className="font-mono text-[0.71875rem] font-normal text-muted-foreground tabular-nums">
+              <span className="font-mono text-[0.6875rem] font-normal text-muted-foreground tabular-nums">
                 {count === 0 ? t("Identical parameters") : t("{{count}} differences", { count })}
               </span>
             </>

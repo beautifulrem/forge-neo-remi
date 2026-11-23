@@ -65,7 +65,7 @@ export function ItemMenu({
         <Menu.Positioner anchor={positionerAnchor(anchor)} side="bottom" align={atPointer ? "start" : "end"} sideOffset={atPointer ? 2 : 4} className="isolate z-50 outline-none">
           <Menu.Popup
             aria-label={item?.title}
-            className="z-50 max-h-(--available-height) min-w-48 origin-(--transform-origin) overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 outline-none data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95"
+            className="z-50 max-h-(--available-height) min-w-48 origin-(--transform-origin) overflow-y-auto rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-150 outline-none data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95"
           >
             {kind && kind.action !== "none" && !(kind.action === "checkpoint" && active) ? (
               <DropdownMenuItem onClick={run("apply")}>

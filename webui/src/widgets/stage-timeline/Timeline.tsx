@@ -8,15 +8,16 @@ import { type KeyboardEvent, type PointerEvent, useId, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { clamp, curvePath, fmt, type StageKind, stageWindow, type Window } from "../_anima/schedule"
 
+// The band carries the hue (chart tokens); its label is ink, which reads at 4.5:1 on every band.
 const KIND_FILL: Record<StageKind, string> = {
-  composition: "fill-sky-500/15",
-  character: "fill-violet-500/15",
-  style: "fill-amber-500/15",
+  composition: "fill-chart-2/18",
+  character: "fill-chart-5/18",
+  style: "fill-chart-3/22",
 }
 const KIND_TEXT: Record<StageKind, string> = {
-  composition: "text-sky-600 dark:text-sky-400",
-  character: "text-violet-600 dark:text-violet-400",
-  style: "text-amber-600 dark:text-amber-400",
+  composition: "text-foreground/85",
+  character: "text-foreground/85",
+  style: "text-foreground/85",
 }
 
 export type Handle = "start" | "peak" | "end"

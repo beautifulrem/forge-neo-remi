@@ -107,7 +107,7 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
                 <span id={`${id}-${field}`} className="text-[0.8rem] font-medium">
                   {field === "prompt" ? t("Prompt") : t("Negative prompt")}
                 </span>
-                <Suspense fallback={<div aria-hidden className="h-20 rounded-lg border border-input" />}>
+                <Suspense fallback={<div aria-hidden className="h-20 rounded-sm bg-field" />}>
                   <LazyPromptEditor
                     value={draft[field]}
                     onChange={(value) => setDraft((d) => ({ ...d, [field]: value }))}

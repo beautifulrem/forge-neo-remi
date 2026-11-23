@@ -117,7 +117,7 @@ export function AddTags({ doc, setValue, disabled, empty, config, kind }: AddTag
                 <span className="min-w-0 flex-1 truncate font-medium" style={color ? { color } : undefined}>
                   {tagText({ ...item, category: null }, { ...config.tags, escape_parentheses: false })}
                 </span>
-                {item.translation ? <span className="max-w-28 shrink truncate text-muted-foreground">{item.translation}</span> : null}
+                {item.translation ? <span title={item.translation} className="max-w-28 shrink truncate text-muted-foreground">{item.translation}</span> : null}
                 {item.count ? <span className="tabular w-9 shrink-0 text-right text-muted-foreground">{compactCount(item.count)}</span> : null}
               </ComboboxItem>
             )

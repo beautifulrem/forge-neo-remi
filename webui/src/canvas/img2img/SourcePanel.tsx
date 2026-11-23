@@ -168,7 +168,7 @@ function ImageRow({ label, id, error, emptyText, mask, onFile, onRemove, busy, e
         {id ? <Thumb id={id} onSize={(s) => setSize({ id, ...s })} /> : <ImageIcon className="size-4 text-muted-foreground" aria-hidden />}
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm font-medium">{label}</span>
+        <span title={label} className="truncate text-sm font-medium">{label}</span>
         <span id={errorId} className={cn("line-clamp-2 text-xs break-words tabular-nums", error ? "text-destructive" : "text-muted-foreground")} role={error ? "alert" : undefined}>
           {error ? t(error) : busy ? t("Uploading…") : id ? (known ? `${known.width}×${known.height}` : "…") : emptyText}
         </span>

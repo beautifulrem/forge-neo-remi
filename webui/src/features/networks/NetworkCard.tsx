@@ -177,16 +177,16 @@ function CardView({ item, kind, id, index, active, cursor, mismatch, width, onAp
         <Preview item={item} width={width} className={cn("absolute inset-0 transition-[filter]", mismatch && "opacity-70 saturate-50")} />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 via-black/40 to-transparent px-2.5 pt-8 pb-2 text-white">
           <p className="line-clamp-2 text-[0.8rem] leading-snug font-medium [overflow-wrap:anywhere] drop-shadow-sm">{item.title}</p>
-          {item.folder ? <p className="truncate text-[0.6875rem] leading-4 text-white/70">{item.folder}</p> : null}
+          {item.folder ? <p title={item.folder} className="truncate text-[0.6875rem] leading-4 text-white/70">{item.folder}</p> : null}
         </div>
         <div className="pointer-events-none absolute top-1.5 left-1.5 flex max-w-[70%] flex-wrap gap-1">
           {item.arch ? (
-            <span className={cn("rounded-md px-1.5 py-px text-[0.625rem] leading-4 font-medium", mismatch ? "bg-warning/85 text-black" : "bg-black/50 text-white")}>
+            <span className={cn("rounded-xs px-1.5 py-px text-[0.625rem] leading-4 font-medium", mismatch ? "bg-warning text-background" : "bg-black/50 text-white")}>
               {mismatch ? <AlertTriangle className="-mt-px mr-0.5 inline size-2.5" aria-hidden /> : null}
               {archLabel(item.arch)}
             </span>
           ) : null}
-          {item.subtype && item.subtype !== "LoRA" ? <span className="rounded-md bg-black/50 px-1.5 py-px text-[0.625rem] leading-4 font-medium text-white">{item.subtype}</span> : null}
+          {item.subtype && item.subtype !== "LoRA" ? <span className="rounded-xs bg-black/50 px-1.5 py-px text-[0.625rem] leading-4 font-medium text-white">{item.subtype}</span> : null}
         </div>
         {active ? (
           <span aria-hidden className="absolute right-1.5 bottom-1.5 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm ring-2 ring-black/20">
@@ -246,8 +246,8 @@ function RowView({ item, kind, id, index, active, cursor, mismatch, onApply, onA
           ) : null}
         </div>
         <div className="min-w-0 flex-1">
-          <p className={cn("truncate text-sm", active && "font-medium text-primary")}>{item.title}</p>
-          <p className="truncate text-xs text-muted-foreground">{item.path}</p>
+          <p title={item.title} className={cn("truncate text-sm", active && "font-medium text-primary")}>{item.title}</p>
+          <p title={item.path} className="truncate text-xs text-muted-foreground">{item.path}</p>
         </div>
         <div className="hidden shrink-0 items-center gap-1 @md:flex">
           {item.subtype && item.subtype !== "LoRA" ? <span className="rounded-md bg-muted px-1.5 text-[0.6875rem] leading-5 text-muted-foreground">{item.subtype}</span> : null}

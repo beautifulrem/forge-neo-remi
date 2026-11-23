@@ -290,7 +290,7 @@ export function PipelineBuilder() {
           onChange={(event) => setName(event.target.value)}
           aria-label={t("Pipeline name")}
           placeholder={t("Pipeline name")}
-          className="h-7 min-w-48 flex-1 text-[0.8125rem] font-medium sm:max-w-xs"
+          className="h-7 min-w-48 flex-1 text-[0.8rem] font-medium sm:max-w-xs"
         />
 
         <DropdownMenu>
@@ -301,7 +301,7 @@ export function PipelineBuilder() {
           <DropdownMenuContent align="start" className="min-w-64">
             {templateItems.map((tpl) => (
               <DropdownMenuItem key={tpl.id} onClick={() => loadTemplate(tpl)} title={tpl.name}>
-                <span className="truncate">{tpl.name}</span>
+                <span title={tpl.name} className="truncate">{tpl.name}</span>
               </DropdownMenuItem>
             ))}
             {savedTemplates.length > 0 ? (
@@ -316,7 +316,7 @@ export function PipelineBuilder() {
                   <DropdownMenuSubContent className="min-w-48">
                     {savedTemplates.map((tpl) => (
                       <DropdownMenuItem key={tpl.id} variant="destructive" disabled={deleteTemplate.isPending} onClick={() => deleteTemplate.mutate(tpl.id)} title={tpl.name}>
-                        <span className="truncate">{tpl.name}</span>
+                        <span title={tpl.name} className="truncate">{tpl.name}</span>
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuSubContent>
@@ -388,7 +388,8 @@ export function PipelineBuilder() {
           ) : (
             <Button
               size="sm"
-              className="h-7 gap-1.5 border border-border/60 bg-glow px-3.5 text-xs font-medium text-glow-foreground shadow-xs hover:bg-glow hover:opacity-90"
+              variant="glow"
+              className="h-7 gap-1.5 px-3.5 text-xs font-medium"
               disabled={run.isPending || stages.every((s) => s.enabled === false)}
               onClick={() => run.mutate(activeRun && firstMod !== null ? firstMod : undefined)}
             >
@@ -425,7 +426,7 @@ export function PipelineBuilder() {
                   <span className="shrink-0 font-mono text-[0.6875rem] font-semibold tracking-wider text-muted-foreground tabular-nums">
                     {stepNumber(index)}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-[0.8125rem] font-semibold text-foreground" title={t(STAGE_META[stage.kind].label)}>
+                  <span className="min-w-0 flex-1 truncate text-[0.8rem] font-semibold text-foreground" title={t(STAGE_META[stage.kind].label)}>
                     {t(STAGE_META[stage.kind].label)}
                   </span>
                   <Switch
@@ -734,7 +735,7 @@ export function PipelineBuilder() {
                 <li key={chain.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/25">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span className="truncate text-[0.8125rem] font-medium text-foreground">{chain.name}</span>
+                      <span title={chain.name} className="truncate text-[0.8rem] font-medium text-foreground">{chain.name}</span>
                       <span className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
                         <span
                           className={cn(

@@ -293,6 +293,26 @@ generated interfaces (sources: Linear's
   page title. The slider is a fader: a recessed groove filled with
   `--primary` up to the value and a squared cap with a centre notch (the
   switch's shape family; `--slider-*` tokens).
+  Radii are concentric: a child's radius is its parent's minus the padding
+  between them, never below `sm`. Floating lists (menus, selects, combobox,
+  popover, command) are `rounded-xl` with `p-1`, so their items stay
+  `rounded-md`; dialogs are `rounded-xl` and their flush footer takes the
+  same radius; a chip or badge inside a row is `rounded-xs`/`rounded-md`,
+  never a pill. Overlays fade in 150 ms.
+  Floating chrome that sits over a still picture (the image editor's panels
+  and the candidate bar) uses `material-float`: a translucent popover
+  surface with a backdrop blur and an edge plus a shadow, tuned separately
+  for light and dark (`--material-float*`). Nothing else is glass: not the
+  header, menus, the progress overlay or the live preview (a blur over a
+  surface that redraws every step costs sampling time).
+  Motion moves `transform` and `opacity` only (a meter fills with
+  `scaleX`, not `width`), 120 to 250 ms. A lone small control (a field's
+  reset dot, a badge's ×, the advice bar's buttons) keeps its look and gets
+  an invisible `after:` hit box of at least 40 px; the box never reaches a
+  neighbouring control, so packed toolbars are not given one (it would take
+  the taps of the next tool). Chart and band colours come from `--chart-2`
+  to `--chart-5`, never fixed Tailwind hues (`--chart-1` follows the accent
+  and can match another band).
   Controls in one row share one look: a button among selects (the header's
   search and VAE / TE, the gallery's date and star) wears the filled field
   style (`FIELD_BUTTON_CLASS`), and everything that opens a list shows the

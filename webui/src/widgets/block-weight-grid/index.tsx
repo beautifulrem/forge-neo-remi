@@ -217,7 +217,7 @@ function LayerGrid({ id, text, onChange, props, disabled }: GridProps) {
   )
 }
 
-const BAND_SWATCH = ["bg-sky-500", "bg-violet-500", "bg-amber-500", "bg-emerald-500"]
+const BAND_SWATCH = ["bg-chart-2", "bg-chart-5", "bg-chart-3", "bg-chart-4"]
 
 function WeightInput(props: { label: string; value: number | null; step: number; disabled: boolean; onCommit: (value: number) => void; band?: number }) {
   return (

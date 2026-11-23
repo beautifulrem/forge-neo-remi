@@ -155,7 +155,7 @@ export default function StageTimeline({ value, onChange, props, disabled, id, la
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           {tw("Strength curve")}
           <select
-            className="h-7 rounded-lg border border-input bg-transparent px-2 text-sm text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
+            className="h-7 rounded-sm border border-transparent bg-field px-2 text-sm text-foreground outline-none hover:bg-field-hover focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
             value={timing.curve}
             disabled={disabled || partsRun}
             onChange={(event) => set({ curve: event.target.value })}

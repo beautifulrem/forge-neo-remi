@@ -119,6 +119,14 @@
   --slider-cap-edge: oklch(0.20 0.014 255 / 26%);
   --slider-cap-shade: oklch(0.16 0.014 255 / 18%);
   --slider-notch: oklch(0.20 0.014 255 / 55%);
+  /* Floating material (`material-float`): the editor's toolbars over the picture.
+     Translucent so the image under a bar stays readable while working; tuned per
+     theme (daylight paper needs more body than the darkroom). Only for chrome over
+     a still image: never on the header, the live preview or its overlay (they
+     repaint every step), never on menus (solid sheets). */
+  --material-float: color-mix(in oklch, var(--popover) 84%, transparent);
+  --material-float-edge: oklch(0.20 0.014 255 / 12%);
+  --material-float-shadow: 0 6px 20px -8px oklch(0.16 0.014 255 / 28%);
 }
 
 .dark {
@@ -175,6 +183,9 @@
   --slider-cap-edge: oklch(0.98 0.004 80 / 26%);
   --slider-cap-shade: oklch(0 0 0 / 52%);
   --slider-notch: oklch(0.18 0.01 255 / 80%);
+  --material-float: color-mix(in oklch, var(--popover) 88%, transparent);
+  --material-float-edge: oklch(0.95 0.006 255 / 11%);
+  --material-float-shadow: 0 8px 24px -8px oklch(0 0 0 / 55%);
 }
 
 /* Accent presets: hue, chroma, and the light-mode lightness that keeps every
@@ -484,6 +495,17 @@
     .remi-cell-fill {
       flex-basis: 100%;
     }
+  }
+}
+
+/* Floating material: one surface, one hairline and one soft shadow (see --material-float). */
+@utility material-float {
+  background-color: var(--popover);
+  box-shadow: 0 0 0 1px var(--material-float-edge), var(--material-float-shadow);
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    background-color: var(--material-float);
+    -webkit-backdrop-filter: blur(14px) saturate(1.35);
+    backdrop-filter: blur(14px) saturate(1.35);
   }
 }
 
