@@ -169,6 +169,15 @@ def test_every_response_has_nosniff_and_a_same_origin_referrer_policy(webui, tmp
             assert response.headers["referrer-policy"] == "same-origin"
 
 
+def test_no_response_asks_to_be_indexed(webui, tmp_path):
+    """A WebUI exposed with --listen / --ngrok is a private tool, not a site:
+    every response (the UI, the API, the docs, errors) tells crawlers so."""
+
+    with server_app(tmp_path) as server:
+        for response in (server.client.get("/"), server.client.get("/api/v2/queue"), server.client.get("/api/v2/nothing-here"), server.client.get("/docs")):
+            assert response.headers.get("x-robots-tag") == "noindex, nofollow", response.request.url
+
+
 def test_an_unhandled_server_error_also_has_nosniff_and_the_referrer_policy(webui, tmp_path):
     from fastapi.testclient import TestClient
 

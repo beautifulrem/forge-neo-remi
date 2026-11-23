@@ -98,8 +98,9 @@ attackers who already have a login (they are administrators by design).
 - **DNS rebinding:** a loopback-only server (default bind, loopback
   `--server-name`, no `--ngrok`) refuses a `Host` that is not a loopback name
   or an allowed CORS host (403 "Unknown host refused").
-- **Headers:** every response carries `X-Content-Type-Options: nosniff` and
-  `Referrer-Policy: same-origin`. The SPA shell and the API docs pages carry a CSP:
+- **Headers:** every response carries `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: same-origin` and `X-Robots-Tag: noindex, nofollow` (an
+  exposed WebUI is a private tool, not a site to index). The SPA shell and the API docs pages carry a CSP:
   scripts only from the server plus the page's own inline scripts by SHA-256
   hash (no `unsafe-inline`/`unsafe-eval` scripts), no plugins, `base-uri` /
   `form-action` `'self'`, `frame-ancestors 'self'` plus the literal

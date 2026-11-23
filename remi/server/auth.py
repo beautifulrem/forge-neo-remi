@@ -406,8 +406,8 @@ def is_docs_path(path: str) -> bool:
 
 # region Response headers
 
-BASE_HEADERS = ((b"x-content-type-options", b"nosniff"), (b"referrer-policy", b"same-origin"))
-"""on every response (unless the route set its own)"""
+BASE_HEADERS = ((b"x-content-type-options", b"nosniff"), (b"referrer-policy", b"same-origin"), (b"x-robots-tag", b"noindex, nofollow"))
+"""on every response (unless the route set its own); the WebUI is a private tool, even exposed with ``--listen``"""
 
 _INLINE_SCRIPT_RE = re.compile(rb"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.S | re.I)
 
