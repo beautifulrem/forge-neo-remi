@@ -13,6 +13,21 @@ export function packageRoot(id) {
   return match ? match[1] : null
 }
 
+/**
+ * Packages a stylesheet pulls in with a bare `@import "name"` / `@import "@scope/name/file.css"`:
+ * Tailwind inlines those itself, so their CSS ships without the module ever reaching the bundle's
+ * module list.
+ */
+export function cssImportedPackages(css) {
+  const names = new Set()
+  for (const [, spec] of css.matchAll(/@import\s+(?:url\()?["']([^"']+)["']/g)) {
+    if (/^(?:\.|\/|[a-z]+:)/i.test(spec)) continue
+    const parts = spec.split("/")
+    names.add(spec.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0])
+  }
+  return [...names]
+}
+
 const LICENSE_FILE = /^(?:licen[cs]e|copying|notice)(?:[.-].*)?$/i
 
 /** Name, version, license and license texts of each package the bundle uses, sorted by name. */

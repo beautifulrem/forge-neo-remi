@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
-import { readFile, writeFile } from "node:fs/promises"
+import { existsSync } from "node:fs"
+import { readdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { promisify } from "node:util"
 import { brotliCompress, constants as zlib, gzip } from "node:zlib"
@@ -7,7 +8,7 @@ import babel from "@rolldown/plugin-babel"
 import tailwindcss from "@tailwindcss/vite"
 import react, { reactCompilerPreset } from "@vitejs/plugin-react"
 import { defineConfig, loadEnv, type Plugin } from "vite"
-import { collectNotices, formatNotices } from "./tools/notices.mjs"
+import { collectNotices, cssImportedPackages, formatNotices } from "./tools/notices.mjs"
 
 // The WebUI server (python launch.py) serves the built app from webui/dist;
 // `pnpm dev` proxies its API and WebSocket to that server.
@@ -81,8 +82,8 @@ function precompress(): Plugin {
 
 /**
  * THIRD-PARTY-NOTICES.txt next to index.html: minification drops the dependencies' license
- * comments, so the build lists every package it bundles (code, styles and fonts) with its
- * license text (tools/notices.mjs). Settings → Licenses links to it.
+ * comments, so the build lists every package it ships (bundled code, stylesheets a CSS file
+ * imports, fonts, the vendored API viewers) with its license text (tools/notices.mjs). Settings → Licenses links to it.
  */
 function thirdPartyNotices(): Plugin {
   return {
@@ -93,6 +94,18 @@ function thirdPartyNotices(): Plugin {
       for (const output of Object.values(bundle)) {
         if (output.type === "chunk") for (const id of output.moduleIds) ids.add(id)
         else for (const name of output.originalFileNames) ids.add(path.resolve(import.meta.dirname, name))
+      }
+      // packages a stylesheet imports (Tailwind inlines them) and the vendored API viewers (apiDocs())
+      const modules = path.resolve(import.meta.dirname, "node_modules")
+      const styles = path.resolve(import.meta.dirname, "src")
+      const names = new Set(["swagger-ui-dist", "redoc"])
+      for (const file of await readdir(styles, { recursive: true })) {
+        if (file.endsWith(".css")) for (const name of cssImportedPackages(await readFile(path.join(styles, file), "utf8"))) names.add(name)
+      }
+      for (const name of names) {
+        const manifest = path.join(modules, name, "package.json")
+        if (!existsSync(manifest)) this.error(`THIRD-PARTY-NOTICES.txt: ${name} is not installed`)
+        ids.add(manifest)
       }
       const notices = await collectNotices(ids)
       if (notices.length === 0) this.error("no bundled package found for THIRD-PARTY-NOTICES.txt")

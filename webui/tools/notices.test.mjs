@@ -1,6 +1,7 @@
 import path from "node:path"
 import { describe, expect, it } from "vitest"
-import { collectNotices, formatNotices, packageRoot } from "./notices.mjs"
+import { readFile } from "node:fs/promises"
+import { collectNotices, cssImportedPackages, formatNotices, packageRoot } from "./notices.mjs"
 
 const modules = path.resolve(import.meta.dirname, "../node_modules")
 
@@ -20,5 +21,11 @@ describe("third-party notices", () => {
     expect(notices[0].texts.join("\n")).toMatch(/Copyright \(c\) Meta Platforms/)
     const text = formatNotices(notices)
     expect(text).toContain(`react ${notices[0].version}\nLicense: MIT`)
+  })
+
+  it("finds the packages the stylesheets import, which never reach the bundle's module list", async () => {
+    expect(cssImportedPackages('@import "tailwindcss";\n@import "./local.css";\n@import url("@fontsource-variable/geist/wght.css");')).toEqual(["tailwindcss", "@fontsource-variable/geist"])
+    const css = await readFile(path.resolve(import.meta.dirname, "../src/index.css"), "utf8")
+    expect(cssImportedPackages(css)).toEqual(expect.arrayContaining(["tailwindcss", "tw-animate-css"]))
   })
 })
