@@ -63,7 +63,7 @@ test.describe("extension management", () => {
     await expect(page.getByRole("button", { name: "Stop" })).toBeVisible()
     // done: the bar goes away and a toast sums it up
     await expect(progress).toBeHidden({ timeout: 20_000 })
-    await expect(page.getByText(/^\d+ updates available$|^Everything is up to date$/)).toBeVisible()
+    await expect(page.getByText(/^\d+ updates? available$|^Everything is up to date$/)).toBeVisible()
     // the mock reports an update for every extension with an even-length name
     await expect(page.getByRole("button", { name: "Update" }).first()).toBeVisible()
     console.assertClean()
