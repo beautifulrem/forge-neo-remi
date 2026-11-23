@@ -86,6 +86,8 @@ def _has_key(infotext: str, key: str) -> bool:
 def test_extension_runs_end_to_end(record, name):
     case = CASES[name]
     entry = record["cases"][name]
+    if "skipped" in entry:
+        pytest.skip(entry["skipped"])
     assert entry["status"] == "completed", entry["error"]
     assert entry["status_off"] == "completed"
     assert entry["script_errors"] == []

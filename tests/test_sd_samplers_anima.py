@@ -1,3 +1,4 @@
+from fractions import Fraction
 from types import SimpleNamespace
 
 import pytest
@@ -41,27 +42,49 @@ def test_unipc_bh_selector_changes_integration_coefficient():
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_unipc_corrector_rhos_match_linalg_solve_without_calling_it(monkeypatch, dtype):
     """The order-2 system is always [[1, 1], [rk, 1]]; its closed form must
-    round like torch.linalg.solve (which syncs with the host on CUDA)."""
+    solve it as accurately as torch.linalg.solve (which syncs with the host on
+    CUDA) does.
+
+    Not bit for bit: the closed form eliminates in reference LAPACK's order and
+    rounds the same on every platform, but the last bit of torch.linalg.solve
+    depends on the process (on a Linux CI runner a bare script matched it, a
+    pytest process did not). Both stay within the forward error bound of
+    partial pivoting, a small multiple of cond(A) * eps * |x| (cond(A) <= 45
+    here), of the exact solution of the rounded system; 2 * cond(A) * eps is
+    that bound with room (both land within 0.45 of it on macOS and Linux)."""
 
     generator = torch.Generator().manual_seed(0)
     hhs = -torch.rand(64, generator=generator, dtype=dtype) * 2.0 - 0.01
     rks = torch.cat([torch.linspace(-3.0, 0.9, 32), torch.linspace(1.1, 3.0, 32)]).to(dtype)
+    eps = torch.finfo(dtype).eps
     expected = []
     for hh, rk in zip(hhs, rks):
         h_phi_1 = torch.expm1(hh)
         h_phi_2 = h_phi_1 / hh - 1.0
         h_phi_3 = h_phi_2 / hh - 0.5
+        v0, v1 = h_phi_2 / h_phi_1, 2.0 * h_phi_3 / h_phi_1
         matrix = torch.stack([torch.ones(2, dtype=dtype), torch.stack([rk, rk.new_tensor(1.0)])])
-        expected.append(torch.linalg.solve(matrix, torch.stack([h_phi_2 / h_phi_1, 2.0 * h_phi_3 / h_phi_1])))
+        solved = torch.linalg.solve(matrix, torch.stack([v0, v1]))
+        # the exact solution of the rounded system, and its condition number (infinity norm)
+        r, a, b = Fraction(rk.item()), Fraction(v0.item()), Fraction(v1.item())
+        rho1 = (b - r * a) / (1 - r)
+        exact = torch.tensor([float(a - rho1), float(rho1)], dtype=torch.float64)
+        condition = max(2, 1 + abs(r)) ** 2 / abs(1 - r)  # |A| * |A^-1|, A^-1 = [[1, -1], [-rk, 1]] / (1 - rk)
+        bound = 2 * float(condition) * eps * exact.abs().max().item()
+        assert (solved.double() - exact).abs().max().item() <= bound
+        expected.append((solved, exact, bound))
 
     def no_solve(*_args, **_kwargs):
         raise AssertionError("torch.linalg.solve syncs with the host on CUDA")
 
     monkeypatch.setattr(torch.linalg, "solve", no_solve)
     like = torch.zeros(1, dtype=dtype)
-    for hh, rk, reference in zip(hhs, rks, expected):
+    for hh, rk, (solved, exact, bound) in zip(hhs, rks, expected):
         _, _, rhos = _bh_rhos(hh, order=2, like=like, predictor=False, solver_type="bh2", rks=(rk,))
-        assert torch.equal(torch.stack(rhos), reference)
+        rhos = torch.stack(rhos)
+        assert rhos.dtype == dtype
+        assert (rhos.double() - exact).abs().max().item() <= bound
+        assert (rhos.double() - solved.double()).abs().max().item() <= 2 * bound
 
 
 def test_flow_solvers_upload_no_scalars_per_step(monkeypatch):

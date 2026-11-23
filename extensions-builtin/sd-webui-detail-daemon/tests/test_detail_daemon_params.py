@@ -126,7 +126,14 @@ def test_registers_its_xyz_axes(dd, monkeypatch):
 def test_the_widget_schedule_fixture_is_current(dd):
     """webui/src/widgets/sigma-curve/schedule.fixture.json is this function's output."""
 
-    assert json.loads(FIXTURE.read_text(encoding="utf-8")) == json.loads(json.dumps(cases(dd.Script().make_schedule)))
+    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    current = json.loads(json.dumps(cases(dd.Script().make_schedule)))
+    assert [(case["steps"], case["params"]) for case in fixture] == [(case["steps"], case["params"]) for case in current]
+    # np.cos is not correctly rounded: Linux and macOS builds differ in the last bit (1e-17
+    # here), so the values match to 1e-12, the precision the widget's test checks them at
+    # (toBeCloseTo(value, 12) in webui/src/widgets/sigma-curve/schedule.test.ts)
+    for stored, fresh in zip(fixture, current, strict=True):
+        assert stored["values"] == pytest.approx(fresh["values"], rel=0, abs=1e-12), stored["params"]
 
 
 def test_ported_without_matplotlib():

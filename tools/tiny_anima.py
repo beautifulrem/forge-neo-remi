@@ -24,10 +24,10 @@ other file goes to the stock loader. Only test and tool code calls ``install()``
 ``serve`` starts the real WebUI (``launch.py``, without preparing the
 environment) with ``install()`` applied and the tiny models of
 :func:`write_models` in ``<data-dir>/models`` (the checkpoint, a second one for
-the Refiner, test LoRAs and a LoKr, a Control-LLLite, an ADetailer detector; a
-new data folder selects the checkpoint), so every page and extension can be
-tried by hand, in the browser or through the APIs, against a model that loads
-in a second. ``tests/test_remi_extensions_e2e.py`` uses the same models to run
+the Refiner, test LoRAs and a LoKr, a Control-LLLite, an ADetailer detector
+when Ultralytics is installed; a new data folder selects the checkpoint), so
+every page and extension can be tried by hand, in the browser or through the
+APIs, against a model that loads in a second. ``tests/test_remi_extensions_e2e.py`` uses the same models to run
 every built-in extension through the server's job queue.
 
 The layout is the one of a real Anima single-file checkpoint: the DiT under
@@ -40,6 +40,7 @@ work on it too.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import math
 import os
@@ -362,7 +363,9 @@ def write_models(models: Path) -> dict[str, Path]:
     """The tiny models an end-to-end run uses, written into the ``models`` folder
     when missing: the checkpoint, a second one (the Refiner's), test LoRAs and a
     LoKr for it (``tools/anima_test_loras.py``), a Control-LLLite and an ADetailer
-    detector. Their paths by role."""
+    detector. Their paths by role; without Ultralytics (ADetailer's own
+    requirement, installed by its ``install.py``, not the WebUI's) there is no
+    ``"detector"``."""
 
     paths = {
         "checkpoint": models / "Stable-diffusion" / FILENAME,
@@ -384,7 +387,10 @@ def write_models(models: Path) -> dict[str, Path]:
     if not paths["controlnet"].is_file():
         write_controllllite(paths["controlnet"])
     if not paths["detector"].is_file():
-        write_detector(paths["detector"])
+        if importlib.util.find_spec("ultralytics") is None:
+            del paths["detector"]
+        else:
+            write_detector(paths["detector"])
     return paths
 
 

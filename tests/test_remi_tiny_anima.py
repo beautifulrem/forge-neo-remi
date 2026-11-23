@@ -59,3 +59,24 @@ def test_the_test_loras_fit_it(checkpoint):
     layers = loras.target_layers(loras.read_header(checkpoint))
     assert len(layers) == 28 * len(loras.MODULES)
     assert layers["blocks.0.mlp.layer2"] == (tiny.DIT["model_channels"], tiny.DIT["model_channels"] * 4)
+
+
+def test_the_models_need_no_ultralytics(tmp_path, monkeypatch):
+    # Ultralytics is ADetailer's own requirement (its install.py), not the WebUI's:
+    # without it there is no detector (the ADetailer e2e case is skipped) and
+    # serving the tiny models (tests/test_remi_gradio_free_generation.py) still works
+    models = tmp_path / "models"
+    loras = _tool("anima_test_loras")
+    written = (
+        models / "Stable-diffusion" / tiny.FILENAME,
+        models / "Stable-diffusion" / tiny.REFINER_FILENAME,
+        models / "ControlNet" / f"{tiny.CONTROLNET_NAME}.safetensors",
+        models / "Lora" / f"{loras.NAMES[0]}.safetensors",
+    )
+    for path in written:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    monkeypatch.setitem(sys.modules, "ultralytics", None)
+    paths = tiny.write_models(models)
+    assert "detector" not in paths and paths["checkpoint"] == written[0]
+    assert not (models / "adetailer").exists()
