@@ -4,10 +4,12 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { createFormStore, type FormStore } from "@/ui/form-store"
 import { TabForm } from "@/ui/SchemaForm"
 import type { TabSchema } from "@/ui/schema"
+import { detectAlphaFromBytes, markUploadAlpha } from "@/ui/uploads"
 import { widgetKeys } from "../_lib/i18n"
 import zh from "./locales/zh-CN.json"
 import source from "./index.tsx?raw"
 import { moveItem, removeAt, replaceAt, selectionAfterRemove } from "./list"
+import { formatSlotToken, resolveSlotFormat } from "./slot-format"
 
 // Widgets load lazily; give the chunk time on a busy machine
 const LOAD = { timeout: 15_000 }
@@ -199,5 +201,57 @@ describe("image-list widget", { timeout: 30_000 }, () => {
   it("translates every chrome string", () => {
     const missing = widgetKeys(source).filter((key) => !(key in zh))
     expect(missing).toEqual([])
+  })
+
+  it("formats model-aware slot badges, inserts slot token into prompt, and shows RGBA badge", async () => {
+    expect(formatSlotToken(0, resolveSlotFormat({ preset: "qwen21" }))).toBe("<image_1>")
+    expect(formatSlotToken(0, resolveSlotFormat({ preset: "flux3" }))).toBe("ref_image_0")
+    expect(formatSlotToken(0, resolveSlotFormat({ preset: "qwen" }))).toBe("Picture 0")
+    expect(formatSlotToken(1, resolveSlotFormat({ preset: "xl" }))).toBe("Image 2")
+
+    // PNG signature with IHDR color type 6 (RGBA) vs 2 (RGB)
+    const rgbaPng = new Uint8Array(26)
+    rgbaPng.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    rgbaPng[25] = 6
+    expect(detectAlphaFromBytes(rgbaPng)).toBe(true)
+    rgbaPng[25] = 2
+    expect(detectAlphaFromBytes(rgbaPng)).toBe(false)
+
+    markUploadAlpha("alpha-img", true)
+    const store = createFormStore(`image-list-slot-${Math.random()}`, { persistDrafts: false })
+    const capSchema: TabSchema = {
+      ...schema,
+      core: {
+        ...schema.core,
+        defaults: { prompt: "portrait" },
+      },
+      scripts: [{ ...schema.scripts[0]!, defaults: { references: ["alpha-img", "plain-img"] } }],
+      capabilities: {
+        preset: "qwen21",
+        dit_name: "qwen21",
+        engine_label: "Qwen-Image-2.1",
+        capabilities: ["multi_reference", "rgba_output"],
+        max_references: 10,
+        reference_slot_format: "<image_{i}>",
+        reference_slot_start: 1,
+        supports_rgba: true,
+        supports_control_blocks: true,
+      },
+    }
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <TabForm schema={capSchema} formId="img2img" store={store} />
+      </QueryClientProvider>,
+    )
+    // Explicitly load capabilities onto the store as Generate's form loader does
+    act(() => {
+      store.getState().setCapabilities(capSchema.capabilities ?? null)
+    })
+
+    const badge = await screen.findByRole("button", { name: "<image_1>" }, LOAD)
+    expect(screen.getByText("RGBA")).toBeVisible()
+    fireEvent.click(badge)
+    expect(store.getState().values.core?.prompt).toBe("portrait <image_1>")
   })
 })

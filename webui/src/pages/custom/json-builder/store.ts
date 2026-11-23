@@ -8,10 +8,13 @@ import { CANVAS_TYPES, LABELS } from "./compile"
 import type { Box, LayoutDraft } from "./decompile"
 import { ASPECT_RATIOS, type AspectRatio, type BuilderDraft, fromDraft, type Item, newItem, rescaleBox } from "./draft"
 import { PROMPT_FORMATS, type PromptFormat } from "./flux3"
+import { DEFAULT_VGL, type VglFields } from "./vgl"
 
-export type BuilderState = BuilderDraft & {
+export type BuilderState = Omit<BuilderDraft, "format" | "vgl"> & {
   /** The model the prompt is compiled for. */
   format: PromptFormat
+  /** Bria Fibo 2.0 VGL 2.0 structured prompt settings. */
+  vgl: VglFields
   /** The size the boxes are laid out for (the last committed size; `width`/`height` can be a preview being typed). */
   committedWidth: number
   committedHeight: number
@@ -23,6 +26,7 @@ export type BuilderState = BuilderDraft & {
   /** The last item id handed out. */
   lastId: number
   set: (patch: Partial<Pick<BuilderState, "caption" | "meta" | "extra" | "canvas" | "mp" | "ar" | "format">>) => void
+  setVgl: (patch: Partial<VglFields>) => void
   /** A new canvas size; when `rescale`, the boxes are scaled from the last committed size into it. */
   setSize: (width: number, height: number, rescale?: boolean) => void
   addItem: () => void
@@ -40,9 +44,11 @@ export const useBuilder = create<BuilderState>()(
   persist(
     (set) => ({
       ...INITIAL,
+      vgl: { ...DEFAULT_VGL },
       items: [newItem(1, INITIAL.width, INITIAL.height)],
       lastId: 1,
       set: (patch) => set(patch),
+      setVgl: (patch) => set((s) => ({ vgl: { ...s.vgl, ...patch } })),
       setSize: (width, height, rescale = false) =>
         set((s) =>
           rescale
@@ -65,7 +71,7 @@ export const useBuilder = create<BuilderState>()(
       version: 1,
       storage: createJSONStorage(() => localStorage),
       // width/height persist the committed size: a preview being typed would otherwise reload boxes scaled for a size they don't have.
-      partialize: ({ committedWidth, committedHeight, caption, meta, extra, canvas, items, mp, ar, lastId, format }) => ({ width: committedWidth, height: committedHeight, caption, meta, extra, canvas, items, mp, ar, lastId, format }),
+      partialize: ({ committedWidth, committedHeight, caption, meta, extra, canvas, items, mp, ar, lastId, format, vgl }) => ({ width: committedWidth, height: committedHeight, caption, meta, extra, canvas, items, mp, ar, lastId, format, vgl }),
       // A stored draft from another build or edited by hand: keep only what is well formed.
       merge: (persisted, current) => ({ ...current, ...restore(persisted) }),
     },
@@ -100,6 +106,14 @@ export function restore(persisted: unknown): Partial<BuilderState> {
   if (str(p.extra)) out.extra = p.extra
   if ((CANVAS_TYPES as readonly unknown[]).includes(p.canvas)) out.canvas = p.canvas as BuilderState["canvas"]
   if ((PROMPT_FORMATS as readonly unknown[]).includes(p.format)) out.format = p.format as PromptFormat
+  if (p.vgl && typeof p.vgl === "object") {
+    const rawVgl = p.vgl as Record<string, unknown>
+    const restored: VglFields = { ...DEFAULT_VGL }
+    for (const key of Object.keys(DEFAULT_VGL) as (keyof VglFields)[]) {
+      if (str(rawVgl[key])) restored[key] = rawVgl[key]
+    }
+    out.vgl = restored
+  }
   if (positive(p.mp)) out.mp = p.mp
   if ((ASPECT_RATIOS as readonly unknown[]).includes(p.ar)) out.ar = p.ar as AspectRatio
   const items = Array.isArray(p.items) ? p.items.map(restoreItem).filter((item): item is Item => item !== null) : []

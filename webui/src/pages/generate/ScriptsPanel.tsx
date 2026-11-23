@@ -1,10 +1,11 @@
 /**
  * The scripts that have no slot of their own (always-on extensions) as a
  * searchable, collapsible list with an "only modified" filter and per-script
- * reset, followed by the selectable-script choice and the chosen script.
+ * reset, followed by a quiet collapsed drawer for scripts marked
+ * `applicable === false` for the active model, and the selectable-script choice.
  */
 import { Collapsible } from "@base-ui/react/collapsible"
-import { ChevronDown, ListFilter, RotateCcw, Search } from "@/components/icons"
+import { ChevronDown, Info, ListFilter, RotateCcw, Search } from "@/components/icons"
 import { useId, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Badge } from "@/components/ui/badge"
@@ -33,7 +34,7 @@ function isActive(s: FormState, script: ScriptSchema): boolean {
   return false
 }
 
-function ScriptCard({ script }: { script: ScriptSchema }) {
+function ScriptCard({ script, reason }: { script: ScriptSchema; reason?: string | null }) {
   const { t } = useTranslation()
   const { store, formId } = useForm()
   const names = scriptNames(script)
@@ -48,7 +49,15 @@ function ScriptCard({ script }: { script: ScriptSchema }) {
   const collapsed: Node | null = !titled && script.kind !== "selectable" ? { type: "section", title: script.title, open: false, children: [body] } : null
   return (
     <OwnerProvider owner={script.id}>
-      <div data-script={script.id} className="min-w-0">
+      <div data-script={script.id} data-applicable={script.applicable === false ? "false" : undefined} className="min-w-0">
+        {reason ? (
+          <p className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Info className="size-3 shrink-0" aria-hidden />
+            <span className="truncate" title={reason}>
+              {reason}
+            </span>
+          </p>
+        ) : null}
         {titled ? (
           <RenderLayout layout={layout} />
         ) : collapsed ? (
@@ -91,20 +100,29 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
   const [query, setQuery] = useState("")
   const [onlyModified, setOnlyModified] = useState(false)
   const [open, setOpen] = useState(true)
+  const [inapplicableOpen, setInapplicableOpen] = useState(false)
 
-  const listed = scriptsForSlot(schema.scripts, DEFAULT_SLOT, slots).filter((script) => script.kind !== "selectable" && script.layout)
+  // Applicable unslotted extensions render normally; any non-selectable script marked
+  // `applicable === false` (unslotted OR slotted) moves into the quiet collapsed drawer.
+  const allNonSelectable = schema.scripts.filter((script) => script.kind !== "selectable" && script.layout)
+  const listed = scriptsForSlot(schema.scripts, DEFAULT_SLOT, slots).filter(
+    (script) => script.kind !== "selectable" && script.layout && script.applicable !== false,
+  )
+  const inapplicable = allNonSelectable.filter((script) => script.applicable === false)
   const selectable = schema.scripts.filter((script) => script.kind === "selectable")
   const modifiedIds = useFormState((s) => listed.filter((script) => anyModified(s, script.id, scriptNames(script))).map((script) => script.id).join(" "))
   const activeCount = useFormState((s) => listed.filter((script) => isActive(s, script)).length)
+  const inapplicableActiveCount = useFormState((s) => inapplicable.filter((script) => isActive(s, script)).length)
   const modifiedSet = new Set(modifiedIds.split(" ").filter(Boolean))
   const q = query.trim().toLowerCase()
   const shown = listed.filter((script) => (!onlyModified || modifiedSet.has(script.id)) && matches(script, q, t))
+  const shownInapplicable = inapplicable.filter((script) => matches(script, q, t))
 
-  if (listed.length === 0 && !scriptChoice) return null
+  if (listed.length === 0 && inapplicable.length === 0 && !scriptChoice) return null
 
   return (
     <div className="flex flex-col gap-3">
-      {listed.length > 0 ? (
+      {listed.length > 0 || inapplicable.length > 0 ? (
         <Collapsible.Root open={open} onOpenChange={setOpen} render={<section aria-labelledby={`${id}-title`} />} className={cn("flex flex-col gap-2", panelClass(0))}>
           <div className="flex min-h-8 items-center gap-2">
             <Collapsible.Trigger className={cn("group/trigger flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50", panelTitleClass(0))}>
@@ -163,10 +181,48 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
                   <ScriptCard key={script.id} script={script} />
                 ))}
               </PanelDepthContext>
-              {shown.length === 0 ? (
+              {listed.length > 0 && shown.length === 0 ? (
                 <p className={cn("rounded-lg border border-dashed p-4 text-center text-xs text-muted-foreground")}>{t("No extension matches")}</p>
               ) : null}
             </div>
+
+            {shownInapplicable.length > 0 ? (
+              <Collapsible.Root
+                open={inapplicableOpen}
+                onOpenChange={setInapplicableOpen}
+                data-slot="inapplicable-scripts"
+                className="mt-1 flex flex-col gap-2 border-t border-border/60 pt-2.5"
+              >
+                <Collapsible.Trigger className="group/inapp flex min-h-7 w-full items-center gap-2 rounded-sm text-left text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
+                  <span className="truncate">{t("Not applicable for active model")}</span>
+                  <Badge variant="outline" className="h-4 border-border px-1.5 text-[0.625rem] text-muted-foreground tabular-nums">
+                    {shownInapplicable.length}
+                  </Badge>
+                  {inapplicableActiveCount > 0 ? (
+                    <Badge variant="outline" className="h-4 border-advice-warn-border bg-advice-warn-bg px-1.5 text-[0.625rem] text-advice-warn tabular-nums">
+                      {t("{{count}} on", { count: inapplicableActiveCount })}
+                    </Badge>
+                  ) : null}
+                  <ChevronDown aria-hidden className="ml-auto size-3.5 shrink-0 -rotate-90 transition-transform duration-150 group-data-[panel-open]/inapp:rotate-0" />
+                </Collapsible.Trigger>
+                <Collapsible.Panel className="-mx-1 flex flex-col gap-2.5 px-1 pt-1 opacity-85">
+                  <PanelDepthContext value={1}>
+                    {shownInapplicable.map((script) => (
+                      <ScriptCard
+                        key={script.id}
+                        script={script}
+                        reason={
+                          script.inapplicable_reason ??
+                          (script.requires_capabilities?.length
+                            ? t("Requires: {{capabilities}}", { capabilities: script.requires_capabilities.join(", ") })
+                            : null)
+                        }
+                      />
+                    ))}
+                  </PanelDepthContext>
+                </Collapsible.Panel>
+              </Collapsible.Root>
+            ) : null}
           </Collapsible.Panel>
         </Collapsible.Root>
       ) : null}

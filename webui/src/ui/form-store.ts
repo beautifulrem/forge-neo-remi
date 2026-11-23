@@ -16,7 +16,7 @@ import type { ParamPatch } from "@/api/types"
 import { jsonEqual } from "./conditions"
 import { buildIndex, defaultOf, type FormIndex, type OwnerSpec } from "./form-index"
 import { collectLocks, lockedNames, type ParamLock } from "./locks"
-import type { ChoiceOption, ValidationError } from "./schema"
+import type { AdviceItem, ChoiceOption, ModelCapabilitySummary, ValidationError } from "./schema"
 import { isPersisted, restoreValue } from "./values"
 
 export type OwnerValues = Record<string, unknown>
@@ -48,6 +48,12 @@ export type FormState = {
   errors: Record<string, Record<string, string>>
   /** `"owner.param"` refs whose changes run `core.__conflicts__` (tab schemas). */
   conflictParams: ReadonlySet<string>
+  /** Active model capability summary from the tab schema or preset action. */
+  capabilities: ModelCapabilitySummary | null
+  /** Pre-submit workflow advice items returned by schema/conflicts/advice actions. */
+  advice: readonly AdviceItem[]
+  /** Advice signatures (`code:message`) dismissed by the user in this session. */
+  dismissedAdvice: ReadonlySet<string>
   index: FormIndex
   /** Toggles that protect another param from programmatic writes while on. */
   locks: readonly ParamLock[]
@@ -57,7 +63,14 @@ export type FormState = {
 
 export type FormActions = {
   /** (Re)initialises from schema owners, keeping compatible draft values. */
-  load: (owners: readonly OwnerSpec[], options?: { conflictParams?: readonly string[] }) => void
+  load: (
+    owners: readonly OwnerSpec[],
+    options?: {
+      conflictParams?: readonly string[]
+      capabilities?: ModelCapabilitySummary | null
+      advice?: readonly AdviceItem[]
+    },
+  ) => void
   setValue: (owner: string, name: string, value: unknown) => void
   /** A programmatic write (paste, send-to, widgets): locked params are skipped. */
   setValues: (owner: string, values: OwnerValues) => void
@@ -66,6 +79,9 @@ export type FormActions = {
   /** Applies param patches `[owner, name, patch]` from an action (locked params keep their value). */
   applyPatches: (patches: readonly [string, string, ParamPatch][]) => void
   setOutputs: (owner: string, outputs: Record<string, unknown>) => void
+  setCapabilities: (capabilities: ModelCapabilitySummary | null) => void
+  setAdvice: (advice: readonly AdviceItem[]) => void
+  dismissAdvice: (key: string) => void
   /** Shows server validation errors on their fields and opens what hides them. */
   setErrors: (errors: readonly ValidationError[]) => void
   clearErrors: () => void
@@ -149,6 +165,9 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
     tabs: {},
     errors: {},
     conflictParams: new Set(),
+    capabilities: null,
+    advice: [],
+    dismissedAdvice: new Set(),
     index: emptyIndex(),
     locks: [],
     revision: 0,
@@ -186,6 +205,9 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
         outputs: {},
         errors: {},
         conflictParams: new Set(options.conflictParams ?? []),
+        capabilities: options.capabilities ?? null,
+        advice: options.advice ?? [],
+        dismissedAdvice: new Set(),
         revision: s.revision + 1,
       }))
     },
@@ -265,6 +287,22 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
 
     setOutputs(owner, outputs) {
       set((s) => ({ outputs: { ...s.outputs, [owner]: { ...s.outputs[owner], ...outputs } } }))
+    },
+
+    setCapabilities(capabilities) {
+      set({ capabilities })
+    },
+
+    setAdvice(advice) {
+      set({ advice })
+    },
+
+    dismissAdvice(key) {
+      set((s) => {
+        const next = new Set(s.dismissedAdvice)
+        next.add(key)
+        return { dismissedAdvice: next }
+      })
     },
 
     setOpen(key, open) {

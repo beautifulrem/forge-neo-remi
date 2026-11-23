@@ -33,6 +33,7 @@ import { phaseOf } from "@/features/progress/run-machine"
 import { EnqueueButton, QueueEditBanner } from "@/features/queue/FormQueueControls"
 import { requestReset } from "./reset-request"
 import { jobsAhead } from "./run-helpers"
+import { WorkflowAdviceBar } from "./WorkflowAdviceBar"
 
 function useQueuePosition(jobId: string | null): number | null {
   const queued = useQuery({ ...queueItemsQuery, enabled: jobId !== null })
@@ -156,7 +157,7 @@ function StatusLine({ tab }: { tab: GenerateTab }) {
   )
 }
 
-export function GenerateBar({ tab, className }: { tab: GenerateTab; className?: string }) {
+export function GenerateBar({ tab, className, showAdvice = true }: { tab: GenerateTab; className?: string; showAdvice?: boolean }) {
   const { t } = useTranslation()
   const run = useRuns((s) => s.runs[tab])
   const phase = phaseOf(run)
@@ -166,6 +167,7 @@ export function GenerateBar({ tab, className }: { tab: GenerateTab; className?: 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <QueueEditBanner tab={tab} />
+      {showAdvice ? <WorkflowAdviceBar tab={tab} /> : null}
       <div className="flex items-center gap-1.5">
         {/* a size container: the shortcut hint shows only when the label fits beside it */}
         <div className="@container/generate flex min-w-0 flex-1">

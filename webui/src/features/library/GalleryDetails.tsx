@@ -7,16 +7,19 @@ import type { GalleryCategory, GalleryItem } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { InfotextPanel } from "@/features/infotext/InfotextPanel"
+import { AssignBoardPopover } from "./BoardsBar"
 import { CATEGORY_LABELS, formatBytes } from "./labels"
+import { LineageStrip } from "./LineageStrip"
 import { openInPngInfo, revealOutput, starOutputs } from "./queries"
 
 type GalleryDetailsProps = {
   item: GalleryItem
   onDelete: (item: GalleryItem) => void
   onClose: () => void
+  onSelectImage?: (fileId: string) => void
 }
 
-export function GalleryDetails({ item, onDelete, onClose }: GalleryDetailsProps) {
+export function GalleryDetails({ item, onDelete, onClose, onSelectImage }: GalleryDetailsProps) {
   const { t, i18n } = useTranslation()
   // "folders.open" is gone under --hide-ui-dir-config (the server answers 403 then).
   const canOpenFolders = useQuery({ ...bootstrapQuery, select: (data) => data.features.includes("folders.open") }).data ?? false
@@ -54,6 +57,7 @@ export function GalleryDetails({ item, onDelete, onClose }: GalleryDetailsProps)
             <FolderOpen />
           </Button>
         ) : null}
+        <AssignBoardPopover fileIds={[item.id]} tone="light" />
         <Button variant="ghost" size="icon-sm" className={cn(tone, "ml-auto hover:text-red-300")} aria-label={t("Delete")} title={t("Delete")} onClick={() => onDelete(item)}>
           <Trash2 />
         </Button>
@@ -68,6 +72,7 @@ export function GalleryDetails({ item, onDelete, onClose }: GalleryDetailsProps)
           </div>
         ))}
       </dl>
+      <LineageStrip item={item} onSelectImage={onSelectImage} onClose={onClose} />
       <InfotextPanel infotext={item.infotext} className="[&_.bg-muted]:bg-white/10 [&_.text-muted-foreground]:text-white/55" />
     </div>
   )

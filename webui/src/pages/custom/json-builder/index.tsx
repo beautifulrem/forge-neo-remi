@@ -12,6 +12,7 @@ import { lazy, Suspense, useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import type { FormTab } from "@/api/types"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -31,6 +32,7 @@ import { decompileFlux3Prompt, isFlux3Prompt, PROMPT_FORMAT_NAMES, PROMPT_FORMAT
 import { LayoutCanvas } from "./LayoutCanvas"
 import { sizeLimit } from "./size-limit"
 import { useBuilder } from "./store"
+import { decompileVglPrompt, isVglPrompt, VGL_LICENSE, VGL_STYLE_MEDIUMS } from "./vgl"
 import { itemColor } from "./view"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 
@@ -135,6 +137,7 @@ function LoadPromptDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
   const id = useId()
   const load = useBuilder((s) => s.load)
   const set = useBuilder((s) => s.set)
+  const setVgl = useBuilder((s) => s.setVgl)
   const width = useBuilder((s) => s.width)
   const height = useBuilder((s) => s.height)
   const [text, setText] = useState("")
@@ -156,7 +159,12 @@ function LoadPromptDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
       return
     }
     try {
-      if (isFlux3Prompt(text)) {
+      if (isVglPrompt(text)) {
+        const { draft, vgl, extra } = decompileVglPrompt(text, size.width, size.height)
+        load(draft)
+        setVgl(vgl)
+        set(extra ? { format: "vgl", extra } : { format: "vgl" })
+      } else if (isFlux3Prompt(text)) {
         const { draft, extra } = decompileFlux3Prompt(text, size.width, size.height)
         load(draft)
         set(extra ? { format: "flux3", extra } : { format: "flux3" })
@@ -176,7 +184,7 @@ function LoadPromptDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("Load prompt")}</DialogTitle>
-          <DialogDescription>{t("Paste a compiled MOSS-Image or FLUX.3 prompt (with the size it was made for) or a saved layout draft.")}</DialogDescription>
+          <DialogDescription>{t("Paste a compiled MOSS-Image, FLUX.3, or Bria Fibo 2.0 VGL prompt (with the size it was made for) or a saved layout draft.")}</DialogDescription>
         </DialogHeader>
         <form
           className="flex flex-col gap-3"
@@ -223,6 +231,7 @@ function FileSection() {
   const { t } = useTranslation()
   const load = useBuilder((s) => s.load)
   const set = useBuilder((s) => s.set)
+  const setVgl = useBuilder((s) => s.setVgl)
   const fileInput = useRef<HTMLInputElement>(null)
   const [dialog, setDialog] = useState(false)
 
@@ -257,7 +266,12 @@ function FileSection() {
     if (prompt === "") return void toast.error(t("No prompt in {{target}} to load", { target }))
     if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(h) || h <= 0) return void toast.error(t("{{target}} has no usable size", { target }))
     try {
-      if (isFlux3Prompt(prompt)) {
+      if (isVglPrompt(prompt)) {
+        const { draft, vgl, extra } = decompileVglPrompt(prompt, w, h)
+        load(draft)
+        setVgl(vgl)
+        set(extra ? { format: "vgl", extra } : { format: "vgl" })
+      } else if (isFlux3Prompt(prompt)) {
         const { draft, extra } = decompileFlux3Prompt(prompt, w, h)
         load(draft)
         set(extra ? { format: "flux3", extra } : { format: "flux3" })
@@ -315,6 +329,65 @@ function FileSection() {
   )
 }
 
+function VglSettings({ id }: { id: string }) {
+  const { t } = useTranslation()
+  const vgl = useBuilder((s) => s.vgl)
+  const setVgl = useBuilder((s) => s.setVgl)
+  const mediumItems = VGL_STYLE_MEDIUMS.map((value) => ({ value, label: value }))
+
+  return (
+    <div data-slot="vgl-schema-controls" className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2 rounded-md border border-advice-warn-border bg-advice-warn-bg px-2.5 py-1.5 text-xs text-advice-warn">
+        <Badge variant="outline" className="h-4 border-advice-warn-border bg-background/60 px-1.5 text-[0.625rem] font-semibold text-advice-warn">
+          {VGL_LICENSE}
+        </Badge>
+        <span className="min-w-0 flex-1">
+          {t("Bria Fibo 2.0 VGL 2.0 JSON: non-commercial weights (CC BY-NC 4.0) unless commercially licensed.")}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-1">
+          <span id={`${id}-vgl-medium`} className="text-[0.8rem] font-medium text-foreground/85">
+            {t("Style medium")}
+          </span>
+          <Select<string> items={mediumItems} value={vgl.styleMedium} onValueChange={(next) => next && setVgl({ styleMedium: next })}>
+            <SelectTrigger aria-labelledby={`${id}-vgl-medium`} size="sm" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {mediumItems.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          <FieldLabel htmlFor={`${id}-vgl-bg`}>{t("Background setting")}</FieldLabel>
+          <Input id={`${id}-vgl-bg`} value={vgl.backgroundSetting} onChange={(e) => setVgl({ backgroundSetting: e.target.value })} />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          <FieldLabel htmlFor={`${id}-vgl-light`}>{t("Lighting")}</FieldLabel>
+          <Input id={`${id}-vgl-light`} value={vgl.lightingConditions} onChange={(e) => setVgl({ lightingConditions: e.target.value })} />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          <FieldLabel htmlFor={`${id}-vgl-mood`}>{t("Mood and atmosphere")}</FieldLabel>
+          <Input id={`${id}-vgl-mood`} value={vgl.moodAtmosphere} onChange={(e) => setVgl({ moodAtmosphere: e.target.value })} />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          <FieldLabel htmlFor={`${id}-vgl-angle`}>{t("Camera angle")}</FieldLabel>
+          <Input id={`${id}-vgl-angle`} value={vgl.cameraAngle} onChange={(e) => setVgl({ cameraAngle: e.target.value })} />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          <FieldLabel htmlFor={`${id}-vgl-lens`}>{t("Lens focal length")}</FieldLabel>
+          <Input id={`${id}-vgl-lens`} value={vgl.lensFocalLength} onChange={(e) => setVgl({ lensFocalLength: e.target.value })} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SummarySection({ missing, onEditField }: { missing: ReadonlySet<Missing>; onEditField: (field: EditableField) => void }) {
   const { t } = useTranslation()
   const id = useId()
@@ -335,6 +408,8 @@ function SummarySection({ missing, onEditField }: { missing: ReadonlySet<Missing
       />
       {format === "flux3" ? (
         <p className="text-xs text-muted-foreground">{t("FLUX.3 layout: a caption citing every item as <id>, then the boxes on a 0-1000 grid (any output size).")}</p>
+      ) : format === "vgl" ? (
+        <VglSettings id={id} />
       ) : (
         <Segmented<CanvasType>
           aria-label={t("Canvas type")}

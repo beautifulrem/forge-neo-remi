@@ -13,6 +13,7 @@ export type GalleryFilters = {
   q: string
   category: GalleryCategory | null
   model: string | null
+  boardId?: string | null
   /** Local dates `YYYY-MM-DD` (both inclusive). */
   from: string | null
   to: string | null
@@ -20,7 +21,10 @@ export type GalleryFilters = {
   sort: GallerySort
 }
 
-export type GalleryView = GalleryFilters & {
+export type ExtendedGalleryQuery = GalleryQuery & { board_id?: string | null }
+
+export type GalleryView = Omit<GalleryFilters, "boardId"> & {
+  boardId: string | null
   layout: GalleryLayout
   size: TileSize
   set: (patch: Partial<Omit<GalleryView, "set" | "reset">>) => void
@@ -28,7 +32,15 @@ export type GalleryView = GalleryFilters & {
   reset: () => void
 }
 
-export const NO_FILTERS: Omit<GalleryFilters, "sort"> = { q: "", category: null, model: null, from: null, to: null, starred: false }
+export const NO_FILTERS: Omit<GalleryFilters, "sort"> & { boardId: string | null } = {
+  q: "",
+  category: null,
+  model: null,
+  boardId: null,
+  from: null,
+  to: null,
+  starred: false,
+}
 
 export const useGalleryView = create<GalleryView>()(
   persist(
@@ -45,7 +57,7 @@ export const useGalleryView = create<GalleryView>()(
       version: 1,
       storage: createJSONStorage(() => localStorage),
       // The search text is per visit; everything else is kept.
-      partialize: ({ category, model, from, to, starred, sort, layout, size }) => ({ category, model, from, to, starred, sort, layout, size }),
+      partialize: ({ category, model, boardId, from, to, starred, sort, layout, size }) => ({ category, model, boardId, from, to, starred, sort, layout, size }),
     },
   ),
 )
@@ -61,12 +73,13 @@ export function localDayStart(date: string | null, days = 0): string | null {
 }
 
 /** The `GET /gallery` query for the filters (empty ones left out; `to` is inclusive). */
-export function galleryQuery(filters: GalleryFilters): GalleryQuery {
-  const query: GalleryQuery = { sort: filters.sort }
+export function galleryQuery(filters: GalleryFilters): ExtendedGalleryQuery {
+  const query: ExtendedGalleryQuery = { sort: filters.sort }
   const q = filters.q.trim()
   if (q) query.q = q
   if (filters.category) query.category = filters.category
   if (filters.model) query.model = filters.model
+  if (filters.boardId) query.board_id = filters.boardId
   const since = localDayStart(filters.from)
   const until = localDayStart(filters.to, 1)
   if (since) query.since = since
@@ -77,5 +90,5 @@ export function galleryQuery(filters: GalleryFilters): GalleryQuery {
 
 /** How many filters narrow the view (for the "clear filters" affordance). */
 export function activeFilters(filters: GalleryFilters): number {
-  return [filters.q.trim(), filters.category, filters.model, filters.from || filters.to, filters.starred].filter(Boolean).length
+  return [filters.q.trim(), filters.category, filters.model, filters.boardId, filters.from || filters.to, filters.starred].filter(Boolean).length
 }

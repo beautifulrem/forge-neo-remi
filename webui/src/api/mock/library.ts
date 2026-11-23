@@ -7,6 +7,7 @@
 import type { GalleryItem, GalleryQuery, ImageMetadata, ImportReport, ImportSourceInfo } from "../types"
 import { MockHttpError } from "./server"
 import { broadcast } from "./socket"
+import { mockBoardItemIds, mockBoardsVersion } from "./workbench"
 
 type Handler = (match: RegExpExecArray, body: unknown, url: URL) => unknown | Promise<unknown>
 
@@ -47,28 +48,38 @@ const library: GalleryItem[] = Array.from({ length: Number(import.meta.env.VITE_
   }
 })
 
+/** Looks up a mock gallery item by id (shared with lineage & compare mock routes). */
+export function findLibraryItem(id: string): GalleryItem | undefined {
+  return library.find((entry) => entry.id === id)
+}
+
 /** Bumped by every change to the library (stars, removal): the filtered list is cached per query until then. */
 let libraryVersion = 0
 let lastFiltered: { key: string; version: number; items: GalleryItem[] } | null = null
+
+type MockGalleryQuery = GalleryQuery & { board_id?: string }
 
 /**
  * The query's items, cached: a page of a large mock library (VITE_MOCK_GALLERY_SIZE) must not
  * filter and sort every image on the page's main thread, as no real server does.
  */
-function filteredCached(query: GalleryQuery): GalleryItem[] {
+function filteredCached(query: MockGalleryQuery): GalleryItem[] {
+  const version = libraryVersion + mockBoardsVersion() * 100_000
   const key = JSON.stringify(query)
-  if (lastFiltered?.key !== key || lastFiltered.version !== libraryVersion) lastFiltered = { key, version: libraryVersion, items: filtered(query) }
+  if (lastFiltered?.key !== key || lastFiltered.version !== version) lastFiltered = { key, version, items: filtered(query) }
   return lastFiltered.items
 }
 
-function filtered(query: GalleryQuery): GalleryItem[] {
+function filtered(query: MockGalleryQuery): GalleryItem[] {
   const terms = (query.q ?? "").toLowerCase().split(/\s+/).filter(Boolean)
   const since = query.since ? Date.parse(query.since) : null
   const until = query.until ? Date.parse(query.until) : null
+  const boardIds = query.board_id ? mockBoardItemIds(query.board_id) : null
   const items = library.filter((item) => {
     const time = Date.parse(item.created_at)
     const text = `${item.infotext ?? ""} ${item.name} ${item.model ?? ""}`.toLowerCase()
     return (
+      (!boardIds || boardIds.has(item.id)) &&
       (!query.category || item.category === query.category) &&
       (!query.model || item.model === query.model) &&
       (since === null || time >= since) &&
@@ -87,11 +98,12 @@ function filtered(query: GalleryQuery): GalleryItem[] {
   return items.sort(by)
 }
 
-function queryOf(url: URL): GalleryQuery {
+function queryOf(url: URL): MockGalleryQuery {
   const get = (key: string) => url.searchParams.get(key) ?? undefined
   const starred = get("starred")
   return {
     q: get("q"),
+    board_id: get("board_id"),
     category: get("category") as GalleryQuery["category"],
     model: get("model"),
     since: get("since"),

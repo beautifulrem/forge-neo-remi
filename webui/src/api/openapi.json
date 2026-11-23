@@ -2696,6 +2696,24 @@
         }
       }
     },
+    "/api/v2/extensions/diagnostics": {
+      "get": {
+        "summary": "Per-extension health, manifest status, load times, and error diagnostics",
+        "operationId": "extension_diagnostics_api_v2_extensions_diagnostics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionDiagnosticsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/extensions/check-updates": {
       "post": {
         "summary": "Fetch the remotes of extensions (default: every enabled one) and report which can update",
@@ -4295,6 +4313,25 @@
               "default": "newest",
               "title": "Sort"
             }
+          },
+          {
+            "name": "board_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "only outputs assigned to this board",
+              "title": "Board Id"
+            },
+            "description": "only outputs assigned to this board"
           }
         ],
         "responses": {
@@ -4615,6 +4652,1917 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/boards": {
+      "get": {
+        "summary": "List gallery project boards",
+        "operationId": "list_boards_api_v2_boards_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a gallery board",
+        "operationId": "create_board_api_v2_boards_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardItem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/boards/{board_id}": {
+      "get": {
+        "summary": "Get a board",
+        "operationId": "get_board_api_v2_boards__board_id__get",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardItem"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Rename or update a board",
+        "operationId": "update_board_api_v2_boards__board_id__patch",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardItem"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a board (images stay in gallery)",
+        "operationId": "delete_board_api_v2_boards__board_id__delete",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      }
+    },
+    "/api/v2/boards/{board_id}/items": {
+      "post": {
+        "summary": "Add gallery outputs to a board",
+        "operationId": "add_board_items_api_v2_boards__board_id__items_post",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardItemsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardItemsResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      }
+    },
+    "/api/v2/boards/{board_id}/items/remove": {
+      "post": {
+        "summary": "Remove gallery outputs from a board",
+        "operationId": "remove_board_items_api_v2_boards__board_id__items_remove_post",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardItemsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardItemsResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      }
+    },
+    "/api/v2/boards/{board_id}/items/{file_id}": {
+      "delete": {
+        "summary": "Remove one output from a board",
+        "operationId": "remove_single_board_item_api_v2_boards__board_id__items__file_id__delete",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          },
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      }
+    },
+    "/api/v2/gallery/{file_id}/lineage": {
+      "get": {
+        "summary": "Ancestors, siblings, and descendants of a gallery output",
+        "operationId": "gallery_lineage_api_v2_gallery__file_id__lineage_get",
+        "parameters": [
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "File Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetLineage"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      }
+    },
+    "/api/v2/gallery/compare": {
+      "post": {
+        "summary": "Structured parameter diff between two gallery outputs or infotexts",
+        "operationId": "gallery_compare_api_v2_gallery_compare_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompareResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/recipes": {
+      "get": {
+        "summary": "List parameter recipes",
+        "operationId": "list_recipes_api_v2_recipes_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "model_family",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Model Family"
+            }
+          },
+          {
+            "name": "tab",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "txt2img",
+                    "img2img",
+                    "extras"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tab"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tag"
+            }
+          },
+          {
+            "name": "capability",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Capability"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a parameter recipe",
+        "operationId": "create_recipe_api_v2_recipes_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeItem"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      }
+    },
+    "/api/v2/recipes/export": {
+      "get": {
+        "summary": "Export all recipes as JSON",
+        "operationId": "export_recipes_api_v2_recipes_export_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeExport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/recipes/import": {
+      "post": {
+        "summary": "Import recipes from JSON",
+        "operationId": "import_recipes_api_v2_recipes_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeImportResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/recipes/{recipe_id}": {
+      "get": {
+        "summary": "Get one recipe",
+        "operationId": "get_recipe_api_v2_recipes__recipe_id__get",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeItem"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a recipe",
+        "operationId": "update_recipe_api_v2_recipes__recipe_id__patch",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeItem"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a recipe",
+        "operationId": "delete_recipe_api_v2_recipes__recipe_id__delete",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      }
+    },
+    "/api/v2/recipes/{recipe_id}/apply": {
+      "post": {
+        "summary": "Apply a recipe onto form values with conflict & capability checks",
+        "operationId": "apply_recipe_route_api_v2_recipes__recipe_id__apply_post",
+        "parameters": [
+          {
+            "name": "recipe_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Recipe Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecipeApplyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecipeApplyResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      }
+    },
+    "/api/v2/chains": {
+      "get": {
+        "summary": "List multi-stage pipeline chains",
+        "operationId": "list_chains_api_v2_chains_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_JobChainModel_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create (and optionally run) a linear multi-stage chain",
+        "operationId": "create_chain_api_v2_chains_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChainCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobChainModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      }
+    },
+    "/api/v2/chains/preview": {
+      "post": {
+        "summary": "Dry-run cache plan showing which stages will reuse cached outputs",
+        "operationId": "preview_chain_api_v2_chains_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChainPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChainPreviewResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/chains/templates": {
+      "get": {
+        "summary": "List saved pipeline templates",
+        "operationId": "list_templates_api_v2_chains_templates_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChainTemplateList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Save a reusable pipeline template",
+        "operationId": "create_template_api_v2_chains_templates_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChainTemplateCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChainTemplateModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/chains/templates/{template_id}": {
+      "get": {
+        "summary": "Get a pipeline template",
+        "operationId": "get_template_api_v2_chains_templates__template_id__get",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChainTemplateModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a pipeline template",
+        "operationId": "delete_template_api_v2_chains_templates__template_id__delete",
+        "parameters": [
+          {
+            "name": "template_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Template Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      }
+    },
+    "/api/v2/chains/{chain_id}": {
+      "get": {
+        "summary": "Get a chain and all stage runs",
+        "operationId": "get_chain_api_v2_chains__chain_id__get",
+        "parameters": [
+          {
+            "name": "chain_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Chain Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobChainModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a finished or paused chain",
+        "operationId": "delete_chain_api_v2_chains__chain_id__delete",
+        "parameters": [
+          {
+            "name": "chain_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Chain Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      }
+    },
+    "/api/v2/chains/{chain_id}/rerun": {
+      "post": {
+        "summary": "Re-run a chain, automatically reusing unchanged cached upstream stages",
+        "operationId": "rerun_chain_api_v2_chains__chain_id__rerun_post",
+        "parameters": [
+          {
+            "name": "chain_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Chain Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ChainRerunRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobChainModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      }
+    },
+    "/api/v2/chains/{chain_id}/pause": {
+      "post": {
+        "summary": "Pause a chain between stages",
+        "operationId": "pause_chain_api_v2_chains__chain_id__pause_post",
+        "parameters": [
+          {
+            "name": "chain_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Chain Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobChainModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      }
+    },
+    "/api/v2/chains/{chain_id}/resume": {
+      "post": {
+        "summary": "Resume a paused chain",
+        "operationId": "resume_chain_api_v2_chains__chain_id__resume_post",
+        "parameters": [
+          {
+            "name": "chain_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Chain Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobChainModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      }
+    },
+    "/api/v2/chains/{chain_id}/cancel": {
+      "post": {
+        "summary": "Cancel a chain and any active stage job",
+        "operationId": "cancel_chain_api_v2_chains__chain_id__cancel_post",
+        "parameters": [
+          {
+            "name": "chain_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Chain Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobChainModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        }
+      }
+    },
+    "/api/v2/workers": {
+      "get": {
+        "summary": "Inference worker pool & MLX sidecar status",
+        "operationId": "list_workers_api_v2_workers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkersResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/workers/{worker_id}": {
+      "get": {
+        "summary": "Status of one inference worker",
+        "operationId": "get_worker_api_v2_workers__worker_id__get",
+        "parameters": [
+          {
+            "name": "worker_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Worker Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerStatusModel"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/workers/{worker_id}/restart": {
+      "post": {
+        "summary": "Restart a worker cleanly",
+        "operationId": "restart_worker_api_v2_workers__worker_id__restart_post",
+        "parameters": [
+          {
+            "name": "worker_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Worker Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerRestartResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
           },
           "422": {
             "description": "Validation Error",
@@ -5045,6 +6993,84 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PromptGenerated"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Content Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/prompt-tools/upsample": {
+      "post": {
+        "summary": "Multimodal & local Prompt Upsampler (PUP) with model-family templates",
+        "operationId": "upsample_api_v2_prompt_tools_upsample_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromptUpsampleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptUpsampled"
                 }
               }
             }
@@ -6389,6 +8415,30 @@
         "title": "AdminErrorBody",
         "description": "A refused or failed extensions/system operation."
       },
+      "AdoptPatch": {
+        "properties": {
+          "core": {
+            "type": "object",
+            "title": "Core",
+            "default": {}
+          },
+          "scripts": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Scripts",
+            "default": {}
+          },
+          "raw_params": {
+            "type": "object",
+            "title": "Raw Params",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "title": "AdoptPatch"
+      },
       "ArchCount": {
         "properties": {
           "id": {
@@ -6406,6 +8456,53 @@
           "count"
         ],
         "title": "ArchCount"
+      },
+      "AssetLineage": {
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "title": "File Id"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LineageNode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ancestors": {
+            "items": {
+              "$ref": "#/components/schemas/LineageNode"
+            },
+            "type": "array",
+            "title": "Ancestors",
+            "default": []
+          },
+          "siblings": {
+            "items": {
+              "$ref": "#/components/schemas/LineageNode"
+            },
+            "type": "array",
+            "title": "Siblings",
+            "default": []
+          },
+          "descendants": {
+            "items": {
+              "$ref": "#/components/schemas/LineageNode"
+            },
+            "type": "array",
+            "title": "Descendants",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_id"
+        ],
+        "title": "AssetLineage"
       },
       "AuthStatus": {
         "properties": {
@@ -6430,6 +8527,194 @@
           "required"
         ],
         "title": "AuthStatus"
+      },
+      "BoardCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Description",
+            "default": ""
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "BoardCreate"
+      },
+      "BoardItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "item_count": {
+            "type": "integer",
+            "title": "Item Count",
+            "default": 0
+          },
+          "cover_file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover File Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "BoardItem"
+      },
+      "BoardItemsRequest": {
+        "properties": {
+          "file_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "minItems": 1,
+            "title": "File Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_ids"
+        ],
+        "title": "BoardItemsRequest"
+      },
+      "BoardItemsResult": {
+        "properties": {
+          "board_id": {
+            "type": "string",
+            "title": "Board Id"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "board_id",
+          "count"
+        ],
+        "title": "BoardItemsResult"
+      },
+      "BoardList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BoardItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "BoardList"
+      },
+      "BoardUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          }
+        },
+        "type": "object",
+        "title": "BoardUpdate"
       },
       "Bootstrap": {
         "properties": {
@@ -6521,6 +8806,279 @@
         ],
         "title": "Bootstrap"
       },
+      "ChainCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Name",
+            "default": ""
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageSpecModel"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Stages"
+          },
+          "run_now": {
+            "type": "boolean",
+            "title": "Run Now",
+            "default": true
+          },
+          "priority": {
+            "type": "integer",
+            "maximum": 1000.0,
+            "minimum": -1000.0,
+            "title": "Priority",
+            "default": 0
+          },
+          "model_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Fingerprint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stages"
+        ],
+        "title": "ChainCreateRequest"
+      },
+      "ChainPreviewRequest": {
+        "properties": {
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageSpecModel"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Stages"
+          },
+          "model_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Fingerprint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stages"
+        ],
+        "title": "ChainPreviewRequest"
+      },
+      "ChainPreviewResult": {
+        "properties": {
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageCachePlan"
+            },
+            "type": "array",
+            "title": "Stages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stages"
+        ],
+        "title": "ChainPreviewResult"
+      },
+      "ChainRerunRequest": {
+        "properties": {
+          "stages": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StageSpecModel"
+                },
+                "type": "array",
+                "maxItems": 8,
+                "minItems": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stages"
+          },
+          "from_stage": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 8.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Stage"
+          },
+          "force_stages": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Force Stages",
+            "default": []
+          },
+          "model_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Fingerprint"
+          }
+        },
+        "type": "object",
+        "title": "ChainRerunRequest"
+      },
+      "ChainTemplateCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          },
+          "model_family": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Family"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageSpecModel"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Stages"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "stages"
+        ],
+        "title": "ChainTemplateCreate"
+      },
+      "ChainTemplateList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChainTemplateModel"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ChainTemplateList"
+      },
+      "ChainTemplateModel": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "model_family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Family"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageSpecModel"
+            },
+            "type": "array",
+            "title": "Stages"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "stages",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ChainTemplateModel"
+      },
       "ClearHistoryRequest": {
         "properties": {
           "keep_starred": {
@@ -6531,6 +9089,141 @@
         },
         "type": "object",
         "title": "ClearHistoryRequest"
+      },
+      "CompareRequest": {
+        "properties": {
+          "id_a": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id A"
+          },
+          "id_b": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id B"
+          },
+          "infotext_a": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Infotext A"
+          },
+          "infotext_b": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Infotext B"
+          }
+        },
+        "type": "object",
+        "title": "CompareRequest"
+      },
+      "CompareResult": {
+        "properties": {
+          "id_a": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id A"
+          },
+          "id_b": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id B"
+          },
+          "infotext_a": {
+            "type": "string",
+            "title": "Infotext A",
+            "default": ""
+          },
+          "infotext_b": {
+            "type": "string",
+            "title": "Infotext B",
+            "default": ""
+          },
+          "identical": {
+            "type": "boolean",
+            "title": "Identical"
+          },
+          "prompt_diff": {
+            "$ref": "#/components/schemas/PromptTokenDiff"
+          },
+          "negative_diff": {
+            "$ref": "#/components/schemas/PromptTokenDiff"
+          },
+          "core_diffs": {
+            "items": {
+              "$ref": "#/components/schemas/CoreParamDiff"
+            },
+            "type": "array",
+            "title": "Core Diffs",
+            "default": []
+          },
+          "lora_diffs": {
+            "items": {
+              "$ref": "#/components/schemas/LoraDiff"
+            },
+            "type": "array",
+            "title": "Lora Diffs",
+            "default": []
+          },
+          "extension_diffs": {
+            "items": {
+              "$ref": "#/components/schemas/ExtensionParamDiff"
+            },
+            "type": "array",
+            "title": "Extension Diffs",
+            "default": []
+          },
+          "adopt_b_patch": {
+            "$ref": "#/components/schemas/AdoptPatch"
+          },
+          "adopt_a_patch": {
+            "$ref": "#/components/schemas/AdoptPatch"
+          }
+        },
+        "type": "object",
+        "required": [
+          "identical",
+          "prompt_diff",
+          "negative_diff",
+          "adopt_b_patch",
+          "adopt_a_patch"
+        ],
+        "title": "CompareResult"
       },
       "ConfigStateDetail": {
         "properties": {
@@ -6719,6 +9412,46 @@
         ],
         "title": "ConfigStateWebui"
       },
+      "CoreParamDiff": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "a": {
+            "title": "A"
+          },
+          "b": {
+            "title": "B"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "changed",
+              "added",
+              "removed"
+            ],
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "kind"
+        ],
+        "title": "CoreParamDiff"
+      },
       "DatasetTag": {
         "properties": {
           "tag": {
@@ -6773,6 +9506,49 @@
           "detail"
         ],
         "title": "Detail"
+      },
+      "DisabledScriptInfo": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "script"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "default": ""
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "tab": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tab"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "title": "DisabledScriptInfo"
       },
       "ErrorItem": {
         "properties": {
@@ -6830,6 +9606,206 @@
         },
         "type": "object",
         "title": "ExtensionCheckRequest"
+      },
+      "ExtensionDiagnosticItem": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "builtin": {
+            "type": "boolean",
+            "title": "Builtin"
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "degraded",
+              "error",
+              "disabled"
+            ],
+            "title": "Health"
+          },
+          "load_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Load Time Ms"
+          },
+          "hook_warnings": {
+            "type": "integer",
+            "title": "Hook Warnings",
+            "default": 0
+          },
+          "hook_errors": {
+            "type": "integer",
+            "title": "Hook Errors",
+            "default": 0
+          },
+          "action_errors": {
+            "type": "integer",
+            "title": "Action Errors",
+            "default": 0
+          },
+          "action_timeouts": {
+            "type": "integer",
+            "title": "Action Timeouts",
+            "default": 0
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_error_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error At"
+          },
+          "manifest_status": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "missing",
+              "invalid",
+              "incompatible"
+            ],
+            "title": "Manifest Status"
+          },
+          "manifest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExtensionManifestModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "manifest_errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Manifest Errors",
+            "default": []
+          },
+          "manifest_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Manifest Warnings",
+            "default": []
+          },
+          "disabled_scripts": {
+            "items": {
+              "$ref": "#/components/schemas/DisabledScriptInfo"
+            },
+            "type": "array",
+            "title": "Disabled Scripts",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "enabled",
+          "builtin",
+          "health",
+          "manifest_status"
+        ],
+        "title": "ExtensionDiagnosticItem"
+      },
+      "ExtensionDiagnosticsResponse": {
+        "properties": {
+          "api_version": {
+            "type": "string",
+            "title": "Api Version"
+          },
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ExtensionDiagnosticsSummary"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExtensionDiagnosticItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "api_version",
+          "schema_version",
+          "summary",
+          "items"
+        ],
+        "title": "ExtensionDiagnosticsResponse"
+      },
+      "ExtensionDiagnosticsSummary": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "healthy": {
+            "type": "integer",
+            "title": "Healthy"
+          },
+          "degraded": {
+            "type": "integer",
+            "title": "Degraded"
+          },
+          "error": {
+            "type": "integer",
+            "title": "Error"
+          },
+          "disabled": {
+            "type": "integer",
+            "title": "Disabled"
+          },
+          "with_manifest": {
+            "type": "integer",
+            "title": "With Manifest"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "healthy",
+          "degraded",
+          "error",
+          "disabled",
+          "with_manifest"
+        ],
+        "title": "ExtensionDiagnosticsSummary"
       },
       "ExtensionIndex": {
         "properties": {
@@ -7096,6 +10072,146 @@
           "access"
         ],
         "title": "ExtensionList"
+      },
+      "ExtensionManifestModel": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "api_version": {
+            "type": "string",
+            "title": "Api Version"
+          },
+          "min_remi_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Remi Version"
+          },
+          "requires_capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Requires Capabilities",
+            "default": []
+          },
+          "requires_widgets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Requires Widgets",
+            "default": []
+          },
+          "license": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License"
+          },
+          "homepage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Homepage"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          }
+        },
+        "type": "object",
+        "required": [
+          "api_version"
+        ],
+        "title": "ExtensionManifestModel"
+      },
+      "ExtensionParamDiff": {
+        "properties": {
+          "group": {
+            "type": "string",
+            "title": "Group"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "a": {
+            "title": "A"
+          },
+          "b": {
+            "title": "B"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "changed",
+              "added",
+              "removed"
+            ],
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "group",
+          "key",
+          "kind"
+        ],
+        "title": "ExtensionParamDiff"
       },
       "ExtensionRepoState": {
         "properties": {
@@ -8195,6 +11311,98 @@
         ],
         "title": "Job"
       },
+      "JobChainModel": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "paused",
+              "completed",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "current_stage": {
+            "type": "integer",
+            "title": "Current Stage"
+          },
+          "total_stages": {
+            "type": "integer",
+            "title": "Total Stages"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageRunModel"
+            },
+            "type": "array",
+            "title": "Stages"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "current_stage",
+          "total_stages",
+          "stages",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "JobChainModel"
+      },
       "JobCount": {
         "properties": {
           "count": {
@@ -8806,6 +12014,133 @@
         ],
         "title": "Licenses"
       },
+      "LineageNode": {
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "title": "File Id"
+          },
+          "relation": {
+            "type": "string",
+            "title": "Relation"
+          },
+          "depth": {
+            "type": "integer",
+            "title": "Depth",
+            "default": 0
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "chain_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chain Id"
+          },
+          "stage_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Index"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "tab": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tab"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "exists": {
+            "type": "boolean",
+            "title": "Exists",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_id",
+          "relation"
+        ],
+        "title": "LineageNode"
+      },
       "LoadedModels": {
         "properties": {
           "checkpoint": {
@@ -8909,6 +12244,35 @@
         ],
         "title": "LoginRequest"
       },
+      "LoraDiff": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "a": {
+            "title": "A"
+          },
+          "b": {
+            "title": "B"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "changed",
+              "added",
+              "removed"
+            ],
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "LoraDiff"
+      },
       "MetadataEntry": {
         "properties": {
           "group": {
@@ -8955,6 +12319,76 @@
           "file_id"
         ],
         "title": "MetadataRequest"
+      },
+      "MlxEnvironmentModel": {
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "title": "Available"
+          },
+          "platform_supported": {
+            "type": "boolean",
+            "title": "Platform Supported"
+          },
+          "mlx_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mlx Version"
+          },
+          "mflux_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mflux Version"
+          },
+          "unified_memory_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unified Memory Mb"
+          },
+          "supported_families": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Supported Families",
+            "default": []
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "available",
+          "platform_supported"
+        ],
+        "title": "MlxEnvironmentModel"
       },
       "ModelRef": {
         "properties": {
@@ -10331,6 +13765,44 @@
         ],
         "title": "Page[GalleryItem]"
       },
+      "Page_JobChainModel_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/JobChainModel"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "Page[JobChainModel]"
+      },
       "Page_Job_": {
         "properties": {
           "items": {
@@ -11474,6 +14946,48 @@
         ],
         "title": "PromptTagLookupRequest"
       },
+      "PromptTokenDiff": {
+        "properties": {
+          "a": {
+            "type": "string",
+            "title": "A"
+          },
+          "b": {
+            "type": "string",
+            "title": "B"
+          },
+          "added": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Added",
+            "default": []
+          },
+          "removed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Removed",
+            "default": []
+          },
+          "unchanged": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unchanged",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "a",
+          "b"
+        ],
+        "title": "PromptTokenDiff"
+      },
       "PromptToolsConfig": {
         "properties": {
           "tags": {
@@ -11798,6 +15312,214 @@
         ],
         "title": "PromptTranslationKeyState"
       },
+      "PromptUpsampleRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Prompt",
+            "description": "short prompt or editing instruction to upsample"
+          },
+          "model_family": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Family",
+            "description": "target model family (\"flux3\", \"qwen21\", \"moss\", \"fibo\", \"zimage\", \"ernie\", \"anima\", \"auto\")"
+          },
+          "reference_file_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 16,
+            "title": "Reference File Ids",
+            "description": "FileStore upload/output ids to attach as multimodal reference images",
+            "default": []
+          },
+          "reference_images": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 16,
+            "title": "Reference Images",
+            "description": "optional data:image/... URIs (use reference_file_ids for uploaded/generated images)",
+            "default": []
+          },
+          "aspect_ratio": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aspect Ratio",
+            "description": "target aspect ratio or dimensions, e.g. \"16:9\" or \"1024x1024\""
+          },
+          "bbox_draft": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox Draft"
+          },
+          "mode": {
+            "type": "string",
+            "maxLength": 32,
+            "title": "Mode",
+            "description": "\"auto\" | \"t2i\" | \"t2i_bbox\" | \"i2i\" | \"i2i_bbox\" | \"vgl_json\"",
+            "default": "auto"
+          },
+          "local_model_path": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Model Path"
+          },
+          "current": {
+            "type": "string",
+            "maxLength": 8000,
+            "title": "Current",
+            "default": ""
+          },
+          "negative": {
+            "type": "boolean",
+            "title": "Negative",
+            "default": false
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 8000,
+            "title": "Instructions",
+            "default": ""
+          },
+          "temperature": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Temperature",
+            "default": 0.7
+          },
+          "max_tokens": {
+            "type": "integer",
+            "maximum": 8192.0,
+            "minimum": 16.0,
+            "title": "Max Tokens",
+            "default": 1024
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "PromptUpsampleRequest"
+      },
+      "PromptUpsampled": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "title": "Prompt"
+          },
+          "original_prompt": {
+            "type": "string",
+            "title": "Original Prompt"
+          },
+          "model_family": {
+            "type": "string",
+            "title": "Model Family"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "backend": {
+            "type": "string",
+            "title": "Backend"
+          },
+          "used_reference_count": {
+            "type": "integer",
+            "title": "Used Reference Count",
+            "default": 0
+          },
+          "aspect_ratio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aspect Ratio"
+          },
+          "layout_rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Layout Rows"
+          },
+          "vgl_json": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vgl Json"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt",
+          "original_prompt",
+          "model_family",
+          "mode",
+          "backend"
+        ],
+        "title": "PromptUpsampled"
+      },
       "PromptUsageRecord": {
         "properties": {
           "name": {
@@ -11860,6 +15582,465 @@
           "paused"
         ],
         "title": "QueueStatus"
+      },
+      "RecipeApplyRequest": {
+        "properties": {
+          "tab": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "txt2img",
+                  "img2img",
+                  "extras"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tab"
+          },
+          "core": {
+            "type": "object",
+            "title": "Core",
+            "default": {}
+          },
+          "scripts": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Scripts",
+            "default": {}
+          },
+          "check_conflicts": {
+            "type": "boolean",
+            "title": "Check Conflicts",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "RecipeApplyRequest"
+      },
+      "RecipeApplyResult": {
+        "properties": {
+          "recipe": {
+            "$ref": "#/components/schemas/RecipeItem"
+          },
+          "tab": {
+            "type": "string",
+            "enum": [
+              "txt2img",
+              "img2img",
+              "extras"
+            ],
+            "title": "Tab"
+          },
+          "patch": {
+            "type": "object",
+            "title": "Patch"
+          },
+          "core": {
+            "type": "object",
+            "title": "Core"
+          },
+          "scripts": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Scripts"
+          },
+          "conflicts": {
+            "type": "object",
+            "title": "Conflicts"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipe",
+          "tab",
+          "patch",
+          "core",
+          "scripts",
+          "conflicts",
+          "warnings"
+        ],
+        "title": "RecipeApplyResult"
+      },
+      "RecipeCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          },
+          "model_family": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Family"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Capabilities",
+            "default": []
+          },
+          "tab": {
+            "type": "string",
+            "enum": [
+              "txt2img",
+              "img2img",
+              "extras"
+            ],
+            "title": "Tab",
+            "default": "txt2img"
+          },
+          "core_patch": {
+            "type": "object",
+            "title": "Core Patch",
+            "default": {}
+          },
+          "scripts_patch": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Scripts Patch",
+            "default": {}
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "RecipeCreate"
+      },
+      "RecipeExport": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 1
+          },
+          "recipes": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Recipes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipes"
+        ],
+        "title": "RecipeExport"
+      },
+      "RecipeImportRequest": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 1
+          },
+          "recipes": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Recipes"
+          },
+          "overwrite": {
+            "type": "boolean",
+            "title": "Overwrite",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipes"
+        ],
+        "title": "RecipeImportRequest"
+      },
+      "RecipeImportResult": {
+        "properties": {
+          "added": {
+            "type": "integer",
+            "title": "Added"
+          },
+          "updated": {
+            "type": "integer",
+            "title": "Updated"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecipeItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "added",
+          "updated",
+          "skipped",
+          "items"
+        ],
+        "title": "RecipeImportResult"
+      },
+      "RecipeItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "model_family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Family"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Capabilities",
+            "default": []
+          },
+          "tab": {
+            "type": "string",
+            "enum": [
+              "txt2img",
+              "img2img",
+              "extras"
+            ],
+            "title": "Tab",
+            "default": "txt2img"
+          },
+          "core_patch": {
+            "type": "object",
+            "title": "Core Patch",
+            "default": {}
+          },
+          "scripts_patch": {
+            "additionalProperties": {
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Scripts Patch",
+            "default": {}
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "default": []
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RecipeItem"
+      },
+      "RecipeList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecipeItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "RecipeList"
+      },
+      "RecipeUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "model_family": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Family"
+          },
+          "capabilities": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capabilities"
+          },
+          "tab": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "txt2img",
+                  "img2img",
+                  "extras"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tab"
+          },
+          "core_patch": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Core Patch"
+          },
+          "scripts_patch": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scripts Patch"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "title": "RecipeUpdate"
       },
       "ReorderRequest": {
         "properties": {
@@ -12199,6 +16380,287 @@
         "title": "SettingsSchema",
         "description": "``GET/PATCH /options`` (schema-format.md §6)."
       },
+      "StageCachePlan": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prompt_upsample",
+              "generate",
+              "refine",
+              "finish"
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "stage_hash": {
+            "type": "string",
+            "title": "Stage Hash"
+          },
+          "cache_hit": {
+            "type": "boolean",
+            "title": "Cache Hit"
+          },
+          "cached_outputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cached Outputs",
+            "default": []
+          },
+          "cached_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cached Prompt"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "kind",
+          "name",
+          "enabled",
+          "stage_hash",
+          "cache_hit"
+        ],
+        "title": "StageCachePlan"
+      },
+      "StageRunModel": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prompt_upsample",
+              "generate",
+              "refine",
+              "finish"
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "tab": {
+            "type": "string",
+            "title": "Tab"
+          },
+          "core": {
+            "type": "object",
+            "title": "Core",
+            "default": {}
+          },
+          "scripts": {
+            "type": "object",
+            "title": "Scripts",
+            "default": {}
+          },
+          "config": {
+            "type": "object",
+            "title": "Config",
+            "default": {}
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "cached",
+              "completed",
+              "failed",
+              "skipped",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "stage_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Hash"
+          },
+          "cached": {
+            "type": "boolean",
+            "title": "Cached",
+            "default": false
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "output_file_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Output File Ids",
+            "default": []
+          },
+          "output_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Prompt"
+          },
+          "infotext": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Infotext"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "kind",
+          "name",
+          "enabled",
+          "tab",
+          "status"
+        ],
+        "title": "StageRunModel"
+      },
+      "StageSpecModel": {
+        "properties": {
+          "index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "prompt_upsample",
+              "generate",
+              "refine",
+              "finish"
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "tab": {
+            "type": "string",
+            "title": "Tab",
+            "default": ""
+          },
+          "core": {
+            "type": "object",
+            "title": "Core",
+            "default": {}
+          },
+          "scripts": {
+            "type": "object",
+            "title": "Scripts",
+            "default": {}
+          },
+          "config": {
+            "type": "object",
+            "title": "Config",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "StageSpecModel"
+      },
       "StarOutputsRequest": {
         "properties": {
           "ids": {
@@ -12369,6 +16831,17 @@
               }
             ],
             "title": "Conflict Params"
+          },
+          "capabilities": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capabilities"
           }
         },
         "additionalProperties": true,
@@ -12572,6 +17045,215 @@
         ],
         "title": "ValidationErrorBody",
         "description": "A rejected request (schema-format.md §3)."
+      },
+      "WorkerRestartResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok",
+            "default": true
+          },
+          "worker": {
+            "$ref": "#/components/schemas/WorkerStatusModel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "worker"
+        ],
+        "title": "WorkerRestartResponse"
+      },
+      "WorkerStatusModel": {
+        "properties": {
+          "worker_id": {
+            "type": "string",
+            "title": "Worker Id"
+          },
+          "pid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "starting",
+              "idle",
+              "busy",
+              "restarting",
+              "stopped",
+              "error",
+              "unavailable"
+            ],
+            "title": "State"
+          },
+          "backend": {
+            "type": "string",
+            "enum": [
+              "inprocess",
+              "forge-pytorch",
+              "mlx-mflux"
+            ],
+            "title": "Backend"
+          },
+          "device": {
+            "type": "string",
+            "title": "Device"
+          },
+          "gpu_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Name"
+          },
+          "vram_total_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vram Total Mb"
+          },
+          "vram_free_mb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vram Free Mb"
+          },
+          "loaded_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loaded Model"
+          },
+          "supported_families": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Supported Families",
+            "default": []
+          },
+          "quant_formats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Quant Formats",
+            "default": []
+          },
+          "current_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Job Id"
+          },
+          "jobs_completed": {
+            "type": "integer",
+            "title": "Jobs Completed",
+            "default": 0
+          },
+          "jobs_failed": {
+            "type": "integer",
+            "title": "Jobs Failed",
+            "default": 0
+          },
+          "restarts": {
+            "type": "integer",
+            "title": "Restarts",
+            "default": 0
+          },
+          "uptime_s": {
+            "type": "number",
+            "title": "Uptime S",
+            "default": 0.0
+          },
+          "last_heartbeat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Heartbeat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "worker_id",
+          "state",
+          "backend",
+          "device"
+        ],
+        "title": "WorkerStatusModel"
+      },
+      "WorkersResponse": {
+        "properties": {
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "inprocess",
+                  "subprocess",
+                  "pool"
+                ]
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Mode"
+          },
+          "workers": {
+            "items": {
+              "$ref": "#/components/schemas/WorkerStatusModel"
+            },
+            "type": "array",
+            "title": "Workers"
+          },
+          "mlx": {
+            "$ref": "#/components/schemas/MlxEnvironmentModel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "workers",
+          "mlx"
+        ],
+        "title": "WorkersResponse"
       },
       "ZipResult": {
         "properties": {

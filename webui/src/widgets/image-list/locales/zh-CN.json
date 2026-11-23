@@ -1,8 +1,12 @@
 {
   "This image is no longer available": "此图像已不可用",
+  "Contains transparency (RGBA)": "包含透明通道（RGBA）",
   "Images": "图像",
   "Image {{n}}": "图像 {{n}}",
   "Remove image {{n}}": "移除图像 {{n}}",
+  "Click to insert {{token}} into prompt": "点击将 {{token}} 插入提示词",
+  "Inserted {{token}} into prompt": "已将 {{token}} 插入提示词",
+  "Insert token": "插入槽位标记",
   "Image actions": "图像操作",
   "Move earlier": "前移",
   "Move later": "后移",

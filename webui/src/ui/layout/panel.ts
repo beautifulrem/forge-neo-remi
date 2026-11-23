@@ -14,4 +14,4 @@ export const usePanelDepth = () => use(PanelDepthContext)
 
 export const panelClass = (depth: number) => (depth === 0 ? "border-t border-border pt-3" : "border-t border-border/60 pt-2.5")
 
-export const panelTitleClass = (depth: number) => (depth === 0 ? "text-[0.9375rem] font-semibold" : "text-sm font-semibold")
+export const panelTitleClass = (depth: number) => (depth === 0 ? "text-[0.9375rem] font-semibold tracking-[-0.01em]" : "text-sm font-semibold")

@@ -1,8 +1,9 @@
 /**
  * `image-list`: an ordered list of uploaded images (e.g. ImageStitch's
  * reference images). Add (drop, paste, browse), select, replace, remove,
- * reorder (drag a thumbnail, Alt+arrow keys or the toolbar) and clear. The
- * order is the order the script receives.
+ * reorder (drag a thumbnail, Alt+arrow keys or the toolbar), clear, click
+ * model-aware slot badges (`<image_1>` / `ref_image_0` / `Image 1`) to insert
+ * the slot token at the prompt cursor, and surface `RGBA` alpha badges.
  *
  * Keyboard (list focused): arrows select, Alt+arrows move the selected
  * image, Home / End, Delete or Backspace remove it. The hover remove button
@@ -11,24 +12,28 @@
  * Declared as `ui.ImageList(..., widget="image-list")`, so the value keeps the
  * upload semantics (never restored from drafts).
  *
- * props: { columns?: number (default 3) }   value: string[] (upload ids)
+ * props: { columns?: number (default 3), slot_format?: string }   value: string[] (upload ids)
  */
-import { ArrowLeft, ArrowRight, ImageOff, ImagePlus, Loader2, Replace, Trash2, X } from "@/components/icons"
+import { ArrowLeft, ArrowRight, GripVertical, ImageOff, ImagePlus, Loader2, Replace, TextCursorInput, Trash2, X } from "@/components/icons"
 import { type KeyboardEvent, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { toast } from "sonner"
+import { useClientOption } from "@/api/app-options"
 import { Button } from "@/components/ui/button"
+import { insertPromptToken } from "@/features/prompt-editor/active-editor"
 import { cn } from "@/lib/utils"
 import { labelId } from "@/ui/a11y"
-import { useForm, useOwner } from "@/ui/hooks"
+import { useForm, useFormState, useOwner } from "@/ui/hooks"
 import { DropZone } from "@/ui/inputs/DropZone"
 import { imageFiles, releaseUpload, useUploader, useUploadInfo } from "@/ui/uploads"
 import type { WidgetProps } from "@/ui/widgets"
 import { registerWidgetCatalogs } from "../_lib/i18n"
 import { moveItem, removeAt, replaceAt, selectionAfterRemove } from "./list"
+import { formatSlotToken, resolveSlotFormat } from "./slot-format"
 
 const NS = registerWidgetCatalogs("image-list", import.meta.glob("./locales/*.json", { eager: true, import: "default" }))
 
-type Props = { columns?: number }
+type Props = { columns?: number; slot_format?: string }
 
 const EMPTY: string[] = []
 
@@ -46,19 +51,44 @@ function Thumb({ id }: { id: string }) {
       </div>
     )
   }
-  return <img src={info.url} alt="" draggable={false} onError={() => setFailed(id)} className="size-full object-contain" />
+  return (
+    <>
+      <img src={info.url} alt="" draggable={false} onError={() => setFailed(id)} className="size-full object-contain" />
+      {info.hasAlpha ? (
+        <span
+          data-slot="rgba-badge"
+          title={tw("Contains transparency (RGBA)")}
+          className="pointer-events-none absolute bottom-1 left-1 rounded-xs border border-capability-badge-border bg-capability-badge-bg/95 px-1 py-px text-[0.625rem] leading-tight font-semibold tracking-tight text-capability-badge"
+        >
+          RGBA
+        </span>
+      ) : null}
+    </>
+  )
 }
 
 export default function ImageListWidget({ value, onChange, props, disabled, id, label, node }: WidgetProps<string[] | null, Props>) {
   const { t: tw } = useTranslation(NS)
-  const { store } = useForm()
+  const { store, formId } = useForm()
   const owner = useOwner()
+  const preset = useClientOption("forge_preset")
+  const checkpoint = useClientOption("sd_model_checkpoint")
+  const schemaSlotFormat = useFormState((s) => s.capabilities?.reference_slot_format ?? null)
+  const schemaSlotStart = useFormState((s) => s.capabilities?.reference_slot_start ?? null)
+  const slotTemplate = resolveSlotFormat({
+    propFormat: props.slot_format,
+    schemaFormat: schemaSlotFormat,
+    schemaStart: schemaSlotStart,
+    preset,
+    checkpoint,
+  })
   const ids = uploadIds(value)
   // After an upload the list may have changed (another upload, a removal): edit the stored list, not this render's
   const latest = () => uploadIds(store.getState().values[owner]?.[node.name])
   const columns = Math.min(Math.max(Math.round(props.columns ?? 3), 1), 8)
   const [selection, setSelection] = useState(-1)
   const [dragFrom, setDragFrom] = useState<number | null>(null)
+  const [dragOver, setDragOver] = useState<number | null>(null)
   const { upload, busy } = useUploader()
   const replaceInput = useRef<HTMLInputElement>(null)
   const list = useRef<HTMLUListElement>(null)
@@ -110,6 +140,13 @@ export default function ImageListWidget({ value, onChange, props, disabled, id, 
     for (const item of ids) releaseUpload(item)
   }
 
+  const insertToken = (index: number) => {
+    const token = formatSlotToken(index, slotTemplate)
+    if (insertPromptToken(formId, token, store)) {
+      toast.success(tw("Inserted {{token}} into prompt", { token }))
+    }
+  }
+
   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
     if (disabled || ids.length === 0) return
     const from = selected < 0 ? 0 : selected
@@ -154,66 +191,99 @@ export default function ImageListWidget({ value, onChange, props, disabled, id, 
             className="grid gap-1.5 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
             style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
           >
-            {ids.map((imageId, index) => (
-              <li
-                key={`${imageId}-${index}`}
-                id={optionId(index)}
-                role="option"
-                aria-selected={index === selected}
-                aria-label={tw("Image {{n}}", { n: index + 1 })}
-                draggable={!disabled}
-                onClick={() => {
-                  if (disabled) return
-                  setSelection(index)
-                  list.current?.focus()
-                }}
-                onDragStart={(event) => {
-                  event.dataTransfer.effectAllowed = "move"
-                  event.dataTransfer.setData("text/plain", String(index))
-                  setDragFrom(index)
-                }}
-                onDragEnd={() => setDragFrom(null)}
-                onDragOver={(event) => {
-                  if (dragFrom === null) return
-                  event.preventDefault()
-                  event.dataTransfer.dropEffect = "move"
-                }}
-                onDrop={(event) => {
-                  if (dragFrom === null) return
-                  event.preventDefault()
-                  move(dragFrom, index)
-                  setDragFrom(null)
-                }}
-                className={cn(
-                  "group/thumb relative aspect-square cursor-pointer overflow-hidden rounded-md border-2 border-transparent bg-checker transition-colors",
-                  index === selected && "border-primary",
-                  dragFrom === index && "opacity-50",
-                  disabled && "cursor-default",
-                )}
-              >
-                <Thumb id={imageId} />
-                <span aria-hidden className="absolute top-1 left-1 rounded bg-background/80 px-1 text-[0.625rem] font-medium tabular-nums">
-                  {index + 1}
-                </span>
-                <Button
-                  variant="secondary"
-                  size="icon-xs"
-                  tabIndex={-1}
-                  aria-hidden
-                  title={tw("Remove image {{n}}", { n: index + 1 })}
-                  disabled={disabled}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    remove(index)
+            {ids.map((imageId, index) => {
+              const slotToken = formatSlotToken(index, slotTemplate)
+              return (
+                <li
+                  key={`${imageId}-${index}`}
+                  id={optionId(index)}
+                  role="option"
+                  aria-selected={index === selected}
+                  aria-label={tw("Image {{n}}", { n: index + 1 })}
+                  draggable={!disabled}
+                  onClick={() => {
+                    if (disabled) return
+                    setSelection(index)
+                    list.current?.focus()
                   }}
-                  className="absolute top-1 right-1 opacity-0 group-hover/thumb:opacity-100 [@media(hover:none)]:opacity-100"
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = "move"
+                    event.dataTransfer.setData("text/plain", String(index))
+                    setDragFrom(index)
+                  }}
+                  onDragEnd={() => {
+                    setDragFrom(null)
+                    setDragOver(null)
+                  }}
+                  onDragOver={(event) => {
+                    if (dragFrom === null) return
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = "move"
+                    if (dragOver !== index) setDragOver(index)
+                  }}
+                  onDragLeave={() => {
+                    if (dragOver === index) setDragOver(null)
+                  }}
+                  onDrop={(event) => {
+                    if (dragFrom === null) return
+                    event.preventDefault()
+                    move(dragFrom, index)
+                    setDragFrom(null)
+                    setDragOver(null)
+                  }}
+                  className={cn(
+                    "group/thumb relative aspect-square cursor-pointer overflow-hidden rounded-md border-2 border-transparent bg-checker transition-colors",
+                    index === selected && "border-primary",
+                    dragFrom === index && "opacity-50",
+                    dragOver === index && dragFrom !== null && dragFrom !== index && "border-primary/70 ring-2 ring-primary/35",
+                    disabled && "cursor-default",
+                  )}
                 >
-                  <X />
-                </Button>
-              </li>
-            ))}
+                  <Thumb id={imageId} />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    disabled={disabled}
+                    title={tw("Click to insert {{token}} into prompt", { token: slotToken })}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setSelection(index)
+                      insertToken(index)
+                    }}
+                    className="absolute top-1 left-1 max-w-[calc(100%-2.25rem)] truncate rounded-xs border border-border/80 bg-background/90 px-1 py-px font-mono text-[0.625rem] leading-tight font-medium text-foreground tabular-nums transition-colors hover:border-primary/60 hover:bg-primary hover:text-primary-foreground disabled:pointer-events-none"
+                  >
+                    {slotToken}
+                  </button>
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute right-1 bottom-1 rounded-xs bg-background/75 p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover/thumb:opacity-100"
+                  >
+                    <GripVertical className="size-3" />
+                  </span>
+                  <Button
+                    variant="secondary"
+                    size="icon-xs"
+                    tabIndex={-1}
+                    aria-hidden
+                    title={tw("Remove image {{n}}", { n: index + 1 })}
+                    disabled={disabled}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      remove(index)
+                    }}
+                    className="absolute top-1 right-1 opacity-0 group-hover/thumb:opacity-100 [@media(hover:none)]:opacity-100"
+                  >
+                    <X />
+                  </Button>
+                </li>
+              )
+            })}
           </ul>
           <div role="toolbar" aria-label={tw("Image actions")} className="flex flex-wrap items-center gap-1">
+            <Button variant="outline" size="xs" disabled={disabled || selected < 0} onClick={() => insertToken(selected)}>
+              <TextCursorInput aria-hidden />
+              {tw("Insert token")}
+            </Button>
             <Button variant="outline" size="xs" disabled={disabled || selected <= 0} onClick={() => move(selected, selected - 1)}>
               <ArrowLeft aria-hidden />
               {tw("Move earlier")}

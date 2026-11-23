@@ -216,6 +216,43 @@ export function childrenOf(node: Node): readonly Node[] {
 
 export type OwnerDefaults = Record<string, Json>
 
+/** Declarative active-model capability summary (`backend/nn/model_capabilities.py`). */
+export type ModelCapabilitySummary = {
+  preset: string
+  dit_name: string | null
+  engine_label: string | null
+  capabilities: string[]
+  max_references: number
+  reference_slot_format: string | null
+  /** 1 for `<image_1>`, 0 for `ref_image_0` / `Picture 0`. */
+  reference_slot_start?: number
+  supports_rgba: boolean
+  supports_control_blocks: boolean
+  supports_cfg_guidance?: boolean
+  supports_negative_prompt?: boolean
+  attention_backends?: string[]
+  quant_formats?: string[]
+  compile_preset?: string | null
+  is_video?: boolean
+  frames?: number
+  use_distill?: boolean
+  use_shift?: boolean
+  defaults?: Record<string, Json>
+  badges?: string[]
+}
+
+export type AdviceSeverity = "info" | "warning" | "error"
+
+/** Pre-submit workflow advice chip with an optional one-click parameter/option fix. */
+export type AdviceItem = {
+  code: string
+  severity: AdviceSeverity
+  message: string
+  /** Core-relative ParamPatch entries and/or `__options__` server option updates. */
+  patch?: (Record<string, unknown> & { __options__?: Record<string, unknown> }) | null
+  action_label?: string | null
+}
+
 export type ScriptSchema = {
   id: string
   title: string
@@ -226,6 +263,12 @@ export type ScriptSchema = {
   layout: Node | null
   defaults: OwnerDefaults
   args?: string[]
+  /** Declarative capability tags this script requires (e.g. `["anima_hooks"]`). */
+  requires_capabilities?: string[]
+  /** False when the active model lacks one or more `requires_capabilities`. */
+  applicable?: boolean
+  /** Human-readable explanation shown when `applicable === false`. */
+  inapplicable_reason?: string | null
 }
 
 /** A core input that must not be empty while `when` holds (schema-format.md §3). */
@@ -242,6 +285,10 @@ export type TabSchema = {
    * run the core `__conflicts__` action with `selected` set to the reference.
    */
   conflict_params?: string[]
+  /** Active model capability metadata driving panel visibility, badges and slot formatting. */
+  capabilities?: ModelCapabilitySummary | null
+  /** Initial pre-submit workflow advice items for the current form defaults/options. */
+  advice?: AdviceItem[]
 }
 
 /**

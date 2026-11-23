@@ -31,4 +31,39 @@ describe("splitResponse", () => {
     expect(splitResponse("x", null)).toEqual({ params: [] })
     expect(splitResponse("x", { __toast__: { message: 3 } })).toEqual({ params: [] })
   })
+
+  it("parses __advice__ and __capabilities__ reserved keys", () => {
+    const split = splitResponse("core", {
+      __advice__: [
+        {
+          code: "qwen21.turbo",
+          severity: "warning",
+          message: "Use 8 steps for Turbo",
+          patch: { "sampler.steps": { value: 8 } },
+          action_label: "Set 8 steps",
+        },
+        { bad: true },
+      ],
+      __capabilities__: {
+        preset: "qwen21",
+        dit_name: "qwen21",
+        engine_label: "Qwen-Image-2.1",
+        capabilities: ["rgba_output"],
+        max_references: 10,
+        reference_slot_format: "<image_{i}>",
+        supports_rgba: true,
+        supports_control_blocks: true,
+      },
+    })
+    expect(split.advice).toEqual([
+      {
+        code: "qwen21.turbo",
+        severity: "warning",
+        message: "Use 8 steps for Turbo",
+        patch: { "sampler.steps": { value: 8 } },
+        action_label: "Set 8 steps",
+      },
+    ])
+    expect(split.capabilities?.preset).toBe("qwen21")
+  })
 })

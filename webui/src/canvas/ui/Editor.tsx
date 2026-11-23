@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils"
 import { describeFile, imageFiles, previewUrlOf, uploadFile, useUploadInfo } from "@/ui/uploads"
 import type { LayerKind } from "../core/modes"
 import { getDocument, loadImage } from "../engine/registry"
+import { type StagedCandidate, useCanvasStaging } from "../state/staging"
 import type { ImageEditorProps } from "../types"
 import { EditorBody } from "./EditorBody"
 import { useDocValue } from "./use-doc"
@@ -160,6 +161,24 @@ export default function Editor(props: ImageEditorProps) {
     setAttempt((n) => n + 1)
   }
 
+  const onAcceptStaged = async (candidate: StagedCandidate) => {
+    setUploading((n) => n + 1)
+    try {
+      const image = await loadImage(previewUrlOf(candidate.fileId) ?? api.fileUrl(candidate.fileId))
+      const size = { width: image.naturalWidth, height: image.naturalHeight }
+      describeFile(candidate.fileId, size)
+      await doc.flush().catch(() => {})
+      doc.setBackground(image, size, candidate.fileId)
+      useCanvasStaging.getState().discardAll(props.docKey)
+      handlers.current.onImageChange?.({ id: candidate.fileId, ...size })
+      showToast("success", t("Accepted candidate as new base layer"))
+    } catch (error) {
+      showToast("error", t("Could not load the image"), errorText(error))
+    } finally {
+      setUploading((n) => n - 1)
+    }
+  }
+
   const body = (inDialog: boolean) => (
     <EditorBody
       key={props.docKey}
@@ -177,6 +196,7 @@ export default function Editor(props: ImageEditorProps) {
       onFiles={onFiles}
       onBlank={onBlank}
       onRemove={() => void onRemove()}
+      onAcceptStaged={(candidate) => void onAcceptStaged(candidate)}
     />
   )
 

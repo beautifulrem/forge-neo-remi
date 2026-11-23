@@ -8,6 +8,7 @@
  */
 import type { Bootstrap, Models, PageSchema, PromptStyle } from "@/api/types"
 import type { ChoiceOption, Node, RequiredInput, ScriptSchema, TabSchema } from "@/ui/schema"
+import { mockAdviceFor, mockCapabilitiesForPreset } from "./capabilities"
 
 const options = (values: string[]): ChoiceOption[] => values.map((value) => ({ value, label: value }))
 
@@ -629,11 +630,40 @@ const MISC: ScriptSchema = {
 }
 
 export function tabSchema(tab: "txt2img" | "img2img"): TabSchema {
+  const preset = String(bootstrap.options.forge_preset ?? "xl")
+  const capabilities = mockCapabilitiesForPreset(
+    preset,
+    String(bootstrap.options.sd_model_checkpoint ?? ""),
+    String(bootstrap.options.forge_unet_storage_dtype ?? ""),
+  )
+  const coreDefaultValues = coreDefaults(tab)
+  const animaGated = preset !== "xl" && preset !== "sd" && !capabilities.capabilities.includes("anima_hooks")
+  const scripts: ScriptSchema[] = [
+    SEED,
+    SAMPLER,
+    REFINER,
+    animaGated
+      ? {
+          ...ANIMA,
+          requires_capabilities: ["anima_hooks"],
+          applicable: false,
+          inapplicable_reason: `Requires Anima engine hooks (active model: ${capabilities.engine_label ?? capabilities.preset})`,
+        }
+      : { ...ANIMA, applicable: true },
+    CONTROLNET,
+    BATCH,
+    XYZ,
+    PROMPT_MATRIX,
+    MISC,
+  ]
+  const scriptDefaults = Object.fromEntries(scripts.map((s) => [s.id, s.defaults]))
   return {
     version: 1,
     tab,
-    core: { owner: "core", layout: coreLayout(tab), defaults: coreDefaults(tab), required: tab === "img2img" ? IMG2IMG_REQUIRED : [] },
-    scripts: [SEED, SAMPLER, REFINER, ANIMA, CONTROLNET, BATCH, XYZ, PROMPT_MATRIX, MISC],
+    core: { owner: "core", layout: coreLayout(tab), defaults: coreDefaultValues, required: tab === "img2img" ? IMG2IMG_REQUIRED : [] },
+    scripts,
+    capabilities,
+    advice: mockAdviceFor(preset, coreDefaultValues, scriptDefaults, bootstrap.options as Record<string, unknown>),
     conflict_params: [
       ...(tab === "txt2img" ? ["core.enable_hr"] : []),
       "anima.lock_cfg",

@@ -36,7 +36,12 @@ export const PRESET_LABELS: Record<string, string> = {
   flux3: "FLUX.3 Image Klein",
 }
 
-export const presetLabel = (id: string) => PRESET_LABELS[id] ?? id
+/** Display labels for extended DiT families not yet in upstream `PresetArch.choices()`. */
+const EXTRA_PRESET_LABELS: Record<string, string> = {
+  fibo: "Fibo 2.0",
+}
+
+export const presetLabel = (id: string) => PRESET_LABELS[id] ?? EXTRA_PRESET_LABELS[id] ?? id
 
 /** "model.safetensors [a1b2c3d4]" → "model.safetensors" (the hash is noise in a picker). */
 export const checkpointLabel = (title: string) => title.replace(/\s*\[[0-9a-f]{6,}\]$/i, "")

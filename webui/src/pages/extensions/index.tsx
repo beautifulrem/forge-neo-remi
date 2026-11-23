@@ -4,7 +4,7 @@
  * Route: `#/extensions?tab=installed|available|url|backup`.
  */
 import { useQuery } from "@tanstack/react-query"
-import { Archive, Download, Link2, Package, ShieldAlert } from "@/components/icons"
+import { Archive, Download, Gauge, Link2, Package, ShieldAlert } from "@/components/icons"
 import { lazy, Suspense } from "react"
 import { useTranslation } from "react-i18next"
 import { navigate, type Route } from "@/app/router"
@@ -18,18 +18,20 @@ import { installedQuery } from "./queries"
 const AvailableView = lazy(() => import("./AvailableView").then((m) => ({ default: m.AvailableView })))
 const InstallUrlView = lazy(() => import("./InstallUrlView").then((m) => ({ default: m.InstallUrlView })))
 const BackupView = lazy(() => import("./BackupView").then((m) => ({ default: m.BackupView })))
+const DiagnosticsView = lazy(() => import("./DiagnosticsView").then((m) => ({ default: m.DiagnosticsView })))
 
-const TABS = [
+const CORE_TABS = [
   { id: "installed", label: "Installed", icon: Package },
   { id: "available", label: "Available", icon: Download },
   { id: "url", label: "Install from URL", icon: Link2 },
   { id: "backup", label: "Backup and restore", icon: Archive },
 ] as const
 
-type TabId = (typeof TABS)[number]["id"]
+type TabId = (typeof CORE_TABS)[number]["id"] | "diagnostics"
 
 function parseTab(value: string | null | undefined): TabId {
-  return TABS.some((tab) => tab.id === value) ? (value as TabId) : "installed"
+  if (value === "diagnostics") return "diagnostics"
+  return CORE_TABS.some((tab) => tab.id === value) ? (value as TabId) : "installed"
 }
 
 function openTab(value: TabId) {
@@ -41,24 +43,28 @@ export default function ExtensionsPage({ route }: { route: Route }) {
   const tab = parseTab(route.query?.get("tab"))
   const list = useQuery(installedQuery)
   const access = list.data?.access ?? true
+  const tabs: { id: TabId; text: string; icon: typeof Package }[] = [
+    ...CORE_TABS.map(({ id, label, icon }) => ({ id, text: t(label), icon })),
+    { id: "diagnostics", text: t("Diagnostics & workers"), icon: Gauge },
+  ]
 
   return (
     <div data-scroll-root className="h-full overflow-y-auto">
       <div className={PAGE_CONTAINER}>
         <Tabs value={tab} onValueChange={(value) => openTab(value as TabId)}>
-          {/* on a phone the four tabs do not fit: they become a select */}
+          {/* on a phone the tabs do not fit: they become a select */}
           <FitTabsList
             aria-label={t("Extensions")}
             variant="line"
             className="border-b pb-px"
-            options={TABS.map(({ id, label, icon: Icon }) => ({ value: id, label: t(label), icon: <Icon aria-hidden /> }))}
+            options={tabs.map(({ id, text, icon: Icon }) => ({ value: id, label: text, icon: <Icon aria-hidden /> }))}
             value={tab}
             onValueChange={openTab}
           >
-            {TABS.map(({ id, label, icon: Icon }) => (
+            {tabs.map(({ id, text, icon: Icon }) => (
               <TabsTrigger key={id} value={id} className="flex-none px-2.5">
                 <Icon aria-hidden />
-                {t(label)}
+                {text}
               </TabsTrigger>
             ))}
           </FitTabsList>
@@ -82,6 +88,9 @@ export default function ExtensionsPage({ route }: { route: Route }) {
             </TabsContent>
             <TabsContent value="backup" className="pt-2">
               {tab === "backup" ? <BackupView access={access} /> : null}
+            </TabsContent>
+            <TabsContent value="diagnostics" className="pt-2">
+              {tab === "diagnostics" ? <DiagnosticsView /> : null}
             </TabsContent>
           </Suspense>
         </Tabs>

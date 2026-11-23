@@ -16,9 +16,9 @@
 import { check, DraftError, isObject } from "./compile"
 import type { Box, Label, LayoutDraft } from "./decompile"
 
-export const PROMPT_FORMATS = ["moss", "flux3"] as const
+export const PROMPT_FORMATS = ["moss", "flux3", "vgl"] as const
 export type PromptFormat = (typeof PROMPT_FORMATS)[number]
-export const PROMPT_FORMAT_NAMES: Record<PromptFormat, string> = { moss: "MOSS-Image", flux3: "FLUX.3" }
+export const PROMPT_FORMAT_NAMES: Record<PromptFormat, string> = { moss: "MOSS-Image", flux3: "FLUX.3", vgl: "Fibo VGL" }
 
 /** The 0–1000 grid FLUX.3 boxes live on. */
 export const CANVAS = 1000

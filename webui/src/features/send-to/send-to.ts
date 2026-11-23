@@ -10,6 +10,7 @@ import { api } from "@/api/endpoints"
 import type { FormTab, ParamValues } from "@/api/types"
 import { currentRoute, navigate, type Route, routeKey } from "@/app/router"
 import { applyPaste, type PasteEntry, type PasteFilter, parsedEntries, planEntries } from "@/features/infotext/paste"
+import { runChangeEffects } from "@/ui/actions"
 import type { FormIndex } from "@/ui/form-index"
 import { getFormStore } from "@/ui/form-store"
 import { describeFile } from "@/ui/uploads"
@@ -123,4 +124,117 @@ export async function sendTo(target: SendTarget, item: SendItem, filter: PasteFi
     describeFile(item.fileId, item)
   }
   return deliver(tab, entries, filter)
+}
+
+export type ReferenceTarget = {
+  owner: string
+  param: string
+  enableParam?: string
+}
+
+/**
+ * Finds the ImageStitch reference list input on a loaded form: prefers an owner
+ * whose id matches `imagestitch` / `image_stitch`, else any script owner with
+ * an `image_list` input named `references`.
+ */
+export function findReferenceTarget(index: FormIndex): ReferenceTarget | null {
+  let fallback: ReferenceTarget | null = null
+  for (const [owner, nodes] of index.inputs) {
+    if (owner === "core") continue
+    const isStitch = /image_?stitch/i.test(owner)
+    const refNode = nodes.get("references")
+    const listEntry =
+      refNode?.type === "image_list"
+        ? (["references", refNode] as const)
+        : isStitch
+          ? [...nodes.entries()].find(([, node]) => node.type === "image_list")
+          : undefined
+    if (!listEntry) continue
+    const enableParam = nodes.get("enable")?.type === "toggle" ? "enable" : undefined
+    const target: ReferenceTarget = { owner, param: listEntry[0], enableParam }
+    if (isStitch) return target
+    fallback ??= target
+  }
+  return fallback
+}
+
+export type AppendReferenceResult = {
+  owner: string | null
+  added: number
+  total: number
+}
+
+function applyReferences(tab: "txt2img" | "img2img", items: readonly SendItem[]): AppendReferenceResult {
+  const store = getFormStore(tab)
+  const state = store.getState()
+  const target = findReferenceTarget(state.index)
+  if (!target) return { owner: null, added: 0, total: 0 }
+
+  const rawExisting = state.values[target.owner]?.[target.param]
+  const existing = Array.isArray(rawExisting) ? rawExisting.filter((entry): entry is string => typeof entry === "string" && entry.length > 0) : []
+  const seen = new Set(existing)
+  const incoming: string[] = []
+  for (const item of items) {
+    if (!item.fileId || seen.has(item.fileId)) continue
+    seen.add(item.fileId)
+    incoming.push(item.fileId)
+    describeFile(item.fileId, item)
+  }
+
+  const nextList = [...existing, ...incoming]
+  const values: ParamValues = { [target.param]: nextList }
+  const changed: string[] = []
+  if (incoming.length > 0) changed.push(target.param)
+  if (target.enableParam && !state.values[target.owner]?.[target.enableParam]) {
+    values[target.enableParam] = true
+    changed.push(target.enableParam)
+  }
+
+  if (changed.length > 0) {
+    state.setValues(target.owner, values)
+    const reveal = state.index.reveal.get(target.owner)?.get(target.param)
+    for (const key of reveal?.open ?? []) state.setOpen(key, true)
+    for (const [key, value] of reveal?.tabs ?? []) state.setTab(key, value)
+    runChangeEffects({ store, tab }, target.owner, changed)
+  }
+
+  return { owner: target.owner, added: incoming.length, total: nextList.length }
+}
+
+const pendingRefs = new Map<"txt2img" | "img2img", { unsubscribe: () => void; resolve: (res: AppendReferenceResult) => void }>()
+
+/**
+ * Appends one or more images to the active generation form's ImageStitch
+ * reference list without clobbering existing references. Waits for the form's
+ * schema to load if it has not been visited yet.
+ */
+export function sendToReference(items: readonly SendItem[], preferredTab?: "txt2img" | "img2img"): Promise<AppendReferenceResult> {
+  const route = currentRoute()
+  const tab: "txt2img" | "img2img" = preferredTab ?? (route.name === "generate" ? route.tab : "txt2img")
+  const valid = items.filter((item) => Boolean(item.fileId))
+  if (valid.length === 0) return Promise.resolve({ owner: null, added: 0, total: 0 })
+
+  const store = getFormStore(tab)
+  const onScreen = routeKey(route) === routeKey(routeOf(tab))
+  if (store.getState().revision > 0) {
+    pendingRefs.get(tab)?.unsubscribe()
+    pendingRefs.delete(tab)
+    const result = applyReferences(tab, valid)
+    if (!onScreen) navigate(routeOf(tab))
+    return Promise.resolve(result)
+  }
+
+  const previous = pendingRefs.get(tab)
+  previous?.unsubscribe()
+  previous?.resolve({ owner: null, added: 0, total: 0 })
+  return new Promise<AppendReferenceResult>((resolve) => {
+    const unsubscribe = store.subscribe((s, prev) => {
+      if (s.revision === prev.revision) return
+      unsubscribe()
+      pendingRefs.delete(tab)
+      resolve(applyReferences(tab, valid))
+    })
+    pendingRefs.set(tab, { unsubscribe, resolve })
+    navigate(routeOf(tab))
+  })
 }

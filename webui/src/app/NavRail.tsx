@@ -55,16 +55,22 @@ function RailLink({ item, active }: { item: NavItem; active: boolean }) {
             onPointerEnter={() => preloadRoute(item.route)}
             onFocus={() => preloadRoute(item.route)}
             className={cn(
-              "group/rail relative grid size-10 place-items-center rounded-md text-rail-muted outline-none",
-              "hover:text-rail-foreground focus-visible:ring-3 focus-visible:ring-rail-foreground/60",
-              active && "text-rail-current hover:text-rail-current",
+              "group/rail relative grid size-10 place-items-center rounded-md text-rail-muted transition-colors outline-none",
+              "hover:bg-sidebar-accent/70 hover:text-rail-foreground focus-visible:ring-3 focus-visible:ring-rail-foreground/60",
+              active && "text-rail-current hover:bg-transparent hover:text-rail-current",
             )}
           />
         }
       >
         {/* registered on the bar: a flat peg notch on the rail's edge */}
         {/* the current page's tile moves to the page picked */}
-        {active ? <m.span layoutId="rail-current" aria-hidden className="absolute inset-0 rounded-md bg-rail-active" /> : null}
+        {active ? (
+          <m.span
+            layoutId="rail-current"
+            aria-hidden
+            className="absolute inset-0 rounded-md bg-rail-active before:absolute before:inset-y-2 before:-left-2 before:w-0.5 before:rounded-r-full before:bg-rail-current"
+          />
+        ) : null}
         <Icon className="relative size-5" weight={active ? "fill" : "regular"} aria-hidden />
         {queued > 0 ? (
           <span
@@ -96,7 +102,7 @@ export function NavRail({ items, route }: { items: NavItem[]; route: Route }) {
   return (
     <nav
       aria-label={t("Main navigation")}
-      className="hidden w-14 shrink-0 flex-col items-center gap-1 bg-rail py-2 md:flex"
+      className="hidden w-14 shrink-0 flex-col items-center gap-1 border-r border-border bg-rail py-2 md:flex"
     >
       <Logo />
       <div className="no-scrollbar mt-2 flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto px-2 py-1">
@@ -104,13 +110,13 @@ export function NavRail({ items, route }: { items: NavItem[]; route: Route }) {
           const separator = index > 0 && main[index - 1]?.group !== item.group
           return (
             <div key={item.id} className="contents">
-              {separator ? <div aria-hidden className="h-3 shrink-0" /> : null}
+              {separator ? <div aria-hidden className="my-1.5 w-5 shrink-0 border-t border-border/80" /> : null}
               <RailLink item={item} active={isActive(item, route)} />
             </div>
           )
         })}
       </div>
-      <div className="flex flex-col items-center gap-1 px-2">
+      <div className="flex flex-col items-center gap-1 border-t border-border/80 px-2 pt-2">
         {system.map((item) => (
           <RailLink key={item.id} item={item} active={isActive(item, route)} />
         ))}
@@ -131,7 +137,7 @@ export function BottomBar({ items, route }: { items: NavItem[]; route: Route }) 
     <nav
       aria-label={t("Main navigation")}
       data-toast-obstacle
-      className="flex shrink-0 items-stretch gap-1 bg-rail px-2 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden"
+      className="flex shrink-0 items-stretch gap-1 border-t border-border bg-rail px-2 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden"
     >
       {primary.map((item) => (
         <BottomTab key={item.id} item={item} active={isActive(item, route)} onRail />

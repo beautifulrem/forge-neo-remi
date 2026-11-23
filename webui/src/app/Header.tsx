@@ -87,11 +87,11 @@ export function Header({ title, locales }: { title: string; locales: LocaleInfo[
   return (
     // Opaque, no backdrop-filter: only the page background is behind it, and its progress line
     // changes every step (a blur would be redrawn with it).
-    <header className="relative flex h-12 shrink-0 items-center gap-2 border-b bg-background px-3 md:px-4">
-      <h1 className="shrink-0 truncate font-heading text-xl font-semibold tracking-[-0.015em]">{title}</h1>
+    <header className="relative flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-3 md:px-4">
+      <h1 className="shrink-0 truncate font-heading text-xl font-semibold tracking-[-0.02em]">{title}</h1>
       {/* page controls keep their size; the model bar (checkpoint name) is what shrinks */}
       <div ref={setSlot} className="flex shrink-0 items-center gap-2" />
-      <div className="ml-auto flex min-w-0 items-center gap-1">
+      <div className="ml-auto flex min-w-0 items-center gap-1.5">
         <div className="hidden min-w-0 sm:block">
           <Suspense fallback={<div aria-hidden className="h-7 w-[min(22rem,40vw)] rounded-sm bg-field" />}>
             <ModelQuickBar />
@@ -100,6 +100,7 @@ export function Header({ title, locales }: { title: string; locales: LocaleInfo[
         <Suspense fallback={null}>
           <QuickSettings />
         </Suspense>
+        <span aria-hidden className="mx-0.5 hidden h-4 w-px shrink-0 bg-border sm:block" />
         <Button
           variant="ghost"
           size="sm"

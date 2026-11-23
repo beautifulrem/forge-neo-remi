@@ -3,20 +3,25 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
-import type { GalleryItem, GalleryQuery } from "@/api/types"
+import type { GalleryItem } from "@/api/types"
 import { navigate } from "@/app/router"
 import { downloadFile } from "@/features/gallery/files"
 import type { ResultItem } from "@/features/gallery/session-store"
 import { t } from "@/i18n"
 import { applyRemoved, applyStars, batches, galleryKeys, MAX_BATCH, PAGE_SIZE, refreshFacets, refreshGallery } from "./cache"
 import { errorText } from "@/features/errors/error-text"
+import { boardKeys, boardsQuery, lineageQuery, listBoardGalleryPage, refreshBoards } from "./boards-api"
+import type { ExtendedGalleryQuery } from "./filters"
 
-export { galleryKeys, MAX_BATCH, PAGE_SIZE }
+export { boardKeys, boardsQuery, galleryKeys, lineageQuery, MAX_BATCH, PAGE_SIZE, refreshBoards }
 
-export const galleryListQuery = (query: GalleryQuery) =>
+export const galleryListQuery = (query: ExtendedGalleryQuery) =>
   infiniteQueryOptions({
     queryKey: galleryKeys.list(query),
-    queryFn: ({ pageParam, signal }) => api.gallery.list({ ...query, limit: PAGE_SIZE, ...(pageParam ? { cursor: pageParam } : {}) }, signal),
+    queryFn: ({ pageParam, signal }) =>
+      query.board_id
+        ? listBoardGalleryPage({ ...query, limit: PAGE_SIZE, ...(pageParam ? { cursor: pageParam } : {}) }, signal)
+        : api.gallery.list({ ...query, limit: PAGE_SIZE, ...(pageParam ? { cursor: pageParam } : {}) }, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.next_cursor ?? undefined,
     staleTime: 15_000,

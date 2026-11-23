@@ -165,5 +165,42 @@
    }
   ]
  },
- "scripts": []
+ "scripts": [],
+ "capabilities": {
+  "preset": "sd",
+  "dit_name": null,
+  "engine_label": "SD 1.5",
+  "capabilities": [],
+  "max_references": 0,
+  "reference_slot_format": null,
+  "reference_slot_start": 1,
+  "supports_rgba": false,
+  "supports_control_blocks": false,
+  "supports_cfg_guidance": true,
+  "supports_negative_prompt": true,
+  "attention_backends": [
+   "sdpa",
+   "flash",
+   "sage",
+   "xformers"
+  ],
+  "quant_formats": [
+   "fp16",
+   "bf16",
+   "fp8",
+   "gguf"
+  ],
+  "compile_preset": null,
+  "is_video": false,
+  "frames": 1,
+  "use_distill": false,
+  "use_shift": false,
+  "defaults": {
+   "sampler": "Euler a",
+   "scheduler": "Automatic",
+   "steps": 32,
+   "cfg_scale": 6.0
+  },
+  "badges": []
+ }
 }

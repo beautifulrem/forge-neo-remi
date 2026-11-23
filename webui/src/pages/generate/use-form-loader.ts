@@ -44,7 +44,11 @@ export function carryOver(before: Snapshot, after: Snapshot): Record<string, Own
 export function loadSchema(store: FormStore, schema: TabSchema) {
   const before = store.getState()
   const snapshot: Snapshot | null = before.revision > 0 ? { values: before.values, defaults: before.defaults, index: before.index } : null
-  before.load(tabOwners(schema), { conflictParams: schema.conflict_params })
+  before.load(tabOwners(schema), {
+    conflictParams: schema.conflict_params,
+    capabilities: schema.capabilities ?? null,
+    advice: schema.advice ?? [],
+  })
   if (snapshot) {
     for (const [owner, values] of Object.entries(carryOver(snapshot, store.getState()))) store.getState().setValues(owner, values)
   }

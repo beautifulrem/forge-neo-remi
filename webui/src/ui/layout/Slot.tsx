@@ -47,7 +47,8 @@ function ScriptView({ script }: { script: ScriptSchema }) {
 export function Slot({ section }: { section: string }) {
   const scripts = use(ScriptsContext)
   const slots = useFormState((s) => s.index.slots)
-  const placed = scriptsForSlot(scripts, section, slots)
+  // Non-applicable scripts move into the quiet "Not applicable for active model" drawer in ScriptsPanel.
+  const placed = scriptsForSlot(scripts, section, slots).filter((script) => script.applicable !== false)
   if (placed.length === 0) return null
   return (
     <div className="flex flex-col gap-3" data-slot-section={section}>

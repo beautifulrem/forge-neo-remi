@@ -20,7 +20,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { FIELD_BUTTON_CLASS } from "@/components/ui/select-styles"
 import { cn } from "@/lib/utils"
+import { currentRoute } from "@/app/router"
+import { getFormStore } from "@/ui/form-store"
+import { useStore } from "zustand"
+import { deriveModelBadges } from "./model-badges"
 import { checkpointLabel, fileName, formatBytes, MODEL_OPTION_KEYS, presetLabel, useApplyPreset, useOptionWrite, writeModules } from "./model-options"
+import { WorkerHealthPill } from "./WorkerHealthPill"
 
 const DEFAULT_PRESETS = ["sd", "xl", "flux", "anima"]
 const DEFAULT_DTYPES = ["Automatic", "Automatic (fp16 LoRA)", "float8-e4m3fn", "float8-e5m2"]
@@ -207,9 +212,10 @@ function DtypeSelect({ className }: { className?: string }) {
   // "Automatic" is the one word among the dtype names
   const items = dtypes.map((d) => ({ value: d, label: d === "Automatic" ? t("Automatic") : d }))
   const value = write.isPending ? (write.variables ?? current) : current
+  const title = value === "Automatic" ? t("Automatic") : value
   return (
     <Select<string> items={items} value={value} onValueChange={(next) => next && next !== current && write.mutate(next)} disabled={write.isPending}>
-      <SelectTrigger size="sm" aria-label={t("Diffusion in Low Bits")} className={cn("max-w-48", className)}>
+      <SelectTrigger size="sm" aria-label={t("Diffusion in Low Bits")} title={title} className={cn("max-w-48", className)}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent alignItemWithTrigger={false} align="end">
@@ -239,6 +245,36 @@ function LoadingStatus({ className }: { className?: string }) {
   )
 }
 
+/** Compact metadata badges for the active checkpoint/preset (`Diffusers`, `FP8`, `INT8-ConvRot`, `Turbo`, `RGBA`, …). */
+function ModelBadges({ className, limit }: { className?: string; limit?: number }) {
+  const { t } = useTranslation()
+  const checkpoint = useClientOption("sd_model_checkpoint")
+  const dtype = useClientOption("forge_unet_storage_dtype")
+  const preset = useClientOption("forge_preset")
+  const route = currentRoute()
+  const tab = route.name === "generate" ? route.tab : "txt2img"
+  const capabilities = useStore(getFormStore(tab), (s) => s.capabilities)
+  const all = deriveModelBadges({ checkpoint, dtype, preset, capabilities })
+  if (all.length === 0) return null
+  const shown = limit ? all.slice(0, limit) : all
+  return (
+    <div aria-label={t("Model capabilities")} data-slot="model-badges" className={cn("flex shrink-0 flex-wrap items-center gap-1", className)}>
+      {shown.map((badge) => (
+        <Badge
+          key={badge.label}
+          variant="outline"
+          className={cn(
+            "h-5 border-capability-badge-border bg-capability-badge-bg px-1.5 text-[0.625rem] font-medium tracking-tight text-capability-badge",
+            badge.kind === "variant" && "border-primary/25 bg-primary/10 text-primary",
+          )}
+        >
+          {badge.label}
+        </Badge>
+      ))}
+    </div>
+  )
+}
+
 /** The compact controls in one popover (narrow headers, phones). */
 function ModelSettingsPopover({ className }: { className?: string }) {
   const { t } = useTranslation()
@@ -248,6 +284,7 @@ function ModelSettingsPopover({ className }: { className?: string }) {
         <SlidersHorizontal />
       </PopoverTrigger>
       <PopoverContent aria-label={t("Model settings")} align="end" className="w-[min(22rem,calc(100vw-2rem))] gap-3">
+        <ModelBadges />
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">{t("UI preset")}</span>
           <PresetSelect className="w-full" />
@@ -260,6 +297,7 @@ function ModelSettingsPopover({ className }: { className?: string }) {
           <span className="text-xs font-medium text-muted-foreground">{t("VAE / Text encoders")}</span>
           <ModulesPicker className="w-full justify-start" />
         </div>
+        <WorkerHealthPill className="w-full justify-start" />
       </PopoverContent>
     </Popover>
   )
@@ -271,8 +309,10 @@ export default function ModelBar() {
     <div role="group" aria-label={t("Model")} className="flex min-w-0 items-center gap-1.5">
       <PresetSelect className="hidden xl:flex" />
       <CheckpointPicker className="w-[min(22rem,36vw)]" />
+      <ModelBadges className="hidden 2xl:flex" limit={3} />
       <ModulesPicker className="hidden xl:inline-flex" />
       <DtypeSelect className="hidden xl:flex" />
+      <WorkerHealthPill className="hidden xl:inline-flex" />
       <ModelSettingsPopover className="xl:hidden" />
       <LoadingStatus className="sr-only" />
     </div>
@@ -285,10 +325,12 @@ export function ModelBarStacked() {
   return (
     <div role="group" aria-label={t("Model")} className="flex flex-col gap-2">
       <CheckpointPicker className="w-full" />
+      <ModelBadges />
       <div className="flex flex-wrap items-center gap-1.5">
         <PresetSelect />
         <ModulesPicker />
         <DtypeSelect className="min-w-0 flex-1" />
+        <WorkerHealthPill />
       </div>
       <LoadingStatus />
     </div>

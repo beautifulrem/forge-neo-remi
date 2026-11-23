@@ -15,7 +15,69 @@ import { t } from "@/i18n"
 import { showToast } from "@/lib/toast"
 import { allFormStores } from "./form-store"
 
-export type UploadInfo = Pick<Upload, "id"> & Partial<Omit<Upload, "id">> & { url?: string; /** ms timestamp of the upload */ at?: number }
+export type UploadInfo = Pick<Upload, "id"> &
+  Partial<Omit<Upload, "id">> & {
+    url?: string
+    /** True when the uploaded image carries an alpha / transparency channel. */
+    hasAlpha?: boolean
+    /** ms timestamp of the upload */
+    at?: number
+  }
+
+/**
+ * Fast header inspection for PNG (color types 4/6 or tRNS chunk) and WebP
+ * (VP8X alpha bit / VP8L lossless) without decoding pixels onto a canvas.
+ */
+export function detectAlphaFromBytes(bytes: Uint8Array): boolean {
+  // PNG signature: 89 50 4E 47 0D 0A 1A 0A; IHDR color type is at byte 25
+  if (
+    bytes.length >= 26 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    const colorType = bytes[25]
+    if (colorType === 4 || colorType === 6) return true
+    // Scan early chunks for tRNS (indexed transparency)
+    for (let i = 33; i + 8 <= bytes.length; ) {
+      const length = ((bytes[i]! << 24) | (bytes[i + 1]! << 16) | (bytes[i + 2]! << 8) | bytes[i + 3]!) >>> 0
+      const type = String.fromCharCode(bytes[i + 4]!, bytes[i + 5]!, bytes[i + 6]!, bytes[i + 7]!)
+      if (type === "tRNS") return true
+      if (type === "IDAT" || type === "IEND") break
+      i += 12 + length
+    }
+    return false
+  }
+  // WebP: RIFF....WEBP + VP8X (flags byte at offset 20, bit 4 = alpha) or VP8L (offset 24 bit 4 = alpha)
+  if (
+    bytes.length >= 21 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    const chunk = String.fromCharCode(bytes[12]!, bytes[13]!, bytes[14]!, bytes[15]!)
+    if (chunk === "VP8X") return Boolean(bytes[20]! & 0x10)
+    if (chunk === "VP8L" && bytes.length >= 25) return Boolean(bytes[24]! & 0x10)
+  }
+  return false
+}
+
+async function detectFileAlpha(file: File): Promise<boolean> {
+  if (file.type !== "image/png" && file.type !== "image/webp" && !/\.(png|webp)$/i.test(file.name)) return false
+  try {
+    const slice = file.slice(0, 256)
+    const buffer = typeof slice.arrayBuffer === "function" ? await slice.arrayBuffer() : null
+    return buffer ? detectAlphaFromBytes(new Uint8Array(buffer)) : false
+  } catch {
+    return false
+  }
+}
 
 type UploadState = { byId: Record<string, UploadInfo> }
 
@@ -67,16 +129,25 @@ export function releaseUpload(id: string) {
 }
 
 export async function uploadFile(file: File): Promise<UploadInfo> {
-  const result = await api.upload(file)
+  const [result, hasAlpha] = await Promise.all([api.upload(file), detectFileAlpha(file)])
   sweep()
+  const serverAlpha = (result as { has_alpha?: boolean; mode?: string }).has_alpha === true || (result as { mode?: string }).mode === "RGBA"
   const info: UploadInfo = {
     ...result,
     name: result.name ?? file.name,
     url: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+    hasAlpha: hasAlpha || serverAlpha || undefined,
     at: Date.now(),
   }
   useUploads.setState((s) => ({ byId: { ...s.byId, [info.id]: info } }))
   return info
+}
+
+/** Records alpha-channel presence on an upload entry (e.g. from image metadata or server info). */
+export function markUploadAlpha(id: string, hasAlpha: boolean) {
+  const current = useUploads.getState().byId[id]
+  if (current?.hasAlpha === hasAlpha) return
+  useUploads.setState((s) => ({ byId: { ...s.byId, [id]: { ...s.byId[id], id, hasAlpha } } }))
 }
 
 /**

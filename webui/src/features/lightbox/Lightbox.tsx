@@ -13,6 +13,8 @@ import { api } from "@/api/endpoints"
 import type { FormTab } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { type BackdropMode, backdropSurface, nextBackdrop } from "@/features/compare/backdrop-modes"
+import { BackdropPicker } from "@/features/compare/BackdropPicker"
 import { downloadFile } from "@/features/gallery/files"
 import type { ResultItem } from "@/features/gallery/session-store"
 import { ResultActions } from "@/features/send-to/ResultActions"
@@ -64,6 +66,7 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
   const [natural, setNatural] = useState<Size | null>(null)
   const [view, setView] = useState<ViewState>({ scale: 1, x: 0, y: 0 })
   const [tiled, setTiled] = useState(false)
+  const [backdrop, setBackdrop] = useState<BackdropMode>("checker")
   /** Pointers down on the viewport (relative to its centre). */
   const pointers = useRef(new Map<number, Point>())
   /** One pointer pans; a second one turns the gesture into a pinch. */
@@ -114,6 +117,8 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
       "0": () => setView({ scale: fitted, x: 0, y: 0 }),
       "1": () => setView({ scale: 1, x: 0, y: 0 }),
       t: () => setTiled((v) => !v),
+      b: () => setBackdrop((v) => nextBackdrop(v)),
+      B: () => setBackdrop((v) => nextBackdrop(v)),
     }
     const run = handled[event.key]
     if (run) {
@@ -162,6 +167,7 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
             ) : null}
             <div className="ml-auto flex min-w-0 items-center gap-0.5">
               {!live ? <ResultActions item={item} tab={tab} tone="light" removable={false} upscalable={upscalable} collapsible onSent={() => onOpenChange(false)} /> : null}
+              <BackdropPicker value={backdrop} onChange={setBackdrop} tone="light" className="mx-1 hidden sm:inline-flex" />
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -227,7 +233,31 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
             }}
           >
             {src && tiled ? (
-              <div aria-hidden className="absolute inset-0" style={{ backgroundImage: `url("${src}")`, backgroundRepeat: "repeat", backgroundPosition: "center", backgroundSize: natural ? `${natural.width * view.scale}px` : undefined }} />
+              <div
+                aria-hidden
+                data-backdrop={backdrop}
+                className={cn("absolute inset-0", backdropSurface(backdrop).className)}
+                style={{
+                  ...backdropSurface(backdrop).style,
+                  backgroundImage: backdrop === "checker" ? `url("${src}"), var(--tw-bg-image)` : `url("${src}")`,
+                  backgroundRepeat: "repeat",
+                  backgroundPosition: "center",
+                  backgroundSize: natural ? `${natural.width * view.scale}px` : undefined,
+                }}
+              />
+            ) : null}
+            {src && natural && !tiled ? (
+              <div
+                aria-hidden
+                data-backdrop={backdrop}
+                className={cn("pointer-events-none absolute top-1/2 left-1/2 origin-center", backdropSurface(backdrop).className)}
+                style={{
+                  ...backdropSurface(backdrop).style,
+                  width: natural.width,
+                  height: natural.height,
+                  transform: `translate(-50%, -50%) translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
+                }}
+              />
             ) : null}
             {src ? (
               <img

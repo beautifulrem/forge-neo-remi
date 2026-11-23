@@ -8,7 +8,7 @@
  * to the image with "use parameters", send-to, PNG Info and show in folder.
  */
 import { useInfiniteQuery } from "@tanstack/react-query"
-import { Columns2, Download, GalleryVerticalEnd, RefreshCw, Star, StarOff, Trash2, X } from "@/components/icons"
+import { Columns2, Download, GalleryVerticalEnd, Images, RefreshCw, Star, StarOff, Trash2, X } from "@/components/icons"
 import { lazy, Suspense, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
@@ -21,19 +21,32 @@ import { PagePlaceholder } from "@/components/PagePlaceholder"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { CompareDialog, type CompareImage } from "@/features/library/CompareDialog"
+import { AssignBoardPopover, BoardsBar } from "@/features/library/BoardsBar"
+import type { CompareImage } from "@/features/library/CompareDialog"
 import { DeleteDialog } from "@/features/library/DeleteDialog"
 import { activeFilters, galleryQuery, useGalleryView } from "@/features/library/filters"
 import { GalleryDetails } from "@/features/library/GalleryDetails"
 import { GalleryGrid } from "@/features/library/GalleryGrid"
 import { errorText } from "@/features/errors/error-text"
 import { GalleryToolbar } from "@/features/library/GalleryToolbar"
-import { asResult, downloadZip, galleryKeys, galleryListQuery, removeOutputs, starOutputs } from "@/features/library/queries"
+import { asResult, downloadZip, galleryKeys, galleryListQuery, openInPngInfo, removeOutputs, starOutputs } from "@/features/library/queries"
 import { EMPTY_SELECTION, modeOf, ordered, prune, select, selectAll, type Selection } from "@/features/library/selection"
+import { sendToReferenceWithFeedback } from "@/features/send-to/result-actions"
 
 const Lightbox = lazy(() => import("@/features/lightbox/Lightbox").then((m) => ({ default: m.Lightbox })))
+const CompareDialog = lazy(() => import("@/features/library/CompareDialog").then((m) => ({ default: m.CompareDialog })))
 
-function BulkBar(props: { count: number; onClear: () => void; onZip: () => void; onStar: (starred: boolean) => void; onCompare: (() => void) | null; onDelete: () => void }) {
+function BulkBar(props: {
+  count: number
+  selectedIds: readonly string[]
+  activeBoardId: string | null
+  onClear: () => void
+  onZip: () => void
+  onStar: (starred: boolean) => void
+  onCompare: (() => void) | null
+  onSendRef: () => void
+  onDelete: () => void
+}) {
   const { t } = useTranslation()
   const action = (label: string, onClick: () => void, icon: React.ReactNode, destructive = false) => (
     <Tooltip>
@@ -51,6 +64,8 @@ function BulkBar(props: { count: number; onClear: () => void; onZip: () => void;
       {action(t("Download as zip"), props.onZip, <Download />)}
       {action(t("Star"), () => props.onStar(true), <Star />)}
       {action(t("Unstar"), () => props.onStar(false), <StarOff />)}
+      <AssignBoardPopover fileIds={props.selectedIds} activeBoardId={props.activeBoardId} />
+      {action(t("Send to Reference Image"), props.onSendRef, <Images />)}
       {props.onCompare ? action(t("Compare"), props.onCompare, <Columns2 />) : null}
       {action(t("Remove…"), props.onDelete, <Trash2 />, true)}
       {action(t("Clear selection"), props.onClear, <X />)}
@@ -180,20 +195,29 @@ export default function GalleryPage() {
   }
 
   const pair = selectedIds.length === 2 ? selectedIds.map((id) => byId.get(id)).filter((item): item is GalleryItem => Boolean(item)) : []
+  const activeBoardSendItems = items.map((item) => ({ fileId: item.id, width: item.width, height: item.height }))
+  const selectedSendItems = selectedIds
+    .map((id) => byId.get(id))
+    .filter((item): item is GalleryItem => Boolean(item))
+    .map((item) => ({ fileId: item.id, width: item.width, height: item.height }))
 
   return (
     <div className="relative flex h-full flex-col">
       {header}
       <GalleryToolbar count={items.length} total={total} failed={list.isError && !list.data} />
+      <BoardsBar activeItems={activeBoardSendItems} />
       <div className="min-h-0 flex-1">{body}</div>
       {selection.ids.size > 0 ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-3">
           <BulkBar
             count={selection.ids.size}
+            selectedIds={selectedIds}
+            activeBoardId={view.boardId}
             onClear={() => setSelection(EMPTY_SELECTION)}
             onZip={() => void downloadZip(selectedIds)}
             onStar={(starred) => void starOutputs(selectedIds, starred)}
             onCompare={pair.length === 2 ? () => setComparing([pair[0]!, pair[1]!]) : null}
+            onSendRef={() => sendToReferenceWithFeedback(selectedSendItems)}
             onDelete={() => setDeleting(selectedIds)}
           />
         </div>
@@ -214,7 +238,20 @@ export default function GalleryPage() {
             tab={viewed?.tab === "img2img" ? "img2img" : "txt2img"}
             aside={(result) => {
               const item = byId.get(result.fileId)
-              return item ? <GalleryDetails item={item} onDelete={(target) => setDeleting([target.id])} onClose={() => setViewing(null)} /> : null
+              return item ? (
+                <GalleryDetails
+                  item={item}
+                  onDelete={(target) => setDeleting([target.id])}
+                  onClose={() => setViewing(null)}
+                  onSelectImage={(fileId) => {
+                    if (byId.has(fileId)) setViewing(fileId)
+                    else {
+                      setViewing(null)
+                      openInPngInfo(fileId)
+                    }
+                  }}
+                />
+              ) : null
             }}
           />
         </Suspense>
@@ -233,7 +270,11 @@ export default function GalleryPage() {
           void removeOutputs(ids, deleteFiles)
         }}
       />
-      <CompareDialog images={comparing} onOpenChange={(open) => !open && setComparing(null)} />
+      {comparing !== null ? (
+        <Suspense fallback={null}>
+          <CompareDialog images={comparing} onOpenChange={(open) => !open && setComparing(null)} />
+        </Suspense>
+      ) : null}
     </div>
   )
 }

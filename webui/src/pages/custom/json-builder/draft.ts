@@ -6,6 +6,7 @@
 import { compilePrompt } from "./compile"
 import type { Box, CanvasType, Label, LayoutDraft } from "./decompile"
 import { finalFlux3Prompt, type PromptFormat } from "./flux3"
+import { finalVglPrompt, type VglFields } from "./vgl"
 
 export type Item = { id: number; label: Label; caption: string; text: string; bbox: Box }
 
@@ -22,6 +23,8 @@ export type BuilderDraft = {
   items: Item[]
   /** The model the prompt is compiled for (MOSS-Image Layout JSON by default). */
   format?: PromptFormat
+  /** Bria Fibo 2.0 VGL 2.0 studio attributes (used when `format === "vgl"`). */
+  vgl?: Partial<VglFields>
 }
 
 /** Display names of the item labels (the prompt keeps the lower-case values). */
@@ -145,6 +148,7 @@ export function missingFields(state: BuilderDraft): Set<Missing> {
  */
 export function finalPrompt(state: BuilderDraft): string {
   if (state.format === "flux3") return finalFlux3Prompt(state)
+  if (state.format === "vgl") return finalVglPrompt(state)
   const flatten = (text: string) => text.replace(/[\r\n]/g, " ")
   const prompt = compilePrompt(
     JSON.stringify(
@@ -170,7 +174,7 @@ export const unescapeParens = (text: string) => text.replace(/\\+([()])/g, "$1")
  * The editor's state for a loaded draft; item ids start after `lastId`. The
  * extra text is cleared, parentheses are shown unescaped.
  */
-export function fromDraft(draft: LayoutDraft, lastId: number): BuilderDraft & { lastId: number } {
+export function fromDraft(draft: LayoutDraft, lastId: number): Omit<BuilderDraft, "format" | "vgl"> & { lastId: number } {
   let id = lastId
   const items = draft.items.map((item) => ({
     id: ++id,

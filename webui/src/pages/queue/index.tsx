@@ -6,13 +6,14 @@
  * Scheduler and Prompt Queue data, stops generate-forever jobs and clears.
  */
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
-import { Ban, Eraser, Import, Infinity as InfinityIcon, ListOrdered, MoreHorizontal, Pause, Play, Search, Star } from "@/components/icons"
+import { Ban, BookOpen, Eraser, GitMerge, Import, Infinity as InfinityIcon, ListOrdered, MoreHorizontal, Pause, Play, Search, Star } from "@/components/icons"
 import { lazy, Suspense, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
 import { queueItemsQuery } from "@/api/queries"
 import type { FormTab, Job, QueueStatus } from "@/api/types"
 import { HeaderSlot } from "@/app/header-slot"
+import { navigate, type Route } from "@/app/router"
 import { Segmented } from "@/components/Segmented"
 import {
   AlertDialog,
@@ -44,6 +45,14 @@ import { RunningCard } from "@/features/queue/RunningCard"
 import { useQueueStatus } from "@/features/queue/status"
 
 const Lightbox = lazy(() => import("@/features/lightbox/Lightbox").then((m) => ({ default: m.Lightbox })))
+const PipelineBuilder = lazy(() => import("@/features/pipelines/PipelineBuilder").then((m) => ({ default: m.PipelineBuilder })))
+const RecipeManager = lazy(() => import("@/features/recipes/RecipeManager").then((m) => ({ default: m.RecipeManager })))
+
+type QueueViewMode = "queue" | "pipelines" | "recipes"
+
+function parseQueueView(value: string | null | undefined): QueueViewMode {
+  return value === "pipelines" || value === "recipes" ? value : "queue"
+}
 
 const ALL_TABS = "__all__"
 
@@ -164,10 +173,21 @@ function History({ onView }: { onView: (job: Job, index: number) => void }) {
 
 type Confirm = "clear-history" | "cancel-all" | null
 
-export default function QueuePage() {
+export default function QueuePage({ route }: { route?: Route } = {}) {
   const { t } = useTranslation()
   const status = useQueueStatus()
   const wide = useMediaQuery("(min-width: 64rem)")
+  const routeMode = parseQueueView(route?.query?.get("view"))
+  const [localMode, setLocalMode] = useState<QueueViewMode>(routeMode)
+  const [seenRouteMode, setSeenRouteMode] = useState(routeMode)
+  if (routeMode !== seenRouteMode) {
+    setSeenRouteMode(routeMode)
+    setLocalMode(routeMode)
+  }
+  const setMode = (next: QueueViewMode) => {
+    setLocalMode(next)
+    if (route) navigate({ name: "queue", query: next === "queue" ? undefined : new URLSearchParams({ view: next }) }, { replace: true })
+  }
   const [importing, setImporting] = useState(false)
   const [confirm, setConfirm] = useState<Confirm>(null)
   const [keepStarred, setKeepStarred] = useState(true)
@@ -232,10 +252,56 @@ export default function QueuePage() {
   const pending = <Pending status={status} />
   const history = <History onView={view} />
 
+  const modeBar = (
+    <div className="flex items-center gap-2 border-b bg-background px-4 py-1.5">
+      <div role="tablist" aria-label={t("Queue")} className="flex items-center gap-1">
+        {(
+          [
+            ["queue", t("Queue & History"), ListOrdered],
+            ["pipelines", t("Pipelines"), GitMerge],
+            ["recipes", t("Recipes"), BookOpen],
+          ] as const
+        ).map(([id, text, Icon]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={localMode === id}
+            onClick={() => setMode(id)}
+            className={cn(
+              "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              localMode === id ? "bg-primary/12 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <Icon className="size-3.5" aria-hidden />
+            {text}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
   return (
     <div className="flex h-full flex-col">
       {header}
-      {wide ? (
+      {modeBar}
+      {localMode === "pipelines" ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-7xl p-4">
+            <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+              <PipelineBuilder />
+            </Suspense>
+          </div>
+        </div>
+      ) : localMode === "recipes" ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-5xl p-4">
+            <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+              <RecipeManager />
+            </Suspense>
+          </div>
+        </div>
+      ) : wide ? (
         <div className="mx-auto grid min-h-0 w-full max-w-7xl flex-1 grid-cols-[minmax(0,5fr)_minmax(0,6fr)] gap-6 p-4">
           <div className="min-h-0 overflow-y-auto pr-1">{pending}</div>
           <div className="flex min-h-0 flex-col">{history}</div>

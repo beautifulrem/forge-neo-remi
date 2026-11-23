@@ -10,8 +10,10 @@ import { showToast } from "@/lib/toast"
 import { splitRef } from "./conditions"
 import type { FormStore } from "./form-store"
 import { isMessage, messageText } from "./messages"
+import type { AdviceItem, AdviceSeverity, ModelCapabilitySummary } from "./schema"
 
 const TOAST_LEVELS = new Set(["info", "success", "warning", "error"])
+const ADVICE_SEVERITIES = new Set<AdviceSeverity>(["info", "warning", "error"])
 const PATCH_KEYS = new Set(["value", "choices", "visible", "enabled", "label", "info", "hint", "minimum", "maximum", "step"])
 
 export type SplitResponse = {
@@ -20,10 +22,32 @@ export type SplitResponse = {
   outputs?: Record<string, unknown>
   /** Settings the action already stored on the server (`__settings__`). */
   settings?: Record<string, unknown>
+  /** Pre-submit workflow advice items (`__advice__`). */
+  advice?: AdviceItem[]
+  /** Updated active model capability summary (`__capabilities__`). */
+  capabilities?: ModelCapabilitySummary
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function parseAdviceList(raw: unknown): AdviceItem[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const items: AdviceItem[] = []
+  for (const entry of raw) {
+    if (!isRecord(entry) || typeof entry.code !== "string" || typeof entry.message !== "string") continue
+    const severity: AdviceSeverity = ADVICE_SEVERITIES.has(entry.severity as AdviceSeverity) ? (entry.severity as AdviceSeverity) : "info"
+    const patch = isRecord(entry.patch) ? (entry.patch as AdviceItem["patch"]) : null
+    const action_label = typeof entry.action_label === "string" ? entry.action_label : null
+    items.push({ code: entry.code, severity, message: entry.message, patch, action_label })
+  }
+  return items
+}
+
+function parseCapabilities(raw: unknown): ModelCapabilitySummary | undefined {
+  if (!isRecord(raw) || typeof raw.preset !== "string" || !Array.isArray(raw.capabilities)) return undefined
+  return raw as unknown as ModelCapabilitySummary
 }
 
 /** Separates reserved keys from param patches and resolves `"owner.param"` keys. */
@@ -40,6 +64,12 @@ export function splitResponse(owner: string, response: ActionResponse | unknown)
       if (isRecord(entry)) out.outputs = entry
     } else if (key === "__settings__") {
       if (isRecord(entry)) out.settings = entry
+    } else if (key === "__advice__") {
+      const advice = parseAdviceList(entry)
+      if (advice !== undefined) out.advice = advice
+    } else if (key === "__capabilities__") {
+      const capabilities = parseCapabilities(entry)
+      if (capabilities !== undefined) out.capabilities = capabilities
     } else if (key.startsWith("__")) {
       // Unknown reserved key: ignore (forward compatible).
     } else if (isRecord(entry)) {
@@ -115,6 +145,8 @@ export function applyResponse(store: FormStore, owner: string, split: SplitRespo
   const state = store.getState()
   if (split.params.length > 0) state.applyPatches(split.params)
   if (split.outputs) state.setOutputs(owner, split.outputs)
+  if (split.advice !== undefined) state.setAdvice(split.advice)
+  if (split.capabilities !== undefined) state.setCapabilities(split.capabilities)
   if (split.toast) showToast(split.toast.level, messageText(i18n, split.toast.message))
   if (split.settings) {
     // Stored by the server already: update the cached values, never write them back.
@@ -126,6 +158,42 @@ export function applyResponse(store: FormStore, owner: string, split: SplitRespo
 
 /** The core action resolving Anima conflict locks (schema-format.md §4, §5). */
 export const CONFLICTS_ACTION = "__conflicts__"
+/** The core action returning pre-submit structured workflow advice (`__advice__`). */
+export const ADVICE_ACTION = "__advice__"
+
+/** Applies an `AdviceItem`'s one-click patch (form params and/or server `__options__`). */
+export async function applyAdvicePatch(ctx: ActionContext, item: AdviceItem): Promise<boolean> {
+  if (!item.patch) return false
+  const { __options__: optionUpdates, ...rest } = item.patch
+  const split = splitResponse("core", rest)
+  const changedByOwner = new Map<string, string[]>()
+  if (split.params.length > 0) {
+    ctx.store.getState().applyPatches(split.params)
+    for (const [owner, name] of split.params) {
+      const list = changedByOwner.get(owner) ?? []
+      if (!list.includes(name)) list.push(name)
+      changedByOwner.set(owner, list)
+    }
+  }
+  if (isRecord(optionUpdates) && Object.keys(optionUpdates).length > 0) {
+    await api.patchOptions(optionUpdates)
+    queryClient.setQueryData<Bootstrap>(keys.app, (app) => (app ? { ...app, options: { ...app.options, ...optionUpdates } } : app))
+    void queryClient.invalidateQueries({ queryKey: keys.options })
+  }
+  if (changedByOwner.size > 0) {
+    runBulkChangeEffects(
+      ctx,
+      [...changedByOwner.entries()].map(([owner, names]) => ({ owner, names })),
+    )
+  }
+  // Remove the resolved chip immediately, then refresh live advice when the server supports capabilities.
+  const current = ctx.store.getState().advice
+  ctx.store.getState().setAdvice(current.filter((entry) => entry.code !== item.code || entry.message !== item.message))
+  if (ctx.store.getState().capabilities !== null) {
+    void runAction(ctx, "core", ADVICE_ACTION)
+  }
+  return true
+}
 
 /** Params of one owner a user edit or a reset changed. */
 export type ParamChange = { owner: string; names: readonly string[] }

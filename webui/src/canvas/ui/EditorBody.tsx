@@ -27,6 +27,7 @@ import {
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { createStore, useStore } from "zustand"
+import { api } from "@/api/endpoints"
 import { Button } from "@/components/ui/button"
 import { useAppearance } from "@/lib/theme"
 import { cn } from "@/lib/utils"
@@ -38,6 +39,7 @@ import { type Command, commandFor, isHovered, isMac, isTyping } from "../core/sh
 import type { EditorDocument } from "../engine/document"
 import { Interaction, type InteractionContext } from "../engine/interaction"
 import { type Overlays, Renderer } from "../engine/renderer"
+import { type StagedCandidate, useCanvasStaging } from "../state/staging"
 import { type BrushSettings, stepSize, type Tool, useTools } from "../state/tools"
 import type { ImageEditorProps } from "../types"
 import { toolbarKeys } from "./a11y"
@@ -46,6 +48,7 @@ import { EmptyState } from "./EmptyState"
 import { LayersPopover } from "./LayersPopover"
 import { OptionsBar } from "./OptionsBar"
 import { ShortcutsPopover } from "./ShortcutsPopover"
+import { StagingBar } from "./StagingBar"
 import { useDocValue, useLayerPending } from "./use-doc"
 
 type BodyProps = {
@@ -69,6 +72,7 @@ type BodyProps = {
   onFiles: (files: File[]) => void
   onBlank: () => void
   onRemove: () => void
+  onAcceptStaged?: (candidate: StagedCandidate) => void
 }
 
 /** How long the resize frame / inpaint previews stay after their setting changed. */
@@ -140,13 +144,15 @@ type ViewOps = {
 /** Whether a tool is offered: the eyedropper only on a sketch layer whose colour the user picks. */
 const offered = (tool: Tool, pickable: boolean) => tool !== "eyedropper" || pickable
 
-export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways, maximized, onMaximize, busy, ready, loadFailed, onRetry, onFiles, onBlank, onRemove }: BodyProps) {
+export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways, maximized, onMaximize, busy, ready, loadFailed, onRetry, onFiles, onBlank, onRemove, onAcceptStaged }: BodyProps) {
   const { t } = useTranslation()
   const mod = isMac() ? "⌘" : "Ctrl"
   const rootRef = useRef<HTMLDivElement>(null)
   const hostRef = useRef<HTMLDivElement>(null)
   const backdropRef = useRef<HTMLDivElement>(null)
+  const stagingRef = useRef<HTMLDivElement>(null)
   const cursorRef = useRef<HTMLDivElement>(null)
+  const preserveViewRef = useRef<{ width: number; height: number } | null>(null)
   const rendererRef = useRef<Renderer | null>(null)
   const interactionRef = useRef<Interaction | null>(null)
   const opsRef = useRef<ViewOps | null>(null)
@@ -162,6 +168,8 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
   const [area, setArea] = useState<Rect | null>(null)
 
   const tools = useTools()
+  const staging = useCanvasStaging((s) => s.sessions[editor.docKey] ?? null)
+  const stagedCandidate = staging ? (staging.candidates[staging.index] ?? null) : null
   const accent = useAppearance((s) => s.accent)
   const hasImage = useDocValue(doc, (d) => d.hasImage)
   const width = useDocValue(doc, (d) => d.width)
@@ -182,7 +190,7 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
   const fixed = { size: editor.fixedSize, opacity: editor.fixedOpacity, softness: editor.fixedSoftness }
 
   // What the event handlers read (they live as long as the renderer).
-  const snapshot = () => ({ activeKey, kind, pickable, fixedColor: editor.fixedColor, fixed, screenBrush, paintable, noUpload: editor.noUpload, onFiles })
+  const snapshot = () => ({ docKey: editor.docKey, activeKey, kind, pickable, fixedColor: editor.fixedColor, fixed, screenBrush, paintable, noUpload: editor.noUpload, onFiles })
   const latest = useRef(snapshot())
   useEffect(() => {
     latest.current = snapshot()
@@ -211,6 +219,12 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
         backdrop.style.transform = `translate(${view.x}px, ${view.y}px)`
         backdrop.style.width = `${doc.width * view.scale}px`
         backdrop.style.height = `${doc.height * view.scale}px`
+      }
+      const stagingEl = stagingRef.current
+      if (stagingEl) {
+        stagingEl.style.transform = `translate(${view.x}px, ${view.y}px)`
+        stagingEl.style.width = `${doc.width * view.scale}px`
+        stagingEl.style.height = `${doc.height * view.scale}px`
       }
       viewStore.setState({ scale: view.scale })
     }
@@ -320,7 +334,15 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
     })
     observer.observe(host)
     const unsubscribe = doc.subscribe((event) => {
-      if (event.type === "background" && doc.hasImage) fit()
+      if (event.type === "background" && doc.hasImage) {
+        const keep = preserveViewRef.current
+        preserveViewRef.current = null
+        if (keep && keep.width === doc.width && keep.height === doc.height) {
+          applyView(viewRef.current)
+        } else {
+          fit()
+        }
+      }
     })
     return () => {
       unsubscribe()
@@ -411,6 +433,24 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
     rendererRef.current?.setOverlays(overlaysRef.current)
   }, [showFrame, width, height, targetWidth, targetHeight, resizeMode, shownArea, hasImage])
 
+  useEffect(() => {
+    const stagingEl = stagingRef.current
+    if (!stagingEl || !stagedCandidate || !hasImage) return
+    const view = viewRef.current
+    stagingEl.style.transform = `translate(${view.x}px, ${view.y}px)`
+    stagingEl.style.width = `${doc.width * view.scale}px`
+    stagingEl.style.height = `${doc.height * view.scale}px`
+  }, [doc, hasImage, stagedCandidate])
+
+  const acceptStaged = (candidate: StagedCandidate) => {
+    preserveViewRef.current = { width: doc.width, height: doc.height }
+    onAcceptStaged?.(candidate)
+  }
+  const acceptStagedRef = useRef(acceptStaged)
+  useEffect(() => {
+    acceptStagedRef.current = acceptStaged
+  })
+
   // ------------------------------------------------------------ commands and keys
 
   const setTool = (next: Tool) => {
@@ -492,6 +532,33 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
         return
       }
       if (event.repeat && event.key !== "[" && event.key !== "]") return
+      const docKey = latest.current.docKey
+      const activeStaging = useCanvasStaging.getState().sessions[docKey]
+      if (activeStaging && activeStaging.candidates.length > 0 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        if (event.key === "ArrowLeft") {
+          event.preventDefault()
+          useCanvasStaging.getState().prev(docKey)
+          return
+        }
+        if (event.key === "ArrowRight") {
+          event.preventDefault()
+          useCanvasStaging.getState().next(docKey)
+          return
+        }
+        if (event.key === "Enter") {
+          const picked = activeStaging.candidates[activeStaging.index]
+          if (picked) {
+            event.preventDefault()
+            acceptStagedRef.current(picked)
+          }
+          return
+        }
+        if (event.key === "Escape") {
+          event.preventDefault()
+          useCanvasStaging.getState().discardAll(docKey)
+          return
+        }
+      }
       const command = commandFor(event, isMac())
       if (!command) return
       event.preventDefault()
@@ -572,10 +639,69 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
             className="pointer-events-none absolute top-0 left-0 z-0 origin-top-left bg-checker shadow-[0_0_0_1px_var(--border),0_8px_30px_-12px_rgb(0_0_0/0.35)]"
             style={plainColor ? { background: plainColor } : undefined}
           />
+          {stagedCandidate && staging ? (
+            <div
+              ref={stagingRef}
+              data-testid="canvas-staging-overlay"
+              className="pointer-events-none absolute top-0 left-0 z-[2] origin-top-left overflow-hidden"
+            >
+              <img
+                src={api.fileUrl(stagedCandidate.fileId)}
+                alt={stagedCandidate.label ?? ""}
+                draggable={false}
+                className="size-full object-contain"
+                style={{
+                  opacity: staging.compareOriginal ? 0 : staging.opacity,
+                  clipPath: staging.splitCompare ? `inset(0 0 0 ${(staging.splitPosition * 100).toFixed(1)}%)` : undefined,
+                }}
+              />
+              {staging.splitCompare && !staging.compareOriginal ? (
+                <div
+                  role="slider"
+                  tabIndex={0}
+                  aria-label="Split compare"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(staging.splitPosition * 100)}
+                  onPointerDown={(event) => {
+                    event.stopPropagation()
+                    const box = stagingRef.current?.getBoundingClientRect()
+                    if (!box || box.width === 0) return
+                    const target = event.currentTarget
+                    target.setPointerCapture?.(event.pointerId)
+                    const update = (clientX: number) =>
+                      useCanvasStaging.getState().setSplitPosition(editor.docKey, (clientX - box.left) / box.width)
+                    update(event.clientX)
+                    const onMove = (e: PointerEvent) => update(e.clientX)
+                    const onUp = () => {
+                      window.removeEventListener("pointermove", onMove)
+                      window.removeEventListener("pointerup", onUp)
+                    }
+                    window.addEventListener("pointermove", onMove)
+                    window.addEventListener("pointerup", onUp)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      const step = event.shiftKey ? 0.1 : 0.02
+                      useCanvasStaging
+                        .getState()
+                        .setSplitPosition(editor.docKey, staging.splitPosition + (event.key === "ArrowRight" ? step : -step))
+                    }
+                  }}
+                  className="pointer-events-auto absolute inset-y-0 w-3 -translate-x-1/2 cursor-ew-resize outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  style={{ left: `${(staging.splitPosition * 100).toFixed(1)}%` }}
+                >
+                  <span aria-hidden className="mx-auto block h-full w-0.5 bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.35)]" />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div
             ref={cursorRef}
             aria-hidden
-            className="pointer-events-none absolute top-0 left-0 z-[2] hidden rounded-full border border-white shadow-[0_0_0_1px_rgb(0_0_0/0.55),inset_0_0_0_1px_rgb(0_0_0/0.55)] data-[mode=eraser]:border-dashed"
+            className="pointer-events-none absolute top-0 left-0 z-[3] hidden rounded-full border border-white shadow-[0_0_0_1px_rgb(0_0_0/0.55),inset_0_0_0_1px_rgb(0_0_0/0.55)] data-[mode=eraser]:border-dashed"
           />
         </div>
       ) : (
@@ -649,6 +775,24 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
             <div className="absolute top-14 right-2 flex flex-col items-end gap-1" aria-live="polite">
               {frameLabel ? <span className={cn(PANEL, "px-2 py-1 text-xs tabular-nums")}>{frameLabel}</span> : null}
               {areaLabel ? <span className={cn(PANEL, "px-2 py-1 text-xs text-primary tabular-nums")}>{areaLabel}</span> : null}
+            </div>
+          ) : null}
+
+          {staging && stagedCandidate ? (
+            <div className="pointer-events-none absolute inset-x-2 bottom-14 flex justify-center">
+              <StagingBar
+                session={staging}
+                busy={busy}
+                onPrev={() => useCanvasStaging.getState().prev(editor.docKey)}
+                onNext={() => useCanvasStaging.getState().next(editor.docKey)}
+                onSelect={(idx) => useCanvasStaging.getState().select(editor.docKey, idx)}
+                onOpacityChange={(val) => useCanvasStaging.getState().setOpacity(editor.docKey, val)}
+                onCompareOriginalChange={(val) => useCanvasStaging.getState().setCompareOriginal(editor.docKey, val)}
+                onToggleSplit={() => useCanvasStaging.getState().toggleSplitCompare(editor.docKey)}
+                onAccept={acceptStaged}
+                onDiscardCurrent={() => useCanvasStaging.getState().discardCurrent(editor.docKey)}
+                onDiscardAll={() => useCanvasStaging.getState().discardAll(editor.docKey)}
+              />
             </div>
           ) : null}
 

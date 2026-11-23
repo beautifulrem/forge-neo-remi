@@ -8,7 +8,7 @@ import { runChangeEffects } from "@/ui/actions"
 import type { FormIndex } from "@/ui/form-index"
 import { getFormStore } from "@/ui/form-store"
 import { infotextValue } from "@/ui/infotext"
-import { type SendItem, type SendTarget, sendTo } from "./send-to"
+import { type SendItem, type SendTarget, sendTo, sendToReference } from "./send-to"
 
 /** The `[owner, name]` of the input that reads infotext key `key` ("Seed" → the seed script's `seed`). */
 export function findByInfotext(index: FormIndex, key: string): [owner: string, name: string] | null {
@@ -56,6 +56,23 @@ export function sendWithFeedback(target: SendTarget, item: SendItem) {
     .catch((error: unknown) =>
       toast.error(t("Could not send to {{target}}", { target: where }), { id, description: error instanceof Error ? error.message : String(error) }),
     )
+}
+
+/** Appends one or more images to the active form's ImageStitch reference slots with toast feedback. */
+export function sendToReferenceWithFeedback(items: readonly SendItem[], preferredTab?: "txt2img" | "img2img") {
+  sendToReference(items, preferredTab)
+    .then((result) => {
+      if (!result.owner) {
+        toast.warning(t("No ImageStitch reference slot found on this form"))
+      } else if (result.added === 0) {
+        toast.info(t("All selected images are already in Reference Images ({{total}} total)", { total: result.total }))
+      } else {
+        toast.success(t("Added {{count}} image to Reference Images ({{total}} total)", { count: result.added, total: result.total }))
+      }
+    })
+    .catch((error: unknown) => {
+      toast.error(t("Could not send to Reference Images"), { description: error instanceof Error ? error.message : String(error) })
+    })
 }
 
 /** Copies outputs to the Save folder (`outdir_save`); with `zip`, also downloads them packed. */

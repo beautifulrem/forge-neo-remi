@@ -421,4 +421,22 @@ describe("JSON Builder page", () => {
     expect(useBuilder.getState().caption).toBe("a room")
     expect(within(dialog).getByRole("button", { name: "Prompt styles" })).toHaveTextContent("style-a")
   })
+
+  it("switches to Fibo VGL mode, displays the CC BY-NC 4.0 badge, and compiles VGL 2.0 JSON", async () => {
+    getFormStore("txt2img").getState().load(tabOwners(tabSchema("txt2img")))
+    renderPage()
+    fireEvent.click(screen.getByRole("radio", { name: "Fibo VGL" }))
+    expect(screen.getByText("CC BY-NC 4.0")).toBeVisible()
+    expect(screen.getByLabelText("Background setting")).toBeVisible()
+    fireEvent.change(screen.getByLabelText("Caption"), { target: { value: "A ceramic vase on stone" } })
+    fireEvent.change(screen.getByLabelText("Caption of item 1"), { target: { value: "ceramic vase" } })
+    fireEvent.click(screen.getByRole("button", { name: "Send to txt2img" }))
+    await waitFor(() => expect(location.hash).toBe("#/txt2img"))
+    const sent = JSON.parse(String(getFormStore("txt2img").getState().values.core?.prompt))
+    expect(sent).toMatchObject({
+      short_description: "A ceramic vase on stone",
+      style_medium: "photograph",
+      objects: [{ description: "ceramic vase" }],
+    })
+  })
 })

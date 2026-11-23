@@ -20,9 +20,9 @@
 /*
  * Design tokens: an animation studio's light table.
  *
- * Surfaces are a blue-tinted graphite desk (dark) or cool drawing paper
- * (light), so the generated images keep the colour. The two pencil colours
- * of key animation carry meaning: the blue pencil (highlights) is the
+ * Surfaces are obsidian/warm-slate graphite (dark) or warm alabaster drawing
+ * paper (light), so the generated images keep the colour. The two pencil
+ * colours of key animation carry meaning: the blue pencil (highlights) is the
  * selection and focus colour (--primary, user-adjustable through
  * data-accent), the red pencil (shadow lines) is destructive. --glow is the
  * light-table lamp: the Generate button and a lit stage.
@@ -33,7 +33,7 @@
   /* Light mode: dark enough that the light label on --primary, --primary as
      text on every surface and on its own 15 % tint all reach 4.5:1
      (tests/e2e/a11y.spec.ts scans each accent). */
-  --brand-l: 0.485;
+  --brand-l: 0.475;
   /* Hover/press shade of --primary: darker in light mode, lighter in dark
      mode, so its label keeps (and gains) contrast. */
   --brand-hover-dl: -0.04;
@@ -43,125 +43,154 @@
      the stage glass is nearly square. */
   --radius: 0.375rem;
 
-  --background: oklch(0.952 0.004 250);
-  --foreground: oklch(0.235 0.016 260);
-  --card: oklch(0.988 0.002 250);
+  /* Warm alabaster / stone daylight studio palette */
+  --background: oklch(0.964 0.0035 80);
+  --foreground: oklch(0.205 0.012 260);
+  --card: oklch(0.99 0.002 80);
   --card-foreground: var(--foreground);
-  --popover: oklch(0.995 0.001 250);
+  --popover: oklch(0.996 0.0015 80);
   --popover-foreground: var(--foreground);
   --primary: oklch(var(--brand-l) var(--brand-c) var(--brand-h));
   --primary-hover: oklch(calc(var(--brand-l) + var(--brand-hover-dl)) var(--brand-c) var(--brand-h));
   --primary-foreground: var(--brand-fg);
-  --secondary: oklch(0.915 0.006 250);
+  --secondary: oklch(0.922 0.0045 80);
   --secondary-foreground: var(--foreground);
-  --muted: oklch(0.925 0.005 250);
-  --muted-foreground: oklch(0.47 0.016 255);
-  --accent: oklch(0.905 0.007 250);
+  --muted: oklch(0.934 0.004 80);
+  --muted-foreground: oklch(0.455 0.012 255);
+  --accent: oklch(0.908 0.0055 80);
   --accent-foreground: var(--foreground);
-  --destructive: oklch(0.52 0.19 33); /* red pencil; ≥ 4.5:1 as text on its own 10 % tint */
-  --success: oklch(0.5 0.12 160); /* ≥ 4.5:1 as text on the paper */
-  --warning: oklch(0.52 0.13 62); /* ≥ 4.5:1 as text on the paper */
-  --star: oklch(0.6 0.15 66); /* a starred mark on the paper: ≥ 3:1 as an icon */
-  --border: oklch(0.24 0.02 258 / 12%);
-  --input: oklch(0.24 0.02 258 / 24%);
+  --destructive: oklch(0.51 0.19 33); /* red pencil; ≥ 4.5:1 as text on its own 10 % tint */
+  --success: oklch(0.48 0.12 160); /* ≥ 4.5:1 as text on the paper */
+  --warning: oklch(0.49 0.13 62); /* ≥ 4.5:1 as text on the paper */
+  --star: oklch(0.58 0.16 68); /* a starred mark on the paper: ≥ 3.5:1 as an icon */
+  /* Pre-submit advice chips, model capability badges, and structured diff surfaces */
+  --advice-warn: oklch(0.46 0.135 58);
+  --advice-warn-bg: oklch(0.945 0.032 78);
+  --advice-warn-border: oklch(0.55 0.13 62 / 28%);
+  --advice-info: oklch(0.44 0.11 245);
+  --advice-info-bg: oklch(0.942 0.018 248);
+  --advice-info-border: oklch(0.48 0.11 245 / 22%);
+  --capability-badge: oklch(0.36 0.022 258);
+  --capability-badge-bg: oklch(0.92 0.008 250);
+  --capability-badge-border: oklch(0.24 0.018 258 / 14%);
+  --diff-add: oklch(0.39 0.13 155);
+  --diff-add-bg: oklch(0.945 0.035 155);
+  --diff-del: oklch(0.46 0.18 28);
+  --diff-del-bg: oklch(0.948 0.032 28);
+  --border: oklch(0.22 0.014 258 / 11%);
+  --input: oklch(0.22 0.014 258 / 22%);
   --ring: oklch(var(--brand-l) var(--brand-c) var(--brand-h));
-  --chart-1: oklch(0.6 0.12 var(--brand-h));
-  --chart-2: oklch(0.62 0.17 33);
-  --chart-3: oklch(0.7 0.13 85);
-  --chart-4: oklch(0.6 0.1 160);
-  --chart-5: oklch(0.55 0.08 300);
-  --sidebar: oklch(0.925 0.006 250);
+  --chart-1: oklch(0.58 0.12 var(--brand-h));
+  --chart-2: oklch(0.6 0.17 33);
+  --chart-3: oklch(0.68 0.13 85);
+  --chart-4: oklch(0.58 0.1 160);
+  --chart-5: oklch(0.54 0.08 300);
+  --sidebar: oklch(0.942 0.0045 80);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: oklch(0.89 0.008 250);
+  --sidebar-accent: oklch(0.9 0.006 80);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
   /* The stage: an unlit light-table glass, and the lamp. In daylight the
-     Generate button is the dark ink block; at night it is the lit lamp. */
-  --canvas: oklch(0.915 0.004 250);
-  /* Entry fields: a filled patch of the sheet, underlined (see the field classes). */
-  --field: oklch(0.235 0.016 260 / 6.5%);
-  --field-hover: oklch(0.235 0.016 260 / 9.5%);
+     Generate button is the dark ink block; at night it is the warm lit lamp. */
+  --canvas: oklch(0.918 0.003 80);
+  /* Entry fields: a flat filled patch of the sheet. */
+  --field: oklch(0.21 0.012 260 / 5.8%);
+  --field-hover: oklch(0.21 0.012 260 / 9%);
   /* The shell: the nav rail and the phone's bottom bar are a neutral strip of the desk, a shade off
      the page; only the current page is marked, with the blue pencil (a tint of --primary, its icon in it). */
   --rail: var(--sidebar);
   --rail-foreground: var(--foreground);
   --rail-muted: var(--muted-foreground);
-  --rail-active: color-mix(in oklch, var(--primary) 15%, var(--rail));
+  --rail-active: color-mix(in oklch, var(--primary) 12%, var(--rail));
   --rail-current: var(--primary);
-  --glow: oklch(0.31 0.075 256);
-  --glow-foreground: oklch(0.97 0.01 250);
-  --glow-dim: oklch(0.31 0.075 256 / 12%);
-  --peg: oklch(0.24 0.02 258 / 22%);
-  --scrollbar: oklch(0.24 0.02 258 / 24%);
+  --glow: oklch(0.265 0.068 258);
+  --glow-foreground: oklch(0.985 0.006 80);
+  --glow-dim: oklch(0.265 0.068 258 / 11%);
+  --peg: oklch(0.22 0.016 258 / 22%);
+  --scrollbar: oklch(0.22 0.016 258 / 22%);
   /* The fader (components/ui/slider.tsx): a groove cut into the sheet and a cap that stands on it. */
-  --slider-groove: oklch(0.24 0.02 258 / 11%);
-  --slider-groove-shade: oklch(0.2 0.02 258 / 22%);
-  --slider-cap: oklch(0.995 0.002 250);
-  --slider-cap-edge: oklch(0.24 0.02 258 / 30%);
-  --slider-cap-shade: oklch(0.2 0.02 258 / 22%);
-  --slider-notch: oklch(0.24 0.02 258 / 55%);
+  --slider-groove: oklch(0.22 0.016 258 / 11%);
+  --slider-groove-shade: oklch(0.18 0.016 258 / 22%);
+  --slider-cap: oklch(0.996 0.002 80);
+  --slider-cap-edge: oklch(0.22 0.016 258 / 28%);
+  --slider-cap-shade: oklch(0.18 0.016 258 / 20%);
+  --slider-notch: oklch(0.22 0.016 258 / 55%);
 }
 
 .dark {
-  --brand-l: 0.75;
+  --brand-l: 0.76;
   --brand-hover-dl: 0.04;
-  --brand-fg: oklch(0.2 0.03 var(--brand-h));
+  --brand-fg: oklch(0.185 0.028 var(--brand-h));
 
-  --background: oklch(0.232 0.013 258);
-  --foreground: oklch(0.93 0.006 248);
-  --card: oklch(0.262 0.014 258);
+  /* Obsidian / warm-slate dark studio palette */
+  --background: oklch(0.195 0.009 260);
+  --foreground: oklch(0.945 0.004 80);
+  --card: oklch(0.228 0.01 260);
   --card-foreground: var(--foreground);
-  --popover: oklch(0.285 0.015 258);
+  --popover: oklch(0.252 0.011 260);
   --popover-foreground: var(--foreground);
-  --secondary: oklch(0.305 0.015 258);
+  --secondary: oklch(0.275 0.011 260);
   --secondary-foreground: var(--foreground);
-  --muted: oklch(0.29 0.014 258);
-  --muted-foreground: oklch(0.765 0.013 250);
-  --accent: oklch(0.315 0.016 258);
+  --muted: oklch(0.258 0.01 260);
+  --muted-foreground: oklch(0.755 0.009 255);
+  --accent: oklch(0.288 0.012 260);
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.75 0.15 33); /* red pencil; ≥ 4.5:1 as text on its own 20 % tint */
-  --success: oklch(0.74 0.13 160);
-  --warning: oklch(0.8 0.13 80);
-  --star: oklch(0.83 0.15 84);
-  --border: oklch(0.86 0.02 248 / 9%);
-  --input: oklch(0.86 0.02 248 / 14%);
-  --sidebar: oklch(0.205 0.012 258);
-  --sidebar-accent: oklch(0.285 0.015 258);
-  --canvas: oklch(0.2 0.005 258);
-  --field: oklch(0.93 0.006 248 / 6%);
-  --field-hover: oklch(0.93 0.006 248 / 9%);
-  --rail-active: color-mix(in oklch, var(--primary) 18%, var(--rail));
-  --glow: oklch(0.955 0.012 230);
-  --glow-foreground: oklch(0.22 0.02 258);
-  --glow-dim: oklch(0.955 0.012 230 / 7%);
-  --peg: oklch(0.86 0.02 248 / 16%);
-  --scrollbar: oklch(0.86 0.02 248 / 18%);
-  --slider-groove: oklch(0.13 0.01 258 / 55%);
-  --slider-groove-shade: oklch(0 0 0 / 45%);
-  --slider-cap: oklch(0.86 0.008 250);
-  --slider-cap-edge: oklch(0.98 0.005 250 / 35%);
-  --slider-cap-shade: oklch(0 0 0 / 50%);
-  --slider-notch: oklch(0.25 0.015 258 / 70%);
+  --success: oklch(0.75 0.13 160);
+  --warning: oklch(0.82 0.13 80);
+  --star: oklch(0.84 0.16 84);
+  --advice-warn: oklch(0.84 0.135 80);
+  --advice-warn-bg: oklch(0.255 0.035 72);
+  --advice-warn-border: oklch(0.82 0.13 78 / 28%);
+  --advice-info: oklch(0.81 0.1 240);
+  --advice-info-bg: oklch(0.245 0.025 250);
+  --advice-info-border: oklch(0.76 0.1 242 / 24%);
+  --capability-badge: oklch(0.85 0.015 250);
+  --capability-badge-bg: oklch(0.265 0.015 258);
+  --capability-badge-border: oklch(0.88 0.015 250 / 13%);
+  --diff-add: oklch(0.81 0.135 155);
+  --diff-add-bg: oklch(0.25 0.045 155);
+  --diff-del: oklch(0.8 0.155 28);
+  --diff-del-bg: oklch(0.255 0.048 28);
+  --border: oklch(0.92 0.008 250 / 10%);
+  --input: oklch(0.92 0.008 250 / 15%);
+  --sidebar: oklch(0.168 0.009 260);
+  --sidebar-accent: oklch(0.248 0.011 260);
+  --canvas: oklch(0.155 0.006 260);
+  --field: oklch(0.95 0.005 80 / 6.5%);
+  --field-hover: oklch(0.95 0.005 80 / 10%);
+  --rail-active: color-mix(in oklch, var(--primary) 16%, var(--rail));
+  --glow: oklch(0.955 0.014 82);
+  --glow-foreground: oklch(0.185 0.014 260);
+  --glow-dim: oklch(0.955 0.014 82 / 8%);
+  --peg: oklch(0.9 0.01 250 / 16%);
+  --scrollbar: oklch(0.9 0.01 250 / 18%);
+  --slider-groove: oklch(0.11 0.008 260 / 65%);
+  --slider-groove-shade: oklch(0 0 0 / 50%);
+  --slider-cap: oklch(0.89 0.006 80);
+  --slider-cap-edge: oklch(0.98 0.004 80 / 32%);
+  --slider-cap-shade: oklch(0 0 0 / 52%);
+  --slider-notch: oklch(0.21 0.012 260 / 78%);
 }
 
 /* Accent presets: hue, chroma, and the light-mode lightness that keeps every
    pairing at 4.5:1 or more (the hues differ in luminance at equal L).
    "blue" is the blue pencil, the default. */
-[data-accent="iris"] { --brand-h: 282; --brand-c: 0.13; --brand-l: 0.515; }
-[data-accent="blue"] { --brand-h: 238; --brand-c: 0.12; --brand-l: 0.485; }
-[data-accent="teal"] { --brand-h: 195; --brand-c: 0.1; --brand-l: 0.47; }
-[data-accent="green"] { --brand-h: 152; --brand-c: 0.12; --brand-l: 0.475; }
-[data-accent="amber"] { --brand-h: 70; --brand-c: 0.14; --brand-l: 0.505; }
-[data-accent="coral"] { --brand-h: 32; --brand-c: 0.15; --brand-l: 0.515; }
-[data-accent="rose"] { --brand-h: 5; --brand-c: 0.15; --brand-l: 0.52; }
+[data-accent="iris"] { --brand-h: 282; --brand-c: 0.13; --brand-l: 0.495; }
+[data-accent="blue"] { --brand-h: 238; --brand-c: 0.12; --brand-l: 0.475; }
+[data-accent="teal"] { --brand-h: 195; --brand-c: 0.1; --brand-l: 0.46; }
+[data-accent="green"] { --brand-h: 152; --brand-c: 0.12; --brand-l: 0.465; }
+[data-accent="amber"] { --brand-h: 70; --brand-c: 0.14; --brand-l: 0.49; }
+[data-accent="coral"] { --brand-h: 32; --brand-c: 0.15; --brand-l: 0.495; }
+[data-accent="rose"] { --brand-h: 5; --brand-c: 0.15; --brand-l: 0.5; }
 /* Dark mode: one lightness for all, with a dark label; amber is brighter. */
 .dark[data-accent],
-.dark [data-accent] { --brand-l: 0.75; }
+.dark [data-accent] { --brand-l: 0.76; }
 .dark[data-accent="amber"],
-.dark [data-accent="amber"] { --brand-l: 0.8; }
+.dark [data-accent="amber"] { --brand-l: 0.81; }
 
 /* Re-derive brand colours wherever an accent is set (e.g. accent swatches). */
 [data-accent] {
@@ -239,6 +268,19 @@
   --color-glow-dim: var(--glow-dim);
   --color-peg: var(--peg);
   --color-star: var(--star);
+  --color-advice-warn: var(--advice-warn);
+  --color-advice-warn-bg: var(--advice-warn-bg);
+  --color-advice-warn-border: var(--advice-warn-border);
+  --color-advice-info: var(--advice-info);
+  --color-advice-info-bg: var(--advice-info-bg);
+  --color-advice-info-border: var(--advice-info-border);
+  --color-capability-badge: var(--capability-badge);
+  --color-capability-badge-bg: var(--capability-badge-bg);
+  --color-capability-badge-border: var(--capability-badge-border);
+  --color-diff-add: var(--diff-add);
+  --color-diff-add-bg: var(--diff-add-bg);
+  --color-diff-del: var(--diff-del);
+  --color-diff-del-bg: var(--diff-del-bg);
   --color-field: var(--field);
   --color-field-hover: var(--field-hover);
   --color-rail: var(--rail);

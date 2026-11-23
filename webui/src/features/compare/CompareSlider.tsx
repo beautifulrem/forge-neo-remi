@@ -9,6 +9,7 @@ import { ChevronsLeftRight } from "@/components/icons"
 import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
+import { type BackdropMode, backdropSurface } from "./backdrop-modes"
 import { clampPosition, keyPosition } from "./position"
 
 type CompareSliderProps = {
@@ -23,9 +24,11 @@ type CompareSliderProps = {
   initial?: number
   /** The frame is as wide as fits this height (a CSS length, e.g. "70dvh") and its container. */
   fitHeight?: string
+  /** RGBA inspection backdrop behind transparent areas (default: checkerboard). */
+  backdrop?: BackdropMode
 }
 
-export function CompareSlider({ before, after, beforeLabel, afterLabel, aspect, className, initial = 0.5, fitHeight }: CompareSliderProps) {
+export function CompareSlider({ before, after, beforeLabel, afterLabel, aspect, className, initial = 0.5, fitHeight, backdrop = "checker" }: CompareSliderProps) {
   const { t } = useTranslation()
   const [position, setPosition] = useState(clampPosition(initial))
   const [natural, setNatural] = useState<number | null>(null)
@@ -40,11 +43,18 @@ export function CompareSlider({ before, after, beforeLabel, afterLabel, aspect, 
   }
   const percent = `${(position * 100).toFixed(1)}%`
 
+  const surface = backdropSurface(backdrop)
+
   return (
     <div
       ref={frame}
-      className={cn("relative isolate max-h-full max-w-full touch-none overflow-hidden rounded-lg bg-checker select-none", className)}
-      style={{ aspectRatio: String(ratio), width: fitHeight ? `min(100%, calc(${fitHeight} * ${ratio}))` : undefined }}
+      data-backdrop={backdrop}
+      className={cn("relative isolate max-h-full max-w-full touch-none overflow-hidden rounded-lg select-none", surface.className, className)}
+      style={{
+        ...surface.style,
+        aspectRatio: String(ratio),
+        width: fitHeight ? `min(100%, calc(${fitHeight} * ${ratio}))` : undefined,
+      }}
       onPointerDown={(event) => {
         if (event.button !== 0) return
         dragging.current = true

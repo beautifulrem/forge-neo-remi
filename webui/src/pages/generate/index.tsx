@@ -207,7 +207,7 @@ function DesktopLayout({ tab, openViewer, wide }: { tab: GenerateTab; openViewer
             className="min-h-0 flex-1"
             leading={<PaneToggle side="left" collapsed={paramsCollapsed} onToggle={() => toggle(paramsRef)} />}
             trailing={wide ? <PaneToggle side="right" collapsed={historyCollapsed} onToggle={() => toggle(historyRef)} /> : null}
-            toolbar={paramsCollapsed ? <GenerateBar tab={tab} className="min-w-0 flex-1" /> : null}
+            toolbar={paramsCollapsed ? <GenerateBar tab={tab} showAdvice={false} className="min-w-0 flex-1" /> : null}
           />
           {wide ? null : <HistoryPane onOpen={openViewer} orientation="strip" />}
         </div>

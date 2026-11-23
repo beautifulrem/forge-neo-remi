@@ -14,8 +14,10 @@ import { bootstrap, extrasSchema, models, serverCatalogZh, styles, tabSchema, to
 import { broadcast, broadcastBinary } from "./socket"
 import { adminRoutes } from "./admin"
 import { authRoutes, mockRefusal } from "./auth"
+import { mockAdviceFor, mockCapabilitiesForPreset } from "./capabilities"
 import { missingLoras, networkRoutes } from "./networks"
 import { libraryRoutes } from "./library"
+import { workbenchRoutes } from "./workbench"
 
 type Handler = (match: RegExpExecArray, body: unknown, url: URL) => unknown | Promise<unknown>
 
@@ -61,7 +63,18 @@ const FORGE_PRESETS: Record<string, [number, number, string, number]> = {
   sd: [512, 7, "Euler a", 20],
   xl: [1024, 5, "Euler a", 28],
   flux: [1024, 1, "Euler", 20],
+  klein: [1024, 1, "Euler", 20],
+  qwen: [1024, 4, "Euler", 24],
+  lumina: [1024, 4, "Euler", 24],
+  zit: [1024, 1, "Euler", 8],
+  wan: [832, 5, "Euler", 20],
   anima: [1024, 4, "ER SDE", 30],
+  ernie: [1024, 1, "Euler", 8],
+  pid: [1024, 1, "Euler", 1],
+  krea: [1024, 3.5, "Euler", 24],
+  qwen21: [1024, 1, "Euler", 8],
+  moss: [1024, 3.5, "Euler", 24],
+  flux3: [1024, 1, "Euler", 8],
 }
 
 /** Emits the `model.loading` stages a real model switch produces. */
@@ -100,7 +113,7 @@ function hiresLine(core: Values): { text: string; params: Record<string, string>
  * Rules: the Anima locks are one-of-two; Hires. fix and the refiner exclude
  * each other (the last one switched on wins); LCM pins the SGM Uniform schedule.
  */
-function conflictPatch(core: Values, scripts: Record<string, Values>, selected: string | undefined) {
+export function conflictPatch(core: Values, scripts: Record<string, Values>, selected: string | undefined) {
   const patch: Record<string, unknown> = {}
   const anima = scripts.anima ?? {}
   if (anima.lock_steps && anima.lock_cfg) {
@@ -132,6 +145,11 @@ function actionPatch(owner: string, action: string, body: ActionRequest & { sele
       const preset = String((body as { preset?: unknown }).preset ?? "sd")
       const [size, cfg, sampler, steps] = FORGE_PRESETS[preset] ?? FORGE_PRESETS.sd!
       bootstrap.options.forge_preset = preset
+      const capabilities = mockCapabilitiesForPreset(
+        preset,
+        String(bootstrap.options.sd_model_checkpoint ?? ""),
+        String(bootstrap.options.forge_unet_storage_dtype ?? ""),
+      )
       simulateModelLoad(`${preset} preset`)
       broadcast({ type: "options.changed", keys: ["forge_preset"] })
       return {
@@ -141,10 +159,35 @@ function actionPatch(owner: string, action: string, body: ActionRequest & { sele
         "sampler.sampler_name": { value: sampler },
         "sampler.steps": { value: steps },
         __settings__: { forge_preset: preset },
+        __capabilities__: capabilities,
+        __advice__: mockAdviceFor(
+          preset,
+          { ...values, width: size, height: size, cfg_scale: cfg },
+          { ...scripts, sampler: { ...(scripts.sampler ?? {}), sampler_name: sampler, steps } },
+          bootstrap.options as Values,
+        ),
       }
     }
-    case "core/__conflicts__":
-      return conflictPatch(values, scripts, body.selected)
+    case "core/__conflicts__": {
+      const patch = conflictPatch(values, scripts, body.selected)
+      const preset = String(bootstrap.options.forge_preset ?? "xl")
+      return {
+        ...patch,
+        __advice__: mockAdviceFor(preset, values, scripts, bootstrap.options as Values),
+      }
+    }
+    case "core/__advice__": {
+      const presetOverride = (body as { preset?: unknown }).preset
+      const preset = typeof presetOverride === "string" && presetOverride ? presetOverride : String(bootstrap.options.forge_preset ?? "xl")
+      return {
+        __advice__: mockAdviceFor(preset, values, scripts, bootstrap.options as Values),
+        __capabilities__: mockCapabilitiesForPreset(
+          preset,
+          String(bootstrap.options.sd_model_checkpoint ?? ""),
+          String(bootstrap.options.forge_unet_storage_dtype ?? ""),
+        ),
+      }
+    }
     case "anima/apply_preset": {
       const [sampler, steps, cfg] = PRESETS[String(values.preset)] ?? PRESETS.balanced ?? ["Euler a", 28, 5]
       return {
@@ -492,6 +535,7 @@ function bootstrapForTest(): Bootstrap {
 
 const routes: [method: string, pattern: RegExp, handler: Handler][] = [
   ...authRoutes, // login (off unless a test turns it on)
+  ...workbenchRoutes, // recipes, chains, boards, lineage, compare, diagnostics, workers, PUP, rules
   ...adminRoutes, // settings & extensions pages (admin.ts)
   ...networkRoutes,
   ...libraryRoutes, // gallery, PNG info & queue tools (library.ts)

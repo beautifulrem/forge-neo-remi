@@ -4,7 +4,7 @@
  * drops (an image dropped anywhere on the field is handed to `onDropImage`).
  */
 import { ImageDown } from "@/components/icons"
-import { type ReactNode, type Ref, Suspense, useId, useImperativeHandle, useRef, useState } from "react"
+import { type ReactNode, type Ref, Suspense, useEffect, useId, useImperativeHandle, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useKeyboardHints } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
@@ -12,7 +12,9 @@ import { describedBy, hintRef, infoTextId } from "@/ui/a11y"
 import { FieldError, ModifiedDot } from "@/ui/Field"
 import { useForm, useParam } from "@/ui/hooks"
 import type { TextNode } from "@/ui/schema"
+import { registerActivePrompt } from "./active-editor"
 import { PromptDecorators } from "./PromptDecorators"
+import { PupTrigger } from "./PupTrigger"
 import { LazyPromptEditor, type PromptEditorHandle } from "./index"
 import type { PromptKind } from "./facets"
 import { TokenCounter } from "./TokenCounter"
@@ -67,6 +69,17 @@ export function PromptField({ node, kind = "positive", steps, styles, actions, o
   const depth = useRef(0)
   const bracketId = `${id}-brackets`
   const handle = useRef<PromptEditorHandle | null>(null)
+  // Register main positive prompt editor so widgets (e.g. image-list) can insert slot tokens at the cursor.
+  useEffect(() => {
+    if (kind !== "positive") return
+    const proxy: PromptEditorHandle = {
+      focus: () => handle.current?.focus(),
+      insertText: (text: string) => handle.current?.insertText(text),
+      view: () => handle.current?.view() ?? null,
+    }
+    registerActivePrompt(formId, proxy)
+    return () => registerActivePrompt(formId, null)
+  }, [formId, kind])
   // The page's ref reaches the editor through this field's own handle.
   useImperativeHandle(
     editorRef,
@@ -117,6 +130,7 @@ export function PromptField({ node, kind = "positive", steps, styles, actions, o
         </label>
         {param.modified ? <ModifiedDot onReset={param.reset} defaultValue={param.defaultValue} label={label} disabled={!param.enabled} /> : null}
         <div className="ml-auto flex shrink-0 items-center gap-1">
+          {kind === "positive" ? <PupTrigger value={value} setValue={param.setValue} disabled={!param.enabled} /> : null}
           {actions}
           <TokenCounter text={value} steps={steps} styles={styles} negative={kind === "negative"} />
         </div>

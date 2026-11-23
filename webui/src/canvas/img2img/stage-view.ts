@@ -13,6 +13,7 @@ import { runningFor, useProgress } from "@/api/progress"
 import { useRuns } from "@/features/progress/run-controller"
 import { getFormStore } from "@/ui/form-store"
 import { isPainting } from "../state/activity"
+import { useCanvasStaging } from "../state/staging"
 
 export type StageView = "source" | "result"
 
@@ -44,7 +45,7 @@ function followRun() {
   if (running) {
     if (runSeen) return
     runSeen = true
-    if (!isPainting()) useStageView.getState().setView("result")
+    if (!isPainting() && !useCanvasStaging.getState().stayOnCanvas) useStageView.getState().setView("result")
   } else if (runIdle()) runSeen = false
 }
 

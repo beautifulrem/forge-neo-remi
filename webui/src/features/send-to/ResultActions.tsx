@@ -4,7 +4,7 @@
  * parameters, Hires. fix it (txt2img's ✨), send to img2img / inpaint /
  * extras, remove from history.
  */
-import { ArrowRightLeft, ClipboardPaste, Copy, Download, Ellipsis, ExternalLink, FileArchive, ImagePlus, Paintbrush, Recycle, Save, Sparkles, Trash2, Wand } from "@/components/icons"
+import { ArrowRightLeft, ClipboardPaste, Copy, Download, Ellipsis, ExternalLink, FileArchive, ImagePlus, Images, Paintbrush, Recycle, Save, Sparkles, Trash2, Wand } from "@/components/icons"
 import type { ReactNode } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils"
 import { copyText, downloadFile, openInNewTab } from "@/features/gallery/files"
 import { type ResultItem, useSession } from "@/features/gallery/session-store"
 import { upscaleResult } from "@/features/progress/run-controller"
-import { applyParameters, reuseSeed, saveResults, sendWithFeedback } from "./result-actions"
+import { applyParameters, reuseSeed, saveResults, sendToReferenceWithFeedback, sendWithFeedback } from "./result-actions"
 
 function Action(props: { label: string; shortcut?: string; onClick: () => void; disabled?: boolean; children: ReactNode; tone?: "light"; className?: string }) {
   return (
@@ -213,6 +213,16 @@ export function ResultActions({ item, tab, tone, removable = true, upscalable = 
           <DropdownMenuItem onClick={() => item && sendImage("extras", item)}>
             <Wand />
             {t("Extras")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => {
+              if (!item) return
+              sendToReferenceWithFeedback([{ fileId: item.fileId, width: item.width, height: item.height }], tab === "img2img" ? "img2img" : "txt2img")
+              onSent?.()
+            }}
+          >
+            <Images />
+            {t("Reference image (ImageStitch)")}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem disabled={!infotext} onClick={() => infotext && send("txt2img", { infotext })}>
