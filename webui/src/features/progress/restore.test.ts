@@ -115,6 +115,46 @@ describe("restoreRuns", () => {
     expect(create).not.toHaveBeenCalled()
   })
 
+  it("leaves a loop to the tab it was duplicated from, which still runs it", async () => {
+    // A duplicated tab starts with a copy of the original's session storage: the loop's job in flight.
+    sessionStorage.setItem(persistKey("txt2img"), JSON.stringify({ jobs: ["f1"], forever: true, repeatLeft: 0 }))
+    // The original tab is alive and still looping txt2img.
+    const original = new BroadcastChannel("remi-run-loops")
+    original.onmessage = (event: MessageEvent<{ type: string; tab: string; id: string; jobs: string[] }>) => {
+      if (event.data.type === "who-loops" && event.data.tab === "txt2img" && event.data.jobs.includes("f1")) original.postMessage({ type: "loops", tab: "txt2img", id: event.data.id })
+    }
+    try {
+      const ws = await socket()
+      serverJobs({ f1: job("f1", "running") })
+      await restoreRuns()
+      expect(useRuns.getState().runs.txt2img).toMatchObject({ forever: false, repeatLeft: 0 })
+      const create = vi.spyOn(api.jobs, "create").mockResolvedValue(created("f2"))
+      send(ws, { type: "job.completed", job_id: "f1", seq: 1, status: "completed", outputs: [] })
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(create).not.toHaveBeenCalled()
+    } finally {
+      original.close()
+    }
+  })
+
+  it("answers a duplicated tab that asks who loops a form", async () => {
+    vi.spyOn(api.jobs, "create").mockResolvedValue(created("f1"))
+    dispatchRun("txt2img", { type: "forever", on: true })
+    await vi.waitFor(() => expect(useRuns.getState().runs.txt2img).toMatchObject({ forever: true, jobs: ["f1"] }))
+    const asker = new BroadcastChannel("remi-run-loops")
+    try {
+      const answer = new Promise<unknown>((resolve) => {
+        asker.onmessage = (event: MessageEvent) => resolve(event.data)
+      })
+      // another tab's own loop of the same form (other jobs) gets no answer
+      asker.postMessage({ type: "who-loops", tab: "txt2img", id: "q0", jobs: ["elsewhere"] })
+      asker.postMessage({ type: "who-loops", tab: "txt2img", id: "q1", jobs: ["f1"] })
+      expect(await answer).toEqual({ type: "loops", tab: "txt2img", id: "q1" })
+    } finally {
+      asker.close()
+    }
+  })
+
   it("does not start Generate forever again when its job ended while the page was closed", async () => {
     sessionStorage.setItem(persistKey("txt2img"), JSON.stringify({ jobs: ["f1"], forever: true, repeatLeft: 0 }))
     serverJobs({ f1: job("f1", "completed") })

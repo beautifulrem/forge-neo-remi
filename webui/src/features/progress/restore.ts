@@ -18,6 +18,7 @@ import { onWsEvent } from "@/api/ws"
 import { useSession } from "@/features/gallery/session-store"
 import { dispatchRun, GENERATE_FORMS, type GenerateTab, type PersistedRun, persistedRun, useRuns } from "./run-controller"
 import type { JobOutcome } from "./run-machine"
+import { loopRunsElsewhere } from "./loop-owner"
 
 let restoring: Promise<void> | null = null
 
@@ -38,8 +39,10 @@ async function restore() {
   }
   await resyncRuns()
   // "Generate forever" / "Generate several times" go on after a reload while their job is still in flight.
+  // A duplicated tab copied the loop with the session storage: the tab it came from still runs it.
   for (const [tab, run] of saved) {
-    if (run.forever || run.repeatLeft > 0) dispatchRun(tab, { type: "resume", forever: run.forever, repeatLeft: run.repeatLeft })
+    if (!(run.forever || run.repeatLeft > 0) || (await loopRunsElsewhere(tab, run.jobs))) continue
+    dispatchRun(tab, { type: "resume", forever: run.forever, repeatLeft: run.repeatLeft })
   }
 }
 

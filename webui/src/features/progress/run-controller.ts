@@ -1,7 +1,7 @@
 /**
  * One run controller per generation form: holds the `run-machine` state,
  * performs its effects (submit the form, interrupt, skip, cancel) and feeds
- * it the WebSocket job events. Jobs in flight are remembered in localStorage,
+ * it the WebSocket job events. Jobs in flight are remembered in session storage,
  * with "Generate forever" and the runs left of "Generate several times", so
  * a reload picks them up again and goes on (`restoreRuns`).
  */
@@ -20,6 +20,7 @@ import { flushPendingWrites } from "@/ui/pending-writes"
 import { jobRequest, missingInputs } from "@/ui/tab"
 import { errorText, toastInvalid } from "@/features/errors/error-text"
 import { notifyResults } from "./effects"
+import { answerLoopQueries } from "./loop-owner"
 import { noteUpscale } from "@/features/gallery/session-store"
 import { IDLE, type JobOutcome, reduce, type RunEffect, type RunEvent, type RunState, type UpscaleSource } from "./run-machine"
 
@@ -176,6 +177,11 @@ let wired = false
 export function wireRunControllers() {
   if (wired) return
   wired = true
+  // a duplicated tab asks before it resumes a loop this tab runs (restoreRuns)
+  answerLoopQueries((tab, jobs) => {
+    const run = useRuns.getState().runs[tab]
+    return (run.forever || run.repeatLeft > 0) && run.jobs.some((id) => jobs.includes(id))
+  })
   const started = (jobId: string) => {
     const tab = ownerOf(jobId)
     if (tab && useRuns.getState().runs[tab].running !== jobId) dispatchRun(tab, { type: "started", jobId })
@@ -205,5 +211,5 @@ export function upscaleResult(source: UpscaleSource) {
 export function resetRunControllers() {
   early.clear()
   useRuns.setState({ runs: { txt2img: IDLE, img2img: IDLE } })
-  for (const tab of GENERATE_FORMS) localStorage.removeItem(persistKey(tab))
+  for (const tab of GENERATE_FORMS) sessionStorage.removeItem(persistKey(tab))
 }
