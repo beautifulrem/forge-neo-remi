@@ -4,7 +4,7 @@ import { useProgress } from "@/api/progress"
 import { keys, queryClient } from "@/api/queries"
 import { getFormStore } from "@/ui/form-store"
 import { tabOwners } from "@/ui/tab"
-import { finishExtras, interruptExtras, resetExtrasRuns, runExtras, singleSource, useExtrasRuns, wireExtrasRuns } from "./run"
+import { finishExtras, interruptExtras, resetExtrasRuns, resyncExtras, runExtras, singleSource, useExtrasRuns, wireExtrasRuns } from "./run"
 
 function mockFetch(answer: (method: string, path: string) => [number, unknown]) {
   const calls: { method: string; path: string; body: unknown }[] = []
@@ -67,6 +67,27 @@ describe("extras runs", () => {
     useProgress.setState({ running: { jobId: "a", step: 0, steps: 0 } })
     interruptExtras()
     await vi.waitFor(() => expect(calls.map((call) => `${call.method} ${call.path}`).sort()).toEqual(["DELETE /jobs/b", "POST /jobs/a/interrupt"]))
+  })
+
+  it("keeps following a job while the server is unreachable and settles it once it answers", async () => {
+    useExtrasRuns.setState({ jobs: ["j1"], sources: { j1: "up1" } })
+    mockFetch(() => [502, { detail: "restarting" }])
+    await resyncExtras()
+    expect(useExtrasRuns.getState().jobs).toEqual(["j1"])
+
+    vi.restoreAllMocks()
+    mockFetch(() => [200, { id: "j1", status: "completed", outputs: [{ file_id: "o1", url: "/files/o1" }], infotext: "x" }])
+    await resyncExtras()
+    expect(useExtrasRuns.getState().jobs).toEqual([])
+    expect(useExtrasRuns.getState().results[0]).toMatchObject({ jobId: "j1", source: "up1", info: "x" })
+  })
+
+  it("reports a job the server no longer knows as gone", async () => {
+    useExtrasRuns.setState({ jobs: ["j2"], sources: { j2: null } })
+    mockFetch(() => [404, { detail: "no such job" }])
+    await resyncExtras()
+    expect(useExtrasRuns.getState().jobs).toEqual([])
+    expect(useExtrasRuns.getState().results[0]?.error).toBeTruthy()
   })
 
   it("ignores jobs it did not queue", () => {

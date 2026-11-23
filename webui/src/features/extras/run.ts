@@ -8,10 +8,11 @@ import { toast } from "sonner"
 import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
 import { api } from "@/api/endpoints"
-import { validationErrors } from "@/api/http"
+import { ApiError, validationErrors } from "@/api/http"
 import { useProgress } from "@/api/progress"
 import { keys, queryClient } from "@/api/queries"
-import type { JobOutput, TabSchema } from "@/api/types"
+import type { Job, JobOutput, TabSchema } from "@/api/types"
+import { onWsEvent } from "@/api/ws"
 import { errorText, toastInvalid } from "@/features/errors/error-text"
 import { t } from "@/i18n"
 import { getFormStore } from "@/ui/form-store"
@@ -129,16 +130,31 @@ export function wireExtrasRuns() {
     if (job && job !== prev.last.extras) finishExtras(job)
   })
   // Jobs still in flight when the page was reloaded: follow them again.
-  for (const id of useExtrasRuns.getState().jobs) {
-    useProgress.getState().track(id, "extras")
-    api.jobs
-      .get(id)
-      .then((job) => {
-        if (job.status === "queued" || job.status === "running") return
-        finishExtras({ jobId: id, outputs: job.outputs, infotext: job.infotext, error: job.status === "failed" ? (job.error ?? undefined) : undefined })
-      })
-      .catch(() => finishExtras({ jobId: id, outputs: [], error: t("The job is gone") }))
-  }
+  for (const id of useExtrasRuns.getState().jobs) useProgress.getState().track(id, "extras")
+  void resyncExtras()
+  // a reconnect: a job that ended while the socket was down sent its event to nobody
+  onWsEvent("hello", () => void resyncExtras())
+}
+
+/**
+ * Asks the server about this page's jobs in flight: an ended one records its
+ * result, one the server no longer knows (404) its error. Any other failure
+ * (the server restarting) leaves the job followed until the next `hello`.
+ */
+export async function resyncExtras(): Promise<void> {
+  await Promise.all(
+    useExtrasRuns.getState().jobs.map(async (id) => {
+      let job: Job
+      try {
+        job = await api.jobs.get(id)
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) finishExtras({ jobId: id, outputs: [], error: t("The job is gone") })
+        return
+      }
+      if (job.status === "queued" || job.status === "running") return
+      finishExtras({ jobId: id, outputs: job.outputs, infotext: job.infotext, error: job.status === "failed" ? (job.error ?? undefined) : undefined })
+    }),
+  )
 }
 
 /** Tests: forget everything. */
