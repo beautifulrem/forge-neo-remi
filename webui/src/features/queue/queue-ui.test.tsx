@@ -299,7 +299,7 @@ describe("editing a queued job in its form", () => {
     const stop = writing("after the last stroke")
     try {
       expect(await enqueueForm("txt2img")).toBe("new")
-      expect((calls.find((call) => call.path === "/jobs")?.body as { core: { prompt: string } }).core.prompt).toBe("after the last stroke")
+      expect((calls.find((call) => call.path === "/jobs")!.body as { core: { prompt: string } }).core.prompt).toBe("after the last stroke")
     } finally {
       stop()
     }
@@ -307,7 +307,7 @@ describe("editing a queued job in its form", () => {
     const again = writing("edited on the canvas")
     try {
       expect(await saveEdit("txt2img")).toBe(true)
-      expect((calls.find((call) => call.method === "PUT")?.body as { core: { prompt: string } }).core.prompt).toBe("edited on the canvas")
+      expect((calls.find((call) => call.method === "PUT")!.body as { core: { prompt: string } }).core.prompt).toBe("edited on the canvas")
     } finally {
       again()
     }
