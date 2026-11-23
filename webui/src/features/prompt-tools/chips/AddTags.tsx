@@ -14,6 +14,7 @@ import { type CompletionItem, type PromptToolsConfig, promptToolsApi } from "../
 import { categoryColor, compactCount } from "../completion/colors"
 import { tagText } from "../completion/insert"
 import { appendChips, type PromptDoc, serializePrompt } from "./parse"
+import { isComposing } from "@/lib/ime"
 
 type AddTagsProps = { doc: PromptDoc; setValue: (value: string) => void; disabled: boolean; empty: boolean; config: PromptToolsConfig; kind: PromptKind }
 
@@ -94,7 +95,7 @@ export function AddTags({ doc, setValue, disabled, empty, config, kind }: AddTag
         aria-label={t("Add tags")}
         placeholder={empty ? t("Add tags, separated by commas") : t("Add tags")}
         onKeyDown={(event) => {
-          if (event.nativeEvent.isComposing) return
+          if (isComposing(event)) return
           if (event.key === "Enter" && !highlighted.current) {
             event.preventDefault()
             add(text)

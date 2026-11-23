@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import { standInFocus } from "@/lib/lazy-module"
 import { SEARCH_SELECT_TRIGGER_CLASS, selectedOption, type SearchSelectProps, type SelectOption } from "./search-select-shared"
 import { SearchSelectTriggerContent } from "./SearchSelectTriggerContent"
+import { isComposing } from "@/lib/ime"
 
 /**
  * The trigger's accessible name as the user hears it: `aria-label`, then the
@@ -113,7 +114,7 @@ export function SearchSelectImpl({ openOnMount, standInKey, ...props }: ImplProp
                 placeholder={t("Search…")}
                 className="h-8 w-full rounded-md bg-input/30 px-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" && offerCustom) {
+                  if (event.key === "Enter" && offerCustom && !isComposing(event)) {
                     event.preventDefault()
                     onValueChange(trimmed)
                     setQuery("")

@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/combobox"
 import { standInFocus } from "@/lib/lazy-module"
 import type { ChipsSelectProps, Option } from "./chips-select-shared"
+import { isComposing } from "@/lib/ime"
 
 export function ChipsSelect(props: ChipsSelectProps & { defaultOpen?: boolean; standInKey?: string }) {
   const { t } = useTranslation()
@@ -74,7 +75,7 @@ export function ChipsSelect(props: ChipsSelectProps & { defaultOpen?: boolean; s
                 aria-invalid={props.invalid || undefined}
                 placeholder={values.length === 0 ? t("Select…") : undefined}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" && addCustom()) event.preventDefault()
+                  if (event.key === "Enter" && !isComposing(event) && addCustom()) event.preventDefault()
                 }}
               />
             </>

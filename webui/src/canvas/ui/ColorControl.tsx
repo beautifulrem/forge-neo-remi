@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import { parseHex, toHex } from "../core/pixels"
 import { SWATCHES } from "../state/tools"
 import { Hint } from "./controls"
+import { isComposing } from "@/lib/ime"
 
 type EyeDropperApi = { open: () => Promise<{ sRGBHex: string }> }
 
@@ -71,7 +72,7 @@ export function ColorControl({ color, recent, onChange, onEyedropper }: { color:
             onChange={(event) => setText(event.target.value)}
             onBlur={(event) => commitText(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") commitText(event.currentTarget.value)
+              if (event.key === "Enter" && !isComposing(event)) commitText(event.currentTarget.value)
             }}
             aria-invalid={text !== null && parseHex(text) === null ? true : undefined}
             className="h-9 font-mono text-xs uppercase"

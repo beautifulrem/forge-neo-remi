@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils"
 import { activeFilters, useGalleryView } from "./filters"
 import { CATEGORY_LABELS, daysAgo } from "./labels"
 import { galleryFacetsQuery } from "./queries"
+import { isComposing } from "@/lib/ime"
 
 const ALL = "__all__"
 
@@ -70,7 +71,7 @@ function SearchBox() {
         type="search"
         value={text}
         onChange={(event) => setText(event.target.value)}
-        onKeyDown={(event) => event.key === "Enter" && set({ q: text })}
+        onKeyDown={(event) => event.key === "Enter" && !isComposing(event) && set({ q: text })}
         ref={input}
         placeholder={placeholder}
         aria-label={t("Search the gallery")}
