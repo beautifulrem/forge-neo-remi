@@ -7,7 +7,7 @@ interpreter (the WebUI is initialised for real, which a test process must not be
 
 It writes the tiny models (``tools/tiny_anima.write_models``: the checkpoint, a
 second one for the Refiner, test LoRAs and a LoKr, a Control-LLLite, an ADetailer
-detector) into ``DATA_DIR/models``, starts the WebUI on the CPU (``--cpu``) with
+detector when Ultralytics is installed) into ``DATA_DIR/models``, starts the WebUI on the CPU (``--cpu``) with
 every built-in extension, as ``remi.server.launch.serve`` does, and serves the
 real app (``remi.server.create_app``) with the job queue running jobs through
 the real runner (``remi.jobs.run_job``). For each :data:`CASES` entry it
@@ -102,6 +102,9 @@ class Case:
     infotext cannot carry (images)"""
     paste_drops: tuple[str, ...] = ()
     """infotext keys the pasted run does not write again (a record of what the run did, not a setting)"""
+    models: tuple[str, ...] = ()
+    """optional tiny models the run needs, by their ``tools/tiny_anima.write_models`` role: without
+    one the case is recorded as skipped"""
     note: str = ""
 
 
@@ -156,7 +159,7 @@ CASES: tuple[Case, ...] = (
     Case("random_resolution", "anima_random_resolution", {"randomize": True}, scripts={"sampler": {"steps": 2, "sampler_name": "Euler", "scheduler": "Simple"}}, hooks=("before_process",), note="a random preset size; the infotext's Size reproduces it"),
     Case("refiner", "refiner", {"enable": True, "checkpoint": REFINER, "switch_at": 0.5}, infotext=("Refiner", "Refiner switch at"), hooks=("setup",), note="a second tiny checkpoint takes over at half the steps"),
     # extensions with their own models (tiny ones: a random YOLOv8n, a Control-LLLite of the tiny DiT)
-    Case("adetailer", "adetailer", {"ad_enable": True, "ad_model": DETECTOR, "ad_confidence": 0.0, "ad_mask_k": 1, "ad_denoising_strength": 0.6, "ad_use_inpaint_width_height": True, "ad_inpaint_width": 64, "ad_inpaint_height": 64}, infotext=("ADetailer model", "ADetailer confidence"), hooks=("postprocess_image",), note="the detector's best box is inpainted again"),
+    Case("adetailer", "adetailer", {"ad_enable": True, "ad_model": DETECTOR, "ad_confidence": 0.0, "ad_mask_k": 1, "ad_denoising_strength": 0.6, "ad_use_inpaint_width_height": True, "ad_inpaint_width": 64, "ad_inpaint_height": 64}, infotext=("ADetailer model", "ADetailer confidence"), hooks=("postprocess_image",), models=("detector",), note="the detector's best box is inpainted again"),
     Case("controlnet", "controlnet", {"unit_0": {"enabled": True, "module": "None", "model": CONTROL_MODEL, "image": "@source"}}, outputs=2, infotext=("ControlNet 0",), contains=(f"Model: {CONTROL_MODEL}",), covers=("extensions-builtin/sd_forge_controlllite",), hooks=("process", *SAMPLING), note="the second output is the control image; a paste keeps the unit's image and Enable, as the old paste did"),
     Case("controlnet_canny", "controlnet", {"unit_0": {"enabled": True, "module": "canny", "model": CONTROL_MODEL, "image": "@source"}}, outputs=2, infotext=("ControlNet 0",), contains=("Module: canny",), covers=("extensions-builtin/sd_forge_controlllite", "extensions-builtin/forge_legacy_preprocessors"), hooks=("process", *SAMPLING), note="the canny preprocessor's map is the second output"),
     Case("controlnet_tile", "controlnet", {"unit_0": {"enabled": True, "module": "tile_colorfix", "model": CONTROL_MODEL, "image": "@source"}}, outputs=2, infotext=("ControlNet 0",), contains=("Module: tile_colorfix",), covers=("extensions-builtin/sd_forge_controlllite", "extensions-builtin/forge_preprocessor_tile"), hooks=("process", *SAMPLING), note="forge_preprocessor_tile's tile_colorfix (it also steers the colours from the control image's latent)"),
@@ -266,7 +269,7 @@ def _start(data_dir: Path):
     sys.path[:0] = [str(ROOT), str(ROOT / "modules_forge" / "packages"), str(ROOT / "tools")]
     import tiny_anima
 
-    checkpoint = tiny_anima.write_models(data_dir / "models")["checkpoint"]
+    models = tiny_anima.write_models(data_dir / "models")
     # MaHiRo and Rescale CFG are shown only with these settings (read when the runners are built)
     config = data_dir / "config.json"
     if not config.is_file():
@@ -281,12 +284,13 @@ def _start(data_dir: Path):
     # as remi.server.launch.serve starts the app
     script_callbacks.before_ui_callback()
     runtime.prepare()
-    return checkpoint
+    return models
 
 
 def run(data_dir: Path, out: Path, only: set[str] | None = None) -> dict:
     started = time.monotonic()
-    checkpoint = _start(data_dir)
+    models = _start(data_dir)
+    checkpoint = models["checkpoint"]
 
     from fastapi.testclient import TestClient
     from PIL import Image
@@ -365,6 +369,11 @@ def run(data_dir: Path, out: Path, only: set[str] | None = None) -> dict:
         baselines: dict[str, dict] = {}
         for case in CASES:
             if only and case.name not in only:
+                continue
+            missing = [role for role in case.models if role not in models]
+            if missing:
+                # write_models writes the detector only with Ultralytics, ADetailer's own requirement
+                results["cases"][case.name] = {"skipped": f"no tiny {', '.join(missing)}: Ultralytics is not installed"}
                 continue
             saved = {key: shared.opts.data.get(key, shared.opts.get_default(key)) for key in case.options}
             if case.options:

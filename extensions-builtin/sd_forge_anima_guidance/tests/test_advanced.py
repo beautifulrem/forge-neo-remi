@@ -555,7 +555,11 @@ class GuidanceRangeTests(unittest.TestCase):
         x = torch.randn(1, 4, 8, 8)
         cond_value, uncond_value = torch.randn_like(x), torch.randn_like(x)
         expected = _run_forge_combine(x, cond_value, uncond_value)
-        self.assertTrue(torch.allclose(expected, uncond_value + (cond_value - uncond_value) * 4.0 * 1.5))
+        # float32 with operands up to ~23 (one ulp: 1.9e-6) and outputs near 0 where they
+        # cancel: Forge's order of operations and this formula round apart by a few ulps of
+        # the operands, which CPU kernels place differently (Linux vs macOS), so the
+        # comparisons here allow 1e-5 absolute, not allclose's default 1e-8
+        self.assertTrue(torch.allclose(expected, uncond_value + (cond_value - uncond_value) * 4.0 * 1.5, atol=1e-5))
 
         ranged = make_guidance_range_cfg_function(None, sigma_start=1.0, sigma_end=0.0)
         identity_hooks = {

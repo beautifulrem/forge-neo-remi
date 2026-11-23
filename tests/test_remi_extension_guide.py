@@ -47,8 +47,9 @@ def test_guide_example_extension_passes_its_own_tests(tmp_path):
 
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
     env.pop("PYTHONPATH", None)
+    # --color=no: CI forces colour (FORCE_COLOR), and its codes would break the \b of the search below
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "extensions/prompt-suffix/tests"],
+        [sys.executable, "-m", "pytest", "-q", "--color=no", "-p", "no:cacheprovider", "extensions/prompt-suffix/tests"],
         cwd=tmp_path,
         env=env,
         capture_output=True,
