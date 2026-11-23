@@ -23,12 +23,14 @@ deleted, not frozen.
 webui/ (React 19 + Vite 8 + Tailwind 4 + shadcn/Base UI, built to webui/dist)
    │  REST /api/v2/*  ·  WebSocket /api/v2/ws  ·  static /assets, /files/*
 remi/server/   FastAPI app factory, routes, auth, static SPA, WS hub
-remi/jobs/     persistent queue (SQLite) + single worker on modules_forge.main_thread
-remi/ui/       parameter/layout DSL, schema export, arg layout, settings schema, actions
-remi/core/     generation forms (txt2img/img2img/extras), tab schema, infotext parse, conflicts, presets
+remi/jobs/     persistent queue (SQLite), linear multi-stage chains (chains.py) + stage cache
+remi/worker/   WorkerProtocol, RuntimeBridge, SubprocessWorker, WorkerPool, MlxSidecarWorker
+remi/recipes.py cross-model parameter Recipes store (SQLite)
+remi/ui/       parameter/layout DSL (REMI_API_VERSION = "1.0"), manifest & diagnostics, schema export, actions
+remi/core/     generation forms, tab schema, ModelCapability bridge (capabilities.py), infotext, conflicts, presets
 remi/pages/    extension pages (former on_ui_tabs)
-modules/       processing pipeline, scripts runtime, options (Gradio removed)
-backend/       inference (unchanged)
+modules/       processing pipeline, scripts runtime (requires_capabilities, cleanup), options (Gradio removed)
+backend/       inference, DiT capability registry (dit_registry, dit_capabilities_ext, model_capabilities, dit_control_patch)
 ```
 
 `webui.py` builds the app with `remi.server.create_app()` and runs uvicorn. The
@@ -115,9 +117,53 @@ optionally with `{"__toast__": {"level", "message"}}`,
 (settings the action already changed on the server; the client only
 refreshes its copy).
 `remi.ui.call_action(owner, name, ActionContext(...), values)` runs and checks
-one. Buttons call actions, and `on_change` / `on_input`
-trigger them. Actions run outside the generation lock unless declared
-`gpu=True`, in which case they queue behind generation.
+one; `remi.ui.actions` also supports isolated execution with per-action
+`timeout` (`@ui.action("name", timeout=15.0)`, default `DEFAULT_ACTION_TIMEOUT = 30.0`),
+raising `ActionTimeoutError` and recording action errors/timeouts in
+`remi.ui.manifest.diagnostics` (`DiagnosticsCollector`, surfaced at
+`GET /api/v2/extensions/diagnostics`). Special patch keys also include
+`__advice__` (structured pre-submit `AdviceItem` entries) and `__capabilities__`
+(updated active `ModelCapabilitySummary` on preset switches). Buttons call
+actions, and `on_change` / `on_input` trigger them. Actions run outside the
+generation lock unless declared `gpu=True`, in which case they queue behind
+generation.
+
+**Extension API v1 & Manifest (`remi/ui/version.py`, `remi/ui/manifest.py`, `remi/testing.py`).**
+`REMI_API_VERSION = "1.0"` establishes the public SemVer contract for `remi.ui`.
+Extensions may ship `remi-extension.json` declaring `api_version` (SemVer range
+validated via `check_api_compatibility`), `min_remi_version`, `requires_capabilities`,
+`requires_widgets`, and metadata. `remi.testing.verify_extension_contract()` /
+`assert_extension_contract()` provides a public contract verifier checking zero
+Gradio / `remi.server` imports, manifest validity, JSON-serializable `params()`
+schemas, `@ui.action` declarations, and locale coverage.
+
+### Full-stack `ModelCapability` & `DiTControlPatch`
+
+`backend/nn/dit_registry.py` (Tier-1 families: Anima, MOSS-Image/Kromoss, Krea 2,
+FLUX.3 Image Klein, Qwen-Image-2.1) and lazy-loaded `backend/nn/dit_capabilities_ext.py`
+(Z-Image Base/Turbo/Omni/Edit, ERNIE-Image, Bria Fibo 2.0) declare per-family
+capabilities (`capabilities`, `preset_arch`, `max_references`, `reference_slot_format`,
+`supports_rgba`, `supports_control_blocks`, `attention_backends`, `quant_formats`,
+`structured_advice`, `form_advice`). `backend/nn/model_capabilities.py` and
+`remi/core/capabilities.py` expose the unified `ModelCapabilitySummary` (with
+auto-detected Model Bar format/variant `badges`) to `GET /api/v2/schema/{tab}`
+and pre-submit advice evaluation:
+
+- **Capability-driven script visibility:** `scripts.Script.requires_capabilities`
+  (e.g. `("anima_hooks",)` on all 10 Anima-only built-ins) emits `requires_capabilities`,
+  `applicable`, and `inapplicable_reason` per script in `scripts_schema()` so the
+  SPA folds inapplicable panels cleanly instead of rendering no-op controls.
+- **Structured pre-submit advice (`AdviceItem`):** `POST /api/v2/rules/derive`,
+  `POST /api/v2/actions/core/__advice__`, and initial `GET /api/v2/schema/{tab}`
+  return structured `AdviceItem(code, severity, message, patch, action_label)` items
+  so the SPA renders one-click fix chips (form patches or `__options__` switches
+  such as Turbo 8-step/CFG 1.0, Kromoss 8-step DMD2, or RGBA → PNG output).
+- **Unified `DiTControlPatch` (`backend/nn/dit_control_patch.py`):** abstracts
+  `control_blocks.*` zero-gated ModelPatches for both `Qwen-Image-2.1-Fun-Controlnet-Union`
+  (16 even layers, 64/129-ch structural + inpaint) and `Z-Image-Turbo-Fun-Controlnet-Union`
+  (16/33-ch) with per-call hint isolation and safe Prefix KV Cache bypass, while
+  `extensions-builtin/sd_forge_spectrum/lib_spectrum/modes.py` adds opt-in
+  `TaylorSeer` and `MagCache` forecasting modes alongside `Chebyshev`.
 
 Uploads and outputs reach an action through `ctx.files` (`ui.ActionFiles`,
 which the server fills with its file store): `image(id)`, `image_size(id)`,
@@ -288,11 +334,13 @@ schema-format.md §3 body; other errors `{"detail": str}`.
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/app` | bootstrap: version, features, tabs, pages, locales, default locale, options subset, models summary, `not_ported` (script files, scripts and Extras operations that could not be loaded, with the reason: an import error, A1111's `ui()` without `params()`, a failing `params()`), `auth`, `queue` |
-| GET | `/schema/{tab}` | `tab` ∈ `txt2img`, `img2img`, `extras`: core form + scripts (layout trees, defaults) |
+| GET | `/schema/{tab}` | `tab` ∈ `txt2img`, `img2img`, `extras`: core form + scripts (layout trees, defaults, `requires_capabilities`, `applicable`, `inapplicable_reason`), active `capabilities` summary, and initial pre-submit `advice` items |
 | GET | `/pages`, `/pages/{id}` | extension pages and one page's schema (schema-format.md §8; read from `remi.pages` when present: `registered()`, `get(id)`, `page_schema(id)`) |
-| POST | `/actions/{owner}/{action}` | run an action, `owner` = script id, `page:<id>`, `core`, or `settings` (`refresh:<key>`); `gpu=True` actions run behind generation on the main thread |
-| POST | `/rules/derive` | `{tab, core, scripts, selected?}` → the core `__conflicts__` patch (Anima conflict locks) |
+| POST | `/actions/{owner}/{action}` | run an action, `owner` = script id, `page:<id>`, `core` (incl. `__conflicts__`, `__advice__`, `__preset__`, `__forge_preset__`), or `settings` (`refresh:<key>`); `gpu=True` actions run behind generation on the main thread |
+| POST | `/rules/derive` | `{tab, core, scripts, selected?}` → the core `__conflicts__` patch (Anima conflict locks) plus pre-submit `__advice__` one-click fix items |
 | GET | `/presets`, `/presets/{name}?tab=` | Anima and UI preset names; an Anima preset's form patch |
+| GET / POST / PATCH / DELETE | `/recipes`, `/recipes/{id}`, `/recipes/export`, `/recipes/import`, `/recipes/{id}/apply` | cross-model parameter Recipes (`remi/recipes.py`): partial `core_patch` / `scripts_patch` presets tagged by model family & capabilities, JSON import/export, and conflict/capability-checked application onto a form |
+| GET / POST / DELETE | `/chains`, `/chains/preview`, `/chains/{id}`, `/chains/{id}/{rerun,pause,resume,cancel}`, `/chains/templates[/{id}]` | non-node linear multi-stage pipelines (`remi/jobs/chains.py`, 1–8 stages: `prompt_upsample`, `generate`, `refine`, `finish`) with content-hashed stage caching, partial re-run reusing unchanged upstream outputs, dry-run cache plan (`/preview`), and saved templates |
 | POST | `/jobs` | `{tab, core, scripts, priority?, repeat? (1–100 copies), forever?}` → `{job_id, job_ids, seq}` (201); validated first |
 | GET | `/jobs?cursor=&limit=&status=&q=&starred=&tab=` | history and queue, newest first by submission time (imported jobs keep theirs, so old Agent Scheduler history sorts below recent jobs): `{items, next_cursor, total}`; `q`: every word in the prompt summary, infotext, parameters or import notes. A job carries `starred`, `replayable`, `name`, `source` (importer) and `notes` |
 | GET / PATCH / DELETE | `/jobs/{id}` | detail (incl. `core`, `scripts`, `layout_hash`); `{priority?, forever?}`; cancel a running job or remove a queued/finished one |
@@ -319,14 +367,17 @@ schema-format.md §3 body; other errors `{"detail": str}`.
 | GET / PUT / DELETE / POST | `/styles`, `/styles/{name}`, `/styles/apply` | prompt styles CRUD; write styles into prompts |
 | GET | `/gallery?cursor=&limit=&q=&category=&model=&since=&until=&starred=&sort=`, `/gallery/facets`, `/gallery/{id}` | the Gallery (`remi/library.py`, side table `gallery_meta` in `files.db`, filled lazily: model from the infotext, category `txt2img`/`img2img`/`extras`/`grids`/`saved`/`other` from the job or the output folder, star): every word of `q` in the infotext, file name or model; ISO `since` (inclusive) / `until` (exclusive); sort `newest`/`oldest`/`name`/`largest`; facets = models and categories with counts, date bounds, totals. `total` is counted for the first page only (no `cursor`). Items whose file cannot be found are left out of the page but stay indexed (an unmounted drive keeps its images and stars); only when the file's folder exists (the file was deleted) is the row dropped, without marking the path removed. The side table is synced only after `files.db` changed (`PRAGMA data_version`) |
 | POST | `/gallery/star`, `/gallery/delete`, `/gallery/zip`, `/gallery/{id}/reveal` | star (`{ids ≤ 2000, starred}`); remove from the gallery (`delete_files` also deletes the files); pack originals into a zip (file id, kept an hour); show the file in the file manager of the WebUI machine (loopback clients that came through no proxy — any `X-Forwarded-*` / `Forwarded` / `X-Real-IP` header refuses; a same-machine tunnel that adds none passes as local, so use `--hide-ui-dir-config` when sharing that way; 403 with `--hide-ui-dir-config`). Zips skip files deleted meanwhile; zips older than an hour and their file rows are pruned by the hourly housekeeping. Changes emit `outputs.changed{ids}` (the SPA patches its cached pages; ids it changed itself are not refetched) |
+| GET / POST / PATCH / DELETE | `/boards`, `/boards/{id}`, `/boards/{id}/items`, `/boards/{id}/items/remove`, `/boards/{id}/items/{file_id}` | gallery project Boards (`remi/server/routes/boards.py`): organize outputs into collections without copying files; delete removes the board while keeping images in the gallery |
+| GET / POST | `/gallery/{file_id}/lineage`, `/gallery/compare` | asset parent/sibling/descendant lineage graph (indexed across `files.job_id`, `jobs.retry_of`, `init_img`, `upscale_from`, `ImageStitch` references) and structured parameter diff between two gallery outputs or infotexts |
 | POST | `/pnginfo` | `{file_id}` (upload or output) → PNG Info: `infotext`, parsed `params`, format / mode / size, `entries` (text chunks, comments, stealth info, every EXIF tag incl. the Exif / GPS / Interop IFDs, binary values as `<N bytes>`), `chunks` (PNG chunk list, IDAT runs merged, text keywords) (`remi/image_meta.py`) |
 | POST | `/outputs/save`, `/outputs/open-folder` | gallery "Save" / "Save zip" (`{ids, zip}` → copies in `outdir_save` through the save path, `log.csv`, zip as a file id); open an output folder on the WebUI machine (403 with `--hide-ui-dir-config`) |
-| GET / PATCH / POST / DELETE | `/extensions`, `/extensions/check-updates`, `/extensions/{name}/check`, `/extensions/update`, `/extensions/install`, `/extensions/{name}` | installed extensions (`remote` without credentials, `remote_url`, `commit_url`, `restartable`, `disabled_by`, `index_url`); enable/disable (`{disabled?, disable_all?}`), check for updates (all, or one at a time for progress; a failed fetch is the status `unknown (remote error)`), apply updates (config-state backup first; 502 names those git could not update), install from a git URL (502 when git cannot clone), uninstall (not built-in ones); logic in `remi/extensions_admin.py`; git never prompts (`GIT_TERMINAL_PROMPT=0`, ssh `BatchMode=yes`, no terminal) and is bounded by timeouts; one git operation per repository at a time; writes refused (403) when extension access is disabled; changes load with `/server/reload`. Errors are `{detail, template, params}`: `template` is the English message with `{{name}}` placeholders, the key clients translate |
+| GET / PATCH / POST / DELETE | `/extensions`, `/extensions/diagnostics`, `/extensions/check-updates`, `/extensions/{name}/check`, `/extensions/update`, `/extensions/install`, `/extensions/{name}` | installed extensions (`remote` without credentials, `remote_url`, `commit_url`, `restartable`, `disabled_by`, `index_url`); per-extension runtime health, `remi-extension.json` manifest status, load times, and recent hook/action errors & timeouts (`/extensions/diagnostics`); enable/disable (`{disabled?, disable_all?}`), check for updates (all, or one at a time for progress; a failed fetch is the status `unknown (remote error)`), apply updates (config-state backup first; 502 names those git could not update), install from a git URL (502 when git cannot clone), uninstall (not built-in ones); logic in `remi/extensions_admin.py`; git never prompts (`GIT_TERMINAL_PROMPT=0`, ssh `BatchMode=yes`, no terminal) and is bounded by timeouts; one git operation per repository at a time; writes refused (403) when extension access is disabled; changes load with `/server/reload`. Errors are `{detail, template, params}`: `template` is the English message with `{{name}}` placeholders, the key clients translate |
 | GET | `/extensions/index?url=&refresh=` | an extension index (default `WEBUI_EXTENSIONS_INDEX` or the A1111 list; fetched by the server, cached 10 min; 403 without extension access, 502 when unreachable): entries with `installed`, tag descriptions |
 | GET / POST / DELETE | `/extensions/config-states`, `/extensions/config-states/{id}`, `/extensions/config-states/{id}/restore` | config-state backups (`config_states/*.json`): list, save `{name}`, detail (each extension saved vs. now; the WebUI commit for reference), delete, restore `{what: "extensions"}` → `{reload}` (each extension is reset to its commit during the next reload). The WebUI checkout is never reset: old backups point at upstream commits and `git reset --hard` would drop the working tree |
 | GET | `/user-assets/{name}` | `user.css` (data folder) and `notification.mp3` (WebUI folder) when present; bootstrap `user_assets` lists them |
 | POST | `/prompt/tokens` | token count of one prompt (`null` without a model; not queued) |
-| GET / POST / PUT / PATCH / DELETE | `/prompt-tools/config`, `/complete`, `/usage`, `/lookup`, `/translate`, `/generate`, `/translation-key`, `/groups`, `/refresh`, `/history[/{id}]`, `/collections[/{id}]`, `/favorites[/{id}]`, `/favorites-export`, `/favorites-import` | prompt tools (`remi/prompt_tools`, frontend.md "Prompt tools"): tag completion, usage ranking, chip lookups, translation through a configured provider (its API key write-only, kept in the prompt tools store), prompt writing from a description by the OpenAI-compatible provider (`/generate`: 409 without that provider, 413 over 4,000 characters, 502 when it fails), quick tag groups, prompt history (recorded from `job.queued`), favorites (paged) |
+| GET / POST / PUT / PATCH / DELETE | `/prompt-tools/config`, `/complete`, `/usage`, `/lookup`, `/translate`, `/generate`, `/upsample`, `/translation-key`, `/groups`, `/refresh`, `/history[/{id}]`, `/collections[/{id}]`, `/favorites[/{id}]`, `/favorites-export`, `/favorites-import` | prompt tools (`remi/prompt_tools`, `remi/prompt_tools/pup.py`, frontend.md "Prompt tools"): tag completion, usage ranking, chip lookups, translation through a configured provider (its API key write-only, kept in the prompt tools store), prompt writing from a description (`/generate`), multimodal & local Prompt Upsampler (`/upsample`: attaches reference images, aspect ratio, BBox drafts, VGL JSON mode, or optional local Qwen3.5 quantized runner with automatic VRAM cleanup), quick tag groups, prompt history (recorded from `job.queued`), favorites (paged) |
+| GET / POST | `/workers`, `/workers/{id}`, `/workers/{id}/restart` | inference worker pool & Apple Silicon MLX sidecar health, capabilities, active job status, and clean worker restart (`remi/server/routes/workers.py`) |
 | GET / POST | `/auth/status`, `/auth/login`, `/auth/logout` | login (session cookie) |
 | POST | `/server/reload`, `/server/restart` | rebuild the app in-process ("Reload UI"); restart the process (when the launcher can; answers first, then the serve loop stops the server, interrupts the running job and exits) |
 | GET / POST | `/sysinfo`, `/sysinfo/check` | system information; whether a sysinfo file's checksum matches (`{text}` → `{valid}`) |
@@ -405,11 +456,30 @@ client has a bounded event queue and one preview slot.
   while waiting for the lock finishes it as `interrupted`, nothing run); they
   never touch another caller's generation. A generate-forever job finishing
   while the queue is paused is queued again for the resume.
+- **Worker isolation (`remi/worker/`):** `RuntimeBridge` decouples the control
+  plane from direct in-process `shared.state` / `shared.sd_model` access, and
+  `WorkerProtocol` (`JobEnvelope`, `WorkerProgress`, `PreviewChunk`, `WorkerResult`,
+  `WorkerHeartbeat`) defines JSON + file-ID / binary-preview IPC between FastAPI
+  and inference backends. In-process execution remains the backward-compatible
+  default (`InProcessWorker`); opt-in CLI flags select isolated workers via
+  `WorkerPool`:
+  - `--worker-process`: runs Forge PyTorch inference in a supervised child
+    process (`SubprocessWorker`) with automatic crash/OOM recovery and zero
+    GIL contention against the FastAPI/gallery/WebSocket event loop.
+  - `--worker-gpus 0,1`: spawns one isolated worker per GPU in `WorkerPool`
+    for concurrent multi-GPU job dispatch.
+  - `--worker-mlx`: registers an optional Apple Silicon `MlxSidecarWorker`
+    (`mlx` / `mflux`) implementing `WorkerProtocol` without modifying Forge's
+    PyTorch core.
+  Worker health and restart controls are exposed at `/api/v2/workers*` and in
+  the SPA header's worker status pill.
 - Services (process-wide, survive reloads; data in `<data path>/remi-data`):
   event bus, file index (`files.db`, `uploads/`, `outputs/` for images the
-  save path did not write — temporary, `thumbs/`), job store (`jobs.db`,
-  WAL), the single worker (generation lock `call_queue.queue_lock`, then
-  `modules_forge.main_thread`), progress monitor and preview encoder.
+  save path did not write — temporary, `thumbs/`, plus `boards` & asset lineage),
+  job store (`jobs.db`, WAL; also stores `chains`, `stage_runs`, `chain_templates`),
+  Recipes store (`recipes.db`), the worker pool (in-process default under
+  `call_queue.queue_lock` / `modules_forge.main_thread`, or isolated workers),
+  progress monitor and preview encoder.
   Housekeeping (at start, then hourly) prunes uploads and unsaved outputs
   older than `remi_upload_retention_days` and indexes the output folders.
 - Auth: `--auth user:pass[,…]` / `--auth-file`. With logins, `/api/v2`, `/internal`, the WebSocket,

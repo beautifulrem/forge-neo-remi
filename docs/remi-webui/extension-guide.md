@@ -38,6 +38,7 @@ Unchanged from A1111: a folder in `extensions/` (user) or
 
 ```
 extensions/prompt-suffix/
+├── remi-extension.json          # optional manifest (api_version, capabilities, widgets, metadata)
 ├── scripts/prompt_suffix.py     # scripts.Script subclasses, callbacks, pages
 ├── lib_prompt_suffix/           # optional package (the extension folder is on sys.path)
 ├── localizations/zh_CN.json     # translations of your UI strings (English text → translation)
@@ -49,6 +50,32 @@ extensions/prompt-suffix/
 `javascript/` and `style.css` folders are **not loaded** any more (see
 [§15](#15-what-is-not-supported-and-what-to-do-instead)). Any module that
 imports `gradio` fails to import: Gradio is not installed.
+
+### API versioning & `remi-extension.json` manifest
+
+`remi.ui.version.REMI_API_VERSION` (currently `"1.0"`) defines the public SemVer
+contract for `remi.ui`. Extensions may include an optional `remi-extension.json`
+manifest at the extension root so Remi can validate compatibility explicitly and
+display health/metadata in the Extensions → Diagnostics view:
+
+```json
+{
+  "name": "Prompt Suffix",
+  "version": "1.0.0",
+  "api_version": "^1.0",
+  "min_remi_version": "1.0.0",
+  "requires_capabilities": [],
+  "requires_widgets": [],
+  "license": "MIT",
+  "author": "Example Author"
+}
+```
+
+- `api_version` (required when the file is present): SemVer version or range
+  (`"1.0"`, `"^1.0"`, `">=1.0,<2.0"`), checked by `remi.ui.version.check_api_compatibility`.
+- `requires_capabilities` / `requires_widgets`: optional declarative capability
+  tags and custom widget names validated by `remi.ui.manifest.load_manifest`.
+- Missing manifests remain valid for backward compatibility (`status: "missing"`).
 
 ## 2. Scripts and their hooks
 
@@ -142,9 +169,19 @@ prompts; `section` still decides the argument order and the category
 for txt2img / img2img") decides the layout. Selectable scripts render only while chosen in the
 "Script" dropdown.
 
+**Model capability gating (`requires_capabilities`).** If your script only
+applies to specific model families or runtime features, declare
+`requires_capabilities = ("anima_hooks",)` (or any capability tag exposed by
+`backend/nn/model_capabilities.py`, such as `multi_reference`, `rgba_output`,
+`control_blocks`, `prefix_kv_cache`). `scripts_schema()` automatically emits
+`requires_capabilities`, `applicable`, and `inapplicable_reason` without
+altering positional argument slots, allowing the SPA to collapse inapplicable
+panels with a clear explanation instead of showing controls that silently no-op.
+
 **Failures are contained.** A script whose `params()` raises is disabled
 (no slots, no hooks) and the reason is logged and listed in the bootstrap
-`not_ported` list (`GET /api/v2/app`). A script that still declares only
+`not_ported` list (`GET /api/v2/app`) as well as the Extensions → Diagnostics
+view (`GET /api/v2/extensions/diagnostics`). A script that still declares only
 A1111's `ui()` is disabled the same way: it has no parameters to receive.
 
 ## 3. `params()`: inputs
@@ -338,6 +375,12 @@ def refresh_models(self, ctx: ui.ActionContext, values: dict) -> dict:
 - Actions run on a worker thread outside the generation lock. `gpu=True`
   runs it behind the running generation, holding the lock (needed when it
   touches the model or the GPU, e.g. ControlNet's preprocessor preview).
+- **Timeout & error isolation:** `@ui.action("name", timeout=15.0)` sets an
+  explicit execution timeout in seconds (default `DEFAULT_ACTION_TIMEOUT = 30.0`
+  in isolated execution). Timeouts (`ActionTimeoutError`) and uncaught action or
+  hook failures are recorded per extension in `remi.ui.manifest.diagnostics`
+  and surfaced in **Extensions → Diagnostics** (`GET /api/v2/extensions/diagnostics`)
+  without crashing the form or queue.
 - An exception becomes an error answer (500, shown as an error toast);
   raise `remi.ui.ValidationError([ui.ParamError(message, param=..., owner=...)])`
   for per-field messages (422). Prefer returning a warning toast for
@@ -774,6 +817,23 @@ What to test:
 Processing tests that need the WebUI's options and script runners without a
 model use `remi.testing.webui_state()`; server-level tests use
 `remi.server.testing.server_app()` (a running app with a stub executor).
+
+**Public contract test helper (`remi.testing`).** Third-party extensions can
+verify Gradio-free compliance, layering (no `remi.server` imports),
+`remi-extension.json` manifest SemVer compatibility, strict JSON-serializable
+`params()` schemas, `@ui.action` specs, and optional locale coverage in one call:
+
+```python
+from pathlib import Path
+from remi.testing import assert_extension_contract
+
+assert_extension_contract(
+    Path(__file__).resolve().parents[1],
+    script_classes=[MyScript],
+    check_manifest=True,
+    check_locales=("zh_CN",),
+)
+```
 
 A real generation without the real model: `tools/tiny_anima.py` writes and
 loads a toy-size checkpoint of the Anima architecture (plus test LoRAs, a

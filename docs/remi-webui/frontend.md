@@ -117,13 +117,50 @@ imperatively).
 
 ## Design system
 
-- Tokens live in `index.css`. Surfaces are neutral with a faint cool tint;
-  one brand hue drives `--primary` and `--ring`: `--brand-h/-c/-l/-fg`, set per
-  accent with `[data-accent=…]` (works on any element, e.g. swatches). shadcn's
-  `--accent` stays a neutral hover surface. Extra semantic colours:
-  `success`, `warning`, `canvas` (image backdrops), utility `bg-checker`.
+- Tokens live in `index.css`. Surfaces follow an animation studio's light table
+  in two calibrated studio palettes: **Warm Alabaster & Stone** (light) and
+  **Obsidian & Warm Graphite** (dark), keeping generated images free of colour
+  cast while maximising inspector readability. One brand hue drives
+  `--primary` and `--ring`: `--brand-h/-c/-l/-fg`, set per accent with
+  `[data-accent=…]` (every pairing audited to ≥ 4.5:1 WCAG AA across all 7
+  accents in both themes). shadcn's `--accent` stays a neutral hover surface.
+  Extra semantic colours:
+  - `success`, `warning`, `destructive`, `star` (warm gold star marks, ≥ 3.5:1
+    on paper), `canvas` (borderless image backdrops), utility `bg-checker`;
+  - **Workflow advice chips**: `--advice-warn`, `--advice-warn-bg`,
+    `--advice-warn-border`, `--advice-info`, `--advice-info-bg`,
+    `--advice-info-border`;
+  - **Model & capability badges**: `--capability-badge`,
+    `--capability-badge-bg`, `--capability-badge-border`;
+  - **Structured prompt/parameter diffs**: `--diff-add`, `--diff-add-bg`,
+    `--diff-del`, `--diff-del-bg`.
   The shell (nav rail, bottom bar) is a neutral surface too: `--rail` is
-  `--sidebar`, not a brand colour.
+  `--sidebar`, separated by a crisp hairline (`border-border`), with the active
+  destination marked by `--rail-active`, `--rail-current` and a 2 px left
+  registration peg.
+- **Model Bar & Capability-Driven Form**:
+  - `ModelBar` surfaces model metadata badges (`Diffusers`, `GGUF`,
+    `INT8-ConvRot`, `NVFP4`, `SVDQuant`, `FP8`, `Turbo`, `RGBA`) from
+    `TabSchema.capabilities.badges` (with filename/dtype/preset fallback) plus a
+    compact `WorkerHealthPill` (`GET /api/v2/workers`) showing single/multi-GPU
+    and MLX sidecar health.
+  - `ScriptsPanel` and `Slot` consume `ScriptSchema.applicable` /
+    `requires_capabilities` / `inapplicable_reason`, automatically collapsing
+    non-applicable model extensions into a quiet "Not applicable for active
+    model" drawer instead of cluttering the workspace.
+  - `WorkflowAdviceBar` renders pre-submit structured `AdviceItem` chips
+    (`TabSchema.advice` and `__advice__` patches) directly above `GenerateBar`
+    with one-click Fix buttons applying form patches and `__options__`.
+  - `PromptField` exposes a lazy-loaded Multimodal PUP Upsampler dialog
+    (`PupTrigger` → `PupUpsamplerDialog`, `POST /api/v2/prompt-tools/upsample`)
+    with model-family detection, reference image & aspect ratio attachment,
+    side-by-side token diff preview, and one-click Apply / Revert.
+  - `widgets/image-list` displays model-aware clickable slot badges
+    (`<image_1>`, `ref_image_0`, `Picture 0`, `Image 1`) that insert tokens at
+    the active prompt cursor, drag-and-drop reordering with drop-target ring,
+    and `RGBA` badges when alpha channels are present.
+  - `pages/custom/json-builder` supports MOSS-Image, FLUX.3 Layout, and Bria
+    Fibo 2.0 VGL 2.0 JSON schema mode (with explicit CC BY-NC 4.0 license badge).
 - **Density** scales Tailwind's `--spacing` (`[data-density=compact]` →
   0.215rem), so every `p-*`, `gap-*`, `h-*`, `size-*` shrinks together. Use
   spacing utilities, not fixed pixel sizes, for anything that should follow.

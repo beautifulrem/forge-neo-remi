@@ -10,13 +10,13 @@
 
 浏览器应用（`webui/`）只通过有文档的 API 与服务器通信（[`/api/v2`](api.md)，外加一个用于进度和实时预览的 WebSocket）；服务器从不渲染 HTML。下面逐页说明。
 
-**整体框架。** 左侧是窄导航栏（手机上为底部栏和“更多”面板），通往各个页面；扩展页面排在内置页面与“设置”之间。顶栏显示页面标题、**模型栏**（界面预设、带架构和大小信息的 checkpoint、VAE / 文本编码器、“低精度扩散”）、你固定的 ⚡ **快捷设置**、**模型网络**按钮、**命令面板**（Ctrl/⌘+K：可搜索所有页面、命令和快捷键）、连接状态指示和**外观**菜单（浅色 / 深色 / 跟随系统、宽松或紧凑密度、强调色、语言）。生成任务运行时，顶栏下方有一条进度线。
+**整体框架。** 左侧是窄导航栏（手机上为底部栏和“更多”面板），通往各个页面；扩展页面排在内置页面与“设置”之间。顶栏显示页面标题、**模型栏**（界面预设、带架构/大小与自动识别的格式及能力徽章如 `Diffusers`、`GGUF`、`INT8-ConvRot`、`FP8`、`NVFP4`、`Turbo`、`RGBA`、`Control` 的 checkpoint、VAE / 文本编码器、“低精度扩散”）、**Worker 状态胶囊**（显示进程内 / 独立子进程 / 多 GPU 池 / MLX Sidecar 状态）、你固定的 ⚡ **快捷设置**、**模型网络**按钮、**命令面板**（Ctrl/⌘+K：可搜索所有页面、命令和快捷键）、连接状态指示和**外观**菜单（浅色 / 深色 / 跟随系统、宽松或紧凑密度、强调色、语言）。生成任务运行时，顶栏下方有一条进度线。
 
 **生成（文生图与图生图）。** 同一个视图，顶栏可在文生图 / 图生图之间切换，两者各有独立的表单。宽屏下分为三栏，可调整宽度、可折叠：
 
-- *参数*：顶部是运行控件（生成、加入队列、中止、跳过，以及包含无限生成、连续生成多次和完成通知的菜单）；下面是正向和反向提示词，使用带语法高亮的编辑器（注意力权重、LoRA 标签、提示词调度、通配符、括号检查、标签补全、token 计数、样式）；再往下按你配置的顺序排列参数卡片：采样器、尺寸（宽高比预设、粘贴“W x H”）、引导、高分辨率修复、种子、批次，以及每个扩展面板（可折叠的分区）。可搜索的脚本列表支持“仅显示已修改”筛选和逐面板重置。值旁边的小圆点表示已修改，点击即可恢复默认值。你输入的值会按浏览器保存。
-- *舞台*：任务运行时显示实时预览（步数、批次、剩余时间、队列位置），之后显示所选结果及操作：下载、保存、复制参数、复用种子、使用全部参数、发送到图生图 / 局部重绘 / 后期处理。在图生图中，舞台就是源图的**图像编辑器**：画笔、橡皮擦、填充、矩形和套索选区、取色器、涂鸦与重绘蒙版图层、撤销/重做、缩放与平移、压感，以及显示缩放框和“仅蒙版区域”的叠加层。
-- *历史*：本次会话的结果，以虚拟化缩略图条显示；全屏查看器支持缩放、平移、平铺预览和手柄操作。
+- *参数*：顶部是运行控件（生成、加入队列、中止、跳过、跨模型参数 **Recipes（配方）** 保存与应用菜单，以及包含无限生成、连续生成多次和完成通知的菜单）；表单上方在检测到参数不匹配时会显示事前 **工作流建议** 芯片，点击即可一键修正（如 Turbo 切 8 步 / CFG 1.0、Kromoss 切 8 步 DMD2、RGBA 透明图切 PNG 输出）；下面是正向和反向提示词，使用带语法高亮的编辑器（注意力权重、LoRA 标签、提示词调度、通配符、括号检查、标签补全、token 计数、样式，以及支持附带参考图/BBox 草案与 Diff 预览的 **提示词扩写（PUP）**）；再往下按你配置的顺序排列参数卡片：采样器、尺寸（宽高比预设、粘贴“W x H”）、引导、高分辨率修复、种子、批次，以及每个扩展面板（可折叠的分区）。扩展通过 `requires_capabilities` 声明适用模型能力，不适用于当前模型的面板（如加载 FLUX.3 或 Qwen-Image-2.1 时的 Anima 专用面板）会自动收纳到“当前模型不适用”抽屉并给出原因；可搜索的脚本列表也支持“仅显示已修改”筛选和逐面板重置。值旁边的小圆点表示已修改，点击即可恢复默认值。你输入的值会按浏览器保存。
+- *舞台*：任务运行时显示实时预览（步数、批次、剩余时间、队列位置），之后显示所选结果及操作：下载、保存、复制参数、复用种子、使用全部参数、发送到图生图 / 局部重绘 / **参考图（`ImageStitch`）** / 后期处理。参考图列表按当前模型自动标注槽位标签（Qwen-Image-2.1 为 `<image_1>`、FLUX.3 为 `ref_image_0`、Fibo 2.0 为 `ref_0`），支持点击插入提示词和拖拽排序。在图生图中，舞台就是源图的**图像编辑器**：画笔、橡皮擦、填充、矩形和套索选区、取色器、涂鸦与重绘蒙版图层、撤销/重做、缩放与平移、压感、**画布原地 Staging**（在局部重绘选区原地生成 1–4 张候选图并左右切换审阅、一键应用或丢弃），以及显示缩放框和“仅蒙版区域”的叠加层。
+- *历史*：本次会话的结果，以虚拟化缩略图条显示；全屏查看器支持缩放、平移、平铺预览、**RGBA 四色底板**切换（棋盘格 / 纯黑 / 纯白 / 绿幕，快捷键 `B`）和手柄操作。
 
 宽度小于 72 rem 时历史栏变为缩略图条；在手机上舞台排在最前，运行控件固定在屏幕底部。把图片拖到提示词上即可读取其生成参数。
 
@@ -24,19 +24,19 @@
 
 **图片信息。** 拖入、粘贴或选择图片，查看其生成参数和所有元数据（文本块、EXIF、PNG 块），并把参数或图片发送到其他页面。
 
-**图库。** 为输出文件夹中的所有图片建立索引：搜索提示词、文件名或模型；按表单、文件夹、模型、日期范围和星标筛选；两端对齐或瀑布流布局；多选后可加星标、打包下载、两张对比或删除。查看器显示生成参数，并可在文件管理器中定位文件。
+**图库。** 为输出文件夹中的所有图片建立索引：搜索提示词、文件名或模型；按表单、文件夹、模型、**项目看板（Boards）**、日期范围和星标筛选；两端对齐或瀑布流布局；多选后可加星标、加入看板、将整个看板批量送入参考图、打包下载、**两张对比**（像素滑块/并排视图 + 结构化 **参数 Diff** 抽屉，高亮提示词、Seed、采样器、CFG、步数、LoRA 与扩展差异，支持一键复制差异到表单）或删除。查看器与详情面板显示**资产血缘**（来源任务、重试、img2img/inpaint/放大衍生链）、生成参数与 RGBA 底板切换，并可在文件管理器中定位文件。
 
 **模型网络。** 一个浏览器统一管理 LoRA / LyCORIS、嵌入、checkpoint、VAE 和文本编码器，可作为整页或提示词旁的抽屉打开（Alt+N）：文件夹树、架构筛选（“与当前预设兼容”）、排序、卡片和列表视图、预览（图片或视频）、元数据与训练标签、条目用户元数据编辑器（描述、激活文本、推荐权重、checkpoint 的首选 VAE / 文本编码器——点击其卡片时一并选中等）、从生成结果设置预览图，以及重新扫描文件夹的刷新按钮（同时更新模型栏）。数千个条目也能流畅滚动。
 
-**队列。** 正在运行的任务及其实时预览，按运行顺序排列的待运行任务（拖动或用键盘调整顺序，高 / 普通 / 低优先级，复制、编辑、取消），暂停 / 继续，以及所有任务的可搜索历史（含输出、星标和“再次排队”）。可导入旧 Agent Scheduler 和 Prompt Queue 的任务。
+**队列。** 正在运行的任务及其实时预览，按运行顺序排列的待运行任务（拖动或用键盘调整顺序，高 / 普通 / 低优先级，复制、编辑、取消），暂停 / 继续，以及所有任务的可搜索历史（含输出、星标和“再次排队”）。同时内置**非节点线性多阶段管线**（`提示词扩写 → 生成 → 精修 → 后处理`：支持保存模板，修改后段参数重跑时自动命中并复用前段未变更阶段的缓存产物）与 **Recipes（配方）** 管理（增删改查、JSON 导入导出与一键应用）。可导入旧 Agent Scheduler 和 Prompt Queue 的任务。
 
 **设置。** 所有设置集中在一个可搜索的虚拟化列表中，带分类、“已修改” / “未保存” / “已固定”筛选、逐项重置、导出与导入（也支持 A1111 的 `config.json`），以及服务器工具：重新加载界面、重启、卸载或重新加载模型、查看内存中的权重、为所有 checkpoint 计算哈希、系统信息和许可证。
 
-**扩展。** 已安装扩展（启用、禁用、检查更新、更新、卸载）、扩展索引（默认是第三方维护的 [Forge Neo 索引](https://github.com/eduardoabreu81/forge-neo-extensions)，安装前请自行确认扩展可靠；可搜索、按标签筛选，并可只看近期有更新的扩展“2025+”）、从 git 网址安装，以及可恢复的配置备份。
+**扩展。** 已安装扩展（启用、禁用、检查更新、更新、卸载）、**健康诊断（Diagnostics）**（展示各扩展的 `remi-extension.json` 清单兼容性、加载耗时、最近 hook 警告/错误、隔离执行的 action 错误/超时及 Worker 状态）、扩展索引（默认是第三方维护的 [Forge Neo 索引](https://github.com/eduardoabreu81/forge-neo-extensions)，安装前请自行确认扩展可靠；可搜索、按标签筛选，并可只看近期有更新的扩展“2025+”）、从 git 网址安装，以及可恢复的配置备份。
 
 **扩展页面。** 扩展可以添加自己的页面：Remi 自带 **JoyCaption**（图片描述，单张或整个文件夹，带进度与取消）、**Prompt Workshop** 和 **JSON Builder**。
 
-JSON Builder 在画布上用方框排布 MOSS-Image 结构化提示词：拖动方框移动位置、拖动右下角调整大小（方向键微调选中方框，Shift 每次 16 像素），滚轮缩放、中键拖动平移。每个项目有自己的颜色，方框边框和列表序号共用。修改画布尺寸时，方框保持原有的相对位置和大小。布局较长时可以展开项目列表占满侧栏，画布上的 ? 按钮有简短说明。
+JSON Builder 在画布上用方框排布 **MOSS-Image Layout**、**FLUX.3 Image Klein BBox** 以及 **Bria Fibo 2.0 VGL 2.0**（切换至 VGL 模式时会显示 CC BY-NC 4.0 非商业许可提示）结构化提示词：拖动方框移动位置、拖动右下角调整大小（方向键微调选中方框，Shift 每次 16 像素），滚轮缩放、中键拖动平移。每个项目有自己的颜色，方框边框和列表序号共用。修改画布尺寸时，方框保持原有的相对位置和大小。布局较长时可以展开项目列表占满侧栏，画布上的 ? 按钮有简短说明。
 
 描述或文字字段可在**字段编辑器**中编辑——双击字段或点铅笔按钮：与生成区相同的提示词编辑器，带补全，另有风格选择器，"应用风格"只把加了风格的文本写回该字段。画布左上角按钮可在方框下垫图作绘制参考（本地文件或选中的会话结果，不会保存或发送）。
 
@@ -79,6 +79,17 @@ JSON Builder 在画布上用方框排布 MOSS-Image 结构化提示词：拖动�
 **控制。** 对 Anima，ControlNet 模型列表只列出能在其 DiT 上运行的模型：ControlNet-LLLite（与 LoRA 一样跨深度重映射）和 control-LoRA。
 
 - **Control-LoRA**（[Anima-Control-Pose](https://huggingface.co/Claquasse/Anima-Control-Pose)，把 `anima_pose_preview2.safetensors` 放进 `models/ControlNet`）：给单元一张骨架图（黑底 OpenPose 渲染图，或使用 openpose 预处理器），再选中该模型。控制图经 VAE 编码后加到 DiT 的 patch embedding 上，强度由单元的**权重**决定（0 为无控制，1 跟随骨架，最高 2），并受起止步数限制。与它一起训练的 LoRA 以 1.0 在整个采样过程中作用于 DiT，并在提示词编码前作用于 LLM adapter，因此起止步数和权重不影响这部分。在 1024 px 左右、权重 1 到 1.5 时跟随效果最好，腿部比举起的手臂更容易跟上；它是用自家的细骨架训练的（COCO 身体关键点、白色关节，加上脸部和手部的点，黑底），没有脸部点的骨架可能被画成背影。模型卡建议使用详细的提示词；其权重仅限非商业用途。
+
+### DiT 模型家族、ControlNet-Union 与推理加速
+
+除 Anima 外，Remi 的声明式 `ModelCapability` 层还完整集成：
+
+- **`Fun-Controlnet-Union`（`DiTControlPatch`）：** 单文件零门控 `control_blocks` 控制支持 **Qwen-Image-2.1-Fun-Controlnet-Union**（16 层偶数层、64/129 通道结构控制与重绘）和 **Z-Image-Turbo-Fun-Controlnet-Union**（16/33 通道），ControlNet 模型列表会按当前加载的 DiT 家族自动过滤。
+- **Z-Image（Base / Turbo / Omni / Edit）** 与 **ERNIE-Image：** 支持 Diffusers/分片目录加载、敏感层量化保护、跨步文本/RoPE 缓存、per-block `torch.compile` 与 Spectrum 接缝。
+- **Bria Fibo 2.0：** 支持 VGL 2.0 结构化 JSON 编辑（与 JSON Builder 及 PUP 联动）和 4 步 Edit Turbo 工作流建议（注意：Fibo 2.0 权重为 CC BY-NC 4.0 非商业许可）。
+- **MOSS-Image / Kromoss：** 内置 8 步 DMD2 LoRA 工作流建议（`steps=8, cfg=1.0`）与 Layout JSON 编辑。
+- **Spectrum 预测模式：** 在默认 **Chebyshev** 预测器之外，Spectrum 提供可选的 **TaylorSeer**（高阶有限差分外推）与 **MagCache**（幅度衰减自适应跳步缓存）模式。
+- **Apple Silicon MPS 与推理基准：** 内置有界 MPS 反量化权重缓存（`backend/operations_mixed_precision.py`）和统一内存预算感知（`backend/memory_management.py`）；可运行 `python tools/perf/bench_inference.py --synthetic`（或 `--real`）对 CUDA、MPS 或 CPU 合成场景进行吞吐、显存和 100 任务队列稳定性基准测试（详见 [inference-performance.md](../research/inference-performance.md)）。
 
 ## 快速开始
 
@@ -204,7 +215,7 @@ docker run --device /dev/kfd --device /dev/dri --group-add video -p 7860:7860 -v
 | `--sage` / `--flash` | 安装可选 attention 依赖；安装成功不代表一定会被选用 |
 | `--disable-extra-extensions`、`--disable-all-extensions` | 不加载用户扩展，或不加载任何扩展 |
 
-**模型与预设**
+**模型、预设与推理 Worker**
 
 | 参数 | 作用 |
 | --- | --- |
@@ -213,6 +224,9 @@ docker run --device /dev/kfd --device /dev/dri --group-add video -p 7860:7860 -v
 | `--force-w4a8` | 以 `w4a8` 格式加载 `convrot_w4a4` checkpoint（画质更好） |
 | `--use-ck-attention`、`--enable-triton-backend` | 使用 Comfy-Kitchen attention（覆盖其他 attention 包）；启用 `comfy-kitchen` 的 Triton 内核 |
 | `--pynvml` | 通过 NVIDIA Management Library 读取实际可用显存 |
+| `--worker-process` | 在独立的受监管子进程（`SubprocessWorker`）中运行 PyTorch 推理，实现 OOM/崩溃隔离自愈并消除 UI/WS 的 GIL 争用（默认：进程内模式） |
+| `--worker-gpus 0,1` | 在 `WorkerPool` 中按指定的 GPU 索引为每张卡启动一个独立推理 Worker |
+| `--worker-mlx` | 启用可选的 Apple Silicon MLX / `mflux` Sidecar Worker，复用全部网页界面、队列与图库 |
 
 **已变更的参数。** 仅用于 Gradio 的参数已移除：请把 `--gradio-auth` / `--gradio-auth-path` 改为 `--auth` / `--auth-file`，并删除 `--gradio-debug`、`--gradio-allowed-path` 和 `--no-gradio-queue`。遇到未知参数时 WebUI 会拒绝启动，因此旧的登录参数不会被悄悄忽略。`--share` 仍被接受，但只会输出警告（请改用 `--listen`、反向代理或 `--ngrok`）；`--use-textbox-seed` 不再起作用；`--theme light|dark|system` 是尚未在外观菜单中选择主题的浏览器所用的主题（与以前一样，URL 中的 `?__theme=light` 会选定主题）；`--agent-scheduler-sqlite-file` 告诉队列导入器旧 Agent Scheduler 数据库的位置。不要盲目安装所有 attention 后端；原生 PyTorch attention 往往兼容性最好，详见上游[额外安装说明](https://github.com/Haoming02/sd-webui-forge-classic/wiki/Extra-Installations)。
 
@@ -227,7 +241,7 @@ docker run --device /dev/kfd --device /dev/dri --group-add video -p 7860:7860 -v
 | 生成的图片 | `output/txt2img-images`、`output/img2img-images`、`output/extras-images`，网格图和保存的图片在相邻目录（设置 → 图片保存路径） |
 | 模型 | `models/`（或 `--model-ref`） |
 | 用户扩展 | `extensions/` |
-| **Remi 数据** | `remi-data/`：`jobs.db`（队列与历史）、`files.db`（文件索引、图库星标）、`uploads/`（你上传的图片，超过 `remi_upload_retention_days` 后清理）、`outputs/`（未被保存设置写入输出目录的结果，按同样规则清理）、`thumbs/`（缩略图缓存）、`networks/`（提取的预览图和占位图）、`prompt-tools.db`（提示词历史、收藏、补全使用频率）、`secret.key` 和 `revoked-sessions.json`（登录会话） |
+| **Remi 数据** | `remi-data/`：`jobs.db`（队列、历史、多阶段管线链与模板）、`files.db`（文件索引、图库星标、项目看板与资产血缘）、`recipes.db`（跨模型配方）、`uploads/`（你上传的图片，超过 `remi_upload_retention_days` 后清理）、`outputs/`（未被保存设置写入输出目录的结果，按同样规则清理）、`thumbs/`（缩略图缓存）、`networks/`（提取的预览图和占位图）、`prompt-tools.db`（提示词历史、收藏、补全使用频率）、`secret.key` 和 `revoked-sessions.json`（登录会话） |
 | 自定义 CSS | `user.css`（存在时应用到网页界面） |
 | 完成提示音 | 安装目录中的 `notification.mp3` |
 | 浏览器本地 | 表单值（草稿）、外观、语言、面板尺寸：保存在浏览器的本地存储中。生成菜单中的“重置所有参数”可将表单恢复为默认值 |
