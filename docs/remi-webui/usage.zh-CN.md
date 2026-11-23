@@ -98,7 +98,7 @@ JSON Builder 在画布上用方框排布 **MOSS-Image Layout**、**FLUX.3 Image 
 - [Git](https://git-scm.com/downloads)
 - [Python 3.13](https://www.python.org/downloads/) 或 [uv](https://docs.astral.sh/uv/)
 - 受支持的 PyTorch 设备；NVIDIA GPU 是测试最充分的选择（Apple Silicon 可通过 MPS 运行）
-- 网页界面需要：[Node.js](https://nodejs.org/) 20.19+ 或 22.12+（每次更新后构建一次，见[网页界面的构建](#网页界面的构建)）。已安装 pnpm 时使用 pnpm；否则启动器通过 Node.js 自带的 Corepack 或 `npx` 运行它。
+- 网页界面需要：[Node.js](https://nodejs.org/) 22.18+ 或 24.11+（每次更新后构建一次，见[网页界面的构建](#网页界面的构建)）。已安装 pnpm 时使用 pnpm；否则启动器通过 Node.js 自带的 Corepack 或 `npx` 运行它。
 - 可选：用于视频导出的 [FFmpeg](https://ffmpeg.org/)
 
 ### 安装与运行
@@ -145,7 +145,7 @@ export COMMANDLINE_ARGS="--uv"
 
   把 `webui/dist` 复制到目标安装的相同位置。每次更新改动了 `webui/` 后，都需要重新构建并复制。
 
-设置环境变量 `REMI_SKIP_WEBUI_BUILD=1` 可关闭自动构建；`--skip-install` 和 `--skip-prepare-environment` 也会跳过构建。
+设置环境变量 `REMI_SKIP_WEBUI_BUILD=1` 可关闭自动构建（任何非空值都会关闭，包括 `0`）；`--skip-install` 和 `--skip-prepare-environment` 也会跳过构建。
 
 ### Docker（NVIDIA 或 AMD GPU）
 
@@ -231,6 +231,8 @@ docker run --device /dev/kfd --device /dev/dri --group-add video -p 127.0.0.1:78
 | `--worker-mlx` | 启用可选的 Apple Silicon MLX / `mflux` Sidecar Worker，复用全部网页界面、队列与图库 |
 
 这三个 `--worker-*` 参数目前是预览：Worker 会出现在 Workers 监控里（健康状态、重启），但队列不会把任务派给它们，仍在进程内执行所有任务。没有给出参数时，`REMI_WORKER_PROCESS=1`、`REMI_WORKER_GPUS=0,1` 和 `REMI_WORKER_MLX=1` 起同样的作用（开关只认 `1`）。
+
+在 Apple Silicon 上，`REMI_MPS_DEQUANT_CACHE_MB` 设置在步骤之间缓存多少 MiB 反量化后的权重（`0` 关闭缓存）。不设置时，缓存最多占推理所需之外剩余统一内存的四分之一，上限 2 GiB。手动设置的值按原样使用，不受这个上限约束；不是整数的值会被忽略。
 
 **已变更的参数。** 仅用于 Gradio 的参数已移除：请把 `--gradio-auth` / `--gradio-auth-path` 改为 `--auth` / `--auth-file`，并删除 `--gradio-debug`、`--gradio-allowed-path` 和 `--no-gradio-queue`。遇到未知参数时 WebUI 会拒绝启动，因此旧的登录参数不会被悄悄忽略。`--share` 仍被接受，但只会输出警告（请改用 `--listen`、反向代理或 `--ngrok`）；`--use-textbox-seed` 不再起作用；`--theme light|dark|system` 是尚未在外观菜单中选择主题的浏览器所用的主题（与以前一样，URL 中的 `?__theme=light` 会选定主题）；`--agent-scheduler-sqlite-file` 告诉队列导入器旧 Agent Scheduler 数据库的位置。不要盲目安装所有 attention 后端；原生 PyTorch attention 往往兼容性最好，详见上游[额外安装说明](https://github.com/Haoming02/sd-webui-forge-classic/wiki/Extra-Installations)。
 
@@ -325,7 +327,7 @@ Agent Scheduler、Prompt Queue 和 Repeat Generate 已成为核心的队列功�
 
 ## 故障排查
 
-**浏览器显示“The web interface is not built”。** 启动器运行时未找到 Node.js、构建失败，或构建被跳过（`--skip-install`、`--skip-prepare-environment`、`REMI_SKIP_WEBUI_BUILD`），控制台会说明是哪一种。Node.js 版本过旧时会提示“Node.js vX is too old to build the web interface”，构建通常会失败。安装 Node.js 20.19+ / 22.12+ 后重启，或在其他机器上构建 `webui/dist` 再复制过来（[网页界面的构建](#网页界面的构建)）。
+**浏览器显示“The web interface is not built”。** 启动器运行时未找到 Node.js、构建失败，或构建被跳过（`--skip-install`、`--skip-prepare-environment`、`REMI_SKIP_WEBUI_BUILD`），控制台会说明是哪一种。Node.js 版本过旧时会提示“Node.js vX is too old to build the web interface”，构建通常会失败；启动器的检查比构建工具宽松（Node.js 20.19+ 即放行），所以在 Node.js 20、22.18 之前的 22、23 或 24.11 之前的 24 上构建失败时，需要更新的版本。安装 Node.js 22.18+ / 24.11+ 后重启，或在其他机器上构建 `webui/dist` 再复制过来（[网页界面的构建](#网页界面的构建)）。
 
 **构建失败**（`pnpm install` 或 `pnpm build` 报错退出）。在 `webui/` 中运行 `pnpm install --frozen-lockfile && pnpm build` 查看完整信息。使用代理时，请为 npm/pnpm 配置代理（`HTTPS_PROXY`）。服务器仍会启动，期间 API 可用。
 

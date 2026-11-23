@@ -45,7 +45,7 @@ The [usage guide](docs/remi-webui/usage.md#the-remi-webui) describes every page.
 
 ## Quick Start
 
-You need [Git](https://git-scm.com/downloads), [Python 3.13](https://www.python.org/downloads/) or [uv](https://docs.astral.sh/uv/), a PyTorch device (an NVIDIA GPU is the most widely tested; Apple Silicon works through MPS) and [Node.js](https://nodejs.org/) 20.19+ or 22.12+ to build the web interface.
+You need [Git](https://git-scm.com/downloads), [Python 3.13](https://www.python.org/downloads/) or [uv](https://docs.astral.sh/uv/), a PyTorch device (an NVIDIA GPU is the most widely tested; Apple Silicon works through MPS) and [Node.js](https://nodejs.org/) 22.18+ or 24.11+ to build the web interface.
 
 ```bash
 git clone --branch remi https://github.com/beautifulrem/forge-neo-remi.git forge-neo-remi

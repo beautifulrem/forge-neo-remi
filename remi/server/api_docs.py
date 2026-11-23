@@ -41,7 +41,7 @@ SWAGGER_PARAMETERS = {"validatorUrl": None}
 NOT_BUILT = """<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{title}</title>
 <style>body{{font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem;line-height:1.5}}code{{background:#8882;padding:.1em .3em;border-radius:.25em}}</style></head>
 <body><h1>The API documentation viewer is not built</h1>
-<p>It comes with the web interface build (Node.js 20+ and pnpm or npm):</p>
+<p>It comes with the web interface build (Node.js 22.18+ or 24.11+ and pnpm):</p>
 <pre><code>cd webui
 pnpm install
 pnpm build</code></pre>

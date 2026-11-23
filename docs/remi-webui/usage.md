@@ -98,7 +98,7 @@ Beyond Anima, Remi's declarative `ModelCapability` layer integrates:
 - [Git](https://git-scm.com/downloads)
 - [Python 3.13](https://www.python.org/downloads/) or [uv](https://docs.astral.sh/uv/)
 - A supported PyTorch device; an NVIDIA GPU is the most widely tested option (Apple Silicon works through MPS)
-- For the web interface: [Node.js](https://nodejs.org/) 20.19+ or 22.12+ (needed once per update to build it; see [The web interface build](#the-web-interface-build)). pnpm is used if installed; otherwise the launcher runs it through Corepack or `npx`, which come with Node.js.
+- For the web interface: [Node.js](https://nodejs.org/) 22.18+ or 24.11+ (needed once per update to build it; see [The web interface build](#the-web-interface-build)). pnpm is used if installed; otherwise the launcher runs it through Corepack or `npx`, which come with Node.js.
 - Optional: [FFmpeg](https://ffmpeg.org/) for video export
 
 ### Install and run
@@ -145,7 +145,7 @@ Without Node.js on the machine:
 
   Copy `webui/dist` into the same place of the target installation. Rebuild and copy again after each update that changes `webui/`.
 
-`REMI_SKIP_WEBUI_BUILD=1` turns the automatic build off; `--skip-install` and `--skip-prepare-environment` skip it too.
+`REMI_SKIP_WEBUI_BUILD=1` turns the automatic build off (any non-empty value does, `0` included); `--skip-install` and `--skip-prepare-environment` skip it too.
 
 ### Docker (NVIDIA or AMD GPU)
 
@@ -231,6 +231,8 @@ Pass options in `COMMANDLINE_ARGS` (`webui-user.bat`, `webui.settings.sh`) or to
 | `--worker-mlx` | Enable the optional Apple Silicon MLX / `mflux` sidecar worker alongside the standard UI, queue, and gallery |
 
 The three `--worker-*` options are a preview: they list the workers in the Workers monitor (health, restart), but the queue does not dispatch to them and still runs every job in-process. `REMI_WORKER_PROCESS=1`, `REMI_WORKER_GPUS=0,1` and `REMI_WORKER_MLX=1` set the same options when the flags are absent (only `1` turns the switches on).
+
+On Apple Silicon, `REMI_MPS_DEQUANT_CACHE_MB` sets how many MiB of dequantized weights stay cached between steps (`0` turns the cache off). Without it the cache takes at most a quarter of the unified memory left above what inference needs, up to 2 GiB. A value you set is used as given, without that cap; one that is not a whole number is ignored.
 
 **Changed options.** The Gradio-only options are gone: replace `--gradio-auth` / `--gradio-auth-path` with `--auth` / `--auth-file`, and drop `--gradio-debug`, `--gradio-allowed-path` and `--no-gradio-queue`. The WebUI refuses to start with an unknown option, so an old login option can never be silently ignored. `--share` is accepted but only logs a warning (use `--listen`, a reverse proxy or `--ngrok`); `--use-textbox-seed` has no effect; `--theme light|dark|system` is the theme of browsers that have not picked one in the Appearance menu (`?__theme=light` in the URL picks one, as before); `--agent-scheduler-sqlite-file` tells the queue importer where an old Agent Scheduler database is. Do not install every attention backend blindly; native PyTorch attention is often the most compatible choice, see the upstream [extra installation guide](https://github.com/Haoming02/sd-webui-forge-classic/wiki/Extra-Installations).
 
@@ -325,7 +327,7 @@ By default the server listens on `127.0.0.1` only.
 
 ## Troubleshooting
 
-**"The web interface is not built"** in the browser. Node.js was not found when the launcher ran, the build failed, or it was skipped (`--skip-install`, `--skip-prepare-environment`, `REMI_SKIP_WEBUI_BUILD`); the console says which. An older Node.js gets the warning "Node.js vX is too old to build the web interface" and the build usually fails. Install Node.js 20.19+ / 22.12+ and restart, or build `webui/dist` elsewhere and copy it ([The web interface build](#the-web-interface-build)).
+**"The web interface is not built"** in the browser. Node.js was not found when the launcher ran, the build failed, or it was skipped (`--skip-install`, `--skip-prepare-environment`, `REMI_SKIP_WEBUI_BUILD`); the console says which. An older Node.js gets the warning "Node.js vX is too old to build the web interface" and the build usually fails; the launcher's check is looser than the build tools (it lets Node.js 20.19+ through), so a build that fails on Node.js 20, 22 before 22.18, 23 or 24 before 24.11 needs a newer one. Install Node.js 22.18+ / 24.11+ and restart, or build `webui/dist` elsewhere and copy it ([The web interface build](#the-web-interface-build)).
 
 **The build fails** (`pnpm install` or `pnpm build` exits with an error). Run `pnpm install --frozen-lockfile && pnpm build` in `webui/` to see the full message. Behind a proxy, configure it for npm/pnpm (`HTTPS_PROXY`). The server still starts; the API works meanwhile.
 

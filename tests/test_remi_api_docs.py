@@ -157,3 +157,13 @@ def test_the_build_vendors_both_viewers():
         file = DIST / assets[key]
         assert file.parent.name.startswith(f"{name}-") and (file.parent / "LICENSE").is_file()
         assert "sourceMappingURL" not in file.read_text(encoding="utf8")[-300:]
+
+
+def test_the_not_built_pages_ask_for_the_node_version_the_build_needs():
+    # @babel/core, which the build loads through @rolldown/plugin-babel, needs Node ^22.18 || >=24.11;
+    # npm would ignore pnpm-lock.yaml, so neither page offers it
+    from remi.server import api_docs, spa
+
+    for page in (spa.NOT_BUILT, api_docs.NOT_BUILT):
+        assert "Node.js 22.18+ or 24.11+" in page
+        assert "npm" not in page.replace("pnpm", "")

@@ -52,7 +52,7 @@ PRECOMPRESSED = (("br", ".br"), ("gzip", ".gz"))
 NOT_BUILT = """<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Remi WebUI</title>
 <style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem;line-height:1.5}code{background:#8882;padding:.1em .3em;border-radius:.25em}</style></head>
 <body><h1>The web interface is not built</h1>
-<p>Build it once with Node.js 20+ and pnpm (or npm):</p>
+<p>Build it once with Node.js 22.18+ or 24.11+ and pnpm:</p>
 <pre><code>cd webui
 pnpm install
 pnpm build</code></pre>
