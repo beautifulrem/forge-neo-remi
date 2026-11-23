@@ -1654,5 +1654,8 @@
   "Could not load the models": "无法加载模型列表",
   "No recipes match": "没有匹配的配方",
   "Could not export the recipes": "无法导出配方",
-  "Export this recipe": "导出此配方"
+  "Export this recipe": "导出此配方",
+  "Generate → Refine → Upscale": "生成 → 精修 → 放大",
+  "PUP → Generate → Refine → Finish": "提示词扩写 → 生成 → 精修 → 收尾",
+  "Generate → Upscale": "生成 → 放大"
 }

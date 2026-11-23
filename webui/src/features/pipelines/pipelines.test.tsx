@@ -1,7 +1,9 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { queryClient } from "@/api/queries"
+import { i18n } from "@/i18n"
+import zhCN from "@/locales/zh-CN.json"
 import { computeStageHashes, defaultStage, firstExecuteStage, planPipelineCache } from "./cache-hash"
 import { usePipelineDraft } from "./draft-store"
 import { PipelineBuilder } from "./PipelineBuilder"
@@ -233,5 +235,36 @@ describe("PipelineBuilder UI", () => {
     fail = false
     fireEvent.click(retry)
     expect(await screen.findByText("No pipeline runs yet")).toBeInTheDocument()
+  })
+})
+
+describe("starter pipelines", () => {
+  afterEach(async () => {
+    vi.restoreAllMocks()
+    queryClient.clear()
+    usePipelineDraft.setState(initialDraft, true)
+    await act(() => i18n.changeLanguage("en"))
+  })
+
+  it("names the starter draft and the built-in templates in the current language", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (url.includes("/chains/templates")) return new Response(JSON.stringify([]), { status: 200 })
+      if (url.includes("/chains/preview")) return new Response(JSON.stringify({ stages: [] }), { status: 200 })
+      if (url.includes("/chains")) return new Response(JSON.stringify({ items: [], total: 0 }), { status: 200 })
+      return new Response("{}", { status: 200 })
+    })
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PipelineBuilder />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByRole("textbox", { name: "管线名称" })).toHaveValue("生成 → 精修 → 放大")
+    fireEvent.click(screen.getByRole("button", { name: "管线模板" }))
+    expect(await screen.findByRole("menuitem", { name: "生成 → 放大" })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("menuitem", { name: "提示词扩写 → 生成 → 精修 → 收尾" }))
+    expect(screen.getByRole("textbox", { name: "管线名称" })).toHaveValue("提示词扩写 → 生成 → 精修 → 收尾")
   })
 })

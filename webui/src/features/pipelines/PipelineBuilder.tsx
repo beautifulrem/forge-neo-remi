@@ -115,9 +115,12 @@ function stepNumber(index: number): string {
   return String(index + 1).padStart(2, "0")
 }
 
+const STARTER_IDS = new Set(STARTER_PIPELINES.map((starter) => starter.id))
+
 export function PipelineBuilder() {
   const { t } = useTranslation()
-  const { name, setName, stages, setStages, activeRunId, setActiveRunId } = usePipelineDraft()
+  const { name: draftName, setName, stages, setStages, activeRunId, setActiveRunId } = usePipelineDraft()
+  const name = draftName ?? t(STARTER_PIPELINES[0]!.name)
   const activeRunQuery = useQuery({ ...chainRunQuery(activeRunId ?? ""), enabled: activeRunId !== null })
   const activeRun = activeRunId !== null ? (activeRunQuery.data ?? null) : null
   const followRun = (chain: JobChain) => {
@@ -258,8 +261,10 @@ export function PipelineBuilder() {
     toast.success(t("Pulled overrides from {{tab}}", { tab }))
   }
 
-  const loadTemplate = (template: Pick<ChainTemplate, "name" | "stages">) => {
-    setName(template.name)
+  // the built-in starters are named in the current language; saved templates keep the name they were given
+  const templateLabel = (template: Pick<ChainTemplate, "id" | "name">) => (STARTER_IDS.has(template.id) ? t(template.name) : template.name)
+  const loadTemplate = (template: Pick<ChainTemplate, "id" | "name" | "stages">) => {
+    setName(templateLabel(template))
     setStages(template.stages.map((s) => structuredClone(s)))
     setActiveRunId(null)
   }
@@ -302,8 +307,8 @@ export function PipelineBuilder() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-64">
             {templateItems.map((tpl) => (
-              <DropdownMenuItem key={tpl.id} onClick={() => loadTemplate(tpl)} title={tpl.name}>
-                <span title={tpl.name} className="truncate">{tpl.name}</span>
+              <DropdownMenuItem key={tpl.id} onClick={() => loadTemplate(tpl)} title={templateLabel(tpl)}>
+                <span title={templateLabel(tpl)} className="truncate">{templateLabel(tpl)}</span>
               </DropdownMenuItem>
             ))}
             {savedTemplates.length > 0 ? (

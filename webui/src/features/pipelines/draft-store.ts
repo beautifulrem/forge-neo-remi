@@ -9,7 +9,7 @@ import type { StageSpec } from "./types"
 type Update<T> = T | ((prev: T) => T)
 
 type PipelineDraft = {
-  name: string
+  name: string | null
   stages: StageSpec[]
   /** The run shown in the builder; its data comes from `chainRunQuery`. */
   activeRunId: string | null
@@ -21,7 +21,8 @@ type PipelineDraft = {
 const starter = STARTER_PIPELINES[0]!
 
 export const usePipelineDraft = create<PipelineDraft>()((set) => ({
-  name: starter.name,
+  // null: the starter's name, shown in the current language until the user names the pipeline
+  name: null,
   stages: starter.stages.map((s) => structuredClone(s)),
   activeRunId: null,
   setName: (name) => set({ name }),
