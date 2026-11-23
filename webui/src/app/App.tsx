@@ -13,7 +13,7 @@ import { ServerControlHost } from "@/features/server-control/ServerControlHost"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { activateLocale, browserLocale, useLocale } from "@/i18n"
 import { useAppearance, useApplyAppearance } from "@/lib/theme"
-import { type Command, useCommands, useRegisterCommands } from "./commands"
+import { type Command, isPaletteKey, useCommands, useRegisterCommands } from "./commands"
 import { Header } from "./Header"
 import { availableLocales } from "./locales"
 import { MotionRoot } from "./MotionRoot"
@@ -32,7 +32,7 @@ const ShortcutsDialog = retryableLazy(() => import("./ShortcutsDialog"))
 function useGlobalShortcuts() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "k") {
+      if (isPaletteKey(event)) {
         event.preventDefault()
         const { palette, setPalette } = useCommands.getState()
         setPalette(!palette)

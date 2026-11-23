@@ -55,6 +55,16 @@ export function useRegisterCommands(source: string, commands: readonly Command[]
 
 export const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
 
+/**
+ * Whether `event` is Mod+K, the command palette: ⌘K on macOS, Ctrl+K elsewhere. On macOS Ctrl+K
+ * is a text field's "delete to the end of the line" (and the prompt editor's), so it is left to
+ * them; a key a field already handled is left alone too.
+ */
+export function isPaletteKey(event: Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "defaultPrevented">, mac = isMac): boolean {
+  if (event.defaultPrevented || event.altKey || event.key.toLowerCase() !== "k") return false
+  return mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+}
+
 /** "Mod+K" → "⌘K" on macOS, "Ctrl+K" elsewhere. */
 export function formatShortcut(shortcut: string): string {
   if (!isMac) return shortcut.replace("Mod", "Ctrl")
