@@ -1,11 +1,22 @@
 # https://github.com/Comfy-Org/ComfyUI/blob/v0.27.0/comfy/ops.py#L1163
 
 import json
+import os
+import threading
+import weakref
+from collections import OrderedDict
 
 import torch
 
 from backend.args import args
-from backend.memory_management import cast_to_device, logger
+from backend.memory_management import (
+    cast_to_device,
+    get_free_memory,
+    is_device_mps,
+    logger,
+    minimum_inference_memory,
+    register_cache_clear_hook,
+)
 
 from .operations import (
     ForgeOperations,
@@ -27,6 +38,156 @@ _GROUPED_INT8_FORMATS = {"asym_w4a8_int8": 4, "w6a8_int8": 6}
 _COMPILE_UNSAFE_LAYOUTS = {"TensorCoreConvRotW4A4Layout", "AsymW4A8Int8Layout"}
 
 
+_MPS_DEQUANT_CACHE_SAFETY_MARGIN = 512 * 1024 * 1024
+_MPS_DEQUANT_CACHE_MAX_BYTES = 2 * 1024 * 1024 * 1024
+
+
+def _mps_dequant_cache_budget_bytes() -> int:
+    """Safe byte budget for caching dequantized resident weights on Apple Silicon MPS.
+
+    Respects ``REMI_MPS_DEQUANT_CACHE_MB`` (``0`` disables caching). Otherwise
+    uses at most 25% of unified-memory surplus above ``minimum_inference_memory()``
+    plus a 512 MiB safety floor, capped at 2 GiB.
+    """
+    override = os.environ.get("REMI_MPS_DEQUANT_CACHE_MB")
+    if override is not None:
+        try:
+            mb = int(override)
+            return max(0, mb) * 1024 * 1024
+        except ValueError:
+            pass
+    try:
+        free_bytes = int(get_free_memory(torch.device("mps")))
+        floor = int(minimum_inference_memory()) + _MPS_DEQUANT_CACHE_SAFETY_MARGIN
+    except Exception:
+        return 0
+    surplus = free_bytes - floor
+    if surplus <= 0:
+        return 0
+    return min(int(surplus * 0.25), _MPS_DEQUANT_CACHE_MAX_BYTES)
+
+
+class _MPSDequantCache:
+    """Thread-safe, headroom-bounded LRU cache for resident MPS dequantized weights."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._entries: OrderedDict[tuple, torch.Tensor] = OrderedDict()
+        self._finalizers: dict[int, weakref.finalize] = {}
+        self._current_bytes: int = 0
+        self._hits: int = 0
+        self._misses: int = 0
+        self._evictions: int = 0
+
+    @staticmethod
+    def _make_key(module: torch.nn.Module, weight: QuantizedTensor, target_dtype: torch.dtype) -> tuple:
+        qdata = weight._qdata
+        params = weight._params
+        scale = getattr(params, "scale", None)
+        scale_ptr = scale.data_ptr() if isinstance(scale, torch.Tensor) else None
+        block_scale = getattr(params, "block_scale", None)
+        block_scale_ptr = block_scale.data_ptr() if isinstance(block_scale, torch.Tensor) else None
+        transposed = bool(getattr(params, "transposed", False))
+        return (id(module), id(qdata), qdata.data_ptr(), scale_ptr, block_scale_ptr, transposed, target_dtype)
+
+    def _drop_module_id(self, module_id: int) -> int:
+        freed = 0
+        with self._lock:
+            stale = [k for k in self._entries if k[0] == module_id]
+            for k in stale:
+                tensor = self._entries.pop(k)
+                nbytes = tensor.nbytes
+                self._current_bytes = max(0, self._current_bytes - nbytes)
+                freed += nbytes
+            self._finalizers.pop(module_id, None)
+        return freed
+
+    def invalidate_module(self, module: torch.nn.Module) -> int:
+        return self._drop_module_id(id(module))
+
+    def clear(self) -> int:
+        with self._lock:
+            freed = self._current_bytes
+            self._entries.clear()
+            for fin in self._finalizers.values():
+                fin.detach()
+            self._finalizers.clear()
+            self._current_bytes = 0
+        return freed
+
+    def reset_stats(self) -> None:
+        with self._lock:
+            self._hits = 0
+            self._misses = 0
+            self._evictions = 0
+
+    def stats(self) -> dict[str, int]:
+        with self._lock:
+            return {
+                "entries": len(self._entries),
+                "bytes": self._current_bytes,
+                "hits": self._hits,
+                "misses": self._misses,
+                "evictions": self._evictions,
+            }
+
+    def get_or_dequantize(self, module: torch.nn.Module, weight: QuantizedTensor, target_dtype: torch.dtype) -> torch.Tensor | None:
+        key = self._make_key(module, weight, target_dtype)
+        with self._lock:
+            cached = self._entries.get(key)
+            if cached is not None:
+                self._entries.move_to_end(key)
+                self._hits += 1
+                return cached
+
+        budget = _mps_dequant_cache_budget_bytes()
+        entry_bytes = weight.numel() * target_dtype.itemsize
+        if budget <= 0 or entry_bytes > budget:
+            return None
+
+        dequant = weight.dequantize()
+        if dequant.dtype != target_dtype:
+            dequant = dequant.to(dtype=target_dtype)
+        actual_bytes = dequant.nbytes
+        if actual_bytes > budget:
+            return dequant
+
+        module_id = id(module)
+        with self._lock:
+            while self._entries and (self._current_bytes + actual_bytes) > budget:
+                _, evicted = self._entries.popitem(last=False)
+                self._current_bytes = max(0, self._current_bytes - evicted.nbytes)
+                self._evictions += 1
+            if key in self._entries:
+                old = self._entries.pop(key)
+                self._current_bytes = max(0, self._current_bytes - old.nbytes)
+            self._entries[key] = dequant
+            self._current_bytes += actual_bytes
+            self._misses += 1
+            if module_id not in self._finalizers:
+                try:
+                    fin = weakref.finalize(module, self._drop_module_id, module_id)
+                    fin.atexit = False
+                    self._finalizers[module_id] = fin
+                except TypeError:
+                    pass
+        return dequant
+
+
+_mps_dequant_cache = _MPSDequantCache()
+register_cache_clear_hook(_mps_dequant_cache.clear)
+
+
+def clear_mps_dequant_cache() -> int:
+    """Drop all cached MPS dequantized weights and return freed bytes."""
+    return _mps_dequant_cache.clear()
+
+
+def mps_dequant_cache_stats() -> dict[str, int]:
+    """Return hit/miss/eviction and byte-usage counters for the MPS dequantization cache."""
+    return _mps_dequant_cache.stats()
+
+
 def _convrot_rotate_input(module: torch.nn.Linear, x: torch.Tensor) -> bool:
     weight = module.weight
     return module._full_precision_mm and isinstance(weight, QuantizedTensor) and weight._layout_cls == "TensorWiseINT8Layout" and getattr(weight._params, "convrot", False) and not getattr(weight._params, "transposed", False) and not isinstance(x, QuantizedTensor) and x.numel() // max(x.shape[-1], 1) < module.out_features and len(module.weight_function) == 0 and not getattr(module, "forge_force_cast_weights", False)
@@ -36,9 +197,11 @@ def _convrot_linear(x: torch.Tensor, weight: QuantizedTensor, bias: torch.Tensor
     qdata, scale = TensorWiseINT8Layout.get_plain_tensors(weight)
     group_size = weight._params.convrot_groupsize
     x = ck.tensor.int8_utils._rotate_activation(x, ck.tensor.int8_utils._build_hadamard(group_size, device=x.device, dtype=x.dtype), group_size)
-    scale = scale.to(dtype=x.dtype).reshape(-1)
+    scale = scale.to(device=x.device, dtype=x.dtype).reshape(-1)
     if x.dtype == torch.float16:
-        return torch.nn.functional.linear(x, qdata.to(dtype=x.dtype) * scale.reshape(-1, 1), bias)
+        w = qdata.to(dtype=x.dtype)
+        w.mul_(scale.reshape(-1, 1))
+        return torch.nn.functional.linear(x, w, bias)
     out = torch.nn.functional.linear(x, qdata.to(dtype=x.dtype)) * scale
     return out if bias is None else out + bias
 
@@ -49,6 +212,7 @@ def _run_eager(fn, *args, **kwargs):
 
 
 def _quantized_apply(module: torch.nn.Module, fn, recurse=True):
+    _mps_dequant_cache.invalidate_module(module)
     if recurse:
         for child in module.children():
             child._apply(fn)
@@ -266,6 +430,7 @@ def mixed_precision_ops(quant_config={}, compute_dtype=torch.bfloat16, full_prec
                 return None
 
             def _load_from_state_dict(self, *args):
+                _mps_dequant_cache.invalidate_module(self)
                 _load_quantized_module(self, super()._load_from_state_dict, *args, load_extra_params=True)
 
             def state_dict(self, *args, destination=None, prefix="", **kwargs):
@@ -278,13 +443,44 @@ def mixed_precision_ops(quant_config={}, compute_dtype=torch.bfloat16, full_prec
                 return self._forward(input, *args, **kwargs)
 
             def _forward(self, input, *args, **kwargs):
+                assert not input.requires_grad
+
+                weight_param = self.weight
+                if (
+                    self._full_precision_mm
+                    and isinstance(weight_param, QuantizedTensor)
+                    and not isinstance(input, QuantizedTensor)
+                    and is_device_mps(weight_param.device)
+                    and is_device_mps(input.device)
+                    and len(self.weight_function) == 0
+                    and len(self.bias_function) == 0
+                    and not getattr(self, "forge_force_cast_weights", False)
+                ):
+                    bias = self.bias
+                    if bias is not None:
+                        bias = cast_to_device(bias, input.device, input.dtype)
+                    cached_weight = _mps_dequant_cache.get_or_dequantize(self, weight_param, input.dtype)
+                    if cached_weight is not None:
+                        return torch.nn.functional.linear(input, cached_weight, bias)
+                    if _convrot_rotate_input(self, input):
+                        return _convrot_linear(input, weight_param, bias)
+                    dequant = weight_param.dequantize()
+                    if dequant.dtype != input.dtype:
+                        dequant = dequant.to(dtype=input.dtype)
+                    return torch.nn.functional.linear(input, dequant, bias)
+
                 input_shape = input.shape
                 reshaped_nd = False
 
-                _use_quantized = getattr(self, "layout_type", None) is not None and not isinstance(input, QuantizedTensor) and not self._full_precision_mm and not getattr(self, "forge_force_cast_weights", False) and len(self.weight_function) == 0 and len(self.bias_function) == 0
-                quantize_input = QUANT_ALGOS.get(getattr(self, "quant_format", None), {}).get("quantize_input", True)
-
-                assert not input.requires_grad
+                _use_quantized = (
+                    getattr(self, "layout_type", None) is not None
+                    and not isinstance(input, QuantizedTensor)
+                    and not self._full_precision_mm
+                    and not getattr(self, "forge_force_cast_weights", False)
+                    and len(self.weight_function) == 0
+                    and len(self.bias_function) == 0
+                )
+                quantize_input = QUANT_ALGOS.get(getattr(self, "quant_format", None), {}).get("quantize_input", True) if _use_quantized else False
 
                 if _use_quantized and quantize_input:
                     input_reshaped = input.reshape(-1, input_shape[-1]) if input.ndim >= 3 else input
@@ -296,17 +492,17 @@ def mixed_precision_ops(quant_config={}, compute_dtype=torch.bfloat16, full_prec
                             scale = cast_to_device(scale, input.device, None)
                         input = QuantizedTensor.from_float(input_reshaped, self.layout_type, scale=scale)
 
-                weight_only_quant = _use_quantized and not quantize_input and isinstance(self.weight, QuantizedTensor)
+                weight_only_quant = _use_quantized and not quantize_input and isinstance(weight_param, QuantizedTensor)
 
                 if not weight_only_quant and _convrot_rotate_input(self, input):
-                    weight, bias, signal = weights_manual_cast(self, x=input, dtype=self.weight.dtype)
+                    weight, bias, signal = weights_manual_cast(self, x=input, dtype=weight_param.dtype)
                     with main_stream_worker(weight, bias, signal):
                         if isinstance(weight, QuantizedTensor):
                             return _convrot_linear(input, weight, bias)
                         return torch.nn.functional.linear(input, weight.to(dtype=input.dtype), bias)
 
                 if weight_only_quant:
-                    weight, bias, signal = weights_manual_cast(self, x=None, dtype=self.weight.dtype, device=input.device, bias_dtype=input.dtype)
+                    weight, bias, signal = weights_manual_cast(self, x=None, dtype=weight_param.dtype, device=input.device, bias_dtype=input.dtype)
                     weight = weight.to(dtype=input.dtype)
                 else:
                     weight, bias, signal = weights_manual_cast(self, x=input)
@@ -328,6 +524,7 @@ def mixed_precision_ops(quant_config={}, compute_dtype=torch.bfloat16, full_prec
                     return weight
 
             def set_weight(self, weight, inplace_update=False, seed=None, return_weight=False, **kwargs):
+                _mps_dequant_cache.invalidate_module(self)
                 if getattr(self, "layout_type", None) is not None:
                     weight = self.weight.requantize_from_float(weight, scale="recalculate", stochastic_rounding=seed, inplace_ops=True).to(self.weight.dtype)
                 else:
@@ -364,6 +561,7 @@ def mixed_precision_ops(quant_config={}, compute_dtype=torch.bfloat16, full_prec
                     if scale is not None:
                         scale = scale.float()
                         manually_loaded_keys.append(scale_key)
+                    self._scale_is_unit = bool(scale is None or (scale.numel() == 1 and scale.device.type == "cpu" and scale.item() == 1.0))
 
                     extra = {}
                     if quant_format == "int8_tensorwise" and layer_conf.get("convrot", False):
@@ -419,7 +617,7 @@ def mixed_precision_ops(quant_config={}, compute_dtype=torch.bfloat16, full_prec
                     if scale is not None:
                         if scale.dim() >= 2 and scale.shape[0] == self.num_embeddings:
                             x = x * torch.nn.functional.embedding(input, scale.to(device=x.device, dtype=target_dtype))
-                        elif scale.numel() != 1 or scale.item() != 1.0:
+                        elif not (scale.numel() == 1 and (getattr(self, "_scale_is_unit", False) or (scale.device.type == "cpu" and scale.item() == 1.0))):
                             x = x * scale.to(device=x.device, dtype=target_dtype)
 
                     return x

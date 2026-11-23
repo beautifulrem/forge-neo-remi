@@ -118,6 +118,8 @@ except Exception:
 
 if args.cpu:
     cpu_state = CPUState.CPU
+elif cpu_state is CPUState.GPU and not xpu_available and not torch.cuda.is_available():
+    cpu_state = CPUState.CPU
 
 
 def is_intel_xpu() -> bool:
@@ -144,12 +146,61 @@ def get_torch_device() -> torch.device:
             return torch.device(torch.cuda.current_device())
 
 
+def _same_device(a: torch.device | None, b: torch.device | None) -> bool:
+    if a == b:
+        return True
+    if a is None or b is None:
+        return False
+    # Apple Silicon exposes a single MPS device, yet torch.device("mps") (index=None)
+    # compares unequal to tensor.device == torch.device("mps:0") (index=0).
+    return a.type == "mps" and b.type == "mps" and a.index in (None, 0) and b.index in (None, 0)
+
+
+def _canonical_device(device: torch.device) -> torch.device:
+    if is_device_mps(device) and device.index == 0:
+        return torch.device("mps")
+    return device
+
+
+def mps_memory_info() -> dict[str, int] | None:
+    """Return Apple Silicon MPS unified-memory counters in bytes, or ``None`` when unavailable."""
+    mps = getattr(torch, "mps", None)
+    if mps is None:
+        return None
+    try:
+        recommended = int(mps.recommended_max_memory()) if hasattr(mps, "recommended_max_memory") else 0
+        current = int(mps.current_allocated_memory()) if hasattr(mps, "current_allocated_memory") else 0
+        driver = int(mps.driver_allocated_memory()) if hasattr(mps, "driver_allocated_memory") else current
+    except Exception:
+        return None
+    if recommended <= 0:
+        return None
+    current = max(0, current)
+    driver = max(current, driver)
+    return {
+        "recommended_max_bytes": recommended,
+        "current_allocated_bytes": current,
+        "driver_allocated_bytes": driver,
+        "reclaimable_cache_bytes": max(0, driver - current),
+        "headroom_bytes": max(0, recommended - current),
+    }
+
+
 def get_total_memory(dev: torch.device = None, torch_total_too: bool = False):
     dev = dev or get_torch_device()
 
-    if hasattr(dev, "type") and (dev.type == "cpu" or dev.type == "mps"):
+    if hasattr(dev, "type") and dev.type == "cpu":
         mem_total = psutil.virtual_memory().total
         mem_total_torch = mem_total
+    elif hasattr(dev, "type") and dev.type == "mps":
+        vm_total = psutil.virtual_memory().total
+        mps_info = mps_memory_info()
+        if mps_info is not None:
+            mem_total = min(vm_total, mps_info["recommended_max_bytes"])
+            mem_total_torch = mps_info["driver_allocated_bytes"]
+        else:
+            mem_total = vm_total
+            mem_total_torch = vm_total
     else:
         if is_intel_xpu():
             stats = torch.xpu.memory_stats(dev)
@@ -469,7 +520,7 @@ class LoadedModel:
         return self.model.model_size() - self.model.loaded_size()
 
     def model_memory_required(self, device):
-        if device == self.model.current_device:
+        if _same_device(device, self.model.current_device):
             return self.model_offloaded_memory()
         else:
             return self.model_memory()
@@ -526,7 +577,7 @@ class LoadedModel:
 
 def use_more_memory(extra_memory, loaded_models, device):
     for m in loaded_models:
-        if m.device == device:
+        if _same_device(m.device, device):
             extra_memory -= m.model_use_more_vram(extra_memory)
             if extra_memory <= 0:
                 break
@@ -535,7 +586,7 @@ def use_more_memory(extra_memory, loaded_models, device):
 def offloaded_memory(loaded_models, device):
     offloaded_mem = 0
     for m in loaded_models:
-        if m.device == device:
+        if _same_device(m.device, device):
             offloaded_mem += m.model_offloaded_memory()
     return offloaded_mem
 
@@ -584,10 +635,14 @@ def free_memory(memory_required: float, device: torch.device, keep_loaded: list[
 
     for i in range(len(current_loaded_models) - 1, -1, -1):
         shift_model = current_loaded_models[i]
-        if shift_model.device == device:
+        if _same_device(shift_model.device, device):
             if shift_model not in keep_loaded and not shift_model.is_dead():
                 can_unload.append((-shift_model.model_offloaded_memory(), sys.getrefcount(shift_model.model), shift_model.model_memory(), i))
                 shift_model.currently_used = False
+
+    if not DISABLE_SMART_MEMORY and is_device_mps(device) and get_free_memory(device) <= memory_required:
+        if _clear_registered_caches() > 0:
+            soft_empty_cache(force=True)
 
     for x in sorted(can_unload):
         i = x[-1]
@@ -663,7 +718,8 @@ def load_models_gpu(models: list["ModelPatcher"], memory_required: float = 0, fo
 
     total_memory_required = {}
     for loaded_model in models_to_load:
-        total_memory_required[loaded_model.device] = total_memory_required.get(loaded_model.device, 0) + loaded_model.model_memory_required(loaded_model.device)
+        dev_key = _canonical_device(loaded_model.device)
+        total_memory_required[dev_key] = total_memory_required.get(dev_key, 0) + loaded_model.model_memory_required(dev_key)
 
     for device in total_memory_required:
         if device != torch.device("cpu"):
@@ -885,7 +941,7 @@ def text_encoder_device() -> torch.device:
 
 
 def text_encoder_initial_device(load_device: torch.device, offload_device: torch.device, model_size: int = 0) -> torch.device:
-    if load_device == offload_device or model_size <= 1024 * 1024 * 1024:
+    if _same_device(load_device, offload_device) or model_size <= 1024 * 1024 * 1024:
         return offload_device
 
     if is_device_mps(load_device):
@@ -1002,7 +1058,7 @@ def device_supports_non_blocking(device: torch.device) -> bool:
 
 
 def cast_to(weight: torch.nn.Parameter, dtype: torch.dtype = None, device: torch.device = None, non_blocking: bool = False, copy: bool = False, *, context=None):
-    if device is None or weight.device == device:
+    if device is None or _same_device(weight.device, device):
         if not copy and (dtype is None or weight.dtype == dtype):
             return weight
         with context or nullcontext():
@@ -1102,9 +1158,18 @@ def force_upcast_attention_dtype() -> dict[torch.dtype, torch.dtype]:
 def get_free_memory(dev: torch.device = None, torch_free_too: bool = False) -> int | tuple[int, int]:
     dev = dev or get_torch_device()
 
-    if hasattr(dev, "type") and (dev.type == "cpu" or dev.type == "mps"):
+    if hasattr(dev, "type") and dev.type == "cpu":
         mem_free_total = psutil.virtual_memory().available
         mem_free_torch = mem_free_total
+    elif hasattr(dev, "type") and dev.type == "mps":
+        vm_avail = psutil.virtual_memory().available
+        mps_info = mps_memory_info()
+        if mps_info is not None:
+            mem_free_torch = mps_info["reclaimable_cache_bytes"]
+            mem_free_total = min(mps_info["headroom_bytes"], vm_avail + mem_free_torch)
+        else:
+            mem_free_total = vm_avail
+            mem_free_torch = 0
     else:
         if is_intel_xpu():
             stats = torch.xpu.memory_stats(dev)
@@ -1222,7 +1287,8 @@ def should_use_bf16(device: torch.device = None, model_params: int = 0, prioriti
         return False
 
     if (device is not None and is_device_mps(device)) or mps_mode():
-        if mac_version() < (14,):
+        mac_ver = mac_version()
+        if mac_ver is not None and mac_ver < (14,):
             return False
         return True
 
@@ -1357,11 +1423,37 @@ def lora_compute_dtype(device: torch.device) -> torch.dtype:
 
 
 signal_empty_cache = False
+_CACHE_CLEAR_HOOKS: list = []
+
+
+def register_cache_clear_hook(hook) -> None:
+    """Register a callable returning reclaimed byte count when memory caches are cleared."""
+    if hook not in _CACHE_CLEAR_HOOKS:
+        _CACHE_CLEAR_HOOKS.append(hook)
+
+
+def _clear_registered_caches() -> int:
+    freed = 0
+    for hook in _CACHE_CLEAR_HOOKS:
+        try:
+            result = hook()
+            if isinstance(result, int) and result > 0:
+                freed += result
+        except Exception:
+            pass
+    return freed
 
 
 def soft_empty_cache(force=False):
+    global signal_empty_cache
+    freed_cache_bytes = _clear_registered_caches()
     if cpu_state is CPUState.MPS:
-        torch.mps.empty_cache()
+        should_flush = force or signal_empty_cache or freed_cache_bytes > 0
+        if not should_flush:
+            mps_info = mps_memory_info()
+            should_flush = mps_info is None or mps_info["reclaimable_cache_bytes"] > 0
+        if should_flush:
+            torch.mps.empty_cache()
     elif is_intel_xpu():
         torch.xpu.synchronize()
         torch.xpu.empty_cache()
@@ -1370,7 +1462,6 @@ def soft_empty_cache(force=False):
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
 
-    global signal_empty_cache
     signal_empty_cache = False
 
 
