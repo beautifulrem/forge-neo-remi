@@ -1,0 +1,199 @@
+"""Unit and route tests for cross-model parameter Recipes (``remi/recipes.py``)."""
+
+from __future__ import annotations
+
+import pytest
+
+from remi.recipes import RECIPE_EXPORT_VERSION, RecipeError, RecipeStore, apply_recipe
+from remi.server.testing import server_app
+from remi.testing import webui_state
+
+
+def test_recipe_store_crud_and_filtering(tmp_path):
+    with RecipeStore(tmp_path / "recipes.db") as store:
+        r1 = store.create(
+            "Anima Clean Lineart",
+            description="Balanced 28-step Euler recipe for Anima",
+            model_family="anima",
+            capabilities=["anima_hooks", "spectrum"],
+            tab="txt2img",
+            core_patch={"cfg_scale": 4.5, "width": 832, "height": 1216},
+            scripts_patch={"sampler": {"steps": 28, "sampler_name": "Euler"}},
+            tags=["anime", "lineart"],
+        )
+        r2 = store.create(
+            "Universal Hires Crisp",
+            description="Works across all families",
+            model_family=None,
+            capabilities=[],
+            tab="txt2img",
+            core_patch={"enable_hr": True, "hr_scale": 1.5},
+            tags=["hires"],
+        )
+        r3 = store.create(
+            "Qwen Edit RGBA",
+            model_family="qwen21",
+            capabilities=["multi_reference", "rgba_output"],
+            tab="img2img",
+            core_patch={"denoising_strength": 0.65},
+            tags=["edit", "rgba"],
+        )
+
+        # Duplicate name rejected with 409
+        with pytest.raises(RecipeError) as dup_err:
+            store.create("Anima Clean Lineart")
+        assert dup_err.value.status == 409
+
+        # Invalid tab / NaN rejected
+        with pytest.raises(RecipeError):
+            store.create("Bad Tab", tab="unknown")
+        with pytest.raises(RecipeError):
+            store.create("Bad Float", core_patch={"cfg_scale": float("nan")})
+
+        # Filtering
+        assert len(store.list()) == 3
+        assert {r.id for r in store.list(model_family="anima")} == {r1.id, r2.id}
+        assert [r.id for r in store.list(tab="img2img")] == [r3.id]
+        assert [r.id for r in store.list(tag="lineart")] == [r1.id]
+        assert [r.id for r in store.list(capability="rgba_output")] == [r3.id]
+        assert [r.id for r in store.list(query="balanced euler")] == [r1.id]
+
+        # Update
+        updated = store.update(r1.id, {"description": "Updated desc", "tags": ["anime", "clean"]})
+        assert updated.description == "Updated desc"
+        assert updated.tags == ["anime", "clean"]
+        assert store.get(r1.id).description == "Updated desc"
+
+        # Delete
+        assert store.delete(r2.id) is True
+        assert store.delete(r2.id) is False
+        assert store.get(r2.id) is None
+
+
+def test_recipe_export_import_and_apply(tmp_path):
+    with RecipeStore(tmp_path / "src.db") as src:
+        src.create(
+            "FLUX3 Klein Fast",
+            model_family="flux3",
+            capabilities=["multi_reference"],
+            core_patch={"cfg_scale": 1.0, "width": 1024, "height": 1024},
+            scripts_patch={"sampler": {"steps": 8}},
+            tags=["turbo"],
+        )
+        exported = src.export_all()
+        assert exported["version"] == RECIPE_EXPORT_VERSION
+        assert len(exported["recipes"]) == 1
+
+    with RecipeStore(tmp_path / "dst.db") as dst:
+        first = dst.import_recipes(exported)
+        assert first["added"] == 1 and first["updated"] == 0 and first["skipped"] == 0
+        # Re-importing without overwrite skips
+        second = dst.import_recipes(exported, overwrite=False)
+        assert second["added"] == 0 and second["skipped"] == 1
+        # Re-importing with overwrite updates
+        exported["recipes"][0]["description"] = "Overwritten!"
+        third = dst.import_recipes(exported, overwrite=True)
+        assert third["updated"] == 1 and third["items"][0].description == "Overwritten!"
+
+        recipe = third["items"][0]
+        applied = apply_recipe(
+            recipe,
+            core={"prompt": "a skyline", "cfg_scale": 7.0},
+            scripts={"sampler": {"steps": 30, "sampler_name": "Euler"}},
+            check_conflicts=False,
+            active_capabilities=["anima_hooks"],
+        )
+        assert applied["core"]["prompt"] == "a skyline"
+        assert applied["core"]["cfg_scale"] == 1.0
+        assert applied["scripts"]["sampler"]["steps"] == 8
+        assert applied["scripts"]["sampler"]["sampler_name"] == "Euler"
+        assert applied["patch"]["core.cfg_scale"] == {"value": 1.0}
+        assert applied["patch"]["sampler.steps"] == {"value": 8}
+        assert applied["warnings"] and "multi_reference" in applied["warnings"][0]
+
+
+def test_recipes_http_routes(tmp_path):
+    with webui_state(), server_app(tmp_path) as server:
+        created = server.client.post(
+            "/api/v2/recipes",
+            json={
+                "name": "Studio Portrait",
+                "description": "Soft light portrait",
+                "model_family": "krea2",
+                "capabilities": ["spectrum"],
+                "tab": "txt2img",
+                "core_patch": {"cfg_scale": 3.5, "width": 896, "height": 1152},
+                "scripts_patch": {"sampler": {"steps": 24}},
+                "tags": ["portrait"],
+            },
+        )
+        assert created.status_code == 201
+        recipe = created.json()
+        rid = recipe["id"]
+        assert recipe["name"] == "Studio Portrait" and recipe["created_at"]
+
+        listed = server.client.get("/api/v2/recipes", params={"tag": "portrait"}).json()
+        assert listed["total"] == 1 and listed["items"][0]["id"] == rid
+
+        fetched = server.client.get(f"/api/v2/recipes/{rid}")
+        assert fetched.status_code == 200 and fetched.json()["model_family"] == "krea2"
+
+        patched = server.client.patch(f"/api/v2/recipes/{rid}", json={"description": "Crisp studio"})
+        assert patched.status_code == 200 and patched.json()["description"] == "Crisp studio"
+
+        applied = server.client.post(
+            f"/api/v2/recipes/{rid}/apply",
+            json={"tab": "txt2img", "core": {"prompt": "portrait"}, "scripts": {}, "check_conflicts": True},
+        )
+        assert applied.status_code == 200
+        body = applied.json()
+        assert body["core"]["cfg_scale"] == 3.5
+        assert body["scripts"]["sampler"]["steps"] == 24
+        assert body["patch"]["core.cfg_scale"]["value"] == 3.5
+
+        exported = server.client.get("/api/v2/recipes/export")
+        assert exported.status_code == 200 and len(exported.json()["recipes"]) == 1
+
+        deleted = server.client.delete(f"/api/v2/recipes/{rid}")
+        assert deleted.status_code == 204
+        assert server.client.get(f"/api/v2/recipes/{rid}").status_code == 404
+
+        reimported = server.client.post("/api/v2/recipes/import", json=exported.json())
+        assert reimported.status_code == 200 and reimported.json()["added"] == 1
+
+        # Route 409/404 error paths
+        assert server.client.post("/api/v2/recipes", json={"name": "Studio Portrait"}).status_code == 409
+        assert server.client.delete("/api/v2/recipes/missing-id").status_code == 404
+        assert server.client.post("/api/v2/recipes/missing-id/apply", json={}).status_code == 404
+
+    # Store validation & update/import edge cases
+    with RecipeStore(tmp_path / "edge.db") as store:
+        with pytest.raises(RecipeError):
+            store.create("   ")
+        with pytest.raises(RecipeError):
+            store.create("x" * 201)
+        with pytest.raises(RecipeError):
+            store.create("Bad Core", core_patch="not-a-dict")  # type: ignore[arg-type]
+        with pytest.raises(RecipeError):
+            store.create("Bad Scripts", scripts_patch={"s": "not-a-dict"})  # type: ignore[dict-item]
+        with pytest.raises(RecipeError):
+            store.create("Bad List Float", core_patch={"weights": [1.0, float("inf")]})
+
+        a = store.create("Alpha", tags=["t1"])
+        b = store.create("Beta", tags=["t2"])
+        with pytest.raises(RecipeError) as e404:
+            store.update("missing", {"description": "x"})
+        assert e404.value.status == 404
+        with pytest.raises(RecipeError) as e409:
+            store.update(b.id, {"name": "Alpha"})
+        assert e409.value.status == 409
+        assert store.update(a.id, {"unknown_field": 1}).id == a.id
+
+        with pytest.raises(RecipeError):
+            store.import_recipes("bad")  # type: ignore[arg-type]
+        with pytest.raises(RecipeError):
+            store.import_recipes({"recipes": "bad"})
+        with pytest.raises(RecipeError):
+            store.import_recipes({"recipes": ["not-a-dict"]})
+        imp = store.import_recipes({"recipes": [{"name": "Gamma", "core_patch": {"cfg_scale": 5}}]})
+        assert imp["added"] == 1 and imp["skipped"] == 0

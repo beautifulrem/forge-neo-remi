@@ -112,6 +112,29 @@ def root_path(cmd_opts: Any) -> str:
     return f"/{cmd_opts.subpath.strip('/')}" if cmd_opts.subpath else ""
 
 
+def worker_mode_summary(cmd_opts: Any) -> str | None:
+    """Human-readable startup summary when worker isolation, multi-GPU pooling,
+    or the MLX sidecar is enabled via CLI flags or environment variables;
+    returns ``None`` in the default in-process mode."""
+
+    from remi.server.services import worker_options_from_cmd_opts
+    from remi.worker.pool import parse_worker_gpus
+
+    use_process, raw_gpus, use_mlx = worker_options_from_cmd_opts(cmd_opts)
+    gpus = parse_worker_gpus(raw_gpus)
+    if not gpus and not use_process and not use_mlx:
+        return None
+    if gpus:
+        mode_desc = f"pool (GPUs: {', '.join(gpus)})"
+    elif use_process:
+        mode_desc = "subprocess (isolated worker)"
+    else:
+        mode_desc = "inprocess"
+    if use_mlx:
+        return f"Worker mode: {mode_desc}, MLX sidecar enabled"
+    return f"Worker mode: {mode_desc}"
+
+
 class RootPathFix:
     """``--subpath`` behind proxies that strip the prefix and proxies that do
     not: uvicorn prefixes every path with ``root_path``, so an unstripped
@@ -213,6 +236,9 @@ def serve(*, webui: bool, startup_timer: Any = None) -> None:
 
     startup_timer = startup_timer or timer.startup_timer
     services = default_services()
+    if (worker_summary := worker_mode_summary(cmd_opts)) is not None:
+        print(worker_summary)
+        log.info(worker_summary)
     host = bind_host(cmd_opts)
     port = pick_port(host, cmd_opts.port, DEFAULT_PORT if webui else DEFAULT_API_PORT)
     if cmd_opts.share:
@@ -264,6 +290,9 @@ def serve(*, webui: bool, startup_timer: Any = None) -> None:
             if not services.queue.stop(timeout=30, interrupt=True):
                 print("The running job did not stop in time")
             services.stop()
+            workers = getattr(services, "workers", None)
+            if workers is not None:
+                workers.shutdown()
             if command == RESTART_PROGRAM:
                 from modules import restart
 

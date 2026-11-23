@@ -143,16 +143,12 @@ def _file_error(request: Request, error: FileError) -> JSONResponse:
 def snapshot_events(services: Services) -> list[dict[str, Any]]:
     """What a client connecting mid-job needs: the queue and the running job."""
 
-    from remi.realtime import progress_snapshot
-
     events: list[dict[str, Any]] = [{"type": "queue.changed", **services.queue.status()}]
     ref = services.queue.current_ref()
     if ref is not None:
         events.append({"type": "job.started", **ref.fields()})
         try:
-            from modules import shared
-
-            events.append({"type": "job.progress", **ref.fields(), **progress_snapshot(shared.state)})
+            events.append({"type": "job.progress", **ref.fields(), **services.bridge.progress_snapshot()})
         except Exception:
             pass
     return events
@@ -208,10 +204,10 @@ def create_app(
     # extension_route_guard asks the app who is logged in
     app.auth_dependency = auth.user_for  # type: ignore[attr-defined]
 
-    from remi.server.routes import admin, core, extensions, files, jobs, library, networks, prompt_tools, queue_tools, system
+    from remi.server.routes import admin, boards, chains, core, extensions, files, jobs, library, networks, prompt_tools, queue_tools, recipes, system, workers
 
     api = APIRouter(prefix=API_PREFIX)
-    for module in (core, jobs, files, networks, extensions, system, admin, queue_tools, library, prompt_tools):
+    for module in (core, jobs, files, networks, extensions, system, admin, queue_tools, library, boards, recipes, chains, workers, prompt_tools):
         api.include_router(module.router)
     app.include_router(api)
     app.include_router(system.internal, prefix="/internal")

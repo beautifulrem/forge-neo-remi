@@ -1,0 +1,378 @@
+"""Unit and route tests for linear multi-stage JobChains with stage caching."""
+
+from __future__ import annotations
+
+import threading
+import time
+
+from PIL import Image
+
+from remi.files import FileStore
+from remi.jobs import ChainRunner, ChainStore, JobQueue, JobResult, JobStore, StageSpec, compute_stage_hash, run_inline
+from remi.realtime import EventBus
+from remi.server.testing import FakeState, StubExecutor, server_app
+from remi.testing import webui_state
+
+
+def test_compute_stage_hash_is_deterministic_and_sensitive():
+    s1 = StageSpec(kind="generate", tab="txt2img", core={"prompt": "cat", "width": 512}, scripts={"sampler": {"steps": 20}})
+    s2 = StageSpec(kind="generate", tab="txt2img", core={"width": 512, "prompt": "cat"}, scripts={"sampler": {"steps": 20}})
+    s3 = StageSpec(kind="generate", tab="txt2img", core={"prompt": "cat", "width": 768}, scripts={"sampler": {"steps": 20}})
+
+    assert compute_stage_hash(s1, model_fingerprint="m1") == compute_stage_hash(s2, model_fingerprint="m1")
+    assert compute_stage_hash(s1, model_fingerprint="m1") != compute_stage_hash(s3, model_fingerprint="m1")
+    assert compute_stage_hash(s1, model_fingerprint="m1") != compute_stage_hash(s1, model_fingerprint="m2")
+    assert compute_stage_hash(s1, upstream_outputs=["fileA"]) != compute_stage_hash(s1, upstream_outputs=["fileB"])
+
+
+def _wait_chain_done(store: ChainStore, chain_id: str, timeout: float = 10.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        ch = store.get_chain(chain_id)
+        if ch is not None and ch.status in ("completed", "failed", "cancelled"):
+            return ch
+        time.sleep(0.02)
+    return store.get_chain(chain_id)
+
+
+def test_chain_four_stage_execution_and_downstream_rerun_cache_reuse(tmp_path):
+    files = FileStore(tmp_path / "files")
+    job_store = JobStore(tmp_path / "jobs.db")
+    bus = EventBus()
+    events: list[dict] = []
+    bus.subscribe(type("Sub", (), {"send_event": lambda self, e: events.append(e), "send_frame": lambda self, f: None})())
+
+    executed_jobs: list[tuple[str, str, dict]] = []
+    state = FakeState()
+
+    def fake_exec(job, ctx):
+        executed_jobs.append((job.meta.get("stage_kind", job.tab), job.tab, dict(job.core)))
+        color = (len(executed_jobs) * 30 % 255, 100, 150)
+        img = Image.new("RGB", (16, 16), color)
+        prompt = job.core.get("prompt", "")
+        return JobResult(images=[img], infotexts=[f"{prompt}\nSteps: 10, Seed: {len(executed_jobs)}"], info=f"{prompt}\nSteps: 10")
+
+    queue = JobQueue(
+        job_store,
+        files,
+        bus,
+        executor=fake_exec,
+        dispatch=run_inline,
+        lock=threading.Lock(),
+        validate=lambda tab, core, scripts: None,
+        state=lambda: state,
+        hash_layout=lambda tab: "test-hash",
+    )
+    chain_store = ChainStore(job_store)
+    upsample_calls: list[str] = []
+
+    def fake_upsampler(stage, upstream_prompt, upstream_outputs):
+        base = stage.core.get("prompt") or upstream_prompt or ""
+        upsample_calls.append(base)
+        return f"{base}, masterwork detailed lighting"
+
+    runner = ChainRunner(chain_store, queue, files, bus, upsampler=fake_upsampler, model_fingerprint=lambda: "anima-v1")
+    queue.start()
+    try:
+        stages = [
+            StageSpec(kind="prompt_upsample", core={"prompt": "a fox in snow"}),
+            StageSpec(kind="generate", tab="txt2img", core={"width": 512, "height": 512}),
+            StageSpec(kind="refine", tab="img2img", core={"denoising_strength": 0.4}),
+            StageSpec(kind="finish", tab="extras", core={"upscaling_resize": 2.0}),
+        ]
+        chain = runner.create_chain(stages, name="Fox 4-Stage")
+        done = _wait_chain_done(chain_store, chain.id)
+        assert done is not None and done.status == "completed"
+        assert len(upsample_calls) == 1
+        assert [kind for kind, _tab, _core in executed_jobs] == ["generate", "refine", "finish"]
+
+        # Verify automatic upstream -> downstream propagation
+        gen_core = executed_jobs[0][2]
+        ref_core = executed_jobs[1][2]
+        fin_core = executed_jobs[2][2]
+        assert gen_core["prompt"] == "a fox in snow, masterwork detailed lighting"
+        assert ref_core["init_img"] == done.stages[1].output_file_ids[0]
+        assert fin_core["image"] == done.stages[2].output_file_ids[0]
+
+        # Dry-run preview after tweaking ONLY stage 3 (finish): stages 0,1,2 hit cache, stage 3 misses!
+        tweaked_stages = [
+            stages[0],
+            stages[1],
+            stages[2],
+            StageSpec(kind="finish", tab="extras", core={"upscaling_resize": 4.0}),
+        ]
+        plan = runner.plan_chain(tweaked_stages)
+        assert [p["cache_hit"] for p in plan] == [True, True, True, False]
+        assert plan[2]["cached_outputs"] == done.stages[2].output_file_ids
+
+        # Re-run chain with tweaked finish stage: stages 0, 1, 2 MUST be reused from cache!
+        rerun = runner.rerun_chain(chain.id, stages=tweaked_stages)
+        done2 = _wait_chain_done(chain_store, rerun.id)
+        assert done2 is not None and done2.status == "completed"
+        assert len(upsample_calls) == 1  # NOT called again!
+        assert len(executed_jobs) == 4  # Only finish ran again (3 + 1 = 4)!
+        assert [st.status for st in done2.stages] == ["cached", "cached", "cached", "completed"]
+        assert [st.cached for st in done2.stages] == [True, True, True, False]
+        assert executed_jobs[3][0] == "finish"
+        assert executed_jobs[3][2]["image"] == done.stages[2].output_file_ids[0]
+
+        # Verify WS events published
+        stage_events = [e for e in events if e["type"] == "chain.stage_completed"]
+        chain_events = [e for e in events if e["type"] == "chain.updated"]
+        assert any(e["cached"] is True and e["stage_index"] == 1 for e in stage_events)
+        assert any(e["status"] == "completed" for e in chain_events)
+
+        # If cached output file is deleted from FileStore, cache must miss cleanly
+        files.delete(done.stages[1].output_file_ids[0], delete_file=True)
+        plan_after_delete = runner.plan_chain(tweaked_stages)
+        assert plan_after_delete[0]["cache_hit"] is True
+        assert plan_after_delete[1]["cache_hit"] is False
+        assert plan_after_delete[2]["cache_hit"] is False
+    finally:
+        queue.stop()
+        runner.close()
+        job_store.close()
+        files.close()
+
+
+def test_chains_http_routes_templates_and_pause_cancel(tmp_path):
+    state = FakeState()
+    executor = StubExecutor(state, count=1, steps=0)
+    with webui_state(), server_app(tmp_path, executor=executor, state=state, validate=lambda tab, core, scripts: None) as server:
+        # Save a reusable template
+        tmpl_res = server.client.post(
+            "/api/v2/chains/templates",
+            json={
+                "name": "Standard Generate + Refine",
+                "description": "Two-stage workflow",
+                "model_family": "anima",
+                "stages": [
+                    {"kind": "generate", "tab": "txt2img", "core": {"prompt": "forest"}},
+                    {"kind": "refine", "tab": "img2img", "core": {"denoising_strength": 0.35}},
+                ],
+                "tags": ["default"],
+            },
+        )
+        assert tmpl_res.status_code == 201
+        tid = tmpl_res.json()["id"]
+        assert len(server.client.get("/api/v2/chains/templates").json()["items"]) == 1
+        assert server.client.get(f"/api/v2/chains/templates/{tid}").status_code == 200
+
+        # Create paused chain, then resume and wait completion
+        created = server.client.post(
+            "/api/v2/chains",
+            json={
+                "name": "Forest Run",
+                "run_now": False,
+                "stages": tmpl_res.json()["stages"],
+                "model_fingerprint": "test-model",
+            },
+        )
+        assert created.status_code == 201
+        cid = created.json()["id"]
+        assert created.json()["status"] == "paused"
+
+        resumed = server.client.post(f"/api/v2/chains/{cid}/resume")
+        assert resumed.status_code == 200
+        assert server.services.queue.wait_idle(timeout=5)
+        done = _wait_chain_done(server.services.chains.store, cid)
+        assert done is not None and done.status == "completed"
+
+        # Preview cache hit on second run
+        preview = server.client.post(
+            "/api/v2/chains/preview",
+            json={"stages": tmpl_res.json()["stages"], "model_fingerprint": "test-model"},
+        )
+        assert preview.status_code == 200
+        assert [st["cache_hit"] for st in preview.json()["stages"]] == [True, True]
+
+        # List chains & delete
+        listed = server.client.get("/api/v2/chains").json()
+        assert listed["total"] == 1 and listed["items"][0]["id"] == cid
+
+        # Cancel a paused chain
+        paused_chain = server.client.post(
+            "/api/v2/chains",
+            json={"name": "Cancel Me", "run_now": False, "stages": [{"kind": "generate", "tab": "txt2img", "core": {"prompt": "x"}}]},
+        ).json()
+        cancelled = server.client.post(f"/api/v2/chains/{paused_chain['id']}/cancel")
+        assert cancelled.status_code == 200 and cancelled.json()["status"] == "cancelled"
+
+        assert server.client.delete(f"/api/v2/chains/{paused_chain['id']}").status_code == 204
+        assert server.client.delete(f"/api/v2/chains/templates/{tid}").status_code == 204
+
+
+def test_chains_edge_cases_errors_disabled_stages_and_routes(tmp_path, monkeypatch):
+    import sys
+    import types
+    from types import SimpleNamespace
+
+    import pytest
+
+    from remi.jobs import chains as chains_mod
+    from remi.jobs.chains import ChainError, StageRun
+
+    # 1. Standalone ChainStore context manager + validation errors + pagination/filtering
+    with ChainStore(tmp_path / "standalone.db") as store:
+        with pytest.raises(ChainError):
+            store.create_chain([])
+        with pytest.raises(ChainError):
+            store.create_chain([StageSpec(kind="generate")] * (chains_mod.MAX_STAGES + 1))
+
+        c1 = store.create_chain([StageSpec(kind="generate", core={"prompt": "a"})], name="One")
+        c2 = store.create_chain([StageSpec(kind="generate", core={"prompt": "b"})], name="Two", status="paused")
+        with pytest.raises(ChainError):
+            store.replace_stages(c1.id, [])
+        store.update_stage(c1.id, 0)  # no-op sets
+        store.update_stage(c1.id, 0, error="minor")
+
+        page1, cursor1, total = store.list_chains(status="queued,paused", limit=1)
+        assert total == 2 and len(page1) == 1 and cursor1 is not None
+        page2, cursor2, _ = store.list_chains(status="queued,paused", cursor=cursor1, limit=1)
+        assert len(page2) == 1 and cursor2 is None
+        assert store.list_chains(status="not_a_real_status")[2] == 0
+        # Bad cursor is ignored gracefully
+        assert len(store.list_chains(cursor="bad:cursor")[0]) == 2
+
+        with pytest.raises(ChainError):
+            store.create_template("   ", [StageSpec(kind="generate")])
+        with pytest.raises(ChainError):
+            store.create_template("Empty", [])
+        store.create_template("Dup", [StageSpec(kind="generate")])
+        with pytest.raises(ChainError) as dup_exc:
+            store.create_template("Dup", [StageSpec(kind="generate")])
+        assert dup_exc.value.status == 409
+        assert c2.status == "paused"
+
+    # 2. _default_upsampler (empty prompt, stubbed pup, exception fallback) + _default_model_fingerprint
+    assert chains_mod._default_upsampler(StageRun(chain_id="c", index=0, kind="prompt_upsample", name="PUP", enabled=True, tab="txt2img", core={"prompt": "  "}), None, []) == "  "
+    fake_pup = types.ModuleType("remi.prompt_tools.pup")
+    fake_pup.upsample_prompt = lambda prompt, **kw: SimpleNamespace(prompt=f"{prompt} [pup]")
+    monkeypatch.setitem(sys.modules, "remi.prompt_tools.pup", fake_pup)
+    assert chains_mod._default_upsampler(StageRun(chain_id="c", index=0, kind="prompt_upsample", name="PUP", enabled=True, tab="txt2img", core={"prompt": "sky"}), None, []) == "sky [pup]"
+    fake_pup.upsample_prompt = lambda prompt, **kw: (_ for _ in ()).throw(RuntimeError("pup offline"))
+    assert chains_mod._default_upsampler(StageRun(chain_id="c", index=0, kind="prompt_upsample", name="PUP", enabled=True, tab="txt2img", core={"prompt": "sky"}), None, []) == "sky"
+    assert isinstance(chains_mod._default_model_fingerprint(), str)
+
+    # 3. ChainRunner failure paths, disabled stages, pause/resume/cancel/delete guards, and finish tabs
+    files = FileStore(tmp_path / "files2")
+    job_store = JobStore(tmp_path / "jobs2.db")
+    bus = EventBus()
+    state = FakeState()
+    mode = {"behavior": "ok"}
+
+    def flakey_exec(job, ctx):
+        if mode["behavior"] == "fail":
+            raise RuntimeError("gpu oom")
+        if mode["behavior"] == "interrupt":
+            state.interrupted = True
+        return JobResult(images=[Image.new("RGB", (8, 8), (1, 2, 3))], infotexts=["p"], info="p")
+
+    queue = JobQueue(
+        job_store,
+        files,
+        bus,
+        executor=flakey_exec,
+        dispatch=run_inline,
+        lock=threading.Lock(),
+        validate=lambda tab, core, scripts: None,
+        state=lambda: state,
+        hash_layout=lambda tab: "h",
+    )
+    cstore = ChainStore(job_store)
+    runner = ChainRunner(cstore, queue, files, bus, upsampler=lambda s, p, o: (_ for _ in ()).throw(RuntimeError("pup crash")), model_fingerprint=lambda: "fp1")
+    queue.start()
+    try:
+        # Disabled stage in plan_chain
+        plan = runner.plan_chain([StageSpec(kind="prompt_upsample", enabled=False), StageSpec(kind="generate", core={"prompt": "a"})])
+        assert plan[0]["enabled"] is False and plan[0]["cache_hit"] is False
+
+        # prompt_upsample failure marks chain failed
+        ch_pup_fail = runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "boom"})])
+        assert ch_pup_fail.status == "failed" and "pup crash" in (ch_pup_fail.error or "")
+
+        # _build_stage_submission finish tab variants (txt2img -> upscale_from, img2img -> init_img)
+        sub_t2i = runner._build_stage_submission(ch_pup_fail, StageRun(chain_id=ch_pup_fail.id, index=1, kind="finish", name="Finish", enabled=True, tab="txt2img"), ["img-1"], None)
+        assert sub_t2i.upscale_from == "img-1"
+        sub_i2i = runner._build_stage_submission(ch_pup_fail, StageRun(chain_id=ch_pup_fail.id, index=1, kind="finish", name="Finish", enabled=True, tab="img2img"), ["img-1"], None)
+        assert sub_i2i.core["init_img"] == "img-1"
+
+        # queue.submit error marks chain failed
+        monkeypatch.setattr(queue, "submit", lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("queue full")))
+        ch_sub_fail = runner.create_chain([StageSpec(kind="generate", tab="txt2img", core={"prompt": "x"})])
+        assert ch_sub_fail.status == "failed" and "queue full" in (ch_sub_fail.error or "")
+        monkeypatch.undo()
+
+        # Job failure & interruption propagate to chain status
+        mode["behavior"] = "fail"
+        ch_jfail = runner.create_chain([StageSpec(kind="generate", tab="txt2img", core={"prompt": "f"})])
+        done_fail = _wait_chain_done(cstore, ch_jfail.id)
+        assert done_fail is not None and done_fail.status == "failed"
+
+        mode["behavior"] = "interrupt"
+        ch_jint = runner.create_chain([StageSpec(kind="generate", tab="txt2img", core={"prompt": "i"})], run_now=False)
+        j_can = job_store.add("txt2img", {"prompt": "i"}, {})
+        j_can = job_store.finish(j_can.id, "cancelled", error="cancelled by user")
+        cstore.update_chain(ch_jint.id, status="running")
+        cstore.update_stage(ch_jint.id, 0, status="running", job_id=j_can.id)
+        runner.on_job_finished(j_can)
+        done_int = cstore.get_chain(ch_jint.id)
+        assert done_int is not None and done_int.status == "cancelled"
+
+        # Non-chain job completion hook returns cleanly
+        non_chain_job = job_store.add("txt2img", {"prompt": "solo"}, {})
+        runner.on_job_finished(non_chain_job)
+
+        # Pause/resume/cancel/rerun/delete guards
+        mode["behavior"] = "ok"
+        ch_ok = runner.create_chain([StageSpec(kind="generate", tab="txt2img", core={"prompt": "ok"})])
+        done_ok = _wait_chain_done(cstore, ch_ok.id)
+        assert done_ok is not None and done_ok.status == "completed"
+
+        # Rerun with stages=None and from_stage=0
+        rerun_same = runner.rerun_chain(ch_ok.id, stages=None, from_stage=0)
+        done_rerun = _wait_chain_done(cstore, rerun_same.id)
+        assert done_rerun is not None and done_rerun.status == "completed"
+
+        with pytest.raises(ChainError):
+            runner.rerun_chain("no-such-chain")
+        with pytest.raises(ChainError):
+            runner.pause_chain("no-such-chain")
+        with pytest.raises(ChainError):
+            runner.pause_chain(ch_ok.id)  # already completed -> 409
+        with pytest.raises(ChainError):
+            runner.resume_chain("no-such-chain")
+        with pytest.raises(ChainError):
+            runner.resume_chain(ch_ok.id)  # not paused -> 409
+        with pytest.raises(ChainError):
+            runner.cancel_chain("no-such-chain")
+        assert runner.delete_chain("no-such-chain") is False
+
+        # Pause a queued/running chain and test running guards
+        ch_paused = runner.create_chain([StageSpec(kind="generate", tab="txt2img", core={"prompt": "p"})], run_now=False)
+        cstore.update_chain(ch_paused.id, status="running")
+        with pytest.raises(ChainError):
+            runner.rerun_chain(ch_paused.id)
+        with pytest.raises(ChainError):
+            runner.delete_chain(ch_paused.id)
+        paused_back = runner.pause_chain(ch_paused.id)
+        assert paused_back.status == "paused"
+        assert runner._advance(ch_paused.id).status == "paused"
+    finally:
+        queue.stop()
+        runner.close()
+        job_store.close()
+        files.close()
+
+    # 4. Route 404 & rerun/pause coverage in remi/server/routes/chains.py
+    state2 = FakeState()
+    with webui_state(), server_app(tmp_path / "srv", executor=StubExecutor(state2, count=1, steps=0), state=state2, validate=lambda *a: None) as server:
+        ch = server.client.post("/api/v2/chains", json={"name": "R", "run_now": False, "stages": [{"kind": "generate", "tab": "txt2img", "core": {"prompt": "a"}}]}).json()
+        assert server.client.get(f"/api/v2/chains/{ch['id']}").status_code == 200
+        assert server.client.get("/api/v2/chains/missing").status_code == 404
+        assert server.client.get("/api/v2/chains/templates/missing").status_code == 404
+        assert server.client.delete("/api/v2/chains/templates/missing").status_code == 404
+        assert server.client.delete("/api/v2/chains/missing").status_code == 404
+        assert server.client.post(f"/api/v2/chains/{ch['id']}/pause").status_code == 200
+        assert server.client.post(f"/api/v2/chains/{ch['id']}/rerun", json={"from_stage": 0}).status_code == 200
+        assert server.services.queue.wait_idle(timeout=5)

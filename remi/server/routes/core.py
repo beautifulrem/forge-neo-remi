@@ -258,6 +258,8 @@ def run_action(owner: str, action: str, body: m.ActionRequest, request: Request,
     )
 
     def call() -> dict[str, Any]:
+        if spec.timeout is not None:
+            return ui.call_action_isolated(target, action, ctx, body.values, timeout=spec.timeout)
         return ui.call_action(target, action, ctx, body.values)
 
     if spec.gpu:

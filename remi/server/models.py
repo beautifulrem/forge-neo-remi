@@ -188,6 +188,7 @@ class TabSchema(Model):
     core: dict[str, Any]
     scripts: list[dict[str, Any]]
     conflict_params: list[str] | None = None
+    capabilities: dict[str, Any] | None = None
 
 
 class PageSchema(Model):
@@ -359,6 +360,62 @@ class ExtensionList(Model):
     restartable: bool = Field(False, description="whether /server/restart can restart the process")
     disabled_by: str | None = Field(None, description='why extensions are not loaded: "all", "extra" (the option) or a command-line flag')
     index_url: str = Field("", description="the default extension index URL")
+
+
+class ExtensionManifestModel(Model):
+    name: str | None = None
+    version: str | None = None
+    api_version: str
+    min_remi_version: str | None = None
+    requires_capabilities: list[str] = []
+    requires_widgets: list[str] = []
+    license: str | None = None
+    homepage: str | None = None
+    description: str | None = None
+    author: str | None = None
+
+
+class DisabledScriptInfo(Model):
+    kind: str = "script"
+    id: str = ""
+    title: str = ""
+    tab: str | None = None
+    reason: str | None = None
+
+
+class ExtensionDiagnosticItem(Model):
+    name: str
+    enabled: bool
+    builtin: bool
+    health: Literal["healthy", "degraded", "error", "disabled"]
+    load_time_ms: float | None = None
+    hook_warnings: int = 0
+    hook_errors: int = 0
+    action_errors: int = 0
+    action_timeouts: int = 0
+    last_error: str | None = None
+    last_error_at: str | None = None
+    manifest_status: Literal["valid", "missing", "invalid", "incompatible"]
+    manifest: ExtensionManifestModel | None = None
+    manifest_errors: list[str] = []
+    manifest_warnings: list[str] = []
+    disabled_scripts: list[DisabledScriptInfo] = []
+
+
+class ExtensionDiagnosticsSummary(Model):
+    total: int
+    healthy: int
+    degraded: int
+    error: int
+    disabled: int
+    with_manifest: int
+
+
+class ExtensionDiagnosticsResponse(Model):
+    api_version: str
+    schema_version: int
+    summary: ExtensionDiagnosticsSummary
+    items: list[ExtensionDiagnosticItem]
 
 
 class ExtensionsPatch(Model):

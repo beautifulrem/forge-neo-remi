@@ -152,6 +152,35 @@ class PromptGenerated(m.Model):
     prompt: str
 
 
+class PromptUpsampleRequest(m.Model):
+    prompt: str = Field(min_length=1, max_length=8000, description="short prompt or editing instruction to upsample")
+    model_family: str | None = Field(None, max_length=64, description='target model family ("flux3", "qwen21", "moss", "fibo", "zimage", "ernie", "anima", "auto")')
+    reference_file_ids: list[str] = Field(default=[], max_length=16, description="FileStore upload/output ids to attach as multimodal reference images")
+    reference_images: list[str] = Field(default=[], max_length=16, description="optional data:image/... URIs (use reference_file_ids for uploaded/generated images)")
+    aspect_ratio: str | None = Field(None, max_length=32, description='target aspect ratio or dimensions, e.g. "16:9" or "1024x1024"')
+    bbox_draft: list[dict[str, Any]] | None = None
+    mode: str = Field("auto", max_length=32, description='"auto" | "t2i" | "t2i_bbox" | "i2i" | "i2i_bbox" | "vgl_json"')
+    local_model_path: str | None = Field(None, max_length=1024)
+    current: str = Field("", max_length=8000)
+    negative: bool = False
+    instructions: str = Field("", max_length=8000)
+    temperature: float = Field(0.7, ge=0.0, le=2.0)
+    max_tokens: int = Field(1024, ge=16, le=8192)
+
+
+class PromptUpsampled(m.Model):
+    prompt: str
+    original_prompt: str
+    model_family: str
+    mode: str
+    backend: str
+    used_reference_count: int = 0
+    aspect_ratio: str | None = None
+    layout_rows: list[dict[str, Any]] | None = None
+    vgl_json: dict[str, Any] | None = None
+    warnings: list[str] = []
+
+
 class PromptTranslationKey(m.Model):
     key: str = Field(max_length=4096, description="the provider's API key; empty: forget it")
 
@@ -319,6 +348,52 @@ def generate(body: PromptGenerateRequest, tools: ToolsDep) -> dict[str, Any]:
         return {"prompt": tools.generate(body.description, current=body.prompt, negative=body.negative)}
     except pt.TranslationError as error:
         raise HTTPException(status_code=error.status, detail=str(error)) from error
+
+
+@router.post(
+    "/upsample",
+    response_model=PromptUpsampled,
+    responses={**ERRORS, 413: {"model": m.Detail}, 502: {"model": m.Detail}},
+    summary="Multimodal & local Prompt Upsampler (PUP) with model-family templates",
+)
+def upsample(body: PromptUpsampleRequest, tools: ToolsDep, services: ServicesDep) -> dict[str, Any]:
+    from remi.prompt_tools.pup import upsample_prompt
+
+    resolved_refs: list[Any] = []
+    for file_id in body.reference_file_ids:
+        record = services.files.get(file_id)
+        if record is None or not record.is_image:
+            raise HTTPException(status_code=404, detail=f"no reference image {file_id!r}")
+        resolved_refs.append(record.path)
+    for item in body.reference_images:
+        if not isinstance(item, str) or not item.startswith("data:image/"):
+            raise HTTPException(status_code=422, detail="reference_images entries must be data:image/... URIs; pass uploaded/output images via reference_file_ids")
+        resolved_refs.append(item)
+    if body.local_model_path:
+        from modules import shared
+
+        if getattr(shared.cmd_opts, "hide_ui_dir_config", False):
+            raise HTTPException(status_code=403, detail="local_model_path is disabled under --hide-ui-dir-config")
+
+    try:
+        result = upsample_prompt(
+            body.prompt,
+            model_family=body.model_family,
+            reference_images=resolved_refs or None,
+            aspect_ratio=body.aspect_ratio,
+            bbox_draft=body.bbox_draft,
+            mode=body.mode,
+            local_model_path=body.local_model_path,
+            config=tools.translation_config(),
+            current=body.current,
+            negative=body.negative,
+            instructions=body.instructions,
+            temperature=body.temperature,
+            max_tokens=body.max_tokens,
+        )
+    except pt.TranslationError as error:
+        raise HTTPException(status_code=error.status, detail=str(error)) from error
+    return result.to_dict()
 
 
 @router.put("/translation-key", response_model=PromptTranslationKeyState, responses=ERRORS, summary="Store (or, empty, forget) the translation API key; it is never sent back")

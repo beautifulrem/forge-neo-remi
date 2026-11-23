@@ -102,5 +102,10 @@ pkm.add_argument("--uv", action="store_true", help="Use the uv package manager")
 pkm.add_argument("--uv-symlink", action="store_true", help="Use the uv package manager with symlink")
 pkm.add_argument("--uv-local-cache", action="store_true", help="Use the uv package manager with a local cache (.uv-cache) instead of the system-wide cache")
 
+parser = _parser.add_argument_group(description="Remi workers")
+parser.add_argument("--worker-process", action="store_true", help="run inference in an isolated supervised worker subprocess with automatic crash/OOM recovery", default=False)
+parser.add_argument("--worker-gpus", type=str, help='comma-separated GPU indices for a local multi-GPU worker pool (e.g. "0,1")', default=None)
+parser.add_argument("--worker-mlx", action="store_true", help="enable the optional Apple Silicon MLX/mflux sidecar worker when available", default=False)
+
 parser = _parser
 paths_internal.parser = parser

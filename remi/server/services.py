@@ -8,6 +8,7 @@ running). Data lives under ``<data path>/remi-data``.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -15,9 +16,10 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from remi.files import DEFAULT_MAX_UPLOAD, FileStore
-from remi.jobs import JobQueue, JobStore, run_job, run_on_main_thread
+from remi.jobs import ChainRunner, ChainStore, JobQueue, JobStore, run_job, run_on_main_thread
 from remi.networks import NetworkIndex
 from remi.realtime import EventBus, PreviewEncoder, ProgressMonitor
+from remi.worker import RuntimeBridge, WorkerPool, create_default_pool
 
 log = logging.getLogger(__name__)
 
@@ -36,17 +38,62 @@ class Services:
     """``shared.state`` getter for the realtime threads (tests pass a fake)"""
     realtime: bool = True
     housekeeping_enabled: bool = True
+    worker_process: bool | None = None
+    worker_gpus: str | None = None
+    worker_mlx: bool | None = None
+    chains: ChainRunner = field(init=False)
+    bridge: RuntimeBridge = field(init=False)
+    workers: WorkerPool = field(init=False)
     _threads: list[Any] = field(default_factory=list)
     _started: bool = False
     _stop: threading.Event = field(default_factory=threading.Event)
 
     HOUSEKEEPING_INTERVAL: ClassVar[float] = 3600
 
+    def __post_init__(self) -> None:
+        self.chains = ChainRunner(ChainStore(self.store), self.queue, self.files, self.bus)
+        self.bridge = RuntimeBridge(state_getter=self.state)
+        use_process = (os.environ.get("REMI_WORKER_PROCESS") == "1") if self.worker_process is None else bool(self.worker_process)
+        use_gpus = (os.environ.get("REMI_WORKER_GPUS") or None) if self.worker_gpus is None else (self.worker_gpus.strip() or None)
+        use_mlx = (os.environ.get("REMI_WORKER_MLX") == "1") if self.worker_mlx is None else bool(self.worker_mlx)
+        self.workers = create_default_pool(
+            worker_process=use_process,
+            worker_gpus=use_gpus,
+            enable_mlx=use_mlx,
+            bridge=self.bridge,
+        )
+        self.queue.add_completion_hook(self._record_job_lineage)
+
+    def _record_job_lineage(self, job: Any) -> None:
+        outputs = getattr(job, "outputs", None) or []
+        image_ids = [out["id"] for out in outputs if isinstance(out, dict) and out.get("kind", "image") == "image" and isinstance(out.get("id"), str)]
+        if not image_ids:
+            return
+        try:
+            from remi.library import gallery_for
+
+            gallery_for(self.files).index_job_lineage(job, image_ids, job_store=self.store)
+        except Exception:
+            log.debug("lineage indexing skipped for job %s", getattr(job, "id", "?"), exc_info=True)
+
     @classmethod
-    def create(cls, root: str | Path, *, max_upload_bytes: int | Callable[[], int] = DEFAULT_MAX_UPLOAD, realtime: bool = True, housekeeping: bool = True, **queue_options: Any) -> Services:
+    def create(
+        cls,
+        root: str | Path,
+        *,
+        max_upload_bytes: int | Callable[[], int] = DEFAULT_MAX_UPLOAD,
+        realtime: bool = True,
+        housekeeping: bool = True,
+        worker_process: bool | None = None,
+        worker_gpus: str | None = None,
+        worker_mlx: bool | None = None,
+        **queue_options: Any,
+    ) -> Services:
         """``queue_options`` go to :class:`JobQueue` (``executor``,
         ``dispatch``, ``lock``, ``validate``, ``state``, ``hash_layout``);
-        ``realtime``/``housekeeping``: start those threads with the queue."""
+        ``realtime``/``housekeeping``: start those threads with the queue;
+        ``worker_process``/``worker_gpus``/``worker_mlx``: worker isolation,
+        multi-GPU pool, and optional Apple Silicon MLX sidecar selection."""
 
         root = Path(root)
         bus = EventBus()
@@ -55,7 +102,20 @@ class Services:
         queue_options.setdefault("executor", run_job)
         queue_options.setdefault("dispatch", run_on_main_thread)
         queue = JobQueue(store, files, bus, **queue_options)
-        return cls(root, bus, files, store, queue, NetworkIndex(files, on_change=lambda kind: bus.publish("networks.changed", **({"kind": kind} if kind else {}))), state=queue_options.get("state"), realtime=realtime, housekeeping_enabled=housekeeping)
+        return cls(
+            root,
+            bus,
+            files,
+            store,
+            queue,
+            NetworkIndex(files, on_change=lambda kind: bus.publish("networks.changed", **({"kind": kind} if kind else {}))),
+            state=queue_options.get("state"),
+            realtime=realtime,
+            housekeeping_enabled=housekeeping,
+            worker_process=worker_process,
+            worker_gpus=worker_gpus,
+            worker_mlx=worker_mlx,
+        )
 
     def start(self) -> None:
         """Start the worker (and the progress/preview threads); idempotent."""
@@ -93,8 +153,12 @@ class Services:
         """Stop everything and close the databases."""
 
         from remi.library import close_gallery
+        from remi.recipes import close_recipes
 
         self.stop()
+        self.workers.shutdown()
+        self.chains.close()
+        close_recipes(self.files)
         close_gallery(self.files)
         self.files.close()
         self.store.close()
@@ -136,6 +200,31 @@ def output_dirs() -> list[str]:
     return [path for name in OUTPUT_DIR_OPTIONS if (path := getattr(shared.opts, name, ""))]
 
 
+def worker_options_from_cmd_opts(cmd_opts: Any = None) -> tuple[bool, str | None, bool]:
+    """Resolve ``(worker_process, worker_gpus, worker_mlx)`` from CLI flags
+    (``--worker-process``, ``--worker-gpus``, ``--worker-mlx``) with
+    ``REMI_WORKER_*`` environment variable fallbacks."""
+
+    opts = cmd_opts
+    if opts is None:
+        try:
+            from modules.shared_cmd_options import cmd_opts as active_opts
+
+            opts = active_opts
+        except Exception:
+            opts = None
+
+    cli_process = bool(getattr(opts, "worker_process", False)) if opts is not None else False
+    raw_gpus = getattr(opts, "worker_gpus", None) if opts is not None else None
+    cli_gpus = str(raw_gpus).strip() or None if raw_gpus is not None else None
+    cli_mlx = bool(getattr(opts, "worker_mlx", False)) if opts is not None else False
+
+    use_process = cli_process or os.environ.get("REMI_WORKER_PROCESS") == "1"
+    use_gpus = cli_gpus if cli_gpus is not None else (os.environ.get("REMI_WORKER_GPUS") or None)
+    use_mlx = cli_mlx or os.environ.get("REMI_WORKER_MLX") == "1"
+    return use_process, use_gpus, use_mlx
+
+
 _default: Services | None = None
 _default_lock = threading.Lock()
 
@@ -151,5 +240,15 @@ def default_services(factory: Callable[[Path], Services] | None = None) -> Servi
 
             # Not "remi": the data path defaults to the repository root, where remi/ is the package
             root = Path(data_path) / "remi-data"
-            _default = factory(root) if factory else Services.create(root, max_upload_bytes=lambda: int(float(option("remi_upload_max_mb", 64)) * 1024 * 1024))
+            if factory:
+                _default = factory(root)
+            else:
+                use_process, use_gpus, use_mlx = worker_options_from_cmd_opts()
+                _default = Services.create(
+                    root,
+                    max_upload_bytes=lambda: int(float(option("remi_upload_max_mb", 64)) * 1024 * 1024),
+                    worker_process=use_process,
+                    worker_gpus=use_gpus,
+                    worker_mlx=use_mlx,
+                )
         return _default

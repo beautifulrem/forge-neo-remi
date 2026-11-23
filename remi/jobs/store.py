@@ -102,6 +102,63 @@ CREATE TABLE IF NOT EXISTS imports (
     job_id TEXT NOT NULL,
     PRIMARY KEY (source, source_id)
 );
+CREATE TABLE IF NOT EXISTS chains (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL,
+    current_stage INTEGER NOT NULL DEFAULT 0,
+    priority INTEGER NOT NULL DEFAULT 0,
+    user TEXT,
+    model_fingerprint TEXT NOT NULL DEFAULT '',
+    error TEXT,
+    created REAL NOT NULL,
+    updated REAL NOT NULL,
+    started REAL,
+    finished REAL
+);
+CREATE INDEX IF NOT EXISTS chains_created ON chains(created DESC);
+CREATE TABLE IF NOT EXISTS stage_runs (
+    chain_id TEXT NOT NULL,
+    stage_index INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    tab TEXT NOT NULL,
+    core TEXT NOT NULL DEFAULT '{}',
+    scripts TEXT NOT NULL DEFAULT '{}',
+    config TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL,
+    stage_hash TEXT,
+    cached INTEGER NOT NULL DEFAULT 0,
+    job_id TEXT,
+    output_file_ids TEXT NOT NULL DEFAULT '[]',
+    output_prompt TEXT,
+    infotext TEXT,
+    error TEXT,
+    started REAL,
+    finished REAL,
+    PRIMARY KEY (chain_id, stage_index)
+);
+CREATE INDEX IF NOT EXISTS stage_runs_job ON stage_runs(job_id);
+CREATE TABLE IF NOT EXISTS stage_cache (
+    stage_hash TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    output_file_ids TEXT NOT NULL DEFAULT '[]',
+    output_prompt TEXT,
+    infotext TEXT,
+    job_id TEXT,
+    created REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS chain_templates (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT NOT NULL DEFAULT '',
+    model_family TEXT,
+    stages TEXT NOT NULL DEFAULT '[]',
+    tags TEXT NOT NULL DEFAULT '[]',
+    created REAL NOT NULL,
+    updated REAL NOT NULL
+);
 """
 # ``imports``: records an importer already brought in (importing twice is a no-op)
 
@@ -484,6 +541,16 @@ class JobStore:
             walk(job.core)
             walk(job.scripts)
             walk(job.meta.get("upscale_from"))
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT sr.core, sr.scripts, sr.config, sr.output_file_ids FROM stage_runs sr JOIN chains c ON c.id = sr.chain_id WHERE c.status IN ('queued', 'running', 'paused')"
+            ).fetchall()
+        for core_s, scripts_s, config_s, outputs_s in rows:
+            for raw in (core_s, scripts_s, config_s, outputs_s):
+                try:
+                    walk(json.loads(raw))
+                except Exception:
+                    pass
         return found
 
     def get_meta(self, key: str, default: str | None = None) -> str | None:

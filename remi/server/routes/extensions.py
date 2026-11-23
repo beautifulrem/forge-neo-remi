@@ -58,6 +58,11 @@ async def list_installed() -> dict[str, Any]:
     return await run_in_threadpool(admin.listing)
 
 
+@router.get("/extensions/diagnostics", response_model=m.ExtensionDiagnosticsResponse, summary="Per-extension health, manifest status, load times, and error diagnostics")
+async def extension_diagnostics() -> dict[str, Any]:
+    return await run_in_threadpool(admin.diagnostics_report)
+
+
 def _configure_and_list(disabled: list[str] | None, disable_all: str | None) -> dict[str, Any]:
     admin.configure(disabled, disable_all)
     return admin.listing()

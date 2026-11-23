@@ -102,6 +102,8 @@ class Submission:
     upscale_from: str | None = None
     """txt2img only: Hires. fix this image (a file id) instead of generating
     the first pass (A1111's ✨ button; ``modules.txt2img.run_txt2img_upscale``)"""
+    meta: dict[str, Any] | None = None
+    """Optional extra job metadata (e.g. ``chain_id``, ``stage_index``, ``upstream_file_ids``)."""
 
 
 def _state() -> Any:
@@ -231,6 +233,31 @@ class JobQueue:
         self._stopping = False
         self._thread: threading.Thread | None = None
         self._loading_model: str | None = None
+        self._completion_hooks: list[Callable[[Job], None]] = []
+
+    def add_completion_hook(self, callback: Callable[[Job], None]) -> Callable[[], None]:
+        """Register a callback invoked whenever a job reaches a final status."""
+
+        with self._cv:
+            self._completion_hooks.append(callback)
+
+        def remove() -> None:
+            with self._cv:
+                if callback in self._completion_hooks:
+                    self._completion_hooks.remove(callback)
+
+        return remove
+
+    def _notify_finished(self, job: Job | None) -> None:
+        if job is None:
+            return
+        with self._cv:
+            hooks = list(self._completion_hooks)
+        for hook in hooks:
+            try:
+                hook(job)
+            except Exception:
+                log.exception("job completion hook failed for %s", job.id)
 
     # region Lifecycle
 
@@ -335,10 +362,10 @@ class JobQueue:
         if not 1 <= submission.repeat <= MAX_REPEAT:
             raise ValidationError([ParamError(f"repeat is between 1 and {MAX_REPEAT}")])
         self.validate(submission.tab, submission.core, submission.scripts)
-        meta = None
+        meta = dict(submission.meta) if submission.meta else None
         if submission.upscale_from is not None:
             self._check_upscale_source(submission.tab, submission.upscale_from)
-            meta = {"upscale_from": submission.upscale_from}
+            meta = {**(meta or {}), "upscale_from": submission.upscale_from}
         layout = self.hash_layout(submission.tab)
         jobs = [self.store.add(submission.tab, submission.core or {}, submission.scripts or {}, priority=submission.priority, layout_hash=layout, schema_version=SCHEMA_VERSION, summary=_summary(submission.core or {}, submission.tab), forever=submission.forever, user=user, meta=meta) for _ in range(submission.repeat)]
         for job in jobs:
@@ -560,6 +587,7 @@ class JobQueue:
             return False
         self._pending_done(job)
         self.bus.publish("job.failed", job_id=job.id, seq=job.seq, tab=job.tab, status=CANCELLED, error="Cancelled")
+        self._notify_finished(self.store.get(job.id))
         if notify:
             self._changed()
         return True
@@ -627,9 +655,10 @@ class JobQueue:
                 self._current = job
         if stopped:  # interrupted while waiting for the lock: nothing made
             status = CANCELLED if job.id in self._cancelled else INTERRUPTED
-            self.store.finish(job.id, status)
+            finished = self.store.finish(job.id, status)
             self._pending_done(job)
             self.bus.publish("job.completed", **ref.fields(), status=status, outputs=[], infotext=None)
+            self._notify_finished(finished)
             return
         from remi import model_selection
 
@@ -658,8 +687,9 @@ class JobQueue:
             if note not in warnings and len(warnings) < MAX_WARNINGS:
                 warnings.append(note)
         info = (result.info if result else None) or next((output.get("infotext") for output in outputs if output.get("infotext")), None)
-        self.store.finish(job.id, status, outputs=outputs, infotext=info, warnings=warnings)
+        finished = self.store.finish(job.id, status, outputs=outputs, infotext=info, warnings=warnings)
         self.bus.publish("job.completed", **ref.fields(), status=status, outputs=outputs, infotext=info, **({"warnings": warnings} if warnings else {}))
+        self._notify_finished(finished)
         if job.forever and status == COMPLETED:  # paused: queued for the resume
             again = self.store.requeue_forever(job.id)
             if again is not None:
@@ -667,8 +697,9 @@ class JobQueue:
 
     def _fail(self, job: Job, message: str, *, errors: list[dict] | None = None) -> None:
         status = CANCELLED if job.id in self._cancelled else FAILED
-        self.store.finish(job.id, status, error=message, errors=errors)
+        finished = self.store.finish(job.id, status, error=message, errors=errors)
         self.bus.publish("job.failed", job_id=job.id, seq=job.seq, tab=job.tab, status=status, error=message, errors=errors)
+        self._notify_finished(finished)
         if status == FAILED and not errors and self.option("queue_automatic_requeue_failed_task", False):
             self._requeue_failed(job)
 

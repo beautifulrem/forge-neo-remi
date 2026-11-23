@@ -920,3 +920,130 @@ def restore_config_state(state_id: str, what: str = "extensions") -> dict[str, A
 
 
 # endregion
+
+# region Diagnostics
+
+
+def _disabled_scripts_by_extension() -> dict[str, list[dict[str, Any]]]:
+    by_ext: dict[str, list[dict[str, Any]]] = {}
+    try:
+        from remi.server.runtime import not_ported
+
+        entries = not_ported()
+    except Exception:
+        entries = []
+    for entry in entries:
+        ext_name = entry.get("extension")
+        if ext_name:
+            by_ext.setdefault(str(ext_name), []).append(
+                {
+                    "kind": entry.get("kind", "script"),
+                    "id": entry.get("id", ""),
+                    "title": entry.get("title", ""),
+                    "tab": entry.get("tab"),
+                    "reason": entry.get("reason"),
+                }
+            )
+    return by_ext
+
+
+def _startup_load_times_ms() -> dict[str, float]:
+    """Read per-extension script load times from ``modules.timer`` when recorded."""
+
+    times: dict[str, float] = {}
+    try:
+        from modules import timer
+
+        records = getattr(timer.startup_timer, "records", None) or {}
+        if isinstance(records, dict):
+            scripts_rec = records.get("scripts") or records.get("load scripts")
+            if isinstance(scripts_rec, dict):
+                for name, value in scripts_rec.items():
+                    if isinstance(value, (int, float)):
+                        times[str(name)] = round(float(value) * 1000.0, 2)
+    except Exception:
+        pass
+    return times
+
+
+def diagnostics_report(*, extensions_list: Iterable[Any] | None = None, known_widgets: Iterable[str] | None = None) -> dict[str, Any]:
+    """Collect per-extension health, manifest status, load times and error counts."""
+
+    from remi.ui.manifest import diagnostics as collector
+    from remi.ui.manifest import load_manifest
+    from remi.ui.schema import SCHEMA_VERSION
+    from remi.ui.version import REMI_API_VERSION
+
+    exts = list(extensions_list) if extensions_list is not None else all_extensions()
+    disabled_map = _disabled_scripts_by_extension()
+    startup_times = _startup_load_times_ms()
+    recorded = collector.snapshot()
+
+    items: list[dict[str, Any]] = []
+    summary = {"total": 0, "healthy": 0, "degraded": 0, "error": 0, "disabled": 0, "with_manifest": 0}
+
+    for ext in exts:
+        name = str(ext.name)
+        enabled = bool(getattr(ext, "enabled", True))
+        builtin = bool(getattr(ext, "is_builtin", False))
+        path = getattr(ext, "path", "") or ""
+        mres = load_manifest(path, known_widgets=known_widgets) if path else load_manifest(".", known_widgets=known_widgets)
+        if not path or not os.path.isdir(path):
+            from remi.ui.manifest import ManifestValidationResult
+
+            mres = ManifestValidationResult(None, "missing", (), (), True)
+
+        rec = recorded.get(name)
+        load_time_ms = rec.load_time_ms if rec and rec.load_time_ms is not None else startup_times.get(name)
+        hook_warnings = rec.hook_warnings if rec else 0
+        hook_errors = rec.hook_errors if rec else 0
+        action_errors = rec.action_errors if rec else 0
+        action_timeouts = rec.action_timeouts if rec else 0
+        last_error = rec.last_error if rec else None
+        last_error_at = iso(rec.last_error_at) if rec and rec.last_error_at else None
+        disabled_scripts = disabled_map.get(name, [])
+
+        if not enabled:
+            health = "disabled"
+        elif mres.status in ("invalid", "incompatible") or hook_errors > 0 or action_errors > 0 or action_timeouts > 0:
+            health = "error"
+        elif hook_warnings > 0 or disabled_scripts or mres.warnings:
+            health = "degraded"
+        else:
+            health = "healthy"
+
+        summary["total"] += 1
+        summary[health] += 1
+        if mres.manifest is not None:
+            summary["with_manifest"] += 1
+
+        items.append(
+            {
+                "name": name,
+                "enabled": enabled,
+                "builtin": builtin,
+                "health": health,
+                "load_time_ms": load_time_ms,
+                "hook_warnings": hook_warnings,
+                "hook_errors": hook_errors,
+                "action_errors": action_errors,
+                "action_timeouts": action_timeouts,
+                "last_error": last_error,
+                "last_error_at": last_error_at,
+                "manifest_status": mres.status,
+                "manifest": mres.manifest.to_dict() if mres.manifest is not None else None,
+                "manifest_errors": list(mres.errors),
+                "manifest_warnings": list(mres.warnings),
+                "disabled_scripts": disabled_scripts,
+            }
+        )
+
+    return {
+        "api_version": REMI_API_VERSION,
+        "schema_version": SCHEMA_VERSION,
+        "summary": summary,
+        "items": items,
+    }
+
+
+# endregion

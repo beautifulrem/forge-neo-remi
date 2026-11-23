@@ -129,8 +129,9 @@ def gallery(
     until: str | None = Query(None, description="ISO date-time (exclusive)"),
     starred: bool | None = None,
     sort: Sort = "newest",
+    board_id: str | None = Query(None, max_length=64, description="only outputs assigned to this board"),
 ) -> dict[str, Any]:
-    query = GalleryQuery(q, category, model, _instant(since, "since"), _instant(until, "until"), starred, sort)
+    query = GalleryQuery(q, category, model, _instant(since, "since"), _instant(until, "until"), starred, sort, board_id=board_id)
     items, next_cursor, total = gallery_for(services.files).list(query, cursor=cursor, limit=limit)
     return {"items": [item_json(item, iso) for item in items], "next_cursor": next_cursor, "total": total}
 

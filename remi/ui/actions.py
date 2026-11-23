@@ -19,6 +19,8 @@ server's services themselves.
 from __future__ import annotations
 
 import inspect
+import logging
+import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -26,9 +28,17 @@ from typing import Any
 from remi.ui.errors import ParamError, SchemaError, ValidationError
 from remi.ui.types import Patch, PatchEntry
 
+log = logging.getLogger(__name__)
+
 PATCH_KEYS = frozenset({"value", "choices", "visible", "enabled", "label", "info", "hint", "minimum", "maximum", "step"})
-SPECIAL_KEYS = frozenset({"__toast__", "__outputs__", "__settings__", "__refresh__"})
+SPECIAL_KEYS = frozenset({"__toast__", "__outputs__", "__settings__", "__refresh__", "__advice__", "__capabilities__"})
 TOAST_LEVELS = ("info", "success", "warning", "error")
+DEFAULT_ACTION_TIMEOUT = 30.0
+"""Default timeout (seconds) for isolated extension action execution."""
+
+
+class ActionTimeoutError(TimeoutError):
+    """Raised when an isolated ``@ui.action`` exceeds its timeout."""
 
 
 @dataclass(frozen=True)
@@ -37,6 +47,8 @@ class ActionSpec:
     func: Callable[..., Any]
     gpu: bool = False
     """Queue behind generation (runs under the generation lock)."""
+    timeout: float | None = None
+    """Optional timeout in seconds for isolated execution (``None``: default)."""
 
 
 @dataclass
@@ -61,12 +73,12 @@ class ActionContext:
     page tasks hold it). ``None``: the WebUI's ``call_queue.queue_lock``."""
 
 
-def action(name: str | None = None, *, gpu: bool = False):
+def action(name: str | None = None, *, gpu: bool = False, timeout: float | None = None):
     """Register a method (or function) as an action named ``name``
     (default: the function name)."""
 
     def decorate(func):
-        func.__remi_action__ = ActionSpec(name or func.__name__, func, gpu)
+        func.__remi_action__ = ActionSpec(name or func.__name__, func, gpu, timeout)
         return func
 
     if callable(name):  # used bare: @ui.action
@@ -106,6 +118,87 @@ def call_action(owner: Any, name: str, ctx: ActionContext, values: Mapping[str, 
         raise ValidationError([ParamError(f"expected an object of named values, got {type(values).__name__}", owner=ctx.owner or None)])
     bound = spec.func if inspect.ismodule(owner) else spec.func.__get__(owner, type(owner))
     return check_patch(bound(ctx, dict(values)) or {})
+
+
+def call_action_isolated(
+    owner: Any,
+    name: str,
+    ctx: ActionContext,
+    values: Mapping[str, Any] | None,
+    *,
+    timeout: float | None = None,
+    extension: str | None = None,
+    return_toast: bool = True,
+) -> Patch:
+    """Run ``owner``'s action ``name`` with timeout and error isolation.
+
+    Client input errors (:class:`ValidationError`) and missing actions
+    (:class:`KeyError`) propagate normally. Runtime failures and timeouts are
+    recorded in :data:`remi.ui.manifest.diagnostics` and, when
+    ``return_toast=True``, turned into a safe error toast patch so a buggy
+    extension action never crashes the rest of the page or server.
+    """
+
+    from remi.ui.manifest import diagnostics
+
+    spec = actions_of(owner).get(name)
+    if spec is None:
+        raise KeyError(f"no action {name!r}")
+    if values is None:
+        values = {}
+    if not isinstance(values, Mapping):
+        raise ValidationError([ParamError(f"expected an object of named values, got {type(values).__name__}", owner=ctx.owner or None)])
+
+    effective_timeout = timeout if timeout is not None else spec.timeout
+    diag_owner = extension or ctx.owner or type(owner).__name__
+    bound = spec.func if inspect.ismodule(owner) else spec.func.__get__(owner, type(owner))
+
+    def _run() -> Patch:
+        return check_patch(bound(ctx, dict(values)) or {})
+
+    if effective_timeout is None or effective_timeout <= 0:
+        try:
+            return _run()
+        except (ValidationError, KeyError):
+            raise
+        except Exception as error:
+            log.warning("isolated action %s.%s failed: %s", diag_owner, name, error, exc_info=True)
+            diagnostics.record_action_error(diag_owner, name, f"{type(error).__name__}: {error}", timed_out=False)
+            if not return_toast:
+                raise
+            return toast(f"Action {name} failed: {error}", level="error")
+
+    result_box: dict[str, Any] = {}
+    done = threading.Event()
+
+    def _worker() -> None:
+        try:
+            result_box["patch"] = _run()
+        except BaseException as error:
+            result_box["error"] = error
+        finally:
+            done.set()
+
+    thread = threading.Thread(target=_worker, name=f"remi-action-{name}", daemon=True)
+    thread.start()
+    if not done.wait(effective_timeout):
+        msg = f"timed out after {effective_timeout:.1f}s"
+        log.warning("isolated action %s.%s %s", diag_owner, name, msg)
+        diagnostics.record_action_error(diag_owner, name, msg, timed_out=True)
+        if not return_toast:
+            raise ActionTimeoutError(f"action {name!r} {msg}")
+        return toast(f"Action {name} {msg}", level="error")
+
+    error = result_box.get("error")
+    if error is not None:
+        if isinstance(error, (ValidationError, KeyError)):
+            raise error
+        log.warning("isolated action %s.%s failed: %s", diag_owner, name, error)
+        diagnostics.record_action_error(diag_owner, name, f"{type(error).__name__}: {error}", timed_out=False)
+        if not return_toast:
+            raise error
+        return toast(f"Action {name} failed: {error}", level="error")
+    return result_box["patch"]
 
 
 def update(**props: Any) -> PatchEntry:
@@ -185,6 +278,11 @@ def check_patch(patch: Mapping[str, Any]) -> Patch:
     result: Patch = {}
     for key, entry in patch.items():
         if key in SPECIAL_KEYS:
+            if key == "__advice__":
+                if not isinstance(entry, list) or not all(isinstance(item, Mapping) for item in entry):
+                    raise SchemaError("__advice__ takes a list of objects")
+                result[key] = [dict(item) for item in entry]
+                continue
             if not isinstance(entry, Mapping):
                 raise SchemaError(f"{key} takes an object")
             if key == "__toast__" and entry.get("level", "info") not in TOAST_LEVELS:
@@ -214,6 +312,16 @@ def merge_patches(*patches: Mapping[str, Any]) -> Patch:
             if key == "__toast__" and key in merged:
                 previous = merged[key]
                 merged[key] = {"level": entry.get("level", previous.get("level", "info")), "message": f"{message_english(previous['message'])}; {message_english(entry['message'])}"}
+            elif key == "__advice__":
+                existing = list(merged.get(key) or [])
+                seen_codes = {item.get("code") for item in existing if isinstance(item, Mapping) and item.get("code")}
+                for item in entry if isinstance(entry, list) else []:
+                    code = item.get("code") if isinstance(item, Mapping) else None
+                    if not code or code not in seen_codes:
+                        existing.append(dict(item) if isinstance(item, Mapping) else item)
+                        if code:
+                            seen_codes.add(code)
+                merged[key] = existing
             else:
                 merged[key] = {**merged.get(key, {}), **entry}
     return merged
