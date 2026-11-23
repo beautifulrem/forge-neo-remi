@@ -15,6 +15,8 @@ import { persist } from "zustand/middleware"
 import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
 import { cjkSpacing } from "./cjk-spacing"
+// English needs only its plural forms ("_one" / "_other" of keys written for the other count)
+import englishPlurals from "../locales/en.json"
 
 export const DEFAULT_LOCALE = "en"
 
@@ -136,7 +138,7 @@ void i18n.use(initReactI18next).use(cjkSpacing).init({
   interpolation: { escapeValue: false },
   // "启用{{title}}" + "ADetailer" → "启用 ADetailer" (cjk-spacing.ts)
   postProcess: ["cjkSpacing"],
-  resources: {},
+  resources: { [DEFAULT_LOCALE]: { chrome: englishPlurals } },
   react: { bindI18nStore: "added" },
 })
 

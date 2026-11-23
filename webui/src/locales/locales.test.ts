@@ -7,6 +7,7 @@
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
+import en from "./en.json"
 import zh from "./zh-CN.json"
 
 const sources = import.meta.glob<string>(["../**/*.{ts,tsx}", "!../**/*.test.*", "!../api/mock/**"], {
@@ -50,6 +51,19 @@ describe("zh-CN chrome catalog", () => {
     for (const [key, value] of Object.entries(zh as Record<string, string>)) {
       const vars = (s: string) => [...s.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort()
       expect(vars(value), key).toEqual(vars(key))
+    }
+  })
+})
+
+describe("en chrome catalog", () => {
+  it("holds only plural forms of chrome strings, with the key's placeholders", () => {
+    const keys = chromeKeys()
+    const vars = (s: string) => [...s.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort()
+    for (const [key, value] of Object.entries(en as Record<string, string>)) {
+      const base = key.replace(/_(one|other)$/, "")
+      expect(base, key).not.toBe(key)
+      expect(keys.has(base) || base in zh, key).toBe(true) // also strings sent through a renamed t()
+      expect(vars(value), key).toEqual(vars(base))
     }
   })
 })
