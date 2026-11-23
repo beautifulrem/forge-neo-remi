@@ -1356,6 +1356,7 @@ class ChainRunner:
                     return  # cancelled, deleted, or re-run (another thread runs it now)
                 if error is not None or result is None:
                     self._fail_chain(chain_id, stage.index, error or "prompt upsampling returned nothing")
+                    self.queue.recheck_done()  # the pipeline ended here, where no job's end looks at the queue
                     return
                 self.store.update_stage(chain_id, stage.index, status="completed", output_prompt=result, finished=time.time())
                 self.store.put_cached(stage_hash, stage.kind, output_prompt=result)
@@ -1364,8 +1365,8 @@ class ChainRunner:
                 self._publish_stage_completed(updated.stages[stage.index])
                 self._publish_chain(updated)
                 should_advance = updated.status in ("running", "queued")
-            if should_advance:
-                self._advance(chain_id)
+            if should_advance and self._advance(chain_id).status in ("completed", "failed"):
+                self.queue.recheck_done()  # the last stage, or the next one refused: as above
         except Exception:
             log.exception("prompt upsampling stage of chain %s", chain_id)
         finally:
@@ -1457,8 +1458,6 @@ class ChainRunner:
             return datetime.fromtimestamp(ts, UTC).isoformat() if ts is not None else None
 
         self.bus.publish("chain.updated", chain_id=chain.id, **chain_json(chain, _iso))
-        if chain.status in ("completed", "failed"):  # a cancel by hand: someone is at the computer
-            self.queue.recheck_done()
 
 
 __all__ = [

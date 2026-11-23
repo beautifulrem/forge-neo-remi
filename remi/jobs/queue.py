@@ -220,6 +220,7 @@ class JobQueue:
         self._claimed: Job | None = None
         """taken from the queue (maybe still waiting for the lock)"""
         self._current: Job | None = None
+        self._done_lock = threading.Lock()
         """holding the lock, generating"""
         self._begun = False
         """``shared.state.begin()`` ran for the current job"""
@@ -819,10 +820,11 @@ class JobQueue:
         """The last queued job finished: ``queue_completion_action``, once
         (the setting goes back to "Do nothing", see remi/jobs/completion.py)."""
 
-        action = str(self.option("queue_completion_action", completion.NOTHING))
-        if action == completion.NOTHING or action not in completion.ACTIONS:
-            return
-        self.set_option("queue_completion_action", completion.NOTHING)
+        with self._done_lock:  # the worker and a pipeline's upsampling thread may both get here
+            action = str(self.option("queue_completion_action", completion.NOTHING))
+            if action == completion.NOTHING or action not in completion.ACTIONS:
+                return
+            self.set_option("queue_completion_action", completion.NOTHING)
         self.when_done(action)
 
     @staticmethod

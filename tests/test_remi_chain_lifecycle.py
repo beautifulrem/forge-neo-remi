@@ -403,6 +403,36 @@ def test_a_pipeline_whose_upsampling_fails_runs_the_completion_action(tmp_path):
         assert ran == ["Shut down"]
 
 
+def test_a_pipeline_that_ends_during_the_request_does_not_run_the_completion_action(tmp_path):
+    with rig(tmp_path) as r:
+        first = r.wait(r.runner.create_chain(seeded(5)).id)
+        assert first.status == "completed" and r.queue.wait_idle()
+        ran = completion_action(r.queue, "Shut down")
+        again = r.runner.rerun_chain(first.id)
+        assert again.status == "completed"  # every stage cached: done before the request answers
+        assert r.runner.wait_idle() and r.queue.wait_idle()
+        assert ran == []  # the person who clicked is at the computer
+
+
+def test_the_completion_action_runs_once_when_two_threads_find_the_queue_done(tmp_path):
+    with rig(tmp_path) as r:
+        ran = completion_action(r.queue, "Shut down")
+        read = r.queue.option
+
+        def slow_read(name, default):  # widens the window between reading the action and switching it off
+            value = read(name, default)
+            time.sleep(0.02)
+            return value
+
+        r.queue.option = slow_read
+        threads = [threading.Thread(target=r.queue.recheck_done) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        assert ran == ["Shut down"]
+
+
 def test_a_pipeline_cancelled_by_hand_does_not_run_the_completion_action(tmp_path):
     gate = threading.Event()
 
