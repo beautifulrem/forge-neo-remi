@@ -5,6 +5,10 @@
 .github
 .vscode
 .DS_Store
+# other dotfiles and notes at the root (tool caches, local editor and assistant files)
+/.*
+/*.md
+**/*.log
 **/__pycache__
 **/*.pyc
 /.uv-cache
@@ -39,6 +43,7 @@
 /webui-user.bat
 /webui-user.sh
 /webui.settings.sh
+/extensions-builtin/*/presets.json
 
 # weights anywhere
 **/*.bin

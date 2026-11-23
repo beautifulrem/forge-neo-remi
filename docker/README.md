@@ -38,17 +38,22 @@ index of <https://download.pytorch.org/whl/>) and `TORCH_PACKAGES` (default
 
 ```bash
 # NVIDIA
-docker run --gpus all -p 7860:7860 -v remi-data:/home/remi/data remi-webui
+docker run --gpus all -p 127.0.0.1:7860:7860 -v remi-data:/home/remi/data remi-webui
 # AMD (ROCm): pass the kernel driver and the GPU devices
 docker run --device /dev/kfd --device /dev/dri --group-add video \
-    -p 7860:7860 -v remi-data:/home/remi/data remi-webui-rocm
+    -p 127.0.0.1:7860:7860 -v remi-data:/home/remi/data remi-webui-rocm
 ```
 
 Open `http://localhost:7860/`. Extra launch options go after the image name or
-in `COMMANDLINE_ARGS` (for example `-e COMMANDLINE_ARGS="--auth user:password"`);
-the container always adds `--listen` and `--data-dir /home/remi/data`. Read
-[Security and Remote Access](../docs/remi-webui/usage.md#security-and-remote-access) before
-exposing the port beyond your machine.
+in `COMMANDLINE_ARGS`; the container always adds `--listen` and
+`--data-dir /home/remi/data`. `-p 127.0.0.1:7860:7860` publishes the port on this
+machine only, because the server inside listens on every interface and has no
+login until you add one. Before publishing it further (`-p 7860:7860`), read
+[Security and Remote Access](../docs/remi-webui/usage.md#security-and-remote-access)
+and set a login with `--auth-file` from a mounted file (for example
+`-v ./logins.txt:/run/remi/logins.txt:ro remi-webui --auth-file /run/remi/logins.txt`):
+a password in `--auth` or `COMMANDLINE_ARGS` shows in `docker inspect` and the
+process list.
 
 ## Data
 

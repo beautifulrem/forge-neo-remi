@@ -51,7 +51,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     REMI_DATA_DIR=/home/remi/data
 
 # uv binary
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.13.8@sha256:5cc1805e2426484abca4ad46ea783bab281fdb225fd82d8ce6d66a81254bac85 /uv /usr/local/bin/uv
 
 # Dependencies (git: extension installs and updates from the Extensions page)
 RUN apt-get update && apt-get install -y --no-install-recommends \

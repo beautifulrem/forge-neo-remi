@@ -28,6 +28,8 @@ __pycache__
 /ui-config.json
 /user.css
 /venv
+/.venv
+.mypy_cache/
 /webui-user.bat
 /webui-user.sh
 /webui.settings.sh
