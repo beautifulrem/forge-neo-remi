@@ -2,6 +2,7 @@ import { TriangleAlert } from "@/components/icons"
 import { Component, type ErrorInfo, type ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import { t } from "@/i18n"
+import { retryFailedLoads } from "@/lib/retryable-lazy"
 
 type Props = {
   children: ReactNode
@@ -30,6 +31,21 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error(error, info.componentStack)
   }
 
+  componentDidMount() {
+    window.addEventListener("online", this.retry)
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener("online", this.retry)
+  }
+
+  /** Renders the children again, with chunks that failed to load fetched anew (a boundary with no message of its own, such as a shell control's, recovers when the browser is back online). */
+  retry = () => {
+    if (!this.state.error) return
+    retryFailedLoads()
+    this.setState({ error: null })
+  }
+
   render() {
     const { error } = this.state
     if (!error) return this.props.children
@@ -48,7 +64,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="font-medium">{t("Something went wrong")}</p>
           <p className="max-w-md text-sm break-words text-muted-foreground">{error.message}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => this.setState({ error: null })}>
+        <Button variant="outline" size="sm" onClick={this.retry}>
           {t("Try again")}
         </Button>
       </div>
