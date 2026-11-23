@@ -24,7 +24,7 @@ function flatten(nodes: readonly NetworkFolder[], expanded: ReadonlySet<string>,
 const ancestors = (path: string) => path.split("/").slice(0, -1).map((_, i, parts) => parts.slice(0, i + 1).join("/"))
 
 export function FolderTree({ folders, total, selected, onSelect, className }: { folders: readonly NetworkFolder[]; total: number; selected: string; onSelect: (path: string) => void; className?: string }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const id = useId()
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(ancestors(selected)))
   const [focused, setFocused] = useState(selected)
@@ -127,7 +127,7 @@ export function FolderTree({ folders, total, selected, onSelect, className }: { 
             <span className="min-w-0 flex-1 truncate" title={row.path || undefined}>
               {row.name}
             </span>
-            <span className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums">{row.count.toLocaleString()}</span>
+            <span className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums">{row.count.toLocaleString(i18n.language)}</span>
           </li>
         )
       })}

@@ -10,7 +10,7 @@ import type { EditorView } from "@codemirror/view"
 import { api } from "@/api/endpoints"
 import { completionAcceptKey, type DecoratedCompletion } from "@/features/prompt-editor/completion-registry"
 import { promptKind, type PromptScope, promptScope } from "@/features/prompt-editor/facets"
-import { t } from "@/i18n"
+import { i18n, t } from "@/i18n"
 import { cn } from "@/lib/utils"
 import { type CompletionItem, type CompletionQuery, type PromptToolsConfig, promptToolsApi } from "../api"
 import { loadConfig } from "../queries"
@@ -129,7 +129,7 @@ function info(item: CompletionItem, config: PromptToolsConfig): (() => Node) | u
   const rows: [string, string][] = []
   const category = categoryName(tags.source, item.category)
   if ((item.type === "tag" || item.type === "extra") && category) rows.push([t("Category"), category])
-  if (item.count) rows.push([t("Posts"), item.count.toLocaleString()])
+  if (item.count) rows.push([t("Posts"), item.count.toLocaleString(i18n.language)])
   if (item.alias) rows.push([t("Alias"), item.alias])
   if (item.translation) rows.push([t("Translation"), item.translation])
   if (item.meta && item.type !== "wildcard") rows.push([item.type === "lora" ? t("Base model") : item.type === "wildcard-value" ? t("Wildcard") : t("Note"), item.meta])

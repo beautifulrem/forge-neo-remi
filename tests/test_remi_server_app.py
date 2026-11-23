@@ -213,6 +213,18 @@ def test_i18n_catalog_merges_and_caches(server, monkeypatch, tmp_path):
     assert {"id": "zh_CN", "name": "简体中文"} in server.client.get("/api/v2/app").json()["locales"]
 
 
+def test_catalogs_named_outside_the_locale_format_are_not_offered(server, monkeypatch, tmp_path):
+    from modules import localization, shared
+
+    good = tmp_path / "zh_CN.json"
+    good.write_text("{}", encoding="utf8")
+    monkeypatch.setattr(localization, "localizations", {"zh_CN": [str(good)], "zh-Hans (Stable)": [str(good)]})
+    monkeypatch.setattr(shared.opts, "localization", "zh-Hans (Stable)", raising=False)
+    data = server.client.get("/api/v2/app").json()
+    assert [entry["id"] for entry in data["locales"]] == ["zh_CN"]
+    assert data["locale"] is None
+
+
 def test_the_real_zh_cn_catalog_is_served(server, monkeypatch):
     from modules import localization
 

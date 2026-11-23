@@ -1,7 +1,7 @@
 import { act, render, screen } from "@testing-library/react"
 import { useTranslation } from "react-i18next"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { activateLocale, i18n, localeName, textDirection, useLocale } from "./index"
+import { activateLocale, browserLocale, i18n, initialLocale, localeName, textDirection, useLocale } from "./index"
 
 function Probe() {
   const { t } = useTranslation()
@@ -45,6 +45,36 @@ describe("locale switching", () => {
     expect(i18n.t("System")).toBe("系统") // the settings category
     expect(i18n.t("Start", { context: "runs" })).toBe("开始")
     expect(i18n.t("Start")).toBe("起始") // a slider's start, from the server catalog
+  })
+
+  it("keeps the language chosen last when an earlier choice is still loading", async () => {
+    let release: () => void = () => {}
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = () => resolve(new Response("{}", { headers: { "Content-Type": "application/json" } }))
+        }),
+    )
+    const slow = activateLocale("ja_JP")
+    await activateLocale("en")
+    release()
+    await slow
+    expect(i18n.language).toBe("en")
+    expect(useLocale.getState().locale).toBe("en")
+  })
+
+  it("uses English for a catalog whose name is no language tag, so dates still format", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { headers: { "Content-Type": "application/json" } }))
+    await activateLocale("zh-Hans (Stable)")
+    expect(i18n.language).toBe("en")
+    expect(() => new Date(0).toLocaleString(i18n.language)).not.toThrow()
+  })
+
+  it("ignores a stored language choice of the wrong type", async () => {
+    localStorage.setItem("remi-locale", JSON.stringify({ state: { chosen: 5 }, version: 1 }))
+    await useLocale.persist.rehydrate()
+    expect(useLocale.getState().chosen).toBeNull()
+    expect(initialLocale()).toBe(browserLocale())
   })
 
   it("writes right-to-left languages right to left (<html dir>)", async () => {

@@ -62,14 +62,17 @@ def normalize(locale: str) -> str | None:
 
 
 def locales() -> list[dict[str, str]]:
-    return [{"id": name, "name": LOCALE_NAMES.get(name, name)} for name in sorted(available())]
+    """The catalogs the language menu offers: only names that are language tags
+    (a file such as ``zh-Hans (Stable).json`` would break the browser's formatters)."""
+
+    return [{"id": name, "name": LOCALE_NAMES.get(name, name)} for name in sorted(available()) if LOCALE_RE.match(name)]
 
 
 def default_locale() -> str | None:
     from modules import shared
 
     value = getattr(shared.opts, "localization", "None")
-    return value if value and value != "None" else None
+    return value if value and value != "None" and LOCALE_RE.match(value) else None
 
 
 def catalog(locale: str) -> tuple[dict[str, str], str]:

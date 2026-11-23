@@ -85,13 +85,36 @@ export const useLocale = create<LocaleState>()(
       direction: "ltr",
       setLocale: (locale) => set({ chosen: locale }),
     }),
-    { name: "remi-locale", version: 1, partialize: ({ chosen }) => ({ chosen }) },
+    {
+      name: "remi-locale",
+      version: 1,
+      partialize: ({ chosen }) => ({ chosen }),
+      // a stored value of another type (edited by hand, another app on this origin) is no choice
+      merge: (stored, current) => {
+        const chosen = (stored as { chosen?: unknown } | null)?.chosen
+        return { ...current, chosen: typeof chosen === "string" && chosen ? chosen : null }
+      },
+    },
   ),
 )
 
 /** The locale to use before the server has told us its default. */
 export function initialLocale(): string {
-  return useLocale.getState().chosen ?? browserLocale()
+  const chosen: unknown = useLocale.getState().chosen
+  return typeof chosen === "string" && chosen ? chosen : browserLocale()
+}
+
+/**
+ * `locale` as a BCP 47 tag the browser's formatters accept ("zh_CN" → "zh-CN"),
+ * or English: a catalog named otherwise ("zh-Hans (Stable)") would make every
+ * `toLocaleString(i18n.language)` throw.
+ */
+export function languageTag(locale: string): string {
+  try {
+    return Intl.getCanonicalLocales(toBcp47(locale))[0] ?? DEFAULT_LOCALE
+  } catch {
+    return DEFAULT_LOCALE
+  }
 }
 
 export function browserLocale(): string {
@@ -118,6 +141,8 @@ void i18n.use(initReactI18next).use(cjkSpacing).init({
 })
 
 const loaded = new Set<string>()
+/** The newest activateLocale call: an older one that finishes loading later does not switch. */
+let activation = 0
 
 async function loadChrome(locale: string): Promise<Record<string, string>> {
   const loader = chromeCatalogs[`../locales/${locale}.json`]
@@ -137,13 +162,15 @@ async function loadServer(locale: string): Promise<Record<string, string> | null
 
 /** Loads both catalogs for `locale` (once) and switches to it. */
 export async function activateLocale(locale: string): Promise<void> {
-  const lng = toBcp47(locale)
+  const call = ++activation
+  const lng = languageTag(locale)
   if (lng !== DEFAULT_LOCALE && !loaded.has(lng)) {
     const [chrome, server] = await Promise.all([loadChrome(lng), loadServer(lng)])
     i18n.addResourceBundle(lng, "chrome", chrome, true, true)
     if (server) i18n.addResourceBundle(lng, "server", server, true, true)
     if (server) loaded.add(lng)
   }
+  if (call !== activation) return // the user picked another language while this one loaded
   await i18n.changeLanguage(lng)
   const direction = textDirection(lng)
   document.documentElement.lang = lng

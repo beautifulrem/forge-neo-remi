@@ -61,7 +61,7 @@ function useNotificationPermission() {
 
 /** The weights in memory (the former "List loaded models"), fetched when asked for. */
 function LoadedWeights() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [shown, setShown] = useState(false)
   const loaded = useQuery({ ...loadedModelsQuery, enabled: shown })
   if (!shown) {
@@ -108,7 +108,7 @@ function LoadedWeights() {
             {loaded.data.items.map((item, index) => (
               <tr key={`${item.name}-${index}`} className="border-t">
                 <td className="px-1 py-1 font-mono">{item.name}</td>
-                <td className="px-1 py-1 text-right">{item.memory_mb != null ? t("{{size}} MiB", { size: item.memory_mb.toLocaleString() }) : "—"}</td>
+                <td className="px-1 py-1 text-right">{item.memory_mb != null ? t("{{size}} MiB", { size: item.memory_mb.toLocaleString(i18n.language) }) : "—"}</td>
                 <td className="px-1 py-1 text-right font-mono">{item.device ?? "—"}</td>
               </tr>
             ))}

@@ -154,7 +154,7 @@ function SortMenu({ sort, order, onChange }: { sort: SortKey; order: SortOrder; 
 }
 
 function SearchBox({ value, onChange, inputRef, count }: { value: string; onChange: (value: string) => void; inputRef: RefObject<HTMLInputElement | null>; count: number | null }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   // the long hint only where it fits; a narrow box (phone, slim drawer) says just "Search…"
   const placeholder = useFittingPlaceholder(inputRef, [t("Search names, folders, tags…"), t("Search…")])
   return (
@@ -179,7 +179,7 @@ function SearchBox({ value, onChange, inputRef, count }: { value: string; onChan
         className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent pr-16 pl-8 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30 [&::-webkit-search-cancel-button]:hidden"
       />
       <div className="absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-1">
-        {count !== null ? <span className="text-[0.6875rem] text-muted-foreground tabular-nums">{count.toLocaleString()}</span> : null}
+        {count !== null ? <span className="text-[0.6875rem] text-muted-foreground tabular-nums">{count.toLocaleString(i18n.language)}</span> : null}
         {value ? (
           <Button variant="ghost" size="icon-xs" aria-label={t("Clear search")} onClick={() => onChange("")}>
             <X />
