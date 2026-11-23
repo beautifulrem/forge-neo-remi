@@ -389,6 +389,45 @@ def test_upsampling_through_an_endpoint_leaves_the_generation_lock_free(tmp_path
         assert seen["locked"] is False and seen["thread"].startswith("remi-chain-upsample")
 
 
+def _wait_for(condition, timeout: float = 10.0) -> None:
+    deadline = time.monotonic() + timeout
+    while not condition():
+        assert time.monotonic() < deadline, "timed out"
+        time.sleep(0.01)
+
+
+@pytest.mark.parametrize("stale", ["fails", "answers"])
+def test_a_cancelled_upsampling_request_that_answers_late_leaves_the_rerun_alone(tmp_path, stale):
+    """Cancel while the endpoint is slow, then re-run: the cancelled request's late failure must not
+    fail the re-run, and its late answer must not stand in for the re-run's own."""
+
+    gates: list[threading.Event] = []
+
+    def upsampler(stage, prompt, outputs):
+        gate = threading.Event()
+        gates.append(gate)
+        first = len(gates) == 1
+        assert gate.wait(10)
+        if first and stale == "fails":
+            raise TimeoutError("endpoint timed out")
+        return "stale prompt" if first else "fresh prompt"
+
+    with rig(tmp_path, upsampler=upsampler) as r:
+        chain = r.runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "x"}), *seeded(5)[:1]])
+        _wait_for(lambda: len(gates) == 1)
+        r.runner.cancel_chain(chain.id)
+        r.runner.rerun_chain(chain.id, force_stages=[0])
+        _wait_for(lambda: len(gates) == 2)
+        gates[0].set()  # the cancelled request answers while the re-run's is still going
+        _wait_for(lambda: len(r.runner._threads) == 1)  # the cancelled run's thread is done
+        middle = r.runner.store.get_chain(chain.id)
+        assert middle.status == "running" and middle.stages[0].status == "running"
+        gates[1].set()
+        done = r.wait(chain.id)
+        assert done.status == "completed"
+        assert done.stages[0].output_prompt == "fresh prompt"
+
+
 def completion_action(queue, action: str) -> list[str]:
     """Arm ``queue_completion_action``; returns the actions the queue ran."""
 

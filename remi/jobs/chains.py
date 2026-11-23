@@ -1316,7 +1316,7 @@ class ChainRunner:
                     self.store.update_stage(chain_id, next_stage.index, status="running", stage_hash=stage_hash, cached=False, started=now)
                     thread = threading.Thread(
                         target=self._run_upsample,
-                        args=(chain_id, next_stage, stage_hash, upstream_prompt, list(upstream_outputs)),
+                        args=(chain_id, next_stage, stage_hash, now, upstream_prompt, list(upstream_outputs)),
                         name=f"remi-chain-upsample-{chain_id[:6]}",
                         daemon=True,
                     )
@@ -1350,7 +1350,7 @@ class ChainRunner:
                 self._publish_chain(updated_chain)
                 return updated_chain
 
-    def _run_upsample(self, chain_id: str, stage: StageRun, stage_hash: str, upstream_prompt: str | None, upstream_outputs: list[str]) -> None:
+    def _run_upsample(self, chain_id: str, stage: StageRun, stage_hash: str, started: float, upstream_prompt: str | None, upstream_outputs: list[str]) -> None:
         try:
             result: str | None = None
             error: str | None = None
@@ -1358,16 +1358,16 @@ class ChainRunner:
                 if stage.config.get("local_model_path"):
                     # a local model loads into VRAM: behind the generation lock, on the main thread
                     with self.queue.lock:
-                        if self._stage_running(chain_id, stage.index, stage_hash):
+                        if self._stage_running(chain_id, stage.index, stage_hash, started):
                             result = self.queue.dispatch(self.upsampler, stage, upstream_prompt, upstream_outputs)
-                elif self._stage_running(chain_id, stage.index, stage_hash):
+                elif self._stage_running(chain_id, stage.index, stage_hash, started):
                     # the prompt tools' endpoint is only a network request: jobs go on meanwhile
                     result = self.upsampler(stage, upstream_prompt, upstream_outputs)
             except Exception as exc:
                 error = f"{type(exc).__name__}: {exc}"
             should_advance = False
             with self._lock:
-                if not self._stage_running(chain_id, stage.index, stage_hash):
+                if not self._stage_running(chain_id, stage.index, stage_hash, started):
                     return  # cancelled, deleted, or re-run (another thread runs it now)
                 if error is not None or result is None:
                     self._fail_chain(chain_id, stage.index, error or "prompt upsampling returned nothing")
@@ -1387,15 +1387,16 @@ class ChainRunner:
         finally:
             self._threads.discard(threading.current_thread())
 
-    def _stage_running(self, chain_id: str, stage_index: int, stage_hash: str) -> bool:
-        """Whether this run of the stage is still the one wanted (a re-run of the
-        chain starts the stage over, maybe with other parameters)."""
+    def _stage_running(self, chain_id: str, stage_index: int, stage_hash: str, started: float) -> bool:
+        """Whether this run of the stage is still the one wanted. A re-run of the
+        chain starts the stage over, maybe with the same parameters: ``started``
+        (when this run began) tells a cancelled run's late answer from the re-run's."""
 
         chain = self.store.get_chain(chain_id)
         if chain is None or chain.status in TERMINAL_CHAIN_STATUSES or stage_index >= len(chain.stages):
             return False
         stage = chain.stages[stage_index]
-        return stage.status == "running" and stage.stage_hash == stage_hash
+        return stage.status == "running" and stage.stage_hash == stage_hash and stage.started == started
 
     def on_job_finished(self, job: Job) -> None:
         """Completion hook called by :class:`JobQueue` when a job reaches a final status
