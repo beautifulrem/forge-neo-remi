@@ -610,3 +610,30 @@ def test_a_cursor_too_long_for_int_starts_at_the_first_page():
     from remi.files import decode_offset, encode_cursor
 
     assert decode_offset(encode_cursor("1" * 5000)) == 0
+
+
+def test_starred_and_boarded_unsaved_outputs_survive_housekeeping(tmp_path):
+    import time
+
+    from remi.jobs import run_inline
+    from remi.library import GalleryIndex
+    from remi.server.services import Services
+
+    services = Services.create(tmp_path, dispatch=run_inline, realtime=False, housekeeping=False)
+    try:
+        store = services.files
+        starred, boarded, plain = (store.save_output_image(Image.new("RGB", (8, 8)), None) for _ in range(3))
+        index = GalleryIndex(store)
+        try:
+            index.set_starred([starred.id], True)
+            board = index.create_board("keep")
+            index.add_to_board(board["id"], [boarded.id])
+        finally:
+            index.close()
+        store._db.execute("UPDATE files SET created = ?", (time.time() - 30 * 86400,))
+        services.housekeeping()
+        assert store.get(starred.id) is not None and Path(starred.path).exists()
+        assert store.get(boarded.id) is not None and Path(boarded.path).exists()
+        assert store.get(plain.id) is None
+    finally:
+        services.close()

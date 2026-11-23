@@ -111,7 +111,7 @@ def _housekeeping_setup(services, monkeypatch, *, retention=7, prune_uploads=Non
     monkeypatch.setattr(services.files, "prune_uploads", recorders["prune_uploads"])
     monkeypatch.setattr(services.files, "prune_unsaved", recorders["prune_unsaved"])
     monkeypatch.setattr(services.files, "scan_outputs", recorders["scan_outputs"])
-    monkeypatch.setattr(remi.library, "gallery_for", lambda files: SimpleNamespace(prune_exports=recorders["prune_exports"]))
+    monkeypatch.setattr(remi.library, "gallery_for", lambda files: SimpleNamespace(prune_exports=recorders["prune_exports"], kept_ids=lambda: {"starred-file"}))
     return recorders
 
 
@@ -121,7 +121,7 @@ def test_housekeeping_prunes_with_the_retention_setting_and_indexes_outputs(serv
         services.housekeeping()
     [(args, kwargs)] = recorders["prune_uploads"].calls
     assert args == (0.5 * 86400,) and kwargs == {"keep": services.store.referenced_strings()}
-    assert recorders["prune_unsaved"].calls == [((0.5 * 86400,), {"keep": services.store.referenced_strings()})]
+    assert recorders["prune_unsaved"].calls == [((0.5 * 86400,), {"keep": services.store.referenced_strings() | {"starred-file"}})]
     assert recorders["prune_exports"].calls == [((), {})]
     assert recorders["scan_outputs"].calls == [((["/outputs/txt2img"],), {})]
     messages = [record.getMessage() for record in caplog.records]

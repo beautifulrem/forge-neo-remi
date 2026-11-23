@@ -423,6 +423,13 @@ class GalleryIndex:
 
     # region Changes
 
+    def kept_ids(self) -> set[str]:
+        """Outputs the user chose to keep: starred or on a board (housekeeping spares them)."""
+
+        with self._lock:
+            rows = self._db.execute("SELECT file_id FROM gallery_meta WHERE starred = 1 UNION SELECT file_id FROM board_items").fetchall()
+        return {file_id for (file_id,) in rows}
+
     def set_starred(self, ids: list[str], starred: bool) -> int:
         self.sync()
         ids = list(dict.fromkeys(ids))[:MAX_ZIP_FILES]

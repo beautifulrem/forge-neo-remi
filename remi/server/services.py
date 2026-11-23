@@ -182,7 +182,10 @@ class Services:
             removed = self.files.prune_uploads(days * 86400, keep=referenced)
             if removed:
                 log.info("Removed %d old upload(s)", removed)
-            removed = self.files.prune_unsaved(days * 86400, keep=referenced)
+            from remi.library import gallery_for
+
+            # a starred image or one on a board was chosen to be kept, saved or not
+            removed = self.files.prune_unsaved(days * 86400, keep=referenced | gallery_for(self.files).kept_ids())
             if removed:
                 log.info("Removed %d old unsaved output(s)", removed)
         except Exception:
