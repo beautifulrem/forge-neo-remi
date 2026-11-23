@@ -4,9 +4,9 @@
  * capability/parameter readouts, JSON import/export, and one-click Apply.
  * Lazily loaded.
  */
-import { useMutation, useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
 import { BookOpen, ClipboardPaste, Download, Plus, Search, Trash2, Upload } from "@/components/icons"
-import { useRef, useState } from "react"
+import { useDeferredValue, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import type { FormTab } from "@/api/types"
@@ -58,7 +58,10 @@ export function RecipeManager() {
   const [deleting, setDeleting] = useState<Recipe | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
 
-  const list = useQuery(recipesQuery({ ...(search.trim() ? { q: search.trim() } : {}), ...(family ? { model_family: family } : {}) }))
+  const q = useDeferredValue(search.trim())
+  const filtered = q !== "" || family !== ""
+  // the previous list stays while a new search loads, so typing does not flash the skeleton
+  const list = useQuery({ ...recipesQuery({ ...(q ? { q } : {}), ...(family ? { model_family: family } : {}) }), placeholderData: keepPreviousData })
   const recipes = list.data?.items ?? []
 
   const captured = captureOpen ? captureFormOverrides(captureTab) : { core_patch: {}, scripts_patch: {}, count: 0 }
@@ -135,7 +138,7 @@ export function RecipeManager() {
       downloadJson("remi-recipes.json", bundle)
       toast.success(t("Exported {{count}} recipes", { count: bundle.recipes.length }))
     } catch (error) {
-      toast.error(t("Could not save recipe"), { description: errorText(error) })
+      toast.error(t("Could not export the recipes"), { description: errorText(error) })
     }
   }
 
@@ -206,7 +209,7 @@ export function RecipeManager() {
               if (file) void handleImportFile(file)
             }}
           />
-          <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2.5 text-xs" disabled={recipes.length === 0} onClick={() => void handleExportAll()}>
+          <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2.5 text-xs" disabled={!filtered && recipes.length === 0} onClick={() => void handleExportAll()}>
             <Download className="size-3.5" aria-hidden />
             {t("Export JSON")}
           </Button>
@@ -239,6 +242,20 @@ export function RecipeManager() {
           </div>
         ) : list.isError && !list.data ? (
           <LoadFailed error={list.error} onRetry={() => void list.refetch()} />
+        ) : recipes.length === 0 && filtered ? (
+          <div className="flex flex-col items-center gap-2 py-10 text-center">
+            <p className="text-sm font-medium">{t("No recipes match")}</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearch("")
+                setFamily("")
+              }}
+            >
+              {t("Clear filters")}
+            </Button>
+          </div>
         ) : recipes.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-10 text-center">
             <BookOpen className="size-7 text-muted-foreground/45" aria-hidden />
@@ -285,8 +302,8 @@ export function RecipeManager() {
                       variant="ghost"
                       size="icon-sm"
                       className="size-7 text-muted-foreground hover:text-foreground"
-                      aria-label={t("Export JSON")}
-                      title={t("Export JSON")}
+                      aria-label={t("Export this recipe")}
+                      title={t("Export this recipe")}
                       onClick={() => downloadJson(`${recipe.name.replace(/[^a-zA-Z0-9_-]+/g, "-") || recipe.id}.json`, { version: 1, recipes: [recipe] })}
                     >
                       <Download className="size-3.5" />

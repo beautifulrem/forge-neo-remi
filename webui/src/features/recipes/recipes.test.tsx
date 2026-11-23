@@ -97,4 +97,54 @@ describe("Recipes capture and manager UI", () => {
     await waitFor(() => expect(getFormStore("txt2img").getState().values.core?.cfg_scale).toBe(1))
     expect(getFormStore("txt2img").getState().values.sampler?.steps).toBe(8)
   })
+  it("tells a search that matched nothing from an empty library, keeps the list while a search loads, and clears the filters", async () => {
+    let release: (() => void) | null = null
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(typeof input === "string" ? input : (input as Request).url, "http://x")
+      const q = url.searchParams.get("q")
+      if (q === "zzz") {
+        await new Promise<void>((resolve) => {
+          release = resolve
+        })
+        return new Response(JSON.stringify({ items: [], total: 0 }), { status: 200, headers: { "Content-Type": "application/json" } })
+      }
+      return new Response(JSON.stringify({ items: q ? [] : [SAMPLE_RECIPE], total: q ? 0 : 1 }), { status: 200, headers: { "Content-Type": "application/json" } })
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText("Qwen Turbo 8-step")).toBeInTheDocument()
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search recipes…" }), { target: { value: "zzz" } })
+    // while the search is in flight the previous list stays (no skeleton flash)
+    await waitFor(() => expect(release).not.toBeNull())
+    expect(screen.getByText("Qwen Turbo 8-step")).toBeInTheDocument()
+    expect(document.querySelector("[aria-busy=true]")).toBeNull()
+    act(() => release!())
+    expect(await screen.findByText("No recipes match")).toBeInTheDocument()
+    expect(screen.queryByText("No recipes yet")).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }))
+    expect(await screen.findByText("Qwen Turbo 8-step")).toBeInTheDocument()
+    expect(screen.getByRole("searchbox", { name: "Search recipes…" })).toHaveValue("")
+  })
+
+  it("names the export when it fails", async () => {
+    const { toast } = await import("sonner")
+    const error = vi.spyOn(toast, "error")
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (url.includes("/export")) return new Response(JSON.stringify({ detail: "nope" }), { status: 404, headers: { "Content-Type": "application/json" } })
+      return new Response(JSON.stringify({ items: [SAMPLE_RECIPE], total: 1 }), { status: 200, headers: { "Content-Type": "application/json" } })
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    await screen.findByText("Qwen Turbo 8-step")
+    fireEvent.click(screen.getByRole("button", { name: "Export JSON" }))
+    await waitFor(() => expect(error).toHaveBeenCalled())
+    expect(error.mock.calls[0]![0]).toBe("Could not export the recipes")
+  })
 })

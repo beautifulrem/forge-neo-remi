@@ -1651,5 +1651,8 @@
   "Could not save to favorites": "无法保存到收藏",
   "Could not update the favorites": "无法更新收藏",
   "Could not update the history": "无法更新历史",
-  "Could not load the models": "无法加载模型列表"
+  "Could not load the models": "无法加载模型列表",
+  "No recipes match": "没有匹配的配方",
+  "Could not export the recipes": "无法导出配方",
+  "Export this recipe": "导出此配方"
 }
