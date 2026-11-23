@@ -6,6 +6,7 @@ import { keys, queryClient } from "@/api/queries"
 import type { Job } from "@/api/types"
 import { jobOf } from "@/test/api-fixtures"
 import { getFormStore } from "@/ui/form-store"
+import { registerPendingWrite } from "@/ui/pending-writes"
 import { tabOwners } from "@/ui/tab"
 import { cancelEdit, enqueueForm, openJob, saveEdit, useQueueEdit } from "./edit-session"
 import { HistoryList } from "./HistoryList"
@@ -285,6 +286,44 @@ describe("editing a queued job in its form", () => {
     await openJob("j2")
     expect(useQueueEdit.getState().sessions.txt2img).toBeUndefined()
     expect(getFormStore("txt2img").getState().values.core?.prompt).toBe("queued prompt")
+  })
+
+  it("waits for values the form is still writing (a canvas upload) before queueing or updating", async () => {
+    const calls = mockFetch({ "GET /jobs/j1": [200, detail], "PUT /jobs/j1/params": [200, detail], "POST /jobs": [201, { job_id: "new", job_ids: ["new"], seq: 9 }] })
+    const store = getFormStore("txt2img")
+    // a stroke's layer is still being exported: its value lands in the form a moment later
+    const writing = (value: string) => registerPendingWrite("txt2img", async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      store.getState().setValue("core", "prompt", value)
+    })
+    const stop = writing("after the last stroke")
+    try {
+      expect(await enqueueForm("txt2img")).toBe("new")
+      expect((calls.find((call) => call.path === "/jobs")?.body as { core: { prompt: string } }).core.prompt).toBe("after the last stroke")
+    } finally {
+      stop()
+    }
+    await openJob("j1")
+    const again = writing("edited on the canvas")
+    try {
+      expect(await saveEdit("txt2img")).toBe(true)
+      expect((calls.find((call) => call.method === "PUT")?.body as { core: { prompt: string } }).core.prompt).toBe("edited on the canvas")
+    } finally {
+      again()
+    }
+  })
+
+  it("queues nothing when a value the form is writing fails", async () => {
+    const calls = mockFetch({ "POST /jobs": [201, { job_id: "new", job_ids: ["new"], seq: 9 }] })
+    const stop = registerPendingWrite("txt2img", async () => {
+      throw new Error("upload failed")
+    })
+    try {
+      expect(await enqueueForm("txt2img")).toBeNull()
+      expect(calls.some((call) => call.path === "/jobs")).toBe(false)
+    } finally {
+      stop()
+    }
   })
 
   it("adds the form to the queue without tracking it as the form's run", async () => {

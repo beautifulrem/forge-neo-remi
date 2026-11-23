@@ -17,6 +17,7 @@ import { deliver } from "@/features/send-to/send-to"
 import { errorText, toastInvalid } from "@/features/errors/error-text"
 import { t } from "@/i18n"
 import { getFormStore } from "@/ui/form-store"
+import { flushPendingWrites } from "@/ui/pending-writes"
 import { jobRequest, missingInputs } from "@/ui/tab"
 
 export type EditSession = { jobId: string; seq: number; tab: FormTab; title: string }
@@ -70,6 +71,13 @@ export async function saveEdit(tab: FormTab): Promise<boolean> {
   const schema = queryClient.getQueryData<TabSchema>(keys.schema(tab))
   if (!session || !schema) return false
   const store = getFormStore(tab)
+  // canvas layers still uploading after the last stroke go out first, as for Generate
+  try {
+    await flushPendingWrites(tab)
+  } catch (error) {
+    toast.error(t("Could not update the job"), { description: errorText(error) })
+    return false
+  }
   const { core, scripts } = jobRequest(store, schema)
   const missing = missingInputs(schema, { core })
   if (missing.length > 0) {
@@ -110,6 +118,12 @@ export async function enqueueForm(tab: FormTab): Promise<string | null> {
   const schema = queryClient.getQueryData<TabSchema>(keys.schema(tab))
   if (!schema) return null
   const store = getFormStore(tab)
+  try {
+    await flushPendingWrites(tab)
+  } catch (error) {
+    toast.error(t("Could not queue the job"), { description: errorText(error) })
+    return null
+  }
   const request = jobRequest(store, schema)
   const missing = missingInputs(schema, request)
   if (missing.length > 0) {
