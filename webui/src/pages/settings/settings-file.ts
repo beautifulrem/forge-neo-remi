@@ -2,6 +2,12 @@
 import { exportSettings } from "./settings-model"
 import { useSettingsEditor } from "./settings-store"
 
+/** `date` as YYYY-MM-DD on the user's clock (toISOString would give the UTC day). */
+function localDay(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0")
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
 /** Downloads the stored settings (only those differing from their defaults unless `all`). */
 export function downloadSettings(all: boolean) {
   const { saved, schema } = useSettingsEditor.getState()
@@ -10,7 +16,7 @@ export function downloadSettings(all: boolean) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
   link.href = url
-  link.download = `remi-settings-${new Date().toISOString().slice(0, 10)}.json`
+  link.download = `remi-settings-${localDay(new Date())}.json`
   document.body.append(link)
   link.click()
   link.remove()

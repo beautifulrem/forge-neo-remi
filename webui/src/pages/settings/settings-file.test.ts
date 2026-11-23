@@ -32,6 +32,17 @@ describe("downloadSettings", () => {
     useSettingsEditor.setState({ saved: {}, schema: null })
   })
 
+  it("dates the file with the local day, not the UTC one", () => {
+    // 12:00 UTC is already the next day east of UTC+12; the local clock is what the user reads
+    vi.spyOn(Date.prototype, "getFullYear").mockReturnValue(2026)
+    vi.spyOn(Date.prototype, "getMonth").mockReturnValue(9)
+    vi.spyOn(Date.prototype, "getDate").mockReturnValue(20)
+    const { links } = captureDownload()
+    downloadSettings(false)
+    expect(links[0]?.download).toBe("remi-settings-2026-10-20.json")
+    vi.restoreAllMocks()
+  })
+
   it("downloads the changed settings as a dated JSON file and frees the URL afterwards", async () => {
     const { blobs, links, revoke } = captureDownload()
     downloadSettings(false)
