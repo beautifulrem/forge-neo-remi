@@ -32,15 +32,19 @@ export const useRuns = create<RunStore>()(() => ({ runs: { txt2img: IDLE, img2im
 
 export const persistKey = (tab: GenerateTab) => `remi-run:${tab}`
 
-/** What a page load leaves for the next one: the jobs in flight and the loops they belong to. */
+/**
+ * What a page load leaves for the next one in the same tab: the jobs in flight and the loops they
+ * belong to. Kept in session storage, which a reload keeps and other tabs do not share: a tab
+ * opened while this one loops "Generate forever" must not take the loop over and queue it twice.
+ */
 export type PersistedRun = { jobs: string[]; forever: boolean; repeatLeft: number }
 
 function persist(tab: GenerateTab, state: RunState) {
   try {
     if (state.jobs.length > 0 || state.forever || state.repeatLeft > 0) {
       const saved: PersistedRun = { jobs: [...state.jobs], forever: state.forever, repeatLeft: state.repeatLeft }
-      localStorage.setItem(persistKey(tab), JSON.stringify(saved))
-    } else localStorage.removeItem(persistKey(tab))
+      sessionStorage.setItem(persistKey(tab), JSON.stringify(saved))
+    } else sessionStorage.removeItem(persistKey(tab))
   } catch {
     // Storage disabled: restoring after a reload is best-effort.
   }
@@ -50,7 +54,7 @@ function persist(tab: GenerateTab, state: RunState) {
 export function persistedRun(tab: GenerateTab): PersistedRun {
   const ids = (value: unknown) => (Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [])
   try {
-    const raw = JSON.parse(localStorage.getItem(persistKey(tab)) ?? "[]") as unknown
+    const raw = JSON.parse(sessionStorage.getItem(persistKey(tab)) ?? "[]") as unknown
     if (Array.isArray(raw)) return { jobs: ids(raw), forever: false, repeatLeft: 0 }
     const saved = (raw ?? {}) as Partial<Record<keyof PersistedRun, unknown>>
     const repeatLeft = typeof saved.repeatLeft === "number" && Number.isFinite(saved.repeatLeft) ? Math.max(0, Math.floor(saved.repeatLeft)) : 0

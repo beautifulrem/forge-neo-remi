@@ -57,7 +57,7 @@ describe("restoreRuns", () => {
     dispatchRun("txt2img", { type: "submitted", jobIds: ["a", "b", "c"] })
     expect(persistedJobs("txt2img")).toEqual(["a", "b", "c"])
     resetRunControllers()
-    localStorage.setItem(persistKey("txt2img"), JSON.stringify(["a", "b", "c"]))
+    sessionStorage.setItem(persistKey("txt2img"), JSON.stringify(["a", "b", "c"]))
 
     const get = serverJobs({
       a: job("a", "completed", [{ id: "out-a", kind: "image", infotext: "a\nSteps: 1, Seed: 1, Size: 8x8" }]),
@@ -79,7 +79,7 @@ describe("restoreRuns", () => {
     dispatchRun("txt2img", { type: "forever", on: true })
     await vi.waitFor(() => expect(persistedRun("txt2img")).toEqual({ jobs: ["f1"], forever: true, repeatLeft: 0 }))
     resetRunControllers()
-    localStorage.setItem(persistKey("txt2img"), JSON.stringify({ jobs: ["f1"], forever: true, repeatLeft: 0 }))
+    sessionStorage.setItem(persistKey("txt2img"), JSON.stringify({ jobs: ["f1"], forever: true, repeatLeft: 0 }))
 
     const ws = await socket()
     serverJobs({ f1: job("f1", "running") })
@@ -93,32 +93,54 @@ describe("restoreRuns", () => {
     await vi.waitFor(() => expect(useRuns.getState().runs.txt2img.jobs).toEqual(["f2"]))
   })
 
+  it("leaves a loop another tab is running to that tab", async () => {
+    // This tab is generating forever: its job is in flight.
+    vi.spyOn(api.jobs, "create").mockResolvedValue(created("f1"))
+    dispatchRun("txt2img", { type: "forever", on: true })
+    await vi.waitFor(() => expect(persistedRun("txt2img")).toEqual({ jobs: ["f1"], forever: true, repeatLeft: 0 }))
+    // A second tab opens: nothing in memory, its own session storage is empty, local storage is shared.
+    resetRunControllers()
+    useProgress.setState({ running: null, owned: {}, last: {}, orphans: {} })
+    sessionStorage.clear()
+    const ws = await socket()
+    serverJobs({ f1: job("f1", "running") })
+    await restoreRuns()
+    expect(useRuns.getState().runs.txt2img).toMatchObject({ jobs: [], forever: false })
+    // The loop's next job is queued by its own tab only, not once more by this one.
+    // (the spy of this tab's first submit, counted from here)
+    const create = vi.spyOn(api.jobs, "create").mockResolvedValue(created("f2"))
+    create.mockClear()
+    send(ws, { type: "job.completed", job_id: "f1", seq: 1, status: "completed", outputs: [] })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(create).not.toHaveBeenCalled()
+  })
+
   it("does not start Generate forever again when its job ended while the page was closed", async () => {
-    localStorage.setItem(persistKey("txt2img"), JSON.stringify({ jobs: ["f1"], forever: true, repeatLeft: 0 }))
+    sessionStorage.setItem(persistKey("txt2img"), JSON.stringify({ jobs: ["f1"], forever: true, repeatLeft: 0 }))
     serverJobs({ f1: job("f1", "completed") })
     const create = vi.spyOn(api.jobs, "create")
     await restoreRuns()
     expect(create).not.toHaveBeenCalled()
     expect(useRuns.getState().runs.txt2img).toMatchObject({ jobs: [], forever: false })
-    expect(localStorage.getItem(persistKey("txt2img"))).toBeNull()
+    expect(sessionStorage.getItem(persistKey("txt2img"))).toBeNull()
   })
 
   it("reads the bare job list an older version persisted", () => {
-    localStorage.setItem(persistKey("img2img"), JSON.stringify(["x", 3, "y"]))
+    sessionStorage.setItem(persistKey("img2img"), JSON.stringify(["x", 3, "y"]))
     expect(persistedRun("img2img")).toEqual({ jobs: ["x", "y"], forever: false, repeatLeft: 0 })
   })
 
   it("forgets jobs the server no longer knows", async () => {
-    localStorage.setItem(persistKey("img2img"), JSON.stringify(["gone"]))
+    sessionStorage.setItem(persistKey("img2img"), JSON.stringify(["gone"]))
     serverJobs({})
     await restoreRuns()
-    expect(localStorage.getItem(persistKey("img2img"))).toBeNull()
+    expect(sessionStorage.getItem(persistKey("img2img"))).toBeNull()
     expect(useRuns.getState().runs.img2img.jobs).toEqual([])
   })
 
   it("applies a job event that arrives while its lookup is pending", async () => {
     const ws = await socket()
-    localStorage.setItem(persistKey("txt2img"), JSON.stringify(["r"]))
+    sessionStorage.setItem(persistKey("txt2img"), JSON.stringify(["r"]))
     let answer!: (value: JobDetail) => void
     vi.spyOn(api.jobs, "get").mockReturnValue(new Promise((resolve) => (answer = resolve)))
     const restored = restoreRuns()
@@ -127,11 +149,11 @@ describe("restoreRuns", () => {
     answer(job("r", "running"))
     await restored
     expect(phaseOf(useRuns.getState().runs.txt2img)).toBe("idle")
-    expect(localStorage.getItem(persistKey("txt2img"))).toBeNull()
+    expect(sessionStorage.getItem(persistKey("txt2img"))).toBeNull()
   })
 
   it("does not drop a job submitted while the restore is pending", async () => {
-    localStorage.setItem(persistKey("txt2img"), JSON.stringify(["old"]))
+    sessionStorage.setItem(persistKey("txt2img"), JSON.stringify(["old"]))
     let answer!: (value: JobDetail) => void
     vi.spyOn(api.jobs, "get").mockReturnValue(new Promise((resolve) => (answer = resolve)))
     const restored = restoreRuns()
@@ -162,7 +184,7 @@ describe("resync after missed events", () => {
     await vi.waitFor(() => expect(phaseOf(useRuns.getState().runs.txt2img)).toBe("idle"))
     expect(useRuns.getState().runs.txt2img.forever).toBe(false)
     expect(useProgress.getState().running).toBeNull()
-    expect(localStorage.getItem(persistKey("txt2img"))).toBeNull()
+    expect(sessionStorage.getItem(persistKey("txt2img"))).toBeNull()
   })
 
   it("files the results of a job that completed unseen and keeps generating forever", async () => {
