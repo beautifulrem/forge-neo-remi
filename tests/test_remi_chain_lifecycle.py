@@ -372,6 +372,53 @@ def test_upsampling_runs_behind_the_generation_lock_and_off_the_request(tmp_path
         assert r.executed[0]["core"]["prompt"] == "fox"  # the stage's own prompt wins
 
 
+def completion_action(queue, action: str) -> list[str]:
+    """Arm ``queue_completion_action``; returns the actions the queue ran."""
+
+    values, ran = {"queue_completion_action": action}, []
+    queue.option = lambda name, default: values.get(name, default)
+    queue.set_option = values.__setitem__
+    queue.when_done = ran.append
+    return ran
+
+
+def test_a_pipeline_that_ends_in_upsampling_runs_the_completion_action(tmp_path):
+    with rig(tmp_path) as r:
+        ran = completion_action(r.queue, "Shut down")
+        chain = r.runner.create_chain([*seeded(5)[:1], StageSpec(kind="prompt_upsample", core={"prompt": "x"})])
+        assert r.wait(chain.id).status == "completed"
+        assert r.runner.wait_idle()
+        assert ran == ["Shut down"]  # the last stage ran off the worker: no job's end saw the queue done
+
+
+def test_a_pipeline_whose_upsampling_fails_runs_the_completion_action(tmp_path):
+    def upsampler(stage, prompt, outputs):
+        raise RuntimeError("model missing")
+
+    with rig(tmp_path, upsampler=upsampler) as r:
+        ran = completion_action(r.queue, "Shut down")
+        chain = r.runner.create_chain([*seeded(5)[:1], StageSpec(kind="prompt_upsample", core={"prompt": "x"}), *seeded(5)[1:]])
+        assert r.wait(chain.id).status == "failed"
+        assert r.runner.wait_idle()
+        assert ran == ["Shut down"]
+
+
+def test_a_pipeline_cancelled_by_hand_does_not_run_the_completion_action(tmp_path):
+    gate = threading.Event()
+
+    def upsampler(stage, prompt, outputs):
+        gate.wait(5)
+        return "late"
+
+    with rig(tmp_path, upsampler=upsampler) as r:
+        ran = completion_action(r.queue, "Shut down")
+        chain = r.runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "x"}), *seeded(5)[:1]])
+        r.runner.cancel_chain(chain.id)
+        gate.set()
+        assert r.runner.wait_idle()
+        assert ran == []
+
+
 def test_cancel_during_upsampling_drops_its_result(tmp_path):
     gate = threading.Event()
 

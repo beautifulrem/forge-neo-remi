@@ -805,6 +805,16 @@ class JobQueue:
         if done and (last is None or last.status not in (INTERRUPTED, CANCELLED)) and not self._busy_elsewhere():
             self._queue_done()
 
+    def recheck_done(self) -> None:
+        """Work outside the queued jobs ended (a pipeline's last stage or its
+        failure, off the worker): run ``queue_completion_action`` if that left
+        the queue done. A job on the worker is left to ``_after_job``."""
+
+        with self._cv:
+            idle = not self._stopping and self._claimed is None and self._current is None and self.store.count(QUEUED) == 0
+        if idle and not self._busy_elsewhere():
+            self._queue_done()
+
     def _queue_done(self) -> None:
         """The last queued job finished: ``queue_completion_action``, once
         (the setting goes back to "Do nothing", see remi/jobs/completion.py)."""

@@ -1457,6 +1457,8 @@ class ChainRunner:
             return datetime.fromtimestamp(ts, UTC).isoformat() if ts is not None else None
 
         self.bus.publish("chain.updated", chain_id=chain.id, **chain_json(chain, _iso))
+        if chain.status in ("completed", "failed"):  # a cancel by hand: someone is at the computer
+            self.queue.recheck_done()
 
 
 __all__ = [
