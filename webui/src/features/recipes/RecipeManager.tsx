@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils"
 import { getFormStore } from "@/ui/form-store"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import { applyRecipeApi, createRecipeApi, deleteRecipeApi, exportRecipesApi, importRecipesApi, recipesQuery, refreshRecipes } from "./api"
+import { CATEGORY_LABELS } from "@/features/library/labels"
 import { appliedRecipeValues, applyRecipeEntries, captureFormOverrides, countRecipeParams, recipeHighlights } from "./capture"
 import type { Recipe } from "./types"
 import { LoadFailed } from "@/components/LoadFailed"
@@ -271,7 +272,7 @@ export function RecipeManager() {
             {recipes.map((recipe) => {
               const highlights = recipeHighlights(recipe)
               const paramCount = countRecipeParams(recipe)
-              const metaParts = [recipe.model_family, recipe.tab, t("{{count}} params", { count: paramCount })].filter(Boolean)
+              const metaParts = [recipe.model_family, t(CATEGORY_LABELS[recipe.tab]), t("{{count}} params", { count: paramCount })].filter(Boolean)
               const detailParts = [...highlights, ...recipe.capabilities, ...recipe.tags.map((tag) => `#${tag}`)]
 
               return (
@@ -349,16 +350,16 @@ export function RecipeManager() {
                 value={captureTab}
                 onValueChange={(value) => setCaptureTab(value)}
                 options={[
-                  { value: "txt2img", label: "txt2img" },
-                  { value: "img2img", label: "img2img" },
-                  { value: "extras", label: "Extras" },
+                  { value: "txt2img", label: t(CATEGORY_LABELS.txt2img) },
+                  { value: "img2img", label: t(CATEGORY_LABELS.img2img) },
+                  { value: "extras", label: t(CATEGORY_LABELS.extras) },
                 ]}
               />
             </div>
 
             {captured.count === 0 ? (
               <p className="rounded-md bg-background px-3 py-2 text-xs text-muted-foreground">
-                {t("No modified parameters found on {{tab}}.", { tab: captureTab })}
+                {t("No modified parameters found on {{tab}}.", { tab: t(CATEGORY_LABELS[captureTab]) })}
               </p>
             ) : (
               <div className="-mx-1 max-h-28 overflow-y-auto px-1">

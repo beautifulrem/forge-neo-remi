@@ -4,6 +4,7 @@
  * minimal and safe to apply across models.
  */
 import type { FormTab, ParamValues } from "@/api/types"
+import { t } from "@/i18n"
 import type { PasteEntry } from "@/features/infotext/paste"
 import { deliver } from "@/features/send-to/send-to"
 import { jsonEqual } from "@/ui/conditions"
@@ -53,16 +54,16 @@ export function countRecipeParams(recipe: Pick<Recipe, "core_patch" | "scripts_p
   return total
 }
 
-/** Builds a concise summary of key parameter chips (`steps`, `cfg_scale`, `sampler_name`, etc.). */
+/** Builds a concise summary of key parameter chips (`steps`, `cfg_scale`, `sampler_name`, etc.), in the UI language. */
 export function recipeHighlights(recipe: Pick<Recipe, "core_patch" | "scripts_patch">): string[] {
   const chips: string[] = []
   const core = recipe.core_patch ?? {}
   const sampler = recipe.scripts_patch?.sampler ?? {}
   if (sampler.sampler_name) chips.push(String(sampler.sampler_name))
-  if (sampler.steps !== undefined) chips.push(`${String(sampler.steps)} steps`)
+  if (sampler.steps !== undefined) chips.push(t("{{count}} steps", { count: Number(sampler.steps) }))
   if (core.cfg_scale !== undefined) chips.push(`CFG ${String(core.cfg_scale)}`)
   if (core.width && core.height) chips.push(`${String(core.width)}×${String(core.height)}`)
-  if (core.denoising_strength !== undefined) chips.push(`denoise ${String(core.denoising_strength)}`)
+  if (core.denoising_strength !== undefined) chips.push(t("denoise {{value}}", { value: String(core.denoising_strength) }))
   const extraScripts = Object.keys(recipe.scripts_patch ?? {}).filter((key) => key !== "sampler" && key !== "seed")
   for (const name of extraScripts.slice(0, 2)) chips.push(name)
   return chips

@@ -268,6 +268,31 @@ describe("starter pipelines", () => {
     expect(screen.getByRole("textbox", { name: "管线名称" })).toHaveValue("提示词扩写 → 生成 → 精修 → 收尾")
   })
 
+  it("shows recent runs' status and cache reuse in the current language", async () => {
+    const stages = [defaultStage("generate"), defaultStage("finish")]
+    const run = completedRun(stages)
+    run.stages[0]!.cached = true
+    const failed = { ...completedRun(stages), id: "chain-failed", status: "failed" as ChainStatus }
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (url.includes("/chains/templates")) return new Response(JSON.stringify([]), { status: 200 })
+      if (url.includes("/chains/preview")) return new Response(JSON.stringify({ stages: [] }), { status: 200 })
+      if (url.includes("/chains")) return new Response(JSON.stringify({ items: [run, failed], total: 2 }), { status: 200 })
+      return new Response("{}", { status: 200 })
+    })
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PipelineBuilder />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText("已完成")).toBeInTheDocument()
+    expect(screen.getByText("失败")).toBeInTheDocument()
+    expect(screen.queryByText("completed")).toBeNull()
+    expect(screen.getByText(/复用缓存 1\/2/)).toBeInTheDocument()
+  })
+
   it("keeps the built-in starters in the menu next to saved templates", async () => {
     const saved = { id: "t1", name: "My chain", description: "", model_family: "universal", stages: [], tags: [], created_at: "2026-11-20T10:00:00Z", updated_at: "2026-11-20T10:00:00Z" }
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

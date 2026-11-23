@@ -3,6 +3,8 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { tabSchema } from "@/api/mock/fixtures"
 import { queryClient } from "@/api/queries"
+import { i18n } from "@/i18n"
+import zhCN from "@/locales/zh-CN.json"
 import { getFormStore } from "@/ui/form-store"
 import { tabOwners } from "@/ui/tab"
 import { captureFormOverrides, countRecipeParams, recipeHighlights } from "./capture"
@@ -127,6 +129,27 @@ describe("Recipes capture and manager UI", () => {
     expect(after.core?.cfg_scale).toBe(1)
     expect(after.sampler?.steps).toBe(8)
     expect(after.core?.prompt).toEqual(before.core?.prompt)
+  })
+
+  it("names forms and parameters in the current language", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ items: [{ ...SAMPLE_RECIPE, core_patch: { ...SAMPLE_RECIPE.core_patch, denoising_strength: 0.35 } }], total: 1 }), { status: 200, headers: { "Content-Type": "application/json" } }))
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RecipeManager />
+        </QueryClientProvider>,
+      )
+      expect(await screen.findByText("Qwen Turbo 8-step")).toBeInTheDocument()
+      const row = screen.getByText("Qwen Turbo 8-step").closest("li")!
+      expect(row).toHaveTextContent("文生图")
+      expect(row).toHaveTextContent("8 步")
+      expect(row).toHaveTextContent("重绘幅度 0.35")
+      expect(row).not.toHaveTextContent("txt2img")
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
   })
 
   it("tells a search that matched nothing from an empty library, keeps the list while a search loads, and clears the filters", async () => {

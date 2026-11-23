@@ -41,6 +41,7 @@ import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { CATEGORY_LABELS } from "@/features/library/labels"
 import { errorText } from "@/features/errors/error-text"
 import { captureFormOverrides } from "@/features/recipes/capture"
 import { cn } from "@/lib/utils"
@@ -61,7 +62,17 @@ import {
 } from "./api"
 import { defaultStage, firstExecuteStage, planPipelineCache, STAGE_KINDS, STAGE_META, STARTER_PIPELINES } from "./cache-hash"
 import { usePipelineDraft } from "./draft-store"
-import type { ChainPreviewStage, ChainTemplate, JobChain, StageKind, StageSpec } from "./types"
+import type { ChainPreviewStage, ChainStatus, ChainTemplate, JobChain, StageKind, StageSpec } from "./types"
+
+/** Recent runs' status (English keys, translated at render). */
+const CHAIN_STATUS_LABEL: Record<ChainStatus, string> = {
+  queued: "Queued",
+  running: "Running",
+  paused: "Paused",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
+}
 
 const MAX_STAGES = 4
 const MIN_STAGES = 1
@@ -258,7 +269,7 @@ export function PipelineBuilder() {
       core: { ...prev.core, ...captured.core_patch },
       scripts: { ...prev.scripts, ...captured.scripts_patch },
     }))
-    toast.success(t("Pulled overrides from {{tab}}", { tab }))
+    toast.success(t("Pulled overrides from {{tab}}", { tab: t(CATEGORY_LABELS[tab]) }))
   }
 
   // the built-in starters are named in the current language; saved templates keep the name they were given
@@ -757,11 +768,11 @@ export function PipelineBuilder() {
                           )}
                           aria-hidden
                         />
-                        {chain.status}
+                        {t(CHAIN_STATUS_LABEL[chain.status])}
                       </span>
                       {reused > 0 ? (
                         <span className="font-mono text-xs text-success tabular-nums">
-                          · {reused}/{chain.total_stages} cached
+                          · {t("{{reused}}/{{total}} cached", { reused, total: chain.total_stages })}
                         </span>
                       ) : null}
                     </div>
