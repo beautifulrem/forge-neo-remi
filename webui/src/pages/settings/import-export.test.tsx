@@ -54,7 +54,7 @@ describe("settings import", () => {
     const onOpenChange = vi.fn()
     render(<ImportDialog open onOpenChange={onOpenChange} onStaged={onStaged} />)
     upload({ format: EXPORT_FORMAT, version: 1, exported_at: "", values: { samples_save: false, jpeg_quality: 80, outdir_samples: "/x", samples_format: "bmp", nope: 1 } })
-    expect(await screen.findByText("1 settings will change")).toBeInTheDocument()
+    expect(await screen.findByText("1 setting will change")).toBeInTheDocument()
     expect(validate).toHaveBeenCalledWith({ samples_save: false, samples_format: "bmp" })
     expect(screen.getByText("1 already match, 2 unknown here (ignored)")).toBeInTheDocument()
     expect(screen.getByText(/unknown format/)).toBeInTheDocument()
