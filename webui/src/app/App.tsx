@@ -144,7 +144,8 @@ export function App() {
         >
           {t("Skip to content")}
         </a>
-        <div className="flex h-dvh overflow-hidden">
+        {/* the page reaches under a landscape notch (viewport-fit=cover): keep the shell beside it */}
+        <div className="flex h-dvh overflow-hidden pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]">
           <NavRail items={nav} route={route} />
           <div className="flex min-w-0 flex-1 flex-col">
             <Header title={title} locales={locales} />
