@@ -5,7 +5,7 @@
 .github
 .vscode
 .DS_Store
-# other dotfiles and notes at the root (tool caches, local editor and assistant files)
+# other dotfiles and notes at the root (tool caches, local editor settings)
 /.*
 /*.md
 **/*.log

@@ -51,7 +51,8 @@ machine only, because the server inside listens on every interface and has no
 login until you add one. Before publishing it further (`-p 7860:7860`), read
 [Security and Remote Access](../docs/remi-webui/usage.md#security-and-remote-access)
 and set a login with `--auth-file` from a mounted file (for example
-`-v ./logins.txt:/run/remi/logins.txt:ro remi-webui --auth-file /run/remi/logins.txt`):
+`-v ./logins.txt:/run/remi/logins.txt:ro remi-webui --auth-file /run/remi/logins.txt`;
+the file must be readable by the container's user, uid 99):
 a password in `--auth` or `COMMANDLINE_ARGS` shows in `docker inspect` and the
 process list.
 
