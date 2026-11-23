@@ -554,8 +554,9 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
           return
         }
         if (event.key === "Escape") {
+          // what the staging bar's "Discard candidate" (Esc) says: this one, not all of them
           event.preventDefault()
-          useCanvasStaging.getState().discardAll(docKey)
+          useCanvasStaging.getState().discardCurrent(docKey)
           return
         }
       }

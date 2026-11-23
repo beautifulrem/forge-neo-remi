@@ -26,6 +26,7 @@ import { Check, Star } from "@/components/icons"
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { TFunction } from "i18next"
 import { useTranslation } from "react-i18next"
+import { LoadMoreStatus } from "@/components/LoadMoreStatus"
 import { api } from "@/api/endpoints"
 import type { GalleryItem } from "@/api/types"
 import { cn } from "@/lib/utils"
@@ -53,6 +54,8 @@ type GalleryGridProps = {
   onStar: (item: GalleryItem) => void
   hasMore: boolean
   loadingMore: boolean
+  /** The last next page failed: no more loading on scroll, a retry instead. */
+  loadFailed?: boolean
   onLoadMore: () => void
   /** Total count for screen readers (`aria-setsize`). */
   total?: number
@@ -186,7 +189,7 @@ export function GalleryGrid(props: GalleryGridProps) {
   // TanStack Virtual's virtualizer is a mutable object the React Compiler must not memoise.
   "use no memo"
   const { t } = useTranslation()
-  const { items, layout, size, selected, hasMore, loadingMore, onLoadMore } = props
+  const { items, layout, size, selected, hasMore, loadingMore, loadFailed = false, onLoadMore } = props
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
   const width = useWidth(scroller)
   const target = TILE_SIZES[size]
@@ -245,8 +248,8 @@ export function GalleryGrid(props: GalleryGridProps) {
   const left = virtualizer.getTotalSize() - (virtualizer.scrollOffset ?? 0) - viewport
   const nearEnd = items.length > 0 && left < Math.max(viewport, 1) * PREFETCH_VIEWPORTS
   useEffect(() => {
-    if (hasMore && !loadingMore && nearEnd) onLoadMore()
-  }, [nearEnd, items.length, hasMore, loadingMore, onLoadMore])
+    if (hasMore && !loadingMore && !loadFailed && nearEnd) onLoadMore()
+  }, [nearEnd, items.length, hasMore, loadingMore, loadFailed, onLoadMore])
 
   // The tab stop: the current tile when rendered, else the first tile in view.
   const tileIndexes = (virtual: { index: number }) => {
@@ -365,7 +368,7 @@ export function GalleryGrid(props: GalleryGridProps) {
           )
         })}
       </div>
-      {loadingMore ? <p className="py-3 text-center text-xs text-muted-foreground">{t("Loading…")}</p> : null}
+      <LoadMoreStatus loading={loadingMore} failed={loadFailed} onRetry={onLoadMore} />
     </div>
   )
 }

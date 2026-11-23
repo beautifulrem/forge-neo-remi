@@ -6,7 +6,7 @@
 import { queryOptions } from "@tanstack/react-query"
 import { queryClient } from "@/api/queries"
 import type { GalleryItem, Page } from "@/api/types"
-import { workbenchRequest } from "@/features/pipelines/workbench-http"
+import { ApiError, workbenchRequest } from "@/features/pipelines/workbench-http"
 
 export const boardKeys = {
   all: ["gallery", "boards"] as const,
@@ -54,14 +54,20 @@ export type LineageResponse = {
 
 // ---------------------------------------------------------------- boards API
 
+/** A server without this feature (404): no boards, no lineage. Anything else is an error. */
+function absent(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404
+}
+
 export async function listBoards(signal?: AbortSignal): Promise<Board[]> {
   try {
     const data = await workbenchRequest<Board[] | { items?: Board[] }>("/boards", { signal })
     if (Array.isArray(data)) return data
     if (data && typeof data === "object" && Array.isArray(data.items)) return data.items
     return []
-  } catch {
-    return []
+  } catch (error) {
+    if (absent(error)) return []
+    throw error // a failure is shown (and retried), not cached as "no boards"
   }
 }
 
@@ -119,8 +125,9 @@ export async function fetchLineage(fileId: string, signal?: AbortSignal): Promis
       siblings: Array.isArray(data.siblings) ? data.siblings : [],
       descendants: data.descendants,
     }
-  } catch {
-    return null
+  } catch (error) {
+    if (absent(error)) return null
+    throw error
   }
 }
 

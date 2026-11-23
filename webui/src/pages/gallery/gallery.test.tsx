@@ -199,6 +199,25 @@ describe("gallery page", { timeout: 20_000 }, () => {
     expect(screen.queryByText("No images yet")).not.toBeInTheDocument()
   })
 
+  it("keeps the images shown when a refetch fails", async () => {
+    let failing = false
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL((input as Request).url)
+      const path = url.pathname.replace("/api/v2", "")
+      if (path === "/gallery" && failing) return new Response(JSON.stringify({ detail: "disk unplugged" }), { status: 400, headers: { "Content-Type": "application/json" } })
+      let data: unknown = {}
+      if (path === "/gallery") data = { items: [item(1), item(2)], next_cursor: null, total: 2 }
+      else if (path === "/gallery/facets") data = { models: [], categories: [], oldest: null, newest: null, total: 2, starred: 0 }
+      return new Response(JSON.stringify(data), { status: 200, headers: { "Content-Type": "application/json" } })
+    })
+    renderPage()
+    expect(await screen.findByRole("button", { name: "prompt number 1" })).toBeInTheDocument()
+    failing = true // outputs.changed, a reconnect: the list is fetched again and that fails
+    await act(() => queryClient.refetchQueries({ predicate: (query) => query.queryKey.includes("gallery") }))
+    expect(screen.getByRole("button", { name: "prompt number 1" })).toBeInTheDocument()
+    expect(screen.queryByText("Gallery unavailable")).not.toBeInTheDocument()
+  })
+
   it("explains an empty library", async () => {
     mockServer([])
     renderPage()

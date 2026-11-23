@@ -154,8 +154,15 @@ export default function GalleryPage() {
         ))}
       </div>
     )
-  } else if (list.isError) {
-    body = <PagePlaceholder icon={GalleryVerticalEnd} title="Gallery unavailable" description={errorText(list.error)} />
+  } else if (list.isError && !list.data) {
+    // only when nothing loaded: a failed next page or refetch keeps the images shown
+    body = (
+      <PagePlaceholder icon={GalleryVerticalEnd} title="Gallery unavailable" description={errorText(list.error)}>
+        <Button variant="outline" size="sm" onClick={() => void list.refetch()}>
+          {t("Retry")}
+        </Button>
+      </PagePlaceholder>
+    )
   } else if (items.length === 0) {
     body =
       activeFilters(view) > 0 ? (
@@ -183,6 +190,7 @@ export default function GalleryPage() {
         selected={selection.ids}
         hasMore={list.hasNextPage}
         loadingMore={list.isFetchingNextPage}
+        loadFailed={list.isFetchNextPageError}
         onLoadMore={() => void list.fetchNextPage()}
         onActivate={(item, event) => {
           if (selection.ids.size > 0 || event.ctrlKey || event.metaKey || event.shiftKey) setSelection(select(selection, order, item.id, modeOf(event)))

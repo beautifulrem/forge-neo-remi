@@ -7,6 +7,7 @@
  * left the page meanwhile.
  */
 import { api } from "@/api/endpoints"
+import { ApiError } from "@/api/http"
 import type { ActionExtra } from "@/api/types"
 import { type ActionContext, actionRequest, applyResponse, splitResponse } from "@/ui/actions"
 import type { Message } from "@/ui/messages"
@@ -46,9 +47,27 @@ export async function resumeTask(ctx: ActionContext, owner: string, task: string
   }
 }
 
+/** Consecutive failed polls after which a follower gives up (about a minute at the 5 s cap). */
+export const MAX_POLL_FAILURES = 15
+
+/** Whether the server refused the poll itself (an unknown task, a handler that raises): asking again will not help. */
+function refused(error: unknown): boolean {
+  return error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429
+}
+
+/** Marks the followed task failed in the form, so the widget stops showing it as running. */
+function giveUp(ctx: ActionContext, owner: string, task: string, id: string, error: unknown) {
+  const current = ctx.store.getState().outputs[owner]?.[outputKey(task)]
+  const base = isTaskStatus(current) && current.id === id ? current : { id, name: task, progress: null, text: null }
+  const message = error instanceof Error ? error.message : String(error)
+  ctx.store.getState().setOutputs(owner, { [outputKey(task)]: { ...base, state: "failed", done: true, error: message } satisfies TaskStatus })
+}
+
 /**
  * Polls until task `id` ends (`interval` ms apart; network errors back off up
- * to 5 s and never toast). Resolves when it has ended or was replaced.
+ * to 5 s and never toast). Resolves when it has ended or was replaced, or
+ * when the server refuses the poll or keeps failing: the task then shows as
+ * failed instead of running forever.
  */
 export function followTask(ctx: ActionContext, owner: string, task: string, id: string, interval = 750): Promise<void> {
   const key = `${ctx.tab}/${owner}/${task}`
@@ -56,13 +75,20 @@ export function followTask(ctx: ActionContext, owner: string, task: string, id: 
   if (running) return running
   const loop = (async () => {
     let delay = interval
+    let failures = 0
     for (;;) {
       await sleep(delay)
       try {
         const status = await poll(ctx, owner, task, { id })
         delay = interval
+        failures = 0
         if (!status || status.done || status.id !== id) return
-      } catch {
+      } catch (error) {
+        failures += 1
+        if (refused(error) || failures >= MAX_POLL_FAILURES) {
+          giveUp(ctx, owner, task, id, error)
+          return
+        }
         delay = Math.min(delay * 2, 5000)
       }
     }

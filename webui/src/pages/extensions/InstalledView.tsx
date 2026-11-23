@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { webUrl } from "@/ui/rich-text"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -121,12 +122,17 @@ function ExtensionRow(props: { ext: ExtensionInfo; staged: Staged; access: boole
           {ext.name}
         </label>
         <p id={`${switchId}-meta`} className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-          {ext.remote_url ? (
-            <a href={ext.remote_url} title={ext.remote_url} target="_blank" rel="noreferrer noopener" className="inline-flex max-w-72 min-w-0 items-center gap-0.5 hover:text-foreground hover:underline">
+          {ext.remote_url && webUrl(ext.remote_url) ? (
+            <a href={webUrl(ext.remote_url)!} title={ext.remote_url} target="_blank" rel="noreferrer noopener" className="inline-flex max-w-72 min-w-0 items-center gap-0.5 hover:text-foreground hover:underline">
               {/* the text in its own box: a flex container does not ellipsize its text */}
               <span className="truncate">{ext.remote_url.replace(/^https:\/\/(www\.)?/, "")}</span>
               <ExternalLink className="size-3 shrink-0" aria-hidden />
             </a>
+          ) : ext.remote_url ? (
+            // not a web address (an SSH remote): shown, not linked
+            <span title={ext.remote_url} className="max-w-72 min-w-0 truncate font-mono">
+              {ext.remote_url}
+            </span>
           ) : ext.builtin ? (
             <span>{t("Built-in")}</span>
           ) : (
@@ -139,8 +145,8 @@ function ExtensionRow(props: { ext: ExtensionInfo; staged: Staged; access: boole
             </span>
           ) : null}
           {ext.version ? (
-            ext.commit_url ? (
-              <a href={ext.commit_url} target="_blank" rel="noreferrer noopener" className="font-mono hover:text-foreground hover:underline">
+            webUrl(ext.commit_url) ? (
+              <a href={webUrl(ext.commit_url)!} target="_blank" rel="noreferrer noopener" className="font-mono hover:text-foreground hover:underline">
                 {ext.version}
               </a>
             ) : (
@@ -167,8 +173,8 @@ function ExtensionRow(props: { ext: ExtensionInfo; staged: Staged; access: boole
             <RefreshCw aria-hidden />
             {t("Check for updates")}
           </DropdownMenuItem>
-          {ext.remote_url ? (
-            <DropdownMenuItem render={<a href={ext.remote_url} target="_blank" rel="noreferrer noopener" />}>
+          {webUrl(ext.remote_url) ? (
+            <DropdownMenuItem render={<a href={webUrl(ext.remote_url)!} target="_blank" rel="noreferrer noopener" />}>
               <ExternalLink aria-hidden />
               {t("Open repository")}
             </DropdownMenuItem>

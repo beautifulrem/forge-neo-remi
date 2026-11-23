@@ -49,7 +49,8 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
   const view = useGalleryView()
   const boardId = view.boardId
   const setView = view.set
-  const { data: boards = [] } = useQuery(boardsQuery)
+  const boardsList = useQuery(boardsQuery)
+  const boards = boardsList.data ?? []
   const facets = useQuery({ ...galleryFacetsQuery, enabled: count !== undefined })
 
   const [createOpen, setCreateOpen] = useState(false)
@@ -152,6 +153,16 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
             </button>
           )
         })}
+        {boardsList.isError && !boardsList.data ? (
+          <button
+            type="button"
+            title={errorText(boardsList.error)}
+            onClick={() => void boardsList.refetch()}
+            className="inline-flex h-8 items-center gap-1 px-2 text-xs text-destructive outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            {t("Could not load boards. Retry")}
+          </button>
+        ) : null}
       </FadeStrip>
 
       <div className="flex shrink-0 items-center gap-1.5">

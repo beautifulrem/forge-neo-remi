@@ -191,4 +191,47 @@ describe("PipelineBuilder UI", () => {
     render(view)
     expect(screen.getByLabelText("Pipeline name")).toHaveValue("My night shots")
   })
+
+  it("lets a number field be emptied while typing and restores it when left empty", () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify([]), { status: 200 }))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PipelineBuilder />
+      </QueryClientProvider>,
+    )
+    const factor = screen.getByLabelText("Upscale factor")
+    fireEvent.change(factor, { target: { value: "" } })
+    expect(factor).toHaveValue(null) // not snapped back to the default while the user retypes
+    const finish = () => usePipelineDraft.getState().stages.find((stage) => stage.kind === "finish")!
+    expect(finish().core?.upscaling_resize).toBe(2)
+    fireEvent.change(factor, { target: { value: "3" } })
+    expect(finish().core?.upscaling_resize).toBe(3)
+    fireEvent.change(factor, { target: { value: "" } })
+    fireEvent.blur(factor)
+    expect(factor).toHaveValue(3)
+  })
+
+  it("keeps a failed run list apart from an empty one and retries it", async () => {
+    let fail = true
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      const method = init?.method ?? (typeof input === "string" ? "GET" : (input as Request).method)
+      if (new URL(url, "http://x").pathname.endsWith("/chains") && method === "GET") {
+        // a client error: the query client does not retry it, so the test needs no backoff
+        if (fail) return new Response(JSON.stringify({ detail: "database is locked" }), { status: 400 })
+        return new Response(JSON.stringify({ items: [], total: 0 }), { status: 200 })
+      }
+      return new Response(JSON.stringify([]), { status: 200 })
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PipelineBuilder />
+      </QueryClientProvider>,
+    )
+    const retry = await screen.findByRole("button", { name: "Retry" })
+    expect(screen.queryByText("No pipeline runs yet")).not.toBeInTheDocument()
+    fail = false
+    fireEvent.click(retry)
+    expect(await screen.findByText("No pipeline runs yet")).toBeInTheDocument()
+  })
 })

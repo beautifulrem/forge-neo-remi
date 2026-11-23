@@ -9,6 +9,7 @@ import { RefreshCw, RotateCw, Search } from "@/components/icons"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { ApiError } from "@/api/http"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -341,8 +342,15 @@ export function DiagnosticsView() {
               <Skeleton key={i} className="h-10 w-full" />
             ))}
           </div>
-        ) : diag.isError ? (
+        ) : diag.isError && diag.error instanceof ApiError && diag.error.status === 404 ? (
           <p className="px-4 py-4 text-sm text-muted-foreground">{t("Diagnostics unavailable on this server.")}</p>
+        ) : diag.isError && !diag.data ? (
+          <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-4 text-sm">
+            <span className="text-destructive">{errorText(diag.error)}</span>
+            <Button variant="outline" size="sm" onClick={() => void diag.refetch()}>
+              {t("Retry")}
+            </Button>
+          </div>
         ) : items.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("No extension diagnostics match.")}</p>
         ) : (

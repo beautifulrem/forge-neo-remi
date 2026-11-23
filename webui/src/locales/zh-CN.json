@@ -1642,5 +1642,9 @@
   "Workers status unavailable on this server.": "当前服务端暂未提供工作进程状态接口。",
   "No workers reported": "暂无工作进程记录",
   "No extension diagnostics match.": "没有匹配的扩展诊断记录。",
-  "Could not cancel pipeline": "无法取消管线"
+  "Could not cancel pipeline": "无法取消管线",
+  "Could not load more.": "无法加载更多。",
+  "Could not load boards. Retry": "无法加载项目看板，点击重试",
+  "Template deleted": "模板已删除",
+  "Could not delete template": "无法删除模板"
 }
