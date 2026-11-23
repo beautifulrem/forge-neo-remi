@@ -493,8 +493,9 @@ client has a bounded event queue and one preview slot.
   deleted reports as cancelled, a stage job cannot be edited (`409`), and a
   failed one is not requeued by `queue_automatic_requeue_failed_task`. At
   start `ChainRunner.reconcile()` settles what the last process left
-  running. `prompt_upsample` stages run on a background thread behind the
-  generation lock. A stage's cache key covers its parameters, its upstream
+  running. `prompt_upsample` stages run on a background thread; one with a
+  local model also takes the generation lock (it loads into VRAM), one that
+  asks the prompt tools' endpoint does not. A stage's cache key covers its parameters, its upstream
   stage's hash, images and prompt, and the server-side model fingerprint
   (checkpoint name and file identity, VAE and text encoders, clip skip and
   the other settings that change every image), read again when the job

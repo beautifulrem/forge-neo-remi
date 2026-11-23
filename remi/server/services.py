@@ -167,6 +167,7 @@ class Services:
     def close(self) -> None:
         """Stop everything and close the databases."""
 
+        from remi import prompt_tools
         from remi.library import close_gallery
         from remi.recipes import close_recipes
 
@@ -175,6 +176,7 @@ class Services:
         self.chains.close()
         close_recipes(self.files)
         close_gallery(self.files)
+        prompt_tools.forget(self)
         self.files.close()
         self.store.close()
 

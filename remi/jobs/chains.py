@@ -1311,8 +1311,8 @@ class ChainRunner:
                     continue
 
                 if next_stage.kind == "prompt_upsample":
-                    # Runs in the background behind the generation lock: it may load a model
-                    # (VRAM), and a request or the queue worker must not wait for it.
+                    # Runs in the background: a request or the queue worker must not wait for it.
+                    # A local model (VRAM) also runs behind the generation lock (_run_upsample).
                     self.store.update_stage(chain_id, next_stage.index, status="running", stage_hash=stage_hash, cached=False, started=now)
                     thread = threading.Thread(
                         target=self._run_upsample,
@@ -1355,9 +1355,14 @@ class ChainRunner:
             result: str | None = None
             error: str | None = None
             try:
-                with self.queue.lock:
-                    if self._stage_running(chain_id, stage.index, stage_hash):
-                        result = self.queue.dispatch(self.upsampler, stage, upstream_prompt, upstream_outputs)
+                if stage.config.get("local_model_path"):
+                    # a local model loads into VRAM: behind the generation lock, on the main thread
+                    with self.queue.lock:
+                        if self._stage_running(chain_id, stage.index, stage_hash):
+                            result = self.queue.dispatch(self.upsampler, stage, upstream_prompt, upstream_outputs)
+                elif self._stage_running(chain_id, stage.index, stage_hash):
+                    # the prompt tools' endpoint is only a network request: jobs go on meanwhile
+                    result = self.upsampler(stage, upstream_prompt, upstream_outputs)
             except Exception as exc:
                 error = f"{type(exc).__name__}: {exc}"
             should_advance = False

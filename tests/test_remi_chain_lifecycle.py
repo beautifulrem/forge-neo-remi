@@ -350,7 +350,7 @@ def test_a_stage_without_an_image_fails_the_chain(tmp_path):
         assert len(r.executed) == 1
 
 
-def test_upsampling_runs_behind_the_generation_lock_and_off_the_request(tmp_path):
+def test_upsampling_with_a_local_model_runs_behind_the_generation_lock_and_off_the_request(tmp_path):
     seen: dict[str, Any] = {}
     gate = threading.Event()
 
@@ -361,7 +361,7 @@ def test_upsampling_runs_behind_the_generation_lock_and_off_the_request(tmp_path
         return "big prompt"
 
     with rig(tmp_path, upsampler=upsampler) as r:
-        chain = r.runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "x"}), *seeded(5)[:1]])
+        chain = r.runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "x"}, config={"local_model_path": "/models/llm"}), *seeded(5)[:1]])
         assert chain.status == "running"  # the request did not wait for the upsampler
         assert r.runner.busy()  # no stage job is queued yet: the queue is not done
         gate.set()
@@ -370,6 +370,23 @@ def test_upsampling_runs_behind_the_generation_lock_and_off_the_request(tmp_path
         assert not r.runner.busy()
         assert seen["locked"] is True and seen["thread"].startswith("remi-chain-upsample")
         assert r.executed[0]["core"]["prompt"] == "fox"  # the stage's own prompt wins
+
+
+def test_upsampling_through_an_endpoint_leaves_the_generation_lock_free(tmp_path):
+    """A stage that asks the prompt tools' endpoint only waits on the network: it must not hold
+    the queue's lock (no job could start) or the main thread for the whole request."""
+
+    seen: dict[str, Any] = {}
+
+    def upsampler(stage, prompt, outputs):
+        seen["locked"] = r.queue.lock.locked()
+        seen["thread"] = threading.current_thread().name
+        return "big prompt"
+
+    with rig(tmp_path, upsampler=upsampler) as r:
+        chain = r.runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "x"}), *seeded(5)[:1]])
+        assert r.wait(chain.id).status == "completed"
+        assert seen["locked"] is False and seen["thread"].startswith("remi-chain-upsample")
 
 
 def completion_action(queue, action: str) -> list[str]:
