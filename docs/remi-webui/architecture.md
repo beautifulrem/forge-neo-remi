@@ -475,7 +475,9 @@ client has a bounded event queue and one preview slot.
     (`mlx` / `mflux`) implementing `WorkerProtocol` without modifying Forge's
     PyTorch core.
   Worker health and restart controls are exposed at `/api/v2/workers*` and in
-  the SPA header's worker status pill.
+  the SPA header's worker status pill. The pool is a preview: the queue does
+  not dispatch to it yet and still runs every job in-process
+  (`run_on_main_thread`).
 - Services (process-wide, survive reloads; data in `<data path>/remi-data`):
   event bus, file index (`files.db`, `uploads/`, `outputs/` for images the
   save path did not write — temporary, `thumbs/`, plus `boards` & asset lineage),

@@ -153,15 +153,17 @@ Without Node.js on the machine:
 
 ```bash
 docker build -f docker/Dockerfile -t remi-webui .
-docker run --gpus all -p 7860:7860 -v remi-data:/home/remi/data remi-webui
+docker run --gpus all -p 127.0.0.1:7860:7860 -v remi-data:/home/remi/data remi-webui
 ```
 
 For AMD GPUs, `docker/Dockerfile.rocm` is the same recipe with the ROCm build of PyTorch:
 
 ```bash
 docker build -f docker/Dockerfile.rocm -t remi-webui-rocm .
-docker run --device /dev/kfd --device /dev/dri --group-add video -p 7860:7860 -v remi-data:/home/remi/data remi-webui-rocm
+docker run --device /dev/kfd --device /dev/dri --group-add video -p 127.0.0.1:7860:7860 -v remi-data:/home/remi/data remi-webui-rocm
 ```
+
+The container listens on every interface and has no login by default, so these commands publish the port on this machine only. To reach it from other machines, set a login with `--auth-file` (see [docker/README.md](../../docker/README.md#run)) and read [Security and Remote Access](#security-and-remote-access).
 
 ### Recommended first Anima run
 
@@ -227,6 +229,8 @@ Pass options in `COMMANDLINE_ARGS` (`webui-user.bat`, `webui.settings.sh`) or to
 | `--worker-process` | Run PyTorch inference in an isolated supervised child process (`SubprocessWorker`) for OOM/crash recovery and zero UI/WS GIL contention (default: in-process) |
 | `--worker-gpus 0,1` | Spawn one isolated inference worker per listed GPU index in `WorkerPool` |
 | `--worker-mlx` | Enable the optional Apple Silicon MLX / `mflux` sidecar worker alongside the standard UI, queue, and gallery |
+
+The three `--worker-*` options are a preview: they start the workers shown in the Workers monitor (health, restart), but the queue still runs every job in-process. `REMI_WORKER_PROCESS=1`, `REMI_WORKER_GPUS=0,1` and `REMI_WORKER_MLX=1` set the same options when the flags are absent (only `1` turns the switches on).
 
 **Changed options.** The Gradio-only options are gone: replace `--gradio-auth` / `--gradio-auth-path` with `--auth` / `--auth-file`, and drop `--gradio-debug`, `--gradio-allowed-path` and `--no-gradio-queue`. The WebUI refuses to start with an unknown option, so an old login option can never be silently ignored. `--share` is accepted but only logs a warning (use `--listen`, a reverse proxy or `--ngrok`); `--use-textbox-seed` has no effect; `--theme light|dark|system` is the theme of browsers that have not picked one in the Appearance menu (`?__theme=light` in the URL picks one, as before); `--agent-scheduler-sqlite-file` tells the queue importer where an old Agent Scheduler database is. Do not install every attention backend blindly; native PyTorch attention is often the most compatible choice, see the upstream [extra installation guide](https://github.com/Haoming02/sd-webui-forge-classic/wiki/Extra-Installations).
 

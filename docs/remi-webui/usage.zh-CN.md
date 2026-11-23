@@ -153,15 +153,17 @@ export COMMANDLINE_ARGS="--uv"
 
 ```bash
 docker build -f docker/Dockerfile -t remi-webui .
-docker run --gpus all -p 7860:7860 -v remi-data:/home/remi/data remi-webui
+docker run --gpus all -p 127.0.0.1:7860:7860 -v remi-data:/home/remi/data remi-webui
 ```
 
 AMD GPU 使用 `docker/Dockerfile.rocm`，流程相同，只是换成 ROCm 版 PyTorch：
 
 ```bash
 docker build -f docker/Dockerfile.rocm -t remi-webui-rocm .
-docker run --device /dev/kfd --device /dev/dri --group-add video -p 7860:7860 -v remi-data:/home/remi/data remi-webui-rocm
+docker run --device /dev/kfd --device /dev/dri --group-add video -p 127.0.0.1:7860:7860 -v remi-data:/home/remi/data remi-webui-rocm
 ```
+
+容器内的服务监听所有网卡，默认没有登录，所以上面的命令只把端口发布到本机。要让其他机器访问，先用 `--auth-file` 设置登录（见 [docker/README.md](../../docker/README.md#run)），并阅读[安全与远程访问](#安全与远程访问)。
 
 ### 首次 Anima 生成建议
 
@@ -227,6 +229,8 @@ docker run --device /dev/kfd --device /dev/dri --group-add video -p 7860:7860 -v
 | `--worker-process` | 在独立的受监管子进程（`SubprocessWorker`）中运行 PyTorch 推理，实现 OOM/崩溃隔离自愈并消除 UI/WS 的 GIL 争用（默认：进程内模式） |
 | `--worker-gpus 0,1` | 在 `WorkerPool` 中按指定的 GPU 索引为每张卡启动一个独立推理 Worker |
 | `--worker-mlx` | 启用可选的 Apple Silicon MLX / `mflux` Sidecar Worker，复用全部网页界面、队列与图库 |
+
+这三个 `--worker-*` 参数目前是预览：它们会启动 Workers 监控里显示的 Worker（健康状态、重启），但队列仍在进程内执行所有任务。没有给出参数时，`REMI_WORKER_PROCESS=1`、`REMI_WORKER_GPUS=0,1` 和 `REMI_WORKER_MLX=1` 起同样的作用（开关只认 `1`）。
 
 **已变更的参数。** 仅用于 Gradio 的参数已移除：请把 `--gradio-auth` / `--gradio-auth-path` 改为 `--auth` / `--auth-file`，并删除 `--gradio-debug`、`--gradio-allowed-path` 和 `--no-gradio-queue`。遇到未知参数时 WebUI 会拒绝启动，因此旧的登录参数不会被悄悄忽略。`--share` 仍被接受，但只会输出警告（请改用 `--listen`、反向代理或 `--ngrok`）；`--use-textbox-seed` 不再起作用；`--theme light|dark|system` 是尚未在外观菜单中选择主题的浏览器所用的主题（与以前一样，URL 中的 `?__theme=light` 会选定主题）；`--agent-scheduler-sqlite-file` 告诉队列导入器旧 Agent Scheduler 数据库的位置。不要盲目安装所有 attention 后端；原生 PyTorch attention 往往兼容性最好，详见上游[额外安装说明](https://github.com/Haoming02/sd-webui-forge-classic/wiki/Extra-Installations)。
 

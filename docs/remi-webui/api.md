@@ -234,12 +234,16 @@ for the detailed semantics of each route and `/docs` for the bodies.
 | bootstrap and forms | `GET /app`, `GET /schema/{tab}`, `GET /pages`, `GET /pages/{id}`, `POST /actions/{owner}/{action}`, `POST /rules/derive`, `GET /presets[/{name}]`, `GET /i18n/{locale}` |
 | jobs and queue | `POST/GET /jobs`, `GET/PATCH/DELETE /jobs/{id}`, `POST /jobs/{id}/interrupt\|skip\|retry\|duplicate`, `PUT /jobs/{id}/params`, `POST /jobs/star`, `POST /jobs/clear-history`, `GET /queue`, `GET /queue/items`, `POST /queue/reorder\|move\|pause\|resume\|stop-forever`, `POST /interrupt`, `GET /queue/import`, `POST /queue/import/{agent-scheduler\|prompt-queue}` |
 | files | `POST /uploads`, `GET /files/{id}`, `GET /thumbs/{id}`, `GET /outputs`, `DELETE /outputs/{id}`, `POST /outputs/save\|refresh\|open-folder` |
-| gallery and image info | `GET /gallery`, `GET /gallery/facets`, `GET /gallery/{id}`, `POST /gallery/star\|delete\|zip`, `POST /gallery/{id}/reveal`, `POST /pnginfo`, `POST /infotext/parse\|image` |
+| boards | `GET/POST /boards`, `GET/PATCH/DELETE /boards/{id}`, `POST /boards/{id}/items`, `POST /boards/{id}/items/remove`, `DELETE /boards/{id}/items/{file_id}` |
+| gallery and image info | `GET /gallery`, `GET /gallery/facets`, `GET /gallery/{id}`, `POST /gallery/star\|delete\|zip`, `POST /gallery/{id}/reveal`, `GET /gallery/{id}/lineage`, `POST /gallery/compare`, `POST /pnginfo`, `POST /infotext/parse\|image` |
 | models | `GET /models`, `POST /models/refresh\|unload\|reload`, `GET /models/loaded`, `GET/POST /models/hashes` |
 | networks (LoRA, embeddings, checkpoints, VAE, text encoders, extension pages) | `GET /networks`, `GET /networks/{kind}`, `GET /networks/{kind}/facets`, `GET/PATCH /networks/{kind}/{name}/meta`, `PUT /networks/{kind}/{name}/preview`, `POST /networks/{kind}/{name}/open-folder`, `POST /networks[/{kind}]/refresh` |
 | settings and styles | `GET/PATCH /options`, `POST /options/validate`, `GET /styles`, `PUT/DELETE /styles/{name}`, `POST /styles/apply`, `POST /prompt/tokens` |
-| prompt tools | `/prompt-tools/config`, `/complete`, `/usage`, `/lookup`, `/translate`, `/generate`, `/translation-key`, `/groups`, `/refresh`, `/history`, `/collections`, `/favorites`, `/favorites-export`, `/favorites-import` |
-| extensions | `GET/PATCH /extensions`, `POST /extensions/check-updates`, `POST /extensions/{name}/check`, `POST /extensions/update\|install`, `DELETE /extensions/{name}`, `GET /extensions/index`, `/extensions/config-states[/{id}[/restore]]` |
+| prompt tools | `/prompt-tools/config`, `/complete`, `/usage`, `/lookup`, `/translate`, `/generate`, `/translation-key`, `/groups`, `/refresh`, `/upsample`, `/history[/{id}]`, `/collections[/{id}]`, `/favorites[/{id}]`, `/favorites-export`, `/favorites-import` |
+| extensions | `GET/PATCH /extensions`, `POST /extensions/check-updates`, `POST /extensions/{name}/check`, `POST /extensions/update\|install`, `DELETE /extensions/{name}`, `GET /extensions/index`, `GET /extensions/diagnostics`, `/extensions/config-states[/{id}[/restore]]` |
+| recipes | `GET/POST /recipes`, `GET/PATCH/DELETE /recipes/{id}`, `POST /recipes/{id}/apply`, `GET /recipes/export`, `POST /recipes/import` |
+| pipelines (chains) | `GET/POST /chains`, `POST /chains/preview`, `GET/DELETE /chains/{id}`, `POST /chains/{id}/cancel\|pause\|resume\|rerun`, `GET/POST /chains/templates`, `GET/DELETE /chains/templates/{id}` |
+| workers | `GET /workers`, `GET /workers/{id}`, `POST /workers/{id}/restart` |
 | server | `GET /auth/status`, `POST /auth/login\|logout`, `GET /server/status`, `POST /server/reload\|restart`, `GET /sysinfo`, `POST /sysinfo/check`, `GET /licenses`, `GET /user-assets/{name}` |
 
 `POST /prompt-tools/translate` (`{"texts", "target"}`) and `POST

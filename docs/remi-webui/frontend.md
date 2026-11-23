@@ -39,9 +39,12 @@ api/                http transport, typed endpoints, models, query keys, WS stor
                     progress store, mock/ (fixtures, in-browser server, mock socket)
 ui/                 the schema renderer (see below)
 widgets/<name>/     custom widgets, one directory each (auto-registered)
-features/           generate-view features: prompt-editor, gallery (session results, history grid),
-                    lightbox, progress (run machine + controller, restore, wake lock / title /
-                    notifications), model-bar, send-to, infotext
+features/           one directory per feature, shared by the pages: prompt-editor, prompt-tools,
+                    gallery (session results, history grid), library (boards, lineage), lightbox,
+                    compare, progress (run machine + controller, restore, wake lock / title /
+                    notifications), queue, pipelines, recipes, networks, model-bar, quicksettings,
+                    send-to, infotext, pnginfo, extras, auth, errors, server-control
+canvas/             the image editor (state, engine, ui; see "Image editor")
 pages/<page>/       one lazily loaded chunk per page; pages/ext/ = extension pages (#/ext/<id>),
                     pages/custom/<name>/ = dedicated views for extension pages with `widget=`
 components/         app-level components (SearchSelect, Segmented, ErrorBoundary, …)
@@ -49,6 +52,7 @@ components/ui/      vendored shadcn components (edit sparingly; lint-exempt)
 i18n/               i18next setup, locale store, catalog loading
 locales/            chrome translations, one JSON per locale (zh-CN.json)
 lib/                appearance store (theme.ts), toast, media query, cn()
+styles/             fonts.css, shadcn.css (keyframes and variants the vendored components use)
 test/               setup.ts (jsdom shims, jest-dom, i18n init), fake-socket.ts (WebSocket double)
 ```
 
