@@ -97,7 +97,7 @@ export function LayersPopover({ layer, inpaint, onlyMasked }: LayersPopoverProps
                         aria-label={t(MASK_COLOR_NAMES[color])}
                         className={cn(
                           "size-5 rounded-full border border-black/15 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 dark:border-white/20",
-                          "data-checked:ring-2 data-checked:ring-primary data-checked:ring-offset-1 data-checked:ring-offset-popover",
+                          "data-checked:ring-2 data-checked:ring-primary data-checked:ring-offset-1 data-checked:ring-offset-background",
                         )}
                         style={{ backgroundColor: color }}
                       />

@@ -45,7 +45,7 @@ function Report({ report }: { report: ImportReport }) {
     <div className="flex min-h-0 flex-col gap-3">
       <dl className="grid grid-cols-3 gap-2 sm:grid-cols-6">
         {counts.map(([label, value]) => (
-          <div key={label} className="rounded-lg bg-muted px-2 py-1.5 text-center">
+          <div key={label} className="rounded-lg bg-background px-2 py-1.5 text-center">
             <dd className="text-xl font-semibold tabular-nums">{value}</dd>
             <dt className="text-[0.6875rem] text-muted-foreground">{label}</dt>
           </div>

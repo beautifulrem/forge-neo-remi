@@ -49,7 +49,7 @@ function ConfirmDialog({ command }: { command: ServerCommand }) {
           </AlertDialogDescription>
         </AlertDialogHeader>
         {running && command === "reload" ? (
-          <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">{t("A job is running: the reload starts when it has finished.")}</p>
+          <p className="rounded-lg bg-background px-3 py-2 text-sm text-muted-foreground">{t("A job is running: the reload starts when it has finished.")}</p>
         ) : null}
         {unsaved > 0 ? (
           <p role="alert" className="flex items-start gap-2 rounded-lg bg-warning/15 px-3 py-2 text-sm">

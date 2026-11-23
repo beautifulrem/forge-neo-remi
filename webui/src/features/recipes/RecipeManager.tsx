@@ -339,12 +339,12 @@ export function RecipeManager() {
             </div>
 
             {captured.count === 0 ? (
-              <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+              <p className="rounded-md bg-background px-3 py-2 text-xs text-muted-foreground">
                 {t("No modified parameters found on {{tab}}.", { tab: captureTab })}
               </p>
             ) : (
               <div className="-mx-1 max-h-28 overflow-y-auto px-1">
-                <pre className="rounded-md bg-muted p-2 font-mono text-[0.6875rem] text-muted-foreground">
+                <pre className="rounded-md bg-background p-2 font-mono text-[0.6875rem] text-muted-foreground">
                   {JSON.stringify({ core: captured.core_patch, scripts: captured.scripts_patch }, null, 2)}
                 </pre>
               </div>
