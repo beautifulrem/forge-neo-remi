@@ -5,12 +5,13 @@
  * Bits". While the server loads a model, `model.loading` shows its stage.
  */
 import { useQuery } from "@tanstack/react-query"
-import { Box, CircleHelp, Hourglass, Layers, Loader2, SlidersHorizontal } from "@/components/icons"
+import { Box, CircleHelp, Hourglass, Layers, Loader2, SlidersHorizontal, TriangleAlert } from "@/components/icons"
 import { useEffect, useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useClientOption } from "@/api/app-options"
 import { useProgress } from "@/api/progress"
 import { modelsQuery } from "@/api/queries"
+import { LoadFailed } from "@/components/LoadFailed"
 import { SearchSelect } from "@/components/SearchSelect"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -69,6 +70,22 @@ function CheckpointPicker({ className }: { className?: string }) {
     hint: [m.arch ? presetLabel(m.arch) : null, formatBytes(m.size)].filter(Boolean).join(" · ") || undefined,
   }))
   const busy = write.isPending || loading !== null
+  if (models.isError && !models.data) {
+    // an empty list would read as "no checkpoints installed"; say it failed and offer to load it again
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        className={cn(FIELD_BUTTON_CLASS, "min-w-0 justify-start gap-1.5 px-2.5 font-normal text-destructive", className)}
+        onClick={() => void models.refetch()}
+        title={t("Retry")}
+      >
+        <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
+        <span className="truncate">{t("Could not load the models")}</span>
+        <span className="ms-auto shrink-0 text-muted-foreground">{t("Retry")}</span>
+      </Button>
+    )
+  }
   return (
     <SearchSelect
       // the loading stage sits inside the pill, so a crowded header never cuts it off
@@ -188,7 +205,11 @@ function ModulesPicker({ className, segmented = false }: { className?: string; s
               )
             },
           )}
-          {modules.length === 0 ? <p className="px-2 py-4 text-center text-sm text-muted-foreground">{t("No modules found")}</p> : null}
+          {models.isError && !models.data ? (
+            <LoadFailed error={models.error} message={t("Could not load the models")} onRetry={() => void models.refetch()} className="px-2" />
+          ) : modules.length === 0 ? (
+            <p className="px-2 py-4 text-center text-sm text-muted-foreground">{t("No modules found")}</p>
+          ) : null}
         </div>
         <div className="flex flex-col gap-1 px-1 text-xs text-muted-foreground">
           <p>{t("Applied when this panel closes.")}</p>

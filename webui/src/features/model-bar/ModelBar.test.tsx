@@ -2,6 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
+import { ApiError } from "@/api/http"
 import { bootstrap, models } from "@/api/mock/fixtures"
 import { keys, queryClient } from "@/api/queries"
 import ModelBar, { MODULES_HELP_URL } from "./ModelBar"
@@ -73,6 +74,37 @@ describe("model bar modules picker", () => {
     expect(link).toHaveAttribute("target", "_blank")
     expect(link.getAttribute("rel")).toContain("noopener")
     expect(screen.getByText(/Checkpoints without a built-in VAE or text encoder/)).toBeVisible()
+  })
+})
+
+describe("model bar when the model list does not load", () => {
+  beforeEach(() => {
+    queryClient.setQueryData(keys.app, structuredClone(bootstrap))
+    vi.spyOn(api, "app").mockResolvedValue(structuredClone(bootstrap))
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    queryClient.clear()
+  })
+
+  it("says the models could not load and loads them again on retry, instead of an empty picker", async () => {
+    const list = vi.spyOn(api, "models").mockRejectedValue(new ApiError(404, "boom"))
+    renderBar()
+    const retry = await screen.findByRole("button", { name: /Could not load the models/ })
+    list.mockResolvedValue(models)
+    fireEvent.click(retry)
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Could not load the models/ })).toBeNull())
+    expect(screen.getByRole("combobox", { name: "Checkpoint" })).toBeTruthy()
+  })
+
+  it("shows the failure in the modules picker too, with a retry", async () => {
+    vi.spyOn(api, "models").mockRejectedValue(new ApiError(404, "boom"))
+    renderBar()
+    await screen.findByRole("button", { name: /Could not load the models/ })
+    fireEvent.click(modulesTriggers()[0]!)
+    const alert = await screen.findByRole("alert")
+    expect(alert.textContent).toContain("Retry")
+    expect(screen.queryByText("No modules found")).toBeNull()
   })
 })
 

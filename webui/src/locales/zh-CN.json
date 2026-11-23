@@ -1650,5 +1650,6 @@
   "Could not save the API key": "无法保存 API 密钥",
   "Could not save to favorites": "无法保存到收藏",
   "Could not update the favorites": "无法更新收藏",
-  "Could not update the history": "无法更新历史"
+  "Could not update the history": "无法更新历史",
+  "Could not load the models": "无法加载模型列表"
 }
