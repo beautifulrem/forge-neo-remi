@@ -26,7 +26,7 @@ export function PromptToolsDecorator(props: PromptDecoratorProps) {
         {props.children}
       </div>
       {chips && config ? (
-        <Suspense fallback={<div aria-hidden className="min-h-16 rounded-lg border border-input bg-input/30" />}>
+        <Suspense fallback={<div aria-hidden className="min-h-16 rounded-sm bg-field" />}>
           <ChipsView {...props} config={config} />
         </Suspense>
       ) : null}

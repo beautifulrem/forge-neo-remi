@@ -9,6 +9,7 @@ import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
 import type { Job, JobStatus } from "@/api/types"
+import { LoadMoreStatus } from "@/components/LoadMoreStatus"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -161,11 +162,13 @@ type HistoryListProps = {
   total: number | null
   hasMore: boolean
   loadingMore: boolean
+  /** The last next page failed: no more loading on scroll, a retry instead. */
+  loadFailed?: boolean
   onLoadMore: () => void
   onView: (job: Job, index: number) => void
 }
 
-export function HistoryList({ jobs, total, hasMore, loadingMore, onLoadMore, onView }: HistoryListProps) {
+export function HistoryList({ jobs, total, hasMore, loadingMore, loadFailed = false, onLoadMore, onView }: HistoryListProps) {
   // TanStack Virtual's virtualizer is a mutable object the React Compiler must not memoise.
   "use no memo"
   const { t } = useTranslation()
@@ -181,8 +184,8 @@ export function HistoryList({ jobs, total, hasMore, loadingMore, onLoadMore, onV
   const items = virtualizer.getVirtualItems()
   const last = items.at(-1)?.index ?? -1
   useEffect(() => {
-    if (last >= jobs.length - 3 && hasMore && !loadingMore) onLoadMore()
-  }, [last, jobs.length, hasMore, loadingMore, onLoadMore])
+    if (last >= jobs.length - 3 && hasMore && !loadingMore && !loadFailed) onLoadMore()
+  }, [last, jobs.length, hasMore, loadingMore, loadFailed, onLoadMore])
 
   return (
     <div ref={setScroller} className="min-h-0 flex-1 overflow-y-auto">
@@ -207,7 +210,7 @@ export function HistoryList({ jobs, total, hasMore, loadingMore, onLoadMore, onV
           )
         })}
       </div>
-      {loadingMore ? <p className="py-2 text-center text-xs text-muted-foreground">{t("Loading…")}</p> : null}
+      <LoadMoreStatus loading={loadingMore} failed={loadFailed} onRetry={onLoadMore} />
     </div>
   )
 }

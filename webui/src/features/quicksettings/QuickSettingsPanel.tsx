@@ -51,7 +51,7 @@ export default function QuickSettingsPanel({ keys: pinned }: { keys: string[] })
                     <Button
                       variant="ghost"
                       size="icon-xs"
-                      className="opacity-0 group-focus-within/quick:opacity-100 group-hover/quick:opacity-100 focus-visible:opacity-100"
+                      className="opacity-0 group-focus-within/quick:opacity-100 group-hover/quick:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
                       aria-label={t("Unpin {{label}}", { label: t(node.label || node.name) })}
                       onClick={() => void setPinned(node.name, false)}
                     />

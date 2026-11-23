@@ -434,7 +434,7 @@ def _forward(name: str, spec: ActionSpec, bound: Callable[..., Any]) -> Callable
         return bound(ctx, values)
 
     call.__name__ = name
-    return ui.action(name, gpu=spec.gpu)(call)
+    return ui.action(name, gpu=spec.gpu, timeout=spec.timeout)(call)
 
 
 def _task_patch(task: Task) -> dict[str, Any]:

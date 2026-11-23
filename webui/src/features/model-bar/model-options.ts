@@ -62,7 +62,8 @@ export function useOptionWrite<T>(key: string) {
   return useMutation({
     mutationKey: ["option", key],
     mutationFn: (value: T) => api.patchOptions({ [key]: value }),
-    onMutate: (value: T) => {
+    onMutate: async (value: T) => {
+      await queryClient.cancelQueries({ queryKey: keys.app }) // an older answer must not flick the picker back
       queryClient.setQueryData<Bootstrap>(keys.app, (data) => (data ? { ...data, options: { ...data.options, [key]: value } } : data))
     },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: keys.app }),
@@ -79,6 +80,7 @@ export function writeModules(next: readonly string[]) {
   const current = clientOption("forge_additional_modules").map(fileName)
   if (next.length === current.length && next.every((name, i) => name === current[i])) return
   const key = MODEL_OPTION_KEYS.modules
+  void queryClient.cancelQueries({ queryKey: keys.app }) // an older answer must not flick the picker back
   queryClient.setQueryData<Bootstrap>(keys.app, (data) => (data ? { ...data, options: { ...data.options, [key]: [...next] } } : data))
   void api
     .patchOptions({ [key]: next })

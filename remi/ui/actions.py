@@ -33,8 +33,6 @@ log = logging.getLogger(__name__)
 PATCH_KEYS = frozenset({"value", "choices", "visible", "enabled", "label", "info", "hint", "minimum", "maximum", "step"})
 SPECIAL_KEYS = frozenset({"__toast__", "__outputs__", "__settings__", "__refresh__", "__advice__", "__capabilities__"})
 TOAST_LEVELS = ("info", "success", "warning", "error")
-DEFAULT_ACTION_TIMEOUT = 30.0
-"""Default timeout (seconds) for isolated extension action execution."""
 
 
 class ActionTimeoutError(TimeoutError):
@@ -48,7 +46,8 @@ class ActionSpec:
     gpu: bool = False
     """Queue behind generation (runs under the generation lock)."""
     timeout: float | None = None
-    """Optional timeout in seconds for isolated execution (``None``: default)."""
+    """Timeout in seconds, run isolated (``None``: no time limit). Ignored with
+    ``gpu``: the action holds the generation lock until it really ends."""
 
 
 @dataclass

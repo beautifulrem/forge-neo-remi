@@ -363,11 +363,90 @@ def test_upsampling_runs_behind_the_generation_lock_and_off_the_request(tmp_path
     with rig(tmp_path, upsampler=upsampler) as r:
         chain = r.runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "x"}), *seeded(5)[:1]])
         assert chain.status == "running"  # the request did not wait for the upsampler
+        assert r.runner.busy()  # no stage job is queued yet: the queue is not done
         gate.set()
         done = r.wait(chain.id)
         assert done.status == "completed"
+        assert not r.runner.busy()
         assert seen["locked"] is True and seen["thread"].startswith("remi-chain-upsample")
         assert r.executed[0]["core"]["prompt"] == "fox"  # the stage's own prompt wins
+
+
+def completion_action(queue, action: str) -> list[str]:
+    """Arm ``queue_completion_action``; returns the actions the queue ran."""
+
+    values, ran = {"queue_completion_action": action}, []
+    queue.option = lambda name, default: values.get(name, default)
+    queue.set_option = values.__setitem__
+    queue.when_done = ran.append
+    return ran
+
+
+def test_a_pipeline_that_ends_in_upsampling_runs_the_completion_action(tmp_path):
+    with rig(tmp_path) as r:
+        ran = completion_action(r.queue, "Shut down")
+        chain = r.runner.create_chain([*seeded(5)[:1], StageSpec(kind="prompt_upsample", core={"prompt": "x"})])
+        assert r.wait(chain.id).status == "completed"
+        assert r.runner.wait_idle()
+        assert ran == ["Shut down"]  # the last stage ran off the worker: no job's end saw the queue done
+
+
+def test_a_pipeline_whose_upsampling_fails_runs_the_completion_action(tmp_path):
+    def upsampler(stage, prompt, outputs):
+        raise RuntimeError("model missing")
+
+    with rig(tmp_path, upsampler=upsampler) as r:
+        ran = completion_action(r.queue, "Shut down")
+        chain = r.runner.create_chain([*seeded(5)[:1], StageSpec(kind="prompt_upsample", core={"prompt": "x"}), *seeded(5)[1:]])
+        assert r.wait(chain.id).status == "failed"
+        assert r.runner.wait_idle()
+        assert ran == ["Shut down"]
+
+
+def test_a_pipeline_that_ends_during_the_request_does_not_run_the_completion_action(tmp_path):
+    with rig(tmp_path) as r:
+        first = r.wait(r.runner.create_chain(seeded(5)).id)
+        assert first.status == "completed" and r.queue.wait_idle()
+        ran = completion_action(r.queue, "Shut down")
+        again = r.runner.rerun_chain(first.id)
+        assert again.status == "completed"  # every stage cached: done before the request answers
+        assert r.runner.wait_idle() and r.queue.wait_idle()
+        assert ran == []  # the person who clicked is at the computer
+
+
+def test_the_completion_action_runs_once_when_two_threads_find_the_queue_done(tmp_path):
+    with rig(tmp_path) as r:
+        ran = completion_action(r.queue, "Shut down")
+        read = r.queue.option
+
+        def slow_read(name, default):  # widens the window between reading the action and switching it off
+            value = read(name, default)
+            time.sleep(0.02)
+            return value
+
+        r.queue.option = slow_read
+        threads = [threading.Thread(target=r.queue.recheck_done) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        assert ran == ["Shut down"]
+
+
+def test_a_pipeline_cancelled_by_hand_does_not_run_the_completion_action(tmp_path):
+    gate = threading.Event()
+
+    def upsampler(stage, prompt, outputs):
+        gate.wait(5)
+        return "late"
+
+    with rig(tmp_path, upsampler=upsampler) as r:
+        ran = completion_action(r.queue, "Shut down")
+        chain = r.runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "x"}), *seeded(5)[:1]])
+        r.runner.cancel_chain(chain.id)
+        gate.set()
+        assert r.runner.wait_idle()
+        assert ran == []
 
 
 def test_cancel_during_upsampling_drops_its_result(tmp_path):

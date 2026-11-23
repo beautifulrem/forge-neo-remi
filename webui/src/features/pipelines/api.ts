@@ -5,7 +5,7 @@
 import { queryOptions } from "@tanstack/react-query"
 import { queryClient } from "@/api/queries"
 import type { ChainListResponse, ChainPreviewResponse, ChainTemplate, JobChain, StageSpec } from "./types"
-import { workbenchRequest } from "./workbench-http"
+import { ApiError, workbenchRequest } from "./workbench-http"
 
 export const chainKeys = {
   all: ["chains"] as const,
@@ -49,8 +49,9 @@ export async function listChains(signal?: AbortSignal): Promise<ChainListRespons
       next_cursor: data?.next_cursor ?? null,
       total: typeof data?.total === "number" ? data.total : 0,
     }
-  } catch {
-    return { items: [], next_cursor: null, total: 0 }
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return { items: [], next_cursor: null, total: 0 }
+    throw error // shown with a retry, not cached as "no runs yet"
   }
 }
 
@@ -60,8 +61,9 @@ export async function listChainTemplates(signal?: AbortSignal): Promise<ChainTem
     if (Array.isArray(data)) return data
     if (data && typeof data === "object" && Array.isArray(data.items)) return data.items
     return []
-  } catch {
-    return []
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return []
+    throw error
   }
 }
 

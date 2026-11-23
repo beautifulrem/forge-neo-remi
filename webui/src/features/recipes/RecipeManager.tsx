@@ -209,7 +209,8 @@ export function RecipeManager() {
           </Button>
           <Button
             size="sm"
-            className="h-7 gap-1.5 border border-border/60 bg-glow px-3 text-xs font-medium text-glow-foreground shadow-xs hover:bg-glow hover:opacity-90"
+            variant="secondary"
+            className="h-7 gap-1.5 px-3 text-xs font-medium"
             onClick={() => setCaptureOpen(true)}
           >
             <Plus className="size-3.5" aria-hidden />
@@ -256,7 +257,7 @@ export function RecipeManager() {
                 <li key={recipe.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-muted/25">
                   <div className="min-w-0 flex-1 basis-64">
                     <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-                      <span className="truncate text-[0.8125rem] font-semibold text-foreground" title={recipe.name}>
+                      <span className="truncate text-[0.8rem] font-semibold text-foreground" title={recipe.name}>
                         {recipe.name}
                       </span>
                       <span className="font-mono text-xs text-muted-foreground tabular-nums">{metaParts.join(" · ")}</span>
@@ -267,7 +268,7 @@ export function RecipeManager() {
                       </p>
                     ) : null}
                     {detailParts.length > 0 ? (
-                      <p className="mt-1 truncate font-mono text-[0.71875rem] text-muted-foreground" title={detailParts.join(" · ")}>
+                      <p className="mt-1 truncate font-mono text-[0.6875rem] text-muted-foreground" title={detailParts.join(" · ")}>
                         {detailParts.join(" · ")}
                       </p>
                     ) : null}

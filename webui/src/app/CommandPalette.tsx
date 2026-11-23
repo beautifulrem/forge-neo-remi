@@ -60,7 +60,7 @@ export default function CommandPalette() {
                     onSelect={() => run(command)}
                   >
                     {Icon ? <Icon aria-hidden /> : null}
-                    <span className="truncate">{label}</span>
+                    <span title={label} className="truncate">{label}</span>
                     {command.shortcut ? <CommandShortcut className="touch-only:hidden">{formatShortcut(command.shortcut)}</CommandShortcut> : null}
                   </CommandItem>
                 )

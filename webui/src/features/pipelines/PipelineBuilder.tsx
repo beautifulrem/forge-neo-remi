@@ -19,14 +19,23 @@ import {
   Save,
   Trash2,
 } from "@/components/icons"
-import { Fragment, useEffect, useMemo, useState } from "react"
+import { type ComponentProps, Fragment, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
 import { queryClient } from "@/api/queries"
 import { onWsEvent } from "@/api/ws"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -59,6 +68,42 @@ function numOr(value: unknown, fallback: number): number {
   if (value === null || value === undefined || (typeof value === "string" && value.trim() === "")) return fallback
   const n = Number(value)
   return Number.isFinite(n) ? n : fallback
+}
+
+/**
+ * A number field of a stage card: keeps what is typed (an emptied field is not
+ * the default yet) and commits each valid number; leaving it invalid restores
+ * the stage's value.
+ */
+function StageNumber({ value, onCommit, ...props }: Omit<ComponentProps<typeof Input>, "value" | "onChange" | "type"> & { value: number; onCommit: (value: number) => void }) {
+  const [text, setText] = useState(String(value))
+  const [shown, setShown] = useState(value)
+  if (value !== shown) {
+    // changed elsewhere (a template, a moved stage): show it
+    setShown(value)
+    setText(String(value))
+  }
+  return (
+    <Input
+      {...props}
+      type="number"
+      value={text}
+      onChange={(event) => {
+        const next = event.target.value
+        setText(next)
+        const n = next.trim() === "" ? Number.NaN : Number(next)
+        if (Number.isFinite(n)) {
+          setShown(n)
+          onCommit(n)
+        }
+      }}
+      onBlur={(event) => {
+        const n = text.trim() === "" ? Number.NaN : Number(text)
+        if (!Number.isFinite(n)) setText(String(value))
+        props.onBlur?.(event)
+      }}
+    />
+  )
 }
 
 /** A run still moving: it can be cancelled, not started again. */
@@ -166,7 +211,11 @@ export function PipelineBuilder() {
 
   const deleteTemplate = useMutation({
     mutationFn: (id: string) => deleteChainTemplateApi(id),
-    onSuccess: () => refreshChains(),
+    onSuccess: () => {
+      refreshChains()
+      toast.success(t("Template deleted"))
+    },
+    onError: (error) => toast.error(t("Could not delete template"), { description: errorText(error) }),
   })
 
   const updateStage = (index: number, updater: (prev: StageSpec) => StageSpec) => {
@@ -230,6 +279,7 @@ export function PipelineBuilder() {
   }
 
   const templateItems = templates.data && templates.data.length > 0 ? templates.data : STARTER_PIPELINES
+  const savedTemplates = (templates.data ?? []).filter((tpl) => "created_at" in tpl)
 
   return (
     <div className="flex flex-col gap-5">
@@ -240,7 +290,7 @@ export function PipelineBuilder() {
           onChange={(event) => setName(event.target.value)}
           aria-label={t("Pipeline name")}
           placeholder={t("Pipeline name")}
-          className="h-7 min-w-48 flex-1 text-[0.8125rem] font-medium sm:max-w-xs"
+          className="h-7 min-w-48 flex-1 text-[0.8rem] font-medium sm:max-w-xs"
         />
 
         <DropdownMenu>
@@ -250,23 +300,29 @@ export function PipelineBuilder() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-64">
             {templateItems.map((tpl) => (
-              <DropdownMenuItem key={tpl.id} onClick={() => loadTemplate(tpl)} className="justify-between gap-2">
-                <span className="truncate">{tpl.name}</span>
-                {"created_at" in tpl ? (
-                  <button
-                    type="button"
-                    aria-label={t("Delete template")}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      deleteTemplate.mutate(tpl.id)
-                    }}
-                    className="rounded p-0.5 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
-                  >
-                    <Trash2 className="size-3" />
-                  </button>
-                ) : null}
+              <DropdownMenuItem key={tpl.id} onClick={() => loadTemplate(tpl)} title={tpl.name}>
+                <span title={tpl.name} className="truncate">{tpl.name}</span>
               </DropdownMenuItem>
             ))}
+            {savedTemplates.length > 0 ? (
+              <>
+                <DropdownMenuSeparator />
+                {/* its own submenu: a delete button inside a load item could not be reached from the keyboard */}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Trash2 aria-hidden />
+                    {t("Delete template")}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="min-w-48">
+                    {savedTemplates.map((tpl) => (
+                      <DropdownMenuItem key={tpl.id} variant="destructive" disabled={deleteTemplate.isPending} onClick={() => deleteTemplate.mutate(tpl.id)} title={tpl.name}>
+                        <span title={tpl.name} className="truncate">{tpl.name}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              </>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -332,7 +388,8 @@ export function PipelineBuilder() {
           ) : (
             <Button
               size="sm"
-              className="h-7 gap-1.5 border border-border/60 bg-glow px-3.5 text-xs font-medium text-glow-foreground shadow-xs hover:bg-glow hover:opacity-90"
+              variant="glow"
+              className="h-7 gap-1.5 px-3.5 text-xs font-medium"
               disabled={run.isPending || stages.every((s) => s.enabled === false)}
               onClick={() => run.mutate(activeRun && firstMod !== null ? firstMod : undefined)}
             >
@@ -347,7 +404,9 @@ export function PipelineBuilder() {
       <ol className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:flex xl:items-stretch xl:gap-0">
         {stages.map((stage, index) => {
           const planned = plan[index]!
-          const runStage = activeRun?.stages[index]
+          // the run's stage at this place only while this card still is that stage (not after a move or an edit)
+          const atIndex = activeRun?.stages[index]
+          const runStage = atIndex && atIndex.kind === stage.kind && planned.decision !== "execute" ? atIndex : undefined
           const enabled = stage.enabled !== false
           const core = stage.core ?? {}
           const sampler = stage.scripts?.sampler ?? {}
@@ -367,7 +426,7 @@ export function PipelineBuilder() {
                   <span className="shrink-0 font-mono text-[0.6875rem] font-semibold tracking-wider text-muted-foreground tabular-nums">
                     {stepNumber(index)}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-[0.8125rem] font-semibold text-foreground" title={t(STAGE_META[stage.kind].label)}>
+                  <span className="min-w-0 flex-1 truncate text-[0.8rem] font-semibold text-foreground" title={t(STAGE_META[stage.kind].label)}>
                     {t(STAGE_META[stage.kind].label)}
                   </span>
                   <Switch
@@ -471,16 +530,15 @@ export function PipelineBuilder() {
                       <div className="grid grid-cols-2 gap-2">
                         <label className="flex flex-col gap-1">
                           <span className="text-[0.6875rem] font-medium text-muted-foreground">{t("Steps")}</span>
-                          <Input
-                            type="number"
+                          <StageNumber
                             min={1}
                             max={150}
                             value={numOr(sampler.steps, 28)}
                             disabled={!enabled}
-                            onChange={(event) =>
+                            onCommit={(value) =>
                               updateStage(index, (prev) => ({
                                 ...prev,
-                                scripts: { ...prev.scripts, sampler: { ...prev.scripts?.sampler, steps: numOr(event.target.value, 28) } },
+                                scripts: { ...prev.scripts, sampler: { ...prev.scripts?.sampler, steps: value } },
                               }))
                             }
                             className="h-7 font-mono text-xs tabular-nums"
@@ -488,17 +546,16 @@ export function PipelineBuilder() {
                         </label>
                         <label className="flex flex-col gap-1">
                           <span className="text-[0.6875rem] font-medium text-muted-foreground">{t("CFG scale")}</span>
-                          <Input
-                            type="number"
+                          <StageNumber
                             min={1}
                             max={30}
                             step={0.5}
                             value={numOr(core.cfg_scale, 5)}
                             disabled={!enabled}
-                            onChange={(event) =>
+                            onCommit={(value) =>
                               updateStage(index, (prev) => ({
                                 ...prev,
-                                core: { ...prev.core, cfg_scale: numOr(event.target.value, 5) },
+                                core: { ...prev.core, cfg_scale: value },
                               }))
                             }
                             className="h-7 font-mono text-xs tabular-nums"
@@ -512,17 +569,16 @@ export function PipelineBuilder() {
                     <div className="grid grid-cols-2 gap-2">
                       <label className="flex flex-col gap-1">
                         <span className="text-[0.6875rem] font-medium text-muted-foreground">{t("Denoising strength")}</span>
-                        <Input
-                          type="number"
+                        <StageNumber
                           min={0.05}
                           max={1}
                           step={0.05}
                           value={numOr(core.denoising_strength, 0.35)}
                           disabled={!enabled}
-                          onChange={(event) =>
+                          onCommit={(value) =>
                             updateStage(index, (prev) => ({
                               ...prev,
-                              core: { ...prev.core, denoising_strength: numOr(event.target.value, 0.35) },
+                              core: { ...prev.core, denoising_strength: value },
                             }))
                           }
                           className="h-7 font-mono text-xs tabular-nums"
@@ -530,16 +586,15 @@ export function PipelineBuilder() {
                       </label>
                       <label className="flex flex-col gap-1">
                         <span className="text-[0.6875rem] font-medium text-muted-foreground">{t("Steps")}</span>
-                        <Input
-                          type="number"
+                        <StageNumber
                           min={1}
                           max={150}
                           value={numOr(sampler.steps, 20)}
                           disabled={!enabled}
-                          onChange={(event) =>
+                          onCommit={(value) =>
                             updateStage(index, (prev) => ({
                               ...prev,
-                              scripts: { ...prev.scripts, sampler: { ...prev.scripts?.sampler, steps: numOr(event.target.value, 20) } },
+                              scripts: { ...prev.scripts, sampler: { ...prev.scripts?.sampler, steps: value } },
                             }))
                           }
                           className="h-7 font-mono text-xs tabular-nums"
@@ -552,17 +607,16 @@ export function PipelineBuilder() {
                     <div className="grid grid-cols-2 gap-2">
                       <label className="flex flex-col gap-1">
                         <span className="text-[0.6875rem] font-medium text-muted-foreground">{t("Upscale factor")}</span>
-                        <Input
-                          type="number"
+                        <StageNumber
                           min={1}
                           max={8}
                           step={0.5}
                           value={numOr(core.upscaling_resize, 2)}
                           disabled={!enabled}
-                          onChange={(event) =>
+                          onCommit={(value) =>
                             updateStage(index, (prev) => ({
                               ...prev,
-                              core: { ...prev.core, upscaling_resize: numOr(event.target.value, 2) },
+                              core: { ...prev.core, upscaling_resize: value },
                             }))
                           }
                           className="h-7 font-mono text-xs tabular-nums"
@@ -663,7 +717,14 @@ export function PipelineBuilder() {
             <span className="ml-2 font-mono font-normal text-muted-foreground tabular-nums">{chains.data?.items.length ?? 0}</span>
           </h3>
         </div>
-        {(chains.data?.items.length ?? 0) === 0 ? (
+        {chains.isError && !chains.data ? (
+          <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-4 text-xs">
+            <span className="text-destructive">{errorText(chains.error)}</span>
+            <Button variant="outline" size="sm" className="h-7" onClick={() => void chains.refetch()}>
+              {t("Retry")}
+            </Button>
+          </div>
+        ) : (chains.data?.items.length ?? 0) === 0 ? (
           <p className="px-4 py-5 text-xs text-muted-foreground">{t("No pipeline runs yet")}</p>
         ) : (
           <ul className="divide-y divide-border/70">
@@ -674,7 +735,7 @@ export function PipelineBuilder() {
                 <li key={chain.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/25">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span className="truncate text-[0.8125rem] font-medium text-foreground">{chain.name}</span>
+                      <span title={chain.name} className="truncate text-[0.8rem] font-medium text-foreground">{chain.name}</span>
                       <span className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
                         <span
                           className={cn(

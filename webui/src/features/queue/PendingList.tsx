@@ -47,6 +47,8 @@ async function commitMove(latest: readonly Job[], from: number, to: number, text
   const plan = planMove(latest, from, to)
   if (!plan) return
   const byId = new Map(latest.map((job) => [job.id, job]))
+  // a refetch already on its way (job.queued, queue.changed) would land after this and show the old order
+  await queryClient.cancelQueries({ queryKey: keys.queueItems })
   queryClient.setQueryData<Job[]>(
     keys.queueItems,
     plan.order.map((id) => (id === plan.id && plan.priority !== null ? { ...byId.get(id)!, priority: plan.priority } : byId.get(id)!)),

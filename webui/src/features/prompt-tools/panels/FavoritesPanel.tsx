@@ -299,7 +299,7 @@ export default function FavoritesPanel({ value, setValue, kind, disabled, close 
                       className="min-w-0 flex-1 rounded-md px-1 py-0.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
                     >
                       <span className="flex items-center gap-1.5">
-                        {item.name ? <span className="truncate text-xs font-semibold">{item.name}</span> : null}
+                        {item.name ? <span title={item.name} className="truncate text-xs font-semibold">{item.name}</span> : null}
                         {item.kind === "tags" ? <span className="rounded bg-muted px-1 text-[0.625rem] font-medium text-muted-foreground">{t("Tags")}</span> : null}
                       </span>
                       <span className="line-clamp-3 text-xs break-words whitespace-pre-wrap">{item.text}</span>
@@ -335,7 +335,7 @@ export default function FavoritesPanel({ value, setValue, kind, disabled, close 
                               <DropdownMenuRadioItem value={NO_COLLECTION}>{t("Unsorted")}</DropdownMenuRadioItem>
                               {named.map((collection) => (
                                 <DropdownMenuRadioItem key={collection.id} value={collection.id!}>
-                                  <span className="truncate">{collection.name}</span>
+                                  <span title={collection.name} className="truncate">{collection.name}</span>
                                 </DropdownMenuRadioItem>
                               ))}
                             </DropdownMenuRadioGroup>

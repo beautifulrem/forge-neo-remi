@@ -3,7 +3,7 @@ export const COMBOBOX_CHIPS_CLASS =
   "flex min-h-8 flex-wrap items-center gap-1 rounded-sm border border-transparent bg-field px-2.5 py-1 text-sm transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 has-aria-invalid:border-destructive has-aria-invalid:ring-3 has-aria-invalid:ring-destructive/20 has-data-[slot=combobox-chip]:px-1 dark:has-aria-invalid:border-destructive/50 dark:has-aria-invalid:ring-destructive/40"
 
 export const COMBOBOX_CHIP_CLASS =
-  "flex h-[calc(--spacing(5.25))] w-fit items-center justify-center gap-1 rounded-sm bg-muted px-1.5 text-xs font-medium whitespace-nowrap text-foreground has-disabled:pointer-events-none has-disabled:cursor-not-allowed has-disabled:opacity-50 has-data-[slot=combobox-chip-remove]:pr-0"
+  "flex h-[calc(--spacing(5.25))] w-fit items-center justify-center gap-1 rounded-xs bg-muted px-1.5 text-xs font-medium whitespace-nowrap text-foreground has-disabled:pointer-events-none has-disabled:cursor-not-allowed has-disabled:opacity-50 has-data-[slot=combobox-chip-remove]:pr-0"
 
 export const COMBOBOX_CHIP_REMOVE_CLASS = "-ml-1 opacity-50 hover:opacity-100"
 

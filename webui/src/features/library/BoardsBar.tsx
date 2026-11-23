@@ -49,7 +49,8 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
   const view = useGalleryView()
   const boardId = view.boardId
   const setView = view.set
-  const { data: boards = [] } = useQuery(boardsQuery)
+  const boardsList = useQuery(boardsQuery)
+  const boards = boardsList.data ?? []
   const facets = useQuery({ ...galleryFacetsQuery, enabled: count !== undefined })
 
   const [createOpen, setCreateOpen] = useState(false)
@@ -147,11 +148,21 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <span className="truncate">{board.name}</span>
+              <span title={board.name} className="truncate">{board.name}</span>
               <span className="font-mono text-[0.6875rem] text-muted-foreground tabular-nums">{board.item_count}</span>
             </button>
           )
         })}
+        {boardsList.isError && !boardsList.data ? (
+          <button
+            type="button"
+            title={errorText(boardsList.error)}
+            onClick={() => void boardsList.refetch()}
+            className="inline-flex h-8 items-center gap-1 px-2 text-xs text-destructive outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            {t("Could not load boards. Retry")}
+          </button>
+        ) : null}
       </FadeStrip>
 
       <div className="flex shrink-0 items-center gap-1.5">
@@ -401,7 +412,7 @@ export function AssignBoardPopover({ fileIds, activeBoardId, trigger, tone = "de
                     className="flex h-7 w-full items-center gap-2 rounded-sm px-2 text-left text-xs transition-colors outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50"
                   >
                     <Folder className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                    <span className="min-w-0 flex-1 truncate">{board.name}</span>
+                    <span title={board.name} className="min-w-0 flex-1 truncate">{board.name}</span>
                     <span className="font-mono text-[0.6875rem] text-muted-foreground tabular-nums">{board.item_count}</span>
                   </button>
                 </li>

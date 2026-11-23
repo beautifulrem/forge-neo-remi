@@ -59,7 +59,7 @@ export function GalleryView({ node }: { node: GalleryNode }) {
               <a href={image.src} target="_blank" rel="noopener noreferrer" className="block outline-none focus-visible:ring-3 focus-visible:ring-ring/60">
                 <img src={image.src} alt={image.caption ?? ""} loading="lazy" className="aspect-square w-full object-cover" />
               </a>
-              {image.caption ? <p className="truncate px-1.5 py-1 text-xs text-muted-foreground">{image.caption}</p> : null}
+              {image.caption ? <p title={image.caption} className="truncate px-1.5 py-1 text-xs text-muted-foreground">{image.caption}</p> : null}
             </li>
           ))}
         </ul>

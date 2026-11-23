@@ -3,7 +3,8 @@
  * Talks to `POST /api/v2/prompt-tools/upsample` (with an offline mock fallback
  * when `VITE_MOCK=1`).
  */
-import { ApiError, apiUrl, MOCK } from "@/api/http"
+import { MOCK } from "@/api/http"
+import { workbenchRequest } from "@/features/pipelines/workbench-http"
 import type { FormState } from "@/ui/form-store"
 
 export const PUP_FAMILIES = ["auto", "flux3", "qwen21", "moss", "fibo", "zimage", "ernie", "anima"] as const
@@ -167,19 +168,6 @@ function mockUpsample(body: PupRequest): PupResponse {
 /** Calls `POST /api/v2/prompt-tools/upsample`. */
 export async function upsamplePromptRequest(body: PupRequest, signal?: AbortSignal): Promise<PupResponse> {
   if (MOCK) return mockUpsample(body)
-  const response = await fetch(apiUrl("/prompt-tools/upsample"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
-    signal,
-  })
-  const payload = await response.json().catch(() => null)
-  if (!response.ok) {
-    const detail =
-      payload && typeof payload === "object" && "detail" in payload && typeof (payload as { detail: unknown }).detail === "string"
-        ? (payload as { detail: string }).detail
-        : `HTTP ${response.status}`
-    throw new ApiError(response.status, detail, payload)
-  }
-  return payload as PupResponse
+  // the shared transport: an expired session opens the sign-in like every other request
+  return workbenchRequest<PupResponse>("/prompt-tools/upsample", { method: "POST", body, signal })
 }

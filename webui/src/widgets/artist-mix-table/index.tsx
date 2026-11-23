@@ -44,7 +44,7 @@ type Props = {
 
 const ROW_HEIGHT = 92
 const SELECT =
-  "h-7 min-w-0 rounded-md border border-input bg-transparent px-1.5 text-xs text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
+  "h-7 min-w-0 rounded-sm border border-transparent bg-field px-1.5 text-xs text-foreground outline-none hover:bg-field-hover focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
 
 export default function ArtistMixTable({ value, onChange, props, disabled, id, label }: WidgetProps<unknown[] | null, Props>) {
   // The virtualizer returns functions the React Compiler cannot memoise

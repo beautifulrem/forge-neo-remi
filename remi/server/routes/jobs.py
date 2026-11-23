@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, Query, Response
@@ -10,7 +11,7 @@ from fastapi import APIRouter, Query, Response
 from remi.files import FileStore
 from remi.jobs import Job, Submission
 from remi.jobs.store import RUNNING
-from remi.realtime import progress_snapshot
+from remi.realtime import JobRef, progress_snapshot
 from remi.server import models as m
 from remi.server.deps import ServicesDep, UserDep, iso
 
@@ -19,7 +20,7 @@ router = APIRouter()
 ERRORS = {404: {"model": m.Detail}, 409: {"model": m.Detail}}
 
 
-def job_json(job: Job, *, detail: bool = False, running: bool = False) -> dict[str, Any]:
+def job_json(job: Job, *, detail: bool = False, running: JobRef | None = None, progress: Callable[[], dict[str, Any]] | None = None) -> dict[str, Any]:
     data: dict[str, Any] = {
         "id": job.id,
         "seq": job.seq,
@@ -44,10 +45,15 @@ def job_json(job: Job, *, detail: bool = False, running: bool = False) -> dict[s
         "notes": [entry if isinstance(entry, dict) else {"message": str(entry), "values": {}} for entry in job.meta.get("notes") or []],
         "warnings": job.meta.get("warnings") or [],
     }
-    if running and job.status == RUNNING:
-        from modules import shared
+    # only the job the progress state belongs to: a claimed job waiting for the lock (or
+    # not begun yet) would show the previous task's numbers
+    if running is not None and running.begun and running.job_id == job.id and job.status == RUNNING:
+        if progress is not None:
+            data["progress"] = progress()
+        else:
+            from modules import shared
 
-        data["progress"] = progress_snapshot(shared.state)
+            data["progress"] = progress_snapshot(shared.state)
     if detail:
         data.update(core=job.core, scripts=job.scripts, layout_hash=job.layout_hash, schema_version=job.schema_version, opaque=job.meta.get("opaque"))
     return data
@@ -91,13 +97,13 @@ def list_jobs(
     tab: m.FormTab | None = None,
 ) -> dict[str, Any]:
     jobs, next_cursor, total = services.store.history(cursor=cursor, limit=limit, status=status, query=q, starred=starred, tab=tab)
-    items = with_missing_outputs([job_json(job, running=True) for job in jobs], services.files)
+    items = with_missing_outputs([job_json(job, running=services.queue.current_ref(), progress=services.bridge.progress_snapshot) for job in jobs], services.files)
     return {"items": items, "next_cursor": next_cursor, "total": total}
 
 
 @router.get("/jobs/{job_id}", response_model=m.JobDetail, responses=ERRORS, summary="One job with its parameters")
 def get_job(job_id: str, services: ServicesDep) -> dict[str, Any]:
-    return with_missing_outputs([job_json(services.queue.get(job_id), detail=True, running=True)], services.files)[0]
+    return with_missing_outputs([job_json(services.queue.get(job_id), detail=True, running=services.queue.current_ref(), progress=services.bridge.progress_snapshot)], services.files)[0]
 
 
 @router.patch("/jobs/{job_id}", response_model=m.Job, responses=ERRORS, summary="Change a job's priority or its generate-forever flag")

@@ -7,7 +7,7 @@
  */
 import { useQuery } from "@tanstack/react-query"
 import { ArrowRight, ClipboardCopy, FileSearch, ImageUp, Images, ListTree, Paintbrush, Rows3, SlidersHorizontal, Upload, Wand, X } from "@/components/icons"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
@@ -30,6 +30,14 @@ const ACCEPT = "image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp,i
 function useUpload(onDone: (id: string) => void) {
   const { t } = useTranslation()
   const [busy, setBusy] = useState(false)
+  // the user may leave while a large upload runs: its answer must not pull them back here
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
   const upload = async (file: File) => {
     setBusy(true)
     try {
@@ -39,7 +47,7 @@ function useUpload(onDone: (id: string) => void) {
         return
       }
       const uploaded = await api.upload(file)
-      onDone(uploaded.id)
+      if (mounted.current) onDone(uploaded.id)
     } catch (error) {
       toast.error(t("Could not upload the image"), { description: errorText(error) })
     } finally {

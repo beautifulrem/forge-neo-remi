@@ -91,7 +91,7 @@ function DateRange() {
     <Popover>
       <PopoverTrigger render={<Button variant="ghost" size="sm" aria-label={t("Date range")} className={cn(FIELD_BUTTON_CLASS, "font-normal", (from || to) && "text-primary")} />}>
         <CalendarRange aria-hidden />
-        <span className="max-w-36 truncate">{summary}</span>
+        <span title={summary} className="max-w-36 truncate">{summary}</span>
       </PopoverTrigger>
       <PopoverContent aria-label={t("Date range")} align="start" className="w-72">
         <div className="flex flex-col gap-3">

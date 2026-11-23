@@ -220,6 +220,7 @@ class JobQueue:
         self._claimed: Job | None = None
         """taken from the queue (maybe still waiting for the lock)"""
         self._current: Job | None = None
+        self._done_lock = threading.Lock()
         """holding the lock, generating"""
         self._begun = False
         """``shared.state.begin()`` ran for the current job"""
@@ -235,6 +236,7 @@ class JobQueue:
         self._loading_model: str | None = None
         self._completion_hooks: list[Callable[[Job], None]] = []
         self._start_hooks: list[Callable[[Job], None]] = []
+        self._busy_checks: list[Callable[[], bool]] = []
 
     def add_start_hook(self, callback: Callable[[Job], None]) -> Callable[[], None]:
         """Register a callback invoked when a job starts, on the worker thread
@@ -249,6 +251,32 @@ class JobQueue:
                     self._start_hooks.remove(callback)
 
         return remove
+
+    def add_busy_check(self, check: Callable[[], bool]) -> Callable[[], None]:
+        """Register ``check``: work outside the queued jobs (a pipeline's
+        inline stage) that keeps the queue from counting as done
+        (``queue_completion_action`` waits for it)."""
+
+        with self._cv:
+            self._busy_checks.append(check)
+
+        def remove() -> None:
+            with self._cv:
+                if check in self._busy_checks:
+                    self._busy_checks.remove(check)
+
+        return remove
+
+    def _busy_elsewhere(self) -> bool:
+        with self._cv:
+            checks = list(self._busy_checks)
+        for check in checks:
+            try:
+                if check():
+                    return True
+            except Exception:
+                log.exception("queue busy check")
+        return False
 
     def _notify_started(self, job: Job) -> None:
         with self._cv:
@@ -658,7 +686,7 @@ class JobQueue:
             try:
                 with self.lock:  # behind /sdapi requests and GPU actions
                     self._run(job)
-            except Exception:
+            except BaseException:  # the worker outlives anything a job raises (SystemExit included)
                 log.exception("job %s", job.id)
             finally:
                 with self._cv:
@@ -704,7 +732,7 @@ class JobQueue:
         except ValidationError as error:
             self._fail(job, str(error), errors=error.to_json()["errors"])
             return
-        except Exception as error:
+        except BaseException as error:  # an extension's sys.exit() fails its job, not the queue
             self._fail(job, self._error_message(error))
             return
         finally:
@@ -720,7 +748,7 @@ class JobQueue:
         finished = self.store.finish(job.id, status, outputs=outputs, infotext=info, warnings=warnings)
         self.bus.publish("job.completed", **ref.fields(), status=status, outputs=outputs, infotext=info, **({"warnings": warnings} if warnings else {}))
         self._notify_finished(finished)
-        if job.forever and status == COMPLETED:  # paused: queued for the resume
+        if status == COMPLETED:  # reads the flag again: it may have been switched on while the job ran
             again = self.store.requeue_forever(job.id)
             if again is not None:
                 self._enqueued(again)
@@ -775,21 +803,32 @@ class JobQueue:
             done = not self._stopping and self.store.count(QUEUED) == 0
         last = self.store.get(job_id)
         # someone stopping the run by hand is at the computer
-        if done and (last is None or last.status not in (INTERRUPTED, CANCELLED)):
+        if done and (last is None or last.status not in (INTERRUPTED, CANCELLED)) and not self._busy_elsewhere():
+            self._queue_done()
+
+    def recheck_done(self) -> None:
+        """Work outside the queued jobs ended (a pipeline's last stage or its
+        failure, off the worker): run ``queue_completion_action`` if that left
+        the queue done. A job on the worker is left to ``_after_job``."""
+
+        with self._cv:
+            idle = not self._stopping and self._claimed is None and self._current is None and self.store.count(QUEUED) == 0
+        if idle and not self._busy_elsewhere():
             self._queue_done()
 
     def _queue_done(self) -> None:
         """The last queued job finished: ``queue_completion_action``, once
         (the setting goes back to "Do nothing", see remi/jobs/completion.py)."""
 
-        action = str(self.option("queue_completion_action", completion.NOTHING))
-        if action == completion.NOTHING or action not in completion.ACTIONS:
-            return
-        self.set_option("queue_completion_action", completion.NOTHING)
+        with self._done_lock:  # the worker and a pipeline's upsampling thread may both get here
+            action = str(self.option("queue_completion_action", completion.NOTHING))
+            if action == completion.NOTHING or action not in completion.ACTIONS:
+                return
+            self.set_option("queue_completion_action", completion.NOTHING)
         self.when_done(action)
 
     @staticmethod
-    def _error_message(error: Exception) -> str:
+    def _error_message(error: BaseException) -> str:
         try:
             from backend.memory_management import is_oom
         except Exception:  # no backend (tests)

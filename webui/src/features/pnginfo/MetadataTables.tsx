@@ -17,7 +17,7 @@ function CopyValue({ value, label }: { value: string; label: string }) {
       variant="ghost"
       size="icon-xs"
       aria-label={t("Copy {{name}}", { name: label })}
-      className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
+      className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
       onClick={() =>
         void copyText(value).then((ok) => {
           if (!ok) return

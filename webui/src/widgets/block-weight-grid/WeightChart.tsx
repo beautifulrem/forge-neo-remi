@@ -8,7 +8,7 @@ import { type KeyboardEvent, type PointerEvent, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { clamp, fmt } from "../_anima/schedule"
 
-const BAND_BAR = ["bg-sky-500/75", "bg-violet-500/75", "bg-amber-500/75", "bg-emerald-500/75"]
+const BAND_BAR = ["bg-chart-2/75", "bg-chart-5/75", "bg-chart-3/75", "bg-chart-4/75"]
 
 type Props = {
   id: string

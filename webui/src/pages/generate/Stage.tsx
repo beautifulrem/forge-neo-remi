@@ -76,7 +76,7 @@ function EmptyViewfinder({ tab, waiting }: { tab: GenerateTab; waiting: boolean 
             aspectRatio: `${metrics.width} / ${metrics.height}`,
             width: `min(100cqw, 22rem, calc(min(100cqh, 22rem) * ${ratioValue}))`,
           }}
-          className="relative flex max-h-full max-w-full items-center justify-center transition-[width] duration-150"
+          className="relative flex max-h-full max-w-full items-center justify-center"
         >
           {/* Faint framing hairline */}
           <span aria-hidden className="pointer-events-none absolute inset-0 border border-border/75" />

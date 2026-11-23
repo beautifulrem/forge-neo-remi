@@ -4,7 +4,7 @@
  * side-by-side Before/After token diff, and offers one-click Apply / Revert.
  */
 import { Check, Loader2, RotateCcw, Sparkles, TriangleAlert } from "@/components/icons"
-import { useId, useMemo, useState } from "react"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { useClientOption } from "@/api/app-options"
@@ -91,8 +91,21 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
     if (open) {
       setFamily(detectedFamily)
       setError(null)
+      // a result for another prompt (edited since) must not be applied over this one
+      if (result && result.original_prompt !== value.trim()) {
+        setResult(null)
+        setEdited("")
+        setEditing(false)
+      }
     }
   }
+
+  // closing drops a request still running: its answer would belong to a prompt that may change
+  const request = useRef<AbortController | null>(null)
+  useEffect(() => {
+    if (!open) request.current?.abort()
+  }, [open])
+  useEffect(() => () => request.current?.abort(), [])
 
   const diff = useMemo(() => (result ? diffPromptTokens(result.original_prompt, edited) : []), [result, edited])
 
@@ -107,6 +120,9 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
     if (!prompt || busy) return
     setBusy(true)
     setError(null)
+    request.current?.abort()
+    const controller = new AbortController()
+    request.current = controller
     try {
       const refs = attachRefs ? collectFormReferenceIds(store.getState()) : []
       const answer = await upsamplePromptRequest({
@@ -116,13 +132,16 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
         reference_file_ids: refs.length > 0 ? refs : undefined,
         aspect_ratio: includeRatio ? aspectRatio : undefined,
         instructions: instructions.trim() || undefined,
-      })
+      }, controller.signal)
+      if (controller.signal.aborted) return
       setResult(answer)
       setEdited(answer.prompt)
       setEditing(false)
     } catch (failure) {
+      if (controller.signal.aborted) return
       setError(failure instanceof Error ? failure.message : String(failure))
     } finally {
+      if (request.current === controller) request.current = null
       setBusy(false)
     }
   }

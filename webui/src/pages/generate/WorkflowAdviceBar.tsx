@@ -69,7 +69,7 @@ export function WorkflowAdviceBar({ tab }: { tab: GenerateTab }) {
           >
             <Icon className="mt-0.5 size-3.5 shrink-0" aria-hidden />
             <p className="min-w-0 flex-1 break-words">{t(item.message)}</p>
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="flex shrink-0 items-center gap-2">
               {item.patch ? (
                 <Button
                   type="button"
@@ -77,7 +77,7 @@ export function WorkflowAdviceBar({ tab }: { tab: GenerateTab }) {
                   size="xs"
                   disabled={fixing !== null}
                   onClick={() => void fix(item)}
-                  className="h-5 gap-1 px-1.5 text-[0.6875rem] font-medium"
+                  className="relative h-5 gap-1 px-1.5 text-[0.6875rem] font-medium after:absolute after:-inset-y-2.5 after:inset-x-0"
                 >
                   {isFixing ? <Loader2 className="size-3 animate-spin" aria-hidden /> : <Wrench className="size-3" aria-hidden />}
                   <span>{item.action_label ? t(item.action_label) : t("Fix")}</span>
@@ -87,7 +87,7 @@ export function WorkflowAdviceBar({ tab }: { tab: GenerateTab }) {
                 type="button"
                 aria-label={t("Dismiss advice")}
                 onClick={() => store.getState().dismissAdvice(key)}
-                className="grid size-5 place-items-center rounded-xs opacity-70 outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
+                className="relative grid size-5 place-items-center rounded-xs opacity-70 after:absolute after:-inset-x-2 after:-inset-y-2.5 outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X className="size-3" aria-hidden />
               </button>

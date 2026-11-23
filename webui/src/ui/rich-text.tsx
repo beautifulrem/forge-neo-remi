@@ -26,6 +26,17 @@ export function safeUrl(url: string): string | null {
   }
 }
 
+/**
+ * `url` when it is an absolute http(s) address, else null: for links a server
+ * reports from elsewhere (a git remote can be `git@host:repo.git`, which as an
+ * href would open a page of this server).
+ */
+export function webUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  const trimmed = url.trim()
+  return /^https?:\/\//i.test(trimmed) ? safeUrl(trimmed) : null
+}
+
 // ---------------------------------------------------------------- inline
 
 /** Capture group `i` of a match ("" when it did not participate). */

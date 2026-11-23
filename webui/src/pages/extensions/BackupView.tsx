@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { webUrl } from "@/ui/rich-text"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -37,8 +38,9 @@ type Repo = { commit_hash?: string | null; commit_url?: string | null; branch?: 
 function Commit({ repo }: { repo: Repo }) {
   if (!repo?.commit_hash) return <span className="text-muted-foreground">—</span>
   const short = repo.commit_hash.slice(0, 8)
-  return repo.commit_url ? (
-    <a href={repo.commit_url} target="_blank" rel="noreferrer noopener" className="font-mono hover:underline">
+  const url = webUrl(repo.commit_url)
+  return url ? (
+    <a href={url} target="_blank" rel="noreferrer noopener" className="font-mono hover:underline">
       {short}
     </a>
   ) : (

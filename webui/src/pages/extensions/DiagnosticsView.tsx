@@ -9,6 +9,7 @@ import { RefreshCw, RotateCw, Search } from "@/components/icons"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { ApiError } from "@/api/http"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -249,14 +250,14 @@ export function DiagnosticsView() {
                           aria-valuemax={100}
                           className="h-0.5 w-full overflow-hidden rounded-full bg-[var(--slider-groove)]"
                         >
-                          <div className="h-full rounded-full bg-foreground/70 transition-[width] duration-300" style={{ width: `${usedPct}%` }} />
+                          <div className="h-full w-full origin-left rounded-full bg-foreground/70 transition-transform duration-200" style={{ transform: `scaleX(${usedPct / 100})` }} />
                         </div>
                       ) : null}
                     </div>
 
                     {/* Row 3: quant formats as quiet inline mono */}
                     {worker.quant_formats && worker.quant_formats.length > 0 ? (
-                      <p className="font-mono text-[0.71875rem] text-muted-foreground">{worker.quant_formats.join(" · ")}</p>
+                      <p className="font-mono text-[0.6875rem] text-muted-foreground">{worker.quant_formats.join(" · ")}</p>
                     ) : null}
                   </div>
                 )
@@ -341,8 +342,15 @@ export function DiagnosticsView() {
               <Skeleton key={i} className="h-10 w-full" />
             ))}
           </div>
-        ) : diag.isError ? (
+        ) : diag.isError && diag.error instanceof ApiError && diag.error.status === 404 ? (
           <p className="px-4 py-4 text-sm text-muted-foreground">{t("Diagnostics unavailable on this server.")}</p>
+        ) : diag.isError && !diag.data ? (
+          <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-4 text-sm">
+            <span className="text-destructive">{errorText(diag.error)}</span>
+            <Button variant="outline" size="sm" onClick={() => void diag.refetch()}>
+              {t("Retry")}
+            </Button>
+          </div>
         ) : items.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("No extension diagnostics match.")}</p>
         ) : (
@@ -366,7 +374,7 @@ export function DiagnosticsView() {
               return (
                 <li key={item.name} className="px-4 py-2.5 transition-colors hover:bg-muted/25">
                   <div className="grid grid-cols-1 items-center gap-x-3 gap-y-1 md:grid-cols-[minmax(12rem,1.4fr)_6.25rem_5.25rem_5.5rem_minmax(0,1fr)_11rem]">
-                    <span className="truncate font-mono text-[0.8125rem] font-medium text-foreground" title={item.name}>
+                    <span className="truncate font-mono text-[0.8rem] font-medium text-foreground" title={item.name}>
                       {item.name}
                     </span>
 

@@ -369,3 +369,23 @@ def test_quant_format_detection_and_attention_capability_matrix():
     bool_mask = torch.ones(1, 1, 4, 4, dtype=torch.bool).tril()
     out = safe_attention_call(q, k, v, heads=2, mask=bool_mask, preferred="flash")
     assert out.shape == (1, 4, 32) and torch.isfinite(out).all()
+
+
+def test_fun_controlnet_union_follows_the_units_start_and_end_steps():
+    from backend.nn.dit_control_patch import _step_window
+
+    denoiser = SimpleNamespace(step=0, total_steps=20)
+    process = SimpleNamespace(sampler=SimpleNamespace(model_wrap_cfg=denoiser), is_hr_pass=False)
+    assert _step_window(process, 0.0, 1.0) is None  # the whole run: no check per block call
+    active = _step_window(process, 0.25, 0.5)
+    seen = []
+    for step in range(20):
+        denoiser.step = step
+        seen.append(active())
+    assert seen == [False] * 5 + [True] * 5 + [False] * 10
+    process.is_hr_pass = True  # set up for the first pass: off in the Hires pass
+    denoiser.step = 6
+    assert active() is False
+    process.is_hr_pass = False
+    denoiser.total_steps = None  # step unknown: the control stays on
+    assert active() is True

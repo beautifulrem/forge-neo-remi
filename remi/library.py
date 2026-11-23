@@ -273,6 +273,7 @@ class GalleryIndex:
         with self._lock:
             self._db.execute("DELETE FROM gallery_meta WHERE file_id NOT IN (SELECT id FROM files WHERE kind = 'output')")
             self._db.execute("DELETE FROM board_items WHERE file_id NOT IN (SELECT id FROM files WHERE kind = 'output')")
+            self._db.execute("DELETE FROM asset_lineage WHERE child_id NOT IN (SELECT id FROM files) OR parent_id NOT IN (SELECT id FROM files)")
 
     def _forget(self, ids: list[str]) -> None:
         """Drop the index rows (and thumbnails) of deleted files; unlike
@@ -283,6 +284,7 @@ class GalleryIndex:
             self._db.executemany("DELETE FROM files WHERE id = ? AND kind = 'output'", [(file_id,) for file_id in ids])
             self._db.executemany("DELETE FROM gallery_meta WHERE file_id = ?", [(file_id,) for file_id in ids])
             self._db.executemany("DELETE FROM board_items WHERE file_id = ?", [(file_id,) for file_id in ids])
+            self._db.executemany("DELETE FROM asset_lineage WHERE child_id = ? OR parent_id = ?", [(file_id, file_id) for file_id in ids])
         for file_id in ids:
             self.files.delete_thumbnails(file_id)
 
@@ -671,7 +673,9 @@ class GalleryIndex:
             return
         with self._lock:
             self._db.execute(
-                "INSERT OR REPLACE INTO asset_lineage (child_id, parent_id, relation, job_id, chain_id, stage_index, created) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                # an edge indexed again (viewing its lineage re-indexes the job) keeps its first time: the lists sort by it
+                "INSERT INTO asset_lineage (child_id, parent_id, relation, job_id, chain_id, stage_index, created) VALUES (?, ?, ?, ?, ?, ?, ?)"
+                " ON CONFLICT (child_id, parent_id, relation) DO UPDATE SET job_id = excluded.job_id, chain_id = excluded.chain_id, stage_index = excluded.stage_index",
                 (child_id, parent_id, relation, job_id, chain_id, stage_index, time.time()),
             )
 

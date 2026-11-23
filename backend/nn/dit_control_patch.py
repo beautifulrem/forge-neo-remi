@@ -25,6 +25,7 @@ this module provides:
 from __future__ import annotations
 
 import logging
+import math
 import os
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Mapping
@@ -1008,6 +1009,32 @@ class FunControlNetUnionPatch(DiTControlPatch):
 # region Forge ControlModelPatcher registration
 
 
+def _step_window(process: Any, start_percent: float, end_percent: float) -> Callable[[], bool] | None:
+    """``active`` for a unit's start / end steps: whether the sampler running
+    ``process``'s pass is inside floor(total × start) ≤ step < floor(total × end)
+    (the window of the other ControlNets). ``None`` (always on) for the full range;
+    on while the step is unknown, and off in another pass (Hires) than the one it
+    was set up for."""
+
+    if start_percent <= 0.0 and end_percent >= 1.0:
+        return None
+    hires = getattr(process, "is_hr_pass", False)
+
+    def active() -> bool:
+        if getattr(process, "is_hr_pass", False) != hires:
+            return False
+        denoiser = getattr(getattr(process, "sampler", None), "model_wrap_cfg", None)
+        step, total = getattr(denoiser, "step", None), getattr(denoiser, "total_steps", None)
+        if not isinstance(step, int) or not isinstance(total, int) or total <= 0:
+            return True
+        start = math.floor(total * start_percent) if start_percent > 0 else 0
+        end = math.floor(total * end_percent) if end_percent > 0 else total
+        return start <= step < end
+
+    return active
+
+
+
 class DiTControlNetUnionPatcher:
     """Forge ``ControlModelPatcher`` subclass for Qwen-Image-2.1 and Z-Image
     Fun ControlNet-Union models (registered via ``add_supported_control_model``)."""
@@ -1116,6 +1143,7 @@ class DiTControlNetUnionPatcher:
             mask=mask,
             masked_latent=masked_latent,
             target_layers=target_layers,
+            active=_step_window(process, self.start_percent, self.end_percent),
         )
         self._patch.attach(dit)
 

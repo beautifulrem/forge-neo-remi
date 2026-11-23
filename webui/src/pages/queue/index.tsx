@@ -75,10 +75,12 @@ function Pending({ status }: { status: QueueStatus | undefined }) {
       <section aria-labelledby="queue-pending-title" className="flex flex-col gap-2">
         <h2 id="queue-pending-title" className="flex items-center gap-2 text-sm font-semibold">
           {t("Up next")}
-          {items.isPending ? null : <span className="text-sm text-muted-foreground tabular-nums">{jobs.length}</span>}
+          {items.isPending || (items.isError && !items.data) ? null : <span className="text-sm text-muted-foreground tabular-nums">{jobs.length}</span>}
         </h2>
         {items.isPending ? (
           <Skeleton className="h-24 w-full" />
+        ) : items.isError && !items.data ? (
+          <LoadFailed error={items.error} onRetry={() => void items.refetch()} />
         ) : jobs.length === 0 ? (
           <p className="py-6 text-center text-sm text-balance text-muted-foreground">
             {t("No jobs are waiting. Use “Add to queue” next to Generate to line jobs up.")}
@@ -87,6 +89,19 @@ function Pending({ status }: { status: QueueStatus | undefined }) {
           <PendingList jobs={jobs} />
         )}
       </section>
+    </div>
+  )
+}
+
+/** A list that could not load at all: what failed, and a retry. */
+function LoadFailed({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  const { t } = useTranslation()
+  return (
+    <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 py-3 text-sm">
+      <span className="text-destructive">{errorText(error)}</span>
+      <Button variant="outline" size="sm" onClick={onRetry}>
+        {t("Retry")}
+      </Button>
     </div>
   )
 }
@@ -156,16 +171,14 @@ function History({ onView }: { onView: (job: Job, index: number) => void }) {
             <Skeleton key={index} className="h-20 w-full" />
           ))}
         </div>
-      ) : history.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          {errorText(history.error)}
-        </p>
+      ) : history.isError && !history.data ? (
+        <LoadFailed error={history.error} onRetry={() => void history.refetch()} />
       ) : jobs.length === 0 ? (
         <p className="py-6 text-center text-sm text-balance text-muted-foreground">
           {q || starred || filter !== "all" || tab !== ALL_TABS ? t("No jobs match.") : t("Finished jobs appear here.")}
         </p>
       ) : (
-        <HistoryList jobs={jobs} total={total} hasMore={history.hasNextPage} loadingMore={history.isFetchingNextPage} onLoadMore={() => void history.fetchNextPage()} onView={onView} />
+        <HistoryList jobs={jobs} total={total} hasMore={history.hasNextPage} loadingMore={history.isFetchingNextPage} loadFailed={history.isFetchNextPageError} onLoadMore={() => void history.fetchNextPage()} onView={onView} />
       )}
     </section>
   )

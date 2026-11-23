@@ -182,6 +182,24 @@ def test_page_actions_resolve_uploads(server):
     assert server.client.post("/api/v2/actions/page:nope/size", json={"values": {}}).status_code == 404
 
 
+def test_a_gpu_action_with_a_timeout_runs_without_the_limit_and_keeps_its_isolation(server):
+    class Handlers:
+        @ui.action("slow", gpu=True, timeout=0.05)
+        def slow(self, ctx, values):
+            time.sleep(0.2)  # past the limit: a GPU action is not cut off (its thread would keep the GPU)
+            return {"__outputs__": {"result": "done"}}
+
+        @ui.action("broken", gpu=True, timeout=5)
+        def broken(self, ctx, values):
+            raise RuntimeError("boom")
+
+    pages.register(pages.Page("gpu", "GPU", params=ui.Text("a"), actions=Handlers()))
+    slow = server.client.post("/api/v2/actions/page:gpu/slow", json={"tab": "page:gpu", "values": {}})
+    assert slow.status_code == 200 and slow.json() == {"__outputs__": {"result": "done"}}
+    broken = server.client.post("/api/v2/actions/page:gpu/broken", json={"tab": "page:gpu", "values": {}})
+    assert broken.status_code == 200 and broken.json()["__toast__"]["level"] == "error"
+
+
 def _poll(server, body, until):
     deadline = time.time() + 5
     while time.time() < deadline:
