@@ -16,10 +16,17 @@ import "./index.css"
 // A tab opened before the WebUI was updated asks for chunk names the new
 // build no longer has: load the new build (at most once a minute, so a
 // server that really lacks a chunk shows the error instead of looping).
+// Offline, a reload would only land on the browser's error page: the
+// page's own error (with "Try again") stays instead.
 window.addEventListener("vite:preloadError", (event) => {
-  const last = Number(sessionStorage.getItem("remi-chunk-reload") ?? 0)
-  if (Date.now() - last < 60_000) return
-  sessionStorage.setItem("remi-chunk-reload", String(Date.now()))
+  if (!navigator.onLine) return
+  try {
+    const last = Number(sessionStorage.getItem("remi-chunk-reload") ?? 0)
+    if (Date.now() - last < 60_000) return
+    sessionStorage.setItem("remi-chunk-reload", String(Date.now()))
+  } catch {
+    return // no session storage to throttle with: never risk a reload loop
+  }
   event.preventDefault()
   location.reload()
 })

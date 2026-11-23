@@ -9,6 +9,8 @@ type Props = {
   resetKey?: unknown
   /** Compact rendering for widgets inside a form. */
   inline?: boolean
+  /** What to show instead of the default message (shell controls: their placeholder, or nothing). */
+  fallback?: ReactNode
 }
 
 type State = { error: Error | null; resetKey: unknown }
@@ -31,6 +33,7 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     const { error } = this.state
     if (!error) return this.props.children
+    if (this.props.fallback !== undefined) return this.props.fallback
     if (this.props.inline) {
       return (
         <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">

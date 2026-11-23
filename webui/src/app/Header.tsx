@@ -1,5 +1,5 @@
 import { Palette, Search } from "@/components/icons"
-import { lazy, Suspense } from "react"
+import { Suspense } from "react"
 import { useTranslation } from "react-i18next"
 import type { LocaleInfo } from "@/api/types"
 import { progressFraction, useProgress } from "@/api/progress"
@@ -11,11 +11,13 @@ import { FIELD_BUTTON_CLASS } from "@/components/ui/select-styles"
 import { cn } from "@/lib/utils"
 import { formatShortcut, useCommands } from "./commands"
 import { useHeaderSlotTarget } from "./header-slot-store"
+import { ErrorBoundary } from "@/components/ErrorBoundary"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
 // Menus and the model picker pull in Base UI's menu/combobox; load them after first paint.
-const AppearanceMenu = lazy(() => import("./AppearanceMenu"))
-const ModelQuickBar = lazy(() => import("./ModelQuickBar"))
-const QuickSettings = lazy(() => import("@/features/quicksettings/QuickSettings"))
+const AppearanceMenu = retryableLazy(() => import("./AppearanceMenu"))
+const ModelQuickBar = retryableLazy(() => import("./ModelQuickBar"))
+const QuickSettings = retryableLazy(() => import("@/features/quicksettings/QuickSettings"))
 
 const STATUS_LABEL: Record<WsStatus, string> = {
   idle: "Connecting…",
@@ -93,13 +95,17 @@ export function Header({ title, locales }: { title: string; locales: LocaleInfo[
       <div ref={setSlot} className="flex shrink-0 items-center gap-2" />
       <div className="ml-auto flex min-w-0 items-center gap-1.5">
         <div className="hidden min-w-0 sm:block">
-          <Suspense fallback={<div aria-hidden className="h-7 w-[min(22rem,40vw)] rounded-sm bg-field" />}>
-            <ModelQuickBar />
-          </Suspense>
+          <ErrorBoundary fallback={null}>
+            <Suspense fallback={<div aria-hidden className="h-7 w-[min(22rem,40vw)] rounded-sm bg-field" />}>
+              <ModelQuickBar />
+            </Suspense>
+          </ErrorBoundary>
         </div>
-        <Suspense fallback={null}>
-          <QuickSettings />
-        </Suspense>
+        <ErrorBoundary fallback={null}>
+          <Suspense fallback={null}>
+            <QuickSettings />
+          </Suspense>
+        </ErrorBoundary>
         <span aria-hidden className="mx-0.5 hidden h-4 w-px shrink-0 bg-border sm:block" />
         <Button
           variant="ghost"
@@ -115,15 +121,17 @@ export function Header({ title, locales }: { title: string; locales: LocaleInfo[
           <Search />
         </Button>
         <ConnectionDot />
-        <Suspense
-          fallback={
-            <Button variant="ghost" size="icon-sm" disabled aria-label={t("Appearance")}>
-              <Palette />
-            </Button>
-          }
-        >
-          <AppearanceMenu locales={locales} />
-        </Suspense>
+        <ErrorBoundary fallback={null}>
+          <Suspense
+            fallback={
+              <Button variant="ghost" size="icon-sm" disabled aria-label={t("Appearance")}>
+                <Palette />
+              </Button>
+            }
+          >
+            <AppearanceMenu locales={locales} />
+          </Suspense>
+        </ErrorBoundary>
       </div>
       <HeaderProgress />
     </header>

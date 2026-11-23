@@ -1,7 +1,7 @@
 /** Slim left navigation rail (desktop) and bottom bar (mobile). */
 import { Ellipsis } from "@/components/icons"
 import * as m from "motion/react-m"
-import { lazy, Suspense, useState } from "react"
+import { Suspense, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
@@ -9,8 +9,10 @@ import { useProgress } from "@/api/progress"
 import { useQueuedCount } from "@/features/queue/status"
 import { isActive, preloadRoute, type NavItem } from "./routes"
 import { type Route, routeHref } from "./router"
+import { ErrorBoundary } from "@/components/ErrorBoundary"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
-const MoreSheet = lazy(() => import("./MoreSheet"))
+const MoreSheet = retryableLazy(() => import("./MoreSheet"))
 
 /**
  * A sheet of animation paper (動画用紙), punched for the peg bar (タップ): a round hole between two
@@ -155,9 +157,11 @@ export function BottomBar({ items, route }: { items: NavItem[]; route: Route }) 
         <span>{t("More")}</span>
       </button>
       {more ? (
-        <Suspense fallback={null}>
-          <MoreSheet items={rest} route={route} onClose={() => setMore(false)} />
-        </Suspense>
+        <ErrorBoundary fallback={null}>
+          <Suspense fallback={null}>
+            <MoreSheet items={rest} route={route} onClose={() => setMore(false)} />
+          </Suspense>
+        </ErrorBoundary>
       ) : null}
     </nav>
   )

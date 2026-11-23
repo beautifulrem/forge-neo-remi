@@ -1,5 +1,6 @@
 /** Navigation entries and the lazily loaded page for each route. */
-import { lazy, type ComponentType, type LazyExoticComponent } from "react"
+import type { ComponentType } from "react"
+import { retryableLazy } from "@/lib/retryable-lazy"
 import {
   FileSearch,
   GalleryVerticalEnd,
@@ -31,9 +32,10 @@ const loaders = {
   "not-found": () => import("@/pages/not-found"),
 } satisfies Record<Route["name"], () => Promise<PageModule>>
 
+// a page whose chunk failed to load is fetched again by the page boundary's "Try again"
 const pages = Object.fromEntries(
-  Object.entries(loaders).map(([name, load]) => [name, lazy<ComponentType<{ route: never }>>(load)]),
-) as Record<Route["name"], LazyExoticComponent<ComponentType<{ route: never }>>>
+  Object.entries(loaders).map(([name, load]) => [name, retryableLazy<{ route: never }>(load)]),
+) as Record<Route["name"], ComponentType<{ route: never }>>
 
 /** The page component for a route; every page receives its own route variant. */
 export function pageFor<R extends Route>(route: R): ComponentType<{ route: R }> {

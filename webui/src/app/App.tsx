@@ -2,7 +2,7 @@
 import { DirectionProvider } from "@base-ui/react/direction-provider"
 import { useQuery } from "@tanstack/react-query"
 import { Keyboard, Languages, Monitor, Moon, Rows3, Rows4, Sun } from "@/components/icons"
-import { lazy, Suspense, useEffect, useMemo } from "react"
+import { Suspense, useEffect, useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { bootstrapQuery } from "@/api/queries"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
@@ -24,9 +24,10 @@ import { navigate, type Route, routeKey, useRoute } from "./router"
 import { useToastBottomOffset } from "./toast-offset"
 import { useUserStylesheet } from "./user-stylesheet"
 import { useWsBridge } from "./ws-bridge"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
-const CommandPalette = lazy(() => import("./CommandPalette"))
-const ShortcutsDialog = lazy(() => import("./ShortcutsDialog"))
+const CommandPalette = retryableLazy(() => import("./CommandPalette"))
+const ShortcutsDialog = retryableLazy(() => import("./ShortcutsDialog"))
 
 function useGlobalShortcuts() {
   useEffect(() => {
@@ -159,14 +160,18 @@ export function App() {
           </div>
         </div>
         {paletteLoaded ? (
-          <Suspense fallback={null}>
-            <CommandPalette />
-          </Suspense>
+          <ErrorBoundary fallback={null}>
+            <Suspense fallback={null}>
+              <CommandPalette />
+            </Suspense>
+          </ErrorBoundary>
         ) : null}
         {shortcutsLoaded ? (
-          <Suspense fallback={null}>
-            <ShortcutsDialog />
-          </Suspense>
+          <ErrorBoundary fallback={null}>
+            <Suspense fallback={null}>
+              <ShortcutsDialog />
+            </Suspense>
+          </ErrorBoundary>
         ) : null}
         <AppToaster />
         <ServerControlHost />
