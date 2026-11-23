@@ -7,6 +7,7 @@ import sqlite3
 import threading
 import time
 
+import pytest
 from PIL import Image
 
 from remi.files import FileStore
@@ -14,6 +15,13 @@ from remi.jobs import JobQueue, JobResult, JobStore, run_inline
 from remi.jobs.queue import Submission
 from remi.realtime import EventBus
 from remi.server.testing import FakeState
+from remi.testing import webui_state
+
+
+@pytest.fixture(scope="module")
+def webui():
+    with webui_state() as state:
+        yield state
 
 
 def wait_for(predicate, timeout: float = 10.0) -> bool:
@@ -58,12 +66,15 @@ def test_a_store_error_while_claiming_does_not_end_the_worker(tmp_path, monkeypa
         files.close()
 
 
-def test_a_job_left_running_by_a_store_failure_can_be_deleted(tmp_path):
+def test_a_job_left_running_by_a_store_failure_can_be_deleted(webui, tmp_path):
     files = FileStore(tmp_path / "files")
     jobs = JobStore(tmp_path / "jobs.db")
     queue = JobQueue(jobs, files, EventBus(), executor=lambda job, ctx: None, dispatch=run_inline, lock=threading.Lock(), validate=lambda *a: None, state=FakeState, hash_layout=lambda tab: "h")
+    from modules import progress  # the registry behind /internal/pending-tasks
+
     try:
         [job] = queue.submit(Submission(tab="txt2img", core={"prompt": "fox"}, scripts={}))
+        assert job.id_task in progress.pending_tasks
         # the worker claimed it, then could not save its end: running in the store, on no worker
         assert jobs.claim_next().id == job.id
         ended = []
@@ -71,6 +82,7 @@ def test_a_job_left_running_by_a_store_failure_can_be_deleted(tmp_path):
         queue.delete(job.id)
         assert jobs.get(job.id) is None
         assert [(j.id, j.status) for j in ended] == [(job.id, "interrupted")]
+        assert job.id_task not in progress.pending_tasks  # nothing left "pending" for it
     finally:
         jobs.close()
         files.close()

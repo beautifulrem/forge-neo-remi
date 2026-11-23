@@ -534,6 +534,7 @@ class JobQueue:
                     log.warning("job %s was left running by a store failure; it is marked interrupted", job_id)
                     message = "the job's end could not be saved"
                     ended = self.store.finish(job_id, INTERRUPTED, error=message)
+                    self._pending_done(job)  # the worker never got as far as dropping it from /internal/pending-tasks
                     # whoever waits for it (a pipeline stage) learns that it ended, as from the worker
                     self.bus.publish("job.failed", job_id=job.id, seq=job.seq, tab=job.tab, status=INTERRUPTED, error=message, errors=None)
                     self._notify_finished(ended)
