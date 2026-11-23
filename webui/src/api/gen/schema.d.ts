@@ -2570,8 +2570,16 @@ export interface components {
         ChainPreviewRequest: {
             /** Stages */
             stages: components["schemas"]["StageSpecModel"][];
-            /** Model Fingerprint */
+            /**
+             * Model Fingerprint
+             * @description Extra salt for the stage hashes, added to the loaded model's fingerprint
+             */
             model_fingerprint?: string | null;
+            /**
+             * Chain Id
+             * @description Plan a re-run of this chain: its random-seed stages can reuse their outputs
+             */
+            chain_id?: string | null;
         };
         /** ChainPreviewResult */
         ChainPreviewResult: {

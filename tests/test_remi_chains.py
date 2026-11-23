@@ -101,8 +101,10 @@ def test_chain_four_stage_execution_and_downstream_rerun_cache_reuse(tmp_path):
             stages[2],
             StageSpec(kind="finish", tab="extras", core={"upscaling_resize": 4.0}),
         ]
-        plan = runner.plan_chain(tweaked_stages)
+        plan = runner.plan_chain(tweaked_stages, chain_id=chain.id)
         assert [p["cache_hit"] for p in plan] == [True, True, True, False]
+        # the generate stage has no seed (random): a new chain draws a new one
+        assert [p["cache_hit"] for p in runner.plan_chain(tweaked_stages)] == [True, False, False, False]
         assert plan[2]["cached_outputs"] == done.stages[2].output_file_ids
 
         # Re-run chain with tweaked finish stage: stages 0, 1, 2 MUST be reused from cache!
@@ -124,7 +126,7 @@ def test_chain_four_stage_execution_and_downstream_rerun_cache_reuse(tmp_path):
 
         # If cached output file is deleted from FileStore, cache must miss cleanly
         files.delete(done.stages[1].output_file_ids[0], delete_file=True)
-        plan_after_delete = runner.plan_chain(tweaked_stages)
+        plan_after_delete = runner.plan_chain(tweaked_stages, chain_id=chain.id)
         assert plan_after_delete[0]["cache_hit"] is True
         assert plan_after_delete[1]["cache_hit"] is False
         assert plan_after_delete[2]["cache_hit"] is False
@@ -181,7 +183,7 @@ def test_chains_http_routes_templates_and_pause_cancel(tmp_path):
         # Preview cache hit on second run
         preview = server.client.post(
             "/api/v2/chains/preview",
-            json={"stages": tmpl_res.json()["stages"], "model_fingerprint": "test-model"},
+            json={"stages": tmpl_res.json()["stages"], "model_fingerprint": "test-model", "chain_id": cid},
         )
         assert preview.status_code == 200
         assert [st["cache_hit"] for st in preview.json()["stages"]] == [True, True]
@@ -251,7 +253,8 @@ def test_chains_edge_cases_errors_disabled_stages_and_routes(tmp_path, monkeypat
     monkeypatch.setitem(sys.modules, "remi.prompt_tools.pup", fake_pup)
     assert chains_mod._default_upsampler(StageRun(chain_id="c", index=0, kind="prompt_upsample", name="PUP", enabled=True, tab="txt2img", core={"prompt": "sky"}), None, []) == "sky [pup]"
     fake_pup.upsample_prompt = lambda prompt, **kw: (_ for _ in ()).throw(RuntimeError("pup offline"))
-    assert chains_mod._default_upsampler(StageRun(chain_id="c", index=0, kind="prompt_upsample", name="PUP", enabled=True, tab="txt2img", core={"prompt": "sky"}), None, []) == "sky"
+    with pytest.raises(RuntimeError, match="pup offline"):  # fails the stage, never passes the prompt on as upsampled
+        chains_mod._default_upsampler(StageRun(chain_id="c", index=0, kind="prompt_upsample", name="PUP", enabled=True, tab="txt2img", core={"prompt": "sky"}), None, [])
     assert isinstance(chains_mod._default_model_fingerprint(), str)
 
     # 3. ChainRunner failure paths, disabled stages, pause/resume/cancel/delete guards, and finish tabs
@@ -289,7 +292,9 @@ def test_chains_edge_cases_errors_disabled_stages_and_routes(tmp_path, monkeypat
 
         # prompt_upsample failure marks chain failed
         ch_pup_fail = runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "boom"})])
-        assert ch_pup_fail.status == "failed" and "pup crash" in (ch_pup_fail.error or "")
+        ch_pup_fail = _wait_chain_done(cstore, ch_pup_fail.id)
+        assert ch_pup_fail is not None and ch_pup_fail.status == "failed" and "pup crash" in (ch_pup_fail.error or "")
+        assert cstore.get_cached(ch_pup_fail.stages[0].stage_hash or "") is None
 
         # _build_stage_submission finish tab variants (txt2img -> upscale_from, img2img -> init_img)
         sub_t2i = runner._build_stage_submission(ch_pup_fail, StageRun(chain_id=ch_pup_fail.id, index=1, kind="finish", name="Finish", enabled=True, tab="txt2img"), ["img-1"], None)

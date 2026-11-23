@@ -23,7 +23,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from remi.core import JobContext
@@ -234,6 +234,30 @@ class JobQueue:
         self._thread: threading.Thread | None = None
         self._loading_model: str | None = None
         self._completion_hooks: list[Callable[[Job], None]] = []
+        self._start_hooks: list[Callable[[Job], None]] = []
+
+    def add_start_hook(self, callback: Callable[[Job], None]) -> Callable[[], None]:
+        """Register a callback invoked when a job starts, on the worker thread
+        under the generation lock, once the model selection it runs with is applied."""
+
+        with self._cv:
+            self._start_hooks.append(callback)
+
+        def remove() -> None:
+            with self._cv:
+                if callback in self._start_hooks:
+                    self._start_hooks.remove(callback)
+
+        return remove
+
+    def _notify_started(self, job: Job) -> None:
+        with self._cv:
+            hooks = list(self._start_hooks)
+        for hook in hooks:
+            try:
+                hook(job)
+            except Exception:
+                log.exception("job start hook failed for %s", job.id)
 
     def add_completion_hook(self, callback: Callable[[Job], None]) -> Callable[[], None]:
         """Register a callback invoked whenever a job reaches a final status."""
@@ -412,6 +436,9 @@ class JobQueue:
         job = self.get(job_id)
         if job.status != QUEUED:
             raise JobError("only queued jobs can be edited")
+        if job.meta.get("chain_id"):
+            # its result is cached under the stage's parameters: edit the pipeline instead
+            raise JobError("this job is a pipeline stage; edit the pipeline and re-run it")
         self.validate(job.tab, core, scripts)
         updated = self.store.update_params(job_id, core or {}, scripts or {}, layout_hash=self.hash_layout(job.tab), schema_version=SCHEMA_VERSION, summary=_summary(core or {}, job.tab))
         if updated is None:
@@ -470,6 +497,8 @@ class JobQueue:
                 if job.status == QUEUED:
                     self._pending_done(job)
                     self._changed()
+                    # it never ran: tell whoever waits for it (a pipeline stage) that it ended
+                    self._notify_finished(replace(job, status=CANCELLED, error="deleted from the queue"))
                 return
             # the worker claimed it between the read and the delete (the store keeps running
             # jobs): cancel it as the running job it now is
@@ -663,6 +692,7 @@ class JobQueue:
         from remi import model_selection
 
         model_selection.apply_held()  # picked while the previous job ran: this job loads it
+        self._notify_started(job)
         self.bus.publish("job.started", **ref.fields())
         self._changed()
         ctx = JobContext(id_task=job.id_task, user=job.user, resolve_upload=self.files.resolve_upload, on_begin=lambda: self._on_begin(job.id))
@@ -710,8 +740,8 @@ class JobQueue:
 
         attempt = job.meta.get("attempt", 1)
         attempt = attempt if isinstance(attempt, int) and attempt > 0 else 1
-        if attempt >= MAX_ATTEMPTS or not job.replayable:
-            return
+        if attempt >= MAX_ATTEMPTS or not job.replayable or job.meta.get("chain_id"):
+            return  # a failed pipeline stage failed its chain: a retry would belong to nothing
         try:
             self.validate(job.tab, job.core, job.scripts)
         except Exception:

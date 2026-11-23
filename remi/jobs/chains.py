@@ -8,14 +8,19 @@ Supported ordered stage kinds:
 - ``finish`` — finishing pass (Hires ``upscale_from`` or ``extras``)
 
 Each stage's deterministic ``stage_hash`` hashes its canonical parameters,
-its upstream stage's hash/output file IDs/prompt, and the active model
-fingerprint. Re-running a chain after tweaking a downstream stage (e.g.
-``refine`` or ``finish``) automatically reuses cached upstream stage output
-``file_id``s without re-executing unchanged upstream stages.
+its upstream stage's hash/output file IDs/prompt, and the fingerprint of the
+model loaded when the stage runs. Re-running a chain after tweaking a downstream
+stage (e.g. ``refine`` or ``finish``) automatically reuses cached upstream stage
+output ``file_id``s without re-executing unchanged upstream stages.
+
+A stage whose seed is random (``-1`` or unset) makes a new image every time,
+so its hash is salted with the chain id: re-running that chain reuses it, a
+new chain does not.
 """
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
@@ -23,7 +28,7 @@ import secrets
 import sqlite3
 import threading
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -44,7 +49,12 @@ DEFAULT_STAGE_TABS = {
 }
 CHAIN_STATUSES = ("queued", "running", "paused", "completed", "failed", "cancelled")
 STAGE_STATUSES = ("pending", "running", "cached", "completed", "failed", "skipped", "cancelled")
+TERMINAL_CHAIN_STATUSES = ("completed", "failed", "cancelled")
 MAX_STAGES = 8
+STAGE_HASH_VERSION = 2
+"""Bumped when the hash inputs change, so entries keyed the old way never hit."""
+SEEDED_TABS = ("txt2img", "img2img")
+"""Tabs whose output depends on the seed (``extras`` and prompt upsampling do not)."""
 
 
 class ChainError(JobError):
@@ -173,6 +183,33 @@ class CachedStageOutput:
     created: float
 
 
+def _random_seed(value: Any) -> bool:
+    if value is None or value == "":
+        return True
+    try:
+        return int(float(value)) == -1
+    except (TypeError, ValueError):
+        return False
+
+
+def uses_random_seed(spec: StageSpec) -> bool:
+    """Whether the stage draws a new seed each time it runs (``-1`` or no seed
+    given, which the form defaults to ``-1``; also a random variation seed
+    with a non-zero strength)."""
+
+    if spec.tab not in SEEDED_TABS:
+        return False
+    seed_values = spec.scripts.get("seed")
+    seed_values = seed_values if isinstance(seed_values, Mapping) else {}
+    if _random_seed(seed_values.get("seed", spec.core.get("seed"))):
+        return True
+    try:
+        strength = float(seed_values.get("subseed_strength") or 0)
+    except (TypeError, ValueError):
+        strength = 0.0
+    return strength > 0 and _random_seed(seed_values.get("subseed"))
+
+
 def compute_stage_hash(
     spec: StageSpec,
     *,
@@ -180,10 +217,14 @@ def compute_stage_hash(
     upstream_outputs: Sequence[str] = (),
     upstream_prompt: str | None = None,
     model_fingerprint: str = "",
+    salt: str = "",
 ) -> str:
-    """Deterministic content-addressed hash of a stage's effective inputs."""
+    """Deterministic content-addressed hash of a stage's effective inputs
+    (``salt``: what else the output depends on, e.g. the chain of a random seed)."""
 
     payload = {
+        "v": STAGE_HASH_VERSION,
+        "salt": salt,
         "kind": spec.kind,
         "enabled": bool(spec.enabled),
         "tab": spec.tab,
@@ -309,6 +350,10 @@ CREATE TABLE IF NOT EXISTS chain_templates (
     created REAL NOT NULL,
     updated REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS chain_force (
+    chain_id TEXT PRIMARY KEY,
+    stages TEXT NOT NULL DEFAULT '[]'
+);
 """
 
 
@@ -341,6 +386,41 @@ class ChainStore:
 
     def __exit__(self, *_exc: Any) -> None:
         self.close()
+
+    @contextlib.contextmanager
+    def _transaction(self) -> Iterator[None]:
+        """Several writes that land together or not at all (the connection
+        autocommits otherwise)."""
+
+        with self._lock:
+            self._db.execute("BEGIN")
+            try:
+                yield
+            except BaseException:
+                self._db.execute("ROLLBACK")
+                raise
+            self._db.execute("COMMIT")
+
+    def _insert_stages(self, chain_id: str, stages: Sequence[StageSpec]) -> None:
+        for idx, spec in enumerate(stages):
+            self._db.execute(
+                """
+                INSERT INTO stage_runs (chain_id, stage_index, kind, name, enabled, tab, core, scripts, config, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    chain_id,
+                    idx,
+                    spec.kind,
+                    spec.name,
+                    int(spec.enabled),
+                    spec.tab,
+                    json.dumps(spec.core, ensure_ascii=False),
+                    json.dumps(spec.scripts, ensure_ascii=False),
+                    json.dumps(spec.config, ensure_ascii=False),
+                    "pending" if spec.enabled else "skipped",
+                ),
+            )
 
     def _load_stages(self, chain_id: str) -> list[StageRun]:
         rows = self._db.execute(
@@ -414,7 +494,7 @@ class ChainStore:
         chain_id = secrets.token_hex(8)
         now = time.time()
         clean_name = (name or "").strip()[:200] or f"Pipeline {chain_id[:6]}"
-        with self._lock:
+        with self._transaction():
             self._db.execute(
                 """
                 INSERT INTO chains (id, name, status, current_stage, priority, user, model_fingerprint, error, created, updated)
@@ -422,25 +502,7 @@ class ChainStore:
                 """,
                 (chain_id, clean_name, status, int(priority), user, model_fingerprint, now, now),
             )
-            for idx, spec in enumerate(stages):
-                self._db.execute(
-                    """
-                    INSERT INTO stage_runs (chain_id, stage_index, kind, name, enabled, tab, core, scripts, config, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        chain_id,
-                        idx,
-                        spec.kind,
-                        spec.name,
-                        int(spec.enabled),
-                        spec.tab,
-                        json.dumps(spec.core, ensure_ascii=False),
-                        json.dumps(spec.scripts, ensure_ascii=False),
-                        json.dumps(spec.config, ensure_ascii=False),
-                        "pending" if spec.enabled else "skipped",
-                    ),
-                )
+            self._insert_stages(chain_id, stages)
         created = self.get_chain(chain_id)
         assert created is not None
         return created
@@ -523,27 +585,41 @@ class ChainStore:
     def replace_stages(self, chain_id: str, stages: Sequence[StageSpec]) -> None:
         if not stages or len(stages) > MAX_STAGES:
             raise ChainError(f"stages count must be between 1 and {MAX_STAGES}", status=422)
-        with self._lock:
+        with self._transaction():
             self._db.execute("DELETE FROM stage_runs WHERE chain_id = ?", (chain_id,))
-            for idx, spec in enumerate(stages):
+            self._insert_stages(chain_id, stages)
+
+    def reset_stages(self, chain_id: str) -> None:
+        """Every stage back to pending (skipped when disabled), results cleared."""
+
+        with self._transaction():
+            self._db.execute(
+                """
+                UPDATE stage_runs SET status = CASE WHEN enabled THEN 'pending' ELSE 'skipped' END,
+                    stage_hash = NULL, cached = 0, job_id = NULL, output_file_ids = '[]', output_prompt = NULL,
+                    infotext = NULL, error = NULL, started = NULL, finished = NULL
+                WHERE chain_id = ?
+                """,
+                (chain_id,),
+            )
+            self._db.execute("UPDATE chains SET updated = ? WHERE id = ?", (time.time(), chain_id))
+
+    def get_forced(self, chain_id: str) -> set[int]:
+        """Stages a re-run must execute even when their output is cached."""
+
+        with self._lock:
+            row = self._db.execute("SELECT stages FROM chain_force WHERE chain_id = ?", (chain_id,)).fetchone()
+        return {int(i) for i in json.loads(row[0])} if row else set()
+
+    def set_forced(self, chain_id: str, stages: set[int]) -> None:
+        with self._lock:
+            if stages:
                 self._db.execute(
-                    """
-                    INSERT INTO stage_runs (chain_id, stage_index, kind, name, enabled, tab, core, scripts, config, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        chain_id,
-                        idx,
-                        spec.kind,
-                        spec.name,
-                        int(spec.enabled),
-                        spec.tab,
-                        json.dumps(spec.core, ensure_ascii=False),
-                        json.dumps(spec.scripts, ensure_ascii=False),
-                        json.dumps(spec.config, ensure_ascii=False),
-                        "pending" if spec.enabled else "skipped",
-                    ),
+                    "INSERT INTO chain_force (chain_id, stages) VALUES (?, ?) ON CONFLICT(chain_id) DO UPDATE SET stages = excluded.stages",
+                    (chain_id, json.dumps(sorted(stages))),
                 )
+            else:
+                self._db.execute("DELETE FROM chain_force WHERE chain_id = ?", (chain_id,))
 
     def update_stage(
         self,
@@ -606,8 +682,9 @@ class ChainStore:
         return (row[0], int(row[1])) if row is not None else None
 
     def delete_chain(self, chain_id: str) -> bool:
-        with self._lock:
+        with self._transaction():
             self._db.execute("DELETE FROM stage_runs WHERE chain_id = ?", (chain_id,))
+            self._db.execute("DELETE FROM chain_force WHERE chain_id = ?", (chain_id,))
             return self._db.execute("DELETE FROM chains WHERE id = ?", (chain_id,)).rowcount > 0
 
     # region Stage cache
@@ -669,9 +746,7 @@ class ChainStore:
 
     def list_templates(self) -> list[ChainTemplate]:
         with self._lock:
-            rows = self._db.execute(
-                "SELECT id, name, description, model_family, stages, tags, created, updated FROM chain_templates ORDER BY updated DESC, name ASC"
-            ).fetchall()
+            rows = self._db.execute("SELECT id, name, description, model_family, stages, tags, created, updated FROM chain_templates ORDER BY updated DESC, name ASC").fetchall()
         return [self._row_to_template(row) for row in rows]
 
     def get_template(self, template_id: str) -> ChainTemplate | None:
@@ -730,15 +805,49 @@ class ChainStore:
     # endregion
 
 
+def _file_identity(path: Any) -> str:
+    try:
+        import os
+
+        stat = os.stat(path)
+    except (OSError, TypeError, ValueError):
+        return ""
+    return f"{stat.st_size}:{stat.st_mtime_ns}"
+
+
 def _default_model_fingerprint() -> str:
+    """What the loaded model and the settings that change every image amount to.
+
+    The checkpoint goes in by name and file identity (size and mtime), so a
+    file replaced under the same name does not reuse the old outputs."""
+
     try:
         from modules import shared
 
         opts = shared.opts
+        checkpoint = str(getattr(opts, "sd_model_checkpoint", "") or "")
+        identity = ""
+        try:
+            from modules import sd_models
+
+            info = sd_models.get_closet_checkpoint_match(checkpoint) if checkpoint else None
+            if info is not None:
+                checkpoint = str(getattr(info, "name", None) or checkpoint)
+                identity = _file_identity(getattr(info, "filename", None))
+        except Exception:
+            pass
+        modules = getattr(opts, "forge_additional_modules", None) or []
         parts = [
-            getattr(opts, "sd_model_checkpoint", "") or "",
+            checkpoint,
+            identity,
             getattr(opts, "forge_preset", "") or "",
             getattr(opts, "forge_unet_storage_dtype", "") or "",
+            getattr(opts, "sd_vae", "") or "",
+            ",".join(sorted(f"{m}@{_file_identity(m)}" for m in modules)) if isinstance(modules, (list, tuple)) else str(modules),
+            getattr(opts, "CLIP_stop_at_last_layers", "") or "",
+            getattr(opts, "emphasis", "") or "",
+            getattr(opts, "eta_noise_seed_delta", "") or "",
+            getattr(opts, "randn_source", "") or "",
         ]
         return "|".join(str(p) for p in parts)
     except Exception:
@@ -749,30 +858,42 @@ UpsamplerFunc = Callable[[StageRun, str | None, Sequence[str]], str]
 
 
 def _default_upsampler(stage: StageRun, upstream_prompt: str | None, upstream_outputs: Sequence[str]) -> str:
-    """Default ``prompt_upsample`` stage handler (uses ``remi.prompt_tools.pup`` if configured)."""
+    """Default ``prompt_upsample`` stage handler (``remi.prompt_tools.pup``).
+
+    Errors propagate: the stage fails instead of passing the base prompt on
+    as if it had been upsampled (and caching that)."""
 
     base_prompt = str(stage.core.get("prompt") or upstream_prompt or "")
     if not base_prompt.strip():
         return base_prompt
-    try:
-        from remi.prompt_tools.pup import upsample_prompt
+    from remi.prompt_tools.pup import upsample_prompt
 
-        cfg = stage.config or {}
-        res = upsample_prompt(
-            base_prompt,
-            model_family=cfg.get("model_family"),
-            aspect_ratio=cfg.get("aspect_ratio"),
-            bbox_draft=cfg.get("bbox_draft"),
-            mode=str(cfg.get("mode") or "auto"),
-            local_model_path=cfg.get("local_model_path"),
-        )
-        return res.prompt
-    except Exception:
-        return base_prompt
+    cfg = stage.config or {}
+    res = upsample_prompt(
+        base_prompt,
+        model_family=cfg.get("model_family"),
+        aspect_ratio=cfg.get("aspect_ratio"),
+        bbox_draft=cfg.get("bbox_draft"),
+        mode=str(cfg.get("mode") or "auto"),
+        local_model_path=cfg.get("local_model_path"),
+    )
+    return res.prompt
+
+
+def _stage_images(job: Job) -> list[str]:
+    """The images a stage hands on: its results, not the grid or extra images
+    (ControlNet maps) that come with them."""
+
+    return [out["id"] for out in (job.outputs or []) if isinstance(out, Mapping) and out.get("kind", "image") == "image" and not out.get("role") and isinstance(out.get("id"), str)]
 
 
 class ChainRunner:
-    """Orchestrates linear multi-stage pipelines over :class:`JobQueue` with stage caching."""
+    """Orchestrates linear multi-stage pipelines over :class:`JobQueue` with stage caching.
+
+    ``model_fingerprint`` describes the model loaded now; it is read when a
+    stage is looked up and again when its job finishes (a model picked while
+    it waited is the one it ran on). A chain's stored ``model_fingerprint`` is
+    the caller's extra salt, never a substitute for it."""
 
     def __init__(
         self,
@@ -791,14 +912,62 @@ class ChainRunner:
         self.upsampler = upsampler or _default_upsampler
         self.model_fingerprint = model_fingerprint
         self._lock = threading.RLock()
-        self._force_stages: dict[str, set[int]] = {}
+        self._threads: set[threading.Thread] = set()
+        self._run_fingerprints: dict[str, str] = {}
+        """job id → the model fingerprint when the stage job started"""
         self._unhook = queue.add_completion_hook(self.on_job_finished)
+        self._unhook_start: Callable[[], None] | None = queue.add_start_hook(self._on_job_started)
 
     def close(self) -> None:
         if self._unhook is not None:
             self._unhook()
             self._unhook = None
+        if self._unhook_start is not None:
+            self._unhook_start()
+            self._unhook_start = None
+        for thread in list(self._threads):
+            thread.join(timeout=10)
         self.store.close()
+
+    def wait_idle(self, timeout: float = 10.0) -> bool:
+        """Wait for inline stages (prompt upsampling) running in the background."""
+
+        deadline = time.monotonic() + timeout
+        for thread in list(self._threads):
+            thread.join(timeout=max(0.0, deadline - time.monotonic()))
+        return not any(thread.is_alive() for thread in self._threads)
+
+    def _fingerprint(self, salt: str = "", *, model: str | None = None) -> str:
+        fp = self.model_fingerprint() if model is None else model
+        return f"{fp}#{salt}" if salt else fp
+
+    def _on_job_started(self, job: Job) -> None:
+        # the model is in place now (a pick held while the job waited was applied just before);
+        # settings changed while it runs need not have reached it, so this is the fingerprint it ran with
+        if job.meta.get("chain_id"):
+            self._run_fingerprints[job.id] = self.model_fingerprint()
+
+    @staticmethod
+    def _stage_hash(
+        spec: StageSpec,
+        upstream: tuple[str, Sequence[str], str | None],
+        *,
+        fingerprint: str,
+        chain_id: str | None,
+    ) -> str:
+        upstream_hash, upstream_outputs, upstream_prompt = upstream
+        salt = ""
+        if uses_random_seed(spec):
+            # a new chain draws a new seed; without a chain (a preview) nothing can match
+            salt = f"chain:{chain_id}" if chain_id else f"once:{secrets.token_hex(8)}"
+        return compute_stage_hash(
+            spec,
+            upstream_hash=upstream_hash,
+            upstream_outputs=upstream_outputs,
+            upstream_prompt=upstream_prompt,
+            model_fingerprint=fingerprint,
+            salt=salt,
+        )
 
     def _cache_valid(self, entry: CachedStageOutput | None) -> bool:
         if entry is None:
@@ -809,10 +978,24 @@ class ChainRunner:
             return False
         return all(self.files.get(fid) is not None for fid in entry.output_file_ids)
 
-    def plan_chain(self, stages: Sequence[StageSpec], *, model_fingerprint: str | None = None) -> list[dict[str, Any]]:
-        """Dry-run cache evaluation: reports per-stage ``stage_hash`` and ``cache_hit``."""
+    def plan_chain(
+        self,
+        stages: Sequence[StageSpec],
+        *,
+        model_fingerprint: str | None = None,
+        chain_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Dry-run cache evaluation: reports per-stage ``stage_hash`` and ``cache_hit``.
 
-        fp = model_fingerprint if model_fingerprint is not None else self.model_fingerprint()
+        ``chain_id``: plan a re-run of that chain (its random-seed stages can
+        hit); without it a random-seed stage always runs. Disabled stages pass
+        their upstream on untouched, as :meth:`_advance` does."""
+
+        salt = model_fingerprint
+        if salt is None and chain_id:
+            existing = self.store.get_chain(chain_id)
+            salt = existing.model_fingerprint if existing is not None else ""
+        fp = self._fingerprint(salt or "")
         plan: list[dict[str, Any]] = []
         upstream_hash = ""
         upstream_outputs: list[str] = []
@@ -820,65 +1003,23 @@ class ChainRunner:
         chain_cache_intact = True
 
         for idx, spec in enumerate(stages):
-            stage_hash = compute_stage_hash(
-                spec,
-                upstream_hash=upstream_hash,
-                upstream_outputs=upstream_outputs,
-                upstream_prompt=upstream_prompt,
-                model_fingerprint=fp,
-            )
+            stage_hash = self._stage_hash(spec, (upstream_hash, upstream_outputs, upstream_prompt), fingerprint=fp, chain_id=chain_id)
+            entry = {"index": idx, "kind": spec.kind, "name": spec.name, "enabled": bool(spec.enabled), "stage_hash": stage_hash, "cache_hit": False, "cached_outputs": [], "cached_prompt": None}
             if not spec.enabled:
-                plan.append(
-                    {
-                        "index": idx,
-                        "kind": spec.kind,
-                        "name": spec.name,
-                        "enabled": False,
-                        "stage_hash": stage_hash,
-                        "cache_hit": False,
-                        "cached_outputs": [],
-                        "cached_prompt": None,
-                    }
-                )
-                upstream_hash = stage_hash
+                plan.append(entry)
                 continue
-
             cached = self.store.get_cached(stage_hash) if chain_cache_intact else None
-            hit = self._cache_valid(cached)
-            if hit and cached is not None:
-                upstream_hash = stage_hash
+            upstream_hash = stage_hash
+            if self._cache_valid(cached) and cached is not None:
                 if cached.output_file_ids:
                     upstream_outputs = list(cached.output_file_ids)
                 if cached.output_prompt is not None:
                     upstream_prompt = cached.output_prompt
-                plan.append(
-                    {
-                        "index": idx,
-                        "kind": spec.kind,
-                        "name": spec.name,
-                        "enabled": True,
-                        "stage_hash": stage_hash,
-                        "cache_hit": True,
-                        "cached_outputs": list(cached.output_file_ids),
-                        "cached_prompt": cached.output_prompt,
-                    }
-                )
+                entry.update(cache_hit=True, cached_outputs=list(cached.output_file_ids), cached_prompt=cached.output_prompt)
             else:
                 chain_cache_intact = False
-                upstream_hash = stage_hash
                 upstream_outputs = []
-                plan.append(
-                    {
-                        "index": idx,
-                        "kind": spec.kind,
-                        "name": spec.name,
-                        "enabled": True,
-                        "stage_hash": stage_hash,
-                        "cache_hit": False,
-                        "cached_outputs": [],
-                        "cached_prompt": None,
-                    }
-                )
+            plan.append(entry)
         return plan
 
     def create_chain(
@@ -891,8 +1032,10 @@ class ChainRunner:
         user: str | None = None,
         model_fingerprint: str | None = None,
     ) -> JobChain:
-        fp = model_fingerprint if model_fingerprint is not None else self.model_fingerprint()
-        chain = self.store.create_chain(stages, name=name, priority=priority, user=user, model_fingerprint=fp, status="queued" if run_now else "paused")
+        """``model_fingerprint``: extra salt for the stage hashes (what else the
+        caller knows the output depends on), added to the loaded model's."""
+
+        chain = self.store.create_chain(stages, name=name, priority=priority, user=user, model_fingerprint=model_fingerprint or "", status="queued" if run_now else "paused")
         self._publish_chain(chain)
         if run_now:
             return self._advance(chain.id)
@@ -911,33 +1054,19 @@ class ChainRunner:
             chain = self.store.get_chain(chain_id)
             if chain is None:
                 raise ChainError(f"no chain {chain_id!r}", status=404)
-            if chain.status == "running":
+            if chain.status == "running" or any(st.status == "running" for st in chain.stages):
                 raise ChainError("cancel or pause the running chain before re-running", status=409)
             if stages is not None:
                 self.store.replace_stages(chain_id, stages)
             else:
-                # Reset existing stages to pending/skipped so cache check runs cleanly
-                for st in chain.stages:
-                    self.store.update_stage(
-                        chain_id,
-                        st.index,
-                        status="pending" if st.enabled else "skipped",
-                        cached=False,
-                        job_id=None,
-                        output_file_ids=[],
-                        output_prompt=None,
-                        infotext=None,
-                        error=None,
-                        started=None,
-                        finished=None,
-                    )
-            forced = set(force_stages)
+                self.store.reset_stages(chain_id)
+            forced = {int(i) for i in force_stages}
             if from_stage is not None:
                 total = len(stages) if stages is not None else len(chain.stages)
                 forced |= set(range(max(0, int(from_stage)), total))
-            self._force_stages[chain_id] = forced
-            fp = model_fingerprint if model_fingerprint is not None else chain.model_fingerprint or self.model_fingerprint()
-            self.store.update_chain(chain_id, status="queued", current_stage=0, model_fingerprint=fp, error=None, started=None, finished=None)
+            self.store.set_forced(chain_id, forced)
+            salt = model_fingerprint if model_fingerprint is not None else chain.model_fingerprint
+            self.store.update_chain(chain_id, status="queued", current_stage=0, model_fingerprint=salt, error=None, started=None, finished=None)
         return self._advance(chain_id)
 
     def pause_chain(self, chain_id: str) -> JobChain:
@@ -945,7 +1074,7 @@ class ChainRunner:
             chain = self.store.get_chain(chain_id)
             if chain is None:
                 raise ChainError(f"no chain {chain_id!r}", status=404)
-            if chain.status in ("completed", "failed", "cancelled"):
+            if chain.status in TERMINAL_CHAIN_STATUSES:
                 raise ChainError(f"cannot pause chain in status {chain.status!r}", status=409)
             updated = self.store.update_chain(chain_id, status="paused")
             assert updated is not None
@@ -953,13 +1082,20 @@ class ChainRunner:
             return updated
 
     def resume_chain(self, chain_id: str) -> JobChain:
+        """Continue a paused chain (a stage still running finishes first)."""
+
         with self._lock:
             chain = self.store.get_chain(chain_id)
             if chain is None:
                 raise ChainError(f"no chain {chain_id!r}", status=404)
             if chain.status != "paused":
                 raise ChainError(f"chain is {chain.status!r}, not paused", status=409)
-            self.store.update_chain(chain_id, status="queued")
+            running = any(st.status == "running" for st in chain.stages)
+            updated = self.store.update_chain(chain_id, status="running" if running else "queued")
+            assert updated is not None
+            if running:
+                self._publish_chain(updated)
+                return updated
         return self._advance(chain_id)
 
     def cancel_chain(self, chain_id: str) -> JobChain:
@@ -967,13 +1103,15 @@ class ChainRunner:
             chain = self.store.get_chain(chain_id)
             if chain is None:
                 raise ChainError(f"no chain {chain_id!r}", status=404)
+            if chain.status in TERMINAL_CHAIN_STATUSES:
+                raise ChainError(f"chain is already {chain.status}", status=409)
             now = time.time()
             active_jobs = [st.job_id for st in chain.stages if st.status == "running" and st.job_id]
             for st in chain.stages:
                 if st.status in ("pending", "running"):
                     self.store.update_stage(chain_id, st.index, status="cancelled", finished=now)
             updated = self.store.update_chain(chain_id, status="cancelled", finished=now)
-            self._force_stages.pop(chain_id, None)
+            self.store.set_forced(chain_id, set())
         for job_id in active_jobs:
             try:
                 self.queue.interrupt(job_id)
@@ -987,10 +1125,58 @@ class ChainRunner:
         chain = self.store.get_chain(chain_id)
         if chain is None:
             return False
-        if chain.status == "running":
+        if chain.status == "running" or any(st.status == "running" for st in chain.stages):
             raise ChainError("cannot delete a running chain; cancel it first", status=409)
-        self._force_stages.pop(chain_id, None)
         return self.store.delete_chain(chain_id)
+
+    def reconcile(self) -> int:
+        """Settle chains a previous process left mid-run (call once the queue
+        has started, so jobs it left running are already marked interrupted).
+
+        A stage whose job finished is recorded as if the job had just ended; a
+        stage whose job is gone, or an inline stage nobody runs any more,
+        cancels its chain (also a paused one); queued chains continue. Returns
+        how many chains moved."""
+
+        moved = 0
+        cursor: str | None = None
+        while True:
+            chains, cursor, _total = self.store.list_chains(status="queued,running,paused", cursor=cursor, limit=200)
+            for chain in chains:
+                if self._reconcile_one(chain):
+                    moved += 1
+            if cursor is None:
+                return moved
+
+    def _reconcile_one(self, chain: JobChain) -> bool:
+        from remi.jobs.store import FINISHED
+
+        finished_jobs: list[Job] = []
+        with self._lock:
+            now = time.time()
+            for stage in chain.stages:
+                if stage.status != "running":
+                    continue
+                job = self.queue.store.get(stage.job_id) if stage.job_id and stage.kind != "prompt_upsample" else None
+                if job is not None and job.status in FINISHED:
+                    finished_jobs.append(job)
+                elif job is None:
+                    error = "the server stopped while the stage ran" if stage.kind == "prompt_upsample" or not stage.job_id else "the stage job was deleted"
+                    self.store.update_stage(chain.id, stage.index, status="cancelled", error=error, finished=now)
+                    updated = self.store.update_chain(chain.id, status="cancelled", error=error, finished=now)
+                    self.store.set_forced(chain.id, set())
+                    assert updated is not None
+                    self._publish_chain(updated)
+                    return True
+                else:
+                    return False  # still queued: its hook will move the chain on
+        if not finished_jobs and chain.status == "paused":
+            return False  # nothing was running: it waits for its resume
+        for job in finished_jobs:
+            self.on_job_finished(job)
+        if not finished_jobs:
+            self._advance(chain.id)
+        return True
 
     def _upstream_state(self, chain: JobChain, before_index: int) -> tuple[str, list[str], str | None]:
         upstream_hash = ""
@@ -1040,13 +1226,25 @@ class ChainRunner:
             meta["upstream_file_ids"] = list(upstream_outputs)
         return Submission(tab=tab, core=core, scripts=scripts, priority=chain.priority, upscale_from=upscale_from, meta=meta)
 
+    def _fail_chain(self, chain_id: str, stage_index: int, message: str, *, status: str = "failed", **stage_fields: Any) -> JobChain:
+        """Record a stage that ended the chain (``status``: failed or cancelled); the caller holds the lock."""
+
+        now = time.time()
+        self.store.update_stage(chain_id, stage_index, status=status, error=message, finished=now, **stage_fields)
+        updated = self.store.update_chain(chain_id, status=status, error=message, finished=now)
+        self.store.set_forced(chain_id, set())
+        assert updated is not None
+        self._publish_stage_completed(updated.stages[stage_index])
+        self._publish_chain(updated)
+        return updated
+
     def _advance(self, chain_id: str) -> JobChain:
         while True:
             with self._lock:
                 chain = self.store.get_chain(chain_id)
                 if chain is None:
                     raise ChainError(f"no chain {chain_id!r}", status=404)
-                if chain.status in ("paused", "cancelled", "completed", "failed"):
+                if chain.status in ("paused", *TERMINAL_CHAIN_STATUSES):
                     return chain
                 if any(st.status == "running" for st in chain.stages):
                     return chain
@@ -1054,7 +1252,7 @@ class ChainRunner:
                 next_stage = next((st for st in chain.stages if st.status == "pending"), None)
                 if next_stage is None:
                     done = self.store.update_chain(chain_id, status="completed", finished=time.time())
-                    self._force_stages.pop(chain_id, None)
+                    self.store.set_forced(chain_id, set())
                     assert done is not None
                     self._publish_chain(done)
                     return done
@@ -1065,16 +1263,11 @@ class ChainRunner:
                 else:
                     self.store.update_chain(chain_id, status="running", current_stage=next_stage.index)
 
-                upstream_hash, upstream_outputs, upstream_prompt = self._upstream_state(chain, next_stage.index)
-                stage_hash = compute_stage_hash(
-                    next_stage.to_spec(),
-                    upstream_hash=upstream_hash,
-                    upstream_outputs=upstream_outputs,
-                    upstream_prompt=upstream_prompt,
-                    model_fingerprint=chain.model_fingerprint,
-                )
+                upstream = self._upstream_state(chain, next_stage.index)
+                _upstream_hash, upstream_outputs, upstream_prompt = upstream
+                stage_hash = self._stage_hash(next_stage.to_spec(), upstream, fingerprint=self._fingerprint(chain.model_fingerprint), chain_id=chain.id)
 
-                forced = self._force_stages.get(chain_id, set())
+                forced = self.store.get_forced(chain_id)
                 cached_entry = None if next_stage.index in forced else self.store.get_cached(stage_hash)
                 if self._cache_valid(cached_entry) and cached_entry is not None:
                     self.store.update_stage(
@@ -1096,50 +1289,30 @@ class ChainRunner:
                     self._publish_chain(updated_chain)
                     continue
 
-                # Execute prompt_upsample inline
                 if next_stage.kind == "prompt_upsample":
-                    self.store.update_stage(chain_id, next_stage.index, status="running", stage_hash=stage_hash, started=now)
-                    try:
-                        upsampled = self.upsampler(next_stage, upstream_prompt, upstream_outputs)
-                    except Exception as error:
-                        msg = f"{type(error).__name__}: {error}"
-                        self.store.update_stage(chain_id, next_stage.index, status="failed", error=msg, finished=time.time())
-                        failed = self.store.update_chain(chain_id, status="failed", error=msg, finished=time.time())
-                        self._force_stages.pop(chain_id, None)
-                        assert failed is not None
-                        self._publish_stage_completed(failed.stages[next_stage.index])
-                        self._publish_chain(failed)
-                        return failed
-                    done_time = time.time()
-                    self.store.update_stage(
-                        chain_id,
-                        next_stage.index,
-                        status="completed",
-                        stage_hash=stage_hash,
-                        cached=False,
-                        output_prompt=upsampled,
-                        finished=done_time,
+                    # Runs in the background behind the generation lock: it may load a model
+                    # (VRAM), and a request or the queue worker must not wait for it.
+                    self.store.update_stage(chain_id, next_stage.index, status="running", stage_hash=stage_hash, cached=False, started=now)
+                    thread = threading.Thread(
+                        target=self._run_upsample,
+                        args=(chain_id, next_stage, stage_hash, upstream_prompt, list(upstream_outputs)),
+                        name=f"remi-chain-upsample-{chain_id[:6]}",
+                        daemon=True,
                     )
-                    self.store.put_cached(stage_hash, next_stage.kind, output_prompt=upsampled)
+                    self._threads.add(thread)
+                    thread.start()
                     updated_chain = self.store.get_chain(chain_id)
                     assert updated_chain is not None
-                    self._publish_stage_completed(updated_chain.stages[next_stage.index])
                     self._publish_chain(updated_chain)
-                    continue
+                    return updated_chain
 
-                # Queue a generation stage job
+                # Queue a generation stage job (the completion hook waits for this lock,
+                # so it sees the job id even when the job ends at once)
                 try:
                     submission = self._build_stage_submission(chain, next_stage, upstream_outputs, upstream_prompt)
                     jobs = self.queue.submit(submission, user=chain.user)
                 except Exception as error:
-                    msg = f"{type(error).__name__}: {error}"
-                    self.store.update_stage(chain_id, next_stage.index, status="failed", stage_hash=stage_hash, error=msg, started=now, finished=time.time())
-                    failed = self.store.update_chain(chain_id, status="failed", error=msg, finished=time.time())
-                    self._force_stages.pop(chain_id, None)
-                    assert failed is not None
-                    self._publish_stage_completed(failed.stages[next_stage.index])
-                    self._publish_chain(failed)
-                    return failed
+                    return self._fail_chain(chain_id, next_stage.index, f"{type(error).__name__}: {error}", stage_hash=stage_hash, started=now)
 
                 job = jobs[0]
                 self.store.update_stage(
@@ -1156,59 +1329,98 @@ class ChainRunner:
                 self._publish_chain(updated_chain)
                 return updated_chain
 
-    def on_job_finished(self, job: Job) -> None:
-        """Completion hook called by :class:`JobQueue` when a job reaches a final status."""
+    def _run_upsample(self, chain_id: str, stage: StageRun, stage_hash: str, upstream_prompt: str | None, upstream_outputs: list[str]) -> None:
+        try:
+            result: str | None = None
+            error: str | None = None
+            try:
+                with self.queue.lock:
+                    if self._stage_running(chain_id, stage.index, stage_hash):
+                        result = self.queue.dispatch(self.upsampler, stage, upstream_prompt, upstream_outputs)
+            except Exception as exc:
+                error = f"{type(exc).__name__}: {exc}"
+            should_advance = False
+            with self._lock:
+                if not self._stage_running(chain_id, stage.index, stage_hash):
+                    return  # cancelled, deleted, or re-run (another thread runs it now)
+                if error is not None or result is None:
+                    self._fail_chain(chain_id, stage.index, error or "prompt upsampling returned nothing")
+                    return
+                self.store.update_stage(chain_id, stage.index, status="completed", output_prompt=result, finished=time.time())
+                self.store.put_cached(stage_hash, stage.kind, output_prompt=result)
+                updated = self.store.get_chain(chain_id)
+                assert updated is not None
+                self._publish_stage_completed(updated.stages[stage.index])
+                self._publish_chain(updated)
+                should_advance = updated.status in ("running", "queued")
+            if should_advance:
+                self._advance(chain_id)
+        except Exception:
+            log.exception("prompt upsampling stage of chain %s", chain_id)
+        finally:
+            self._threads.discard(threading.current_thread())
 
-        found = self.store.find_stage_by_job(job.id)
-        if found is None:
-            return
-        chain_id, stage_index = found
+    def _stage_running(self, chain_id: str, stage_index: int, stage_hash: str) -> bool:
+        """Whether this run of the stage is still the one wanted (a re-run of the
+        chain starts the stage over, maybe with other parameters)."""
+
+        chain = self.store.get_chain(chain_id)
+        if chain is None or chain.status in TERMINAL_CHAIN_STATUSES or stage_index >= len(chain.stages):
+            return False
+        stage = chain.stages[stage_index]
+        return stage.status == "running" and stage.stage_hash == stage_hash
+
+    def on_job_finished(self, job: Job) -> None:
+        """Completion hook called by :class:`JobQueue` when a job reaches a final status
+        (also with a cancelled copy of a queued job that was deleted)."""
+
         should_advance = False
+        run_fingerprint = self._run_fingerprints.pop(job.id, None)
         with self._lock:
+            found = self.store.find_stage_by_job(job.id)
+            if found is None:
+                return
+            chain_id, stage_index = found
             chain = self.store.get_chain(chain_id)
             if chain is None or stage_index >= len(chain.stages):
                 return
             stage = chain.stages[stage_index]
             if stage.status != "running":
                 return
-            now = time.time()
-            output_ids = [out["id"] for out in (job.outputs or []) if isinstance(out, Mapping) and out.get("kind", "image") == "image" and isinstance(out.get("id"), str)]
+            output_ids = _stage_images(job)
+            if job.status == COMPLETED and not output_ids:
+                self._fail_chain(chain_id, stage_index, "the stage made no image to pass on")
+                return
             if job.status == COMPLETED:
+                # keyed by the model it ran on, not the one loaded when it was queued; when that is
+                # unknown (it ended before a restart), by what was expected at submission
+                stage_hash = stage.stage_hash
+                if run_fingerprint is not None or not stage_hash:
+                    stage_hash = self._stage_hash(
+                        stage.to_spec(),
+                        self._upstream_state(chain, stage_index),
+                        fingerprint=self._fingerprint(chain.model_fingerprint, model=run_fingerprint),
+                        chain_id=chain.id,
+                    )
                 self.store.update_stage(
                     chain_id,
                     stage_index,
                     status="completed",
+                    stage_hash=stage_hash,
                     output_file_ids=output_ids,
                     infotext=job.infotext,
-                    finished=now,
+                    finished=time.time(),
                 )
-                if stage.stage_hash and output_ids:
-                    self.store.put_cached(
-                        stage.stage_hash,
-                        stage.kind,
-                        output_file_ids=output_ids,
-                        infotext=job.infotext,
-                        job_id=job.id,
-                    )
+                self.store.put_cached(stage_hash, stage.kind, output_file_ids=output_ids, infotext=job.infotext, job_id=job.id)
                 updated = self.store.get_chain(chain_id)
                 assert updated is not None
                 self._publish_stage_completed(updated.stages[stage_index])
                 self._publish_chain(updated)
-                should_advance = updated.status == "running"
+                should_advance = updated.status in ("running", "queued")
             elif job.status in (CANCELLED, INTERRUPTED):
-                self.store.update_stage(chain_id, stage_index, status="cancelled", error=job.error or job.status, finished=now)
-                updated = self.store.update_chain(chain_id, status="cancelled", error=job.error or job.status, finished=now)
-                self._force_stages.pop(chain_id, None)
-                assert updated is not None
-                self._publish_stage_completed(updated.stages[stage_index])
-                self._publish_chain(updated)
+                self._fail_chain(chain_id, stage_index, job.error or job.status, status="cancelled")
             elif job.status == FAILED:
-                self.store.update_stage(chain_id, stage_index, status="failed", error=job.error or "stage job failed", finished=now)
-                updated = self.store.update_chain(chain_id, status="failed", error=job.error or "stage job failed", finished=now)
-                self._force_stages.pop(chain_id, None)
-                assert updated is not None
-                self._publish_stage_completed(updated.stages[stage_index])
-                self._publish_chain(updated)
+                self._fail_chain(chain_id, stage_index, job.error or "stage job failed")
         if should_advance:
             self._advance(chain_id)
 
@@ -1226,20 +1438,14 @@ class ChainRunner:
         )
 
     def _publish_chain(self, chain: JobChain) -> None:
+        """``chain.updated`` carries the whole chain, as ``GET /chains/{id}`` returns it."""
+
         from datetime import UTC, datetime
 
         def _iso(ts: float | None) -> str | None:
             return datetime.fromtimestamp(ts, UTC).isoformat() if ts is not None else None
 
-        self.bus.publish(
-            "chain.updated",
-            chain_id=chain.id,
-            name=chain.name,
-            status=chain.status,
-            current_stage=chain.current_stage,
-            total_stages=len(chain.stages),
-            stages=[stage_json(st, _iso) for st in chain.stages],
-        )
+        self.bus.publish("chain.updated", chain_id=chain.id, **chain_json(chain, _iso))
 
 
 __all__ = [
@@ -1247,6 +1453,7 @@ __all__ = [
     "DEFAULT_STAGE_TABS",
     "STAGE_KINDS",
     "STAGE_STATUSES",
+    "TERMINAL_CHAIN_STATUSES",
     "CachedStageOutput",
     "ChainError",
     "ChainRunner",
@@ -1259,4 +1466,5 @@ __all__ = [
     "compute_stage_hash",
     "stage_json",
     "template_json",
+    "uses_random_seed",
 ]

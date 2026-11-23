@@ -842,12 +842,13 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
             chain_id: chain.id,
             stage_index: stage.index,
             kind: stage.kind,
+            status: stage.status,
             cached: stage.cached,
             output_file_ids: stage.output_file_ids,
           })
         }
       }
-      broadcast({ type: "chain.updated", chain_id: chain.id, status: chain.status, current_stage: chain.current_stage })
+      broadcast({ type: "chain.updated", chain_id: chain.id, ...structuredClone(chain) })
       return chain
     },
   ],
@@ -882,7 +883,7 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
       found.updated_at = now
       found.finished_at = now
       found.error = null
-      broadcast({ type: "chain.updated", chain_id: found.id, status: found.status, current_stage: found.current_stage })
+      broadcast({ type: "chain.updated", chain_id: found.id, ...structuredClone(found) })
       return found
     },
   ],
@@ -894,9 +895,12 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
       const action = m[2]
       const found = chains.find((c) => c.id === id)
       if (!found) throw new MockHttpError(404, { detail: `no chain ${id}` })
+      if (action === "cancel" && ["completed", "failed", "cancelled"].includes(found.status)) {
+        throw new MockHttpError(409, { detail: `chain is already ${found.status}` })
+      }
       found.status = action === "pause" ? "paused" : action === "cancel" ? "cancelled" : "completed"
       found.updated_at = new Date().toISOString()
-      broadcast({ type: "chain.updated", chain_id: found.id, status: found.status, current_stage: found.current_stage })
+      broadcast({ type: "chain.updated", chain_id: found.id, ...structuredClone(found) })
       return found
     },
   ],

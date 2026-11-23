@@ -32,6 +32,10 @@ export type WsEventMap = {
   "model.loading": { stage: string; model?: string; progress?: number | null }
   /** A model load finished (successfully or not); ends `model.loading`. */
   "model.loaded": { model?: string; error?: string | null }
+  /** A pipeline changed; the rest of the fields are the whole chain, as `GET /chains/{id}` returns it. */
+  "chain.updated": { chain_id: string; status: string; id?: string; updated_at?: string; stages?: unknown[] }
+  /** A pipeline stage ended (ran, reused its cached output, failed or was cancelled). */
+  "chain.stage_completed": { chain_id: string; stage_index: number; status: string; cached?: boolean; output_file_ids?: string[] }
 }
 
 export type WsEventType = keyof WsEventMap
@@ -64,6 +68,8 @@ const SHAPES: { [K in WsEventType]: Record<string, (v: unknown) => boolean> } = 
   pong: {},
   "model.loading": { stage: isString },
   "model.loaded": {},
+  "chain.updated": { chain_id: isString, status: isString },
+  "chain.stage_completed": { chain_id: isString, stage_index: isNumber, status: isString },
 }
 
 /**

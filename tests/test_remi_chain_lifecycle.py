@@ -1,0 +1,412 @@
+"""Pipeline (chain) regressions: stage-cache keys, the chain state machine
+across every way a stage job can end, restart recovery and stage inputs."""
+
+from __future__ import annotations
+
+import threading
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Any
+
+import pytest
+from PIL import Image
+
+from remi.files import FileStore
+from remi.jobs import ChainRunner, ChainStore, JobError, JobQueue, JobResult, JobStore, StageSpec, run_inline
+from remi.jobs.chains import ChainError
+from remi.realtime import EventBus
+from remi.server.testing import FakeState
+
+
+@dataclass
+class Rig:
+    files: FileStore
+    jobs: JobStore
+    queue: JobQueue
+    runner: ChainRunner
+    bus: EventBus
+    model: dict[str, str]
+    executed: list[dict[str, Any]] = field(default_factory=list)
+    events: list[dict[str, Any]] = field(default_factory=list)
+    result: dict[str, Any] = field(default_factory=dict)
+
+    def wait(self, chain_id: str, timeout: float = 10.0):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            chain = self.runner.store.get_chain(chain_id)
+            if chain is not None and chain.status in ("completed", "failed", "cancelled"):
+                return chain
+            time.sleep(0.02)
+        return self.runner.store.get_chain(chain_id)
+
+    def statuses(self, chain_id: str) -> list[str]:
+        chain = self.runner.store.get_chain(chain_id)
+        assert chain is not None
+        return [stage.status for stage in chain.stages]
+
+    def new_runner(self) -> ChainRunner:
+        """Another runner on the same databases (what a restart starts with)."""
+
+        self.runner.close()
+        self.runner = ChainRunner(ChainStore(self.jobs), self.queue, self.files, self.bus, upsampler=lambda s, p, o: f"{p or s.core.get('prompt')}+", model_fingerprint=lambda: self.model["fp"])
+        return self.runner
+
+
+@contextmanager
+def rig(tmp_path, *, upsampler=None, option=None, start: bool = True) -> Iterator[Rig]:
+    files = FileStore(tmp_path / "files")
+    jobs = JobStore(tmp_path / "jobs.db")
+    bus = EventBus()
+    state = FakeState()
+    model = {"fp": "model-a"}
+    holder: dict[str, Rig] = {}
+
+    def execute(job, ctx):
+        r = holder["rig"]
+        r.executed.append({"kind": job.meta.get("stage_kind"), "core": dict(job.core), "model": model["fp"]})
+        if r.result.get("during") is not None:
+            r.result["during"]()
+        if r.result.get("images") is not None:
+            return JobResult(images=r.result["images"], infotexts=["x"] * len(r.result["images"]), info="x", roles=r.result.get("roles", []))
+        color = (len(r.executed) * 40 % 255, 10, 20)
+        return JobResult(images=[Image.new("RGB", (8, 8), color)], infotexts=["x"], info="x")
+
+    options = {"option": option} if option is not None else {}
+    queue = JobQueue(jobs, files, bus, executor=execute, dispatch=run_inline, lock=threading.Lock(), validate=lambda *a: None, state=lambda: state, hash_layout=lambda tab: "h", **options)
+    runner = ChainRunner(ChainStore(jobs), queue, files, bus, upsampler=upsampler or (lambda s, p, o: f"{p or s.core.get('prompt')}+"), model_fingerprint=lambda: model["fp"])
+    r = Rig(files, jobs, queue, runner, bus, model)
+    holder["rig"] = r
+    bus.subscribe(type("Sub", (), {"send_event": lambda self, e: r.events.append(e), "send_frame": lambda self, f: None})())
+    # a queue that never started would leave its jobs in the process-wide progress registry;
+    # "not started" here is a paused worker
+    queue.start()
+    if not start:
+        queue.set_paused(True)
+    try:
+        yield r
+    finally:
+        queue.stop()
+        r.runner.close()
+        jobs.close()
+        files.close()
+
+
+def seeded(seed: int | None, prompt: str = "fox") -> list[StageSpec]:
+    scripts = {"seed": {"seed": seed}} if seed is not None else {}
+    return [StageSpec(kind="generate", tab="txt2img", core={"prompt": prompt}, scripts=scripts), StageSpec(kind="refine", tab="img2img", core={}, scripts=scripts)]
+
+
+# region Stage-cache keys
+
+
+def test_a_random_seed_reruns_in_a_new_chain_but_not_in_its_own_rerun(tmp_path):
+    with rig(tmp_path) as r:
+        first = r.wait(r.runner.create_chain(seeded(-1)).id)
+        assert first.status == "completed"
+        second = r.wait(r.runner.create_chain(seeded(-1)).id)
+        assert [s.status for s in second.stages] == ["completed", "completed"]  # new images, not the old ones
+        again = r.wait(r.runner.rerun_chain(first.id).id)
+        assert [s.status for s in again.stages] == ["cached", "cached"]
+        assert again.stages[1].output_file_ids == first.stages[1].output_file_ids
+        assert len(r.executed) == 4
+
+
+def test_no_seed_counts_as_random_and_a_fixed_seed_is_shared(tmp_path):
+    with rig(tmp_path) as r:
+        r.wait(r.runner.create_chain(seeded(None)).id)
+        assert [s.status for s in r.wait(r.runner.create_chain(seeded(None)).id).stages] == ["completed", "completed"]
+        r.wait(r.runner.create_chain(seeded(7)).id)
+        assert [s.status for s in r.wait(r.runner.create_chain(seeded(7)).id).stages] == ["cached", "cached"]
+
+
+def test_a_random_variation_seed_only_counts_with_a_strength(tmp_path):
+    from remi.jobs.chains import uses_random_seed
+
+    assert not uses_random_seed(StageSpec(kind="generate", scripts={"seed": {"seed": 3, "subseed": -1, "subseed_strength": 0}}))
+    assert uses_random_seed(StageSpec(kind="generate", scripts={"seed": {"seed": 3, "subseed": -1, "subseed_strength": 0.4}}))
+    assert not uses_random_seed(StageSpec(kind="finish", tab="extras"))  # upscaling draws no seed
+    assert uses_random_seed(StageSpec(kind="generate", core={"seed": "-1"}))
+
+
+def test_a_rerun_after_a_model_switch_runs_again(tmp_path):
+    with rig(tmp_path) as r:
+        chain = r.wait(r.runner.create_chain(seeded(5)).id)
+        r.model["fp"] = "model-b"
+        again = r.wait(r.runner.rerun_chain(chain.id).id)
+        assert [s.status for s in again.stages] == ["completed", "completed"]
+        assert r.executed[-1]["model"] == "model-b"
+
+
+def test_outputs_are_cached_under_the_model_the_job_ran_on(tmp_path):
+    with rig(tmp_path, start=False) as r:
+        chain = r.runner.create_chain(seeded(5)[:1])
+        r.model["fp"] = "model-b"  # picked while the stage waited in the queue
+        r.queue.set_paused(False)
+        assert r.wait(chain.id).status == "completed"
+        assert r.executed[0]["model"] == "model-b"
+        assert [p["cache_hit"] for p in r.runner.plan_chain(seeded(5)[:1])] == [True]
+        r.model["fp"] = "model-a"
+        assert [p["cache_hit"] for p in r.runner.plan_chain(seeded(5)[:1])] == [False]
+
+
+def test_a_setting_changed_while_the_job_runs_does_not_rekey_its_output(tmp_path):
+    with rig(tmp_path) as r:
+        r.result["during"] = lambda: r.model.update(fp="model-b")  # e.g. clip skip changed mid-run
+        assert r.wait(r.runner.create_chain(seeded(5)[:1]).id).status == "completed"
+        assert [p["cache_hit"] for p in r.runner.plan_chain(seeded(5)[:1])] == [False]
+        r.model["fp"] = "model-a"
+        assert [p["cache_hit"] for p in r.runner.plan_chain(seeded(5)[:1])] == [True]
+
+
+def test_a_client_fingerprint_is_salt_not_a_substitute(tmp_path):
+    with rig(tmp_path) as r:
+        r.wait(r.runner.create_chain(seeded(5), model_fingerprint="client").id)
+        assert [p["cache_hit"] for p in r.runner.plan_chain(seeded(5), model_fingerprint="client")] == [True, True]
+        r.model["fp"] = "model-b"  # the client still claims the same fingerprint
+        assert [p["cache_hit"] for p in r.runner.plan_chain(seeded(5), model_fingerprint="client")] == [False, False]
+
+
+def test_the_plan_matches_the_run_around_a_disabled_stage(tmp_path):
+    stages = [StageSpec(kind="generate", tab="txt2img", core={"prompt": "p"}, scripts={"seed": {"seed": 1}}), StageSpec(kind="refine", enabled=False), StageSpec(kind="finish", tab="extras", core={})]
+    with rig(tmp_path) as r:
+        r.wait(r.runner.create_chain(stages).id)
+        planned = [p["cache_hit"] for p in r.runner.plan_chain(stages)]
+        actual = r.statuses(r.wait(r.runner.create_chain(stages).id).id)
+        assert planned == [True, False, True]
+        assert actual == ["cached", "skipped", "cached"]
+
+
+def test_editing_a_queued_stage_job_is_refused(tmp_path):
+    with rig(tmp_path, start=False) as r:
+        chain = r.runner.create_chain(seeded(5)[:1])
+        job_id = r.runner.store.get_chain(chain.id).stages[0].job_id
+        with pytest.raises(JobError, match="pipeline stage"):
+            r.queue.update_params(job_id, {"prompt": "other"}, {})
+
+
+# endregion
+
+# region Chain state machine
+
+
+def test_resume_while_the_stage_job_waits_finishes_the_chain(tmp_path):
+    with rig(tmp_path, start=False) as r:
+        chain = r.runner.create_chain(seeded(5))
+        assert r.runner.pause_chain(chain.id).status == "paused"
+        assert r.runner.resume_chain(chain.id).status == "running"
+        r.queue.set_paused(False)
+        done = r.wait(chain.id)
+        assert done.status == "completed", r.statuses(chain.id)
+
+
+def test_a_paused_chain_waits_for_its_resume(tmp_path):
+    with rig(tmp_path, start=False) as r:
+        chain = r.runner.create_chain(seeded(5))
+        r.runner.pause_chain(chain.id)
+        r.queue.set_paused(False)
+        assert r.queue.wait_idle(timeout=5)
+        assert r.runner.store.get_chain(chain.id).status == "paused"
+        assert r.statuses(chain.id) == ["completed", "pending"]
+        r.runner.resume_chain(chain.id)
+        assert r.wait(chain.id).status == "completed"
+
+
+def test_deleting_a_queued_stage_job_cancels_the_chain(tmp_path):
+    with rig(tmp_path, start=False) as r:
+        chain = r.runner.create_chain(seeded(5))
+        r.queue.delete(r.runner.store.get_chain(chain.id).stages[0].job_id)
+        done = r.runner.store.get_chain(chain.id)
+        assert done.status == "cancelled" and "deleted" in (done.error or "")
+        assert r.statuses(chain.id) == ["cancelled", "pending"]
+        assert r.runner.rerun_chain(chain.id).status == "running"  # not stuck: it can run again
+
+
+def test_cancelling_a_finished_chain_is_refused(tmp_path):
+    with rig(tmp_path) as r:
+        chain = r.wait(r.runner.create_chain(seeded(5)[:1]).id)
+        finished = chain.finished
+        with pytest.raises(ChainError) as error:
+            r.runner.cancel_chain(chain.id)
+        assert error.value.status == 409
+        again = r.runner.store.get_chain(chain.id)
+        assert again.status == "completed" and again.finished == finished
+
+
+def test_a_failed_stage_job_is_not_requeued_on_its_own(tmp_path):
+    def option(name, default):
+        return True if name == "queue_automatic_requeue_failed_task" else default
+
+    with rig(tmp_path, option=option) as r:
+        r.queue.executor = lambda job, ctx: (_ for _ in ()).throw(RuntimeError("gpu oom"))
+        chain = r.wait(r.runner.create_chain(seeded(5)[:1]).id)
+        assert chain.status == "failed"
+        assert r.queue.wait_idle(timeout=5)
+        assert r.jobs.count("failed") == 1  # no orphan retries ran after the chain had failed
+
+
+def test_chain_updated_carries_the_whole_chain(tmp_path):
+    with rig(tmp_path) as r:
+        chain = r.wait(r.runner.create_chain(seeded(5)[:1]).id)
+        last = [e for e in r.events if e["type"] == "chain.updated" and e["chain_id"] == chain.id][-1]
+        assert last["id"] == chain.id and last["status"] == "completed"
+        assert last["updated_at"] and last["created_at"] and last["stages"][0]["output_file_ids"]
+
+
+# endregion
+
+# region Restart recovery
+
+
+def test_reconcile_cancels_a_chain_whose_job_the_restart_interrupted(tmp_path):
+    with rig(tmp_path, start=False) as r:
+        chain = r.runner.create_chain(seeded(5))
+        job_id = r.runner.store.get_chain(chain.id).stages[0].job_id
+        r.jobs.claim_next()  # the previous process was running it
+        r.queue._pending_done(r.jobs.get(job_id))  # (and took it off the process-wide progress registry)
+        r.jobs.recover()
+        assert r.new_runner().reconcile() == 1
+        done = r.runner.store.get_chain(chain.id)
+        assert done.status == "cancelled" and r.statuses(chain.id) == ["cancelled", "pending"]
+        assert job_id
+
+
+def test_reconcile_records_a_job_that_finished_unseen_and_goes_on(tmp_path):
+    with rig(tmp_path, start=False) as r:
+        chain = r.runner.create_chain(seeded(5))
+        stage_job = r.runner.store.get_chain(chain.id).stages[0].job_id
+        output = r.files.save_output_image(Image.new("RGB", (8, 8)), "x", job_id=stage_job, tab="txt2img")
+        r.jobs.claim_next()
+        r.queue._pending_done(r.jobs.get(stage_job))  # the previous process ran it to the end
+        r.jobs.finish(stage_job, "completed", outputs=[{"id": output.id, "kind": "image"}], infotext="x")
+        r.new_runner().reconcile()
+        assert r.statuses(chain.id) == ["completed", "running"]
+        r.queue.set_paused(False)
+        assert r.wait(chain.id).status == "completed"
+
+
+def test_reconcile_cancels_an_upsample_nobody_runs_and_a_vanished_job(tmp_path):
+    with rig(tmp_path, start=False) as r:
+        pup = r.runner.store.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "x"})], status="running")
+        r.runner.store.update_stage(pup.id, 0, status="running")
+        gone = r.runner.store.create_chain(seeded(5), status="running")
+        r.runner.store.update_stage(gone.id, 0, status="running", job_id="no-such-job")
+        queued = r.runner.store.create_chain(seeded(5), status="queued")
+        assert r.new_runner().reconcile() == 3
+        assert r.runner.store.get_chain(pup.id).status == "cancelled"
+        assert r.runner.store.get_chain(gone.id).status == "cancelled"
+        assert r.statuses(queued.id)[0] == "running"  # submitted: it goes on
+
+
+def test_reconcile_cancels_a_paused_chain_whose_job_the_restart_interrupted(tmp_path):
+    with rig(tmp_path, start=False) as r:
+        chain = r.runner.create_chain(seeded(5))
+        job_id = r.runner.store.get_chain(chain.id).stages[0].job_id
+        r.runner.pause_chain(chain.id)
+        r.jobs.claim_next()
+        r.queue._pending_done(r.jobs.get(job_id))
+        r.jobs.recover()
+        resting = r.runner.store.create_chain(seeded(5), status="paused")
+        assert r.new_runner().reconcile() == 1
+        assert r.runner.store.get_chain(chain.id).status == "cancelled"
+        assert r.runner.store.get_chain(resting.id).status == "paused"  # nothing ran: it waits
+
+
+def test_forced_stages_survive_a_restart(tmp_path):
+    with rig(tmp_path) as r:
+        chain = r.wait(r.runner.create_chain(seeded(5)).id)
+        r.queue.set_paused(True)
+        r.runner.rerun_chain(chain.id, from_stage=1)
+        assert r.runner.store.get_forced(chain.id) == {1}
+        r.new_runner()
+        r.queue.set_paused(False)
+        done = r.wait(chain.id)
+        assert [s.status for s in done.stages] == ["cached", "completed"]
+        assert r.runner.store.get_forced(chain.id) == set()
+
+
+# endregion
+
+# region Stage inputs and prompt upsampling
+
+
+def test_the_next_stage_gets_the_image_not_the_grid_or_extras(tmp_path):
+    with rig(tmp_path) as r:
+        grid, image, extra = (Image.new("RGB", (8, 8), c) for c in ((1, 1, 1), (2, 2, 2), (3, 3, 3)))
+        r.result.update(images=[grid, image, extra], roles=["grid", None, "extra"])
+        chain = r.wait(r.runner.create_chain(seeded(5)).id)
+        assert chain.status == "completed"
+        assert len(chain.stages[0].output_file_ids) == 1
+        assert r.executed[1]["core"]["init_img"] == chain.stages[0].output_file_ids[0]
+
+
+def test_a_stage_without_an_image_fails_the_chain(tmp_path):
+    with rig(tmp_path) as r:
+        r.result.update(images=[])
+        chain = r.wait(r.runner.create_chain(seeded(5)).id)
+        assert chain.status == "failed" and "no image" in (chain.error or "")
+        assert [s.status for s in chain.stages] == ["failed", "pending"]
+        assert len(r.executed) == 1
+
+
+def test_upsampling_runs_behind_the_generation_lock_and_off_the_request(tmp_path):
+    seen: dict[str, Any] = {}
+    gate = threading.Event()
+
+    def upsampler(stage, prompt, outputs):
+        seen["locked"] = r.queue.lock.locked()
+        seen["thread"] = threading.current_thread().name
+        gate.wait(5)
+        return "big prompt"
+
+    with rig(tmp_path, upsampler=upsampler) as r:
+        chain = r.runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "x"}), *seeded(5)[:1]])
+        assert chain.status == "running"  # the request did not wait for the upsampler
+        gate.set()
+        done = r.wait(chain.id)
+        assert done.status == "completed"
+        assert seen["locked"] is True and seen["thread"].startswith("remi-chain-upsample")
+        assert r.executed[0]["core"]["prompt"] == "fox"  # the stage's own prompt wins
+
+
+def test_cancel_during_upsampling_drops_its_result(tmp_path):
+    gate = threading.Event()
+
+    def upsampler(stage, prompt, outputs):
+        gate.wait(5)
+        return "late"
+
+    with rig(tmp_path, upsampler=upsampler) as r:
+        chain = r.runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "x"}), *seeded(5)[:1]])
+        r.runner.cancel_chain(chain.id)
+        gate.set()
+        assert r.runner.wait_idle()
+        done = r.runner.store.get_chain(chain.id)
+        assert done.status == "cancelled" and [s.status for s in done.stages] == ["cancelled", "cancelled"]
+        assert r.executed == []
+
+
+# endregion
+
+
+def test_a_stale_upsampling_thread_does_not_write_into_a_rerun(tmp_path):
+    gate = threading.Event()
+
+    def upsampler(stage, prompt, outputs):
+        if stage.core.get("prompt") == "old":
+            gate.wait(5)
+        return f"{stage.core.get('prompt')}!"
+
+    def stages(prompt: str) -> list[StageSpec]:
+        return [StageSpec(kind="prompt_upsample", core={"prompt": prompt}), StageSpec(kind="generate", tab="txt2img", core={}, scripts={"seed": {"seed": 5}})]
+
+    with rig(tmp_path, upsampler=upsampler) as r:
+        chain = r.runner.create_chain(stages("old"))
+        r.runner.cancel_chain(chain.id)
+        r.runner.rerun_chain(chain.id, stages=stages("new"))  # its thread waits behind the old one
+        gate.set()
+        done = r.wait(chain.id)
+        assert done.status == "completed"
+        assert done.stages[0].output_prompt == "new!"
+        assert [e["core"]["prompt"] for e in r.executed] == ["new!"]

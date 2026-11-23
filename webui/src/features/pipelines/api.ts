@@ -11,10 +11,33 @@ export const chainKeys = {
   all: ["chains"] as const,
   list: ["chains", "list"] as const,
   templates: ["chains", "templates"] as const,
+  run: (id: string) => ["chains", "run", id] as const,
 }
 
+/** Refetches the run list and templates (a run in view is kept current by `chain.updated`). */
 export function refreshChains() {
-  void queryClient.invalidateQueries({ queryKey: chainKeys.all })
+  void queryClient.invalidateQueries({ queryKey: chainKeys.list })
+  void queryClient.invalidateQueries({ queryKey: chainKeys.templates })
+}
+
+export async function getChain(id: string, signal?: AbortSignal): Promise<JobChain> {
+  return workbenchRequest<JobChain>(`/chains/${encodeURIComponent(id)}`, { signal })
+}
+
+/** One run, kept current by `chain.updated` events (see {@link storeChainRun}). */
+export const chainRunQuery = (id: string) =>
+  queryOptions({
+    queryKey: chainKeys.run(id),
+    queryFn: ({ signal }) => getChain(id, signal),
+    staleTime: 5_000,
+  })
+
+/** Puts a chain the server returned (a mutation's answer or a `chain.updated` event) in the cache. */
+export function storeChainRun(chain: JobChain) {
+  // an HTTP answer can arrive after the events it raced (a stage that failed at once): keep the newer one
+  const known = queryClient.getQueryData<JobChain>(chainKeys.run(chain.id))
+  if (known && known.updated_at > chain.updated_at) return
+  queryClient.setQueryData(chainKeys.run(chain.id), chain)
 }
 
 export async function listChains(signal?: AbortSignal): Promise<ChainListResponse> {
@@ -54,11 +77,15 @@ export const chainTemplatesQuery = queryOptions({
   staleTime: 30_000,
 })
 
-export async function previewChainApi(stages: readonly StageSpec[], modelFingerprint?: string, signal?: AbortSignal): Promise<ChainPreviewResponse | null> {
+/**
+ * The server's cache plan for `stages`. `chainId`: plan a re-run of that run
+ * (stages with a random seed can reuse its outputs; in a new run they cannot).
+ */
+export async function previewChainApi(stages: readonly StageSpec[], chainId?: string, signal?: AbortSignal): Promise<ChainPreviewResponse | null> {
   try {
     return await workbenchRequest<ChainPreviewResponse>("/chains/preview", {
       method: "POST",
-      body: { stages, ...(modelFingerprint ? { model_fingerprint: modelFingerprint } : {}) },
+      body: { stages, ...(chainId ? { chain_id: chainId } : {}) },
       signal,
     })
   } catch {

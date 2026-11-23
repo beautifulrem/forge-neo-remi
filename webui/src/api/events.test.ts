@@ -18,6 +18,13 @@ describe("normalizeEvent", () => {
     expect(normalizeEvent("text")).toBeNull()
   })
 
+  it("passes pipeline events on (the builder follows its run with them)", () => {
+    const chain = { type: "chain.updated", chain_id: "c", id: "c", status: "running", stages: [] }
+    expect(normalizeEvent(chain)).toEqual(chain)
+    expect(normalizeEvent({ type: "chain.stage_completed", chain_id: "c", stage_index: 1, status: "cached" })).toMatchObject({ stage_index: 1 })
+    expect(normalizeEvent({ type: "chain.updated", status: "running" })).toBeNull()
+  })
+
   it("fills optional lists of terminal job events", () => {
     expect(normalizeEvent({ type: "job.completed", job_id: "j" })).toEqual({ type: "job.completed", job_id: "j", outputs: [] })
     expect(normalizeEvent({ type: "job.failed", job_id: "j" })).toMatchObject({ error: "Failed" })

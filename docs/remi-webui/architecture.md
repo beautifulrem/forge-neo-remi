@@ -405,7 +405,10 @@ skipped on this device — also kept on the job),
 `job.failed{job_id, seq, tab, status, error, errors?}`, `queue.changed{size,
 paused, running}`, `options.changed{keys}`, `networks.changed{kind?}`,
 `outputs.changed{ids}` (gallery stars / removals),
-`model.loading{stage, model}`, `model.loaded{model, error?}`, `pong`,
+`model.loading{stage, model}`, `model.loaded{model, error?}`,
+`chain.updated{chain_id, ...}` (the rest is the whole chain, as `GET /chains/{id}`
+returns it), `chain.stage_completed{chain_id, stage_index, kind, status, cached,
+job_id, output_file_ids, output_prompt}`, `pong`,
 `resync{dropped}` (the client's queue overflowed: the backlog is replaced by a
 fresh snapshot, `queue.changed` and the running job; the client refetches
 what it shows, e.g. job history). A failed send closes the socket. The
@@ -482,6 +485,23 @@ client has a bounded event queue and one preview slot.
   progress monitor and preview encoder.
   Housekeeping (at start, then hourly) prunes uploads and unsaved outputs
   older than `remi_upload_retention_days` and indexes the output folders.
+- Pipelines (`remi/jobs/chains.py`): each generation stage is a queued job
+  (`meta.chain_id`, `meta.stage_index`); the queue's completion hook moves
+  the chain on. Every way a stage job ends reaches it: a queued job that is
+  deleted reports as cancelled, a stage job cannot be edited (`409`), and a
+  failed one is not requeued by `queue_automatic_requeue_failed_task`. At
+  start `ChainRunner.reconcile()` settles what the last process left
+  running. `prompt_upsample` stages run on a background thread behind the
+  generation lock. A stage's cache key covers its parameters, its upstream
+  stage's hash, images and prompt, and the server-side model fingerprint
+  (checkpoint name and file identity, VAE and text encoders, clip skip and
+  the other settings that change every image), read again when the job
+  finishes, so outputs are cached under the model they were made with. A
+  client's `model_fingerprint` is only added to it. A random seed (`-1` or
+  none, in `txt2img`/`img2img` stages) salts the key with the chain id:
+  re-running a chain reuses its stages, a new chain makes new images. The
+  next stage gets the result images, not the grid or extra images. Forced
+  stages of a re-run are stored (`chain_force`), so they survive a restart.
 - Auth: `--auth user:pass[,…]` / `--auth-file`. With logins, `/api/v2`, `/internal`, the WebSocket,
   files and the SPA need the signed session cookie (`POST /auth/login`;
   a page load without it gets the SPA shell with status 401 and the SPA

@@ -23,6 +23,7 @@ import { Fragment, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
+import { queryClient } from "@/api/queries"
 import { onWsEvent } from "@/api/ws"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -35,6 +36,8 @@ import { captureFormOverrides } from "@/features/recipes/capture"
 import { cn } from "@/lib/utils"
 import {
   cancelChainApi,
+  chainKeys,
+  chainRunQuery,
   chainsQuery,
   chainTemplatesQuery,
   createChainApi,
@@ -43,17 +46,23 @@ import {
   refreshChains,
   rerunChainApi,
   saveChainTemplateApi,
+  storeChainRun,
 } from "./api"
 import { defaultStage, firstExecuteStage, planPipelineCache, STAGE_KINDS, STAGE_META, STARTER_PIPELINES } from "./cache-hash"
+import { usePipelineDraft } from "./draft-store"
 import type { ChainPreviewStage, ChainTemplate, JobChain, StageKind, StageSpec } from "./types"
 
 const MAX_STAGES = 4
 const MIN_STAGES = 1
 
 function numOr(value: unknown, fallback: number): number {
+  if (value === null || value === undefined || (typeof value === "string" && value.trim() === "")) return fallback
   const n = Number(value)
   return Number.isFinite(n) ? n : fallback
 }
+
+/** A run still moving: it can be cancelled, not started again. */
+const ACTIVE_STATUSES = new Set(["queued", "running"])
 
 function stepNumber(index: number): string {
   return String(index + 1).padStart(2, "0")
@@ -61,9 +70,13 @@ function stepNumber(index: number): string {
 
 export function PipelineBuilder() {
   const { t } = useTranslation()
-  const [name, setName] = useState("Generate → Refine → Upscale")
-  const [stages, setStages] = useState<StageSpec[]>(() => STARTER_PIPELINES[0]!.stages.map((s) => structuredClone(s)))
-  const [activeRun, setActiveRun] = useState<JobChain | null>(null)
+  const { name, setName, stages, setStages, activeRunId, setActiveRunId } = usePipelineDraft()
+  const activeRunQuery = useQuery({ ...chainRunQuery(activeRunId ?? ""), enabled: activeRunId !== null })
+  const activeRun = activeRunId !== null ? (activeRunQuery.data ?? null) : null
+  const followRun = (chain: JobChain) => {
+    storeChainRun(chain)
+    setActiveRunId(chain.id)
+  }
   const [serverPreview, setServerPreview] = useState<{ sig: string; stages: ChainPreviewStage[] } | null>(null)
   const [saveOpen, setSaveOpen] = useState(false)
   const [templateName, setTemplateName] = useState("")
@@ -71,23 +84,29 @@ export function PipelineBuilder() {
   const chains = useQuery(chainsQuery)
   const templates = useQuery(chainTemplatesQuery)
 
-  // Live updates when backend emits `chain.updated`, `chain.stage_completed` or `job.completed` over WS.
+  // `chain.updated` carries the whole chain: the run in the builder follows it, the recent runs list refetches.
   useEffect(() => {
-    return onWsEvent("*", (event) => {
-      const eventType = (event as { type: string }).type
-      if (eventType === "chain.updated" || eventType === "chain.stage_completed" || eventType === "job.completed") {
-        refreshChains()
-      }
+    const offChain = onWsEvent("chain.updated", (event) => {
+      const { type: _type, chain_id: chainId, ...rest } = event
+      const chain = rest as Partial<JobChain>
+      if (typeof chain.id === "string" && Array.isArray(chain.stages)) storeChainRun(chain as JobChain)
+      else void queryClient.invalidateQueries({ queryKey: chainKeys.run(chainId) })
+      void queryClient.invalidateQueries({ queryKey: chainKeys.list })
     })
+    const offJob = onWsEvent("job.completed", () => void queryClient.invalidateQueries({ queryKey: chainKeys.list }))
+    return () => {
+      offChain()
+      offJob()
+    }
   }, [])
 
   // Debounced server cache preview whenever stages or the latest completed run change.
   const stagesSignature = useMemo(() => JSON.stringify(stages), [stages])
-  const previewKey = `${stagesSignature}:${activeRun?.id ?? ""}:${activeRun?.updated_at ?? ""}`
+  const previewKey = `${stagesSignature}:${activeRunId ?? ""}:${activeRun?.updated_at ?? ""}`
   useEffect(() => {
     const controller = new AbortController()
     const timer = setTimeout(() => {
-      void previewChainApi(stages, undefined, controller.signal).then((res) => {
+      void previewChainApi(stages, activeRunId ?? undefined, controller.signal).then((res) => {
         if (!controller.signal.aborted) {
           setServerPreview(res?.stages ? { sig: stagesSignature, stages: res.stages } : null)
         }
@@ -117,7 +136,7 @@ export function PipelineBuilder() {
       return createChainApi({ name: name.trim() || t("Linear stage pipeline"), stages, run_now: true })
     },
     onSuccess: (chain) => {
-      setActiveRun(chain)
+      followRun(chain)
       refreshChains()
       toast.success(t("Pipeline started"))
     },
@@ -127,10 +146,11 @@ export function PipelineBuilder() {
   const cancel = useMutation({
     mutationFn: (id: string) => cancelChainApi(id),
     onSuccess: (chain) => {
-      setActiveRun(chain)
+      followRun(chain)
       refreshChains()
       toast.info(t("Pipeline cancelled"))
     },
+    onError: (error) => toast.error(t("Could not cancel pipeline"), { description: errorText(error) }),
   })
 
   const saveTemplate = useMutation({
@@ -190,7 +210,7 @@ export function PipelineBuilder() {
   const loadTemplate = (template: Pick<ChainTemplate, "name" | "stages">) => {
     setName(template.name)
     setStages(template.stages.map((s) => structuredClone(s)))
-    setActiveRun(null)
+    setActiveRunId(null)
   }
 
   const loadRun = (chain: JobChain) => {
@@ -206,7 +226,7 @@ export function PipelineBuilder() {
         config: config ? { ...config } : undefined,
       })),
     )
-    setActiveRun(chain)
+    followRun(chain)
   }
 
   const templateItems = templates.data && templates.data.length > 0 ? templates.data : STARTER_PIPELINES
@@ -304,7 +324,7 @@ export function PipelineBuilder() {
           <span className="hidden font-mono text-xs text-muted-foreground tabular-nums sm:inline">
             {t("{{cached}} cached · {{execute}} to run", { cached: cachedCount, execute: executeCount })}
           </span>
-          {activeRun && activeRun.status === "running" ? (
+          {activeRun && ACTIVE_STATUSES.has(activeRun.status) ? (
             <Button variant="destructive" size="sm" className="h-7 gap-1.5 px-3 text-xs" onClick={() => cancel.mutate(activeRun.id)}>
               <Ban className="size-3.5" aria-hidden />
               {t("Cancel pipeline")}

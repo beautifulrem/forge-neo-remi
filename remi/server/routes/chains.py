@@ -76,7 +76,8 @@ class ChainCreateRequest(m.Model):
 
 class ChainPreviewRequest(m.Model):
     stages: list[StageSpecModel] = Field(min_length=1, max_length=8)
-    model_fingerprint: str | None = None
+    model_fingerprint: str | None = Field(None, description="Extra salt for the stage hashes, added to the loaded model's fingerprint")
+    chain_id: str | None = Field(None, description="Plan a re-run of this chain: its random-seed stages can reuse their outputs")
 
 
 class StageCachePlan(m.Model):
@@ -154,7 +155,7 @@ def create_chain(body: ChainCreateRequest, services: ServicesDep, user: UserDep)
 
 @router.post("/preview", response_model=ChainPreviewResult, responses=ERRORS, summary="Dry-run cache plan showing which stages will reuse cached outputs")
 def preview_chain(body: ChainPreviewRequest, services: ServicesDep) -> dict[str, Any]:
-    plan = services.chains.plan_chain(_to_specs(body.stages), model_fingerprint=body.model_fingerprint)
+    plan = services.chains.plan_chain(_to_specs(body.stages), model_fingerprint=body.model_fingerprint, chain_id=body.chain_id)
     return {"stages": plan}
 
 

@@ -184,7 +184,9 @@ export function planPipelineCache(
     }
 
     const hitFromServer = Boolean(serverStage && serverStage.kind === stage.kind && serverStage.cache_hit)
-    const localHit = prevByHash.get(hashes[index]!) ?? prevByHash.get(stage_hash)
+    // The server's plan decides; the local estimate only fills in until it arrives
+    // (it cannot see random seeds, the loaded model or deleted outputs).
+    const localHit = serverStage ? undefined : (prevByHash.get(hashes[index]!) ?? prevByHash.get(stage_hash))
     const cache_hit = !upstreamInvalidated && (hitFromServer || Boolean(localHit))
     if (!cache_hit) upstreamInvalidated = true
 

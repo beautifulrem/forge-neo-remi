@@ -194,7 +194,8 @@ describe("mock workbench routes", () => {
     expect((await call("GET", `/chains/${chainId}`)).status).toBe(200)
     expect((await call("POST", `/chains/${chainId}/pause`)).data.status).toBe("paused")
     expect((await call("POST", `/chains/${chainId}/resume`)).data.status).toBe("completed")
-    expect((await call("POST", `/chains/${chainId}/cancel`)).data.status).toBe("cancelled")
+    // a finished run cannot be cancelled (it would overwrite its result), as on the server
+    expect((await call("POST", `/chains/${chainId}/cancel`)).status).toBe(409)
     expect((await call("DELETE", `/chains/${chainId}`)).status).toBe(204)
     expect((await call("GET", `/chains/${chainId}`)).status).toBe(404)
 

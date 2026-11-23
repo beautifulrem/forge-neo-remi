@@ -5,6 +5,7 @@
  * dynamic import so production bundles tree-shake the mock server cleanly).
  */
 import { ApiError, apiUrl, MOCK, type Query } from "@/api/http"
+import { sessionRefused } from "@/api/session"
 
 export { ApiError, MOCK }
 
@@ -52,6 +53,8 @@ export async function workbenchRequest<T>(path: string, options: RequestOptions 
   } else {
     response = await fetch(url, init)
   }
+  // an expired session asks for the login, as every other request does (see `transport` in @/api/http)
+  if (response.status === 401 && !path.startsWith("/auth/")) sessionRefused()
   if (response.status === 204) return undefined as T
   const text = await response.text()
   let payload: unknown = undefined

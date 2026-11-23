@@ -125,6 +125,13 @@ class Services:
         self._started = True
         self._stop.clear()
         self.queue.start()
+        try:
+            moved = self.chains.reconcile()  # after start(): jobs the last process left running are interrupted now
+        except Exception:
+            log.exception("settling the pipelines left by the last run")
+        else:
+            if moved:
+                log.info("Settled %d pipeline(s) left running by the last shutdown", moved)
         if self.realtime:
             state = {"state": self.state} if self.state is not None else {}
             monitor = ProgressMonitor(self.bus, self.queue.current_ref, on_tick=self.queue.poll, **state)

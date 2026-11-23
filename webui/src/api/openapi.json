@@ -8873,7 +8873,20 @@
                 "type": "null"
               }
             ],
-            "title": "Model Fingerprint"
+            "title": "Model Fingerprint",
+            "description": "Extra salt for the stage hashes, added to the loaded model's fingerprint"
+          },
+          "chain_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chain Id",
+            "description": "Plan a re-run of this chain: its random-seed stages can reuse their outputs"
           }
         },
         "type": "object",
