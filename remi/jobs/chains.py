@@ -857,8 +857,10 @@ def _default_model_fingerprint() -> str:
 UpsamplerFunc = Callable[[StageRun, str | None, Sequence[str]], str]
 
 
-def _default_upsampler(stage: StageRun, upstream_prompt: str | None, upstream_outputs: Sequence[str]) -> str:
-    """Default ``prompt_upsample`` stage handler (``remi.prompt_tools.pup``).
+def _default_upsampler(stage: StageRun, upstream_prompt: str | None, upstream_outputs: Sequence[str], *, config: Any = None) -> str:
+    """Default ``prompt_upsample`` stage handler (``remi.prompt_tools.pup``);
+    ``config``: the prompt tools' provider (endpoint, model, key), as
+    ``POST /prompt-tools/upsample`` passes it.
 
     Errors propagate: the stage fails instead of passing the base prompt on
     as if it had been upsampled (and caching that)."""
@@ -866,16 +868,24 @@ def _default_upsampler(stage: StageRun, upstream_prompt: str | None, upstream_ou
     base_prompt = str(stage.core.get("prompt") or upstream_prompt or "")
     if not base_prompt.strip():
         return base_prompt
+    cfg = stage.config or {}
+    local_model_path = cfg.get("local_model_path")
+    if local_model_path:
+        from modules import shared
+
+        # the same guard as the upsample route: a client-given path is a server folder
+        if getattr(getattr(shared, "cmd_opts", None), "hide_ui_dir_config", False):
+            raise PermissionError("local_model_path is disabled under --hide-ui-dir-config")
     from remi.prompt_tools.pup import upsample_prompt
 
-    cfg = stage.config or {}
     res = upsample_prompt(
         base_prompt,
         model_family=cfg.get("model_family"),
         aspect_ratio=cfg.get("aspect_ratio"),
         bbox_draft=cfg.get("bbox_draft"),
         mode=str(cfg.get("mode") or "auto"),
-        local_model_path=cfg.get("local_model_path"),
+        local_model_path=local_model_path,
+        config=config,
     )
     return res.prompt
 

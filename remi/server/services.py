@@ -50,8 +50,16 @@ class Services:
 
     HOUSEKEEPING_INTERVAL: ClassVar[float] = 3600
 
+    def _upsample_stage(self, stage: Any, upstream_prompt: str | None, upstream_outputs: Any) -> str:
+        """A pipeline's ``prompt_upsample`` stage, with the provider the prompt tools are set to."""
+
+        from remi import prompt_tools as pt
+        from remi.jobs.chains import _default_upsampler
+
+        return _default_upsampler(stage, upstream_prompt, upstream_outputs, config=pt.tools_for(self).translation_config())
+
     def __post_init__(self) -> None:
-        self.chains = ChainRunner(ChainStore(self.store), self.queue, self.files, self.bus)
+        self.chains = ChainRunner(ChainStore(self.store), self.queue, self.files, self.bus, upsampler=self._upsample_stage)
         self.bridge = RuntimeBridge(state_getter=self.state)
         use_process = (os.environ.get("REMI_WORKER_PROCESS") == "1") if self.worker_process is None else bool(self.worker_process)
         use_gpus = (os.environ.get("REMI_WORKER_GPUS") or None) if self.worker_gpus is None else (self.worker_gpus.strip() or None)

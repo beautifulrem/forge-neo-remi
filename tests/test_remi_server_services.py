@@ -256,3 +256,46 @@ def test_perform_later_runs_on_a_daemon_timer(monkeypatch):
 
 
 # endregion
+
+
+def test_a_pipelines_upsample_stage_uses_the_configured_endpoint(services, monkeypatch):
+    """The prompt tools' provider (URL, model, stored key) reaches a pipeline's
+    ``prompt_upsample`` stage, as it reaches ``POST /prompt-tools/upsample``:
+    without it every pipeline upsample failed with "needs an endpoint"."""
+
+    import sys
+    import types
+
+    from remi import prompt_tools as pt
+    from remi.jobs.chains import StageRun
+
+    configured = pt.ProviderConfig("openai", "http://127.0.0.1:9/v1", "", "vlm")
+    monkeypatch.setattr(pt, "tools_for", lambda services: SimpleNamespace(translation_config=lambda: configured))
+    seen: dict = {}
+
+    def upsample_prompt(prompt, **kwargs):
+        seen.update(kwargs)
+        return SimpleNamespace(prompt=f"{prompt}, upsampled")
+
+    fake = types.ModuleType("remi.prompt_tools.pup")
+    fake.upsample_prompt = upsample_prompt
+    monkeypatch.setitem(sys.modules, "remi.prompt_tools.pup", fake)
+    stage = StageRun(chain_id="c", index=0, kind="prompt_upsample", name="PUP", enabled=True, tab="txt2img", core={"prompt": "a fox"}, config={"mode": "auto"})
+    assert services.chains.upsampler(stage, None, []) == "a fox, upsampled"
+    assert seen.get("config") == configured
+
+
+def test_a_pipelines_upsample_stage_keeps_local_model_paths_off_under_hide_ui_dir_config(services, monkeypatch):
+    import sys
+    import types
+
+    from modules import shared
+    from remi.jobs.chains import StageRun
+
+    fake = types.ModuleType("remi.prompt_tools.pup")
+    fake.upsample_prompt = lambda prompt, **kwargs: pytest.fail("a local model path must not be loaded")
+    monkeypatch.setitem(sys.modules, "remi.prompt_tools.pup", fake)
+    monkeypatch.setattr(shared, "cmd_opts", SimpleNamespace(hide_ui_dir_config=True), raising=False)
+    stage = StageRun(chain_id="c", index=0, kind="prompt_upsample", name="PUP", enabled=True, tab="txt2img", core={"prompt": "a fox"}, config={"local_model_path": "/etc"})
+    with pytest.raises(PermissionError, match="hide-ui-dir-config"):
+        services.chains.upsampler(stage, None, [])
