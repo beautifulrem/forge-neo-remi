@@ -88,10 +88,20 @@ def perform(action: str, *, platform: str = sys.platform, run: Callable[[Sequenc
     return True
 
 
-def perform_later(action: str, delay: float = DELAY) -> None:
-    """:func:`perform` on its own thread after ``delay`` seconds."""
+def perform_later(action: str, delay: float = DELAY, *, still_done: Callable[[], bool] | None = None, rearm: Callable[[str], None] | None = None) -> None:
+    """:func:`perform` on its own thread after ``delay`` seconds, unless
+    ``still_done`` then says work started meanwhile: ``rearm`` gets the
+    action back, to run when the queue is done again."""
 
-    timer = threading.Timer(delay, perform, args=(action,))
+    def fire() -> None:
+        if still_done is not None and not still_done():
+            log.info("A job started before the queue completion action %s: it waits for the queue again", action)
+            if rearm is not None:
+                rearm(action)
+            return
+        perform(action)
+
+    timer = threading.Timer(delay, fire)
     timer.daemon = True
     timer.name = "remi-queue-done"
     timer.start()

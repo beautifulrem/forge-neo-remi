@@ -209,7 +209,7 @@ class JobQueue:
         hash_layout: Callable[[str], str] = layout_hash,
         option: Callable[[str, Any], Any] = _option,
         set_option: Callable[[str, Any], None] = _set_option,
-        when_done: Callable[[str], None] = completion.perform_later,
+        when_done: Callable[[str], None] | None = None,
     ) -> None:
         self.store, self.files, self.bus = store, files, bus
         self.executor, self.dispatch = executor, dispatch
@@ -217,7 +217,10 @@ class JobQueue:
         self.validate = validate if validate is not None else validate_values(files)
         self.state = state
         self.hash_layout = hash_layout
-        self.option, self.set_option, self.when_done = option, set_option, when_done
+        self.option, self.set_option = option, set_option
+        self.when_done = when_done if when_done is not None else self._perform_later
+        self._spent_action: str | None = None
+        """A completion action that ran although the setting could not be reset (frozen settings)"""
         self._retention_checked = 0.0
         self._cv = threading.Condition()
         self._claimed: Job | None = None
@@ -829,9 +832,7 @@ class JobQueue:
         failure, off the worker): run ``queue_completion_action`` if that left
         the queue done. A job on the worker is left to ``_after_job``."""
 
-        with self._cv:
-            idle = not self._stopping and self._claimed is None and self._current is None and self.store.count(QUEUED) == 0
-        if idle and not self._busy_elsewhere():
+        if self._idle():
             self._queue_done()
 
     def _queue_done(self) -> None:
@@ -840,10 +841,27 @@ class JobQueue:
 
         with self._done_lock:  # the worker and a pipeline's upsampling thread may both get here
             action = str(self.option("queue_completion_action", completion.NOTHING))
-            if action == completion.NOTHING or action not in completion.ACTIONS:
+            if action == completion.NOTHING or action not in completion.ACTIONS or action == self._spent_action:
                 return
             self.set_option("queue_completion_action", completion.NOTHING)
+            # frozen settings keep the action: run it once per process, not after every run
+            self._spent_action = action if self.option("queue_completion_action", completion.NOTHING) == action else None
         self.when_done(action)
+
+    def _idle(self) -> bool:
+        with self._cv:
+            idle = not self._stopping and self._claimed is None and self._current is None and self.store.count(QUEUED) == 0
+        return idle and not self._busy_elsewhere()
+
+    def _perform_later(self, action: str) -> None:
+        """The action after a short delay, unless a job started meanwhile (it then waits again)."""
+
+        def rearm(action: str) -> None:
+            with self._done_lock:
+                self._spent_action = None
+                self.set_option("queue_completion_action", action)
+
+        completion.perform_later(action, still_done=self._idle, rearm=rearm)
 
     @staticmethod
     def _error_message(error: BaseException) -> str:

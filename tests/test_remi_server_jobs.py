@@ -621,6 +621,29 @@ def test_the_completion_action_runs_once_when_the_queue_is_done(webui, tmp_path)
         assert server.services.queue.wait_idle() and ran == [] and changed == {}
 
 
+def test_a_completion_action_that_cannot_be_reset_runs_only_once(webui, tmp_path):
+    state = FakeState()
+    with server_app(tmp_path, state=state, executor=StubExecutor(state)) as server:
+        queue = server.services.queue
+        _changed, ran = settings(queue, queue_completion_action="Shut down")
+        queue.set_option = lambda name, value: None  # frozen settings: the reset is refused
+        submit(server, "one")
+        assert queue.wait_idle() and wait_until(lambda: ran == ["Shut down"])
+        submit(server, "two")
+        assert queue.wait_idle() and not wait_until(lambda: len(ran) > 1, timeout=1)
+
+
+def test_a_delayed_completion_action_waits_when_a_job_starts_meanwhile(monkeypatch):
+    from remi.jobs import completion
+
+    performed, rearmed = [], []
+    monkeypatch.setattr(completion, "perform", performed.append)
+    fired = threading.Event()
+    completion.perform_later("Shut down", delay=0.01, still_done=lambda: False, rearm=lambda action: (rearmed.append(action), fired.set()))
+    assert fired.wait(5)
+    assert performed == [] and rearmed == ["Shut down"]
+
+
 def test_completion_actions_run_the_systems_commands():
     from remi.jobs import completion
 
