@@ -113,8 +113,9 @@ const ORDERED = /^(\s*)\d+[.)]\s+(.*)$/
 const QUOTE = /^>\s?(.*)$/
 
 const HEADING_CLASS = [
-  "text-xl font-semibold tracking-tight",
-  "text-[0.9375rem] font-semibold tracking-tight",
+  // a heading inside a form panel stays below the panel titles and the page title
+  "text-[0.9375rem] font-semibold tracking-[-0.01em]",
+  "text-sm font-semibold",
   "text-sm font-semibold",
   "text-sm font-medium",
   "text-sm font-medium",

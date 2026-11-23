@@ -637,7 +637,7 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
           <div
             ref={backdropRef}
             aria-hidden
-            className="pointer-events-none absolute top-0 left-0 z-0 origin-top-left bg-checker shadow-[0_8px_30px_-12px_rgb(0_0_0/0.35)]"
+            className="pointer-events-none absolute top-0 left-0 z-0 origin-top-left bg-checker shadow-[0_0_0_1px_var(--border)]"
             style={plainColor ? { background: plainColor } : undefined}
           />
           {stagedCandidate && staging ? (

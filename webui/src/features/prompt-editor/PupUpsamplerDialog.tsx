@@ -220,7 +220,7 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
           </div>
 
           {/* Context options: references + aspect ratio */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md bg-muted/50 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md bg-background px-3 py-2">
             <Label className="font-normal text-foreground/85">
               <Checkbox checked={attachRefs && referenceIds.length > 0} disabled={referenceIds.length === 0} onCheckedChange={(checked) => setAttachRefs(checked === true)} />
               <span>{t("Attach reference images ({{count}})", { count: referenceIds.length })}</span>
@@ -309,7 +309,7 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
                 />
               ) : (
                 <div
-                  className="grid grid-cols-1 divide-y divide-border overflow-hidden rounded-md bg-muted/50 md:grid-cols-2 md:divide-x md:divide-y-0"
+                  className="grid grid-cols-1 divide-y divide-border overflow-hidden rounded-md bg-background md:grid-cols-2 md:divide-x md:divide-y-0"
                   aria-label={t("Before and after comparison")}
                 >
                   <div className="flex min-w-0 flex-col gap-1.5 p-3">

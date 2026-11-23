@@ -131,6 +131,8 @@
   --material-float-highlight: oklch(1 0 0 / 60%);
   /* a light sheet washes a picture out, so it lifts the colour back; the dark sheet lifts it less */
   --material-float-filter: blur(14px) saturate(1.35);
+  /* the shared select chevron (CaretDown, bold) in --muted-foreground, for native selects */
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='%2351565c' d='M216.49,104.49l-80,80a12,12,0,0,1-17,0l-80-80a12,12,0,0,1,17-17L128,159l71.51-71.52a12,12,0,0,1,17,17Z'/%3E%3C/svg%3E");
 }
 
 .dark {
@@ -192,6 +194,7 @@
   --material-float-shadow: 0 8px 24px -8px oklch(0 0 0 / 55%);
   --material-float-highlight: oklch(1 0 0 / 7%);
   --material-float-filter: blur(16px) saturate(1.15);
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='%23a6aaae' d='M216.49,104.49l-80,80a12,12,0,0,1-17,0l-80-80a12,12,0,0,1,17-17L128,159l71.51-71.52a12,12,0,0,1,17,17Z'/%3E%3C/svg%3E");
 }
 
 /* Accent presets: hue, chroma, and the light-mode lightness that keeps every
@@ -442,22 +445,20 @@
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus {
     -webkit-text-fill-color: var(--foreground);
-    transition: background-color 600000s 0s, color 600000s 0s;
+    /* important: in the base layer it must still beat the fields' own transition utilities */
+    transition: background-color 600000s 0s, color 600000s 0s !important;
   }
 
-  /* Native selects (the table widgets) draw the shared chevron in the muted ink, not the
-     browser's arrow, and open a list in the popover's colours. */
+  /* Native selects (the table widgets) draw the shared chevron (CaretDown, as the Select
+     component) in the muted ink, not the browser's arrow, and open a list in the popover's
+     colours. Each select carries its own pr-7 for the chevron's room. */
   select:not([multiple]):not([size]) {
     -webkit-appearance: none;
     appearance: none;
     padding-right: 1.75rem;
-    background-image:
-      linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
-      linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
-    background-position:
-      calc(100% - 0.8125rem) 55%,
-      calc(100% - 0.5625rem) 55%;
-    background-size: 0.25rem 0.25rem;
+    background-image: var(--select-chevron);
+    background-position: right 0.5rem center;
+    background-size: 1rem 1rem;
     background-repeat: no-repeat;
   }
 

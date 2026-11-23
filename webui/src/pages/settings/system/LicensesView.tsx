@@ -39,15 +39,15 @@ function LicenseText({ url }: { url: string }) {
   return <pre className="mt-1 max-h-96 overflow-auto rounded-md bg-muted/50 px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap">{text.data}</pre>
 }
 
-function LicenseEntry({ entry }: { entry: Entry }) {
+function LicenseEntry({ entry, depth }: { entry: Entry; depth: number }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   return (
-    // a panel nested in its group's panel (`ui/layout/panel.ts`): a fainter hairline, no box
-    <li className={cn("flex flex-col gap-1", panelClass(1))}>
+    // a panel (`ui/layout/panel.ts`), a level down when its group has a titled panel of its own
+    <li className={cn("flex flex-col gap-1", panelClass(depth))}>
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className={panelTitleClass(1)}>
+          <p className={panelTitleClass(depth)}>
             {entry.url ? (
               <a href={entry.url} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 underline-offset-2 hover:underline">
                 {entry.name}
@@ -62,7 +62,7 @@ function LicenseEntry({ entry }: { entry: Entry }) {
       </div>
       {entry.license_url ? (
         <Collapsible open={open} onOpenChange={setOpen}>
-          <CollapsibleTrigger className="flex w-fit items-center gap-1.5 rounded-sm py-0.5 text-left text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
+          <CollapsibleTrigger className="relative flex w-fit items-center gap-1.5 rounded-sm py-0.5 text-left after:absolute after:-inset-x-2 after:-inset-y-2.5 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
             <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} aria-hidden />
             {open ? t("Hide license") : t("Show license")}
           </CollapsibleTrigger>
@@ -98,7 +98,7 @@ export function LicensesView() {
             {group.title ? <h2 className={panelTitleClass(0)}>{t(group.title)}</h2> : null}
             <ul className="flex flex-col gap-2.5">
               {group.items.map((entry) => (
-                <LicenseEntry key={entry.id} entry={entry} />
+                <LicenseEntry key={entry.id} entry={entry} depth={group.title ? 1 : 0} />
               ))}
             </ul>
           </section>

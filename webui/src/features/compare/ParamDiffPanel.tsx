@@ -198,7 +198,7 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
               {coreRows.length > 0 ? (
                 <div className="flex flex-col gap-1.5 border-t border-border/60 pt-2">
                   <h4 className="text-xs font-medium text-foreground">{t("Core parameters")}</h4>
-                  <div className="overflow-x-auto rounded-md bg-muted/50">
+                  <div className="overflow-x-auto rounded-md bg-background">
                     <table className="w-full border-collapse text-xs">
                       <thead>
                         <tr className="border-b border-border/70 bg-muted/35 text-left text-[0.6875rem] text-muted-foreground">
@@ -228,7 +228,7 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
               {diff.lora_diffs.length > 0 ? (
                 <div className="flex flex-col gap-1.5 border-t border-border/60 pt-2">
                   <h4 className="text-xs font-medium text-foreground">{t("LoRAs")}</h4>
-                  <div className="overflow-x-auto rounded-md bg-muted/50">
+                  <div className="overflow-x-auto rounded-md bg-background">
                     <table className="w-full border-collapse text-xs font-mono tabular-nums">
                       <tbody className="divide-y divide-border/50">
                         {diff.lora_diffs.map((lora) => (
@@ -253,7 +253,7 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
               {diff.extension_diffs.length > 0 ? (
                 <div className="flex flex-col gap-1.5 border-t border-border/60 pt-2">
                   <h4 className="text-xs font-medium text-foreground">{t("Active extensions")}</h4>
-                  <div className="overflow-x-auto rounded-md bg-muted/50">
+                  <div className="overflow-x-auto rounded-md bg-background">
                     <table className="w-full border-collapse text-xs font-mono tabular-nums">
                       <tbody className="divide-y divide-border/50">
                         {diff.extension_diffs.map((ext) => (

@@ -66,7 +66,7 @@ function PreferredModules({ id, value, onChange }: { id: string; value: string[]
           {t("Clear")}
         </Button>
       </div>
-      <div role="group" aria-labelledby={id} aria-describedby={`${id}-info`} className="flex max-h-40 flex-col gap-0.5 overflow-y-auto rounded-lg bg-muted/50 p-1">
+      <div role="group" aria-labelledby={id} aria-describedby={`${id}-info`} className="flex max-h-40 flex-col gap-0.5 overflow-y-auto rounded-lg bg-background p-1">
         {rows.map((m, index) => (
           <div key={m.value} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-accent">
             <Checkbox id={`${id}-${index}`} checked={value.includes(m.value)} onCheckedChange={(on) => onChange(on ? [...value, m.value] : value.filter((v) => v !== m.value))} />
@@ -163,7 +163,7 @@ function Editor({ meta, kind, onDone }: { meta: NetworkMeta; kind: NetworkKind; 
                 pickLabel={t("Training tags: click to add to or remove from the activation text")}
                 isOn={(tag) => hasTag(draft.activation, tag)}
                 onPick={(tag) => update({ activation: toggleTag(draft.activation, tag) })}
-                className="max-h-40 overflow-y-auto rounded-lg bg-muted/50 p-2"
+                className="max-h-40 overflow-y-auto rounded-lg bg-background p-2"
               />
             ) : null}
           </div>
@@ -208,7 +208,7 @@ function Editor({ meta, kind, onDone }: { meta: NetworkMeta; kind: NetworkKind; 
                 {t("Copy")}
               </Button>
             </div>
-            <p aria-live="polite" className="min-h-10 rounded-lg bg-muted/50 px-2.5 py-2 text-xs text-foreground/85">
+            <p aria-live="polite" className="min-h-10 rounded-lg bg-background px-2.5 py-2 text-xs text-foreground/85">
               {random || <span className="text-muted-foreground">{t("A prompt drawn from the training tags, by frequency.")}</span>}
             </p>
           </div>
