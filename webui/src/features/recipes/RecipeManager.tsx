@@ -209,7 +209,7 @@ export function RecipeManager() {
           </Button>
           <Button
             size="sm"
-            variant="glow"
+            variant="secondary"
             className="h-7 gap-1.5 px-3 text-xs font-medium"
             onClick={() => setCaptureOpen(true)}
           >
