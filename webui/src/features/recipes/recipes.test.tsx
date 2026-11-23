@@ -6,6 +6,7 @@ import { queryClient } from "@/api/queries"
 import { getFormStore } from "@/ui/form-store"
 import { tabOwners } from "@/ui/tab"
 import { captureFormOverrides, countRecipeParams, recipeHighlights } from "./capture"
+import { recipeFileName } from "./file-name"
 import { RecipeManager } from "./RecipeManager"
 import type { Recipe } from "./types"
 
@@ -146,5 +147,49 @@ describe("Recipes capture and manager UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Export JSON" }))
     await waitFor(() => expect(error).toHaveBeenCalled())
     expect(error.mock.calls[0]![0]).toBe("Could not export the recipes")
+  })
+
+  it("names a recipe's export after the recipe, whatever its script", () => {
+    expect(recipeFileName({ ...SAMPLE_RECIPE, name: "夏日人像" })).toBe("夏日人像.json")
+    expect(recipeFileName({ ...SAMPLE_RECIPE, name: "Portrait / 夏: v2?" })).toBe("Portrait - 夏- v2.json")
+    expect(recipeFileName({ ...SAMPLE_RECIPE, name: " /// " })).toBe("r1.json")
+  })
+
+  it("says a picked file is not a recipes file instead of blaming the server", async () => {
+    const { toast } = await import("sonner")
+    const error = vi.spyOn(toast, "error")
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ items: [SAMPLE_RECIPE], total: 1 }), { status: 200, headers: { "Content-Type": "application/json" } }))
+    const { container } = render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    await screen.findByText("Qwen Turbo 8-step")
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!
+    fireEvent.change(input, { target: { files: [new File(["{not json"], "bad.json", { type: "application/json" })] } })
+    await waitFor(() => expect(error).toHaveBeenCalled())
+    expect(error.mock.calls[0]![1]).toMatchObject({ description: "This file is not a recipes export." })
+  })
+
+  it("does not report a recipe as applied when the server could not apply it", async () => {
+    const { toast } = await import("sonner")
+    const success = vi.spyOn(toast, "success")
+    const error = vi.spyOn(toast, "error")
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (url.includes("/apply")) return new Response(JSON.stringify({ detail: "gone" }), { status: 404, headers: { "Content-Type": "application/json" } })
+      return new Response(JSON.stringify({ items: [SAMPLE_RECIPE], total: 1 }), { status: 200, headers: { "Content-Type": "application/json" } })
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    await screen.findByText("Qwen Turbo 8-step")
+    getFormStore("txt2img").getState().setValue("core", "cfg_scale", 7)
+    fireEvent.click(screen.getByRole("button", { name: "Apply recipe" }))
+    await waitFor(() => expect(error).toHaveBeenCalled())
+    expect(success).not.toHaveBeenCalled()
+    expect(getFormStore("txt2img").getState().values.core?.cfg_scale).toBe(7)
   })
 })

@@ -32,6 +32,7 @@ import { applyRecipeApi, createRecipeApi, deleteRecipeApi, exportRecipesApi, imp
 import { applyRecipeEntries, captureFormOverrides, countRecipeParams, recipeHighlights } from "./capture"
 import type { Recipe } from "./types"
 import { LoadFailed } from "@/components/LoadFailed"
+import { recipeFileName } from "./file-name"
 
 const FAMILIES = ["", "anima", "qwen21", "flux3", "moss", "zimage", "sdxl"] as const
 
@@ -104,23 +105,16 @@ export function RecipeManager() {
   const apply = useMutation({
     mutationFn: async (recipe: Recipe) => {
       const store = getFormStore(recipe.tab).getState()
-      let core = recipe.core_patch
-      let scripts = recipe.scripts_patch
-      let tab = recipe.tab
-      let warnings: string[] = []
-      try {
-        const res = await applyRecipeApi(recipe.id, {
-          tab: recipe.tab,
-          core: store.values.core ?? {},
-          scripts: Object.fromEntries(Object.entries(store.values).filter(([k]) => k !== "core")),
-        })
-        core = res.core ?? core
-        scripts = res.scripts ?? scripts
-        tab = res.tab ?? tab
-        warnings = res.warnings ?? []
-      } catch {
-        // Fallback to applying local recipe patches directly if apply endpoint is unavailable.
-      }
+      // the server checks conflicts and capabilities: a failed apply is reported, not replaced by a local one
+      const res = await applyRecipeApi(recipe.id, {
+        tab: recipe.tab,
+        core: store.values.core ?? {},
+        scripts: Object.fromEntries(Object.entries(store.values).filter(([k]) => k !== "core")),
+      })
+      const core = res.core ?? recipe.core_patch
+      const scripts = res.scripts ?? recipe.scripts_patch
+      const tab = res.tab ?? recipe.tab
+      const warnings = res.warnings ?? []
       const count = await applyRecipeEntries(tab, core, scripts)
       return { recipe, count, warnings }
     },
@@ -143,14 +137,23 @@ export function RecipeManager() {
   }
 
   const handleImportFile = async (file: File) => {
+    let parsed: unknown
     try {
-      const text = await file.text()
-      const parsed = JSON.parse(text) as { version?: number; recipes?: Partial<Recipe>[] } | Partial<Recipe>[] | Partial<Recipe>
-      const listToImport: Partial<Recipe>[] = Array.isArray(parsed)
-        ? parsed
-        : "recipes" in parsed && Array.isArray(parsed.recipes)
-          ? parsed.recipes
-          : [parsed as Partial<Recipe>]
+      parsed = JSON.parse(await file.text())
+    } catch {
+      parsed = null
+    }
+    if (!parsed || typeof parsed !== "object") {
+      toast.error(t("Could not import recipes"), { description: t("This file is not a recipes export.") })
+      return
+    }
+    try {
+      const bundle = parsed as { version?: number; recipes?: Partial<Recipe>[] } | Partial<Recipe>[] | Partial<Recipe>
+      const listToImport: Partial<Recipe>[] = Array.isArray(bundle)
+        ? bundle
+        : "recipes" in bundle && Array.isArray(bundle.recipes)
+          ? bundle.recipes
+          : [bundle as Partial<Recipe>]
       const res = await importRecipesApi({ version: 1, recipes: listToImport, overwrite: true })
       refreshRecipes()
       toast.success(t("Imported {{added}} recipes ({{updated}} updated)", { added: res.added, updated: res.updated }))
@@ -304,7 +307,7 @@ export function RecipeManager() {
                       className="size-7 text-muted-foreground hover:text-foreground"
                       aria-label={t("Export this recipe")}
                       title={t("Export this recipe")}
-                      onClick={() => downloadJson(`${recipe.name.replace(/[^a-zA-Z0-9_-]+/g, "-") || recipe.id}.json`, { version: 1, recipes: [recipe] })}
+                      onClick={() => downloadJson(recipeFileName(recipe), { version: 1, recipes: [recipe] })}
                     >
                       <Download className="size-3.5" />
                     </Button>
