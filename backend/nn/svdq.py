@@ -10,23 +10,64 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-from nunchaku import NunchakuFluxTransformer2dModel, NunchakuT5EncoderModel
-from nunchaku.caching.diffusers_adapters.flux import apply_cache_on_transformer
-from nunchaku.caching.fbcache import cache_context, create_cache_context
-from nunchaku.lora.flux.compose import compose_lora
-from nunchaku.models.embeddings import pack_rotemb
-from nunchaku.models.linear import AWQW4A16Linear, SVDQW4A4Linear
-from nunchaku.models.transformers.utils import patch_scale_key
-from nunchaku.models.utils import CPUOffloadManager
-from nunchaku.ops.fused import fused_gelu_mlp
-from nunchaku.ops.gemm import svdq_gemm_w4a4_cuda
-from nunchaku.utils import load_state_dict_in_safetensors, pad_tensor
+
+try:
+    from nunchaku import NunchakuFluxTransformer2dModel, NunchakuT5EncoderModel
+    from nunchaku.caching.diffusers_adapters.flux import apply_cache_on_transformer
+    from nunchaku.caching.fbcache import cache_context, create_cache_context
+    from nunchaku.lora.flux.compose import compose_lora
+    from nunchaku.models.embeddings import pack_rotemb
+    from nunchaku.models.linear import AWQW4A16Linear, SVDQW4A4Linear
+    from nunchaku.models.transformers.utils import patch_scale_key
+    from nunchaku.models.utils import CPUOffloadManager
+    from nunchaku.ops.fused import fused_gelu_mlp
+    from nunchaku.ops.gemm import svdq_gemm_w4a4_cuda
+    from nunchaku.utils import load_state_dict_in_safetensors, pad_tensor
+
+    from backend.nn._qwen_lora import compose_loras_v2, reset_lora_v2
+
+    SVDQ_AVAILABLE = True
+except ImportError:
+    SVDQ_AVAILABLE = False
+    NunchakuFluxTransformer2dModel = None
+    NunchakuT5EncoderModel = None
+    apply_cache_on_transformer = None
+    cache_context = None
+    create_cache_context = None
+    compose_lora = None
+    pack_rotemb = None
+    AWQW4A16Linear = nn.Linear
+    SVDQW4A4Linear = nn.Linear
+    patch_scale_key = None
+    CPUOffloadManager = None
+    fused_gelu_mlp = None
+    svdq_gemm_w4a4_cuda = None
+    load_state_dict_in_safetensors = None
+    pad_tensor = None
+    compose_loras_v2 = None
+    reset_lora_v2 = None
 
 from backend.args import dynamic_args
 from backend.memory_management import logger, soft_empty_cache
-from backend.nn._qwen_lora import compose_loras_v2, reset_lora_v2
+from backend.nn.quant_formats import QuantFormatInfo, detect_quant_format, is_svdq_state_dict
 from backend.utils import process_img
 from modules import shared
+
+SVDQ_SUPPORTED_ARCHITECTURES: tuple[str, ...] = ("flux", "qwen", "zimage")
+
+
+def svdq_supported_architectures() -> tuple[str, ...]:
+    """DiT families with native Nunchaku SVDQuant W4A4 / NVFP4 adapters."""
+
+    return SVDQ_SUPPORTED_ARCHITECTURES
+
+
+def svdq_quant_metadata(state_dict: dict[str, torch.Tensor], metadata: dict | None = None) -> QuantFormatInfo | None:
+    """Return :class:`QuantFormatInfo` when ``state_dict`` is SVDQuant W4A4/NVFP4, else ``None``."""
+
+    if not is_svdq_state_dict(state_dict):
+        return None
+    return detect_quant_format(state_dict, metadata)
 
 
 class NunchakuModelMixin(nn.Module):

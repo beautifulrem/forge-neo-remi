@@ -2,6 +2,7 @@ import os
 
 from lib_spectrum import logger
 from lib_spectrum.forecaster import SpectrumNode
+from lib_spectrum.modes import FORECAST_MODES
 from lib_spectrum.pass_context import resolve_pass_context
 from lib_spectrum.presets import CONTROLS, DEFAULT, ENABLE_KEY, INFOTEXT_KEYS, PresetManager
 
@@ -10,6 +11,20 @@ from modules.anima_support import script_arguments, table_params
 from remi import ui
 
 PresetManager.load_presets()
+
+_DEFAULT_FORECAST_MODE = FORECAST_MODES[0]
+_SELECTED_FORECAST_MODE = _DEFAULT_FORECAST_MODE
+
+
+def active_forecast_mode() -> str:
+    return _SELECTED_FORECAST_MODE
+
+
+def set_active_forecast_mode(mode: str | None) -> str:
+    global _SELECTED_FORECAST_MODE
+    candidate = str(mode or _DEFAULT_FORECAST_MODE)
+    _SELECTED_FORECAST_MODE = candidate if candidate in FORECAST_MODES else _DEFAULT_FORECAST_MODE
+    return _SELECTED_FORECAST_MODE
 
 # The params() names of the settings, in CONTROLS order: their preset fields' last parts.
 PARAM_NAMES = tuple(name.rsplit(".", 1)[-1] for _, name, _, _ in CONTROLS)
@@ -65,6 +80,15 @@ class SpectrumForForge(scripts.Script):
                         ui.Slider("sea_beta", 0.5, 4.0, DEFAULT["spec_sea_beta"], 0.1, label="SEA Spectral Beta", info="Natural-image spectral slope used only for SEA decisions."),
                     ),
                     ui.Choice(
+                        "forecast_mode",
+                        list(FORECAST_MODES),
+                        active_forecast_mode,
+                        label="Forecasting Mode",
+                        info="Chebyshev uses ridge regression with Taylor blending; TaylorSeer uses higher-order finite-difference extrapolation; MagCache adapts skips by feature magnitude drift.",
+                        arg=False,
+                        on_change="set_forecast_mode",
+                    ),
+                    ui.Choice(
                         "policy",
                         ["Conservative", "Strict", "Legacy / fastest"],
                         DEFAULT["spec_compat_policy"],
@@ -86,7 +110,7 @@ class SpectrumForForge(scripts.Script):
                 ),
             ],
         )
-        table_params(ROWS, root)  # infotext keys and preset fields
+        table_params((*ROWS, ("forecast_mode", None, None)), root)  # infotext keys and preset fields
         return root
 
     def _settings(self, values: dict) -> dict:
@@ -121,6 +145,11 @@ class SpectrumForForge(scripts.Script):
         if names is None:
             return ui.toast("Enter a preset name", "error")
         return {"preset_name": {"choices": names, "value": name}, **ui.toast(ui.message('Preset "{{name}}" saved', name=name), "success")}
+
+    @ui.action("set_forecast_mode")
+    def set_forecast_mode(self, ctx: ui.ActionContext, values: dict) -> dict:
+        mode = set_active_forecast_mode(values.get("forecast_mode"))
+        return {"forecast_mode": {"value": mode}}
 
     @ui.action("delete_preset")
     def delete_preset(self, ctx: ui.ActionContext, values: dict) -> dict:
@@ -171,6 +200,9 @@ class SpectrumForForge(scripts.Script):
             "latent_batch": int(x.shape[0]) if x is not None else None,
             "latent_hw": latent_shape,
         }
+        raw_mode = kwargs.get("forecast_mode") or getattr(p, "spectrum_forecast_mode", None) or active_forecast_mode()
+        forecast_mode = str(raw_mode) if str(raw_mode) in FORECAST_MODES else _DEFAULT_FORECAST_MODE
+
         unet = p.sd_model.forge_objects.unet
         unet = SpectrumNode.patch(
             unet,
@@ -179,9 +211,12 @@ class SpectrumForForge(scripts.Script):
             sea_cache_dir=os.path.join(paths.data_path, "cache", "spectrum-sea"),
             sea_cache_context=sea_context,
             process=p,
+            forecast_mode=forecast_mode,
         )
         p.sd_model.forge_objects.unet = unet
 
         p.extra_generation_params[ENABLE_KEY] = True
         for k, v in zip(INFOTEXT_KEYS, args):
             p.extra_generation_params[k] = v
+        if forecast_mode != _DEFAULT_FORECAST_MODE:
+            p.extra_generation_params["spec_forecast_mode"] = forecast_mode

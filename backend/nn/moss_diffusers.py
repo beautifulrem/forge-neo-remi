@@ -13,6 +13,8 @@ Handles:
 from __future__ import annotations
 
 import os
+import re
+from collections.abc import Mapping
 
 import torch
 
@@ -152,3 +154,118 @@ def load_moss_diffusers_dir(directory: os.PathLike | str) -> tuple[dict[str, tor
         del vae_sd
 
     return sd, metadata
+
+
+# region Kromoss & 8-step DMD/DMD2 detection and LoRA key mapping
+
+_KROMOSS_RE = re.compile(r"(?:^|[-_ /])(?:kromoss|moss[-_ ]?image[-_ ]?sft[-_ ]?8[-_ ]?steps?[-_ ]?dmd2?)(?:$|[-_ /.])", re.IGNORECASE)
+_DMD2_RE = re.compile(r"(?:^|[-_ /])(?:dmd2?|8[-_]?steps?[-_ ]?dmd2?|turbo)(?:$|[-_ /.])", re.IGNORECASE)
+
+
+def is_kromoss_variant(name: str = "", metadata: Mapping | None = None) -> bool:
+    """True when a checkpoint name or safetensors metadata identifies a
+    ``lodestones/Kromoss`` or 8-step MOSS-Image DMD/DMD2 variant."""
+
+    if name and _KROMOSS_RE.search(name):
+        return True
+    if metadata:
+        joined = " ".join(str(v) for v in metadata.values() if isinstance(v, (str, int, float)))
+        if joined and _KROMOSS_RE.search(joined):
+            return True
+    return False
+
+
+def is_dmd2_lora(name: str = "", state_dict: Mapping | None = None) -> bool:
+    """True when a LoRA filename or state dict matches an 8-step MOSS/Kromoss
+    DMD/DMD2 distillation adapter."""
+
+    if name and _DMD2_RE.search(name):
+        if state_dict is None:
+            return True
+        # Confirm MOSS-Image layer structure if tensors are supplied
+        if any(".proj." in k or "shared_block_modulation" in k for k in state_dict):
+            return True
+    return False
+
+
+def moss_lora_key_map(sd: Mapping[str, torch.Tensor]) -> dict[str, object]:
+    """Comprehensive bidirectional LoRA/LoKr key map for MOSS-Image & Kromoss
+    (including 8-step DMD/DMD2 LoRAs from ComfyUI, Diffusers, PEFT, ai-toolkit,
+    kohya, LyCORIS, and OneTrainer).
+
+    Bidirectionally bridges:
+    - fused ``layers.{i}.proj.qkv`` <-> split ``layers.{i}.proj.{q,k,v}``;
+    - fused ``layers.{i}.proj.ffn_up_gate`` <-> split ``ffn_up`` / ``ffn_gate``
+      (emitted by some DMD2 / Diffusers trainers).
+    """
+
+    from modules_forge.packages.comfy.lora import SplitTargets
+
+    key_map: dict[str, object] = {}
+
+    def register(bare: str, target) -> None:
+        flat = bare.replace(".", "_")
+        for prefix in ("", "diffusion_model.", "transformer.", "base_model.model.", "base_model.model.diffusion_model.", "base_model.model.transformer."):
+            key_map[f"{prefix}{bare}"] = target
+        key_map[f"lora_unet_{flat}"] = target
+        key_map[f"lycoris_{flat}"] = target
+        key_map[f"lora_transformer_{flat}"] = target
+
+    for k in sd:
+        if not (k.startswith("diffusion_model.") and k.endswith(".weight")):
+            continue
+        bare = k[len("diffusion_model.") : -len(".weight")]
+        register(bare, k)
+
+        if bare.endswith(".proj.qkv"):
+            third = int(sd[k].shape[0]) // 3
+            stem = bare[: -len(".qkv")]
+            for i, proj in enumerate(("q", "k", "v")):
+                register(f"{stem}.{proj}", (k, (0, i * third, third)))
+        elif bare.endswith(".proj.q"):
+            k_key = k[: -len(".q.weight")] + ".k.weight"
+            v_key = k[: -len(".q.weight")] + ".v.weight"
+            if k_key in sd and v_key in sd:
+                qd, kd, vd = int(sd[k].shape[0]), int(sd[k_key].shape[0]), int(sd[v_key].shape[0])
+                stem = bare[: -len(".q")]
+                register(
+                    f"{stem}.qkv",
+                    SplitTargets(
+                        targets=((k, 0, qd), (k_key, qd, kd), (v_key, qd + kd, vd)),
+                        slice_dim=0,
+                        full_dim=qd + kd + vd,
+                    ),
+                )
+        elif bare.endswith(".proj.ffn_up_gate"):
+            half = int(sd[k].shape[0]) // 2
+            stem = bare[: -len(".ffn_up_gate")]
+            register(f"{stem}.ffn_up", (k, (0, 0, half)))
+            register(f"{stem}.ffn_gate", (k, (0, half, half)))
+
+    return key_map
+
+
+def kromoss_dmd2_workflow_advice(p, *, opts=None) -> list[str]:
+    """Targeted workflow hints for Kromoss / MOSS-Image 8-step DMD/DMD2 runs."""
+
+    from backend.nn.dit_registry import _prompt_and_checkpoint_names
+
+    ckpt_name, lora_names = _prompt_and_checkpoint_names(p)
+    is_kromoss = is_kromoss_variant(ckpt_name)
+    has_dmd2 = any(is_dmd2_lora(name) for name in lora_names) or bool(ckpt_name and _DMD2_RE.search(ckpt_name))
+    if not (is_kromoss or has_dmd2):
+        return []
+
+    advice: list[str] = []
+    steps = getattr(p, "steps", None)
+    cfg = getattr(p, "cfg_scale", None)
+    if (isinstance(steps, (int, float)) and steps > 12) or (isinstance(cfg, (int, float)) and cfg > 1.5):
+        label = "Kromoss" if is_kromoss else "MOSS-Image DMD2"
+        advice.append(
+            f"{label} 8-step DMD/DMD2 detected with steps={steps}, cfg={cfg}: "
+            "switch to 8 steps and CFG 1.0 for optimal speed and typography fidelity."
+        )
+    return advice
+
+
+# endregion

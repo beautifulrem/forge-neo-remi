@@ -242,3 +242,5 @@ class ControlNetPatcher(ControlModelPatcher):
 
 
 add_supported_control_model(ControlNetPatcher)
+from backend.nn.dit_control_patch import DiTControlNetUnionPatcher  # noqa: E402
+add_supported_control_model(DiTControlNetUnionPatcher)

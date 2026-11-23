@@ -164,22 +164,41 @@ NEGATIVE_INSTRUCTIONS = (
 )
 
 
-def _clean_prompt(text: str) -> str:
+def _clean_prompt(text: str, *, preserve_newlines: bool = False) -> str:
     """The model's answer as a prompt: code fences, a "Prompt:" label and
-    enclosing quotes dropped, lines joined with commas."""
+    enclosing quotes dropped; lines joined with commas unless ``preserve_newlines``."""
 
     text = re.sub(r"^```[\w-]*\s*|\s*```$", "", text.strip())
     text = re.sub(r"^(?:negative\s+)?prompt\s*:\s*", "", text, flags=re.IGNORECASE)
     if len(text) >= 2 and (text[0], text[-1]) in (('"', '"'), ("'", "'"), ("“", "”"), ("「", "」")):
         text = text[1:-1]
+    if preserve_newlines:
+        return text.strip()
     lines = [line.strip().strip(",").strip() for line in text.splitlines()]
     return ", ".join(line for line in lines if line)
 
 
-def generate_prompt(config: ProviderConfig, description: str, *, current: str = "", negative: bool = False, instructions: str = "", post: Post = _http_post) -> str:
+def generate_prompt(
+    config: ProviderConfig,
+    description: str,
+    *,
+    current: str = "",
+    negative: bool = False,
+    instructions: str = "",
+    images: Sequence[str] | None = None,
+    temperature: float = 0.7,
+    max_tokens: int | None = None,
+    preserve_newlines: bool = False,
+    post: Post = _http_post,
+) -> str:
     """A prompt written by the OpenAI-compatible model of ``config`` (the
     translation provider) from ``description``; ``current``: the prompt to
-    build on. ``instructions`` replaces the built-in system message."""
+    build on. ``instructions`` replaces the built-in system message.
+
+    When ``images`` (data URIs or image URLs) are supplied, the user turn uses
+    OpenAI-compatible multimodal content parts (supported by llama.cpp,
+    Ollama, MLX-LM, vLLM, and cloud VLM endpoints).
+    """
 
     if config.provider != "openai" or not config.enabled:
         raise TranslationError("writing prompts needs the OpenAI-compatible translation provider with its URL and model", 409)
@@ -190,17 +209,33 @@ def generate_prompt(config: ProviderConfig, description: str, *, current: str = 
         raise TranslationError("the description is too long", 413)
     system = instructions.strip() or (NEGATIVE_INSTRUCTIONS if negative else DEFAULT_INSTRUCTIONS)
     request = description if not current.strip() else f"Current prompt: {current.strip()}\n\nChange it as follows: {description}"
+    user_content: Any = request
+    if images:
+        parts: list[dict[str, Any]] = [{"type": "text", "text": request}]
+        for image_url in images:
+            if isinstance(image_url, str) and image_url.strip():
+                parts.append({"type": "image_url", "image_url": {"url": image_url.strip()}})
+        if len(parts) > 1:
+            user_content = parts
     headers = {"Content-Type": "application/json"}
     if config.key.strip():
         headers["Authorization"] = f"Bearer {config.key.strip()}"
-    body = {"model": config.model.strip(), "temperature": 0.7, "messages": [{"role": "system", "content": system}, {"role": "user", "content": request}]}
+    body: dict[str, Any] = {
+        "model": config.model.strip(),
+        "temperature": float(temperature),
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user_content}],
+    }
+    if max_tokens is not None and int(max_tokens) > 0:
+        body["max_tokens"] = int(max_tokens)
     base = config.url.rstrip("/")
     data = post(base if base.endswith("/chat/completions") else f"{base}/chat/completions", headers, body)
     try:
         content = data["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as error:
         raise TranslationError("unexpected chat completion answer") from error
-    prompt = _clean_prompt(str(content or ""))
+    if isinstance(content, list):
+        content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+    prompt = _clean_prompt(str(content or ""), preserve_newlines=preserve_newlines)
     if not prompt:
         raise TranslationError("the model answered with an empty prompt")
     return prompt

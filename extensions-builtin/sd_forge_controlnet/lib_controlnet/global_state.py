@@ -86,8 +86,9 @@ def control_model_family(filename: str | None) -> str:
                 keys = list(f.keys())
         except Exception:
             keys = []
-        anima = any(k.startswith("lllite_dit") or k.endswith("control_embedder.proj.weight") for k in keys)
-        family = _FAMILY_CACHE[key] = "anima" if anima else "unet"
+        from backend.nn.dit_control_patch import detect_dit_control_family
+
+        family = _FAMILY_CACHE[key] = detect_dit_control_family(keys) or "unet"
     return family
 
 
@@ -105,9 +106,11 @@ def get_filtered_controlnet_names(tag: str) -> list[str]:
         filename_filters.extend(p.model_filename_filters)
 
     names = [cnet for cnet in controlnet_names if cnet == "None" or any(f.lower() in cnet.lower() for f in filename_filters)]
-    # Only the control models the loaded checkpoint can take: an SD ControlNet does nothing on
-    # the Anima DiT, and an Anima LLLite has no blocks to go on in a UNet
-    wanted = "anima" if model_is_anima() else "unet"
+    # Only the control models the loaded checkpoint can take: filter by active DiT family
+    # (anima / qwen21 / zimage) or standard UNet.
+    from backend.nn.dit_control_patch import active_control_family
+
+    wanted = "anima" if model_is_anima() else active_control_family()
     return [cnet for cnet in names if cnet == "None" or control_model_family(controlnet_filename_dict.get(cnet)) == wanted]
 
 

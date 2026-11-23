@@ -22,6 +22,7 @@ from backend.nn.dit_registry import (
     match_spectrum_capability,
     resolve_spectrum_capture_module,
 )
+from lib_spectrum.modes import FORECAST_MODES, MagCacheForecaster, MagCacheTracker, TaylorSeerForecaster
 from lib_spectrum.sea import SeaCalibration, flow_time, l1rel, sea_filter
 from modules import spectrum_force
 from modules.anima_support import call_model_wrapper, is_anima_auxiliary_denoiser, process_ref, sigma_value
@@ -259,6 +260,11 @@ class SpectrumState:
         sea_calibration,
         verbose,
         flow_sigmas=True,
+        forecast_mode="Chebyshev",
+        taylor_order=2,
+        magcache_threshold=0.12,
+        magcache_max_skip=2,
+        magcache_decay=0.95,
     ):
         self.steps = int(steps)
         self.window_size = float(window_size)
@@ -270,7 +276,17 @@ class SpectrumState:
         self.sea_calibration = sea_calibration
         self.flow_sigmas = bool(flow_sigmas)
         self.verbose = bool(verbose)
-        self.forecasters: dict[Hashable, ChebyshevForecaster] = {}
+        mode = str(forecast_mode)
+        if mode not in FORECAST_MODES:
+            logger.warning("Unknown Spectrum forecast_mode %r; using Chebyshev.", mode)
+            mode = "Chebyshev"
+        self.forecast_mode = mode
+        self.taylor_order = max(1, min(int(taylor_order), 4))
+        self.magcache_threshold = float(magcache_threshold)
+        self.magcache_max_skip = max(1, int(magcache_max_skip))
+        self.magcache_decay = float(magcache_decay)
+        self.forecasters: dict[Hashable, ChebyshevForecaster | TaylorSeerForecaster | MagCacheForecaster] = {}
+        self.magcache_trackers: dict[Hashable, MagCacheTracker] = {}
         self.sea_distances: list[float] = []
         self.sea_delta = sea_calibration.load() if sea_calibration is not None else None
         self.sea_saved = self.sea_delta is not None
@@ -279,6 +295,7 @@ class SpectrumState:
 
     def reset(self):
         self.forecasters.clear()
+        self.magcache_trackers.clear()
         self.step = -1
         # Branches the current step's model calls have run so far
         self.step_branches: set = set()
@@ -359,6 +376,9 @@ class SpectrumState:
     def decide(self, branches):
         if self.step < self.warmup_steps or self.forecasting_ended or not self.ready(branches):
             return "actual"
+        if self.forecast_mode == "MagCache":
+            can_skip = all(key in self.magcache_trackers and self.magcache_trackers[key].should_skip() for key in branches)
+            return "cached" if can_skip else "actual"
         if self.schedule == "SEA (auto-calibrated)" and self.sea_delta is not None:
             return "cached" if self.sea_accumulated < self.sea_delta else "actual"
         divisor = max(1, math.floor(self.current_window))
@@ -371,8 +391,14 @@ class SpectrumState:
         if self.schedule == "SEA (auto-calibrated)" and self.sea_delta is not None:
             self.sea_accumulated = 0.0
 
-    def cached_completed(self):
+    def cached_completed(self, branches=None):
         self.consecutive_cached += 1
+        if self.forecast_mode == "MagCache":
+            targets = branches if branches is not None else self.magcache_trackers.keys()
+            for key in targets:
+                tracker = self.magcache_trackers.get(key)
+                if tracker is not None:
+                    tracker.record_skip()
 
 
 class SpectrumNode:
@@ -397,6 +423,12 @@ class SpectrumNode:
         sea_cache_dir: str,
         sea_cache_context: dict,
         process=None,
+        *,
+        forecast_mode: str = "Chebyshev",
+        taylor_order: int = 2,
+        magcache_threshold: float = 0.12,
+        magcache_max_skip: int = 2,
+        magcache_decay: float = 0.95,
     ):
         history_size = max(int(history_size), int(degree) + 2)
         if compat_policy not in COMPAT_POLICIES:
@@ -454,6 +486,11 @@ class SpectrumNode:
             sea_calibration=calibration,
             verbose=verbose,
             flow_sigmas=_is_flow_predictor(predictor),
+            forecast_mode=forecast_mode,
+            taylor_order=taylor_order,
+            magcache_threshold=magcache_threshold,
+            magcache_max_skip=magcache_max_skip,
+            magcache_decay=magcache_decay,
         )
         if feature_cache:
             _ensure_capture_hook(capture_module)
@@ -554,7 +591,7 @@ class SpectrumNode:
                 else:
                     result = feature.to(input_x.dtype)
                 if not branch_step:
-                    state.cached_completed()
+                    state.cached_completed(keys)
                 return result
 
             # Only a new, cacheable step (of these branches) a later forecast
@@ -584,8 +621,24 @@ class SpectrumNode:
                 for key, chunk in zip(keys, chunks):
                     forecaster = state.forecasters.get(key)
                     if forecaster is None:
-                        forecaster = ChebyshevForecaster(degree, history_size, lam, steps, weight)
+                        if state.forecast_mode == "TaylorSeer":
+                            forecaster = TaylorSeerForecaster(order=state.taylor_order, history_size=history_size)
+                        elif state.forecast_mode == "MagCache":
+                            forecaster = MagCacheForecaster(decay=state.magcache_decay)
+                        else:
+                            forecaster = ChebyshevForecaster(degree, history_size, lam, steps, weight)
                         state.forecasters[key] = forecaster
+                    if state.forecast_mode == "MagCache":
+                        tracker = state.magcache_trackers.get(key)
+                        if tracker is None:
+                            tracker = MagCacheTracker(
+                                threshold=state.magcache_threshold,
+                                max_skip=state.magcache_max_skip,
+                                decay=state.magcache_decay,
+                            )
+                            state.magcache_trackers[key] = tracker
+                        prev_feat = forecaster.features[-1] if forecaster.features else None
+                        tracker.observe_actual(chunk, prev_feat)
                     forecaster.update(state.step, chunk)
             if new_step:
                 state.actual_completed()
