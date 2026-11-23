@@ -25,7 +25,7 @@ import {
   ShieldCheck,
   X,
 } from "@/components/icons"
-import { lazy, type ReactNode, type Ref, type RefObject, Suspense, useEffect, useImperativeHandle, useRef, useState } from "react"
+import { type ReactNode, type Ref, type RefObject, Suspense, useEffect, useImperativeHandle, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
@@ -66,6 +66,7 @@ import { type GridHandle, NetworkGrid } from "./NetworkGrid"
 import { usePromptTarget } from "./prompt-target"
 import { facetsQuery, type IndexRange, kindsQuery, type ListParams, type SortKey, type SortOrder, useNetworkWindow } from "./queries"
 import { type CardSize, type Surface, TREE_WIDTH, useNetworksUi, useSurface } from "./store"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
 export type BrowserHandle = { focusSearch: () => void }
 
@@ -73,9 +74,9 @@ type DialogType = "metadata" | "edit" | "preview"
 type Dialog = { type: DialogType; item: NetworkItem } | null
 
 // The item dialogs are fetched the first time one opens (they are not part of the browser's first view).
-const MetadataDialog = lazy(() => import("./MetadataDialog").then((m) => ({ default: m.MetadataDialog })))
-const EditMetadataDialog = lazy(() => import("./EditMetadataDialog").then((m) => ({ default: m.EditMetadataDialog })))
-const PreviewDialog = lazy(() => import("./PreviewDialog").then((m) => ({ default: m.PreviewDialog })))
+const MetadataDialog = retryableLazy(() => import("./MetadataDialog").then((m) => ({ default: m.MetadataDialog })))
+const EditMetadataDialog = retryableLazy(() => import("./EditMetadataDialog").then((m) => ({ default: m.EditMetadataDialog })))
+const PreviewDialog = retryableLazy(() => import("./PreviewDialog").then((m) => ({ default: m.PreviewDialog })))
 
 function useKindTitle() {
   const { t } = useTranslation()

@@ -1,4 +1,4 @@
-import { type ComponentType, createElement, lazy, type LazyExoticComponent } from "react"
+import { type ComponentProps, type ComponentType, createElement, lazy, type LazyExoticComponent } from "react"
 
 /** Loads that failed, each with the swap that lets its component load again. */
 const failed = new Set<() => void>()
@@ -22,8 +22,9 @@ export function retryFailedLoads(): void {
  * usual; {@link retryFailedLoads} then swaps in a fresh lazy component, and
  * the next render fetches the chunk again.
  */
-export function retryableLazy<P extends object>(load: () => Promise<{ default: ComponentType<P> }>): ComponentType<P> {
-  const make = (): LazyExoticComponent<ComponentType<P>> =>
+// oxlint-disable-next-line typescript/no-explicit-any -- the constraint React.lazy has
+export function retryableLazy<T extends ComponentType<any>>(load: () => Promise<{ default: T }>): ComponentType<ComponentProps<T>> {
+  const make = (): LazyExoticComponent<T> =>
     lazy(() =>
       load().catch((error: unknown) => {
         failed.add(() => {
@@ -33,8 +34,8 @@ export function retryableLazy<P extends object>(load: () => Promise<{ default: C
       }),
     )
   let current = make()
-  function Retryable(props: P) {
-    return createElement(current, props)
+  function Retryable(props: ComponentProps<T>) {
+    return createElement(current as ComponentType<ComponentProps<T>>, props)
   }
   return Retryable
 }

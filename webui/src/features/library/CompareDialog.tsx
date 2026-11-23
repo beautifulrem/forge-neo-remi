@@ -1,5 +1,5 @@
 /** Compare two images: before / after divider or side by side, with RGBA 4-backdrop and collapsible structured Parameters Diff. */
-import { lazy, Suspense, useState } from "react"
+import { Suspense, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
 import { Segmented } from "@/components/Segmented"
@@ -8,8 +8,9 @@ import { type BackdropMode, backdropSurface } from "@/features/compare/backdrop-
 import { BackdropPicker } from "@/features/compare/BackdropPicker"
 import { CompareSlider } from "@/features/compare/CompareSlider"
 import { cn } from "@/lib/utils"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
-const ParamDiffPanel = lazy(() => import("@/features/compare/ParamDiffPanel").then((m) => ({ default: m.ParamDiffPanel })))
+const ParamDiffPanel = retryableLazy(() => import("@/features/compare/ParamDiffPanel").then((m) => ({ default: m.ParamDiffPanel })))
 
 export type CompareImage = {
   id: string

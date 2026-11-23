@@ -10,12 +10,12 @@
  * (`completionAcceptKey`). `registerPromptDecorator(id, Component)` wraps
  * every prompt editor in a component (toolbars, alternative views).
  */
-import { lazy } from "react"
 
 export { completionAcceptKey, registerCompletionSource, type CompletionEntry, type DecoratedCompletion } from "./completion-registry"
+import { retryableLazy } from "@/lib/retryable-lazy"
 export { registerPromptDecorator, type PromptDecoratorProps } from "./decorators"
 export type { PromptEditorHandle, PromptEditorProps } from "./PromptEditor"
 export type { PromptKind, PromptScope } from "./facets"
 export { bracketProblems, tokenizePrompt, type BracketProblem, type PromptToken } from "./tokenize"
 
-export const LazyPromptEditor = lazy(() => import("./PromptEditor"))
+export const LazyPromptEditor = retryableLazy(() => import("./PromptEditor"))

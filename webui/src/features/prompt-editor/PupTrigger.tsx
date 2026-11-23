@@ -4,12 +4,13 @@
  * comfortably under the 150 KB gzip budget.
  */
 import { RotateCcw, WandSparkles } from "@/components/icons"
-import { lazy, Suspense, useState } from "react"
+import { Suspense, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
-const PupUpsamplerDialog = lazy(() => import("./PupUpsamplerDialog"))
+const PupUpsamplerDialog = retryableLazy(() => import("./PupUpsamplerDialog"))
 
 export function PupTrigger({ value, setValue, disabled }: { value: string; setValue: (next: string) => void; disabled?: boolean }) {
   const { t } = useTranslation()

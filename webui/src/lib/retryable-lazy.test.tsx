@@ -87,3 +87,13 @@ describe("retryableLazy", () => {
     expect(load).toHaveBeenCalledTimes(1)
   })
 })
+
+describe("lazy components in the app", () => {
+  it("are all retryable: a chunk that failed once loads again on Try again or back online", async () => {
+    const { readFileSync, readdirSync } = await import("node:fs")
+    const { join } = await import("node:path")
+    const files = (readdirSync("src", { recursive: true }) as string[]).filter((file) => /\.tsx?$/.test(file) && !/\.test\.tsx?$/.test(file))
+    const plain = files.filter((file) => file !== join("lib", "retryable-lazy.ts") && /(?<![\w.])lazy\(/.test(readFileSync(join("src", file), "utf8")))
+    expect(plain).toEqual([])
+  })
+})

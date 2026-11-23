@@ -5,7 +5,7 @@
  * history strip. Phones: one column with the run controls stuck to the bottom.
  */
 import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from "@/components/icons"
-import { lazy, Suspense, useEffect, useRef, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useClientOption } from "@/api/app-options"
 import { useProgress } from "@/api/progress"
@@ -29,6 +29,7 @@ import { ResetFormDialog } from "./ResetFormDialog"
 import { useGenerateCommands, useGenerateRuntime } from "./runtime"
 import { useGenerateShortcuts } from "./shortcuts"
 import { Stage } from "./Stage"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
 // The parameter form (the schema renderer with its controls, the prompt fields, the scripts) is its
 // own chunk. Its fetch starts when this module runs, alongside the schema request, so the page's
@@ -36,10 +37,10 @@ import { Stage } from "./Stage"
 // (docs/research/ui-performance.md, "Bundle").
 const loadParamsPane = () => import("./ParamsPane")
 void loadParamsPane().catch(() => {})
-const ParamsPane = lazy(() => loadParamsPane().then((m) => ({ default: m.ParamsPane })))
+const ParamsPane = retryableLazy(() => loadParamsPane().then((m) => ({ default: m.ParamsPane })))
 
 // The viewer's chunk loads on first open.
-const Lightbox = lazy(() => import("@/features/lightbox/Lightbox").then((m) => ({ default: m.Lightbox })))
+const Lightbox = retryableLazy(() => import("@/features/lightbox/Lightbox").then((m) => ({ default: m.Lightbox })))
 
 /** txt2img ↔ img2img: two links set as tabs on the header's bottom edge (they are navigation). */
 function ModeSwitch({ tab }: { tab: GenerateTab }) {

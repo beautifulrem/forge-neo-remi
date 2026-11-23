@@ -4,7 +4,7 @@
  * prompt-focus tracking that decides where cards go.
  */
 import { Layers } from "@/components/icons"
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { type Command, formatShortcut, useRegisterCommands } from "@/app/commands"
 import { HeaderSlot } from "@/app/header-slot"
@@ -14,8 +14,9 @@ import type { GenerateTab } from "@/features/progress/run-controller"
 import { useTrackPromptFocus } from "./prompt-target"
 import { DRAWER_ID, isNetworksShortcut, NETWORKS_SHORTCUT } from "./shortcut"
 import { useNetworksUi } from "./store"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
-const NetworksDrawer = lazy(() => import("./NetworksDrawer"))
+const NetworksDrawer = retryableLazy(() => import("./NetworksDrawer"))
 
 export function NetworksDrawerHost({ tab }: { tab: GenerateTab }) {
   const { t } = useTranslation()

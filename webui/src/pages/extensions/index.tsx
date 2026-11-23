@@ -5,7 +5,7 @@
  */
 import { useQuery } from "@tanstack/react-query"
 import { Archive, Download, Gauge, Link2, Package, ShieldAlert } from "@/components/icons"
-import { lazy, Suspense } from "react"
+import { Suspense } from "react"
 import { useTranslation } from "react-i18next"
 import { navigate, type Route } from "@/app/router"
 import { FitTabsList } from "@/components/FitTabsList"
@@ -14,11 +14,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsTrigger } from "@/components/ui/tabs"
 import { InstalledView } from "./InstalledView"
 import { installedQuery } from "./queries"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
-const AvailableView = lazy(() => import("./AvailableView").then((m) => ({ default: m.AvailableView })))
-const InstallUrlView = lazy(() => import("./InstallUrlView").then((m) => ({ default: m.InstallUrlView })))
-const BackupView = lazy(() => import("./BackupView").then((m) => ({ default: m.BackupView })))
-const DiagnosticsView = lazy(() => import("./DiagnosticsView").then((m) => ({ default: m.DiagnosticsView })))
+const AvailableView = retryableLazy(() => import("./AvailableView").then((m) => ({ default: m.AvailableView })))
+const InstallUrlView = retryableLazy(() => import("./InstallUrlView").then((m) => ({ default: m.InstallUrlView })))
+const BackupView = retryableLazy(() => import("./BackupView").then((m) => ({ default: m.BackupView })))
+const DiagnosticsView = retryableLazy(() => import("./DiagnosticsView").then((m) => ({ default: m.DiagnosticsView })))
 
 const CORE_TABS = [
   { id: "installed", label: "Installed", icon: Package },

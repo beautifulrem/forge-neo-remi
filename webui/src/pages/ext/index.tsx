@@ -7,7 +7,7 @@
  */
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query"
 import { Puzzle } from "@/components/icons"
-import { type ComponentType, lazy, type LazyExoticComponent, Suspense, useEffect } from "react"
+import { type ComponentType, Suspense, useEffect } from "react"
 import { bootstrapQuery, pageSchemaQuery } from "@/api/queries"
 import type { PageInfo } from "@/api/types"
 import type { Route } from "@/app/router"
@@ -17,12 +17,13 @@ import { PageSkeleton } from "@/components/PageSkeleton"
 import { cn } from "@/lib/utils"
 import { dropPending } from "./deliver"
 import { PageView } from "./PageView"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
 export type CustomPageProps = { page: PageInfo }
 
 const customModules = import.meta.glob<{ default: ComponentType<CustomPageProps> }>("../custom/*/index.tsx")
-const customPages = new Map<string, LazyExoticComponent<ComponentType<CustomPageProps>>>(
-  Object.entries(customModules).map(([path, load]) => [path.split("/").at(-2) ?? path, lazy(load)]),
+const customPages = new Map<string, ComponentType<CustomPageProps>>(
+  Object.entries(customModules).map(([path, load]) => [path.split("/").at(-2) ?? path, retryableLazy(load)]),
 )
 
 function SchemaPage({ page }: { page: PageInfo }) {

@@ -5,12 +5,14 @@
  * reconnecting overlay.
  */
 import { RefreshCw, Power } from "@/components/icons"
-import { lazy, Suspense, useEffect, useMemo } from "react"
+import { Suspense, useEffect, useMemo } from "react"
 import { type Command, useRegisterCommands } from "@/app/commands"
+import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { requestServerCommand, useServerControl } from "./server-control"
 import { installBeforeUnloadGuard } from "./unsaved"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
-const ServerOverlay = lazy(() => import("./ServerOverlay"))
+const ServerOverlay = retryableLazy(() => import("./ServerOverlay"))
 
 export function ServerControlHost() {
   const active = useServerControl((s) => s.pending !== null || s.phase !== "idle")
@@ -23,9 +25,12 @@ export function ServerControlHost() {
     [],
   )
   useRegisterCommands("server-control", commands)
+  // its own boundary: a chunk that cannot load (the server is restarting) must not take the app down
   return active ? (
-    <Suspense fallback={null}>
-      <ServerOverlay />
-    </Suspense>
+    <ErrorBoundary fallback={null}>
+      <Suspense fallback={null}>
+        <ServerOverlay />
+      </Suspense>
+    </ErrorBoundary>
   ) : null
 }

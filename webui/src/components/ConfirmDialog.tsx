@@ -7,11 +7,12 @@
  * fetches it ahead, e.g. when the pointer enters the button that opens it.
  */
 // oxlint-disable react/only-export-components -- the component and its preload
-import { lazy, Suspense, useState } from "react"
+import { Suspense, useState } from "react"
 import type { ConfirmDialogProps } from "./ConfirmDialogView"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
 const load = () => import("./ConfirmDialogView")
-const View = lazy(() => load().then((module) => ({ default: module.ConfirmDialogView })))
+const View = retryableLazy(() => load().then((module) => ({ default: module.ConfirmDialogView })))
 
 /** Fetches the dialog's code (button intent); module loads are cached. */
 export function preloadConfirmDialog() {

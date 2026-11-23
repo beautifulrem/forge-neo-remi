@@ -1,5 +1,5 @@
 /** The parameters of one generation form: prompts, img2img source, curated core form, scripts. */
-import { lazy, type ReactNode, Suspense } from "react"
+import { type ReactNode, Suspense } from "react"
 import { useTranslation } from "react-i18next"
 import type { GenerateTab } from "@/features/progress/run-controller"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -13,9 +13,10 @@ import { curateCore } from "./curate"
 import { PromptsPanel } from "./PromptsPanel"
 import { ScriptsPanel } from "./ScriptsPanel"
 import { useFormLoader } from "./use-form-loader"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
 // Phones only (the header shows the bar elsewhere); shares the header bar's chunk.
-const ModelBarStacked = lazy(() => import("@/features/model-bar/ModelBar").then((m) => ({ default: m.ModelBarStacked })))
+const ModelBarStacked = retryableLazy(() => import("@/features/model-bar/ModelBar").then((m) => ({ default: m.ModelBarStacked })))
 
 /** "Reuse seed" takes the seed of the result the stage shows. */
 function SelectedSeedSource({ children }: { children: ReactNode }) {

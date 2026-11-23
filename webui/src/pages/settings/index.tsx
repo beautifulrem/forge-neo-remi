@@ -10,7 +10,7 @@
  */
 import { useQuery } from "@tanstack/react-query"
 import { Download, Ellipsis, FileUp, ListTree, Lock, RefreshCw, Search, Settings as SettingsIcon, X } from "@/components/icons"
-import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { useStore } from "zustand"
@@ -45,10 +45,11 @@ import { SettingsNav } from "./SettingsNav"
 import { type SettingsView, SYSTEM_VIEWS } from "./views"
 import { serverStatusQuery } from "./queries"
 import "./settings.css"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
-const ServerView = lazy(() => import("./system/ServerView").then((m) => ({ default: m.ServerView })))
-const SysinfoView = lazy(() => import("./system/SysinfoView").then((m) => ({ default: m.SysinfoView })))
-const LicensesView = lazy(() => import("./system/LicensesView").then((m) => ({ default: m.LicensesView })))
+const ServerView = retryableLazy(() => import("./system/ServerView").then((m) => ({ default: m.ServerView })))
+const SysinfoView = retryableLazy(() => import("./system/SysinfoView").then((m) => ({ default: m.SysinfoView })))
+const LicensesView = retryableLazy(() => import("./system/LicensesView").then((m) => ({ default: m.LicensesView })))
 
 const FILTER_LABELS: Record<FilterMode, string> = { all: "All", changed: "Changed", unsaved: "Unsaved", pinned: "Pinned" }
 

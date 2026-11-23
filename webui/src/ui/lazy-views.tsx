@@ -8,8 +8,9 @@
  * fetches them all (tests, or a view that is about to show them).
  */
 // oxlint-disable react/only-export-components -- the exports are components made by deferred(), plus their preload
-import { type ComponentType, lazy, Suspense } from "react"
+import { type ComponentType, Suspense } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
 // oxlint-disable-next-line typescript/no-explicit-any -- each view receives its own node variant
 type View = ComponentType<{ node: any }>
@@ -26,7 +27,12 @@ function deferred(load: () => Promise<View>, fallback: string): View {
   loaders.push(fetch)
   // Once fetched (by an earlier render or preloadViews), React.lazy resolves synchronously: a
   // thenable that calls back at once renders without suspending.
-  const Lazy = lazy(() => (loaded ? ({ then: (resolve: (module: { default: View }) => void) => resolve({ default: loaded as View }) } as Promise<{ default: View }>) : fetch().then((component) => ({ default: component }))))
+  // (a thenable with `catch`, which retryableLazy attaches its retry to; it never rejects)
+  const ready = (view: View): Promise<{ default: View }> => {
+    const thenable = { then: (resolve: (module: { default: View }) => void) => resolve({ default: view }), catch: () => thenable }
+    return thenable as unknown as Promise<{ default: View }>
+  }
+  const Lazy = retryableLazy(() => (loaded ? ready(loaded) : fetch().then((component) => ({ default: component }))))
   function DeferredView(props: { node: unknown }) {
     return (
       <Suspense fallback={<Skeleton className={fallback} />}>

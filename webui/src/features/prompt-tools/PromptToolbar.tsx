@@ -5,7 +5,7 @@
  * panel is its own lazy chunk, loaded when first opened).
  */
 import { BrushCleaning, History, KeyRound, Languages, LayoutGrid, Sparkles, Star, Tags, TextCursorInput } from "@/components/icons"
-import { lazy, type ReactNode, Suspense, useState } from "react"
+import { type ReactNode, Suspense, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -21,12 +21,13 @@ import { parsePrompt, tidyPrompt } from "./chips/parse"
 import type { PanelProps } from "./panels/helpers"
 import { translatePromptToEnglish, translateTags } from "./translate"
 import { type PromptView, usePromptViews } from "./view-store"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
-const TranslationKeyDialog = lazy(() => import("./TranslationKeyDialog").then((module) => ({ default: module.TranslationKeyDialog })))
-const GroupsPanel = lazy(() => import("./panels/GroupsPanel"))
-const HistoryPanel = lazy(() => import("./panels/HistoryPanel"))
-const FavoritesPanel = lazy(() => import("./panels/FavoritesPanel"))
-const GeneratePanel = lazy(() => import("./panels/GeneratePanel"))
+const TranslationKeyDialog = retryableLazy(() => import("./TranslationKeyDialog").then((module) => ({ default: module.TranslationKeyDialog })))
+const GroupsPanel = retryableLazy(() => import("./panels/GroupsPanel"))
+const HistoryPanel = retryableLazy(() => import("./panels/HistoryPanel"))
+const FavoritesPanel = retryableLazy(() => import("./panels/FavoritesPanel"))
+const GeneratePanel = retryableLazy(() => import("./panels/GeneratePanel"))
 
 export type PromptToolbarProps = PromptDecoratorProps & { config: PromptToolsConfig; viewKey: string; view: PromptView }
 

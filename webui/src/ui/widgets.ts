@@ -3,8 +3,9 @@
  * named `<name>` (its default export), discovered at build time and loaded
  * lazily on first use; there is no central list to edit.
  */
-import { type ComponentType, lazy, type LazyExoticComponent } from "react"
+import type { ComponentType } from "react"
 import type { Json, WidgetNode } from "./schema"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
 export type WidgetProps<V = Json, P extends Record<string, unknown> = Record<string, Json>> = {
   /** Current value (JSON). */
@@ -31,11 +32,11 @@ function nameOf(path: string): string {
   return path.split("/").at(-2) ?? path
 }
 
-const registry = new Map<string, LazyExoticComponent<AnyWidget>>(
-  Object.entries(modules).map(([path, load]) => [nameOf(path), lazy(load)]),
+const registry = new Map<string, AnyWidget>(
+  Object.entries(modules).map(([path, load]) => [nameOf(path), retryableLazy(load)]),
 )
 
-export function getWidget(name: string): LazyExoticComponent<AnyWidget> | undefined {
+export function getWidget(name: string): AnyWidget | undefined {
   return registry.get(name)
 }
 

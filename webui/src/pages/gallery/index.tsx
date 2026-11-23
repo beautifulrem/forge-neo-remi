@@ -9,7 +9,7 @@
  */
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { Columns2, Download, GalleryVerticalEnd, Images, RefreshCw, Star, StarOff, Trash2, X } from "@/components/icons"
-import { lazy, Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
@@ -32,9 +32,10 @@ import { GalleryToolbar } from "@/features/library/GalleryToolbar"
 import { asResult, downloadZip, galleryKeys, galleryListQuery, openInPngInfo, removeOutputs, starOutputs } from "@/features/library/queries"
 import { EMPTY_SELECTION, modeOf, ordered, prune, select, selectAll, type Selection } from "@/features/library/selection"
 import { sendToReferenceWithFeedback } from "@/features/send-to/result-actions"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
-const Lightbox = lazy(() => import("@/features/lightbox/Lightbox").then((m) => ({ default: m.Lightbox })))
-const CompareDialog = lazy(() => import("@/features/library/CompareDialog").then((m) => ({ default: m.CompareDialog })))
+const Lightbox = retryableLazy(() => import("@/features/lightbox/Lightbox").then((m) => ({ default: m.Lightbox })))
+const CompareDialog = retryableLazy(() => import("@/features/library/CompareDialog").then((m) => ({ default: m.CompareDialog })))
 
 function BulkBar(props: {
   count: number

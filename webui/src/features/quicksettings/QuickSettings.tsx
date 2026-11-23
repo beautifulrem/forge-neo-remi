@@ -5,7 +5,7 @@
  * page. The model bar next to it covers checkpoint, VAE / TE, dtype, preset.
  */
 import { Loader2, Settings2, Zap } from "@/components/icons"
-import { lazy, Suspense } from "react"
+import { Suspense } from "react"
 import { useTranslation } from "react-i18next"
 import { optionsQuery, queryClient } from "@/api/queries"
 import { navigate } from "@/app/router"
@@ -15,8 +15,9 @@ import { usePopupTooltip } from "@/components/popup-tooltip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useQuickKeys } from "./pinned"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
-const QuickSettingsPanel = lazy(() => import("./QuickSettingsPanel"))
+const QuickSettingsPanel = retryableLazy(() => import("./QuickSettingsPanel"))
 const preloadPanel = () => {
   void import("./QuickSettingsPanel")
   void queryClient.prefetchQuery(optionsQuery)

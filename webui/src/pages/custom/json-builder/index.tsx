@@ -8,7 +8,7 @@
  * JSON files. The draft is kept in the browser (`./store`).
  */
 import { Braces, ClipboardCopy, Expand, FileDown, FileInput, FileUp, Images, Pencil, Plus, Ratio, Trash2, Wand, X } from "@/components/icons"
-import { lazy, Suspense, useId, useRef, useState } from "react"
+import { Suspense, useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import type { FormTab } from "@/api/types"
@@ -34,9 +34,10 @@ import { useBuilder } from "./store"
 import { decompileVglPrompt, isVglPrompt, VGL_LICENSE, VGL_STYLE_MEDIUMS } from "./vgl"
 import { itemColor } from "./view"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
 /** The field editor, a lazy chunk (it carries CodeMirror): mounted only while a field is open in it. */
-const FieldEditor = lazy(() => import("./FieldEditor").then((m) => ({ default: m.FieldEditor })))
+const FieldEditor = retryableLazy(() => import("./FieldEditor").then((m) => ({ default: m.FieldEditor })))
 
 const CANVAS_NAMES: Record<CanvasType, string> = { single: "Single", multi_panel: "Multi-panel", collage: "Collage" }
 

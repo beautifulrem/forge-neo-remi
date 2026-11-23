@@ -1,4 +1,4 @@
-import { lazy, Suspense, use, useId, useRef } from "react"
+import { Suspense, use, useId, useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -11,9 +11,10 @@ import { Field } from "../Field"
 import { placeholderText } from "../placeholder"
 import type { TextNode } from "../schema"
 import { useFallbackName } from "../fallback-name"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
 // CodeMirror is a separate chunk, fetched when the first prompt field mounts.
-const PromptEditor = lazy(() => import("../prompt/PromptEditor"))
+const PromptEditor = retryableLazy(() => import("../prompt/PromptEditor"))
 
 const LINE_HEIGHT_REM = 1.25
 

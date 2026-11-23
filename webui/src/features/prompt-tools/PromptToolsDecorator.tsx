@@ -4,13 +4,14 @@
  * tools bar under them. Small and in the shell; the bar and the chips view
  * are lazy chunks loaded once the server says the tools are on.
  */
-import { lazy, Suspense } from "react"
+import { Suspense } from "react"
 import type { PromptDecoratorProps } from "@/features/prompt-editor/decorators"
 import { useToolsConfig } from "./queries"
 import { usePromptViews, viewKey } from "./view-store"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
-const PromptToolbar = lazy(() => import("./PromptToolbar"))
-const ChipsView = lazy(() => import("./chips/ChipsView"))
+const PromptToolbar = retryableLazy(() => import("./PromptToolbar"))
+const ChipsView = retryableLazy(() => import("./chips/ChipsView"))
 
 export function PromptToolsDecorator(props: PromptDecoratorProps) {
   const config = useToolsConfig()

@@ -34,7 +34,7 @@ const loaders = {
 
 // a page whose chunk failed to load is fetched again by the page boundary's "Try again"
 const pages = Object.fromEntries(
-  Object.entries(loaders).map(([name, load]) => [name, retryableLazy<{ route: never }>(load)]),
+  Object.entries(loaders).map(([name, load]) => [name, retryableLazy<ComponentType<{ route: never }>>(load)]),
 ) as Record<Route["name"], ComponentType<{ route: never }>>
 
 /** The page component for a route; every page receives its own route variant. */

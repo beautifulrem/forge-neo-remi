@@ -7,7 +7,7 @@
  */
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { Ban, BookOpen, Eraser, GitMerge, Import, Infinity as InfinityIcon, ListOrdered, MoreHorizontal, Pause, Play, Search, Star } from "@/components/icons"
-import { lazy, Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
 import { queueItemsQuery } from "@/api/queries"
@@ -43,10 +43,11 @@ import { PendingList } from "@/features/queue/PendingList"
 import { act, HISTORY_STATUSES, type HistoryFilter, historyQuery } from "@/features/queue/queries"
 import { RunningCard } from "@/features/queue/RunningCard"
 import { useQueueStatus } from "@/features/queue/status"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
-const Lightbox = lazy(() => import("@/features/lightbox/Lightbox").then((m) => ({ default: m.Lightbox })))
-const PipelineBuilder = lazy(() => import("@/features/pipelines/PipelineBuilder").then((m) => ({ default: m.PipelineBuilder })))
-const RecipeManager = lazy(() => import("@/features/recipes/RecipeManager").then((m) => ({ default: m.RecipeManager })))
+const Lightbox = retryableLazy(() => import("@/features/lightbox/Lightbox").then((m) => ({ default: m.Lightbox })))
+const PipelineBuilder = retryableLazy(() => import("@/features/pipelines/PipelineBuilder").then((m) => ({ default: m.PipelineBuilder })))
+const RecipeManager = retryableLazy(() => import("@/features/recipes/RecipeManager").then((m) => ({ default: m.RecipeManager })))
 
 type QueueViewMode = "queue" | "pipelines" | "recipes"
 

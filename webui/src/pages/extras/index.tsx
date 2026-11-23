@@ -6,7 +6,7 @@
  * runs stay in a strip below.
  */
 import { Ban, ImageIcon, ImageUpscale, Loader2, Maximize2 } from "@/components/icons"
-import { lazy, Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
 import { progressFraction, runningFor, useProgress } from "@/api/progress"
@@ -33,8 +33,9 @@ import { DEFAULT_SLOT } from "@/ui/form-index"
 import { getFormStore } from "@/ui/form-store"
 import { ScriptsProvider, Slot } from "@/ui/layout/Slot"
 import { RenderLayout } from "@/ui/Renderer"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
-const Lightbox = lazy(() => import("@/features/lightbox/Lightbox").then((m) => ({ default: m.Lightbox })))
+const Lightbox = retryableLazy(() => import("@/features/lightbox/Lightbox").then((m) => ({ default: m.Lightbox })))
 
 wireExtrasRuns()
 

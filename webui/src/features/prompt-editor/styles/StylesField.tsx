@@ -4,7 +4,7 @@
  * selection) and the style editor.
  */
 import { Pencil, Stamp } from "@/components/icons"
-import { lazy, Suspense, useState } from "react"
+import { Suspense, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useForm, useFormState } from "@/ui/hooks"
 import { RenderNode } from "@/ui/Renderer"
 import type { MultiChoiceNode } from "@/ui/schema"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
 type StylesFieldProps = {
   node: MultiChoiceNode
@@ -21,7 +22,7 @@ type StylesFieldProps = {
   negative?: string
 }
 
-const StyleEditorDialog = lazy(() => import("./StyleEditorDialog").then((m) => ({ default: m.StyleEditorDialog })))
+const StyleEditorDialog = retryableLazy(() => import("./StyleEditorDialog").then((m) => ({ default: m.StyleEditorDialog })))
 
 function ToolButton({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
   return (

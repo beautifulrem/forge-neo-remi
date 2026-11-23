@@ -11,13 +11,14 @@
  *   onLayerChange={(_, id) => set({ mask: id })} height={320} />
  * ```
  */
-import { lazy, Suspense } from "react"
+import { Suspense } from "react"
 import { clientOption } from "@/api/app-options"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import type { ImageEditorProps } from "./types"
+import { retryableLazy } from "@/lib/retryable-lazy"
 
-const Editor = lazy(() => import("./ui/Editor"))
+const Editor = retryableLazy(() => import("./ui/Editor"))
 
 export function ImageEditor(props: ImageEditorProps) {
   return (
