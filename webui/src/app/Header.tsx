@@ -46,7 +46,8 @@ function ConnectionDot() {
             className={cn(
               "size-1.5 rounded-full",
               status === "open" && "bg-success",
-              (status === "connecting" || status === "idle" || status === "reconnecting") && "animate-pulse bg-warning",
+              // still, not pulsing: a reconnect can last as long as a job runs
+              (status === "connecting" || status === "idle" || status === "reconnecting") && "bg-warning",
               status === "closed" && "bg-destructive",
             )}
           />

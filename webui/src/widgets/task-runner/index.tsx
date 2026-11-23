@@ -10,7 +10,7 @@
  *          variant?: "primary" | "secondary" (default "primary"), interval?: number (ms, 750) }
  * value: unused (null)
  */
-import { Loader2, Play, X } from "@/components/icons"
+import { Hourglass, Loader2, Play, X } from "@/components/icons"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { ActionExtra } from "@/api/types"
@@ -93,7 +93,8 @@ export default function TaskRunner({ props, disabled, id }: WidgetProps<null, Pr
           aria-busy={active || undefined}
           onClick={() => void start()}
         >
-          {active ? <Loader2 className="animate-spin" aria-hidden /> : <Play aria-hidden />}
+          {/* a task can run for minutes: once it reports, its bar shows the motion and the button holds still */}
+          {active ? status ? <Hourglass aria-hidden /> : <Loader2 className="animate-spin" aria-hidden /> : <Play aria-hidden />}
           {label}
         </Button>
         {active && status ? (

@@ -5,7 +5,7 @@
  * Bits". While the server loads a model, `model.loading` shows its stage.
  */
 import { useQuery } from "@tanstack/react-query"
-import { Box, CircleHelp, Layers, Loader2, SlidersHorizontal } from "@/components/icons"
+import { Box, CircleHelp, Hourglass, Layers, Loader2, SlidersHorizontal } from "@/components/icons"
 import { useEffect, useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useClientOption } from "@/api/app-options"
@@ -84,7 +84,10 @@ function CheckpointPicker({ className }: { className?: string }) {
       onValueChange={(name) => name !== current && write.mutate(name)}
       disabled={write.isPending}
       prefix={
-        busy ? (
+        // loading a model can take minutes: a still mark then, a spinner only for the short write
+        loading !== null ? (
+          <Hourglass className="size-3.5 shrink-0 text-primary" aria-hidden />
+        ) : busy ? (
           <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" aria-hidden />
         ) : (
           <Box className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
@@ -177,7 +180,7 @@ function ModulesPicker({ className, segmented = false }: { className?: string; s
               return (
                 <div key={m.value} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-accent">
                   <Checkbox id={checkId} checked={selected.includes(m.value)} onCheckedChange={(on) => toggle(m.value, on)} />
-                  <label htmlFor={checkId} className={cn("min-w-0 flex-1 truncate text-sm", m.missing && "text-muted-foreground line-through")}>
+                  <label htmlFor={checkId} className={cn("min-w-0 flex-1 truncate text-sm", m.missing && "text-muted-foreground line-through")} title={m.label}>
                     {m.label}
                   </label>
                   {m.size ? <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{m.size}</span> : null}
