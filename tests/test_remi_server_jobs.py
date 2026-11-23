@@ -681,6 +681,22 @@ def test_putting_the_completion_action_back_keeps_one_the_user_picked_meanwhile(
         assert changed == {} and ran == []
 
 
+def test_a_frozen_completion_action_put_back_before_it_ran_runs_after_the_next_job(webui, tmp_path, monkeypatch):
+    with server_app(tmp_path) as server:
+        queue = server.services.queue
+        _changed, ran = settings(queue, queue_completion_action="Shut down")
+        queue.set_option = lambda name, value: None  # frozen settings: the reset is refused
+        assert queue.wait_idle()
+        queue.recheck_done()  # the queue is done: the action is spent once...
+        assert ran == ["Shut down"]
+        rearm = _rearm_of(queue, monkeypatch)
+        busy = queue.add_busy_check(lambda: True)  # ...but work started before it ran
+        rearm("Shut down")
+        busy()
+        queue.recheck_done()
+        assert ran == ["Shut down", "Shut down"]
+
+
 def test_a_completion_action_put_back_after_the_queue_emptied_still_runs(webui, tmp_path, monkeypatch):
     with server_app(tmp_path) as server:
         queue = server.services.queue

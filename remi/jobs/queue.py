@@ -532,7 +532,11 @@ class JobQueue:
                 # never saved (the store failed). It is over; record it so it can go.
                 if self.get(job_id).status == RUNNING:
                     log.warning("job %s was left running by a store failure; it is marked interrupted", job_id)
-                    self.store.finish(job_id, INTERRUPTED, error="the job's end could not be saved")
+                    message = "the job's end could not be saved"
+                    ended = self.store.finish(job_id, INTERRUPTED, error=message)
+                    # whoever waits for it (a pipeline stage) learns that it ended, as from the worker
+                    self.bus.publish("job.failed", job_id=job.id, seq=job.seq, tab=job.tab, status=INTERRUPTED, error=message, errors=None)
+                    self._notify_finished(ended)
             if self.store.delete(job_id):
                 if job.status == QUEUED:
                     self._pending_done(job)
@@ -864,10 +868,14 @@ class JobQueue:
 
         def rearm(action: str) -> None:
             with self._done_lock:
-                if str(self.option("queue_completion_action", completion.NOTHING)) != completion.NOTHING:
-                    return  # the user picked an action meanwhile: theirs stands
+                current = str(self.option("queue_completion_action", completion.NOTHING))
+                # another action is the user's pick meanwhile: theirs stands. The same one is
+                # frozen settings keeping it (``_spent_action``): it has not run, so it is armed again.
+                if current not in (completion.NOTHING, self._spent_action):
+                    return
                 self._spent_action = None
-                self.set_option("queue_completion_action", action)
+                if current == completion.NOTHING:
+                    self.set_option("queue_completion_action", action)
             # the job that kept it waiting may have ended before the action was back: nothing
             # would run it then, so look again
             try:

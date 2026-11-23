@@ -66,8 +66,11 @@ def test_a_job_left_running_by_a_store_failure_can_be_deleted(tmp_path):
         [job] = queue.submit(Submission(tab="txt2img", core={"prompt": "fox"}, scripts={}))
         # the worker claimed it, then could not save its end: running in the store, on no worker
         assert jobs.claim_next().id == job.id
+        ended = []
+        queue.add_completion_hook(ended.append)  # a pipeline stage waiting for it
         queue.delete(job.id)
         assert jobs.get(job.id) is None
+        assert [(j.id, j.status) for j in ended] == [(job.id, "interrupted")]
     finally:
         jobs.close()
         files.close()
