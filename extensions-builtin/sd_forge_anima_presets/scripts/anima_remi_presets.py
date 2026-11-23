@@ -34,6 +34,7 @@ def owner_relative(patch: dict, owner: str) -> dict:
 class AnimaRemiPresetScript(scripts.Script):
     # Default section, below the panels the preset configures.
     sorting_priority = 100000
+    requires_capabilities = ("anima_hooks",)
 
     def title(self):
         return "Anima Remi Presets"

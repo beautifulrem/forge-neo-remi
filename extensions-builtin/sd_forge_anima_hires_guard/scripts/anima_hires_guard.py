@@ -59,6 +59,7 @@ class AnimaHiresGuardScript(scripts.Script):
     # Panel position only. The guard checks the final dimensions because it
     # runs in after_model_load, after the resolution randomizer's before_process.
     sorting_priority = 2100
+    requires_capabilities = ("anima_hooks",)
 
     def title(self):
         return "Anima Hires Guard"

@@ -49,23 +49,29 @@ def tab_schema(tab: str, ctx: Context | None = None) -> TabSchema:
 
     from modules import scripts
     from remi.core import extras
+    from remi.core.capabilities import active_capability_summary, derive_advice
 
     ctx = ctx or Context()
     runner = runner_for(tab)
     layout = forms.core_layout(tab, runner)
+    capabilities = active_capability_summary()
     if runner is None:
         script_entries = extras.scripts_schema(scripts.scripts_postproc, ctx)
     else:
-        script_entries = runner.scripts_schema(ctx)
+        script_entries = runner.scripts_schema(ctx, capability_summary=capabilities)
+    core_defaults = jsonable(layout.defaults(ctx))
     schema: TabSchema = {
         "version": SCHEMA_VERSION,
         "tab": tab,
-        "core": {"owner": "core", "layout": layout.schema(ctx), "defaults": jsonable(layout.defaults(ctx)), "required": forms.required_inputs(tab)},
+        "core": {"owner": "core", "layout": layout.schema(ctx), "defaults": core_defaults, "required": forms.required_inputs(tab)},
         "scripts": script_entries,
+        "capabilities": capabilities,
     }
     if runner is not None:
         layouts = {"core": layout, **{script.script_id: script.layout for script in runner.scripts if script.layout is not None}}
         schema["conflict_params"] = conflict_params(tab, layouts)
+        initial_values = {"core": core_defaults, **{entry["id"]: entry.get("defaults") or {} for entry in script_entries}}
+        schema["advice"] = derive_advice(tab, initial_values, preset=capabilities.get("preset"))
     return schema
 
 

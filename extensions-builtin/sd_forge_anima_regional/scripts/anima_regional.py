@@ -149,6 +149,7 @@ def _region_is_used(active, text, width, height, strength) -> bool:
 
 class AnimaRegionalScript(scripts.Script):
     sorting_priority = 2027
+    requires_capabilities = ("anima_hooks",)
 
     def title(self):
         return "Anima Regional Conditioning"

@@ -825,6 +825,7 @@ def guidance_params(title: str, *, hide_local_paths: bool) -> ui.Section:
 
 class AnimaGuidanceScript(scripts.Script):
     sorting_priority = 2030
+    requires_capabilities = ("anima_hooks",)
 
     def title(self):
         return "Anima Guidance & Corrections"

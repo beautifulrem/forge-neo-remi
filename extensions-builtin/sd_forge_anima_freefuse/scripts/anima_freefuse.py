@@ -116,6 +116,7 @@ class AnimaFreeFuseScript(scripts.Script):
     # Panel position only (sorting_priority orders the UI, not the hooks):
     # below Spectrum, Regional and Guidance, whose options conflict with it.
     sorting_priority = 2040
+    requires_capabilities = ("anima_hooks",)
 
     def title(self):
         return "Anima FreeFuse (multi-LoRA)"

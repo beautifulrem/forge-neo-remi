@@ -1083,6 +1083,7 @@ def _shifts(ctx):
 
 class Script(scripts.Script):
     param_order = PARAM_NAMES
+    requires_capabilities = ("anima_hooks",)
 
     def title(self):
         return _t("title")

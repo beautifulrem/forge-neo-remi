@@ -38,6 +38,7 @@ def _panel(ctx) -> str:
 
 class Script(scripts.Script):
     section = None
+    requires_capabilities = ("anima_hooks",)
 
     def __init__(self):
         _register_cfg_callback_once()

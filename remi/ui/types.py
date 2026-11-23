@@ -90,7 +90,43 @@ class PatchEntry(TypedDict, total=False):
 
 Patch: TypeAlias = dict[str, Any]
 """``{param | "owner.param": PatchEntry}`` plus the reserved ``__toast__``,
-``__outputs__`` and ``__settings__`` entries."""
+``__outputs__``, ``__settings__``, ``__refresh__``, ``__advice__``, and
+``__capabilities__`` entries."""
+
+
+class AdviceItemSchema(TypedDict):
+    """One pre-submit workflow advice chip (``TabSchema.advice`` / ``Patch.__advice__``)."""
+
+    code: str
+    severity: Literal["info", "warning", "error"]
+    message: str
+    patch: dict[str, Any] | None
+    action_label: NotRequired[str]
+
+
+class ModelCapabilitySchema(TypedDict, total=False):
+    """Active model capability metadata exposed on ``TabSchema.capabilities``."""
+
+    preset: str
+    dit_name: str | None
+    engine_label: str
+    capabilities: list[str]
+    max_references: int
+    reference_slot_format: str | None
+    reference_slot_start: int
+    supports_rgba: bool
+    supports_control_blocks: bool
+    supports_cfg_guidance: bool
+    supports_negative_prompt: bool
+    attention_backends: list[str]
+    quant_formats: list[str]
+    compile_preset: str | None
+    is_video: bool
+    frames: int
+    use_distill: bool
+    use_shift: bool
+    defaults: dict[str, Any]
+    badges: list[str]
 
 
 class ScriptEntry(TypedDict):
@@ -105,6 +141,9 @@ class ScriptEntry(TypedDict):
     layout: NodeSchema | None
     defaults: dict[str, Any]
     args: list[str]
+    requires_capabilities: NotRequired[list[str]]
+    applicable: NotRequired[bool]
+    inapplicable_reason: NotRequired[str]
 
 
 class RequiredInput(TypedDict):
@@ -126,3 +165,5 @@ class TabSchema(TypedDict):
     core: OwnerSchema
     scripts: list[ScriptEntry]
     conflict_params: NotRequired[list[str]]
+    capabilities: NotRequired[ModelCapabilitySchema]
+    advice: NotRequired[list[AdviceItemSchema]]

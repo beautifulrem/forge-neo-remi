@@ -103,6 +103,9 @@ class Script:
     layout = None
     """The ``remi.ui.ScriptLayout`` built from ``params()``."""
 
+    requires_capabilities: tuple[str, ...] = ()
+    """Model capability tokens required for this script to apply (e.g. ``("anima_hooks",)``)."""
+
     def title(self):
         """this function should return the title of the script. This is what will be displayed in the dropdown menu."""
 
@@ -810,13 +813,16 @@ class ScriptRunner:
             values[script.script_id] = self.layout_for(script).args_to_values(args[script.args_from : script.args_to], ctx)
         return selected, values
 
-    def scripts_schema(self, ctx: "Context | None" = None) -> list["ScriptEntry"]:
+    def scripts_schema(self, ctx: "Context | None" = None, *, active_capabilities=None, capability_summary=None) -> list["ScriptEntry"]:
         """The ``scripts`` part of ``GET /schema/{tab}`` (schema-format.md §4)."""
 
+        from remi.core.capabilities import active_capability_summary, script_applicability
         from remi.ui import Context, jsonable
 
         ctx = ctx or Context()
         self.ensure_arg_slots()
+        summary = capability_summary if capability_summary is not None else active_capability_summary()
+        active_caps = active_capabilities if active_capabilities is not None else summary.get("capabilities", ())
         result = []
         ordered = sorted(self.alwayson_scripts, key=lambda x: x.sorting_priority) + sorted(self.selectable_scripts, key=lambda x: x.sorting_priority)
         for script in ordered:
@@ -833,6 +839,7 @@ class ScriptRunner:
             if not script.alwayson:
                 entry["visible_if"] = {"param": "core.script", "eq": title}
             entry.update(layout=layout.schema(ctx), defaults=jsonable(layout.defaults(ctx)), args=layout.names)
+            entry.update(script_applicability(script, active_caps, summary=summary))
             result.append(entry)
         return result
 

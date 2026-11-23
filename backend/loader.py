@@ -1057,6 +1057,9 @@ def _additional_key_filter(path: os.PathLike, guess):
 
 def split_state_dict(path: os.PathLike, additional_state_dicts: list[os.PathLike] = None):
     from backend.nn.dit_registry import is_diffusers_checkpoint_dir
+    from backend.nn.model_capabilities import ensure_ext_capabilities_loaded
+
+    ensure_ext_capabilities_loaded()
 
     try:
         if is_diffusers_checkpoint_dir(path):

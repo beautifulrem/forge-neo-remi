@@ -740,6 +740,8 @@ def _param_rows():
 
 
 class Script(scripts.Script):
+    requires_capabilities = ("anima_hooks",)
+
     def title(self):
         return TITLE
 

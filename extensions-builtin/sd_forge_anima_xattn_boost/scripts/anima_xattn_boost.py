@@ -29,6 +29,7 @@ class AnimaXattnBoostScript(AnimaPatchPanel, scripts.Script):
     INFOTEXT_KEYS = INFOTEXT_KEYS
     PRESET_FIELDS = PRESET_FIELDS
     sorting_priority = 2029
+    requires_capabilities = ("anima_hooks",)
 
     def title(self):
         return "Anima Cross-Attention Boost"

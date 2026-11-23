@@ -131,4 +131,13 @@ def conflict_patch(tab: str, values: Mapping[str, Mapping[str, Any]], selected: 
         patch[_ref(*ref)] = entry
     if messages:
         patch["__toast__"] = {"level": "warning", "message": "Compatibility: " + "; ".join(messages)}
+
+    from remi.core.capabilities import derive_advice
+
+    effective_values: dict[str, dict[str, Any]] = {
+        owner: dict(owner_values) for owner, owner_values in values.items() if isinstance(owner_values, Mapping)
+    }
+    for (owner, name), resolved_value in state.items():
+        effective_values.setdefault(owner, {})[name] = resolved_value
+    patch["__advice__"] = derive_advice(tab, effective_values)
     return patch
