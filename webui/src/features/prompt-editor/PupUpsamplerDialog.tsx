@@ -9,7 +9,6 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { useClientOption } from "@/api/app-options"
 import { api } from "@/api/endpoints"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -148,17 +147,13 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <div className="flex flex-wrap items-center gap-2 pr-6">
+          <div className="flex flex-wrap items-baseline gap-2.5 pr-6">
             <DialogTitle>{t("Upsample prompt (PUP)")}</DialogTitle>
             {detectedFamily !== "auto" ? (
-              <Badge variant="outline" className="border-capability-badge-border bg-capability-badge-bg text-capability-badge">
-                {PUP_FAMILY_LABELS[detectedFamily]}
-              </Badge>
+              <span className="font-mono text-xs text-muted-foreground">{PUP_FAMILY_LABELS[detectedFamily]}</span>
             ) : null}
             {effectiveFamily === "fibo" ? (
-              <Badge variant="outline" className="border-advice-warn-border bg-advice-warn-bg text-advice-warn">
-                CC BY-NC 4.0
-              </Badge>
+              <span className="font-mono text-xs font-medium text-advice-warn">CC BY-NC 4.0</span>
             ) : null}
           </div>
           <DialogDescription>
@@ -257,22 +252,25 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
 
           {result ? (
             <div className="flex flex-col gap-2 border-t border-border pt-3">
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                <Badge variant="outline" className="border-capability-badge-border bg-capability-badge-bg text-capability-badge">
-                  {PUP_FAMILY_LABELS[result.model_family as PupFamily] ?? result.model_family}
-                </Badge>
-                <Badge variant="secondary">{result.mode}</Badge>
+              <div className="flex flex-wrap items-center gap-2 font-mono text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">{PUP_FAMILY_LABELS[result.model_family as PupFamily] ?? result.model_family}</span>
+                <span aria-hidden className="size-0.5 rounded-full bg-muted-foreground/50" />
+                <span>{result.mode}</span>
+                <span aria-hidden className="size-0.5 rounded-full bg-muted-foreground/50" />
                 <span>{result.backend}</span>
                 {result.used_reference_count > 0 ? (
-                  <span className="tabular-nums">{t("{{count}} reference images attached", { count: result.used_reference_count })}</span>
+                  <>
+                    <span aria-hidden className="size-0.5 rounded-full bg-muted-foreground/50" />
+                    <span className="tabular-nums">{t("{{count}} reference images attached", { count: result.used_reference_count })}</span>
+                  </>
                 ) : null}
-                <Button type="button" variant="ghost" size="xs" className="ml-auto" onClick={() => setEditing((v) => !v)}>
+                <Button type="button" variant="ghost" size="xs" className="ml-auto font-sans" onClick={() => setEditing((v) => !v)}>
                   {editing ? t("Show diff") : t("Edit result")}
                 </Button>
               </div>
 
               {result.warnings.length > 0 ? (
-                <div className="flex flex-col gap-1 rounded-md border border-advice-warn-border bg-advice-warn-bg px-2.5 py-1.5 text-xs text-advice-warn">
+                <div className="flex flex-col gap-1 rounded-r-sm border-l-2 border-l-advice-warn bg-advice-warn-bg px-2.5 py-1.5 text-xs text-advice-warn">
                   {result.warnings.map((warn, i) => (
                     <div key={i} className="flex items-start gap-1.5">
                       <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
@@ -291,9 +289,12 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
                   className="max-h-64 font-sans text-sm"
                 />
               ) : (
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-2" aria-label={t("Before and after comparison")}>
-                  <div className="flex min-w-0 flex-col gap-1 rounded-md border border-border bg-muted/30 p-2.5">
-                    <span className="text-xs font-medium text-muted-foreground">{t("Before")}</span>
+                <div
+                  className="grid grid-cols-1 divide-y divide-border overflow-hidden rounded-md border border-border bg-muted/25 md:grid-cols-2 md:divide-x md:divide-y-0"
+                  aria-label={t("Before and after comparison")}
+                >
+                  <div className="flex min-w-0 flex-col gap-1.5 p-3">
+                    <span className="font-mono text-[0.6875rem] font-medium tracking-tight text-muted-foreground">{t("Before")}</span>
                     <div className="-mx-1 max-h-56 overflow-y-auto px-1 text-sm leading-relaxed break-words whitespace-pre-wrap">
                       {diff.map((seg, index) =>
                         seg.kind === "add" ? null : (
@@ -304,8 +305,8 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
                       )}
                     </div>
                   </div>
-                  <div className="flex min-w-0 flex-col gap-1 rounded-md border border-border bg-muted/30 p-2.5">
-                    <span className="text-xs font-medium text-muted-foreground">{t("After")}</span>
+                  <div className="flex min-w-0 flex-col gap-1.5 p-3">
+                    <span className="font-mono text-[0.6875rem] font-medium tracking-tight text-muted-foreground">{t("After")}</span>
                     <div className="-mx-1 max-h-56 overflow-y-auto px-1 text-sm leading-relaxed break-words whitespace-pre-wrap">
                       {diff.map((seg, index) =>
                         seg.kind === "del" ? null : (

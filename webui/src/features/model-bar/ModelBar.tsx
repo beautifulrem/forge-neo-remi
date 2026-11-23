@@ -12,7 +12,6 @@ import { useClientOption } from "@/api/app-options"
 import { useProgress } from "@/api/progress"
 import { modelsQuery } from "@/api/queries"
 import { SearchSelect } from "@/components/SearchSelect"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -95,7 +94,7 @@ function CheckpointPicker({ className }: { className?: string }) {
   )
 }
 
-function ModulesPicker({ className }: { className?: string }) {
+function ModulesPicker({ className, segmented = false }: { className?: string; segmented?: boolean }) {
   const { t } = useTranslation()
   const id = useId()
   const models = useQuery(modelsQuery)
@@ -145,14 +144,19 @@ function ModulesPicker({ className }: { className?: string }) {
     <Popover onOpenChange={(open) => !open && commit()}>
       <PopoverTrigger
         render={
-          <Button variant="ghost" size="sm" className={cn(FIELD_BUTTON_CLASS, "gap-1.5 font-normal", className)} aria-label={t("VAE / Text encoders")} />
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(segmented ? "rounded-none bg-transparent hover:bg-field-hover focus-visible:z-10" : FIELD_BUTTON_CLASS, "gap-1.5 px-2 font-normal", className)}
+            aria-label={t("VAE / Text encoders")}
+          />
         }
       >
         <Layers className="text-muted-foreground" aria-hidden />
         <span className="hidden 2xl:inline">{t("VAE / TE")}</span>
-        <Badge variant={selected.length > 0 ? "default" : "secondary"} className="h-4 min-w-4 px-1 text-[0.625rem] tabular-nums">
+        <span className={cn("font-mono text-xs tabular-nums", selected.length > 0 ? "font-semibold text-primary" : "text-muted-foreground")}>
           {selected.length}
-        </Badge>
+        </span>
       </PopoverTrigger>
       <PopoverContent aria-labelledby={`${id}-title`} align="end" className="w-[min(26rem,calc(100vw-2rem))] gap-2 p-2">
         <div className="flex items-center justify-between gap-2 px-1">
@@ -245,7 +249,7 @@ function LoadingStatus({ className }: { className?: string }) {
   )
 }
 
-/** Compact metadata badges for the active checkpoint/preset (`Diffusers`, `FP8`, `INT8-ConvRot`, `Turbo`, `RGBA`, …). */
+/** Quiet inline mono capability tags for the active checkpoint/preset (`Diffusers`, `FP8`, `Turbo`, `RGBA`, …). */
 function ModelBadges({ className, limit }: { className?: string; limit?: number }) {
   const { t } = useTranslation()
   const checkpoint = useClientOption("sd_model_checkpoint")
@@ -258,18 +262,16 @@ function ModelBadges({ className, limit }: { className?: string; limit?: number 
   if (all.length === 0) return null
   const shown = limit ? all.slice(0, limit) : all
   return (
-    <div aria-label={t("Model capabilities")} data-slot="model-badges" className={cn("flex shrink-0 flex-wrap items-center gap-1", className)}>
-      {shown.map((badge) => (
-        <Badge
-          key={badge.label}
-          variant="outline"
-          className={cn(
-            "h-5 border-capability-badge-border bg-capability-badge-bg px-1.5 text-[0.625rem] font-medium tracking-tight text-capability-badge",
-            badge.kind === "variant" && "border-primary/25 bg-primary/10 text-primary",
-          )}
-        >
-          {badge.label}
-        </Badge>
+    <div
+      aria-label={t("Model capabilities")}
+      data-slot="model-badges"
+      className={cn("flex shrink-0 flex-wrap items-center gap-1.5 font-mono text-[0.6875rem] tracking-tight", className)}
+    >
+      {shown.map((badge, index) => (
+        <span key={badge.label} className="inline-flex items-center gap-1.5">
+          {index > 0 ? <span aria-hidden className="size-0.5 rounded-full bg-muted-foreground/50" /> : null}
+          <span className={badge.kind === "variant" ? "font-medium text-primary" : "text-muted-foreground"}>{badge.label}</span>
+        </span>
       ))}
     </div>
   )
@@ -306,12 +308,18 @@ function ModelSettingsPopover({ className }: { className?: string }) {
 export default function ModelBar() {
   const { t } = useTranslation()
   return (
-    <div role="group" aria-label={t("Model")} className="flex min-w-0 items-center gap-1.5">
-      <PresetSelect className="hidden xl:flex" />
-      <CheckpointPicker className="w-[min(22rem,36vw)]" />
+    <div role="group" aria-label={t("Model")} className="flex min-w-0 items-center gap-2">
+      {/* Unified recessed studio instrument strip: one surface, crisp hairlines, unclipped focus rings */}
+      <div className="flex h-7 min-w-0 items-center rounded-sm bg-field">
+        <PresetSelect className="hidden min-w-20 rounded-none rounded-l-sm bg-transparent hover:bg-field-hover focus-visible:z-10 xl:flex" />
+        <span aria-hidden className="hidden h-3.5 w-px shrink-0 bg-border xl:block" />
+        <CheckpointPicker className="w-[min(22rem,34vw)] rounded-sm bg-transparent hover:bg-field-hover focus-visible:z-10 xl:rounded-none" />
+        <span aria-hidden className="hidden h-3.5 w-px shrink-0 bg-border xl:block" />
+        <ModulesPicker segmented className="hidden xl:inline-flex" />
+        <span aria-hidden className="hidden h-3.5 w-px shrink-0 bg-border xl:block" />
+        <DtypeSelect className="hidden rounded-none rounded-r-sm bg-transparent hover:bg-field-hover focus-visible:z-10 xl:flex" />
+      </div>
       <ModelBadges className="hidden 2xl:flex" limit={3} />
-      <ModulesPicker className="hidden xl:inline-flex" />
-      <DtypeSelect className="hidden xl:flex" />
       <WorkerHealthPill className="hidden xl:inline-flex" />
       <ModelSettingsPopover className="xl:hidden" />
       <LoadingStatus className="sr-only" />

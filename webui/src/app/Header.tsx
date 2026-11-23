@@ -39,10 +39,10 @@ function ConnectionDot() {
         {label}
       </span>
       <Tooltip>
-        <TooltipTrigger render={<span aria-hidden className="grid size-8 place-items-center rounded-lg" />}>
+        <TooltipTrigger render={<span aria-hidden className="grid size-7 place-items-center rounded-sm" />}>
           <span
             className={cn(
-              "size-2 rounded-full",
+              "size-1.5 rounded-full",
               status === "open" && "bg-success",
               (status === "connecting" || status === "idle" || status === "reconnecting") && "animate-pulse bg-warning",
               status === "closed" && "bg-destructive",

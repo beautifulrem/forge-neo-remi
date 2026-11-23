@@ -8,7 +8,6 @@ import { Collapsible } from "@base-ui/react/collapsible"
 import { ChevronDown, Info, ListFilter, RotateCcw, Search } from "@/components/icons"
 import { useId, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Toggle } from "@/components/ui/toggle"
@@ -127,10 +126,8 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
           <div className="flex min-h-8 items-center gap-2">
             <Collapsible.Trigger className={cn("group/trigger flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50", panelTitleClass(0))}>
               <span id={`${id}-title`}>{t("Extensions")}</span>
-              <Badge variant="secondary" className="tabular-nums">
-                {listed.length}
-              </Badge>
-              {activeCount > 0 ? <Badge className="tabular-nums">{t("{{count}} on", { count: activeCount })}</Badge> : null}
+              <span className="font-mono text-xs font-normal text-muted-foreground tabular-nums">{listed.length}</span>
+              {activeCount > 0 ? <span className="font-mono text-xs font-medium text-primary tabular-nums">{t("{{count}} on", { count: activeCount })}</span> : null}
               <ChevronDown aria-hidden className="ml-auto size-4 shrink-0 -rotate-90 text-muted-foreground transition-transform duration-150 group-data-[panel-open]/trigger:rotate-0" />
             </Collapsible.Trigger>
             {modifiedSet.size > 0 ? (
@@ -195,13 +192,11 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
               >
                 <Collapsible.Trigger className="group/inapp flex min-h-7 w-full items-center gap-2 rounded-sm text-left text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
                   <span className="truncate">{t("Not applicable for active model")}</span>
-                  <Badge variant="outline" className="h-4 border-border px-1.5 text-[0.625rem] text-muted-foreground tabular-nums">
-                    {shownInapplicable.length}
-                  </Badge>
+                  <span className="font-mono text-xs font-normal text-muted-foreground tabular-nums">{shownInapplicable.length}</span>
                   {inapplicableActiveCount > 0 ? (
-                    <Badge variant="outline" className="h-4 border-advice-warn-border bg-advice-warn-bg px-1.5 text-[0.625rem] text-advice-warn tabular-nums">
+                    <span className="font-mono text-xs font-medium text-advice-warn tabular-nums">
                       {t("{{count}} on", { count: inapplicableActiveCount })}
-                    </Badge>
+                    </span>
                   ) : null}
                   <ChevronDown aria-hidden className="ml-auto size-3.5 shrink-0 -rotate-90 transition-transform duration-150 group-data-[panel-open]/inapp:rotate-0" />
                 </Collapsible.Trigger>

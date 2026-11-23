@@ -12,7 +12,6 @@ import { lazy, Suspense, useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import type { FormTab } from "@/api/types"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -336,12 +335,10 @@ function VglSettings({ id }: { id: string }) {
   const mediumItems = VGL_STYLE_MEDIUMS.map((value) => ({ value, label: value }))
 
   return (
-    <div data-slot="vgl-schema-controls" className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2 rounded-md border border-advice-warn-border bg-advice-warn-bg px-2.5 py-1.5 text-xs text-advice-warn">
-        <Badge variant="outline" className="h-4 border-advice-warn-border bg-background/60 px-1.5 text-[0.625rem] font-semibold text-advice-warn">
-          {VGL_LICENSE}
-        </Badge>
-        <span className="min-w-0 flex-1">
+    <div data-slot="vgl-schema-controls" className="flex flex-col gap-2.5">
+      <div className="flex items-baseline gap-2 rounded-r-sm border-l-2 border-l-advice-warn bg-muted/45 px-2.5 py-1.5 text-xs leading-snug">
+        <span className="shrink-0 font-mono text-[0.6875rem] font-semibold tracking-tight text-advice-warn">{VGL_LICENSE}</span>
+        <span className="min-w-0 flex-1 text-muted-foreground">
           {t("Bria Fibo 2.0 VGL 2.0 JSON: non-commercial weights (CC BY-NC 4.0) unless commercially licensed.")}
         </span>
       </div>
@@ -364,24 +361,24 @@ function VglSettings({ id }: { id: string }) {
           </Select>
         </div>
         <div className="flex min-w-0 flex-col gap-1">
-          <FieldLabel htmlFor={`${id}-vgl-bg`}>{t("Background setting")}</FieldLabel>
-          <Input id={`${id}-vgl-bg`} value={vgl.backgroundSetting} onChange={(e) => setVgl({ backgroundSetting: e.target.value })} />
-        </div>
-        <div className="flex min-w-0 flex-col gap-1">
           <FieldLabel htmlFor={`${id}-vgl-light`}>{t("Lighting")}</FieldLabel>
-          <Input id={`${id}-vgl-light`} value={vgl.lightingConditions} onChange={(e) => setVgl({ lightingConditions: e.target.value })} />
+          <Input id={`${id}-vgl-light`} title={vgl.lightingConditions} value={vgl.lightingConditions} onChange={(e) => setVgl({ lightingConditions: e.target.value })} />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1 sm:col-span-2">
+          <FieldLabel htmlFor={`${id}-vgl-bg`}>{t("Background setting")}</FieldLabel>
+          <Input id={`${id}-vgl-bg`} title={vgl.backgroundSetting} value={vgl.backgroundSetting} onChange={(e) => setVgl({ backgroundSetting: e.target.value })} />
         </div>
         <div className="flex min-w-0 flex-col gap-1">
           <FieldLabel htmlFor={`${id}-vgl-mood`}>{t("Mood and atmosphere")}</FieldLabel>
-          <Input id={`${id}-vgl-mood`} value={vgl.moodAtmosphere} onChange={(e) => setVgl({ moodAtmosphere: e.target.value })} />
+          <Input id={`${id}-vgl-mood`} title={vgl.moodAtmosphere} value={vgl.moodAtmosphere} onChange={(e) => setVgl({ moodAtmosphere: e.target.value })} />
         </div>
         <div className="flex min-w-0 flex-col gap-1">
           <FieldLabel htmlFor={`${id}-vgl-angle`}>{t("Camera angle")}</FieldLabel>
-          <Input id={`${id}-vgl-angle`} value={vgl.cameraAngle} onChange={(e) => setVgl({ cameraAngle: e.target.value })} />
+          <Input id={`${id}-vgl-angle`} title={vgl.cameraAngle} value={vgl.cameraAngle} onChange={(e) => setVgl({ cameraAngle: e.target.value })} />
         </div>
-        <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1 sm:col-span-2">
           <FieldLabel htmlFor={`${id}-vgl-lens`}>{t("Lens focal length")}</FieldLabel>
-          <Input id={`${id}-vgl-lens`} value={vgl.lensFocalLength} onChange={(e) => setVgl({ lensFocalLength: e.target.value })} />
+          <Input id={`${id}-vgl-lens`} title={vgl.lensFocalLength} value={vgl.lensFocalLength} onChange={(e) => setVgl({ lensFocalLength: e.target.value })} />
         </div>
       </div>
     </div>
@@ -678,7 +675,7 @@ export default function JsonBuilderPage(_props: CustomPageProps) {
           <ItemsSection activeId={activeId} onActivate={setActiveId} onEditField={setEditField} missing={missing} expanded={itemsExpanded} onToggleExpand={() => setItemsExpanded((v) => !v)} />
           {/* pinned to the bottom of the page (phone) or of the scrolling side column (lg+): the send buttons stay in reach */}
           <div className="sticky bottom-0 z-10 flex gap-2 border-t border-border/70 bg-background py-2 lg:border-t-0 lg:pt-2 lg:pb-0" data-toast-obstacle>
-            <Button className="flex-1" onClick={() => send("txt2img")}>
+            <Button variant="glow" className="flex-1 font-semibold" onClick={() => send("txt2img")}>
               <Wand aria-hidden />
               {t("Send to txt2img")}
             </Button>

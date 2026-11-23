@@ -36,11 +36,11 @@ function Slider({
       <SliderPrimitive.Control className="relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col">
         <SliderPrimitive.Track
           data-slot="slider-track"
-          className="relative grow overflow-hidden rounded-[2px] bg-(--slider-groove) shadow-[inset_0_1px_1.5px_var(--slider-groove-shade)] select-none data-horizontal:h-1.5 data-horizontal:w-full data-vertical:h-full data-vertical:w-1.5"
+          className="relative grow overflow-hidden rounded-full bg-(--slider-groove) shadow-[inset_0_1px_1px_var(--slider-groove-shade)] select-none data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1"
         >
           <SliderPrimitive.Indicator
             data-slot="slider-range"
-            className="bg-primary select-none data-horizontal:h-full data-vertical:w-full"
+            className="bg-primary/85 transition-colors group-hover/slider:bg-primary select-none data-horizontal:h-full data-vertical:w-full"
           />
         </SliderPrimitive.Track>
         {Array.from({ length: _values.length }, (_, index) => (
@@ -50,8 +50,8 @@ function Slider({
             getAriaLabel={getAriaLabel}
             getAriaValueText={getAriaValueText}
             className={cn(
-              "group/cap relative block h-5 w-3 shrink-0 rounded-[3px] border border-(--slider-cap-edge) bg-(--slider-cap) shadow-[0_1px_2px_var(--slider-cap-shade)] ring-ring/45 transition-[border-color,box-shadow] select-none",
-              "group-data-vertical/slider:h-3 group-data-vertical/slider:w-5",
+              "group/cap relative block h-4.5 w-2.5 shrink-0 rounded-[2.5px] border border-(--slider-cap-edge) bg-(--slider-cap) shadow-[0_1px_2px_var(--slider-cap-shade)] ring-ring/45 transition-[border-color,box-shadow] select-none",
+              "group-data-vertical/slider:h-2.5 group-data-vertical/slider:w-4.5",
               // the notch: across the cap, along the groove's normal
               "before:absolute before:top-1/2 before:left-1/2 before:h-2 before:w-px before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full before:bg-(--slider-notch) before:transition-colors",
               "group-data-vertical/slider:before:h-px group-data-vertical/slider:before:w-2",

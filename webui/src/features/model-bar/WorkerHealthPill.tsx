@@ -8,10 +8,8 @@ import { Cpu } from "@/components/icons"
 import { useId } from "react"
 import { useTranslation } from "react-i18next"
 import { apiUrl, MOCK } from "@/api/http"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { FIELD_BUTTON_CLASS } from "@/components/ui/select-styles"
 import { cn } from "@/lib/utils"
 import { type WorkersStatus, workersSummary } from "./model-badges"
 
@@ -86,30 +84,27 @@ export function WorkerHealthPill({ className }: { className?: string }) {
             variant="ghost"
             size="sm"
             aria-label={t("Worker status")}
-            className={cn(FIELD_BUTTON_CLASS, "gap-1.5 px-2 font-normal text-foreground", className)}
+            className={cn("gap-1.5 px-1.5 font-mono text-xs font-normal text-muted-foreground hover:text-foreground", className)}
           />
         }
       >
-        <span
-          aria-hidden
-          className={cn(
-            "size-1.5 shrink-0 rounded-full",
-            summary.tone === "ok" && "bg-success",
-            summary.tone === "warn" && "bg-warning",
-            summary.tone === "error" && "bg-destructive",
-          )}
-        />
-        <Cpu className="size-3.5 text-muted-foreground" aria-hidden />
-        <span className="text-xs font-medium tabular-nums">{summary.label}</span>
+        {/* Single status-dot rule: quiet monochrome readout when healthy; indicator only when degraded/failed. */}
+        {summary.tone !== "ok" ? (
+          <span
+            aria-hidden
+            data-slot="worker-alert-dot"
+            className={cn("size-1.5 shrink-0 rounded-full", summary.tone === "warn" ? "bg-warning" : "bg-destructive")}
+          />
+        ) : null}
+        <Cpu className="size-3.5 shrink-0" aria-hidden />
+        <span className="tabular-nums">{summary.label}</span>
       </PopoverTrigger>
       <PopoverContent aria-labelledby={`${id}-title`} align="end" className="w-[min(22rem,calc(100vw-2rem))] gap-2.5 p-3">
         <div className="flex items-center justify-between gap-2">
           <p id={`${id}-title`} className="text-sm font-semibold">
             {t("Inference workers")}
           </p>
-          <Badge variant="outline" className="border-capability-badge-border bg-capability-badge-bg text-capability-badge">
-            {t(MODE_LABELS[data.mode] ?? data.mode)}
-          </Badge>
+          <span className="font-mono text-[0.6875rem] text-muted-foreground">{t(MODE_LABELS[data.mode] ?? data.mode)}</span>
         </div>
         <ul className="flex flex-col gap-2">
           {data.workers.map((worker) => {
@@ -123,19 +118,17 @@ export function WorkerHealthPill({ className }: { className?: string }) {
               <li key={worker.worker_id} className="flex flex-col gap-1 border-t border-border/60 pt-2 first:border-t-0 first:pt-0">
                 <div className="flex items-center gap-1.5 text-xs">
                   <span className="truncate font-medium text-foreground">{worker.gpu_name || worker.device || worker.worker_id}</span>
-                  <Badge variant="secondary" className="ml-auto h-4 px-1.5 text-[0.625rem]">
-                    {worker.state}
-                  </Badge>
+                  <span className="ml-auto shrink-0 font-mono text-[0.6875rem] text-muted-foreground">{worker.state}</span>
                 </div>
                 {totalGb ? (
                   <div className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between text-[0.6875rem] text-muted-foreground tabular-nums">
+                    <div className="flex items-center justify-between font-mono text-[0.6875rem] text-muted-foreground tabular-nums">
                       <span>{freeGb ? t("{{free}} free of {{total}}", { free: freeGb, total: totalGb }) : totalGb}</span>
                       {typeof worker.jobs_completed === "number" ? <span>{t("{{count}} done", { count: worker.jobs_completed })}</span> : null}
                     </div>
                     {usedRatio !== null ? (
                       <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
-                        <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round(usedRatio * 100)}%` }} />
+                        <div className="h-full rounded-full bg-primary/85" style={{ width: `${Math.round(usedRatio * 100)}%` }} />
                       </div>
                     ) : null}
                   </div>
@@ -147,7 +140,7 @@ export function WorkerHealthPill({ className }: { className?: string }) {
         {data.mlx?.platform_supported ? (
           <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-2 text-xs text-muted-foreground">
             <span>{t("MLX sidecar")}</span>
-            <span className="font-medium text-foreground">{data.mlx.available ? t("Available") : t("Standby")}</span>
+            <span className="font-mono text-[0.6875rem] font-medium text-foreground">{data.mlx.available ? t("Available") : t("Standby")}</span>
           </div>
         ) : null}
       </PopoverContent>

@@ -8,8 +8,8 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary-hover",
-        // the light table: the one control that makes pictures
-        glow: "bg-glow text-glow-foreground hover:bg-[color-mix(in_oklch,var(--glow),var(--glow-foreground)_9%)] active:bg-[color-mix(in_oklch,var(--glow),var(--glow-foreground)_14%)]",
+        // the light table: the one machined keycap that makes pictures
+        glow: "border-glow-foreground/12 bg-glow text-glow-foreground hover:bg-[color-mix(in_oklch,var(--glow),var(--glow-foreground)_9%)] active:bg-[color-mix(in_oklch,var(--glow),var(--glow-foreground)_14%)]",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:

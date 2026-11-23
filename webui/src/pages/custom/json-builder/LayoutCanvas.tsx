@@ -345,7 +345,7 @@ export function LayoutCanvas({
     >
       <div
         ref={setStage}
-        className={cn("relative shrink-0 overflow-hidden border bg-muted/40 shadow-inner", view.scale > 1 && !panning && "cursor-grab")}
+        className={cn("relative shrink-0 overflow-hidden border border-border bg-muted/35", view.scale > 1 && !panning && "cursor-grab")}
         style={
           {
             width: fitted.width,
@@ -353,11 +353,16 @@ export function LayoutCanvas({
             transform: `translate(${view.panX}px, ${view.panY}px) scale(${view.scale})`,
             "--jb-text-scale": String(1 / Math.max(1, view.scale)),
             backgroundImage:
-              "linear-gradient(to right, color-mix(in oklch, var(--border) 70%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in oklch, var(--border) 70%, transparent) 1px, transparent 1px)",
+              "linear-gradient(to right, color-mix(in oklch, var(--border) 65%, transparent) 1px, transparent 1px), linear-gradient(to bottom, color-mix(in oklch, var(--border) 65%, transparent) 1px, transparent 1px)",
             backgroundSize: "16px 16px",
           } as CSSProperties
         }
       >
+        {/* Subtle drafting corner ticks */}
+        <span aria-hidden className="pointer-events-none absolute top-0 left-0 size-2.5 border-t-[1.5px] border-l-[1.5px] border-foreground/35" />
+        <span aria-hidden className="pointer-events-none absolute top-0 right-0 size-2.5 border-t-[1.5px] border-r-[1.5px] border-foreground/35" />
+        <span aria-hidden className="pointer-events-none absolute bottom-0 left-0 size-2.5 border-b-[1.5px] border-l-[1.5px] border-foreground/35" />
+        <span aria-hidden className="pointer-events-none absolute bottom-0 right-0 size-2.5 border-b-[1.5px] border-r-[1.5px] border-foreground/35" />
         {bg ? (
           <img
             src={bg.url}
@@ -405,14 +410,14 @@ export function LayoutCanvas({
         }}
       />
       <div className="absolute right-2 bottom-2 flex items-center gap-0.5 rounded-lg bg-background/90 p-0.5 shadow-sm">
-        <span className="px-1.5 text-xs text-muted-foreground tabular-nums">
+        <span className="px-1.5 font-mono text-xs text-muted-foreground tabular-nums">
           {width} × {height}
         </span>
         <span aria-hidden className="h-4 w-px bg-border" />
         <Button size="icon-xs" variant="ghost" aria-label={t("Zoom out")} title={t("Zoom out")} onClick={() => zoom(1 / ZOOM_STEP)}>
           <ZoomOut aria-hidden />
         </Button>
-        <span className="w-10 text-center text-xs text-muted-foreground tabular-nums">{Math.round(view.scale * 100)}%</span>
+        <span className="w-10 text-center font-mono text-xs text-muted-foreground tabular-nums">{Math.round(view.scale * 100)}%</span>
         <Button size="icon-xs" variant="ghost" aria-label={t("Zoom in")} title={t("Zoom in")} onClick={() => zoom(ZOOM_STEP)}>
           <ZoomIn aria-hidden />
         </Button>

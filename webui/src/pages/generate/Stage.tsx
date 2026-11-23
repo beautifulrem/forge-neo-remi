@@ -4,10 +4,11 @@
  * result), with step / percent / ETA over the image, the result actions and
  * the generation parameters.
  */
-import { ChevronDown, Expand, Radio, Wand } from "@/components/icons"
+import { ChevronDown, Expand, Radio } from "@/components/icons"
 import * as m from "motion/react-m"
 import { type ReactNode, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { useStore } from "zustand"
 import { useClientOption } from "@/api/app-options"
 import { api } from "@/api/endpoints"
 import { progressFraction, type RunningJob } from "@/api/progress"
@@ -23,8 +24,10 @@ import type { GenerateTab } from "@/features/progress/run-controller"
 import { useShowsStageProgress } from "@/features/progress/stage-overlay"
 import { ResultActions } from "@/features/send-to/ResultActions"
 import { Img2imgStage } from "@/canvas"
+import { getFormStore } from "@/ui/form-store"
 import { useOwnRunningJob } from "./hooks"
 import { LivePreview } from "./LivePreview"
+import { viewfinderMetrics } from "./viewfinder"
 
 function ProgressOverlay({ job, tab }: { job: RunningJob; tab: GenerateTab }) {
   const { t } = useTranslation()
@@ -43,6 +46,60 @@ function ProgressOverlay({ job, tab }: { job: RunningJob; tab: GenerateTab }) {
         {eta ? <span className="shrink-0 text-muted-foreground">{t("ETA {{eta}}", { eta })}</span> : null}
       </div>
       <ExposureSheet step={job.step} steps={job.steps} fraction={fraction} aria-label={t("Generation progress")} />
+    </div>
+  )
+}
+
+/**
+ * Live darkroom viewfinder shown while the stage has no result yet: reads the
+ * form's current width and height to draw an architectural proportional frame
+ * with four L-shaped crop marks, an optical center registration crosshair, and
+ * monospaced resolution telemetry.
+ */
+function EmptyViewfinder({ tab, waiting }: { tab: GenerateTab; waiting: boolean }) {
+  const { t } = useTranslation()
+  const store = getFormStore(tab)
+  const rawWidth = useStore(store, (s) => s.values.core?.width)
+  const rawHeight = useStore(store, (s) => s.values.core?.height)
+  const metrics = viewfinderMetrics(rawWidth, rawHeight)
+  const ratioValue = metrics.width / metrics.height
+
+  return (
+    <div className="flex size-full flex-col items-center justify-center gap-4 p-6 sm:p-8">
+      <div
+        className="flex min-h-32 w-full max-w-md flex-1 items-center justify-center"
+        style={{ containerType: "size" }}
+      >
+        <div
+          data-slot="stage-viewfinder"
+          style={{
+            aspectRatio: `${metrics.width} / ${metrics.height}`,
+            width: `min(100cqw, 22rem, calc(min(100cqh, 22rem) * ${ratioValue}))`,
+          }}
+          className="relative flex max-h-full max-w-full items-center justify-center transition-[width] duration-150"
+        >
+          {/* Faint framing hairline */}
+          <span aria-hidden className="pointer-events-none absolute inset-0 border border-border/75" />
+          {/* Four crisp L-shaped architectural darkroom crop marks */}
+          <span aria-hidden className="pointer-events-none absolute -top-px -left-px size-3 border-t-[1.5px] border-l-[1.5px] border-foreground/45" />
+          <span aria-hidden className="pointer-events-none absolute -top-px -right-px size-3 border-t-[1.5px] border-r-[1.5px] border-foreground/45" />
+          <span aria-hidden className="pointer-events-none absolute -bottom-px -left-px size-3 border-b-[1.5px] border-l-[1.5px] border-foreground/45" />
+          <span aria-hidden className="pointer-events-none absolute -bottom-px -right-px size-3 border-b-[1.5px] border-r-[1.5px] border-foreground/45" />
+          {/* Optical center registration crosshair */}
+          <span aria-hidden className="pointer-events-none relative size-3.5 opacity-30">
+            <span className="absolute top-1/2 left-0 h-px w-full -translate-y-1/2 bg-foreground" />
+            <span className="absolute top-0 left-1/2 h-full w-px -translate-x-1/2 bg-foreground" />
+          </span>
+        </div>
+      </div>
+      <div className="flex max-w-[34ch] flex-col items-center gap-1 text-center">
+        <p data-slot="viewfinder-spec" className="font-mono text-xs text-muted-foreground tabular-nums">
+          {metrics.width} × {metrics.height} · {metrics.ratio} · {metrics.megapixels}
+        </p>
+        <p className="text-xs text-balance text-muted-foreground">
+          {waiting ? t("Waiting for the first preview…") : t("Write a prompt, then press {{shortcut}} to generate", { shortcut: formatShortcut("Mod+Enter") })}
+        </p>
+      </div>
     </div>
   )
 }
@@ -156,10 +213,7 @@ export function Stage({ tab, onOpenViewer, className, leading, trailing, toolbar
           )}
         </button>
       ) : (
-        <div className="flex max-w-[28ch] flex-col items-center gap-2 p-6 text-center text-sm text-balance text-muted-foreground">
-          <Wand className="size-7 opacity-50" aria-hidden />
-          <p>{job ? t("Waiting for the first preview…") : t("Write a prompt, then press {{shortcut}} to generate", { shortcut: formatShortcut("Mod+Enter") })}</p>
-        </div>
+        <EmptyViewfinder tab={tab} waiting={job !== null} />
       )}
       {job && !follow ? (
         <Button

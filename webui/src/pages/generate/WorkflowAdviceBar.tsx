@@ -61,10 +61,10 @@ export function WorkflowAdviceBar({ tab }: { tab: GenerateTab }) {
             key={key}
             data-advice-code={item.code}
             className={cn(
-              "flex items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs leading-snug",
-              item.severity === "warning" && "border-advice-warn-border bg-advice-warn-bg text-advice-warn",
-              item.severity === "error" && "border-destructive/30 bg-destructive/10 text-destructive",
-              item.severity === "info" && "border-advice-info-border bg-advice-info-bg text-advice-info",
+              "flex items-start gap-2 rounded-r-sm border-l-2 px-2.5 py-1.5 text-xs leading-snug",
+              item.severity === "warning" && "border-l-advice-warn bg-advice-warn-bg text-advice-warn",
+              item.severity === "error" && "border-l-destructive bg-destructive/10 text-destructive",
+              item.severity === "info" && "border-l-advice-info bg-advice-info-bg text-advice-info",
             )}
           >
             <Icon className="mt-0.5 size-3.5 shrink-0" aria-hidden />

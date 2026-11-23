@@ -118,49 +118,70 @@ imperatively).
 ## Design system
 
 - Tokens live in `index.css`. Surfaces follow an animation studio's light table
-  in two calibrated studio palettes: **Warm Alabaster & Stone** (light) and
-  **Obsidian & Warm Graphite** (dark), keeping generated images free of colour
-  cast while maximising inspector readability. One brand hue drives
-  `--primary` and `--ring`: `--brand-h/-c/-l/-fg`, set per accent with
-  `[data-accent=…]` (every pairing audited to ≥ 4.5:1 WCAG AA across all 7
-  accents in both themes). shadcn's `--accent` stays a neutral hover surface.
+  in two calibrated studio palettes: **Washi Paper & Technical Ink** (light) and
+  **Darkroom Graphite & Warm Ivory** (dark: `--canvas` → `--sidebar` →
+  `--background` → `--card` → `--popover` calibrated neutral luminance ladder),
+  keeping generated images free of colour cast while maximising inspector
+  readability. One restrained brand hue drives `--primary` and `--ring`:
+  `--brand-h/-c/-l/-fg`, defaulting to a technical cobalt/slate pencil (`blue`,
+  hue 248°, restrained chroma) set per accent with `[data-accent=…]` (every
+  pairing audited to ≥ 4.5:1 WCAG AA across all 7 accents in both themes).
+  shadcn's `--accent` stays a neutral hover surface; `--glow` renders a machined
+  warm-ivory (dark) or technical-ink (light) keycap for the primary creation CTA
+  (`Generate`, `Send to txt2img`).
   Extra semantic colours:
   - `success`, `warning`, `destructive`, `star` (warm gold star marks, ≥ 3.5:1
     on paper), `canvas` (borderless image backdrops), utility `bg-checker`;
-  - **Workflow advice chips**: `--advice-warn`, `--advice-warn-bg`,
+  - **Editorial callout strips & advice**: `--advice-warn`, `--advice-warn-bg`,
     `--advice-warn-border`, `--advice-info`, `--advice-info-bg`,
-    `--advice-info-border`;
-  - **Model & capability badges**: `--capability-badge`,
-    `--capability-badge-bg`, `--capability-badge-border`;
+    `--advice-info-border` (rendered as 2 px left-accent hairline strips, never
+    pill-inside-box);
+  - **Model & capability metadata**: `--capability-badge`,
+    `--capability-badge-bg`, `--capability-badge-border` (inline borderless
+    mono micro-tags in the header);
   - **Structured prompt/parameter diffs**: `--diff-add`, `--diff-add-bg`,
     `--diff-del`, `--diff-del-bg`.
   The shell (nav rail, bottom bar) is a neutral surface too: `--rail` is
   `--sidebar`, separated by a crisp hairline (`border-border`), with the active
-  destination marked by `--rail-active`, `--rail-current` and a 2 px left
-  registration peg.
-- **Model Bar & Capability-Driven Form**:
-  - `ModelBar` surfaces model metadata badges (`Diffusers`, `GGUF`,
-    `INT8-ConvRot`, `NVFP4`, `SVDQuant`, `FP8`, `Turbo`, `RGBA`) from
-    `TabSchema.capabilities.badges` (with filename/dtype/preset fallback) plus a
-    compact `WorkerHealthPill` (`GET /api/v2/workers`) showing single/multi-GPU
-    and MLX sidecar health.
+  destination elevated calmly in neutral surface tone (`--rail-active`) plus a
+  2 px left registration peg and active icon in `--rail-current`.
+- **Studio Instrument Craft (Anti-AI-Slop Rules)**:
+  - **Unified Model Bar Instrument Strip**: `ModelBar` groups Preset,
+    Checkpoint, VAE/TE, and Low-Bits Dtype inside one continuous 28 px recessed
+    strip (`bg-field`) separated by vertical hairlines (`h-3.5 w-px bg-border`),
+    eliminating disconnected header box soup while preserving unclipped focus
+    rings (`focus-visible:z-10`). Model capability badges (`Diffusers`, `GGUF`,
+    `INT8-ConvRot`, `NVFP4`, `SVDQuant`, `FP8`, `Turbo`, `RGBA`) render as
+    whisper-quiet borderless inline mono micro-tags.
+  - **Single Status-Dot Rule**: `ConnectionDot` is the sole green LED in the
+    header. `WorkerHealthPill` (`GET /api/v2/workers`) stays a calm borderless
+    ghost monochrome readout (`CPU MPS` / `CUDA` / `1/2 GPU`) when healthy and
+    only shows an amber/red indicator dot when a worker is degraded or failed.
+  - **Live Darkroom Aspect-Ratio Viewfinder**: when the Generate stage has no
+    image yet, `Stage.tsx` renders a live proportional framing box synced to
+    `core.width` / `core.height` (`viewfinder.ts`) with four L-shaped hairline
+    crop marks, optical center crosshair, and monospaced resolution telemetry
+    (`1024 × 1024 · 1:1 · 1.05 MP`) — never cliché sparkle/wand placeholders.
+  - **Editorial Strips, Never Pill-Inside-Box**: `WorkflowAdviceBar`, PUP
+    warnings, and JSON Builder VGL's `CC BY-NC 4.0` notice use crisp 2 px
+    left-accent strips (`border-l-2`) with plain monospaced prefixes instead of
+    nested bordered pills inside bordered boxes; pane/extension counts use clean
+    tabular mono numerals.
   - `ScriptsPanel` and `Slot` consume `ScriptSchema.applicable` /
     `requires_capabilities` / `inapplicable_reason`, automatically collapsing
     non-applicable model extensions into a quiet "Not applicable for active
     model" drawer instead of cluttering the workspace.
-  - `WorkflowAdviceBar` renders pre-submit structured `AdviceItem` chips
-    (`TabSchema.advice` and `__advice__` patches) directly above `GenerateBar`
-    with one-click Fix buttons applying form patches and `__options__`.
   - `PromptField` exposes a lazy-loaded Multimodal PUP Upsampler dialog
     (`PupTrigger` → `PupUpsamplerDialog`, `POST /api/v2/prompt-tools/upsample`)
     with model-family detection, reference image & aspect ratio attachment,
-    side-by-side token diff preview, and one-click Apply / Revert.
+    unified split editorial token diff sheet, and one-click Apply / Revert.
   - `widgets/image-list` displays model-aware clickable slot badges
     (`<image_1>`, `ref_image_0`, `Picture 0`, `Image 1`) that insert tokens at
     the active prompt cursor, drag-and-drop reordering with drop-target ring,
     and `RGBA` badges when alpha channels are present.
   - `pages/custom/json-builder` supports MOSS-Image, FLUX.3 Layout, and Bria
-    Fibo 2.0 VGL 2.0 JSON schema mode (with explicit CC BY-NC 4.0 license badge).
+    Fibo 2.0 VGL 2.0 JSON schema mode (with left-accent CC BY-NC 4.0 studio
+    notice and unified `--glow` primary send CTA).
 - **Density** scales Tailwind's `--spacing` (`[data-density=compact]` →
   0.215rem), so every `p-*`, `gap-*`, `h-*`, `size-*` shrinks together. Use
   spacing utilities, not fixed pixel sizes, for anything that should follow.

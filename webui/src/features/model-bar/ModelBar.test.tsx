@@ -5,6 +5,7 @@ import { api } from "@/api/endpoints"
 import { bootstrap, models } from "@/api/mock/fixtures"
 import { keys, queryClient } from "@/api/queries"
 import ModelBar, { MODULES_HELP_URL } from "./ModelBar"
+import { WorkerHealthPill } from "./WorkerHealthPill"
 
 function renderBar() {
   return render(
@@ -72,5 +73,41 @@ describe("model bar modules picker", () => {
     expect(link).toHaveAttribute("target", "_blank")
     expect(link.getAttribute("rel")).toContain("noopener")
     expect(screen.getByText(/Checkpoints without a built-in VAE or text encoder/)).toBeVisible()
+  })
+})
+
+describe("worker health pill single-status-dot rule", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    queryClient.clear()
+  })
+
+  it("stays quiet monochrome when healthy and only renders an alert dot when degraded", async () => {
+    queryClient.setQueryData(["workers"], {
+      mode: "inprocess",
+      workers: [{ worker_id: "w0", state: "ready", device: "mps" }],
+    })
+    const { container, rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <WorkerHealthPill />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByRole("button", { name: "Worker status" })).toHaveTextContent("MPS")
+    expect(container.querySelector('[data-slot="worker-alert-dot"]')).toBeNull()
+
+    queryClient.setQueryData(["workers"], {
+      mode: "pool",
+      workers: [
+        { worker_id: "w0", state: "ready", device: "cuda:0" },
+        { worker_id: "w1", state: "crashed", device: "cuda:1" },
+      ],
+    })
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <WorkerHealthPill />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByRole("button", { name: "Worker status" })).toHaveTextContent("1/2 GPU")
+    expect(container.querySelector('[data-slot="worker-alert-dot"]')).not.toBeNull()
   })
 })
