@@ -645,3 +645,12 @@ def test_a_file_deleted_from_disk_answers_404_not_500(tmp_path):
         os.remove(record.path)
         assert server.client.get(f"/api/v2/files/{record.id}").status_code == 404
         assert server.client.get(f"/api/v2/thumbs/{record.id}").status_code == 404
+
+
+def test_a_jobs_outputs_are_found_through_an_index(tmp_path):
+    store = FileStore(tmp_path)
+    try:
+        plan = store._db.execute("EXPLAIN QUERY PLAN SELECT id FROM files WHERE job_id = ? AND kind = 'output' AND id != ? ORDER BY created", ("j", "f")).fetchall()
+        assert "files_job" in " ".join(str(row[-1]) for row in plan)
+    finally:
+        store.close()

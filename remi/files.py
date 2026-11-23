@@ -189,6 +189,7 @@ CREATE TABLE IF NOT EXISTS files (
 CREATE INDEX IF NOT EXISTS files_kind_created ON files(kind, created DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS files_kind_path ON files(kind, path);
 CREATE INDEX IF NOT EXISTS files_sha ON files(sha256);
+CREATE INDEX IF NOT EXISTS files_job ON files(job_id, kind, created);
 CREATE TABLE IF NOT EXISTS removed (path TEXT PRIMARY KEY);
 """
 # ``removed``: outputs taken out of the gallery but kept on disk (the output
