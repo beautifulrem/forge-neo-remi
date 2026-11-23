@@ -660,7 +660,7 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
                 <div
                   role="slider"
                   tabIndex={0}
-                  aria-label="Split compare"
+                  aria-label={t("Split compare")}
                   aria-valuemin={0}
                   aria-valuemax={100}
                   aria-valuenow={Math.round(staging.splitPosition * 100)}
@@ -677,9 +677,11 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
                     const onUp = () => {
                       window.removeEventListener("pointermove", onMove)
                       window.removeEventListener("pointerup", onUp)
+                      window.removeEventListener("pointercancel", onUp)
                     }
                     window.addEventListener("pointermove", onMove)
                     window.addEventListener("pointerup", onUp)
+                    window.addEventListener("pointercancel", onUp)
                   }}
                   onKeyDown={(event) => {
                     if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
