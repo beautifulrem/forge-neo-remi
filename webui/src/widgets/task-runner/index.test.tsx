@@ -93,6 +93,23 @@ describe("task-runner widget", () => {
     expect(polls).toBe(2) // refused once: not asked again
   })
 
+  it("keeps following a task while the session is signed out", async () => {
+    let polls = 0
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const action = new URL((input as Request).url).pathname.split("/").at(-1)!
+      if (action === "caption") return json({ __outputs__: { "task:caption": status("running") } })
+      polls += 1
+      if (polls === 1) return json({ __outputs__: { "task:caption": null } }) // the mount's resume check
+      if (polls === 2) return new Response(JSON.stringify({ detail: "sign in" }), { status: 401, headers: { "Content-Type": "application/json" } })
+      return json({ __outputs__: { "task:caption": status("completed", { progress: 1 }) } })
+    })
+    const store = setup()
+    await waitFor(() => expect(polls).toBe(1))
+    fireEvent.click(screen.getByRole("button", { name: "Caption image" }))
+    await waitFor(() => expect(store.getState().outputs[OWNER]?.["task:caption"]).toMatchObject({ state: "completed", done: true }), { timeout: 5000 })
+    expect(polls).toBe(3)
+  }, 10_000)
+
   it("applies the result of a task that ended while no view followed it (a reload)", async () => {
     const calls = server({
       __task__: [{ caption_out: { value: "late cat" }, __outputs__: { "task:caption": status("completed", { progress: 1 }) } }],

@@ -52,13 +52,17 @@ export const MAX_POLL_FAILURES = 15
 
 /** Whether the server refused the poll itself (an unknown task, a handler that raises): asking again will not help. */
 function refused(error: unknown): boolean {
-  return error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429
+  return error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 401 && error.status !== 408 && error.status !== 429
 }
+
+/** The session ended: the sign-in form is up and the task still runs, so the follower waits for it. */
+const signedOut = (error: unknown) => error instanceof ApiError && error.status === 401
 
 /** Marks the followed task failed in the form, so the widget stops showing it as running. */
 function giveUp(ctx: ActionContext, owner: string, task: string, id: string, error: unknown) {
   const current = ctx.store.getState().outputs[owner]?.[outputKey(task)]
-  const base = isTaskStatus(current) && current.id === id ? current : { id, name: task, progress: null, text: null }
+  if (isTaskStatus(current) && current.id !== id) return // a newer task is shown: not this follower's to fail
+  const base = isTaskStatus(current) ? current : { id, name: task, progress: null, text: null }
   const message = error instanceof Error ? error.message : String(error)
   ctx.store.getState().setOutputs(owner, { [outputKey(task)]: { ...base, state: "failed", done: true, error: message } satisfies TaskStatus })
 }
@@ -84,6 +88,10 @@ export function followTask(ctx: ActionContext, owner: string, task: string, id: 
         failures = 0
         if (!status || status.done || status.id !== id) return
       } catch (error) {
+        if (signedOut(error)) {
+          delay = Math.min(delay * 2, 5000) // not a failure: asked again until the user is back
+          continue
+        }
         failures += 1
         if (refused(error) || failures >= MAX_POLL_FAILURES) {
           giveUp(ctx, owner, task, id, error)
