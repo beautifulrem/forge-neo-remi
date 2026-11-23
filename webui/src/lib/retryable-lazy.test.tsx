@@ -60,6 +60,24 @@ describe("retryableLazy", () => {
     expect(await screen.findByText("loaded page")).toBeInTheDocument()
   })
 
+  it("fetches the chunk again when a boundary mounts on a load that failed before", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const load = loader(1)
+    const Sheet = retryableLazy(load)
+    const first = render(
+      <ErrorBoundary fallback={null}>
+        <Suspense fallback={<p>loading</p>}>
+          <Sheet />
+        </Suspense>
+      </ErrorBoundary>,
+    )
+    await settle()
+    first.unmount() // the More sheet closed with nothing in it
+    mount(Sheet, null) // and opened again
+    expect(await screen.findByText("loaded page")).toBeInTheDocument()
+    expect(load).toHaveBeenCalledTimes(2)
+  })
+
   it("is needed: React.lazy keeps the failure", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     const load = loader(1)

@@ -33,6 +33,13 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidMount() {
     window.addEventListener("online", this.retry)
+    // mounted on a load that failed before (the More sheet opened again): fetch it once more
+    if (this.state.error) this.retry()
+  }
+
+  componentDidUpdate(previous: Props) {
+    // back on a page whose load failed (the route key changed): fetch it once more
+    if (previous.resetKey !== this.props.resetKey && this.state.error) this.retry()
   }
 
   componentWillUnmount() {
