@@ -56,6 +56,11 @@ the file must be readable by the container's user, uid 99):
 a password in `--auth` or `COMMANDLINE_ARGS` shows in `docker inspect` and the
 process list.
 
+The image's health check asks `http://localhost:7860/internal/ping`. With another
+`--port` or with `--tls-keyfile` / `--tls-certfile` it fails and the container
+shows as unhealthy while it works: keep the server on plain HTTP at 7860 and
+terminate TLS at a reverse proxy, or run the container with `--no-healthcheck`.
+
 ## Data
 
 Everything the WebUI keeps is in the data folder, `/home/remi/data` (`--data-dir`):

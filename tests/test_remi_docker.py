@@ -136,3 +136,35 @@ def test_the_rocm_recipe_is_the_same_image_with_rocm_pytorch():
     assert "REMI_SKIP_WEBUI_BUILD=1" in ROCM_DOCKERFILE and "REMI_DATA_DIR=/home/remi/data" in ROCM_DOCKERFILE
     assert "docker build -f docker/Dockerfile.rocm -t remi-webui-rocm ." in README
 
+
+
+def test_uv_comes_from_a_pinned_digest():
+    """A tag alone can be moved; the digest pins the exact uv binary copied into the image."""
+
+    for recipe in (DOCKERFILE, ROCM_DOCKERFILE):
+        sources = [rest.split()[0] for keyword, rest in instructions(recipe) if keyword == "COPY" and "astral-sh/uv" in rest]
+        assert sources, "uv is not copied from its image"
+        for source in sources:
+            assert re.fullmatch(r"--from=ghcr\.io/astral-sh/uv:[\w.]+@sha256:[0-9a-f]{64}", source), source
+
+
+def test_every_documented_run_publishes_on_this_machine_only():
+    """The server inside listens on every interface without a login: the documented
+    commands publish the port on 127.0.0.1, and only the remote-access section widens it."""
+
+    usage = (ROOT / "docs" / "remi-webui" / "usage.md").read_text(encoding="utf-8")
+    usage_zh = (ROOT / "docs" / "remi-webui" / "usage.zh-CN.md").read_text(encoding="utf-8")
+    for text in (README, usage, usage_zh):
+        runs = [line for line in text.splitlines() if line.lstrip().startswith(("docker run", "-p "))]
+        assert runs
+        for line in runs:
+            for publish in re.findall(r"-p\s+(\S+)", line):
+                assert publish.startswith("127.0.0.1:"), line
+
+
+def test_the_build_stage_node_meets_the_build_tools():
+    """@babel/core (loaded by the build) needs Node ^22.18 || >=24.11; a floating major tag of 24 or
+    later resolves to a release past 24.11."""
+
+    for recipe in (DOCKERFILE, ROCM_DOCKERFILE):
+        assert int(arg_default("NODE_VERSION", recipe)) >= 24
