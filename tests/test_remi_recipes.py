@@ -112,6 +112,27 @@ def test_recipe_export_import_and_apply(tmp_path):
         assert applied["warnings"] and "multi_reference" in applied["warnings"][0]
 
 
+def test_an_import_that_fails_part_way_adds_nothing(tmp_path):
+    """A rejected entry fails the whole import: the client is told it failed,
+    so none of the entries before it may stay behind."""
+
+    with RecipeStore(tmp_path / "recipes.db") as store:
+        store.create("kept", tab="txt2img", core_patch={"steps": 4})
+        payload = {
+            "recipes": [
+                {"name": "a", "tab": "txt2img"},
+                {"name": "kept", "tab": "img2img", "description": "changed"},
+                {"name": "b", "tab": "nope"},
+            ]
+        }
+        with pytest.raises(RecipeError):
+            store.import_recipes(payload, overwrite=True)
+        assert [recipe.name for recipe in store.list()] == ["kept"]
+        assert store.get_by_name("kept").tab == "txt2img" and store.get_by_name("kept").description == ""
+        # the store still works after the rollback
+        assert store.import_recipes({"recipes": [{"name": "a", "tab": "txt2img"}]})["added"] == 1
+
+
 def test_recipes_http_routes(tmp_path):
     with webui_state(), server_app(tmp_path) as server:
         created = server.client.post(

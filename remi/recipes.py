@@ -354,6 +354,18 @@ class RecipeStore:
             raise RecipeError("import payload must include a 'recipes' list")
         if len(items) > MAX_IMPORT_RECIPES:
             raise RecipeError(f"cannot import more than {MAX_IMPORT_RECIPES} recipes at once")
+        # one transaction: an entry that fails leaves none of the earlier ones behind
+        with self._lock:
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                result = self._import_entries(items, overwrite=overwrite)
+            except BaseException:
+                self._db.execute("ROLLBACK")
+                raise
+            self._db.execute("COMMIT")
+        return result
+
+    def _import_entries(self, items: list[Any], *, overwrite: bool) -> dict[str, Any]:
         added = updated = skipped = 0
         imported: list[Recipe] = []
         for entry in items:
