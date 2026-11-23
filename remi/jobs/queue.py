@@ -192,6 +192,9 @@ def _summary(core: dict[str, Any], tab: str) -> str:
 
 
 class JobQueue:
+    RETRY_DELAY = 2.0
+    """Seconds the worker waits after its store failed before it asks again."""
+
     def __init__(
         self,
         store: JobStore,
@@ -530,6 +533,7 @@ class JobQueue:
                 return
             # the worker claimed it between the read and the delete (the store keeps running
             # jobs): cancel it as the running job it now is
+        raise JobError("the job changed while it was being removed; try again")
 
     def update(self, job_id: str, *, priority: int | None = None, forever: bool | None = None) -> Job:
         self.get(job_id)
@@ -673,32 +677,46 @@ class JobQueue:
 
     def _loop(self) -> None:
         while True:
-            with self._cv:
-                self._cv.wait_for(self._runnable)
-                if self._stopping:
-                    return
-                job = self.store.claim_next()
-                if job is not None:
-                    self._claimed = job
-            if job is None:  # it cancelled queued jobs it cannot run: nothing is queued now
-                self._changed()
-                continue
             try:
-                with self.lock:  # behind /sdapi requests and GPU actions
-                    self._run(job)
-            except BaseException:  # the worker outlives anything a job raises (SystemExit included)
-                log.exception("job %s", job.id)
-            finally:
+                if not self._step():
+                    return
+            except Exception:  # the store failed (a full disk, a locked database): ask again later
+                log.exception("job queue")
                 with self._cv:
-                    self._claimed = self._current = None
-                    self._begun = False
-                    self._interrupted.discard(job.id)
-                    self._after_current.discard(job.id)
-                    self._cancelled.discard(job.id)
-                    self._skips.discard(job.id)
-                    self._cv.notify_all()
-                self._changed()
-                self._after_job(job.id)
+                    if self._stopping:
+                        return
+                    self._cv.wait(self.RETRY_DELAY)
+
+    def _step(self) -> bool:
+        """Claim and run the next job; ``False`` once the queue stops."""
+
+        with self._cv:
+            self._cv.wait_for(self._runnable)
+            if self._stopping:
+                return False
+            job = self.store.claim_next()
+            if job is not None:
+                self._claimed = job
+        if job is None:  # it cancelled queued jobs it cannot run: nothing is queued now
+            self._changed()
+            return True
+        try:
+            with self.lock:  # behind /sdapi requests and GPU actions
+                self._run(job)
+        except BaseException:  # the worker outlives anything a job raises (SystemExit included)
+            log.exception("job %s", job.id)
+        finally:
+            with self._cv:
+                self._claimed = self._current = None
+                self._begun = False
+                self._interrupted.discard(job.id)
+                self._after_current.discard(job.id)
+                self._cancelled.discard(job.id)
+                self._skips.discard(job.id)
+                self._cv.notify_all()
+        self._changed()
+        self._after_job(job.id)
+        return True
 
     def _run(self, job: Job) -> None:
         """Run ``job``; the caller holds the generation lock."""
