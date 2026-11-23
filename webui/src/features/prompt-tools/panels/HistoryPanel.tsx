@@ -28,8 +28,9 @@ function Action({ label, onClick, children, disabled }: { label: string; onClick
   )
 }
 
-function failed(t: (key: string) => string, error: unknown) {
-  toast.error(t("Something went wrong"), { description: error instanceof Error ? error.message : String(error) })
+/** A failed action's toast: what failed (`title`, translated) and the server's reason. */
+function failed(title: string, error: unknown) {
+  toast.error(title, { description: error instanceof Error ? error.message : String(error) })
 }
 
 export default function HistoryPanel({ value, setValue, kind, disabled, close }: PanelProps) {
@@ -66,7 +67,7 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
       await client.invalidateQueries({ queryKey: toolKeys.collections })
       toast.success(t("Saved to favorites"))
     } catch (error) {
-      failed(t, error)
+      failed(t("Could not save to favorites"), error)
     }
   }
 
@@ -78,7 +79,7 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
       setRenaming(null)
       await refresh()
     } catch (error) {
-      failed(t, error)
+      failed(t("Could not update the history"), error)
     }
   }
 
@@ -87,7 +88,7 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
       await promptToolsApi.history.remove(item.id, field)
       await refresh()
     } catch (error) {
-      failed(t, error)
+      failed(t("Could not update the history"), error)
     }
   }
 
@@ -98,7 +99,7 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
       await refresh()
       toast.success(t("Removed {{count}} history entries", { count: removed }))
     } catch (error) {
-      failed(t, error)
+      failed(t("Could not clear the history"), error)
     }
   }
 

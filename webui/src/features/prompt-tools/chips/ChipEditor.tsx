@@ -70,7 +70,7 @@ export function ChipEditor({ doc, index, info, translation, config, setValue, cl
       await client.invalidateQueries({ queryKey: ["prompt-tools", "collections"] })
       toast.success(t("Saved to favorites"))
     } catch (error) {
-      toast.error(t("Something went wrong"), { description: error instanceof Error ? error.message : String(error) })
+      toast.error(t("Could not save to favorites"), { description: error instanceof Error ? error.message : String(error) })
     }
   }
 

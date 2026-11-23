@@ -129,7 +129,7 @@ export default function FavoritesPanel({ value, setValue, kind, disabled, close 
       await refresh()
       if (success) toast.success(success)
     } catch (error) {
-      toast.error(t("Something went wrong"), { description: error instanceof Error ? error.message : String(error) })
+      toast.error(t("Could not update the favorites"), { description: error instanceof Error ? error.message : String(error) })
     }
   }
 

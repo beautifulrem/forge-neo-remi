@@ -1646,5 +1646,9 @@
   "Could not load more.": "无法加载更多。",
   "Could not load boards. Retry": "无法加载项目看板，点击重试",
   "Template deleted": "模板已删除",
-  "Could not delete template": "无法删除模板"
+  "Could not delete template": "无法删除模板",
+  "Could not save the API key": "无法保存 API 密钥",
+  "Could not save to favorites": "无法保存到收藏",
+  "Could not update the favorites": "无法更新收藏",
+  "Could not update the history": "无法更新历史"
 }

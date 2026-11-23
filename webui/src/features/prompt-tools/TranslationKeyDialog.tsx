@@ -37,7 +37,7 @@ export function TranslationKeyDialog({ open, onOpenChange, configured }: Transla
       setKey("")
       onOpenChange(false)
     } catch (error) {
-      toast.error(t("Something went wrong"), { description: error instanceof Error ? error.message : String(error) })
+      toast.error(t("Could not save the API key"), { description: error instanceof Error ? error.message : String(error) })
     } finally {
       setBusy(false)
     }
