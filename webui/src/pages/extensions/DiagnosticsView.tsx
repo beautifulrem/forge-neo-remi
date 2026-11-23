@@ -180,7 +180,7 @@ export function DiagnosticsView() {
           <div className="py-2">
             <Skeleton className="h-20 w-full" />
           </div>
-        ) : workers.isError ? (
+        ) : workers.isError && !workers.data ? (
           <p className="py-2 text-sm text-muted-foreground">{t("Workers status unavailable on this server.")}</p>
         ) : (
           <div className="divide-y divide-border/70">

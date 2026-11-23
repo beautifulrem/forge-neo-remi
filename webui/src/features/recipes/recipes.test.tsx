@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { tabSchema } from "@/api/mock/fixtures"
 import { queryClient } from "@/api/queries"
@@ -45,6 +45,22 @@ describe("Recipes capture and manager UI", () => {
     expect(countRecipeParams(SAMPLE_RECIPE)).toBe(5)
     expect(recipeHighlights(SAMPLE_RECIPE)).toContain("8 steps")
     expect(recipeHighlights(SAMPLE_RECIPE)).toContain("CFG 1")
+  })
+
+  it("keeps the recipes when a refetch fails", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ items: [SAMPLE_RECIPE], total: 1 }), { status: 200, headers: { "Content-Type": "application/json" } }))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText("Qwen Turbo 8-step")).toBeInTheDocument()
+    fetch.mockImplementation(async () => new Response(JSON.stringify({ detail: "bad gateway" }), { status: 502, headers: { "Content-Type": "application/json" } }))
+    await act(() => queryClient.refetchQueries())
+    expect(queryClient.getQueryState(["recipes", "list", {}])?.status).toBe("error")
+    // (the query notifies its observers on the next tick)
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(screen.getByText("Qwen Turbo 8-step")).toBeInTheDocument()
   })
 
   it("lists recipes, filters by search, and applies a recipe to the form", async () => {

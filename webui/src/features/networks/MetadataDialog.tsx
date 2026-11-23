@@ -23,6 +23,7 @@ import { Preview } from "./NetworkCard"
 import { metaQuery } from "./queries"
 import { TagChips } from "./TagChips"
 import { escapeTag } from "./tags"
+import { LoadFailed } from "@/components/LoadFailed"
 
 async function copy(text: string, what: string) {
   try {
@@ -217,7 +218,7 @@ export function MetadataDialog({ item, open, onOpenChange }: { item: NetworkItem
           {meta.data ? (
             <Body meta={meta.data} />
           ) : meta.isError ? (
-            <p className="text-sm text-destructive">{meta.error.message}</p>
+            <LoadFailed error={meta.error} onRetry={() => void meta.refetch()} />
           ) : (
             <div className="flex flex-col gap-3" aria-busy="true">
               <Skeleton className="h-32 w-full" />

@@ -10,6 +10,7 @@ import { FormProvider, OwnerProvider } from "@/ui/context"
 import { RenderNode } from "@/ui/Renderer"
 import { createQuickForm, QUICK_OWNER, type QuickForm } from "./quick-form"
 import { setPinned } from "./pinned"
+import { LoadFailed } from "@/components/LoadFailed"
 
 export default function QuickSettingsPanel({ keys: pinned }: { keys: string[] }) {
   const { t } = useTranslation()
@@ -27,7 +28,7 @@ export default function QuickSettingsPanel({ keys: pinned }: { keys: string[] })
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [form, options.data, signature])
 
-  if (options.isError) return <p className="px-1 py-4 text-sm text-destructive">{options.error.message}</p>
+  if (options.isError && !options.data) return <LoadFailed className="px-1" error={options.error} onRetry={() => void options.refetch()} />
   if (!options.data || loadedFrom === null) {
     return (
       <div className="grid place-items-center py-8" aria-busy="true">

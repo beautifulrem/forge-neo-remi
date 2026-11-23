@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
@@ -46,6 +46,25 @@ describe("extensions page", { timeout: 20_000 }, () => {
   afterEach(() => {
     vi.restoreAllMocks()
     queryClient.clear()
+  })
+
+  it("keeps the list when a refetch fails, and offers a retry when the first load fails", async () => {
+    renderPage()
+    expect(await screen.findByText("tagger")).toBeInTheDocument()
+    vi.spyOn(api.extensions, "list").mockRejectedValue(new ApiError(502, "bad gateway"))
+    await act(() => queryClient.refetchQueries())
+    // (the query notifies its observers on the next tick)
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(screen.getByText("tagger")).toBeInTheDocument()
+
+    // a first load that failed (a client error: not retried) offers a retry instead of an empty page
+    queryClient.clear()
+    const list = vi.spyOn(api.extensions, "list").mockRejectedValue(new ApiError(409, "busy"))
+    renderPage()
+    const retry = await screen.findByRole("button", { name: "Retry" })
+    list.mockImplementation(async () => listing(items))
+    fireEvent.click(retry)
+    expect(await screen.findAllByText("tagger")).not.toHaveLength(0)
   })
 
   it("lists user and built-in extensions apart; built-in ones cannot be uninstalled", async () => {

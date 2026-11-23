@@ -32,6 +32,7 @@ import { runServerCommandAfterApply } from "@/features/server-control/server-con
 import { cn } from "@/lib/utils"
 import { adminErrorMessage, backupDiffers, type ConfigStateDetail, formatDate } from "./extensions-model"
 import { extensionKeys, stateQuery, statesQuery } from "./queries"
+import { LoadFailed } from "@/components/LoadFailed"
 
 type Repo = { commit_hash?: string | null; commit_url?: string | null; branch?: string | null; remote?: string | null; enabled?: boolean } | null | undefined
 
@@ -170,8 +171,8 @@ export function BackupView({ access }: { access: boolean }) {
         </form>
         {states.isPending ? (
           <Skeleton className="h-40 w-full" />
-        ) : states.isError ? (
-          <p role="alert" className="text-sm text-destructive">{adminErrorMessage(states.error, t)}</p>
+        ) : states.isError && !states.data ? (
+          <LoadFailed error={states.error} message={adminErrorMessage(states.error, t)} onRetry={() => void states.refetch()} />
         ) : states.data.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("No backups yet. One is made before every update.")}</p>
         ) : (
@@ -216,8 +217,8 @@ export function BackupView({ access }: { access: boolean }) {
           </Empty>
         ) : detail.isPending ? (
           <Skeleton className="h-64 w-full" />
-        ) : detail.isError ? (
-          <p role="alert" className="text-sm text-destructive">{adminErrorMessage(detail.error, t)}</p>
+        ) : detail.isError && !detail.data ? (
+          <LoadFailed error={detail.error} message={adminErrorMessage(detail.error, t)} onRetry={() => void detail.refetch()} />
         ) : (
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center gap-2">

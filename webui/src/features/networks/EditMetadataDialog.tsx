@@ -28,6 +28,7 @@ import { metaQuery, networkKeys } from "./queries"
 import { TagChips } from "./TagChips"
 import { hasTag, randomPrompt, toggleTag } from "./tags"
 import { type Draft, draftFrom, PREFERRED_WEIGHT_LIMIT, patchFrom } from "./metadata-draft"
+import { LoadFailed } from "@/components/LoadFailed"
 
 function Field({ id, label, info, children }: { id: string; label: string; info?: string; children: React.ReactNode }) {
   return (
@@ -240,7 +241,7 @@ export function EditMetadataDialog({ item, kind, open, onOpenChange }: { item: N
         {meta.data && kind ? (
           <Editor key={`${meta.data.kind}:${meta.data.name}`} meta={meta.data} kind={kind} onDone={() => onOpenChange(false)} />
         ) : meta.isError ? (
-          <p className="text-sm text-destructive">{meta.error.message}</p>
+          <LoadFailed error={meta.error} onRetry={() => void meta.refetch()} />
         ) : (
           <div className="flex flex-col gap-3" aria-busy="true">
             <Skeleton className="h-20 w-full" />

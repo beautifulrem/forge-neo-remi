@@ -53,6 +53,7 @@ import {
 } from "./extensions-model"
 import { extensionKeys, installedQuery } from "./queries"
 import { checkForUpdates, stopUpdateCheck, useUpdateCheck } from "./update-check"
+import { LoadFailed } from "@/components/LoadFailed"
 
 /** Staged changes survive switching tabs (not a page reload: the shell asks first). */
 const useStaged = create<{ staged: Staged; set: (staged: Staged) => void }>()((set) => ({ staged: NO_CHANGES, set: (staged) => set({ staged }) }))
@@ -319,7 +320,8 @@ export function InstalledView() {
       </div>
     )
   }
-  if (list.isError) return <p role="alert" className="text-sm text-destructive">{adminErrorMessage(list.error, t)}</p>
+  // a failed refetch keeps the list on screen; only a first load that failed has nothing to show
+  if (list.isError && !list.data) return <LoadFailed error={list.error} message={adminErrorMessage(list.error, t)} onRetry={() => void list.refetch()} />
 
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
   const visible = terms.length ? items.filter((ext) => terms.every((term) => `${ext.name} ${ext.remote ?? ""}`.toLowerCase().includes(term))) : items

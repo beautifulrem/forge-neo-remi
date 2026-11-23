@@ -31,6 +31,7 @@ import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import { applyRecipeApi, createRecipeApi, deleteRecipeApi, exportRecipesApi, importRecipesApi, recipesQuery, refreshRecipes } from "./api"
 import { applyRecipeEntries, captureFormOverrides, countRecipeParams, recipeHighlights } from "./capture"
 import type { Recipe } from "./types"
+import { LoadFailed } from "@/components/LoadFailed"
 
 const FAMILIES = ["", "anima", "qwen21", "flux3", "moss", "zimage", "sdxl"] as const
 
@@ -236,10 +237,8 @@ export function RecipeManager() {
               <Skeleton key={i} className="h-14 w-full" />
             ))}
           </div>
-        ) : list.isError ? (
-          <p role="alert" className="py-2 text-sm text-destructive">
-            {errorText(list.error)}
-          </p>
+        ) : list.isError && !list.data ? (
+          <LoadFailed error={list.error} onRetry={() => void list.refetch()} />
         ) : recipes.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-10 text-center">
             <BookOpen className="size-7 text-muted-foreground/45" aria-hidden />

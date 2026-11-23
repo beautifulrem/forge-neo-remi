@@ -11,6 +11,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
+import { LoadFailed } from "@/components/LoadFailed"
 
 /** Short scalar entries shown as a summary; everything else is a collapsible section. */
 const SUMMARY_KEYS = ["Platform", "Python", "Version", "Git status", "Script path", "Data path", "Extensions dir"]
@@ -129,10 +130,8 @@ export function SysinfoView() {
             <Skeleton key={i} className="h-9 w-full" />
           ))}
         </div>
-      ) : info.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          {info.error.message}
-        </p>
+      ) : info.isError && !info.data ? (
+        <LoadFailed error={info.error} onRetry={() => void info.refetch()} />
       ) : (
         <>
           <dl className={cn("grid gap-x-4 gap-y-2 text-sm sm:grid-cols-[max-content_1fr]", panelClass(0))}>
