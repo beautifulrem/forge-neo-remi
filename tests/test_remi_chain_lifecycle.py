@@ -363,9 +363,11 @@ def test_upsampling_runs_behind_the_generation_lock_and_off_the_request(tmp_path
     with rig(tmp_path, upsampler=upsampler) as r:
         chain = r.runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "x"}), *seeded(5)[:1]])
         assert chain.status == "running"  # the request did not wait for the upsampler
+        assert r.runner.busy()  # no stage job is queued yet: the queue is not done
         gate.set()
         done = r.wait(chain.id)
         assert done.status == "completed"
+        assert not r.runner.busy()
         assert seen["locked"] is True and seen["thread"].startswith("remi-chain-upsample")
         assert r.executed[0]["core"]["prompt"] == "fox"  # the stage's own prompt wins
 

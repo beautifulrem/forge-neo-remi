@@ -638,3 +638,14 @@ def test_translate_http_post_and_provider_error_paths(monkeypatch):
     monkeypatch.setattr(requests, "post", lambda *_a, **_kw: FakeResp(200, json_err=True))
     with pytest.raises(TranslationError, match="sent no JSON"):
         _http_post("http://x", {}, {})
+
+
+def test_a_reference_image_over_the_pixel_limit_is_refused_before_decoding(monkeypatch):
+    import remi.files
+
+    monkeypatch.setattr(remi.files, "MAX_UPLOAD_PIXELS", 40 * 40 - 1)
+    uri = "data:image/png;base64," + base64.b64encode(_png_bytes((40, 40), "RGB", (1, 2, 3))).decode("ascii")
+    for item in (uri, _png_bytes((40, 40), "RGB", (1, 2, 3))):
+        with pytest.raises(TranslationError) as err:
+            pup.prepare_reference_images([item])
+        assert err.value.status == 413

@@ -917,6 +917,7 @@ class ChainRunner:
         """job id → the model fingerprint when the stage job started"""
         self._unhook = queue.add_completion_hook(self.on_job_finished)
         self._unhook_start: Callable[[], None] | None = queue.add_start_hook(self._on_job_started)
+        self._unhook_busy: Callable[[], None] | None = queue.add_busy_check(self.busy)
 
     def close(self) -> None:
         if self._unhook is not None:
@@ -925,9 +926,19 @@ class ChainRunner:
         if self._unhook_start is not None:
             self._unhook_start()
             self._unhook_start = None
+        if self._unhook_busy is not None:
+            self._unhook_busy()
+            self._unhook_busy = None
         for thread in list(self._threads):
             thread.join(timeout=10)
         self.store.close()
+
+    def busy(self) -> bool:
+        """Whether a pipeline is still queued or running (its next stage may
+        not be a queued job yet: prompt upsampling runs on its own thread)."""
+
+        _chains, _cursor, total = self.store.list_chains(status="queued,running", limit=1)
+        return total > 0
 
     def wait_idle(self, timeout: float = 10.0) -> bool:
         """Wait for inline stages (prompt upsampling) running in the background."""

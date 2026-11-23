@@ -118,7 +118,7 @@ optionally with `{"__toast__": {"level", "message"}}`,
 refreshes its copy).
 `remi.ui.call_action(owner, name, ActionContext(...), values)` runs and checks
 one; `remi.ui.actions` also supports isolated execution with per-action
-`timeout` (`@ui.action("name", timeout=15.0)`, default `DEFAULT_ACTION_TIMEOUT = 30.0`),
+`timeout` (`@ui.action("name", timeout=15.0)`; none by default, ignored with `gpu=True`),
 raising `ActionTimeoutError` and recording action errors/timeouts in
 `remi.ui.manifest.diagnostics` (`DiagnosticsCollector`, surfaced at
 `GET /api/v2/extensions/diagnostics`). Special patch keys also include

@@ -719,3 +719,75 @@ def test_numpy_extra_images_become_pil_outputs():
     result = _from_processed(SimpleNamespace(images=[image], extra_images=[detected], infotexts=["info"], info="info"))
     assert result.images[0] is image and isinstance(result.images[1], Image.Image) and result.images[1].size == (6, 4)
     assert result.infotexts == ["info", "info"]
+
+
+# region Worker robustness
+
+
+def test_a_job_that_raises_system_exit_fails_and_the_queue_runs_on(webui, tmp_path):
+    state = FakeState()
+    executor = StubExecutor(state, error=SystemExit(2))  # an extension calling sys.exit()
+    with server_app(tmp_path, state=state, executor=executor) as server:
+        first = submit(server, "exits")["job_id"]
+        assert wait_until(lambda: server.services.store.get(first).status == FAILED)
+        assert "SystemExit" in server.services.store.get(first).error
+        executor.error = None
+        second = submit(server, "after")["job_id"]
+        assert wait_until(lambda: server.services.store.get(second).status == COMPLETED)
+
+
+def test_generate_forever_switched_on_while_the_job_runs_queues_a_copy(webui, tmp_path):
+    state = FakeState()
+    gate = threading.Event()
+    executor = StubExecutor(state, gate=gate)
+    with server_app(tmp_path, state=state, executor=executor) as server:
+        job_id = submit(server, "loop")["job_id"]
+        assert wait_until(lambda: len(executor.calls) == 1)
+        assert server.client.patch(f"/api/v2/jobs/{job_id}", json={"forever": True}).status_code == 200
+        gate.set()
+        assert wait_until(lambda: len(executor.calls) >= 2)
+        server.services.queue.stop_forever()
+        assert server.services.queue.wait_idle()
+        assert any(job.retry_of == job_id for job, _ctx in executor.calls)
+
+
+def test_a_claimed_job_shows_no_progress_before_it_begins(server):
+    queue = server.services.queue
+    with queue.lock:  # behind an /sdapi request: claimed (running), not begun
+        job_id = submit(server, "waits")["job_id"]
+        assert wait_until(lambda: server.services.store.get(job_id).status == RUNNING)
+        listed = server.client.get("/api/v2/jobs", params={"status": "running"}).json()["items"]
+        assert [item["id"] for item in listed] == [job_id] and listed[0].get("progress") is None
+        assert server.client.get(f"/api/v2/jobs/{job_id}").json().get("progress") is None
+        from remi.server.app import snapshot_events
+
+        assert [event["type"] for event in snapshot_events(server.services)] == ["queue.changed"]
+    assert queue.wait_idle()
+
+
+def test_the_job_that_began_shows_its_progress(webui, tmp_path):
+    state = FakeState()
+    gate = threading.Event()
+    executor = StubExecutor(state, gate=gate)
+    with server_app(tmp_path, state=state, executor=executor) as server:
+        job_id = submit(server, "runs")["job_id"]
+        assert executor.started.wait(5)
+        assert server.client.get(f"/api/v2/jobs/{job_id}").json().get("progress") is not None
+        gate.set()
+        assert server.services.queue.wait_idle()
+
+
+def test_the_completion_action_waits_for_a_running_pipeline(webui, tmp_path):
+    with server_app(tmp_path) as server:
+        changed, ran = settings(server.services.queue, queue_completion_action="Shut down")
+        busy = [True]
+        unhook = server.services.queue.add_busy_check(lambda: busy[0])
+        submit(server, "before the pipeline's next stage")
+        assert server.services.queue.wait_idle() and ran == [] and changed == {}
+        busy[0] = False
+        submit(server, "the last stage")
+        assert server.services.queue.wait_idle() and wait_until(lambda: ran == ["Shut down"])
+        unhook()
+
+
+# endregion

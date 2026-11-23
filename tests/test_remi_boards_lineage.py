@@ -234,3 +234,33 @@ def test_boards_lineage_compare_http_routes(tmp_path):
         assert server.client.post("/api/v2/gallery/compare", json={}).status_code == 422
         # Keep unused import clean
         assert Job.__name__ == "Job"
+
+
+def test_viewing_lineage_keeps_edge_times_and_deleting_drops_edges(tmp_path):
+    files = FileStore(tmp_path / "files")
+    job_store = JobStore(tmp_path / "jobs.db")
+    index = GalleryIndex(files, folders=list)
+    try:
+        j1 = job_store.add("txt2img", {"prompt": "base"}, {})
+        base = _save_img(files, (1, 2, 3), "base\nSteps: 20, Seed: 1", job_id=j1.id)
+        j1 = job_store.finish(j1.id, "completed", outputs=[{"id": base.id, "kind": "image"}])
+        j2 = job_store.add("img2img", {"prompt": "refined", "init_img": base.id}, {})
+        refined = _save_img(files, (4, 5, 6), "refined\nSteps: 20, Seed: 2", job_id=j2.id, tab="img2img")
+        j2 = job_store.finish(j2.id, "completed", outputs=[{"id": refined.id, "kind": "image"}])
+        index.index_job_lineage(j2, [refined.id], job_store=job_store)
+
+        def created():
+            with index._lock:
+                return index._db.execute("SELECT created FROM asset_lineage WHERE child_id = ?", (refined.id,)).fetchall()
+
+        before = created()
+        assert len(before) == 1
+        index.lineage_for(refined.id, job_store=job_store)  # indexes the job again
+        assert created() == before  # the sort key of the lists is not rewritten by a view
+
+        assert index.delete([base.id]) == 1
+        assert created() == []
+    finally:
+        index.close()
+        job_store.close()
+        files.close()

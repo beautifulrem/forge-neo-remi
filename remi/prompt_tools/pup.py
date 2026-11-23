@@ -371,6 +371,16 @@ def prepare_reference_images(
     data_uris: list[str] = []
     pil_images: list[Image.Image] = []
 
+    def checked(opened: Image.Image, idx: int) -> Image.Image:
+        # before load(): the header is read, the pixels are not (X/Y/Z plot turns Pillow's own
+        # decompression-bomb limit off for the whole process)
+        from remi.files import MAX_UPLOAD_PIXELS
+
+        if opened.width * opened.height > MAX_UPLOAD_PIXELS:
+            raise TranslationError(f"reference_images[{idx}] is too large ({opened.width}×{opened.height})", 413)
+        opened.load()
+        return opened
+
     for idx, item in enumerate(items):
         if isinstance(item, Image.Image):
             uri, resized = _encode_pil_to_data_uri(item, num_refs)
@@ -378,8 +388,7 @@ def prepare_reference_images(
             pil_images.append(resized)
         elif isinstance(item, (bytes, bytearray)):
             with Image.open(io.BytesIO(bytes(item))) as opened:
-                opened.load()
-                uri, resized = _encode_pil_to_data_uri(opened, num_refs)
+                uri, resized = _encode_pil_to_data_uri(checked(opened, idx), num_refs)
             data_uris.append(uri)
             pil_images.append(resized)
         elif isinstance(item, (str, os.PathLike)):
@@ -390,10 +399,11 @@ def prepare_reference_images(
                     try:
                         raw_bytes = base64.b64decode(raw_b64)
                         with Image.open(io.BytesIO(raw_bytes)) as opened:
-                            opened.load()
-                            uri, resized = _encode_pil_to_data_uri(opened, num_refs)
+                            uri, resized = _encode_pil_to_data_uri(checked(opened, idx), num_refs)
                         data_uris.append(uri)
                         pil_images.append(resized)
+                    except TranslationError:
+                        raise
                     except Exception:
                         data_uris.append(text)
                 else:
@@ -402,8 +412,7 @@ def prepare_reference_images(
                 data_uris.append(text)
             elif os.path.isfile(text):
                 with Image.open(text) as opened:
-                    opened.load()
-                    uri, resized = _encode_pil_to_data_uri(opened, num_refs)
+                    uri, resized = _encode_pil_to_data_uri(checked(opened, idx), num_refs)
                 data_uris.append(uri)
                 pil_images.append(resized)
             else:

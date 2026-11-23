@@ -258,7 +258,8 @@ def run_action(owner: str, action: str, body: m.ActionRequest, request: Request,
     )
 
     def call() -> dict[str, Any]:
-        if spec.timeout is not None:
+        # a GPU action that timed out would keep using the GPU after the lock is released
+        if spec.timeout is not None and not spec.gpu:
             return ui.call_action_isolated(target, action, ctx, body.values, timeout=spec.timeout)
         return ui.call_action(target, action, ctx, body.values)
 

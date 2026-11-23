@@ -375,8 +375,8 @@ def upsample(body: PromptUpsampleRequest, tools: ToolsDep, services: ServicesDep
         if getattr(shared.cmd_opts, "hide_ui_dir_config", False):
             raise HTTPException(status_code=403, detail="local_model_path is disabled under --hide-ui-dir-config")
 
-    try:
-        result = upsample_prompt(
+    def run() -> Any:
+        return upsample_prompt(
             body.prompt,
             model_family=body.model_family,
             reference_images=resolved_refs or None,
@@ -391,6 +391,14 @@ def upsample(body: PromptUpsampleRequest, tools: ToolsDep, services: ServicesDep
             temperature=body.temperature,
             max_tokens=body.max_tokens,
         )
+
+    try:
+        if body.local_model_path:
+            # a local model loads on the GPU: behind the running job, like a pipeline's upsample stage
+            with services.queue.lock:
+                result = services.queue.dispatch(run)
+        else:
+            result = run()
     except pt.TranslationError as error:
         raise HTTPException(status_code=error.status, detail=str(error)) from error
     return result.to_dict()

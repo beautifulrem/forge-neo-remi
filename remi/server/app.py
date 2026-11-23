@@ -147,6 +147,7 @@ def snapshot_events(services: Services) -> list[dict[str, Any]]:
     ref = services.queue.current_ref()
     if ref is not None:
         events.append({"type": "job.started", **ref.fields()})
+    if ref is not None and ref.begun:  # before that, the progress state is still the previous task's
         try:
             events.append({"type": "job.progress", **ref.fields(), **services.bridge.progress_snapshot()})
         except Exception:

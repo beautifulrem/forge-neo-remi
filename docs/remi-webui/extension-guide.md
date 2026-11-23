@@ -376,8 +376,9 @@ def refresh_models(self, ctx: ui.ActionContext, values: dict) -> dict:
   runs it behind the running generation, holding the lock (needed when it
   touches the model or the GPU, e.g. ControlNet's preprocessor preview).
 - **Timeout & error isolation:** `@ui.action("name", timeout=15.0)` sets an
-  explicit execution timeout in seconds (default `DEFAULT_ACTION_TIMEOUT = 30.0`
-  in isolated execution). Timeouts (`ActionTimeoutError`) and uncaught action or
+  execution timeout in seconds; without one an action has no time limit, and a
+  `gpu=True` action never has one (it keeps the generation lock until it ends,
+  so a timed-out action cannot keep using the GPU beside the next job). Timeouts (`ActionTimeoutError`) and uncaught action or
   hook failures are recorded per extension in `remi.ui.manifest.diagnostics`
   and surfaced in **Extensions → Diagnostics** (`GET /api/v2/extensions/diagnostics`)
   without crashing the form or queue.
