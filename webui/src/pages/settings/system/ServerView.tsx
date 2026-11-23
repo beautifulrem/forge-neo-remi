@@ -268,7 +268,8 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
           {t("Unload model")}
         </Button>
         <Button variant="outline" disabled={model.isPending || modelLoading !== null} onClick={() => model.mutate(loadAction)}>
-          {model.isPending && model.variables !== "unload" ? <Loader2 className="animate-spin" aria-hidden /> : <Upload aria-hidden />}
+          {/* a load lasts until the model is in memory, often minutes: a still mark */}
+          {model.isPending && model.variables !== "unload" ? <Hourglass aria-hidden /> : <Upload aria-hidden />}
           {loaded ? t("Reload model from disk") : t("Load model")}
         </Button>
       </Panel>

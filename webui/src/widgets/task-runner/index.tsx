@@ -93,7 +93,7 @@ export default function TaskRunner({ props, disabled, id }: WidgetProps<null, Pr
           aria-busy={active || undefined}
           onClick={() => void start()}
         >
-          {/* a task can run for minutes: once it reports, its bar shows the motion and the button holds still */}
+          {/* a task can run for minutes: once it reports, the status below says so and the button holds still */}
           {active ? status ? <Hourglass aria-hidden /> : <Loader2 className="animate-spin" aria-hidden /> : <Play aria-hidden />}
           {label}
         </Button>
@@ -106,8 +106,8 @@ export default function TaskRunner({ props, disabled, id }: WidgetProps<null, Pr
       </div>
       {active && status ? (
         <div className="flex flex-col gap-1">
-          {/* Base UI: a null value is an indeterminate bar */}
-          <Progress value={percent} aria-label={label} />
+          {/* no fraction reported yet: Base UI would draw an empty track (it reads as 0 %), so the text alone */}
+          {percent !== null ? <Progress value={percent} aria-label={label} /> : null}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span title={text} className="min-w-0 flex-1 truncate">{text}</span>
             {percent != null ? <span className="tabular">{percent}%</span> : null}
