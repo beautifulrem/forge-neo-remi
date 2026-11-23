@@ -133,7 +133,7 @@ describe("theme in effect", () => {
     }
   })
 
-  it("keeps THEME_COLORS and index.html equal to each theme's --background", async () => {
+  it("keeps THEME_COLORS and index.html equal to each theme's --background, and the select chevron to its --muted-foreground", async () => {
     const { readFileSync } = await import("node:fs")
     const { THEME_COLORS } = await load({})
     const css = readFileSync("src/index.css", "utf8")
@@ -151,6 +151,10 @@ describe("theme in effect", () => {
     const backgrounds = [...css.matchAll(/^ {2}--background: oklch\(([\d.]+) ([\d.]+) ([\d.]+)\);/gm)].map((m) => toHex(Number(m[1]), Number(m[2]), Number(m[3])))
     expect(backgrounds).toEqual([THEME_COLORS.light, THEME_COLORS.dark])
     for (const color of backgrounds) expect(html).toContain(color)
+    // the native select chevron is a data URI, so it carries each theme's --muted-foreground as hex
+    const muted = [...css.matchAll(/^ {2}--muted-foreground: oklch\(([\d.]+) ([\d.]+) ([\d.]+)\);/gm)].map((m) => toHex(Number(m[1]), Number(m[2]), Number(m[3])))
+    const chevrons = [...css.matchAll(/^ {2}--select-chevron: .*fill='%23([0-9a-f]{6})'/gm)].map((m) => `#${m[1]}`)
+    expect(chevrons).toEqual(muted)
   })
 
   it("ignores an unknown server theme and an unreadable stored state", async () => {

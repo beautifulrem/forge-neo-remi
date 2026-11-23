@@ -301,7 +301,12 @@ generated interfaces (sources: Linear's
   between them, never below `sm`. Floating lists (menus, selects, combobox,
   popover, command) are `rounded-xl` with `p-1`, so their items stay
   `rounded-md`; dialogs are `rounded-xl` and their flush footer takes the
-  same radius; a chip or badge inside a row is `rounded-xs`/`rounded-md`,
+  same radius. A well inside a dialog or popover (a list box, a layer row)
+  is a flat `bg-background` fill with no edge: it sits below the popover in
+  both themes, where `--muted` does not in dark. A native `select` (the
+  table widgets) draws the Select component's chevron from
+  `--select-chevron`, whose hex must equal the theme's `--muted-foreground`
+  (`lib/theme.test.ts` checks it), and takes `pr-7` for it; a chip or badge inside a row is `rounded-xs`/`rounded-md`,
   never a pill. Overlays fade in 150 ms.
   Floating chrome that sits over a still picture (the image editor's panels
   and the candidate bar) uses `material-float`: a translucent popover
