@@ -116,7 +116,7 @@ export function FolderTree({ folders, total, selected, onSelect, className }: { 
                   event.stopPropagation()
                   toggle(row.path)
                 }}
-                className="grid size-5 shrink-0 place-items-center rounded hover:bg-background"
+                className="grid size-5 shrink-0 place-items-center rounded-sm hover:bg-background"
               >
                 <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} aria-hidden />
               </span>

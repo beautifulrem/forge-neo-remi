@@ -168,7 +168,7 @@ export function HistoryGrid({ onOpen, orientation = "grid", className }: History
                       className="size-full object-cover"
                     />
                     {item.tab === "img2img" ? (
-                      <span className="absolute bottom-1 left-1 rounded bg-black/55 px-1 text-[0.625rem] font-medium text-white">i2i</span>
+                      <span className="absolute bottom-1 left-1 rounded-sm bg-black/55 px-1 text-[0.625rem] font-medium text-white">i2i</span>
                     ) : null}
                   </div>
                 )

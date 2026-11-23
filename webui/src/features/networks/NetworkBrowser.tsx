@@ -185,7 +185,7 @@ function SearchBox({ value, onChange, inputRef, count }: { value: string; onChan
             <X />
           </Button>
         ) : (
-          <kbd className="hidden h-5 items-center rounded border px-1.5 font-mono text-[0.625rem] text-muted-foreground sm:inline-flex touch-only:hidden!" aria-hidden>
+          <kbd className="hidden h-5 items-center rounded-sm border px-1.5 font-mono text-[0.625rem] text-muted-foreground sm:inline-flex touch-only:hidden!" aria-hidden>
             /
           </kbd>
         )}

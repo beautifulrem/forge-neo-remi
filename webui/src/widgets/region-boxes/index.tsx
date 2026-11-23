@@ -26,12 +26,16 @@ const NS = registerWidgetCatalogs("region-boxes", import.meta.glob("./locales/*.
 
 type Props = { regions?: string[] }
 
-/** One colour per region (full class names, so Tailwind keeps them). */
+/**
+ * One colour per region, from the band tokens (full class names, so Tailwind keeps them). The
+ * number badge stays a solid sheet with the colour as a dot: the bands are mid-tones, so neither
+ * white nor dark text keeps 4.5:1 on every one of them.
+ */
 const COLORS = [
-  { box: "border-sky-500 bg-sky-500/20", badge: "bg-sky-500", swatch: "bg-sky-500" },
-  { box: "border-amber-500 bg-amber-500/20", badge: "bg-amber-500", swatch: "bg-amber-500" },
-  { box: "border-emerald-500 bg-emerald-500/20", badge: "bg-emerald-500", swatch: "bg-emerald-500" },
-  { box: "border-fuchsia-500 bg-fuchsia-500/20", badge: "bg-fuchsia-500", swatch: "bg-fuchsia-500" },
+  { box: "border-chart-2 bg-chart-2/20", swatch: "bg-chart-2" },
+  { box: "border-chart-3 bg-chart-3/20", swatch: "bg-chart-3" },
+  { box: "border-chart-4 bg-chart-4/20", swatch: "bg-chart-4" },
+  { box: "border-chart-5 bg-chart-5/20", swatch: "bg-chart-5" },
 ]
 const BOX_FIELDS = ["x", "y", "width", "height"] as const
 const CORNERS: Handle[] = ["nw", "ne", "sw", "se"]
@@ -226,7 +230,10 @@ export default function RegionBoxes({ props, disabled, id, label }: WidgetProps<
                 onFocus={() => setSelected(index)}
                 onKeyDown={(event) => onKeyDown(event, index)}
               >
-                <span className={cn("rounded px-1 font-semibold text-white tabular", color.badge)}>{region.number}</span>
+                <span className="inline-flex items-center gap-1 rounded-sm bg-popover px-1 font-semibold text-popover-foreground tabular">
+                  <span aria-hidden className={cn("size-1.5 rounded-full", color.swatch)} />
+                  {region.number}
+                </span>
                 <span className={cn("line-clamp-3 break-words text-foreground", !region.prompt.trim() && "text-muted-foreground italic")}>
                   {region.prompt.trim() || tw("Empty prompt: not used")}
                 </span>
@@ -261,7 +268,7 @@ export default function RegionBoxes({ props, disabled, id, label }: WidgetProps<
               <span aria-hidden className={cn("size-2.5 rounded-sm", color.swatch)} />
               <button
                 type="button"
-                className={cn("rounded px-1 tabular hover:bg-accent", index === current && "font-semibold")}
+                className={cn("rounded-sm px-1 tabular hover:bg-accent", index === current && "font-semibold")}
                 disabled={disabled || !region.active}
                 onClick={() => {
                   setSelected(index)

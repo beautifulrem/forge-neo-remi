@@ -179,7 +179,7 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
               </>
             ) : null}
             {view.q ? (
-              <button type="button" className="inline-flex items-center gap-0.5 rounded px-1 font-sans hover:bg-muted" onClick={() => setView({ q: "" })}>
+              <button type="button" className="inline-flex items-center gap-0.5 rounded-sm px-1 font-sans hover:bg-muted" onClick={() => setView({ q: "" })}>
                 “{view.q}” <X className="size-3" aria-label={t("Clear search")} />
               </button>
             ) : null}

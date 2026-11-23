@@ -36,11 +36,11 @@ export function BackdropPicker({ value, onChange, tone = "default", className }:
             title={label}
             onClick={() => onChange(mode)}
             className={cn(
-              "grid size-6 place-items-center rounded-[4px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+              "grid size-6 place-items-center rounded-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
               active
                 ? tone === "light"
                   ? "bg-white/22 ring-1 ring-white/80"
-                  : "bg-card shadow-xs ring-1 ring-primary"
+                  : "bg-card ring-1 ring-primary"
                 : tone === "light"
                   ? "hover:bg-white/14"
                   : "hover:bg-background/60",
@@ -49,7 +49,7 @@ export function BackdropPicker({ value, onChange, tone = "default", className }:
             <span
               aria-hidden
               className={cn(
-                "block size-3.5 rounded-[2px] border",
+                "block size-3.5 rounded-xs border",
                 mode === "checker" && "bg-checker",
                 tone === "light" ? "border-white/35" : "border-border",
               )}

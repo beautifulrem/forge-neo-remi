@@ -39,7 +39,7 @@ export function CompareDialog({ images, onOpenChange }: CompareDialogProps) {
         <DialogHeader className="flex-row flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
             <DialogTitle>{t("Compare images")}</DialogTitle>
-            <DialogDescription className="truncate">
+            <DialogDescription className="truncate" title={a && b ? `${a.name} · ${b.name}` : undefined}>
               {a && b ? `${a.name} · ${b.name}` : null}
               {a && b && !sameSize ? ` · ${t("Different sizes: both are fitted to the frame")}` : null}
             </DialogDescription>
@@ -83,7 +83,7 @@ export function CompareDialog({ images, onOpenChange }: CompareDialogProps) {
                       className={cn("min-h-0 flex-1 rounded-lg object-contain", surface.className)}
                       style={surface.style}
                     />
-                    <figcaption className="truncate text-center text-xs text-muted-foreground">
+                    <figcaption className="truncate text-center text-xs text-muted-foreground" title={image.name}>
                       {index === 0 ? t("A") : t("B")} · {image.name}
                       {image.width && image.height ? ` · ${image.width}×${image.height}` : ""}
                     </figcaption>

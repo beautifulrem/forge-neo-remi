@@ -73,7 +73,7 @@ function Pending({ status }: { status: QueueStatus | undefined }) {
     <div className="flex flex-col gap-3">
       <RunningCard paused={status?.paused ?? false} queued={jobs.length} loading={status === undefined} />
       <section aria-labelledby="queue-pending-title" className="flex flex-col gap-2">
-        <h2 id="queue-pending-title" className="flex items-center gap-2 text-sm font-semibold">
+        <h2 id="queue-pending-title" className="flex items-center gap-2 text-[0.9375rem] font-semibold">
           {t("Up next")}
           {items.isPending || (items.isError && !items.data) ? null : <span className="text-sm text-muted-foreground tabular-nums">{jobs.length}</span>}
         </h2>
@@ -113,7 +113,7 @@ function History({ onView }: { onView: (job: Job, index: number) => void }) {
   return (
     <section aria-labelledby="queue-history-title" className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-1.5">
-        <h2 id="queue-history-title" className="mr-1 text-sm font-semibold">
+        <h2 id="queue-history-title" className="mr-1 text-[0.9375rem] font-semibold">
           {t("History")}
           {total !== null ? " " : null}
           {total !== null ? <span className="ml-1 text-xs font-normal text-muted-foreground tabular-nums">{total}</span> : null}

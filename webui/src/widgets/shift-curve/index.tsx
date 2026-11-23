@@ -63,7 +63,7 @@ export default function ShiftCurve({ value, onChange, props, disabled, id, label
         aria-labelledby={label ? labelId(id) : undefined}
         aria-label={label ? undefined : tw("Curve")}
       />
-      <figure className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 p-2">
+      <figure className="flex flex-col gap-1.5 rounded-lg bg-muted/50 p-2">
         <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={summary} className="h-auto w-full" preserveAspectRatio="none">
           <path d={path(start, start, "Linear")} fill="none" strokeWidth={1.5} strokeDasharray="4 4" className="stroke-muted-foreground/70" />
           <path d={path(end, end, "Linear")} fill="none" strokeWidth={1.5} strokeDasharray="1 3" className="stroke-muted-foreground/70" />

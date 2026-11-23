@@ -35,8 +35,9 @@ export function Group({ node }: { node: GroupNode }) {
         <ChevronRight aria-hidden className="size-3.5 transition-transform duration-200 group-data-[panel-open]/trigger:rotate-90" />
         {t(node.title)}
       </Collapsible.Trigger>
-      <Collapsible.Panel className="h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out-soft data-ending-style:h-0 data-starting-style:h-0">
-        <div className="flex flex-col gap-3 pt-2">
+      {/* 4 px of room on every side (-mx-1 / px-1, pb-1): the clip keeps the fields' focus rings */}
+      <Collapsible.Panel className="-mx-1 h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out-soft data-ending-style:h-0 data-starting-style:h-0">
+        <div className="flex flex-col gap-3 px-1 pt-2 pb-1">
           <ContainerTitleContext value={t(node.title)}>
             <RenderChildren nodes={node.children} />
           </ContainerTitleContext>

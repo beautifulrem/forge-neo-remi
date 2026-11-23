@@ -108,7 +108,7 @@ function ChipItem({
           onFocus={onFocus}
           onPointerDown={onPointerDown}
           disabled={disabled}
-          className="rounded px-1.5 text-[0.625rem] font-semibold tracking-widest text-muted-foreground outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="rounded-sm px-1.5 text-[0.625rem] font-semibold tracking-widest text-muted-foreground outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           {chip.text}
         </button>
@@ -159,7 +159,7 @@ function ChipItem({
             {translation ? <span title={translation} className="max-w-64 truncate text-[0.625rem] font-normal text-muted-foreground">{translation}</span> : null}
           </span>
           {weighted ? (
-            <span className="tabular shrink-0 rounded bg-primary/10 px-1 text-[0.625rem] font-semibold text-primary">{weightLabel(chip.weight)}</span>
+            <span className="tabular shrink-0 rounded-xs bg-primary/10 px-1 text-[0.625rem] font-semibold text-primary">{weightLabel(chip.weight)}</span>
           ) : null}
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72" aria-label={t("Edit “{{tag}}”", { tag: text })}>

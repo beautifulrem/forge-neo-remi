@@ -61,7 +61,7 @@ export function LayersPopover({ layer, inpaint, onlyMasked }: LayersPopoverProps
         <section aria-label={t("Layers")} className="flex flex-col gap-1">
           <h3 className="text-xs font-medium text-muted-foreground">{t("Layers")}</h3>
           {layer ? (
-            <div className="flex flex-col gap-2 rounded-lg border bg-card p-2">
+            <div className="flex flex-col gap-2 rounded-md bg-muted/50 p-2">
               <div className="flex items-center gap-2">
                 <span
                   aria-hidden
@@ -107,7 +107,7 @@ export function LayersPopover({ layer, inpaint, onlyMasked }: LayersPopoverProps
               ) : null}
             </div>
           ) : null}
-          <div className="flex items-center gap-2 rounded-lg border bg-card p-2">
+          <div className="flex items-center gap-2 rounded-md bg-muted/50 p-2">
             <ImageIcon aria-hidden className="size-3.5 text-muted-foreground" />
             <span className="text-sm font-medium">{t("Image")}</span>
             <span className="ml-auto" />

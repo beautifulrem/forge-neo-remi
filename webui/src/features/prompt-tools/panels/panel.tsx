@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 export function PanelHeader({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="flex items-center gap-2 border-b px-3 py-2">
-      <h2 className="truncate text-sm font-semibold">{title}</h2>
+      <h2 className="truncate text-[0.9375rem] font-semibold">{title}</h2>
       <div className="ml-auto flex shrink-0 items-center gap-1">{children}</div>
     </div>
   )

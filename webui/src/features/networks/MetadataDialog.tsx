@@ -208,7 +208,9 @@ export function MetadataDialog({ item, open, onOpenChange }: { item: NetworkItem
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[min(88dvh,52rem)] flex-col gap-4 sm:max-w-3xl">
         <DialogHeader className="pr-8">
-          <DialogTitle className="truncate">{item?.title ?? ""}</DialogTitle>
+          <DialogTitle className="truncate" title={item?.title}>
+            {item?.title ?? ""}
+          </DialogTitle>
           <DialogDescription>{t("File information, training details and dataset tags")}</DialogDescription>
         </DialogHeader>
         <div className="-mx-4 min-h-0 flex-1 overflow-y-auto px-4 pb-1">

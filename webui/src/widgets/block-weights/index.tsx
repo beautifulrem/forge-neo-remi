@@ -31,7 +31,7 @@ export default function BlockWeights({ value, onChange, props, disabled, id, lab
 
   return (
     <div id={id} role="group" aria-label={label || t("Block weights")} className="flex flex-col gap-2">
-      <div className="flex gap-1 overflow-x-auto rounded-lg border bg-muted/30 p-2">
+      <div className="flex gap-1 overflow-x-auto rounded-lg bg-muted/50 p-2">
         {blocks.map((block, i) => (
           <div key={block} className="flex w-9 shrink-0 flex-col items-center gap-1">
             <span className="text-[0.625rem] text-muted-foreground tabular-nums">{(weights[i] ?? 0).toFixed(2)}</span>

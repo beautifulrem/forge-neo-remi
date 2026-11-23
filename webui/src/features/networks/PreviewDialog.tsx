@@ -122,7 +122,7 @@ export function PreviewDialog({ item, open, onOpenChange }: { item: NetworkItem 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[min(90dvh,48rem)] flex-col gap-4 sm:max-w-2xl">
         <DialogHeader className="pr-8">
-          <DialogTitle className="truncate">{t("Preview of {{name}}", { name: item?.title ?? "" })}</DialogTitle>
+          <DialogTitle className="truncate" title={item?.title}>{t("Preview of {{name}}", { name: item?.title ?? "" })}</DialogTitle>
           <DialogDescription>{t("Pick a result or upload an image. It is saved next to the model file.")}</DialogDescription>
         </DialogHeader>
         <Tabs value={tab} onValueChange={(value) => setTab(String(value))} className="flex min-h-0 flex-col">

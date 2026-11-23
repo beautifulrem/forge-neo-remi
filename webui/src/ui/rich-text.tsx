@@ -113,8 +113,8 @@ const ORDERED = /^(\s*)\d+[.)]\s+(.*)$/
 const QUOTE = /^>\s?(.*)$/
 
 const HEADING_CLASS = [
-  "text-lg font-semibold tracking-tight",
-  "text-base font-semibold tracking-tight",
+  "text-xl font-semibold tracking-tight",
+  "text-[0.9375rem] font-semibold tracking-tight",
   "text-sm font-semibold",
   "text-sm font-medium",
   "text-sm font-medium",

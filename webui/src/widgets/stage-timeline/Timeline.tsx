@@ -116,7 +116,7 @@ export function Timeline(props: Props) {
         onKeyDown={(event) => onKeyDown(event, name)}
       >
         {name === "peak" ? (
-          <span className="mt-0.5 size-3 rotate-45 rounded-[2px] border-2 border-background bg-primary shadow group-focus-visible/handle:ring-2 group-focus-visible/handle:ring-ring" />
+          <span className="mt-0.5 size-3 rotate-45 rounded-xs border-2 border-background bg-primary group-focus-visible/handle:ring-2 group-focus-visible/handle:ring-ring" />
         ) : (
           <span className="h-full w-0.5 rounded bg-foreground/70 group-hover/handle:bg-foreground group-focus-visible/handle:w-1 group-focus-visible/handle:bg-ring" />
         )}
@@ -126,7 +126,7 @@ export function Timeline(props: Props) {
 
   return (
     <div className={cn("flex flex-col gap-1", props.className)}>
-      <div ref={area} className="relative h-28 rounded-lg border bg-muted/20 select-none" data-testid="stage-timeline-plot">
+      <div ref={area} className="relative h-28 rounded-lg bg-muted/50 select-none" data-testid="stage-timeline-plot">
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={props.summary} className="absolute inset-0 h-full w-full overflow-visible">
           <defs>
             <pattern id={hatch} width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">

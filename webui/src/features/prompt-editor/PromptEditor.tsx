@@ -51,7 +51,7 @@ const externalSync = Annotation.define<boolean>()
 const theme = EditorView.theme({
   // An entry sheet: the fields' fill, no edge; ringed in blue pencil while being written on.
   "&": {
-    fontSize: "0.9rem",
+    fontSize: "0.9375rem",
     borderRadius: "var(--radius-sm)",
     border: "none",
     backgroundColor: "var(--field)",

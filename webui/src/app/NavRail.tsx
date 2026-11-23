@@ -78,7 +78,7 @@ function RailLink({ item, active }: { item: NavItem; active: boolean }) {
           <span
             aria-hidden
             className={cn(
-              "absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-rail-foreground px-1 text-[0.625rem] leading-none font-semibold text-rail tabular-nums ring-2 ring-rail",
+              "absolute top-0.5 right-0.5 grid h-4 min-w-4 place-items-center rounded-md bg-rail-foreground px-1 text-[0.625rem] leading-none font-semibold text-rail tabular-nums ring-2 ring-rail",
             )}
           >
             {queued > 99 ? "99+" : queued}

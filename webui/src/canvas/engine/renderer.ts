@@ -40,7 +40,8 @@ export type LayerStyle = {
   blur: number
 }
 
-const ACCENT = "#7c5cff"
+/** The default accent (`blue`, `--primary` in index.css) until the page's own is read. */
+const ACCENT = "#255d8d"
 
 export class Renderer {
   readonly element: HTMLDivElement

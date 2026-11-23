@@ -44,10 +44,10 @@ function SignInForm({ expired, onSignedIn }: { expired: boolean; onSignedIn: (us
       onSubmit={(event) => void submit(event)}
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-description`}
-      className="grid w-full max-w-sm gap-4 rounded-md bg-card p-6 text-card-foreground shadow-lg ring-1 ring-foreground/10"
+      className="grid w-full max-w-sm gap-4 rounded-md bg-card p-6 text-card-foreground ring-1 ring-foreground/10"
     >
       <div className="grid gap-1">
-        <h1 id={`${id}-title`} className="font-heading text-lg font-semibold tracking-tight">
+        <h1 id={`${id}-title`} className="font-heading text-xl font-semibold tracking-tight">
           {t("Sign in to Remi WebUI")}
         </h1>
         <p id={`${id}-description`} className="text-sm text-muted-foreground">

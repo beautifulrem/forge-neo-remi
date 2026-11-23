@@ -37,8 +37,8 @@ import { dropTarget, moveIndex, planMove, PRIORITIES, priorityLabel } from "./re
 type Grab = { id: string; order: readonly Job[]; via: "pointer" | "keyboard" }
 type MoveTexts = { failure: string; started: string }
 
-/** Row height estimate (a row is one card of two text lines plus the gap). */
-const ROW = 58
+/** Row height estimate (two text lines beside the 36 px handle, plus the hairline). */
+const ROW = 49
 /** Pointer distance from the scroller's edge that scrolls it while dragging. */
 const EDGE = 48
 
@@ -237,13 +237,14 @@ export function PendingList({ jobs }: { jobs: readonly Job[] }) {
                   virtualizer.measureElement(element)
                 } else rows.current.delete(job.id)
               }}
-              className={cn("absolute inset-x-0 top-0 pb-1.5", grabbed && "z-10")}
+              className={cn("absolute inset-x-0 top-0", grabbed && "z-10")}
               style={{ transform: `translateY(${virtual.start - margin}px)` }}
             >
               <div
                 className={cn(
-                  "flex items-center gap-2 rounded-lg border bg-card py-1.5 pr-1.5 pl-1 transition-shadow",
-                  grabbed && "border-primary/60 shadow-lg ring-2 ring-primary/30",
+                  // a row with a hairline below it; the row being moved lifts off the list (a shadow, no edge)
+                  "flex items-center gap-2 border-b py-1.5 pr-1.5 pl-1",
+                  grabbed && "rounded-md border-transparent bg-popover shadow-lg",
                 )}
               >
                 <button

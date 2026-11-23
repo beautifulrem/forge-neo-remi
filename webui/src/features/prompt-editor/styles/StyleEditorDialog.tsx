@@ -88,7 +88,7 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
               {t("Use {prompt} in a style to place your prompt there; otherwise the style is appended to the prompt.")}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+          <div className="-mx-1 flex min-h-0 flex-col gap-3 overflow-y-auto px-1 py-1">
             <div className="flex flex-col gap-1.5">
               <label id={`${id}-name`} className="text-[0.8rem] font-medium">
                 {t("Style", { context: "prompt" })}

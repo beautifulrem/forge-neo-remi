@@ -58,7 +58,7 @@ export function FileInput({ node }: { node: FileNode }) {
           ) : (
             <FileUp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
           )}
-          <span id={hintId} className={value ? "truncate" : "truncate text-muted-foreground"}>
+          <span id={hintId} className={value ? "truncate" : "truncate text-muted-foreground"} title={value ? (uploaded?.name ?? value) : undefined}>
             {value ? (uploaded?.name ?? value) : node.accept ? t("Choose a file ({{types}})", { types: node.accept }) : t("Choose a file")}
           </span>
         </DropZone>

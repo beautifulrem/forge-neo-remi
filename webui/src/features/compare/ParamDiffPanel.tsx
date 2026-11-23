@@ -49,7 +49,7 @@ function TokenDiffRow({ title, diff }: { title: string; diff: TokenDiff }) {
           {diff.removed.map((token, idx) => (
             <span
               key={`r-${idx}-${token}`}
-              className="rounded-[3px] bg-diff-del-bg px-1.5 py-0.5 text-diff-del line-through decoration-current/55"
+              className="rounded-xs bg-diff-del-bg px-1.5 py-0.5 text-diff-del line-through decoration-current/55"
               title={`${t("Removed")} (A)`}
             >
               − {token}
@@ -58,7 +58,7 @@ function TokenDiffRow({ title, diff }: { title: string; diff: TokenDiff }) {
           {diff.added.map((token, idx) => (
             <span
               key={`a-${idx}-${token}`}
-              className="rounded-[3px] bg-diff-add-bg px-1.5 py-0.5 text-diff-add"
+              className="rounded-xs bg-diff-add-bg px-1.5 py-0.5 text-diff-add"
               title={`${t("Added")} (B)`}
             >
               + {token}
@@ -198,7 +198,7 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
               {coreRows.length > 0 ? (
                 <div className="flex flex-col gap-1.5 border-t border-border/60 pt-2">
                   <h4 className="text-xs font-medium text-foreground">{t("Core parameters")}</h4>
-                  <div className="overflow-x-auto rounded-md border border-border/80 bg-card/50">
+                  <div className="overflow-x-auto rounded-md bg-muted/50">
                     <table className="w-full border-collapse text-xs">
                       <thead>
                         <tr className="border-b border-border/70 bg-muted/35 text-left text-[0.6875rem] text-muted-foreground">
@@ -228,7 +228,7 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
               {diff.lora_diffs.length > 0 ? (
                 <div className="flex flex-col gap-1.5 border-t border-border/60 pt-2">
                   <h4 className="text-xs font-medium text-foreground">{t("LoRAs")}</h4>
-                  <div className="overflow-x-auto rounded-md border border-border/80 bg-card/50">
+                  <div className="overflow-x-auto rounded-md bg-muted/50">
                     <table className="w-full border-collapse text-xs font-mono tabular-nums">
                       <tbody className="divide-y divide-border/50">
                         {diff.lora_diffs.map((lora) => (
@@ -253,7 +253,7 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
               {diff.extension_diffs.length > 0 ? (
                 <div className="flex flex-col gap-1.5 border-t border-border/60 pt-2">
                   <h4 className="text-xs font-medium text-foreground">{t("Active extensions")}</h4>
-                  <div className="overflow-x-auto rounded-md border border-border/80 bg-card/50">
+                  <div className="overflow-x-auto rounded-md bg-muted/50">
                     <table className="w-full border-collapse text-xs font-mono tabular-nums">
                       <tbody className="divide-y divide-border/50">
                         {diff.extension_diffs.map((ext) => (

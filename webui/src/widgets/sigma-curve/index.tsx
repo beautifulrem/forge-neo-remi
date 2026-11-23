@@ -92,7 +92,7 @@ export default function SigmaCurve({ props, id, disabled }: WidgetProps<null, Pr
 
   return (
     <div id={id} className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-      <figure className="relative m-0 h-28 min-w-0 flex-1 rounded-lg border bg-muted/30 px-2 py-2">
+      <figure className="relative m-0 h-28 min-w-0 flex-1 rounded-lg bg-muted/50 px-2 py-2">
         <Curve state={selectedState} on={on} width={200} height={100} detailed label={describe(selected, selectedState)} />
         <figcaption className="pointer-events-none absolute top-1 left-2 text-xs font-medium text-muted-foreground tabular-nums">
           {selected.title}
@@ -116,9 +116,9 @@ export default function SigmaCurve({ props, id, disabled }: WidgetProps<null, Pr
                 title={describe(daemon, state)}
                 onClick={() => props.tab && store.getState().setValue(owner, props.tab, daemon.value)}
                 className={cn(
-                  "relative flex h-12 flex-col rounded-md border bg-card px-1 pt-0.5 pb-1 text-left outline-none",
+                  "relative flex h-12 flex-col rounded-md bg-muted/50 px-1 pt-0.5 pb-1 text-left outline-none",
                   "focus-visible:ring-3 focus-visible:ring-ring/50",
-                  current ? "border-primary/60 ring-1 ring-primary/30" : "hover:bg-accent",
+                  current ? "ring-1 ring-primary/70" : "hover:bg-accent",
                 )}
               >
                 <span className="text-[0.625rem] leading-none font-semibold text-muted-foreground">

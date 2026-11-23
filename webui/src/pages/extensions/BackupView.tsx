@@ -222,7 +222,7 @@ export function BackupView({ access }: { access: boolean }) {
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center gap-2">
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-base font-semibold" title={detail.data.name}>{detail.data.name}</h2>
+                <h2 className="truncate text-[0.9375rem] font-semibold" title={detail.data.name}>{detail.data.name}</h2>
                 <p className="text-xs text-muted-foreground">{formatDate(detail.data.created_at, i18n.language)}</p>
               </div>
               <Button disabled={!access} onClick={() => setConfirm("restore")}>

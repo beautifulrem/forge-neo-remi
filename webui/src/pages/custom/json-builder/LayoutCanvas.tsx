@@ -175,7 +175,7 @@ function BoxView({
         backgroundColor: `color-mix(in oklch, ${color} 14%, transparent)`,
       }}
       className={cn(
-        "absolute flex min-h-5 min-w-5 touch-none flex-col overflow-hidden rounded border-[1.5px] outline-none select-none",
+        "absolute flex min-h-5 min-w-5 touch-none flex-col overflow-hidden rounded-sm border-[1.5px] outline-none select-none",
         "cursor-move transition-[border-color,box-shadow] focus-visible:ring-3 focus-visible:ring-ring/50",
         (active || dragging) && "z-10 shadow-lg ring-3 ring-primary/30",
       )}

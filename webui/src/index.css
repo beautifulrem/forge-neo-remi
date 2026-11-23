@@ -404,7 +404,8 @@
     border-radius: 999px;
   }
 
-  ::-webkit-scrollbar-track {
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
     background: transparent;
   }
 
@@ -433,6 +434,36 @@
     cursor: pointer;
     background-color: var(--muted-foreground);
     mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+
+  /* Autofilled fields keep the theme's fill and ink: the browser's own fill is held off (it only
+     takes effect after the transition) and the text keeps --foreground. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--foreground);
+    transition: background-color 600000s 0s, color 600000s 0s;
+  }
+
+  /* Native selects (the table widgets) draw the shared chevron in the muted ink, not the
+     browser's arrow, and open a list in the popover's colours. */
+  select:not([multiple]):not([size]) {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 1.75rem;
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+      linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+    background-position:
+      calc(100% - 0.8125rem) 55%,
+      calc(100% - 0.5625rem) 55%;
+    background-size: 0.25rem 0.25rem;
+    background-repeat: no-repeat;
+  }
+
+  option {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
   }
 
   :focus-visible {

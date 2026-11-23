@@ -189,7 +189,7 @@ function CardView({ item, kind, id, index, active, cursor, mismatch, width, onAp
           {item.subtype && item.subtype !== "LoRA" ? <span className="rounded-xs bg-black/50 px-1.5 py-px text-[0.625rem] leading-4 font-medium text-white">{item.subtype}</span> : null}
         </div>
         {active ? (
-          <span aria-hidden className="absolute right-1.5 bottom-1.5 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm ring-2 ring-black/20">
+          <span aria-hidden className="absolute right-1.5 bottom-1.5 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground ring-2 ring-black/20">
             <Check className="size-3" strokeWidth={3} />
           </span>
         ) : null}

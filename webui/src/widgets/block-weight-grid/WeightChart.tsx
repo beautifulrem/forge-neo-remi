@@ -99,7 +99,7 @@ export function WeightChart(props: Props) {
       <div
         ref={area}
         data-testid="weight-chart"
-        className={cn("relative flex h-28 touch-none items-end gap-px rounded-lg border bg-muted/30 px-1 pt-1 select-none", disabled ? "opacity-60" : "cursor-crosshair")}
+        className={cn("relative flex h-28 touch-none items-end gap-px rounded-lg bg-muted/50 px-1 pt-1 select-none", disabled ? "opacity-60" : "cursor-crosshair")}
         onPointerDown={(event) => {
           if (disabled || event.button !== 0) return
           event.preventDefault()
@@ -138,7 +138,7 @@ export function WeightChart(props: Props) {
             >
               <div
                 className={cn(
-                  "absolute inset-x-0 bottom-0 rounded-t-sm transition-[height] duration-75",
+                  "absolute inset-x-0 bottom-0 rounded-t-sm",
                   band >= 0 ? BAND_BAR[band % BAND_BAR.length] : "bg-primary/70",
                   index === props.selected && "ring-2 ring-foreground/60",
                   copy !== null && "opacity-60",

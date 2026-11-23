@@ -47,7 +47,7 @@ function ThumbChip({
         current ? "bg-white/12 ring-1 ring-white/75" : "bg-white/5 ring-1 ring-white/10 hover:bg-white/12 hover:ring-white/30",
       )}
     >
-      <div className="relative aspect-square w-12 overflow-hidden rounded-[2px] bg-black/50">
+      <div className="relative aspect-square w-12 overflow-hidden rounded-sm bg-black/50">
         <img src={api.thumbUrl(node.file_id, 128)} alt={label} className="size-full object-cover" loading="lazy" />
       </div>
       <span className={cn("w-full truncate text-center font-mono text-[0.625rem]", current ? "font-medium text-white" : "text-white/75")}>

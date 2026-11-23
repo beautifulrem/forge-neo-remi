@@ -94,15 +94,15 @@ export default function NetworksDrawer({ tab, autoFocus, onClose, returnFocus }:
         close()
       }}
       className={cn(
-        "fixed z-40 flex flex-col border-border bg-background shadow-2xl",
+        "fixed z-40 flex flex-col bg-background shadow-2xl",
         "animate-in duration-200 fade-in-0",
-        desktop ? "top-12 right-0 bottom-0 border-l slide-in-from-right-8" : "inset-x-0 bottom-0 h-[82dvh] rounded-t-2xl border-t slide-in-from-bottom-8",
+        desktop ? "top-12 right-0 bottom-0 slide-in-from-right-8" : "inset-x-0 bottom-0 h-[82dvh] rounded-t-xl slide-in-from-bottom-8",
       )}
       style={desktop ? { width: `min(${width}px, calc(100vw - 4rem))` } : undefined}
     >
       {desktop ? <ResizeHandle /> : <div aria-hidden className="mx-auto mt-2 h-1 w-10 rounded-full bg-muted-foreground/30" />}
       <header className="flex items-center gap-2 px-3 pt-2">
-        <h2 className="font-heading text-sm font-semibold">{t("Networks")}</h2>
+        <h2 className="font-heading text-[0.9375rem] font-semibold">{t("Networks")}</h2>
         <PromptTargetSwitch className="ml-2" />
         <div className="ml-auto flex items-center gap-0.5">
           <Button

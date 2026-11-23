@@ -66,11 +66,11 @@ function PreferredModules({ id, value, onChange }: { id: string; value: string[]
           {t("Clear")}
         </Button>
       </div>
-      <div role="group" aria-labelledby={id} aria-describedby={`${id}-info`} className="flex max-h-40 flex-col gap-0.5 overflow-y-auto rounded-lg border bg-muted/30 p-1">
+      <div role="group" aria-labelledby={id} aria-describedby={`${id}-info`} className="flex max-h-40 flex-col gap-0.5 overflow-y-auto rounded-lg bg-muted/50 p-1">
         {rows.map((m, index) => (
           <div key={m.value} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-accent">
             <Checkbox id={`${id}-${index}`} checked={value.includes(m.value)} onCheckedChange={(on) => onChange(on ? [...value, m.value] : value.filter((v) => v !== m.value))} />
-            <label htmlFor={`${id}-${index}`} className={m.missing ? "min-w-0 flex-1 truncate text-sm text-muted-foreground line-through" : "min-w-0 flex-1 truncate text-sm"}>
+            <label htmlFor={`${id}-${index}`} className={m.missing ? "min-w-0 flex-1 truncate text-sm text-muted-foreground line-through" : "min-w-0 flex-1 truncate text-sm"} title={m.label}>
               {m.label}
             </label>
           </div>
@@ -163,7 +163,7 @@ function Editor({ meta, kind, onDone }: { meta: NetworkMeta; kind: NetworkKind; 
                 pickLabel={t("Training tags: click to add to or remove from the activation text")}
                 isOn={(tag) => hasTag(draft.activation, tag)}
                 onPick={(tag) => update({ activation: toggleTag(draft.activation, tag) })}
-                className="max-h-40 overflow-y-auto rounded-lg border bg-muted/30 p-2"
+                className="max-h-40 overflow-y-auto rounded-lg bg-muted/50 p-2"
               />
             ) : null}
           </div>
@@ -208,7 +208,7 @@ function Editor({ meta, kind, onDone }: { meta: NetworkMeta; kind: NetworkKind; 
                 {t("Copy")}
               </Button>
             </div>
-            <p aria-live="polite" className="min-h-10 rounded-lg border bg-muted/30 px-2.5 py-2 text-xs text-foreground/85">
+            <p aria-live="polite" className="min-h-10 rounded-lg bg-muted/50 px-2.5 py-2 text-xs text-foreground/85">
               {random || <span className="text-muted-foreground">{t("A prompt drawn from the training tags, by frequency.")}</span>}
             </p>
           </div>
@@ -234,7 +234,7 @@ export function EditMetadataDialog({ item, kind, open, onOpenChange }: { item: N
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[min(90dvh,52rem)] flex-col gap-4 sm:max-w-2xl">
         <DialogHeader className="pr-8">
-          <DialogTitle className="truncate">{t("Edit {{name}}", { name: item?.title ?? "" })}</DialogTitle>
+          <DialogTitle className="truncate" title={item?.title}>{t("Edit {{name}}", { name: item?.title ?? "" })}</DialogTitle>
           <DialogDescription>{item?.path}</DialogDescription>
         </DialogHeader>
         {meta.data && kind ? (

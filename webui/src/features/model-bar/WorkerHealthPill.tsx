@@ -117,7 +117,9 @@ export function WorkerHealthPill({ className }: { className?: string }) {
             return (
               <li key={worker.worker_id} className="flex flex-col gap-1 border-t border-border/60 pt-2 first:border-t-0 first:pt-0">
                 <div className="flex items-center gap-1.5 text-xs">
-                  <span className="truncate font-medium text-foreground">{worker.gpu_name || worker.device || worker.worker_id}</span>
+                  <span className="truncate font-medium text-foreground" title={worker.gpu_name || worker.device || worker.worker_id}>
+                    {worker.gpu_name || worker.device || worker.worker_id}
+                  </span>
                   <span className="ml-auto shrink-0 font-mono text-[0.6875rem] text-muted-foreground">{worker.state}</span>
                 </div>
                 {totalGb ? (

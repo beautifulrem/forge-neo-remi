@@ -306,10 +306,15 @@ generated interfaces (sources: Linear's
   Floating chrome that sits over a still picture (the image editor's panels
   and the candidate bar) uses `material-float`: a translucent popover
   surface with a backdrop blur, a 1 px top highlight, and an edge plus a
-  shadow, tuned separately for light and dark (`--material-float*`). It is
-  the one exception to "never an edge and a shadow together": over a busy
-  picture the shadow alone does not hold the outline. The panel stays
-  opaque enough that its text keeps its contrast over pure black or white.
+  shadow, tuned separately for light and dark (`--material-float*`). Floating
+  layers are the one exception to "never an edge and a shadow together":
+  this material, the floating lists (menus, selects, combobox, popover, hover
+  card) keep a hairline ring with their shadow, because they
+  open over anything (a busy picture, a surface of their own tone) and the
+  shadow alone does not hold the outline there. A floating bar (the settings
+  apply bar, the gallery's bulk bar) and a drawer take the shadow alone. The
+  material stays opaque enough that its text keeps its contrast over pure
+  black or white.
   Nothing else is glass: not the header, menus, popovers, the command
   palette, the mobile bottom bar or its More sheet, the progress overlay or
   the live preview (a blur over a surface that redraws every step costs
