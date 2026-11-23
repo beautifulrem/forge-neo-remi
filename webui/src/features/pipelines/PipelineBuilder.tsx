@@ -1,19 +1,17 @@
 /**
  * Non-Node Multi-Stage Linear Pipeline Builder & Runner:
- * compose 2–4 linear stages (`Prompt Upsample` -> `Base Generate` ->
- * `Refine / Inpaint` -> `Finish / Upscale / PiD`), inspect per-stage cache-hit
- * badges ("Reused from cached output" vs "Will execute"), run or re-run from a
- * modified stage, and save/load reusable pipeline templates. Lazily loaded.
+ * connected tactile studio modules (`Prompt Upsample` -> `Base Generate` ->
+ * `Refine / Inpaint` -> `Finish / Upscale / PiD`), whisper-quiet inline cache
+ * status, `--glow` lamp CTA, and recent runs matrix. Lazily loaded.
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
   ArrowDown,
-  ArrowRight,
   ArrowUp,
   Ban,
   CheckCircle2,
+  ChevronRight,
   ClipboardPaste,
-  DatabaseZap,
   History,
   Play,
   Plus,
@@ -21,11 +19,11 @@ import {
   Save,
   Trash2,
 } from "@/components/icons"
-import { useEffect, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
 import { onWsEvent } from "@/api/ws"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
@@ -35,7 +33,6 @@ import { Switch } from "@/components/ui/switch"
 import { errorText } from "@/features/errors/error-text"
 import { captureFormOverrides } from "@/features/recipes/capture"
 import { cn } from "@/lib/utils"
-import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import {
   cancelChainApi,
   chainsQuery,
@@ -49,7 +46,6 @@ import {
 } from "./api"
 import { defaultStage, firstExecuteStage, planPipelineCache, STAGE_KINDS, STAGE_META, STARTER_PIPELINES } from "./cache-hash"
 import type { ChainPreviewStage, ChainTemplate, JobChain, StageKind, StageSpec } from "./types"
-import { useTranslation } from "react-i18next"
 
 const MAX_STAGES = 4
 const MIN_STAGES = 1
@@ -57,6 +53,10 @@ const MIN_STAGES = 1
 function numOr(value: unknown, fallback: number): number {
   const n = Number(value)
   return Number.isFinite(n) ? n : fallback
+}
+
+function stepNumber(index: number): string {
+  return String(index + 1).padStart(2, "0")
 }
 
 export function PipelineBuilder() {
@@ -213,17 +213,18 @@ export function PipelineBuilder() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Instrument command bar */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border/70 pb-3">
         <Input
           value={name}
           onChange={(event) => setName(event.target.value)}
           aria-label={t("Pipeline name")}
           placeholder={t("Pipeline name")}
-          className="h-7 min-w-48 flex-1 text-[0.8rem] sm:max-w-xs"
+          className="h-7 min-w-48 flex-1 text-[0.8125rem] font-medium sm:max-w-xs"
         />
 
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" />}>
+          <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="h-7 gap-1.5 px-2.5 text-xs" />}>
             <History className="size-3.5" aria-hidden />
             {t("Templates")}
           </DropdownMenuTrigger>
@@ -250,7 +251,7 @@ export function PipelineBuilder() {
         </DropdownMenu>
 
         <Popover open={saveOpen} onOpenChange={setSaveOpen}>
-          <PopoverTrigger render={<Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" />}>
+          <PopoverTrigger render={<Button variant="outline" size="sm" className="h-7 gap-1.5 px-2.5 text-xs" />}>
             <Save className="size-3.5" aria-hidden />
             {t("Save template")}
           </PopoverTrigger>
@@ -285,7 +286,7 @@ export function PipelineBuilder() {
 
         {stages.length < MAX_STAGES ? (
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" />}>
+            <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="h-7 gap-1.5 px-2.5 text-xs" />}>
               <Plus className="size-3.5" aria-hidden />
               {t("Add stage")}
             </DropdownMenuTrigger>
@@ -299,19 +300,19 @@ export function PipelineBuilder() {
           </DropdownMenu>
         ) : null}
 
-        <div className="ml-auto flex items-center gap-2">
-          <span className="hidden text-xs text-muted-foreground tabular-nums sm:inline">
+        <div className="ml-auto flex items-center gap-2.5">
+          <span className="hidden font-mono text-xs text-muted-foreground tabular-nums sm:inline">
             {t("{{cached}} cached · {{execute}} to run", { cached: cachedCount, execute: executeCount })}
           </span>
           {activeRun && activeRun.status === "running" ? (
-            <Button variant="destructive" size="sm" className="h-7 gap-1 px-2.5 text-xs" onClick={() => cancel.mutate(activeRun.id)}>
+            <Button variant="destructive" size="sm" className="h-7 gap-1.5 px-3 text-xs" onClick={() => cancel.mutate(activeRun.id)}>
               <Ban className="size-3.5" aria-hidden />
               {t("Cancel pipeline")}
             </Button>
           ) : (
             <Button
               size="sm"
-              className="h-7 gap-1 px-3 text-xs"
+              className="h-7 gap-1.5 border border-border/60 bg-glow px-3.5 text-xs font-medium text-glow-foreground shadow-xs hover:bg-glow hover:opacity-90"
               disabled={run.isPending || stages.every((s) => s.enabled === false)}
               onClick={() => run.mutate(activeRun && firstMod !== null ? firstMod : undefined)}
             >
@@ -322,12 +323,8 @@ export function PipelineBuilder() {
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        {t("Compose 2–4 sequential stages without nodes. Unchanged upstream stages reuse cached outputs automatically.")}
-      </p>
-
-      {/* Linear stage track */}
-      <ol className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-4">
+      {/* Connected linear stage track */}
+      <ol className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:flex xl:items-stretch xl:gap-0">
         {stages.map((stage, index) => {
           const planned = plan[index]!
           const runStage = activeRun?.stages[index]
@@ -336,324 +333,342 @@ export function PipelineBuilder() {
           const sampler = stage.scripts?.sampler ?? {}
 
           return (
-            <li
-              key={`${stage.kind}-${index}`}
-              data-stage-index={index}
-              data-cache-decision={planned.decision}
-              className={cn(
-                "relative flex flex-col gap-2.5 border-t border-border pt-3 transition-opacity",
-                !enabled && "opacity-55",
-              )}
-            >
-              <div className="flex items-center gap-1.5">
-                <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[0.6875rem] font-semibold tabular-nums">
-                  {index + 1}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold" title={t(STAGE_META[stage.kind].label)}>
-                  {t(STAGE_META[stage.kind].label)}
-                </span>
-                {index < stages.length - 1 ? <ArrowRight className="hidden size-3.5 shrink-0 text-muted-foreground/50 xl:block" aria-hidden /> : null}
-                <Switch
-                  checked={enabled}
-                  aria-label={`${t("Stage {{n}}", { n: index + 1 })} ${t(STAGE_META[stage.kind].label)}`}
-                  onCheckedChange={(checked) => updateStage(index, (prev) => ({ ...prev, enabled: checked }))}
-                />
-              </div>
-
-              {/* Cache-hit / execution status badge */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                {planned.decision === "cached" ? (
-                  <Badge variant="secondary" className="gap-1 bg-diff-add-bg text-[0.625rem] text-diff-add">
-                    <DatabaseZap className="size-3" aria-hidden />
-                    {t("Reused from cached output")}
-                  </Badge>
-                ) : planned.decision === "execute" ? (
-                  <Badge variant="outline" className="gap-1 text-[0.625rem]">
-                    <Play className="size-2.5" aria-hidden />
-                    {t("Will execute")}
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-[0.625rem] text-muted-foreground">
-                    {t("Stage skipped")}
-                  </Badge>
+            <Fragment key={`${stage.kind}-${index}`}>
+              <li
+                data-stage-index={index}
+                data-cache-decision={planned.decision}
+                className={cn(
+                  "flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card transition-opacity",
+                  !enabled && "opacity-55",
                 )}
-
-                {runStage?.status === "completed" || runStage?.status === "cached" ? (
-                  <CheckCircle2 className="size-3.5 text-diff-add" aria-label={t("Stage completed")} />
-                ) : null}
-              </div>
-
-              {/* Cached / latest output preview thumb */}
-              {planned.cached_outputs.length > 0 || (runStage?.output_file_ids?.length ?? 0) > 0 ? (
-                <div className="flex items-center gap-1.5">
-                  {(planned.cached_outputs.length > 0 ? planned.cached_outputs : (runStage?.output_file_ids ?? []))
-                    .slice(0, 3)
-                    .map((fileId) => (
-                      <img
-                        key={fileId}
-                        src={api.thumbUrl(fileId, 96)}
-                        alt=""
-                        className="size-10 rounded-sm bg-checker object-cover ring-1 ring-border"
-                      />
-                    ))}
+              >
+                {/* Stage module header */}
+                <div className="flex items-center gap-2 border-b border-border/70 bg-muted/25 px-3 py-2">
+                  <span className="shrink-0 font-mono text-[0.6875rem] font-semibold tracking-wider text-muted-foreground tabular-nums">
+                    {stepNumber(index)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[0.8125rem] font-semibold text-foreground" title={t(STAGE_META[stage.kind].label)}>
+                    {t(STAGE_META[stage.kind].label)}
+                  </span>
+                  <Switch
+                    checked={enabled}
+                    aria-label={`${t("Stage {{n}}", { n: index + 1 })} ${t(STAGE_META[stage.kind].label)}`}
+                    onCheckedChange={(checked) => updateStage(index, (prev) => ({ ...prev, enabled: checked }))}
+                  />
                 </div>
-              ) : null}
 
-              {/* Stage-specific lightweight controls */}
-              <div className="flex flex-col gap-2 text-xs">
-                {stage.kind === "prompt_upsample" ? (
-                  <>
-                    <label className="flex flex-col gap-1">
-                      <span className="text-muted-foreground">{t("Prompt")}</span>
-                      <Input
-                        value={String(core.prompt ?? "")}
-                        disabled={!enabled}
-                        onChange={(event) =>
-                          updateStage(index, (prev) => ({ ...prev, core: { ...prev.core, prompt: event.target.value } }))
-                        }
-                        className="h-7 text-xs"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1">
-                      <span className="text-muted-foreground">{t("PUP mode")}</span>
-                      <Select
-                        value={String(stage.config?.mode ?? "auto")}
-                        disabled={!enabled}
-                        onValueChange={(value) =>
-                          value && updateStage(index, (prev) => ({ ...prev, config: { ...prev.config, mode: value } }))
-                        }
-                      >
-                        <SelectTrigger size="sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="auto">auto</SelectItem>
-                          <SelectItem value="t2i">t2i</SelectItem>
-                          <SelectItem value="i2i">i2i</SelectItem>
-                          <SelectItem value="t2i_bbox">t2i_bbox</SelectItem>
-                          <SelectItem value="vgl_json">vgl_json</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </label>
-                  </>
-                ) : null}
+                {/* Whisper-quiet inline cache/execution status */}
+                <div className="flex items-center justify-between gap-2 px-3 pt-2.5">
+                  {planned.decision === "cached" ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success">
+                      <span className="size-1.5 shrink-0 rounded-full bg-success" aria-hidden />
+                      {t("Reused from cached output")}
+                    </span>
+                  ) : planned.decision === "execute" ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
+                      {t("Will execute")}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground/45" aria-hidden />
+                      {t("Stage skipped")}
+                    </span>
+                  )}
 
-                {stage.kind === "generate" ? (
-                  <>
-                    <label className="flex flex-col gap-1">
-                      <span className="text-muted-foreground">{t("Prompt")}</span>
-                      <Input
-                        value={String(core.prompt ?? "")}
-                        disabled={!enabled}
-                        onChange={(event) =>
-                          updateStage(index, (prev) => ({ ...prev, core: { ...prev.core, prompt: event.target.value } }))
-                        }
-                        className="h-7 text-xs"
-                      />
-                    </label>
-                    <div className="grid grid-cols-2 gap-1.5">
+                  {runStage?.status === "completed" || runStage?.status === "cached" ? (
+                    <CheckCircle2 className="size-3.5 shrink-0 text-success" aria-label={t("Stage completed")} />
+                  ) : null}
+                </div>
+
+                {/* Stage parameters & cached preview */}
+                <div className="flex flex-1 flex-col gap-2.5 px-3 py-2.5 text-xs">
+                  {planned.cached_outputs.length > 0 || (runStage?.output_file_ids?.length ?? 0) > 0 ? (
+                    <div className="flex items-center gap-1.5">
+                      {(planned.cached_outputs.length > 0 ? planned.cached_outputs : (runStage?.output_file_ids ?? []))
+                        .slice(0, 3)
+                        .map((fileId) => (
+                          <img
+                            key={fileId}
+                            src={api.thumbUrl(fileId, 96)}
+                            alt=""
+                            className="size-10 rounded-sm bg-checker object-cover ring-1 ring-border"
+                          />
+                        ))}
+                    </div>
+                  ) : null}
+
+                  {stage.kind === "prompt_upsample" ? (
+                    <>
                       <label className="flex flex-col gap-1">
-                        <span className="text-muted-foreground">{t("Steps")}</span>
+                        <span className="text-[0.6875rem] font-medium text-muted-foreground">{t("Prompt")}</span>
+                        <Input
+                          value={String(core.prompt ?? "")}
+                          disabled={!enabled}
+                          onChange={(event) =>
+                            updateStage(index, (prev) => ({ ...prev, core: { ...prev.core, prompt: event.target.value } }))
+                          }
+                          className="h-7 text-xs"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[0.6875rem] font-medium text-muted-foreground">{t("PUP mode")}</span>
+                        <Select
+                          value={String(stage.config?.mode ?? "auto")}
+                          disabled={!enabled}
+                          onValueChange={(value) =>
+                            value && updateStage(index, (prev) => ({ ...prev, config: { ...prev.config, mode: value } }))
+                          }
+                        >
+                          <SelectTrigger size="sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">auto</SelectItem>
+                            <SelectItem value="t2i">t2i</SelectItem>
+                            <SelectItem value="i2i">i2i</SelectItem>
+                            <SelectItem value="t2i_bbox">t2i_bbox</SelectItem>
+                            <SelectItem value="vgl_json">vgl_json</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </label>
+                    </>
+                  ) : null}
+
+                  {stage.kind === "generate" ? (
+                    <>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[0.6875rem] font-medium text-muted-foreground">{t("Prompt")}</span>
+                        <Input
+                          value={String(core.prompt ?? "")}
+                          disabled={!enabled}
+                          onChange={(event) =>
+                            updateStage(index, (prev) => ({ ...prev, core: { ...prev.core, prompt: event.target.value } }))
+                          }
+                          className="h-7 text-xs"
+                        />
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="flex flex-col gap-1">
+                          <span className="text-[0.6875rem] font-medium text-muted-foreground">{t("Steps")}</span>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={150}
+                            value={numOr(sampler.steps, 28)}
+                            disabled={!enabled}
+                            onChange={(event) =>
+                              updateStage(index, (prev) => ({
+                                ...prev,
+                                scripts: { ...prev.scripts, sampler: { ...prev.scripts?.sampler, steps: numOr(event.target.value, 28) } },
+                              }))
+                            }
+                            className="h-7 font-mono text-xs tabular-nums"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-[0.6875rem] font-medium text-muted-foreground">{t("CFG scale")}</span>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={30}
+                            step={0.5}
+                            value={numOr(core.cfg_scale, 5)}
+                            disabled={!enabled}
+                            onChange={(event) =>
+                              updateStage(index, (prev) => ({
+                                ...prev,
+                                core: { ...prev.core, cfg_scale: numOr(event.target.value, 5) },
+                              }))
+                            }
+                            className="h-7 font-mono text-xs tabular-nums"
+                          />
+                        </label>
+                      </div>
+                    </>
+                  ) : null}
+
+                  {stage.kind === "refine" ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[0.6875rem] font-medium text-muted-foreground">{t("Denoising strength")}</span>
+                        <Input
+                          type="number"
+                          min={0.05}
+                          max={1}
+                          step={0.05}
+                          value={numOr(core.denoising_strength, 0.35)}
+                          disabled={!enabled}
+                          onChange={(event) =>
+                            updateStage(index, (prev) => ({
+                              ...prev,
+                              core: { ...prev.core, denoising_strength: numOr(event.target.value, 0.35) },
+                            }))
+                          }
+                          className="h-7 font-mono text-xs tabular-nums"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[0.6875rem] font-medium text-muted-foreground">{t("Steps")}</span>
                         <Input
                           type="number"
                           min={1}
                           max={150}
-                          value={numOr(sampler.steps, 28)}
+                          value={numOr(sampler.steps, 20)}
                           disabled={!enabled}
                           onChange={(event) =>
                             updateStage(index, (prev) => ({
                               ...prev,
-                              scripts: { ...prev.scripts, sampler: { ...prev.scripts?.sampler, steps: numOr(event.target.value, 28) } },
+                              scripts: { ...prev.scripts, sampler: { ...prev.scripts?.sampler, steps: numOr(event.target.value, 20) } },
                             }))
                           }
-                          className="h-7 text-xs tabular-nums"
-                        />
-                      </label>
-                      <label className="flex flex-col gap-1">
-                        <span className="text-muted-foreground">{t("CFG scale")}</span>
-                        <Input
-                          type="number"
-                          min={1}
-                          max={30}
-                          step={0.5}
-                          value={numOr(core.cfg_scale, 5)}
-                          disabled={!enabled}
-                          onChange={(event) =>
-                            updateStage(index, (prev) => ({
-                              ...prev,
-                              core: { ...prev.core, cfg_scale: numOr(event.target.value, 5) },
-                            }))
-                          }
-                          className="h-7 text-xs tabular-nums"
+                          className="h-7 font-mono text-xs tabular-nums"
                         />
                       </label>
                     </div>
-                  </>
-                ) : null}
+                  ) : null}
 
-                {stage.kind === "refine" ? (
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <label className="flex flex-col gap-1">
-                      <span className="text-muted-foreground">{t("Denoising strength")}</span>
-                      <Input
-                        type="number"
-                        min={0.05}
-                        max={1}
-                        step={0.05}
-                        value={numOr(core.denoising_strength, 0.35)}
-                        disabled={!enabled}
-                        onChange={(event) =>
-                          updateStage(index, (prev) => ({
-                            ...prev,
-                            core: { ...prev.core, denoising_strength: numOr(event.target.value, 0.35) },
-                          }))
-                        }
-                        className="h-7 text-xs tabular-nums"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1">
-                      <span className="text-muted-foreground">{t("Steps")}</span>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={150}
-                        value={numOr(sampler.steps, 20)}
-                        disabled={!enabled}
-                        onChange={(event) =>
-                          updateStage(index, (prev) => ({
-                            ...prev,
-                            scripts: { ...prev.scripts, sampler: { ...prev.scripts?.sampler, steps: numOr(event.target.value, 20) } },
-                          }))
-                        }
-                        className="h-7 text-xs tabular-nums"
-                      />
-                    </label>
-                  </div>
-                ) : null}
-
-                {stage.kind === "finish" ? (
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <label className="flex flex-col gap-1">
-                      <span className="text-muted-foreground">{t("Upscale factor")}</span>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={8}
-                        step={0.5}
-                        value={numOr(core.upscaling_resize, 2)}
-                        disabled={!enabled}
-                        onChange={(event) =>
-                          updateStage(index, (prev) => ({
-                            ...prev,
-                            core: { ...prev.core, upscaling_resize: numOr(event.target.value, 2) },
-                          }))
-                        }
-                        className="h-7 text-xs tabular-nums"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1">
-                      <span className="text-muted-foreground">{t("Upscaler")}</span>
-                      <Input
-                        value={String(core.upscaler_1 ?? "R-ESRGAN 4x+")}
-                        disabled={!enabled}
-                        onChange={(event) =>
-                          updateStage(index, (prev) => ({
-                            ...prev,
-                            core: { ...prev.core, upscaler_1: event.target.value },
-                          }))
-                        }
-                        className="h-7 text-xs"
-                      />
-                    </label>
-                  </div>
-                ) : null}
-              </div>
-
-              {/* Per-stage actions */}
-              <div className="mt-auto flex flex-wrap items-center gap-1 border-t border-border/50 pt-1.5">
-                {stage.kind !== "prompt_upsample" ? (
-                  <Button variant="ghost" size="sm" className="h-7 shrink-0 gap-1 px-1.5 text-[0.6875rem]" disabled={!enabled} onClick={() => pullFromForm(index)}>
-                    <ClipboardPaste className="size-3" aria-hidden />
-                    {t("Pull from form")}
-                  </Button>
-                ) : null}
-                {activeRun ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 shrink-0 gap-1 px-1.5 text-[0.6875rem]"
-                    disabled={!enabled || run.isPending}
-                    onClick={() => run.mutate(index)}
-                  >
-                    <RotateCw className="size-3" aria-hidden />
-                    {t("Re-run from stage {{n}}", { n: index + 1 })}
-                  </Button>
-                ) : null}
-                <div className="ml-auto flex shrink-0 items-center gap-0.5">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="size-7 shrink-0"
-                    disabled={index === 0}
-                    aria-label={t("Move stage left")}
-                    onClick={() => moveStage(index, index - 1)}
-                  >
-                    <ArrowUp className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="size-7 shrink-0"
-                    disabled={index === stages.length - 1}
-                    aria-label={t("Move stage right")}
-                    onClick={() => moveStage(index, index + 1)}
-                  >
-                    <ArrowDown className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={stages.length <= MIN_STAGES}
-                    aria-label={t("Remove stage")}
-                    className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => removeStage(index)}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
+                  {stage.kind === "finish" ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[0.6875rem] font-medium text-muted-foreground">{t("Upscale factor")}</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={8}
+                          step={0.5}
+                          value={numOr(core.upscaling_resize, 2)}
+                          disabled={!enabled}
+                          onChange={(event) =>
+                            updateStage(index, (prev) => ({
+                              ...prev,
+                              core: { ...prev.core, upscaling_resize: numOr(event.target.value, 2) },
+                            }))
+                          }
+                          className="h-7 font-mono text-xs tabular-nums"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[0.6875rem] font-medium text-muted-foreground">{t("Upscaler")}</span>
+                        <Input
+                          value={String(core.upscaler_1 ?? "R-ESRGAN 4x+")}
+                          disabled={!enabled}
+                          onChange={(event) =>
+                            updateStage(index, (prev) => ({
+                              ...prev,
+                              core: { ...prev.core, upscaler_1: event.target.value },
+                            }))
+                          }
+                          className="h-7 text-xs"
+                        />
+                      </label>
+                    </div>
+                  ) : null}
                 </div>
-              </div>
-            </li>
+
+                {/* Recessed studio footer bar */}
+                <div className="mt-auto flex flex-wrap items-center gap-1 border-t border-border/70 bg-muted/20 px-2 py-1.5">
+                  {stage.kind !== "prompt_upsample" ? (
+                    <Button variant="ghost" size="sm" className="h-7 shrink-0 gap-1 px-1.5 text-xs text-muted-foreground hover:text-foreground" disabled={!enabled} onClick={() => pullFromForm(index)}>
+                      <ClipboardPaste className="size-3" aria-hidden />
+                      {t("Pull from form")}
+                    </Button>
+                  ) : null}
+                  {activeRun ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 shrink-0 gap-1 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                      disabled={!enabled || run.isPending}
+                      onClick={() => run.mutate(index)}
+                    >
+                      <RotateCw className="size-3" aria-hidden />
+                      {t("Re-run from stage {{n}}", { n: index + 1 })}
+                    </Button>
+                  ) : null}
+                  <div className="ml-auto flex shrink-0 items-center gap-0.5">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
+                      disabled={index === 0}
+                      aria-label={t("Move stage left")}
+                      onClick={() => moveStage(index, index - 1)}
+                    >
+                      <ArrowUp className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
+                      disabled={index === stages.length - 1}
+                      aria-label={t("Move stage right")}
+                      onClick={() => moveStage(index, index + 1)}
+                    >
+                      <ArrowDown className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={stages.length <= MIN_STAGES}
+                      aria-label={t("Remove stage")}
+                      className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeStage(index)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </li>
+
+              {/* Crisp architectural horizontal flow connector on desktop */}
+              {index < stages.length - 1 ? (
+                <li aria-hidden className="hidden w-7 shrink-0 items-center justify-center xl:flex">
+                  <div className="flex w-full items-center">
+                    <span className="h-px flex-1 bg-border" />
+                    <ChevronRight className="-ml-1.5 size-3.5 shrink-0 text-muted-foreground/60" />
+                  </div>
+                </li>
+              ) : null}
+            </Fragment>
           )
         })}
       </ol>
 
       {/* Recent pipeline runs */}
-      <section className={panelClass(0)} aria-label={t("Recent pipeline runs")}>
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className={panelTitleClass(0)}>
+      <section className="overflow-hidden rounded-lg border border-border bg-card" aria-label={t("Recent pipeline runs")}>
+        <div className="flex items-center justify-between border-b border-border/70 px-4 py-2.5">
+          <h3 className="text-xs font-semibold tracking-wide text-foreground">
             {t("Recent pipeline runs")}
-            <span className="ml-2 text-xs font-normal text-muted-foreground tabular-nums">{chains.data?.items.length ?? 0}</span>
+            <span className="ml-2 font-mono font-normal text-muted-foreground tabular-nums">{chains.data?.items.length ?? 0}</span>
           </h3>
         </div>
         {(chains.data?.items.length ?? 0) === 0 ? (
-          <p className="py-4 text-xs text-muted-foreground">{t("No pipeline runs yet")}</p>
+          <p className="px-4 py-5 text-xs text-muted-foreground">{t("No pipeline runs yet")}</p>
         ) : (
           <ul className="divide-y divide-border/70">
             {chains.data!.items.map((chain) => {
               const reused = chain.stages.filter((s) => s.cached).length
               const outputs = chain.stages.flatMap((s) => s.output_file_ids ?? []).slice(-4)
               return (
-                <li key={chain.id} className="flex flex-wrap items-center gap-3 py-2">
+                <li key={chain.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/25">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium">{chain.name}</span>
-                      <Badge variant="outline" className="text-[0.625rem]">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span className="truncate text-[0.8125rem] font-medium text-foreground">{chain.name}</span>
+                      <span className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+                        <span
+                          className={cn(
+                            "size-1.5 rounded-full",
+                            chain.status === "completed" ? "bg-success" : chain.status === "failed" ? "bg-destructive" : "bg-warning",
+                          )}
+                          aria-hidden
+                        />
                         {chain.status}
-                      </Badge>
+                      </span>
                       {reused > 0 ? (
-                        <Badge variant="secondary" className="bg-diff-add-bg text-[0.625rem] text-diff-add">
-                          {reused}/{chain.total_stages} cached
-                        </Badge>
+                        <span className="font-mono text-xs text-success tabular-nums">
+                          · {reused}/{chain.total_stages} cached
+                        </span>
                       ) : null}
                     </div>
                     <p className="mt-0.5 text-xs text-muted-foreground">
@@ -667,7 +682,7 @@ export function PipelineBuilder() {
                       ))}
                     </div>
                   ) : null}
-                  <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => loadRun(chain)}>
+                  <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => loadRun(chain)}>
                     {t("Load into builder")}
                   </Button>
                 </li>

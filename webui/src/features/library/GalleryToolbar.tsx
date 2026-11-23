@@ -1,6 +1,6 @@
 /** Gallery filters: search, form / folder, model, date range, stars, sort, layout and tile size. */
 import { useQuery } from "@tanstack/react-query"
-import { CalendarRange, FilterX, LayoutGrid, Rows3, Search, SlidersHorizontal, Star, X } from "@/components/icons"
+import { CalendarRange, FilterX, Search, SlidersHorizontal, Star } from "@/components/icons"
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { GalleryCategory, GallerySort } from "@/api/types"
@@ -187,8 +187,8 @@ function ViewControls({ stacked = false }: { stacked?: boolean }) {
   )
 }
 
-/** `failed`: the image list could not be read (the page shows why): the toolbar shows no count then. */
-export function GalleryToolbar({ count, total, failed = false }: { count: number; total: number | null; failed?: boolean }) {
+/** Single-row gallery filter & view-options toolbar (image count folds into `BoardsBar`). */
+export function GalleryToolbar() {
   const { t } = useTranslation()
   const view = useGalleryView()
   const facets = useQuery(galleryFacetsQuery)
@@ -200,7 +200,7 @@ export function GalleryToolbar({ count, total, failed = false }: { count: number
     // Wide: one row, the view controls at its end. Narrow (a phone, a tablet, the details pane open): the
     // search and a "View options" button on the first row, the filters on a second that scrolls sideways,
     // never three ragged rows.
-    <div className="@container/gallerybar flex flex-col gap-2 border-b bg-background px-3 py-2">
+    <div className="@container/gallerybar flex flex-col gap-1.5 border-b border-border/70 bg-background px-3 py-1.5">
       <div className="flex flex-col gap-1.5 @6xl/gallerybar:flex-row @6xl/gallerybar:items-center">
         <div className="flex items-center gap-1.5 @6xl/gallerybar:contents">
           <SearchBox />
@@ -259,20 +259,6 @@ export function GalleryToolbar({ count, total, failed = false }: { count: number
           </div>
         </FadeStrip>
       </div>
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums empty:hidden" aria-live="polite">
-        {failed ? null : (
-          <>
-            {view.layout === "justified" ? <Rows3 className="size-3.5" aria-hidden /> : <LayoutGrid className="size-3.5" aria-hidden />}
-            {total === null ? t("Loading…") : filtered > 0 ? t("{{count}} of {{total}} images match", { count: total, total: facets.data?.total ?? total }) : t("Images: {{count}}", { count: total })}
-            {count < (total ?? 0) ? <span>· {t("{{count}} loaded", { count })}</span> : null}
-          </>
-        )}
-        {view.q ? (
-          <button type="button" className="inline-flex items-center gap-0.5 rounded px-1 hover:bg-muted" onClick={() => view.set({ q: "" })}>
-            “{view.q}” <X className="size-3" aria-label={t("Clear search")} />
-          </button>
-        ) : null}
-      </p>
     </div>
   )
 }

@@ -1,22 +1,19 @@
 /**
  * Extensions Health Diagnostics & Worker / Multi-GPU / MLX Monitor view:
- * surfaces `REMI_API_VERSION`, manifest compatibility, per-extension load time,
- * warning/error counts, disabled reasons, and the supervised worker pool card.
- * Lazily loaded on `#/extensions?tab=diagnostics`.
+ * Linear / Apple Activity Monitor-inspired instrument panel with zero badge
+ * clutter — hairline telemetry strip, precision worker monitor, and a crisp
+ * tabular extension health matrix. Lazily loaded on `#/extensions?tab=diagnostics`.
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { CheckCircle2, CircleAlert, Cpu, Gauge, RefreshCw, RotateCw, Search, Server, ShieldAlert, ShieldCheck, TriangleAlert } from "@/components/icons"
+import { RefreshCw, RotateCw, Search } from "@/components/icons"
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { errorText } from "@/features/errors/error-text"
-import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
-import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import {
   type ExtensionDiagnosticItem,
   extensionDiagnosticsQuery,
@@ -44,37 +41,28 @@ function modeLabel(mode: WorkersStatusResponse["mode"], t: (key: string) => stri
   }
 }
 
-function HealthBadge({ health }: { health: ExtensionDiagnosticItem["health"] }) {
+function workerDotTone(state: string): string {
+  const s = state.toLowerCase()
+  if (s === "idle" || s === "ready" || s === "running") return "bg-success"
+  if (s === "error" || s === "crashed" || s === "dead" || s === "stopped") return "bg-destructive"
+  return "bg-warning"
+}
+
+function HealthIndicator({ health }: { health: ExtensionDiagnosticItem["health"] }) {
   const { t } = useTranslation()
-  switch (health) {
-    case "healthy":
-      return (
-        <Badge variant="secondary" className="gap-1 bg-diff-add-bg text-[0.625rem] text-diff-add">
-          <CheckCircle2 className="size-3" aria-hidden />
-          {t("Healthy")}
-        </Badge>
-      )
-    case "degraded":
-      return (
-        <Badge variant="secondary" className="gap-1 bg-advice-warn-bg text-[0.625rem] text-advice-warn">
-          <TriangleAlert className="size-3" aria-hidden />
-          {t("Degraded")}
-        </Badge>
-      )
-    case "error":
-      return (
-        <Badge variant="destructive" className="gap-1 text-[0.625rem]">
-          <CircleAlert className="size-3" aria-hidden />
-          {t("Error")}
-        </Badge>
-      )
-    default:
-      return (
-        <Badge variant="outline" className="text-[0.625rem] text-muted-foreground">
-          {t("Disabled")}
-        </Badge>
-      )
-  }
+  const config = {
+    healthy: { dot: "bg-success", text: "text-foreground", label: t("Healthy") },
+    degraded: { dot: "bg-warning", text: "text-advice-warn", label: t("Degraded") },
+    error: { dot: "bg-destructive", text: "text-destructive", label: t("Error") },
+    disabled: { dot: "bg-muted-foreground/50", text: "text-muted-foreground", label: t("Disabled") },
+  }[health] ?? { dot: "bg-muted-foreground/50", text: "text-muted-foreground", label: t("Disabled") }
+
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", config.text)}>
+      <span className={cn("size-1.5 shrink-0 rounded-full", config.dot)} aria-hidden />
+      <span>{config.label}</span>
+    </span>
+  )
 }
 
 export function DiagnosticsView() {
@@ -96,7 +84,14 @@ export function DiagnosticsView() {
 
   const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const items = (diag.data?.items ?? []).filter((item) => {
-    if (filter === "issues" && item.health !== "degraded" && item.health !== "error" && item.hook_warnings === 0 && item.hook_errors === 0 && item.action_errors === 0) {
+    if (
+      filter === "issues" &&
+      item.health !== "degraded" &&
+      item.health !== "error" &&
+      item.hook_warnings === 0 &&
+      item.hook_errors === 0 &&
+      item.action_errors === 0
+    ) {
       return false
     }
     if (filter === "manifest" && item.manifest_status === "missing") return false
@@ -113,126 +108,188 @@ export function DiagnosticsView() {
     { id: "disabled", text: t("Disabled") },
   ]
 
+  const sep = (
+    <span className="text-muted-foreground/45 select-none" aria-hidden>
+      ·
+    </span>
+  )
+
   return (
     <div className="flex flex-col gap-5 pb-12">
-      {/* Top refresh bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
+      {/* Borderless hairline telemetry strip */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground tabular-nums">
           {diag.data ? (
-            <Badge variant="outline" className="gap-1 font-mono text-[0.6875rem]">
-              <ShieldCheck className="size-3.5 text-primary" aria-hidden />
+            <span className="font-mono text-foreground">
               {t("Remi API version")}: {diag.data.api_version}
-            </Badge>
+            </span>
           ) : null}
+          {diag.data && workers.data ? sep : null}
           {workers.data ? (
-            <Badge variant="secondary" className="gap-1 text-[0.6875rem]">
-              <Server className="size-3" aria-hidden />
-              {t("Worker mode")}: {modeLabel(workers.data.mode, t)}
-            </Badge>
+            <span>
+              {t("Worker mode")}: <span className="font-medium text-foreground">{modeLabel(workers.data.mode, t)}</span>
+            </span>
+          ) : null}
+          {diag.data?.summary ? (
+            <>
+              {sep}
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-success" aria-hidden />
+                {diag.data.summary.healthy} {t("Healthy")}
+              </span>
+              {diag.data.summary.degraded > 0 ? (
+                <>
+                  {sep}
+                  <span className="inline-flex items-center gap-1.5 text-advice-warn">
+                    <span className="size-1.5 rounded-full bg-warning" aria-hidden />
+                    {diag.data.summary.degraded} {t("Degraded")}
+                  </span>
+                </>
+              ) : null}
+              {diag.data.summary.error > 0 ? (
+                <>
+                  {sep}
+                  <span className="inline-flex items-center gap-1.5 text-destructive">
+                    <span className="size-1.5 rounded-full bg-destructive" aria-hidden />
+                    {diag.data.summary.error} {t("Error")}
+                  </span>
+                </>
+              ) : null}
+              {sep}
+              <span className="font-mono">
+                {diag.data.summary.with_manifest}/{diag.data.summary.total} {t("With manifest")}
+              </span>
+            </>
           ) : null}
         </div>
-        <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={refreshDiagnostics}>
+        <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={refreshDiagnostics}>
           <RefreshCw className="size-3.5" aria-hidden />
           {t("Refresh diagnostics")}
         </Button>
       </div>
 
-      {/* Worker / Multi-GPU / MLX monitor panel */}
-      <section className={panelClass(0)} aria-label={t("Runtime & workers")}>
-        <h2 className={cn(panelTitleClass(0), "mb-3 flex items-center gap-2")}>
-          <Cpu className="size-4 text-muted-foreground" aria-hidden />
-          {t("Runtime & workers")}
-        </h2>
+      {/* Worker / Multi-GPU / MLX precision instrument panel */}
+      <section className="overflow-hidden rounded-lg border border-border bg-card" aria-label={t("Runtime & workers")}>
+        <div className="flex items-center justify-between border-b border-border/70 px-4 py-2.5">
+          <h2 className="text-xs font-semibold tracking-wide text-foreground">{t("Runtime & workers")}</h2>
+        </div>
 
         {workers.isPending ? (
-          <Skeleton className="h-24 w-full" />
+          <div className="p-4">
+            <Skeleton className="h-20 w-full" />
+          </div>
         ) : workers.isError ? (
-          <p className="text-sm text-muted-foreground">{t("Workers status unavailable on this server.")}</p>
+          <p className="px-4 py-4 text-sm text-muted-foreground">{t("Workers status unavailable on this server.")}</p>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="divide-y divide-border/70">
             {workers.data.workers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t("No workers reported")}</p>
+              <p className="px-4 py-4 text-sm text-muted-foreground">{t("No workers reported")}</p>
             ) : (
-              <ul className="divide-y divide-border/70">
-                {workers.data.workers.map((worker) => {
-                  const usedMb =
-                    worker.vram_total_mb != null && worker.vram_free_mb != null
-                      ? Math.max(0, worker.vram_total_mb - worker.vram_free_mb)
-                      : null
-                  const usedPct = usedMb != null && worker.vram_total_mb ? Math.min(100, (usedMb / worker.vram_total_mb) * 100) : null
-                  return (
-                    <li key={worker.worker_id} className="flex flex-col gap-2 py-2.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-sm font-medium">{worker.worker_id}</span>
-                        <Badge variant="secondary" className="text-[0.625rem]">
-                          {worker.backend} · {worker.device}
-                        </Badge>
-                        <Badge variant="outline" className="text-[0.625rem]">
-                          {worker.state}
-                        </Badge>
-                        {worker.gpu_name ? <span className="text-xs text-muted-foreground">{worker.gpu_name}</span> : null}
-                        {worker.pid ? <span className="font-mono text-xs text-muted-foreground">PID {worker.pid}</span> : null}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="ml-auto h-7 gap-1 px-2 text-xs"
-                          disabled={restart.isPending}
-                          onClick={() => restart.mutate(worker.worker_id)}
-                        >
-                          <RotateCw className="size-3" aria-hidden />
-                          {t("Restart worker")}
-                        </Button>
-                      </div>
+              workers.data.workers.map((worker) => {
+                const usedMb =
+                  worker.vram_total_mb != null && worker.vram_free_mb != null
+                    ? Math.max(0, worker.vram_total_mb - worker.vram_free_mb)
+                    : null
+                const usedPct = usedMb != null && worker.vram_total_mb ? Math.min(100, (usedMb / worker.vram_total_mb) * 100) : null
+                return (
+                  <div key={worker.worker_id} className="flex flex-col gap-2.5 px-4 py-3">
+                    {/* Row 1: identity, backend/device, live status dot, restart action */}
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                      <span className="font-mono text-sm font-semibold text-foreground">{worker.worker_id}</span>
+                      {sep}
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {worker.backend} · {worker.device}
+                      </span>
+                      {sep}
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
+                        <span className={cn("size-1.5 shrink-0 rounded-full", workerDotTone(worker.state))} aria-hidden />
+                        <span className="capitalize">{worker.state}</span>
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="ml-auto h-7 gap-1.5 px-2.5 text-xs"
+                        disabled={restart.isPending}
+                        onClick={() => restart.mutate(worker.worker_id)}
+                      >
+                        <RotateCw className="size-3" aria-hidden />
+                        {t("Restart worker")}
+                      </Button>
+                    </div>
 
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground tabular-nums">
+                    {/* Row 2: clean tabular key-value telemetry + razor-thin 2px memory track */}
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground tabular-nums">
+                        {worker.gpu_name ? <span className="text-foreground/90">{worker.gpu_name}</span> : null}
+                        {worker.pid ? <span className="font-mono">PID {worker.pid}</span> : null}
                         {worker.loaded_model ? (
-                          <span>
-                            {t("Loaded model")}: <strong className="font-medium text-foreground">{worker.loaded_model}</strong>
+                          <span className="min-w-0 truncate" title={worker.loaded_model}>
+                            {t("Loaded model")}: <span className="font-mono text-foreground">{worker.loaded_model}</span>
                           </span>
                         ) : null}
                         <span>
-                          {t("Jobs completed")}: {worker.jobs_completed}
+                          {t("Jobs completed")}: <span className="font-mono text-foreground">{worker.jobs_completed}</span>
                         </span>
                         <span>
-                          {t("Restarts")}: {worker.restarts}
+                          {t("Restarts")}: <span className="font-mono text-foreground">{worker.restarts}</span>
                         </span>
                         {usedMb != null && worker.vram_total_mb != null ? (
-                          <span>
+                          <span className="font-mono text-foreground sm:ml-auto">
                             {t("VRAM")}: {formatMb(usedMb)} / {formatMb(worker.vram_total_mb)}
                           </span>
                         ) : null}
                       </div>
 
-                      {usedPct != null ? <Progress value={usedPct} aria-label={t("VRAM")} className="h-1.5" /> : null}
-
-                      {worker.quant_formats && worker.quant_formats.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {worker.quant_formats.map((fmt) => (
-                            <span key={fmt} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.625rem] text-muted-foreground">
-                              {fmt}
-                            </span>
-                          ))}
+                      {usedPct != null ? (
+                        <div
+                          role="progressbar"
+                          aria-label={t("VRAM")}
+                          aria-valuenow={Math.round(usedPct)}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          className="h-0.5 w-full overflow-hidden rounded-full bg-[var(--slider-groove)]"
+                        >
+                          <div className="h-full rounded-full bg-foreground/70 transition-[width] duration-300" style={{ width: `${usedPct}%` }} />
                         </div>
                       ) : null}
-                    </li>
-                  )
-                })}
-              </ul>
+                    </div>
+
+                    {/* Row 3: quant formats as quiet inline mono */}
+                    {worker.quant_formats && worker.quant_formats.length > 0 ? (
+                      <p className="font-mono text-[0.71875rem] text-muted-foreground">{worker.quant_formats.join(" · ")}</p>
+                    ) : null}
+                  </div>
+                )
+              })
             )}
 
+            {/* MLX sidecar sleek inline sub-row */}
             {workers.data.mlx ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5 text-xs">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{t("Apple Silicon MLX sidecar")}</span>
-                  <Badge variant={workers.data.mlx.available ? "secondary" : "outline"} className="text-[0.625rem]">
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-muted/25 px-4 py-2.5 text-xs">
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                  <span className="font-medium text-foreground">{t("Apple Silicon MLX sidecar")}</span>
+                  {sep}
+                  <span className={cn("inline-flex items-center gap-1.5 font-medium", workers.data.mlx.available ? "text-success" : "text-muted-foreground")}>
+                    <span
+                      className={cn("size-1.5 shrink-0 rounded-full", workers.data.mlx.available ? "bg-success" : "bg-muted-foreground/50")}
+                      aria-hidden
+                    />
                     {workers.data.mlx.available ? t("MLX available") : t("MLX unavailable")}
-                  </Badge>
+                  </span>
                   {workers.data.mlx.unified_memory_mb ? (
-                    <span className="text-muted-foreground tabular-nums">
-                      {t("Unified memory")}: {formatMb(workers.data.mlx.unified_memory_mb)}
-                    </span>
+                    <>
+                      {sep}
+                      <span className="font-mono text-muted-foreground tabular-nums">
+                        {t("Unified memory")}: {formatMb(workers.data.mlx.unified_memory_mb)}
+                      </span>
+                    </>
                   ) : null}
-                  {workers.data.mlx.mlx_version ? <span className="font-mono text-muted-foreground">mlx {workers.data.mlx.mlx_version}</span> : null}
+                  {workers.data.mlx.mlx_version ? (
+                    <>
+                      {sep}
+                      <span className="font-mono text-muted-foreground">mlx {workers.data.mlx.mlx_version}</span>
+                    </>
+                  ) : null}
                 </div>
                 {workers.data.mlx.reason ? <span className="text-muted-foreground">{workers.data.mlx.reason}</span> : null}
               </div>
@@ -241,47 +298,12 @@ export function DiagnosticsView() {
         )}
       </section>
 
-      {/* Extension Health & Manifest Diagnostics */}
-      <section className={panelClass(0)} aria-label={t("Extension health & API")}>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className={cn(panelTitleClass(0), "flex items-center gap-2")}>
-            <Gauge className="size-4 text-muted-foreground" aria-hidden />
-            {t("Extension health & API")}
-          </h2>
-          {diag.data?.summary ? (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground tabular-nums">
-              <span>
-                {t("Healthy")}: {diag.data.summary.healthy}
-              </span>
-              <span>·</span>
-              <span>
-                {t("Degraded")}: {diag.data.summary.degraded}
-              </span>
-              <span>·</span>
-              <span>
-                {t("Error")}: {diag.data.summary.error}
-              </span>
-              <span>·</span>
-              <span>
-                {t("With manifest")}: {diag.data.summary.with_manifest}/{diag.data.summary.total}
-              </span>
-            </div>
-          ) : null}
-        </div>
+      {/* Linear-style Extension Health Matrix */}
+      <section className="overflow-hidden rounded-lg border border-border bg-card" aria-label={t("Extension health & API")}>
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/70 px-4 py-2">
+          <h2 className="mr-2 text-xs font-semibold tracking-wide text-foreground">{t("Extension health & API")}</h2>
 
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div className="relative min-w-44 flex-1 sm:max-w-xs">
-            <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={t("Filter diagnostics…")}
-              aria-label={t("Filter diagnostics…")}
-              className="h-7 pl-7 text-[0.8rem]"
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-1" role="group" aria-label={t("Filter diagnostics…")}>
+          <div className="flex flex-wrap items-center gap-0.5" role="group" aria-label={t("Filter diagnostics…")}>
             {filterButtons.map((btn) => (
               <button
                 key={btn.id}
@@ -289,26 +311,40 @@ export function DiagnosticsView() {
                 aria-pressed={filter === btn.id}
                 onClick={() => setFilter(btn.id)}
                 className={cn(
-                  "h-7 rounded-md px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                  filter === btn.id ? "bg-primary/12 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  "relative h-7 rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                  filter === btn.id
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
                 )}
               >
                 {btn.text}
               </button>
             ))}
           </div>
+
+          <div className="relative ml-auto min-w-44 flex-1 sm:max-w-56 sm:flex-initial">
+            <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <Input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={t("Filter diagnostics…")}
+              aria-label={t("Filter diagnostics…")}
+              className="h-7 pl-7 text-xs"
+            />
+          </div>
         </div>
 
         {diag.isPending ? (
-          <div className="flex flex-col gap-2" aria-busy="true">
+          <div className="flex flex-col gap-2 p-4" aria-busy="true">
             {Array.from({ length: 4 }, (_, i) => (
-              <Skeleton key={i} className="h-14 w-full" />
+              <Skeleton key={i} className="h-10 w-full" />
             ))}
           </div>
         ) : diag.isError ? (
-          <p className="text-sm text-muted-foreground">{t("Diagnostics unavailable on this server.")}</p>
+          <p className="px-4 py-4 text-sm text-muted-foreground">{t("Diagnostics unavailable on this server.")}</p>
         ) : items.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">{t("No extension diagnostics match.")}</p>
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t("No extension diagnostics match.")}</p>
         ) : (
           <ul className="divide-y divide-border/70">
             {items.map((item) => {
@@ -319,31 +355,47 @@ export function DiagnosticsView() {
                   ?.map((s) => (s.name && s.reason ? `${s.name}: ${s.reason}` : s.reason || s.name))
                   .filter(Boolean)
                   .join("; ")
+              const manifestText =
+                item.manifest_status === "valid"
+                  ? `v${item.manifest?.api_version ?? "1.0"}`
+                  : item.manifest_status === "incompatible" || item.manifest_status === "invalid"
+                    ? t("Incompatible")
+                    : "—"
+              const caps = item.manifest?.requires_capabilities ?? []
+
               return (
-                <li key={item.name} className="flex flex-col gap-1.5 py-2.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-sm font-medium" title={item.name}>
+                <li key={item.name} className="px-4 py-2.5 transition-colors hover:bg-muted/25">
+                  <div className="grid grid-cols-1 items-center gap-x-3 gap-y-1 md:grid-cols-[minmax(12rem,1.4fr)_6.25rem_5.25rem_5.5rem_minmax(0,1fr)_11rem]">
+                    <span className="truncate font-mono text-[0.8125rem] font-medium text-foreground" title={item.name}>
                       {item.name}
                     </span>
-                    <HealthBadge health={item.health} />
-                    {item.manifest_status === "valid" ? (
-                      <Badge variant="outline" className="gap-1 font-mono text-[0.625rem]">
-                        {t("Manifest")} v{item.manifest?.api_version ?? "1.0"}
-                      </Badge>
-                    ) : item.manifest_status === "incompatible" || item.manifest_status === "invalid" ? (
-                      <Badge variant="destructive" className="gap-1 text-[0.625rem]">
-                        <ShieldAlert className="size-3" aria-hidden />
-                        {t("Incompatible")}
-                      </Badge>
-                    ) : null}
-                    {item.manifest?.license ? (
-                      <span className="text-[0.6875rem] text-muted-foreground">{item.manifest.license}</span>
-                    ) : null}
 
-                    <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
-                      {item.load_time_ms != null ? (
-                        <span title={t("Load time")}>{item.load_time_ms.toFixed(1)} ms</span>
-                      ) : null}
+                    <HealthIndicator health={item.health} />
+
+                    <span
+                      className={cn(
+                        "font-mono text-xs tabular-nums",
+                        item.manifest_status === "incompatible" || item.manifest_status === "invalid"
+                          ? "font-medium text-destructive"
+                          : "text-muted-foreground",
+                      )}
+                      title={t("Manifest")}
+                    >
+                      {manifestText}
+                    </span>
+
+                    <span className="truncate text-xs text-muted-foreground" title={item.manifest?.license ?? undefined}>
+                      {item.manifest?.license ?? "—"}
+                    </span>
+
+                    <span
+                      className="truncate font-mono text-xs text-muted-foreground"
+                      title={caps.length > 0 ? `${t("Required capabilities")}: ${caps.join(", ")}` : undefined}
+                    >
+                      {caps.length > 0 ? caps.join(" · ") : "—"}
+                    </span>
+
+                    <div className="flex items-center gap-2.5 font-mono text-xs text-muted-foreground tabular-nums md:justify-end">
                       {item.hook_warnings > 0 ? (
                         <span className="text-advice-warn">
                           {t("Warnings")}: {item.hook_warnings}
@@ -354,30 +406,24 @@ export function DiagnosticsView() {
                           {t("Errors")}: {totalErrors}
                         </span>
                       ) : null}
+                      {item.load_time_ms != null ? (
+                        <span className="min-w-14 text-right" title={t("Load time")}>
+                          {item.load_time_ms.toFixed(1)} ms
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
-                  {item.manifest?.requires_capabilities && item.manifest.requires_capabilities.length > 0 ? (
-                    <div className="flex flex-wrap items-center gap-1 text-[0.6875rem] text-muted-foreground">
-                      <span>{t("Required capabilities")}:</span>
-                      {item.manifest.requires_capabilities.map((cap) => (
-                        <span key={cap} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.625rem] text-foreground">
-                          {cap}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-
                   {disabledReason ? (
-                    <p className="text-xs text-muted-foreground">
-                      <span className="font-medium">{t("Disabled reason")}:</span> {disabledReason}
+                    <p className="mt-1.5 border-l-2 border-border pl-2.5 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground/85">{t("Disabled reason")}:</span> {disabledReason}
                     </p>
                   ) : null}
 
                   {item.last_error ? (
-                    <pre className="overflow-x-auto rounded bg-muted px-2 py-1 font-mono text-[0.6875rem] text-destructive">
+                    <p className="mt-1.5 overflow-x-auto border-l-2 border-destructive/70 pl-2.5 font-mono text-xs text-destructive">
                       {item.last_error}
-                    </pre>
+                    </p>
                   ) : null}
                 </li>
               )

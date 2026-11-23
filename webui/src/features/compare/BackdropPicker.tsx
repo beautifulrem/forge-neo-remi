@@ -1,4 +1,4 @@
-/** Compact 28px 4-swatch RGBA backdrop picker shared by Lightbox and CompareDialog. */
+/** Compact 28px machined 4-swatch RGBA backdrop picker shared by Lightbox and CompareDialog. */
 import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
 import { BACKDROP_META, BACKDROP_MODES, type BackdropMode } from "./backdrop-modes"
@@ -18,8 +18,8 @@ export function BackdropPicker({ value, onChange, tone = "default", className }:
       role="group"
       aria-label={t("RGBA backdrop")}
       className={cn(
-        "inline-flex h-7 items-center gap-0.5 rounded-md p-0.5",
-        tone === "light" ? "bg-white/10" : "bg-muted",
+        "inline-flex h-7 items-center gap-0.5 rounded-md border p-0.5",
+        tone === "light" ? "border-white/15 bg-white/8" : "border-border bg-muted/70",
         className,
       )}
     >
@@ -36,20 +36,20 @@ export function BackdropPicker({ value, onChange, tone = "default", className }:
             title={label}
             onClick={() => onChange(mode)}
             className={cn(
-              "grid size-6 place-items-center rounded-sm transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              "grid size-6 place-items-center rounded-[4px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
               active
                 ? tone === "light"
-                  ? "bg-white/25 ring-1 ring-white/70"
-                  : "bg-card ring-1 ring-primary"
+                  ? "bg-white/22 ring-1 ring-white/80"
+                  : "bg-card shadow-xs ring-1 ring-primary"
                 : tone === "light"
-                  ? "hover:bg-white/15"
+                  ? "hover:bg-white/14"
                   : "hover:bg-background/60",
             )}
           >
             <span
               aria-hidden
               className={cn(
-                "block size-3.5 rounded-[3px] border",
+                "block size-3.5 rounded-[2px] border",
                 mode === "checker" && "bg-checker",
                 tone === "light" ? "border-white/35" : "border-border",
               )}

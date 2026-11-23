@@ -253,30 +253,35 @@ export default function QueuePage({ route }: { route?: Route } = {}) {
   const history = <History onView={view} />
 
   const modeBar = (
-    <div className="flex items-center gap-2 border-b bg-background px-4 py-1.5">
-      <div role="tablist" aria-label={t("Queue")} className="flex items-center gap-1">
+    <div className="flex items-center border-b border-border bg-background px-4">
+      <div role="tablist" aria-label={t("Queue")} className="flex items-stretch gap-1">
         {(
           [
             ["queue", t("Queue & History"), ListOrdered],
             ["pipelines", t("Pipelines"), GitMerge],
             ["recipes", t("Recipes"), BookOpen],
           ] as const
-        ).map(([id, text, Icon]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={localMode === id}
-            onClick={() => setMode(id)}
-            className={cn(
-              "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-              localMode === id ? "bg-primary/12 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            <Icon className="size-3.5" aria-hidden />
-            {text}
-          </button>
-        ))}
+        ).map(([id, text, Icon]) => {
+          const active = localMode === id
+          return (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setMode(id)}
+              className={cn(
+                "relative inline-flex h-9 items-center gap-1.5 px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                active
+                  ? "text-foreground after:absolute after:inset-x-1 after:bottom-0 after:h-0.5 after:bg-primary"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Icon className="size-3.5" aria-hidden />
+              {text}
+            </button>
+          )
+        })}
       </div>
     </div>
   )

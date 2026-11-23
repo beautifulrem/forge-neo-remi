@@ -1,19 +1,19 @@
 /**
- * Asset Lineage Strip inside `GalleryDetails`: visualizes the
+ * Asset Lineage Strip inside `GalleryDetails`: darkroom film-strip view of the
  * parent → current → child derivative chain (`GET /api/v2/gallery/{id}/lineage`),
  * allowing one-click navigation to ancestor/descendant images or loading the
  * source job directly into its form.
  */
 import { useQuery } from "@tanstack/react-query"
-import { ArrowRight, GitBranch, History } from "@/components/icons"
+import { ChevronRight, GitBranch, History } from "@/components/icons"
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
 import type { FormTab, GalleryItem } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { errorText } from "@/features/errors/error-text"
 import { parsedEntries } from "@/features/infotext/paste"
-import { useTranslation } from "react-i18next"
 import { deliver } from "@/features/send-to/send-to"
 import { cn } from "@/lib/utils"
 import { type LineageNode, lineageQuery } from "./boards-api"
@@ -43,14 +43,16 @@ function ThumbChip({
       title={current ? `${t("Current")} · ${label}` : t("Jump to {{name}}", { name: label })}
       onClick={onClick}
       className={cn(
-        "group relative flex w-14 shrink-0 flex-col items-center gap-1 rounded-md p-1 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        current ? "bg-white/15 ring-1 ring-primary" : "bg-white/6 hover:bg-white/14",
+        "group relative flex w-14 shrink-0 flex-col items-center gap-1 rounded-sm p-1 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        current ? "bg-white/12 ring-1 ring-white/75" : "bg-white/5 ring-1 ring-white/10 hover:bg-white/12 hover:ring-white/30",
       )}
     >
-      <div className="relative aspect-square w-12 overflow-hidden rounded-sm bg-black/40">
+      <div className="relative aspect-square w-12 overflow-hidden rounded-[2px] bg-black/50">
         <img src={api.thumbUrl(node.file_id, 128)} alt={label} className="size-full object-cover" loading="lazy" />
       </div>
-      <span className="w-full truncate text-center text-[0.625rem] text-white/75">{current ? t("Current") : node.relation || node.tab || "—"}</span>
+      <span className={cn("w-full truncate text-center font-mono text-[0.625rem]", current ? "font-medium text-white" : "text-white/75")}>
+        {current ? t("Current") : node.relation || node.tab || "—"}
+      </span>
     </button>
   )
 }
@@ -114,7 +116,7 @@ export function LineageStrip({ item, onSelectImage, onClose }: LineageStripProps
   return (
     <section aria-label={t("Asset lineage")} className="flex flex-col gap-2 border-t border-white/10 pt-2.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-xs font-semibold text-white/85">
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-white/90">
           <GitBranch className="size-3.5 text-white/60" aria-hidden />
           {t("Asset lineage")}
         </span>
@@ -141,7 +143,7 @@ export function LineageStrip({ item, onSelectImage, onClose }: LineageStripProps
                   <ThumbChip key={`anc-${node.file_id}`} node={node} onClick={() => jumpTo(node.file_id)} />
                 ))}
               </div>
-              <ArrowRight className="size-3.5 shrink-0 text-white/40" aria-hidden />
+              <ChevronRight className="size-3.5 shrink-0 text-white/40" aria-hidden />
             </>
           ) : null}
 
@@ -149,7 +151,7 @@ export function LineageStrip({ item, onSelectImage, onClose }: LineageStripProps
 
           {descendants.length > 0 ? (
             <>
-              <ArrowRight className="size-3.5 shrink-0 text-white/40" aria-hidden />
+              <ChevronRight className="size-3.5 shrink-0 text-white/40" aria-hidden />
               <div className="flex items-center gap-1" aria-label={t("Children")}>
                 {descendants.map((node) => (
                   <ThumbChip key={`desc-${node.file_id}`} node={node} onClick={() => jumpTo(node.file_id)} />
@@ -162,7 +164,7 @@ export function LineageStrip({ item, onSelectImage, onClose }: LineageStripProps
 
       {siblings.length > 0 ? (
         <div className="flex flex-col gap-1">
-          <span className="text-[0.6875rem] text-white/55">{t("Siblings")}</span>
+          <span className="text-[0.6875rem] text-white/65">{t("Siblings")}</span>
           <div className="-mx-1 flex items-center gap-1 overflow-x-auto px-1 pb-0.5">
             {siblings.map((node) => (
               <ThumbChip key={`sib-${node.file_id}`} node={node} onClick={() => jumpTo(node.file_id)} />

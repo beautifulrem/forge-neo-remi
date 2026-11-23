@@ -1,17 +1,17 @@
 /**
  * Collapsible structured Parameters Diff panel rendered beneath the visual
- * comparison in `CompareDialog`. Lazily loaded so it costs 0 KB until needed.
+ * comparison in `CompareDialog`. Razor-sharp monospaced diff table without
+ * pill clutter. Lazily loaded so it costs 0 KB until needed.
  */
 import { useQuery } from "@tanstack/react-query"
 import { ArrowRightLeft, ChevronDown, ClipboardPaste, Loader2 } from "@/components/icons"
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import type { FormTab } from "@/api/types"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { errorText } from "@/features/errors/error-text"
-import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
 import { applyCompareDiffToForm, fetchCompareDiff, type TokenDiff, totalDiffCount } from "./param-diff"
 
@@ -32,24 +32,24 @@ function TokenDiffRow({ title, diff }: { title: string; diff: TokenDiff }) {
   const { t } = useTranslation()
   const changed = diff.added.length > 0 || diff.removed.length > 0
   return (
-    <div className="flex flex-col gap-1 border-t border-border/60 pt-2">
-      <div className="flex items-center gap-2 text-xs font-medium">
+    <div className="flex flex-col gap-1.5 border-t border-border/60 pt-2">
+      <div className="flex items-center gap-2 text-xs font-medium text-foreground">
         <span>{title}</span>
         {changed ? (
-          <span className="flex items-center gap-1.5 text-[0.6875rem] tabular-nums">
+          <span className="flex items-center gap-1.5 font-mono text-[0.6875rem] tabular-nums">
             {diff.removed.length > 0 ? <span className="text-diff-del">−{diff.removed.length}</span> : null}
             {diff.added.length > 0 ? <span className="text-diff-add">+{diff.added.length}</span> : null}
           </span>
         ) : (
-          <span className="text-[0.6875rem] font-normal text-muted-foreground">{t("Unchanged")}</span>
+          <span className="font-mono text-[0.6875rem] font-normal text-muted-foreground">{t("Unchanged")}</span>
         )}
       </div>
       {changed ? (
-        <div className="flex flex-wrap gap-1 text-xs leading-relaxed">
+        <div className="flex flex-wrap gap-1 font-mono text-[0.71875rem] leading-relaxed">
           {diff.removed.map((token, idx) => (
             <span
               key={`r-${idx}-${token}`}
-              className="rounded-sm bg-diff-del-bg px-1.5 py-0.5 text-diff-del line-through decoration-current/60"
+              className="rounded-[3px] bg-diff-del-bg px-1.5 py-0.5 text-diff-del line-through decoration-current/55"
               title={`${t("Removed")} (A)`}
             >
               − {token}
@@ -58,20 +58,20 @@ function TokenDiffRow({ title, diff }: { title: string; diff: TokenDiff }) {
           {diff.added.map((token, idx) => (
             <span
               key={`a-${idx}-${token}`}
-              className="rounded-sm bg-diff-add-bg px-1.5 py-0.5 text-diff-add"
+              className="rounded-[3px] bg-diff-add-bg px-1.5 py-0.5 text-diff-add"
               title={`${t("Added")} (B)`}
             >
               + {token}
             </span>
           ))}
           {diff.unchanged.map((token, idx) => (
-            <span key={`u-${idx}-${token}`} className="rounded-sm bg-muted/60 px-1.5 py-0.5 text-muted-foreground">
+            <span key={`u-${idx}-${token}`} className="px-1 py-0.5 text-muted-foreground">
               {token}
             </span>
           ))}
         </div>
       ) : diff.a ? (
-        <p className="line-clamp-2 text-xs text-muted-foreground">{diff.a}</p>
+        <p className="line-clamp-2 font-mono text-xs text-muted-foreground">{diff.a}</p>
       ) : null}
     </div>
   )
@@ -123,16 +123,21 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="border-t border-border pt-2">
       <div className="flex flex-wrap items-center gap-2">
-        <CollapsibleTrigger className="flex h-7 items-center gap-1.5 rounded-sm px-1 text-sm font-semibold outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
-          <ChevronDown className={cn("size-4 text-muted-foreground transition-transform duration-150", !open && "-rotate-90")} aria-hidden />
+        <CollapsibleTrigger className="flex h-7 items-center gap-1.5 rounded-sm px-1 text-xs font-semibold tracking-wide text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+          <ChevronDown className={cn("size-3.5 text-muted-foreground transition-transform duration-150", !open && "-rotate-90")} aria-hidden />
           <ArrowRightLeft className="size-3.5 text-muted-foreground" aria-hidden />
           <span>{t("Parameters diff")}</span>
           {query.isPending ? (
             <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-hidden />
           ) : hasMetadata ? (
-            <Badge variant={count > 0 ? "secondary" : "outline"} className="text-[0.625rem] tabular-nums">
-              {count === 0 ? t("Identical parameters") : t("{{count}} differences", { count })}
-            </Badge>
+            <>
+              <span className="text-muted-foreground/50 select-none" aria-hidden>
+                ·
+              </span>
+              <span className="font-mono text-[0.71875rem] font-normal text-muted-foreground tabular-nums">
+                {count === 0 ? t("Identical parameters") : t("{{count}} differences", { count })}
+              </span>
+            </>
           ) : null}
         </CollapsibleTrigger>
 
@@ -141,7 +146,7 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-xs"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
               aria-pressed={onlyDiffs}
               onClick={() => setOnlyDiffs((v) => !v)}
             >
@@ -152,21 +157,21 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 px-2 text-xs"
+                  className="h-7 gap-1 px-2 text-xs"
                   disabled={applying !== null}
                   onClick={() => void applySide("a")}
                 >
-                  <ClipboardPaste aria-hidden />
+                  <ClipboardPaste className="size-3" aria-hidden />
                   {t("Apply A to form")}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 px-2 text-xs"
+                  className="h-7 gap-1 px-2 text-xs"
                   disabled={applying !== null}
                   onClick={() => void applySide("b")}
                 >
-                  <ClipboardPaste aria-hidden />
+                  <ClipboardPaste className="size-3" aria-hidden />
                   {t("Apply B to form")}
                 </Button>
               </>
@@ -181,7 +186,7 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
             <p className="py-3 text-xs text-muted-foreground">{t("No parameter metadata available for either image.")}</p>
           ) : diff ? (
             <div className="flex flex-col gap-2.5 pb-1">
-              {(!onlyDiffs || diff.prompt_diff.added.length > 0 || diff.prompt_diff.removed.length > 0) ? (
+              {!onlyDiffs || diff.prompt_diff.added.length > 0 || diff.prompt_diff.removed.length > 0 ? (
                 <TokenDiffRow title={t("Prompt diff")} diff={diff.prompt_diff} />
               ) : null}
 
@@ -191,25 +196,25 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
               ) : null}
 
               {coreRows.length > 0 ? (
-                <div className="flex flex-col gap-1 border-t border-border/60 pt-2">
-                  <h4 className="text-xs font-medium">{t("Core parameters")}</h4>
-                  <div className="overflow-x-auto">
+                <div className="flex flex-col gap-1.5 border-t border-border/60 pt-2">
+                  <h4 className="text-xs font-medium text-foreground">{t("Core parameters")}</h4>
+                  <div className="overflow-x-auto rounded-md border border-border/80 bg-card/50">
                     <table className="w-full border-collapse text-xs">
                       <thead>
-                        <tr className="border-b border-border/70 text-left text-[0.6875rem] text-muted-foreground">
-                          <th className="py-1 pr-3 font-medium">{t("Parameter")}</th>
-                          <th className="py-1 pr-3 font-medium">A</th>
-                          <th className="py-1 font-medium">B</th>
+                        <tr className="border-b border-border/70 bg-muted/35 text-left text-[0.6875rem] text-muted-foreground">
+                          <th className="w-1/3 px-2.5 py-1 font-medium">{t("Parameter")}</th>
+                          <th className="w-1/3 px-2.5 py-1 font-mono font-medium">A</th>
+                          <th className="w-1/3 px-2.5 py-1 font-mono font-medium">B</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-border/40">
+                      <tbody className="divide-y divide-border/50 font-mono tabular-nums">
                         {coreRows.map((row) => (
-                          <tr key={row.key} className={cn(row.changed && "bg-primary/[0.04]")}>
-                            <td className="py-1 pr-3 font-medium text-muted-foreground">{row.key}</td>
-                            <td className={cn("py-1 pr-3 font-mono break-all", row.changed && row.a && "text-diff-del")}>
+                          <tr key={row.key}>
+                            <td className="px-2.5 py-1 font-sans font-medium text-muted-foreground">{row.key}</td>
+                            <td className={cn("px-2.5 py-1 break-all", row.changed && row.a && "bg-diff-del-bg/60 text-diff-del")}>
                               {row.a ?? "—"}
                             </td>
-                            <td className={cn("py-1 font-mono break-all", row.changed && row.b && "font-medium text-diff-add")}>
+                            <td className={cn("px-2.5 py-1 break-all", row.changed && row.b && "bg-diff-add-bg/60 font-medium text-diff-add")}>
                               {row.b ?? "—"}
                             </td>
                           </tr>
@@ -221,41 +226,51 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
               ) : null}
 
               {diff.lora_diffs.length > 0 ? (
-                <div className="flex flex-col gap-1 border-t border-border/60 pt-2">
-                  <h4 className="text-xs font-medium">{t("LoRAs")}</h4>
-                  <ul className="flex flex-col divide-y divide-border/40 text-xs">
-                    {diff.lora_diffs.map((lora) => (
-                      <li key={lora.name} className="flex items-center gap-2 py-1">
-                        <span className="min-w-0 flex-1 truncate font-medium" title={lora.name}>
-                          {lora.name}
-                        </span>
-                        <span className="font-mono text-muted-foreground">{lora.a ?? "—"}</span>
-                        <span className="text-muted-foreground" aria-hidden>
-                          →
-                        </span>
-                        <span className="font-mono font-medium">{lora.b ?? "—"}</span>
-                      </li>
-                    ))}
-                  </ul>
+                <div className="flex flex-col gap-1.5 border-t border-border/60 pt-2">
+                  <h4 className="text-xs font-medium text-foreground">{t("LoRAs")}</h4>
+                  <div className="overflow-x-auto rounded-md border border-border/80 bg-card/50">
+                    <table className="w-full border-collapse text-xs font-mono tabular-nums">
+                      <tbody className="divide-y divide-border/50">
+                        {diff.lora_diffs.map((lora) => (
+                          <tr key={lora.name}>
+                            <td className="w-1/3 truncate px-2.5 py-1 font-sans font-medium text-foreground" title={lora.name}>
+                              {lora.name}
+                            </td>
+                            <td className={cn("w-1/3 px-2.5 py-1", lora.a ? "bg-diff-del-bg/60 text-diff-del" : "text-muted-foreground")}>
+                              {lora.a ?? "—"}
+                            </td>
+                            <td className={cn("w-1/3 px-2.5 py-1", lora.b ? "bg-diff-add-bg/60 font-medium text-diff-add" : "text-muted-foreground")}>
+                              {lora.b ?? "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ) : null}
 
               {diff.extension_diffs.length > 0 ? (
-                <div className="flex flex-col gap-1 border-t border-border/60 pt-2">
-                  <h4 className="text-xs font-medium">{t("Active extensions")}</h4>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse text-xs">
-                      <tbody className="divide-y divide-border/40">
+                <div className="flex flex-col gap-1.5 border-t border-border/60 pt-2">
+                  <h4 className="text-xs font-medium text-foreground">{t("Active extensions")}</h4>
+                  <div className="overflow-x-auto rounded-md border border-border/80 bg-card/50">
+                    <table className="w-full border-collapse text-xs font-mono tabular-nums">
+                      <tbody className="divide-y divide-border/50">
                         {diff.extension_diffs.map((ext) => (
                           <tr key={`${ext.group}:${ext.key}`}>
-                            <td className="py-1 pr-3 text-muted-foreground">
-                              <Badge variant="outline" className="mr-1.5 text-[0.625rem]">
-                                {ext.group}
-                              </Badge>
+                            <td className="w-1/3 px-2.5 py-1 font-sans text-muted-foreground">
+                              <span className="font-mono text-[0.6875rem] text-foreground">{ext.group}</span>
+                              <span className="mx-1 text-muted-foreground/50" aria-hidden>
+                                /
+                              </span>
                               {ext.key}
                             </td>
-                            <td className="py-1 pr-3 font-mono text-destructive">{ext.a ?? "—"}</td>
-                            <td className="py-1 font-mono font-medium">{ext.b ?? "—"}</td>
+                            <td className={cn("w-1/3 px-2.5 py-1", ext.a ? "bg-diff-del-bg/60 text-diff-del" : "text-muted-foreground")}>
+                              {ext.a ?? "—"}
+                            </td>
+                            <td className={cn("w-1/3 px-2.5 py-1", ext.b ? "bg-diff-add-bg/60 font-medium text-diff-add" : "text-muted-foreground")}>
+                              {ext.b ?? "—"}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

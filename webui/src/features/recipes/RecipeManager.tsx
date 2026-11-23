@@ -1,11 +1,13 @@
 /**
- * Cross-Model Parameter Recipes Manager: browse/search/filter Recipes,
- * capture current form overrides as a Recipe, import/export JSON, and apply
- * with one click. Designed to be lazily loaded.
+ * Cross-Model Parameter Recipes Manager: dense Linear / Capture One preset
+ * matrix without pill clutter — clean typographic hierarchy, inline mono
+ * capability/parameter readouts, JSON import/export, and one-click Apply.
+ * Lazily loaded.
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { BookOpen, ClipboardPaste, Download, Plus, Search, Trash2, Upload } from "@/components/icons"
 import { useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import type { FormTab } from "@/api/types"
 import { Segmented } from "@/components/Segmented"
@@ -18,16 +20,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { errorText } from "@/features/errors/error-text"
-import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
 import { getFormStore } from "@/ui/form-store"
-import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import { applyRecipeApi, createRecipeApi, deleteRecipeApi, exportRecipesApi, importRecipesApi, recipesQuery, refreshRecipes } from "./api"
 import { applyRecipeEntries, captureFormOverrides, countRecipeParams, recipeHighlights } from "./capture"
 import type { Recipe } from "./types"
@@ -157,7 +156,7 @@ export function RecipeManager() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border/70 pb-3">
         <div className="relative min-w-44 flex-1 sm:max-w-xs">
           <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
@@ -166,11 +165,11 @@ export function RecipeManager() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t("Search recipes…")}
             aria-label={t("Search recipes…")}
-            className="h-7 pl-7 text-[0.8rem]"
+            className="h-7 pl-7 text-xs"
           />
         </div>
 
-        <div className="-mx-1 flex flex-wrap items-center gap-1 px-1" role="group" aria-label={t("Model family")}>
+        <div className="-mx-1 flex flex-wrap items-center gap-0.5 px-1" role="group" aria-label={t("Model family")}>
           {FAMILIES.map((item) => (
             <button
               key={item || "all"}
@@ -178,8 +177,9 @@ export function RecipeManager() {
               aria-pressed={family === item}
               onClick={() => setFamily(item)}
               className={cn(
-                "h-7 rounded-md px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                family === item ? "bg-primary/12 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                "h-7 rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                item && "font-mono",
+                family === item ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
               )}
             >
               {item ? item : t("All families")}
@@ -188,7 +188,7 @@ export function RecipeManager() {
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={() => importInputRef.current?.click()}>
+          <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2.5 text-xs" onClick={() => importInputRef.current?.click()}>
             <Upload className="size-3.5" aria-hidden />
             {t("Import JSON")}
           </Button>
@@ -203,38 +203,42 @@ export function RecipeManager() {
               if (file) void handleImportFile(file)
             }}
           />
-          <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs" disabled={recipes.length === 0} onClick={() => void handleExportAll()}>
+          <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2.5 text-xs" disabled={recipes.length === 0} onClick={() => void handleExportAll()}>
             <Download className="size-3.5" aria-hidden />
             {t("Export JSON")}
           </Button>
-          <Button size="sm" className="h-7 gap-1 px-2.5 text-xs" onClick={() => setCaptureOpen(true)}>
+          <Button
+            size="sm"
+            className="h-7 gap-1.5 border border-border/60 bg-glow px-3 text-xs font-medium text-glow-foreground shadow-xs hover:bg-glow hover:opacity-90"
+            onClick={() => setCaptureOpen(true)}
+          >
             <Plus className="size-3.5" aria-hidden />
             {t("Capture from form")}
           </Button>
         </div>
       </div>
 
-      <section className={panelClass(0)} aria-label={t("Cross-model parameter recipes")}>
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className={panelTitleClass(0)}>
+      <section className="overflow-hidden rounded-lg border border-border bg-card" aria-label={t("Cross-model parameter recipes")}>
+        <div className="flex items-center justify-between border-b border-border/70 px-4 py-2.5">
+          <h2 className="text-xs font-semibold tracking-wide text-foreground">
             {t("Cross-model parameter recipes")}
-            {!list.isPending ? <span className="ml-2 text-xs font-normal text-muted-foreground tabular-nums">{recipes.length}</span> : null}
+            {!list.isPending ? <span className="ml-2 font-mono font-normal text-muted-foreground tabular-nums">{recipes.length}</span> : null}
           </h2>
         </div>
 
         {list.isPending ? (
-          <div className="flex flex-col gap-2" aria-busy="true">
+          <div className="flex flex-col gap-2 p-4" aria-busy="true">
             {Array.from({ length: 3 }, (_, i) => (
-              <Skeleton key={i} className="h-16 w-full" />
+              <Skeleton key={i} className="h-14 w-full" />
             ))}
           </div>
         ) : list.isError ? (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="px-4 py-4 text-sm text-destructive">
             {errorText(list.error)}
           </p>
         ) : recipes.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <BookOpen className="size-8 text-muted-foreground/45" aria-hidden />
+          <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
+            <BookOpen className="size-7 text-muted-foreground/45" aria-hidden />
             <p className="text-sm font-medium">{t("No recipes yet")}</p>
             <p className="max-w-md text-xs text-balance text-muted-foreground">
               {t("Capture your current form tweaks as a reusable cross-model recipe, or import one from JSON.")}
@@ -245,49 +249,39 @@ export function RecipeManager() {
             {recipes.map((recipe) => {
               const highlights = recipeHighlights(recipe)
               const paramCount = countRecipeParams(recipe)
+              const metaParts = [recipe.model_family, recipe.tab, t("{{count}} params", { count: paramCount })].filter(Boolean)
+              const detailParts = [...highlights, ...recipe.capabilities, ...recipe.tags.map((tag) => `#${tag}`)]
+
               return (
-                <li key={recipe.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5">
-                  <div className="min-w-0 flex-1 basis-60">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="truncate text-sm font-medium" title={recipe.name}>
+                <li key={recipe.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-muted/25">
+                  <div className="min-w-0 flex-1 basis-64">
+                    <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+                      <span className="truncate text-[0.8125rem] font-semibold text-foreground" title={recipe.name}>
                         {recipe.name}
                       </span>
-                      {recipe.model_family ? (
-                        <Badge variant="secondary" className="text-[0.625rem]">
-                          {recipe.model_family}
-                        </Badge>
-                      ) : null}
-                      <Badge variant="outline" className="text-[0.625rem]">
-                        {recipe.tab}
-                      </Badge>
-                      <span className="text-[0.6875rem] text-muted-foreground tabular-nums">{t("{{count}} params", { count: paramCount })}</span>
+                      <span className="font-mono text-xs text-muted-foreground tabular-nums">{metaParts.join(" · ")}</span>
                     </div>
-                    {recipe.description ? <p className="mt-0.5 truncate text-xs text-muted-foreground" title={recipe.description}>{recipe.description}</p> : null}
-                    {highlights.length > 0 || recipe.tags.length > 0 ? (
-                      <div className="mt-1 flex flex-wrap items-center gap-1">
-                        {highlights.map((chip) => (
-                          <span key={chip} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.625rem] text-muted-foreground">
-                            {chip}
-                          </span>
-                        ))}
-                        {recipe.tags.map((tag) => (
-                          <span key={tag} className="rounded bg-primary/8 px-1.5 py-0.5 text-[0.625rem] text-primary">
-                            #{tag}
-                          </span>
-                        ))}
-                      </div>
+                    {recipe.description ? (
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground" title={recipe.description}>
+                        {recipe.description}
+                      </p>
+                    ) : null}
+                    {detailParts.length > 0 ? (
+                      <p className="mt-1 truncate font-mono text-[0.71875rem] text-muted-foreground" title={detailParts.join(" · ")}>
+                        {detailParts.join(" · ")}
+                      </p>
                     ) : null}
                   </div>
 
                   <div className="flex shrink-0 items-center gap-1">
-                    <Button variant="outline" size="sm" className="h-7 gap-1 px-2.5 text-xs" disabled={apply.isPending} onClick={() => apply.mutate(recipe)}>
+                    <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2.5 text-xs" disabled={apply.isPending} onClick={() => apply.mutate(recipe)}>
                       <ClipboardPaste className="size-3.5" aria-hidden />
                       {t("Apply recipe")}
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="h-7 w-7"
+                      className="size-7 text-muted-foreground hover:text-foreground"
                       aria-label={t("Export JSON")}
                       title={t("Export JSON")}
                       onClick={() => downloadJson(`${recipe.name.replace(/[^a-zA-Z0-9_-]+/g, "-") || recipe.id}.json`, { version: 1, recipes: [recipe] })}
@@ -297,7 +291,7 @@ export function RecipeManager() {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      className="size-7 text-muted-foreground hover:text-destructive"
                       aria-label={t("Delete recipe")}
                       title={t("Delete recipe")}
                       onClick={() => setDeleting(recipe)}
