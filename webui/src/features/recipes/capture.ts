@@ -9,7 +9,7 @@ import { deliver } from "@/features/send-to/send-to"
 import { jsonEqual } from "@/ui/conditions"
 import { getFormStore } from "@/ui/form-store"
 import { isPersisted } from "@/ui/values"
-import type { Recipe } from "./types"
+import type { Recipe, RecipeApplyResponse } from "./types"
 
 export type CapturedOverrides = {
   core_patch: ParamValues
@@ -66,6 +66,29 @@ export function recipeHighlights(recipe: Pick<Recipe, "core_patch" | "scripts_pa
   const extraScripts = Object.keys(recipe.scripts_patch ?? {}).filter((key) => key !== "sampler" && key !== "seed")
   for (const name of extraScripts.slice(0, 2)) chips.push(name)
   return chips
+}
+
+/**
+ * What applying a recipe changes: the targets the server lists in `patch` ("owner.param", the
+ * recipe's own values plus the ones its conflicts derive). The response's `core` / `scripts` are
+ * the whole form merged with the recipe, so applying those would rewrite every field (undoing edits
+ * made meanwhile) and count them all. Without a `patch` the recipe's own values are applied.
+ */
+export function appliedRecipeValues(
+  response: Partial<Pick<RecipeApplyResponse, "patch">>,
+  recipe: Pick<Recipe, "core_patch" | "scripts_patch">,
+): { core: ParamValues; scripts: Record<string, ParamValues> } {
+  const core: ParamValues = {}
+  const scripts: Record<string, ParamValues> = {}
+  for (const [target, entry] of Object.entries(response.patch ?? {})) {
+    const dot = target.indexOf(".")
+    if (target.startsWith("__") || dot <= 0 || !entry || typeof entry !== "object" || !("value" in entry)) continue
+    const owner = target.slice(0, dot)
+    const values = owner === "core" ? core : (scripts[owner] ??= {})
+    values[target.slice(dot + 1)] = (entry as { value: unknown }).value
+  }
+  if (Object.keys(core).length === 0 && Object.keys(scripts).length === 0) return { core: { ...recipe.core_patch }, scripts: structuredClone(recipe.scripts_patch) }
+  return { core, scripts }
 }
 
 /** Applies a recipe's `core_patch` and `scripts_patch` into its target form via `deliver()`. */

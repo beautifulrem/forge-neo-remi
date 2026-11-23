@@ -688,12 +688,23 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
       const mergedCore: Values = { ...(b.core ?? {}), ...recipe.core_patch }
       const mergedScripts: Record<string, Values> = structuredClone(b.scripts ?? {})
       const patch: Record<string, unknown> = {}
-      for (const [key, value] of Object.entries(recipe.core_patch)) patch[key] = { value }
+      for (const [key, value] of Object.entries(recipe.core_patch)) patch[`core.${key}`] = { value }
       for (const [owner, vals] of Object.entries(recipe.scripts_patch)) {
         mergedScripts[owner] = { ...(mergedScripts[owner] ?? {}), ...vals }
         for (const [key, value] of Object.entries(vals)) patch[`${owner}.${key}`] = { value }
       }
       const conflicts = b.check_conflicts === false ? {} : conflictPatch(mergedCore, mergedScripts, undefined)
+      // as the server: the derived values join the patch and the merged form
+      for (const [target, entry] of Object.entries(conflicts)) {
+        const dot = target.indexOf(".")
+        if (target.startsWith("__") || dot <= 0 || !entry || typeof entry !== "object") continue
+        patch[target] = { ...(patch[target] as object | undefined), ...entry }
+        if ("value" in entry) {
+          const owner = target.slice(0, dot)
+          const values = owner === "core" ? mergedCore : (mergedScripts[owner] ??= {})
+          values[target.slice(dot + 1)] = (entry as { value: unknown }).value
+        }
+      }
       const activeCaps = mockCapabilitiesForPreset(String(bootstrap.options.forge_preset ?? "xl")).capabilities
       const missingCaps = recipe.capabilities.filter((cap) => !activeCaps.includes(cap))
       const warnings = missingCaps.length > 0 ? [`Active model lacks capabilities: ${missingCaps.join(", ")}`] : []

@@ -98,6 +98,37 @@ describe("Recipes capture and manager UI", () => {
     await waitFor(() => expect(getFormStore("txt2img").getState().values.core?.cfg_scale).toBe(1))
     expect(getFormStore("txt2img").getState().values.sampler?.steps).toBe(8)
   })
+  it("applies only the recipe's own values from the merged form the server answers, and counts those", async () => {
+    const { toast } = await import("sonner")
+    const success = vi.spyOn(toast, "success")
+    const store = getFormStore("txt2img")
+    const before = store.getState().values
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (url.includes("/recipes/r1/apply")) {
+        const body = JSON.parse(String(init?.body ?? (await (input as Request).text())))
+        // the server answers the whole form merged with the recipe, and the recipe's targets in `patch`
+        const { core, ...scripts } = { core: { ...body.core, ...SAMPLE_RECIPE.core_patch }, ...body.scripts }
+        for (const [owner, values] of Object.entries(SAMPLE_RECIPE.scripts_patch)) scripts[owner] = { ...scripts[owner], ...values }
+        const patch: Record<string, unknown> = { "core.cfg_scale": { value: 1 }, "core.width": { value: 1024 }, "core.height": { value: 1024 }, "sampler.steps": { value: 8 }, "sampler.sampler_name": { value: "Euler" } }
+        return new Response(JSON.stringify({ recipe: SAMPLE_RECIPE, tab: "txt2img", patch, core, scripts, conflicts: {}, warnings: [] }), { status: 200, headers: { "Content-Type": "application/json" } })
+      }
+      return new Response(JSON.stringify({ items: [SAMPLE_RECIPE], total: 1 }), { status: 200, headers: { "Content-Type": "application/json" } })
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText("Qwen Turbo 8-step")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Apply recipe" }))
+    await waitFor(() => expect(success).toHaveBeenCalledWith("Recipe “Qwen Turbo 8-step” applied (5 params)", expect.anything()))
+    const after = store.getState().values
+    expect(after.core?.cfg_scale).toBe(1)
+    expect(after.sampler?.steps).toBe(8)
+    expect(after.core?.prompt).toEqual(before.core?.prompt)
+  })
+
   it("tells a search that matched nothing from an empty library, keeps the list while a search loads, and clears the filters", async () => {
     let release: (() => void) | null = null
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

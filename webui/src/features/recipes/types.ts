@@ -49,6 +49,6 @@ export type RecipeApplyResponse = {
   patch: Record<string, unknown>
   core: ParamValues
   scripts: Record<string, ParamValues>
-  conflicts: unknown[]
+  conflicts: Record<string, unknown>
   warnings: string[]
 }

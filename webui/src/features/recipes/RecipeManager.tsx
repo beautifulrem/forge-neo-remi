@@ -29,7 +29,7 @@ import { cn } from "@/lib/utils"
 import { getFormStore } from "@/ui/form-store"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import { applyRecipeApi, createRecipeApi, deleteRecipeApi, exportRecipesApi, importRecipesApi, recipesQuery, refreshRecipes } from "./api"
-import { applyRecipeEntries, captureFormOverrides, countRecipeParams, recipeHighlights } from "./capture"
+import { appliedRecipeValues, applyRecipeEntries, captureFormOverrides, countRecipeParams, recipeHighlights } from "./capture"
 import type { Recipe } from "./types"
 import { LoadFailed } from "@/components/LoadFailed"
 import { recipeFileName } from "./file-name"
@@ -111,8 +111,7 @@ export function RecipeManager() {
         core: store.values.core ?? {},
         scripts: Object.fromEntries(Object.entries(store.values).filter(([k]) => k !== "core")),
       })
-      const core = res.core ?? recipe.core_patch
-      const scripts = res.scripts ?? recipe.scripts_patch
+      const { core, scripts } = appliedRecipeValues(res, recipe)
       const tab = res.tab ?? recipe.tab
       const warnings = res.warnings ?? []
       const count = await applyRecipeEntries(tab, core, scripts)
