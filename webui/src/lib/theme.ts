@@ -113,7 +113,10 @@ export function useTheme() {
   return { theme: resolved, setTheme }
 }
 
-/** Mirrors the appearance preferences onto <html> (class + data attributes). */
+/** `--background` of each theme in hex: the `theme-color` the browser paints around the page (index.html sets it first). */
+export const THEME_COLORS = { light: "#f6f4f0", dark: "#0f1113" } as const
+
+/** Mirrors the appearance preferences onto <html> (class + data attributes) and the browser's theme-color. */
 export function useApplyAppearance() {
   const { theme } = useTheme()
   const density = useAppearance((s) => s.density)
@@ -121,6 +124,7 @@ export function useApplyAppearance() {
   useEffect(() => {
     const root = document.documentElement
     root.classList.toggle("dark", theme === "dark")
+    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[theme])
     root.dataset.density = density
     root.dataset.accent = accent
   }, [theme, density, accent])

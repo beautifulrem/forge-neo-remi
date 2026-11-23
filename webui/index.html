@@ -5,6 +5,8 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="dark light" />
+    <!-- the browser chrome around the page (mobile address bar, PWA title bar): the header's --background -->
+    <meta name="theme-color" content="#0f1113" />
     <!-- The app has its own dark theme: keep Dark Reader from re-coloring the light one. -->
     <meta name="darkreader-lock" />
     <title>Remi WebUI</title>
@@ -20,6 +22,7 @@
         var t = themes[q] ? q : themes[s.theme] && s.themeChosen !== false ? s.theme : themes[window.__REMI_THEME__] ? window.__REMI_THEME__ : "dark"
         var dark = t === "light" ? false : t === "system" ? matchMedia("(prefers-color-scheme: dark)").matches : true
         d.classList.toggle("dark", dark)
+        document.querySelector('meta[name="theme-color"]').content = dark ? "#0f1113" : "#f6f4f0"
         if (s.density) d.dataset.density = s.density
         // version 2's default iris became blue (the store's migrate)
         if (s.accent) d.dataset.accent = s.accent === "iris" && (p.version || 0) < 3 ? "blue" : s.accent

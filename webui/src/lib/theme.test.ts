@@ -118,6 +118,41 @@ describe("theme in effect", () => {
     expect(root.classList.contains("dark")).toBe(true)
   })
 
+  it("paints the browser's theme-color with the header's background of the theme in effect", async () => {
+    const { renderHook, act } = await import("@testing-library/react")
+    systemScheme(false)
+    const meta = document.head.appendChild(Object.assign(document.createElement("meta"), { name: "theme-color", content: "#0f1113" }))
+    try {
+      const { useAppearance, useApplyAppearance, THEME_COLORS } = await load({})
+      renderHook(() => useApplyAppearance())
+      expect(meta.content).toBe(THEME_COLORS.dark)
+      act(() => useAppearance.getState().setTheme("light"))
+      expect(meta.content).toBe(THEME_COLORS.light)
+    } finally {
+      meta.remove()
+    }
+  })
+
+  it("keeps THEME_COLORS and index.html equal to each theme's --background", async () => {
+    const { readFileSync } = await import("node:fs")
+    const { THEME_COLORS } = await load({})
+    const css = readFileSync("src/index.css", "utf8")
+    const html = readFileSync("index.html", "utf8")
+    const toHex = (L: number, C: number, h: number) => {
+      const a = C * Math.cos((h * Math.PI) / 180)
+      const b = C * Math.sin((h * Math.PI) / 180)
+      const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
+      const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
+      const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3
+      const rgb = [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s]
+      const channel = (x: number) => Math.round(255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055))
+      return `#${rgb.map((x) => channel(Math.min(1, Math.max(0, x))).toString(16).padStart(2, "0")).join("")}`
+    }
+    const backgrounds = [...css.matchAll(/^ {2}--background: oklch\(([\d.]+) ([\d.]+) ([\d.]+)\);/gm)].map((m) => toHex(Number(m[1]), Number(m[2]), Number(m[3])))
+    expect(backgrounds).toEqual([THEME_COLORS.light, THEME_COLORS.dark])
+    for (const color of backgrounds) expect(html).toContain(color)
+  })
+
   it("ignores an unknown server theme and an unreadable stored state", async () => {
     expect((await load({ server: "sepia" })).serverTheme()).toBeNull()
     localStorage.setItem("remi-appearance", "{not json")
