@@ -27,6 +27,7 @@ import { type Collection, type Favorite, type FavoriteKind, type FavoritesExport
 import { toolKeys } from "../queries"
 import { appendText, type PanelProps } from "./helpers"
 import { PanelHeader, SearchBox } from "./panel"
+import { LoadFailed } from "@/components/LoadFailed"
 
 /** Every collection, the unsorted favorites, or a collection id. */
 type Filter = string
@@ -268,6 +269,8 @@ export default function FavoritesPanel({ value, setValue, kind, disabled, close 
           <div className="flex h-32 items-center justify-center">
             <Spinner aria-label={t("Loading")} />
           </div>
+        ) : favorites.isError && favorites.data === undefined ? (
+          <LoadFailed className="justify-center px-3" error={favorites.error} onRetry={() => void favorites.refetch()} />
         ) : items.length === 0 ? (
           <Empty className="py-8">
             <EmptyHeader>

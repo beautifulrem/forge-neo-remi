@@ -14,6 +14,7 @@ import { queueItemsQuery } from "@/api/queries"
 import type { FormTab, Job, QueueStatus } from "@/api/types"
 import { HeaderSlot } from "@/app/header-slot"
 import { navigate, type Route } from "@/app/router"
+import { LoadFailed } from "@/components/LoadFailed"
 import { Segmented } from "@/components/Segmented"
 import {
   AlertDialog,
@@ -36,7 +37,6 @@ import { Toggle } from "@/components/ui/toggle"
 import { useMediaQuery } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import type { ResultItem } from "@/features/gallery/session-store"
-import { errorText } from "@/features/errors/error-text"
 import { HistoryList } from "@/features/queue/HistoryList"
 import { ImportDialog } from "@/features/queue/ImportDialog"
 import { PendingList } from "@/features/queue/PendingList"
@@ -89,19 +89,6 @@ function Pending({ status }: { status: QueueStatus | undefined }) {
           <PendingList jobs={jobs} />
         )}
       </section>
-    </div>
-  )
-}
-
-/** A list that could not load at all: what failed, and a retry. */
-function LoadFailed({ error, onRetry }: { error: unknown; onRetry: () => void }) {
-  const { t } = useTranslation()
-  return (
-    <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 py-3 text-sm">
-      <span className="text-destructive">{errorText(error)}</span>
-      <Button variant="outline" size="sm" onClick={onRetry}>
-        {t("Retry")}
-      </Button>
     </div>
   )
 }

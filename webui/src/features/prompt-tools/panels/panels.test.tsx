@@ -41,6 +41,19 @@ describe("quick tag groups", () => {
   }, 20_000)
 })
 
+describe("a panel whose list cannot load", () => {
+  it("says what failed and retries instead of showing an empty list", async () => {
+    const groups = vi.spyOn(promptToolsApi, "groups").mockRejectedValue(new Error("tag groups unavailable"))
+    render(<GroupsPanel {...panelProps("")} />, { wrapper })
+    const alert = await screen.findByRole("alert", {}, { timeout: 15_000 })
+    expect(alert.textContent).not.toBe("")
+    expect(screen.queryByText("No tag groups")).not.toBeInTheDocument()
+    groups.mockResolvedValue([{ name: "服装", groups: [{ name: "上衣", color: null, tags: [{ tag: "hanten_(clothes)", label: "半缠" }] }] }])
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }))
+    expect(await screen.findByRole("button", { name: /半缠/ })).toBeInTheDocument()
+  }, 20_000)
+})
+
 const favorite = (id: string, text: string, fields: Partial<Favorite> = {}): Favorite => ({ id, collection_id: null, kind: "prompt", text, name: "", created: 0, position: 0, ...fields })
 
 describe("favorites", () => {

@@ -18,6 +18,7 @@ import { type HistoryItem, promptToolsApi } from "../api"
 import { toolKeys } from "../queries"
 import { appendText, type PanelProps, timeAgo } from "./helpers"
 import { PanelHeader, SearchBox } from "./panel"
+import { LoadFailed } from "@/components/LoadFailed"
 
 function Action({ label, onClick, children, disabled }: { label: string; onClick: () => void; children: ReactNode; disabled?: boolean }) {
   return (
@@ -128,6 +129,8 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
           <div className="flex h-32 items-center justify-center">
             <Spinner aria-label={t("Loading")} />
           </div>
+        ) : history.isError && history.data === undefined ? (
+          <LoadFailed className="justify-center px-3" error={history.error} onRetry={() => void history.refetch()} />
         ) : items.length === 0 ? (
           <Empty className="py-8">
             <EmptyHeader>

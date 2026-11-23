@@ -17,6 +17,7 @@ import { findTag, parsePrompt, tagKey, toggleTag } from "../chips/parse"
 import { toolKeys } from "../queries"
 import { groupTagText, type PanelProps } from "./helpers"
 import { PanelHeader, SearchBox } from "./panel"
+import { LoadFailed } from "@/components/LoadFailed"
 
 type FlatTag = { tag: string; label: string | null; group: string; color: string | null }
 
@@ -81,6 +82,8 @@ export default function GroupsPanel({ value, setValue, disabled, config }: Panel
         <div className="flex h-40 items-center justify-center">
           <Spinner aria-label={t("Loading")} />
         </div>
+      ) : groups.isError && groups.data === undefined ? (
+        <LoadFailed className="justify-center px-3" error={groups.error} onRetry={() => void groups.refetch()} />
       ) : categories.length === 0 ? (
         <Empty className="py-8">
           <EmptyHeader>
