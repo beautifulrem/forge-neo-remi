@@ -4,6 +4,7 @@
  */
 import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
+import { mergeTyped } from "@/lib/persist"
 
 export type Tool = "brush" | "eraser" | "fill" | "rect" | "lasso" | "eyedropper" | "hand"
 
@@ -121,7 +122,7 @@ export const useTools = create<ToolState & ToolActions>()(
       storage: createJSONStorage(() => localStorage),
       // Older or hand-edited values fall back to the defaults key by key.
       merge: (persisted, current) => {
-        const p = (persisted ?? {}) as Partial<ToolState>
+        const p = mergeTyped(persisted, current) as Partial<ToolState>
         return {
           ...current,
           ...p,

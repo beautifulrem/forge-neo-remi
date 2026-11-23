@@ -17,6 +17,7 @@ import { errorText, toastInvalid } from "@/features/errors/error-text"
 import { t } from "@/i18n"
 import { getFormStore } from "@/ui/form-store"
 import { jobRequest, missingInputs } from "@/ui/tab"
+import { mergeTyped } from "@/lib/persist"
 
 export type ExtrasResult = {
   jobId: string
@@ -47,6 +48,7 @@ export const useExtrasRuns = create<ExtrasRunState>()(
     version: 1,
     storage: createJSONStorage(() => sessionStorage),
     partialize: ({ results, jobs, sources }) => ({ results, jobs, sources }),
+    merge: mergeTyped,
   }),
 )
 

@@ -93,6 +93,8 @@ export type FormStore = StoreApi<FormState & FormActions>
 
 type Persisted = Pick<FormState, "values" | "open" | "tabs">
 
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value)
+
 const emptyIndex = (): FormIndex => ({ inputs: new Map(), slots: new Set(), reveal: new Map() })
 
 /** `errors` minus the given names of `owner` (the same object when nothing changes). */
@@ -321,8 +323,17 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
       version: 1,
       storage,
       partialize: (s): Persisted => ({ values: persistableValues(s), open: s.open, tabs: s.tabs }),
-          // Drafts are merged in `load` against the schema; hydration only restores the raw data.
-          merge: (persisted, current) => ({ ...current, ...(persisted as Persisted | undefined) }),
+          // Drafts are merged in `load` against the schema; hydration only restores the raw data,
+          // and only its objects (a damaged entry must not break `load` on every page load).
+          merge: (persisted, current) => {
+            const saved = (isRecord(persisted) ? persisted : {}) as Partial<Record<keyof Persisted, unknown>>
+            return {
+              ...current,
+              values: isRecord(saved.values) ? (saved.values as Persisted["values"]) : current.values,
+              open: isRecord(saved.open) ? (saved.open as Persisted["open"]) : current.open,
+              tabs: isRecord(saved.tabs) ? (saved.tabs as Persisted["tabs"]) : current.tabs,
+            }
+          },
         }),
       )
     : createStore<FormState & FormActions>()(initializer)

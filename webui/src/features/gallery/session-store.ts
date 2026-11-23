@@ -8,6 +8,7 @@ import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
 import { useProgress } from "@/api/progress"
 import type { FormTab, JobOutput } from "@/api/types"
+import { mergeTyped } from "@/lib/persist"
 
 export type ResultItem = {
   /** `${jobId}:${index}` */
@@ -108,6 +109,7 @@ export const useSession = create<SessionState>()(
       version: 1,
       storage: createJSONStorage(() => sessionStorage),
       partialize: (s) => ({ items: s.items, selected: s.selected }),
+      merge: mergeTyped,
     },
   ),
 )

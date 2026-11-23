@@ -1,6 +1,7 @@
 /** Per-prompt view choice (text editor or tag chips), remembered across reloads. */
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { mergeTyped } from "@/lib/persist"
 
 export type PromptView = "text" | "chips"
 
@@ -15,7 +16,7 @@ export const usePromptViews = create<ViewState>()(
       views: {},
       setView: (key, view) => set((state) => ({ views: { ...state.views, [key]: view } })),
     }),
-    { name: "remi-prompt-tools", version: 1, partialize: ({ views }) => ({ views }) },
+    { name: "remi-prompt-tools", version: 1, partialize: ({ views }) => ({ views }), merge: mergeTyped },
   ),
 )
 

@@ -8,6 +8,7 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import type { GenerateTab } from "@/features/progress/run-controller"
 import type { SortKey, SortOrder } from "./queries"
+import { mergeTyped } from "@/lib/persist"
 
 export type Surface = "page" | "drawer"
 export type ViewMode = "grid" | "list"
@@ -113,7 +114,7 @@ export const useNetworksUi = create<NetworksUiState>()(
         return saved as PersistedState
       },
       merge: (persisted, current) => {
-        const saved = (persisted ?? {}) as Partial<NetworksUiState>
+        const saved = mergeTyped(persisted, current) as Partial<NetworksUiState>
         const surface = (name: Surface): SurfaceState => ({ ...current.surfaces[name], ...(saved.surfaces?.[name] ?? {}) })
         return {
           ...current,

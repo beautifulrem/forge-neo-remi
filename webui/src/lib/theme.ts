@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react"
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { mergeTyped } from "@/lib/persist"
 
 export type Theme = "light" | "dark" | "system"
 export type Density = "comfortable" | "compact"
@@ -71,7 +72,7 @@ export const useAppearance = create<AppearanceState>()(
       },
       // A theme never picked follows the server's `--theme` (it may have changed since).
       merge: (persisted, current) => {
-        const state = (persisted ?? {}) as Partial<AppearanceState>
+        const state = mergeTyped(persisted, current) as Partial<AppearanceState>
         const chosen = state.themeChosen === true && isTheme(state.theme)
         return { ...current, ...state, theme: chosen ? state.theme! : current.theme, themeChosen: chosen }
       },

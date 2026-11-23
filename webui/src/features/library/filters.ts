@@ -6,6 +6,7 @@ import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
 import type { GalleryCategory, GalleryQuery, GallerySort } from "@/api/types"
 import type { TileSize } from "./layout"
+import { mergeTyped } from "@/lib/persist"
 
 export type GalleryLayout = "justified" | "masonry"
 
@@ -58,6 +59,7 @@ export const useGalleryView = create<GalleryView>()(
       storage: createJSONStorage(() => localStorage),
       // The search text is per visit; everything else is kept.
       partialize: ({ category, model, boardId, from, to, starred, sort, layout, size }) => ({ category, model, boardId, from, to, starred, sort, layout, size }),
+      merge: mergeTyped,
     },
   ),
 )

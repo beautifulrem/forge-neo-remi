@@ -89,6 +89,20 @@ describe("form store", () => {
     expect(s.open["ext::enable"]).toBe(true)
   })
 
+  it.each([
+    ["values: null", { values: null, open: {}, tabs: {} }],
+    ["values: a string", { values: "x", open: null, tabs: 3 }],
+    ["an owner's values: null", { values: { core: null, ext: 5 } }],
+    ["state: null", null],
+  ])("loads the defaults from a damaged draft (%s)", (_name, state) => {
+    localStorage.setItem(draftKey("t-damaged"), JSON.stringify({ state, version: 1 }))
+    const store = createFormStore("t-damaged")
+    expect(() => store.getState().load(owners)).not.toThrow()
+    expect(store.getState().values.core!.prompt).toBe("")
+    expect(store.getState().open).toEqual(expect.any(Object))
+    expect(store.getState().tabs).toEqual(expect.any(Object))
+  })
+
   it("persists drafts (debounced) without upload ids", async () => {
     const store = createFormStore("t4")
     store.getState().load(owners)
