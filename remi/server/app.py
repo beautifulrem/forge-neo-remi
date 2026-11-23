@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse
 from remi.files import FileError
 from remi.jobs import JobError
 from remi.server.api_docs import add_docs_routes
-from remi.server.auth import Auth, SecurityMiddleware, credentials_from_cmd_opts, load_secret
+from remi.server.auth import BASE_HEADERS, Auth, SecurityMiddleware, credentials_from_cmd_opts, load_secret
 from remi.server.limits import BodyLimitMiddleware, body_limit
 from remi.server.services import Services, default_services
 from remi.server.spa import DIST, Spa
@@ -96,7 +96,9 @@ def handle_exception(request: Request, error: Exception) -> JSONResponse:
         return ErrorResponse(status_code=status, content={"detail": detail if isinstance(detail, str) and detail else _phrase(status)})
     error_id = secrets.token_hex(6)
     log.error("%s %s failed (error id %s)", request.method, request.url.path, error_id, exc_info=error)
-    return ErrorResponse(status_code=status, content={"error": _phrase(status), "detail": f"Internal server error (id {error_id}); the details are in the server log", "id": error_id})
+    # this handler runs in Starlette's outermost middleware, outside the one that adds the base headers
+    headers = {name.decode(): value.decode() for name, value in BASE_HEADERS}
+    return ErrorResponse(status_code=status, content={"error": _phrase(status), "detail": f"Internal server error (id {error_id}); the details are in the server log", "id": error_id}, headers=headers)
 
 
 # Longest raw body text an error echoes back (an upload can be megabytes)

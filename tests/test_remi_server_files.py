@@ -637,3 +637,11 @@ def test_starred_and_boarded_unsaved_outputs_survive_housekeeping(tmp_path):
         assert store.get(plain.id) is None
     finally:
         services.close()
+
+
+def test_a_file_deleted_from_disk_answers_404_not_500(tmp_path):
+    with server_app(tmp_path) as server:
+        record = server.services.files.save_output_image(Image.new("RGB", (8, 8)), None)
+        os.remove(record.path)
+        assert server.client.get(f"/api/v2/files/{record.id}").status_code == 404
+        assert server.client.get(f"/api/v2/thumbs/{record.id}").status_code == 404

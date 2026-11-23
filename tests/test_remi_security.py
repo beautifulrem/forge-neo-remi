@@ -169,6 +169,21 @@ def test_every_response_has_nosniff_and_a_same_origin_referrer_policy(webui, tmp
             assert response.headers["referrer-policy"] == "same-origin"
 
 
+def test_an_unhandled_server_error_also_has_nosniff_and_the_referrer_policy(webui, tmp_path):
+    from fastapi.testclient import TestClient
+
+    with server_app(tmp_path) as server:
+
+        @server.app.get("/api/v2/test-boom")
+        def boom():
+            raise RuntimeError("boom")
+
+        response = TestClient(server.app, base_url=str(server.client.base_url), raise_server_exceptions=False).get("/api/v2/test-boom")
+        assert response.status_code == 500
+        assert response.headers["x-content-type-options"] == "nosniff"
+        assert response.headers["referrer-policy"] == "same-origin"
+
+
 def script_hashes(csp):
     script_src = next(part for part in csp.split(";") if part.strip().startswith("script-src"))
     return set(re.findall(r"'sha256-([^']+)'", script_src))
