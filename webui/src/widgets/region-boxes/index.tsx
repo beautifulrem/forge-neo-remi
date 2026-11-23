@@ -234,7 +234,7 @@ export default function RegionBoxes({ props, disabled, id, label }: WidgetProps<
                   <span aria-hidden className={cn("size-1.5 rounded-full", color.swatch)} />
                   {region.number}
                 </span>
-                <span className={cn("line-clamp-3 break-words text-foreground", !region.prompt.trim() && "text-muted-foreground italic")}>
+                <span className={cn("line-clamp-3 break-words text-foreground", !region.prompt.trim() && "pe-[0.2em] text-muted-foreground italic")}>
                   {region.prompt.trim() || tw("Empty prompt: not used")}
                 </span>
                 {region.active && isSelected && !disabled

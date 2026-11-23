@@ -82,6 +82,15 @@ describe("region-boxes", { timeout: 20_000 }, () => {
     expect(canvas.querySelector('[data-region="3"]')).toHaveAttribute("tabindex", "-1")
   })
 
+  it("leaves room for the italic placeholder's overhang inside its clamp", () => {
+    setup()
+    // line-clamp clips at the text's own box (the region aligns it to the start, so the box is as
+    // wide as the text): an italic last letter leans past it and was cut ("not used" read "not usea")
+    const placeholder = within(region(2)).getByText("Empty prompt: not used")
+    expect(placeholder).toHaveClass("italic", "line-clamp-3")
+    expect(placeholder.className).toMatch(/(^|\s)pe-\S+/)
+  })
+
   it("moves and resizes the focused region with the arrow keys", () => {
     const store = setup()
     fireEvent.keyDown(region(2), { key: "ArrowLeft" })
