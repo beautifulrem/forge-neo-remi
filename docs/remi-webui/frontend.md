@@ -306,8 +306,8 @@ generated interfaces (sources: Linear's
   header, menus, the progress overlay or the live preview (a blur over a
   surface that redraws every step costs sampling time).
   Motion moves `transform` and `opacity` only (a meter fills with
-  `scaleX`, not `width`), 120 to 250 ms. A lone small control (a field's
-  reset dot, a badge's ×, the advice bar's buttons) keeps its look and gets
+  `scaleX`, not `width`), 120 to 250 ms. A lone small control (a badge's
+  ×, the advice bar's buttons) keeps its look and gets
   an invisible `after:` hit box of at least 40 px; the box never reaches a
   neighbouring control, so packed toolbars are not given one (it would take
   the taps of the next tool). Chart and band colours come from `--chart-2`
