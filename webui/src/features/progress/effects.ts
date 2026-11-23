@@ -63,9 +63,11 @@ export function useProgressTitle(job: RunningJob | null, enabled: boolean) {
   useEffect(() => {
     if (!enabled || percent === null) return
     const base = document.title.replace(/^\[\d+%\][^·]*· /, "")
-    document.title = `[${percent}%]${eta ? ` ${t("ETA {{eta}}", { eta })}` : ""} · ${base}`
+    const shown = `[${percent}%]${eta ? ` ${t("ETA {{eta}}", { eta })}` : ""} · ${base}`
+    document.title = shown
     return () => {
-      document.title = base
+      // the app may have renamed the page meanwhile (a route or language change): keep its title
+      if (document.title === shown) document.title = base
     }
   }, [enabled, percent, eta])
 }
