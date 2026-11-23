@@ -197,6 +197,9 @@ export default defineConfig(({ mode }) => {
       include: ["src/**/*.test.{ts,tsx}", "tools/**/*.test.mjs"],
       css: false,
       restoreMocks: true,
+      // the persistent transform cache keys a module by its own text, so an `import.meta.glob`
+      // scan (the locale coverage test) keeps the file list it saw first and passes stale
+      fsModuleCache: false,
       // jsdom suites are CPU heavy: half the cores and generous timeouts keep runs stable under load
       // (the e2e server, pytest) instead of timing out; override with `--maxWorkers`.
       maxWorkers: "50%",

@@ -28,7 +28,8 @@ function chromeKeys(): Set<string> {
       else if (!m[2]) keys.add(m[1]!)
     }
     if (INDIRECT.test(path)) {
-      for (const m of source.matchAll(/\b(?:label|title|description): "([^"]+)"/g)) keys.add(m[1]!)
+      // `label: "text" as const` is a typed data tag (a JSON Builder object kind), not a string shown as is
+      for (const m of source.matchAll(/\b(?:label|title|description): "([^"]+)"(?! as const)/g)) keys.add(m[1]!)
       for (const m of source.matchAll(/\b(?:group): "([A-Z][^"]+)"/g)) keys.add(m[1]!)
       for (const m of source.matchAll(/\b(?:title|description)="([^"]+)"/g)) keys.add(m[1]!)
     }
