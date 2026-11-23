@@ -103,6 +103,13 @@ def test_the_entrypoint_parses():
     assert subprocess.run(["bash", "-n", str(DOCKER / "entrypoint.sh")], capture_output=True).returncode == 0
 
 
+def test_the_entrypoint_runs_from_a_windows_checkout():
+    """Git for Windows checks text files out with CRLF (core.autocrlf), and the repository has no
+    .gitattributes: "#!/bin/bash\\r" is no interpreter, so the image strips the CRs itself."""
+    for dockerfile in (DOCKERFILE, ROCM_DOCKERFILE):
+        assert "RUN sed -i 's/\\r$//' docker/entrypoint.sh && chmod +x docker/entrypoint.sh" in dockerfile
+
+
 def test_the_build_context_leaves_out_data_and_build_output():
     for pattern in ("/models", "/extensions", "/output", "/remi-data", "/config.json", "/venv", "/.venv", "/webui/node_modules", "/webui/dist", ".git", "**/*.safetensors"):
         assert pattern in IGNORE, pattern

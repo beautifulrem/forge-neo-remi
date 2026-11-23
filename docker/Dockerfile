@@ -97,7 +97,8 @@ RUN python launch.py --exit --skip-torch-cuda-test --data-dir /tmp/remi-build \
     && rm -rf /tmp/remi-build
 
 # Runtime
-RUN chmod +x docker/entrypoint.sh
+# a Windows checkout has CRLF line endings (core.autocrlf); bash then finds no interpreter
+RUN sed -i 's/\r$//' docker/entrypoint.sh && chmod +x docker/entrypoint.sh
 
 EXPOSE 7860
 
