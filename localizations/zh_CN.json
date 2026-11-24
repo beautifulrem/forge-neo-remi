@@ -836,6 +836,7 @@
   "Select a model": "选择模型",
   "The filename is one of the models being merged; choose another": "该文件名是正在合并的模型之一，请换一个",
   "The filename must stay inside the checkpoint folder": "文件名必须位于模型文件夹内",
+  "A file with this name is already in the checkpoint folder; choose another": "模型文件夹中已有同名文件，请换一个文件名",
   "based on the interpolation method when empty": "留空时按插值方法命名",
   "in regex format": "正则表达式格式",
   "saved in the \"Stable-diffusion\" folder": "保存在 “Stable-diffusion” 文件夹中",

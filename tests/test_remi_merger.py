@@ -264,6 +264,18 @@ def test_save_current_model_rejects_paths_outside_the_folder(server):
     assert _act(server, "save_unet", {"save_filename": "../../x"}) == {"__toast__": {"level": "warning", "message": "The filename must stay inside the checkpoint folder"}}
 
 
+def test_save_current_model_never_writes_over_a_file(server, models):
+    """The default filename (flux.safetensors) may well name a model in the folder already:
+    saving refuses rather than replace it, without loading anything."""
+
+    before = (models.folder / "a.safetensors").read_bytes()
+    exists = {"__toast__": {"level": "warning", "message": "A file with this name is already in the checkpoint folder; choose another"}}
+    for action in ("save_unet", "save_checkpoint"):
+        assert _act(server, action, {"save_filename": "a"}) == exists
+        assert _act(server, action, {"save_filename": " a.safetensors "}) == exists
+    assert (models.folder / "a.safetensors").read_bytes() == before
+
+
 def test_the_page_strings_are_translated(models):
     """Every label, note, button and message of the page has a zh-CN entry."""
 

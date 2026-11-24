@@ -230,6 +230,9 @@ class CheckpointMerger(pages.Page):
             path = extras.merge_output_path(resolved["save_filename"])
         except ValueError:
             return ui.toast("The filename must stay inside the checkpoint folder", "warning")
+        if os.path.exists(path):
+            # The default name (flux.safetensors) may be a model there already: never replace it.
+            return ui.toast("A file with this name is already in the checkpoint folder; choose another", "warning")
 
         def work(task: pages.Task) -> dict[str, Any]:
             from modules import sd_models, shared
