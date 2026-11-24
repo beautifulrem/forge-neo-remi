@@ -28,5 +28,6 @@
   "{{count}} values are not valid here and are skipped:_one": "{{count}} value is not valid here and is skipped:",
   "{{count}} settings changes are not applied yet_one": "{{count}} settings change is not applied yet",
   "Staged {{count}} candidate on canvas_other": "Staged {{count}} candidates on canvas",
-  "Added {{count}} image to Reference Images ({{total}} total)_other": "Added {{count}} images to Reference Images ({{total}} total)"
+  "Added {{count}} image to Reference Images ({{total}} total)_other": "Added {{count}} images to Reference Images ({{total}} total)",
+  "{{count}} steps_one": "{{count}} step"
 }

@@ -66,6 +66,14 @@ describe("en chrome catalog", () => {
       expect(vars(value), key).toEqual(vars(base))
     }
   })
+
+  it("gives a count followed by a plural noun its singular form", () => {
+    // Without "{{count}} steps_one" a one-step recipe reads "1 steps". These counts are never 1.
+    const neverOne = new Set(["A zip holds at most {{count}} images: the first {{count}} selected are packed.", "Show all {{count}} tags"])
+    const singular = new Set(Object.keys(en).flatMap((key) => (key.endsWith("_one") ? [key.slice(0, -"_one".length)] : [])))
+    const missing = [...chromeKeys()].filter((key) => /\{\{count\}\} [a-z]{2,}s\b/.test(key) && !singular.has(key) && !neverOne.has(key))
+    expect(missing).toEqual([])
+  })
 })
 
 /** The server's zh_CN catalog as `/api/v2/i18n/zh_CN` merges it: core, then every built-in extension's. */

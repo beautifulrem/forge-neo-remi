@@ -1260,15 +1260,19 @@ older server) nothing is shown.
 
 - Keys are the **English text** (`keySeparator`/`nsSeparator` off).
   Namespaces per locale: `chrome` (bundled `src/locales/<locale>.json`, one
-  lazy chunk each) and `server` (`GET /api/v2/i18n/{locale}`, e.g. `zh_CN`,
+  lazy chunk each; `en.json` holds only English plural forms and ships with
+  the i18n module) and `server` (`GET /api/v2/i18n/{locale}`, e.g. `zh_CN`,
   for schema labels, choices, info texts and extension strings). `t()` looks
   in `chrome`, then `server`, then returns the key.
 - Every UI chrome string goes through `t()` with a **literal English key**:
   `t("Reset to default")`, `t("Step {{step}} of {{steps}}", { step, steps })`.
   Keep constants that are translated later as `label:` / `group:` /
   `title=` / `description=` literals (routes, commands, placeholders). No
-  string concatenation, no plural suffixes; write sentences that work
-  without plural forms.
+  string concatenation. Prefer sentences that work without plural forms
+  (`Saved: {{count}}`). A count followed by a noun (`{{count}} steps`) gets
+  its English singular in `en.json` as `"{{count}} steps_one": "{{count}} step"`;
+  the key itself is the plural; `zh-CN.json` needs no plural forms. `locales.test.ts`
+  fails on a `{{count}} <plural noun>` key without its `_one` form.
 - Schema strings are passed to `t()` as-is (`t(node.label)`); `markdown` and
   `html` node text and a setting's HTML comment are looked up whole (key = the
   exact source text; the catalogs translate them keeping the Markdown or
