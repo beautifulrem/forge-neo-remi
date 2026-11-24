@@ -75,6 +75,13 @@ def accepted_codings(header: str) -> set[str]:
     return codings
 
 
+def _same_file(a: Path, b: Path) -> bool:
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
 class Spa:
     def __init__(self, auth: Auth, dist: Path | None = None, *, theme: str | None = None) -> None:
         self.auth = auth
@@ -119,6 +126,11 @@ class Spa:
             if not candidate.is_relative_to(self.dist) or not candidate.is_file():
                 return None
         except (OSError, ValueError):
+            return None
+        # The shell goes out only through `index()`, with its headers (CSP, frame-ancestors), under
+        # whatever name reaches it: "/index.html/", "/Index.html" on a volume that ignores case, a
+        # short or link name. No other HTML file is served as is either.
+        if candidate.suffix.lower() == ".html" or _same_file(candidate, self.dist / "index.html"):
             return None
         return candidate
 
@@ -170,7 +182,7 @@ class Spa:
         # Only existing build files under /assets: it is public (the shell
         # loads it to show the sign-in form), so it must never fall back to
         # the shell
-        if path == "/assets" or path.startswith("/assets/") or (os.path.splitext(path)[1] and not path.endswith(".html")):
+        if path == "/assets" or path.startswith("/assets/") or (os.path.splitext(path)[1] and not path.lower().endswith(".html")):
             return JSONResponse({"detail": "Not Found"}, status_code=404)
         index = self.index(root)
         if index is None:

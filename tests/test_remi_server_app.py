@@ -3,6 +3,7 @@ i18n, models, styles, the SPA and the OpenAPI export."""
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -385,6 +386,31 @@ def test_the_spa_is_served_with_cache_headers_and_client_route_fallback(webui, t
         assert server.client.get("/../secret.txt").status_code in (200, 404) and "secret" not in server.client.get("/../secret.txt").text
         assert server.client.get("/%2e%2e/secret.txt").status_code == 404
         assert server.client.post("/").status_code == 404
+
+
+def test_every_spelling_of_the_shell_gets_its_headers(webui, tmp_path):
+    """``/index.html/`` (and ``/Index.html`` on a volume that ignores case) reached
+    the shell as a plain file: no CSP, so any site could frame the WebUI."""
+
+    dist = make_dist(tmp_path)
+    with server_app(tmp_path / "data", spa_dir=dist) as server:
+        for path in ("/", "/index.html", "/index.html/", "/Index.html", "/INDEX.HTML", "/gallery"):
+            response = server.client.get(path)
+            assert response.status_code == 200 and "window.__REMI_ROOT__" in response.text, path
+            assert "frame-ancestors" in response.headers.get("content-security-policy", ""), path
+            assert response.headers["cache-control"] == "no-cache", path
+
+
+def test_the_shell_under_another_name_is_not_served_as_a_file(webui, tmp_path):
+    """A name the file system resolves to the shell (a link here; an 8.3 short
+    name or a trailing dot on Windows) must not serve it without its headers."""
+
+    dist = make_dist(tmp_path)
+    os.link(dist / "index.html", dist / "shell.htm")
+    with server_app(tmp_path / "data", spa_dir=dist) as server:
+        response = server.client.get("/shell.htm")
+        assert response.status_code == 404 or "frame-ancestors" in response.headers.get("content-security-policy", "")
+        assert server.client.get("/favicon.svg").status_code == 200  # other build files still are
 
 
 def test_the_shell_carries_the_theme_of_launch_flag_before_its_own_script(tmp_path):
