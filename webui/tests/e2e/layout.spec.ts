@@ -618,6 +618,23 @@ test("a dialog fits a phone held sideways and scrolls inside", async ({ page }) 
   expect(hit).toBe(true)
 })
 
+// A popover taller than the room beside its trigger ran off the window: held sideways (844×390),
+// the VAE / Text encoders picker had its title and search above the top edge, out of reach.
+test("a popover fits a phone held sideways and scrolls inside", async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 })
+  await openGenerate(page)
+  const trigger = page.getByRole("button", { name: "VAE / Text encoders" })
+  if (!(await trigger.isVisible())) await page.getByRole("button", { name: "Model settings" }).click()
+  await trigger.click()
+  const popover = page.getByRole("dialog", { name: "VAE / Text encoders" })
+  await expect(popover).toBeVisible()
+  await page.waitForTimeout(300) // the opening zoom
+  const box = (await popover.boundingBox())!
+  expect(Math.round(box.y), "the popover's top").toBeGreaterThanOrEqual(0)
+  expect(Math.round(box.y + box.height), "the popover's bottom").toBeLessThanOrEqual(390)
+  await expect(popover.getByRole("textbox", { name: "Search modules" })).toBeInViewport()
+})
+
 // Tabbing down the rail in a short window parked a link flush against the scroller's edge, under
 // the fade, with the bottom of its focus ring cut off.
 test("the rail keeps a focused link out of its faded edges", async ({ page }) => {
