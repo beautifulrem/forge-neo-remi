@@ -70,7 +70,7 @@ imperatively).
   keeps the server contract to "serve `index.html` at `/`". Use
   `navigate(route)`, `routeHref(route)` for links, `useRoute()` to read.
 - **Pages** are code-split: `app/routes.tsx` maps each route name to a
-  `lazy(() => import("@/pages/…"))`; nav items preload their chunk on
+  `retryableLazy(() => import("@/pages/…"))`; nav items preload their chunk on
   hover/focus. A page component receives `{ route }` (its own route variant).
 - **Navigation**: `BUILTIN_NAV` plus extension pages from `GET /app`
   (`pages`), ordered/filtered by `Bootstrap.tabs`; Queue, Settings and
@@ -291,7 +291,7 @@ generated interfaces (sources: Linear's
   room around its controls so their focus rings are not clipped. Toolbar
   controls (header, settings, extensions, gallery) are one 28 px height.
   A pressed toggle wears the selection tint (`--primary` text on a 15 %
-  wash, 20 % in the dark theme), hovered too, set once in
+  wash, 20 % in the dark theme, 25 % there when hovered), set once in
   `components/ui/toggle.tsx` (`PRESSED_TINT_CLASS`, which a button acting as
   a toggle wears as well); a near-black tone alone does not show a lone
   toggle's state. A light theme's hover keeps the 15 % wash: a deeper one
@@ -1445,7 +1445,13 @@ Keeping a first view small:
   synchronously calls `preloadViews()` first.
 - Dialogs and surfaces that open on demand (img2img's source panel and
   stage, the networks item dialogs, the lightbox, the style editor) are
-  `lazy()` and mounted on first use.
+  `retryableLazy()` and mounted on first use.
+- Every code-split component is `retryableLazy()` (`lib/retryable-lazy.ts`),
+  never a plain `lazy()`: `lazy()` keeps a failed import for good, so a chunk
+  that failed once (offline, a build replaced under the page) stayed failed
+  until a reload. A failed load reaches the error boundary as usual; its
+  "Try again", and the browser coming back online, load the chunk again.
+  `retryable-lazy.test.tsx` fails on a plain `lazy(` in `src`.
 
 Fonts load per unicode range (Geist latin ≈ 28 KB woff2; a Chinese page loads a dozen Noto Sans SC slices of 20 to 70 KB, cached after the first visit).
 
