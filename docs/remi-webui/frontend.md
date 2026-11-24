@@ -199,8 +199,12 @@ imperatively).
   filters on a second row that scrolls sideways (`GalleryToolbar`,
   `@container/gallerybar`; the network browser folds card size and refresh
   into one menu; the img2img stage gives the result actions a row of their
-  own under its canvas controls, `Img2imgStage`). It never wraps into
-  ragged rows. A grid never leaves an
+  own under its canvas controls, `Img2imgStage`, and on one row shows its
+  staging buttons' labels only where the result actions keep their folded
+  set beside them). It never wraps into ragged rows. A size container
+  (`@container/…`) has no width of its own to hold in a flex row, so one that
+  shares a row gets a `min-w` for what it cannot fold: too narrow a row then
+  wraps instead of sliding it under its neighbour. A grid never leaves an
   empty cell (the img2img mode picker and the phone's More sheet centre a
   short last row).
 - A running job's progress shows once where the user looks: over the stage

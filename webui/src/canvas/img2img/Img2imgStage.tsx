@@ -58,6 +58,13 @@ function ViewSwitch({ view, onChange }: { view: "source" | "result"; onChange: (
   )
 }
 
+/**
+ * The staging buttons' labels: shown once a bar of their own row has room (32rem), and on a
+ * one-row bar (from 46rem) only from 54rem, where the result actions keep their folded set
+ * beside them in English, the longest (830 px of bar).
+ */
+const STAGE_LABEL = "hidden @[32rem]/actions:inline @[46rem]/actions:hidden @[54rem]/actions:inline"
+
 type Img2imgStageProps = {
   /** The result view (image and parameters). */
   result: ReactNode
@@ -117,12 +124,12 @@ export function Img2imgStage({ result, actions, leading, trailing, className }: 
               className="h-7 gap-1 px-2 text-xs"
             >
               <Layers className="size-3.5" aria-hidden />
-              <span className="hidden @[32rem]/actions:inline">{t("Stage in canvas")}</span>
+              <span className={STAGE_LABEL}>{t("Stage in canvas")}</span>
             </Toggle>
             {shown === "result" && img2imgItems.length > 0 ? (
               <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" aria-label={t("Stage latest result")} title={t("Stage latest result")} onClick={stageLatest}>
                 <Layers className="size-3.5" aria-hidden />
-                <span className="hidden @[32rem]/actions:inline">{t("Stage latest result")}</span>
+                <span className={STAGE_LABEL}>{t("Stage latest result")}</span>
               </Button>
             ) : null}
           </>
@@ -130,9 +137,11 @@ export function Img2imgStage({ result, actions, leading, trailing, className }: 
         {/* The labels above go by the bar's width (the stage's `@container/actions`). A wide bar is
             one row; a narrow one gives the result actions a row of their own under the canvas
             controls (a planned second row, not a wrap), where they fold into "More actions" by the
-            room they have. */}
+            room they have. On one row they keep at least the room their folded set needs (a size
+            container has no width of its own to defend): were a bar too narrow after all, they
+            would wrap rather than slide under "Hide history". */}
         {shown === "result" && actions ? (
-          <div className="@container/actions order-last flex min-w-0 grow basis-full items-center gap-1 @[46rem]/actions:order-none @[46rem]/actions:basis-0">{actions}</div>
+          <div className="@container/actions order-last flex min-w-0 grow basis-full items-center gap-1 @[46rem]/actions:order-none @[46rem]/actions:min-w-[21rem] @[46rem]/actions:basis-0">{actions}</div>
         ) : (
           <div className="min-w-0 flex-1" />
         )}

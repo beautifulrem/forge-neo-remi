@@ -355,26 +355,39 @@ test.describe("toggles and control rows", () => {
   })
 })
 
+/** img2img with a source image on the canvas and a finished run (`batch` images) on the Result view. */
+async function generateOnCanvas(page: Page, width: number, batch = 1) {
+  if (batch > 1) {
+    await page.addInitScript((size) => {
+      localStorage.setItem("remi-form:img2img", JSON.stringify({ state: { values: { core: { batch_size: size } }, open: {}, tabs: {} }, version: 1 }))
+    }, batch)
+  }
+  await page.setViewportSize({ width, height: 900 })
+  await openGenerate(page, "img2img")
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement("canvas")
+    canvas.width = 640
+    canvas.height = 480
+    canvas.getContext("2d")!.fillRect(0, 0, 640, 480)
+    return canvas.toDataURL("image/png").split(",")[1]!
+  })
+  const chooser = page.waitForEvent("filechooser")
+  await page.getByRole("button", { name: "Add a source image" }).click()
+  await (await chooser).setFiles({ name: "source.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") })
+  await expect(page.getByRole("img", { name: /^Image editor/ })).toBeVisible()
+  await page.keyboard.press(`${mod}+Enter`)
+  const view = page.getByRole("tablist", { name: "Image view" })
+  await expect(view.getByRole("tab", { name: "Result" })).toHaveAttribute("aria-selected", "true", { timeout: 20_000 })
+  await expect(page.getByRole("button", { name: "Stage latest result" })).toBeVisible()
+  return view
+}
+
 test.describe("the img2img stage toolbar", () => {
-  for (const width of [768, 1280]) {
-    test(`at ${width} px keeps its canvas controls on one row and the result actions whole on the next, nothing cut`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 900 })
-      await openGenerate(page, "img2img")
-      const png = await page.evaluate(() => {
-        const canvas = document.createElement("canvas")
-        canvas.width = 640
-        canvas.height = 480
-        canvas.getContext("2d")!.fillRect(0, 0, 640, 480)
-        return canvas.toDataURL("image/png").split(",")[1]!
-      })
-      const chooser = page.waitForEvent("filechooser")
-      await page.getByRole("button", { name: "Add a source image" }).click()
-      await (await chooser).setFiles({ name: "source.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") })
-      await expect(page.getByRole("img", { name: /^Image editor/ })).toBeVisible()
-      await page.keyboard.press(`${mod}+Enter`)
-      const view = page.getByRole("tablist", { name: "Image view" })
-      await expect(view.getByRole("tab", { name: "Result" })).toHaveAttribute("aria-selected", "true", { timeout: 20_000 })
-      await expect(page.getByRole("button", { name: "Stage latest result" })).toBeVisible()
+  // 768 and 1280 give the result actions a row of their own; from 1680 the bar is one row, where
+  // the longer English labels once pushed "Parameters" under "Hide history" (a bar of 740 to 830 px).
+  for (const width of [768, 1280, 1680, 1760, 1840, 1920]) {
+    test(`at ${width} px keeps its controls apart and whole, on at most two rows`, async ({ page }) => {
+      const view = await generateOnCanvas(page, width)
       const layout = await view.evaluate((switcher) => {
         const bar = switcher.parentElement!
         const right = bar.getBoundingClientRect().right
@@ -383,14 +396,25 @@ test.describe("the img2img stage toolbar", () => {
           const box = element.getBoundingClientRect()
           return Math.round((box.top + box.bottom) / 8)
         }
+        const name = (element: Element) => element.getAttribute("aria-label") || element.textContent?.trim()
+        const controls = [...bar.querySelectorAll("button, [role=tab]")].filter((element) => element.getBoundingClientRect().width > 0)
+        const cut = controls.filter((element) => element.getBoundingClientRect().right > right + 1).map(name)
+        const overlaps: string[] = []
+        for (const [index, a] of controls.entries()) {
+          for (const b of controls.slice(index + 1)) {
+            if (a.contains(b) || b.contains(a)) continue
+            const [boxA, boxB] = [a.getBoundingClientRect(), b.getBoundingClientRect()]
+            const across = Math.min(boxA.right, boxB.right) - Math.max(boxA.left, boxB.left)
+            const down = Math.min(boxA.bottom, boxB.bottom) - Math.max(boxA.top, boxB.top)
+            if (across > 0.5 && down > 0.5) overlaps.push(`${name(a)} × ${name(b)}`)
+          }
+        }
         const actions = bar.querySelector("[role=toolbar]")!
-        const cut = [...bar.querySelectorAll("button, [role=tab]")]
-          .filter((element) => element.getBoundingClientRect().width > 0 && element.getBoundingClientRect().right > right + 1)
-          .map((element) => element.getAttribute("aria-label") || element.textContent)
-        const parameters = [...bar.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Parameters")!
-        return { cut, rows: new Set([...bar.children].filter((element) => element.getBoundingClientRect().width > 0).map(row)).size, actionsWithParameters: row(actions) === row(parameters) }
+        const parameters = controls.find((button) => button.textContent?.trim() === "Parameters")!
+        return { cut, overlaps, rows: new Set([...bar.children].filter((element) => element.getBoundingClientRect().width > 0).map(row)).size, actionsWithParameters: row(actions) === row(parameters) }
       })
       expect(layout.cut).toEqual([])
+      expect(layout.overlaps).toEqual([])
       expect(layout.rows).toBeLessThanOrEqual(2)
       expect(layout.actionsWithParameters).toBe(true) // the result's own row, not split across two
     })
