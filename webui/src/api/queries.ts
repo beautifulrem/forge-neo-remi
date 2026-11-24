@@ -4,15 +4,19 @@ import { ApiError } from "./http"
 import { api } from "./endpoints"
 import type { FormTab } from "./types"
 
+// The server is usually this machine: a browser that reports offline (no Wi-Fi) still reaches it,
+// so requests never wait for the network to come back ("online" mode would hold them, and a model
+// switch would show without reaching the server). A server that is down fails like any request.
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      networkMode: "always",
       staleTime: 30_000,
       refetchOnWindowFocus: false,
       // Client errors will not fix themselves; retry only transient failures.
       retry: (count, error) => !(error instanceof ApiError && error.status >= 400 && error.status < 500) && count < 2,
     },
-    mutations: { retry: false },
+    mutations: { networkMode: "always", retry: false },
   },
 })
 
