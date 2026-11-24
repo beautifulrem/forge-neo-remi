@@ -4,9 +4,19 @@
  * default shallow merge lets a field of the wrong type through and the first
  * render that reads it throws. `mergeTyped` keeps a stored field only when its
  * type matches the store's own value (a `null` default stands for "a string
- * or nothing"), and drops empty entries from stored lists.
+ * or nothing"), and drops empty entries from stored lists. It does not look
+ * inside them: a store whose lists or maps hold objects checks each entry
+ * (`keepEntries`, a type guard on its items).
  */
-const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value)
+export const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value)
+
+/** A string, or nothing stored (an optional or nullable text field). */
+export const isText = (value: unknown): value is string | null | undefined => value === null || value === undefined || typeof value === "string"
+
+/** The entries of a stored map whose values `keep` accepts. */
+export function keepEntries<T>(value: Record<string, unknown>, keep: (item: unknown) => item is T): Record<string, T> {
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, T] => keep(entry[1])))
+}
 
 function sameKind(value: unknown, fallback: unknown): boolean {
   if (fallback === null) return value === null || typeof value === "string"

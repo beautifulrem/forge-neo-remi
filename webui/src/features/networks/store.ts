@@ -8,7 +8,7 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import type { GenerateTab } from "@/features/progress/run-controller"
 import type { SortKey, SortOrder } from "./queries"
-import { mergeTyped } from "@/lib/persist"
+import { keepEntries, mergeTyped } from "@/lib/persist"
 
 export type Surface = "page" | "drawer"
 export type ViewMode = "grid" | "list"
@@ -115,7 +115,16 @@ export const useNetworksUi = create<NetworksUiState>()(
       },
       merge: (persisted, current) => {
         const saved = mergeTyped(persisted, current) as Partial<NetworksUiState>
-        const surface = (name: Surface): SurfaceState => ({ ...current.surfaces[name], ...(saved.surfaces?.[name] ?? {}) })
+        // a surface's fields keep their kinds too (a stored `query: null` threw on every render)
+        const surface = (name: Surface): SurfaceState => {
+          const merged = mergeTyped(saved.surfaces?.[name], current.surfaces[name])
+          return {
+            ...merged,
+            folder: keepEntries(merged.folder, (value) => typeof value === "string"),
+            archs: keepEntries(merged.archs, (value): value is string[] => Array.isArray(value) && value.every((arch) => typeof arch === "string")),
+            compatible: keepEntries(merged.compatible, (value) => typeof value === "boolean"),
+          }
+        }
         return {
           ...current,
           ...saved,

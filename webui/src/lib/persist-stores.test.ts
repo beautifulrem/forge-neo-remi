@@ -61,4 +61,27 @@ describe("persisted stores", () => {
       sameKinds(before, kinds(store.getState()))
     }
   })
+
+  // The kinds were checked one level deep: a damaged surface, result or run crashed its page on
+  // every load (`query.trim()`, `key.replace`, `outputs.find`), and "Try again" crashed again.
+  it("keeps only the stored entries of their own shape", async () => {
+    const item = { key: "job:0", fileId: "f", jobId: "job", tab: "txt2img", index: 0, infotext: null, createdAt: 1 }
+    sessionStorage.setItem("remi-session-results", JSON.stringify({ state: { items: [{}, 5, "x", { key: "a:0" }, item], selected: null }, version: 1 }))
+    await useSession.persist.rehydrate()
+    expect(useSession.getState().items).toEqual([item])
+
+    const run = { jobId: "j", outputs: [{ id: "o", kind: "image" }], source: null, info: null, at: 1 }
+    const runs = { results: [{}, { jobId: "j", outputs: null }, 5, { ...run, outputs: [null] }, run], jobs: [5, "k"], sources: { k: 5, j: "s" } }
+    sessionStorage.setItem("remi-extras-runs", JSON.stringify({ state: runs, version: 1 }))
+    await useExtrasRuns.persist.rehydrate()
+    expect(useExtrasRuns.getState()).toMatchObject({ results: [run], jobs: ["k"], sources: { j: "s" } })
+
+    const page = { folder: null, archs: null, compatible: null, query: null, kind: 5 }
+    const drawer = { query: "lora", folder: { lora: 5, lyco: "sub" }, archs: { lora: "sdxl", lyco: ["sdxl"] }, compatible: { lora: "yes", lyco: true } }
+    localStorage.setItem("remi-networks", JSON.stringify({ state: { surfaces: { page, drawer }, drawerOpen: true }, version: 2 }))
+    await useNetworksUi.persist.rehydrate()
+    const { surfaces } = useNetworksUi.getState()
+    expect(surfaces.page).toMatchObject({ kind: "lora", query: "", folder: {}, archs: {}, compatible: {} })
+    expect(surfaces.drawer).toMatchObject({ query: "lora", folder: { lyco: "sub" }, archs: { lyco: ["sdxl"] }, compatible: { lyco: true } })
+  })
 })

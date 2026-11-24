@@ -8,7 +8,7 @@ import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
 import { useProgress } from "@/api/progress"
 import type { FormTab, JobOutput } from "@/api/types"
-import { mergeTyped } from "@/lib/persist"
+import { isRecord, isText, mergeTyped } from "@/lib/persist"
 
 export type ResultItem = {
   /** `${jobId}:${index}` */
@@ -109,10 +109,18 @@ export const useSession = create<SessionState>()(
       version: 1,
       storage: createJSONStorage(() => sessionStorage),
       partialize: (s) => ({ items: s.items, selected: s.selected }),
-      merge: mergeTyped,
+      merge: (persisted, current) => {
+        const merged = mergeTyped(persisted, current)
+        return { ...merged, items: merged.items.filter(isResultItem) }
+      },
     },
   ),
 )
+
+/** A stored result the pages can show (sessionStorage edited by hand or written by another app). */
+function isResultItem(value: unknown): value is ResultItem {
+  return isRecord(value) && typeof value.key === "string" && typeof value.fileId === "string" && typeof value.jobId === "string" && typeof value.tab === "string" && typeof value.index === "number" && isText(value.infotext)
+}
 
 /** The selected result, or the newest one. */
 export function selectedItem(s: Pick<SessionState, "items" | "selected">): ResultItem | null {

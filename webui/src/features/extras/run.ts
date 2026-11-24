@@ -17,7 +17,7 @@ import { errorText, toastInvalid } from "@/features/errors/error-text"
 import { t } from "@/i18n"
 import { getFormStore } from "@/ui/form-store"
 import { jobRequest, missingInputs } from "@/ui/tab"
-import { mergeTyped } from "@/lib/persist"
+import { isRecord, isText, keepEntries, mergeTyped } from "@/lib/persist"
 
 export type ExtrasResult = {
   jobId: string
@@ -48,9 +48,30 @@ export const useExtrasRuns = create<ExtrasRunState>()(
     version: 1,
     storage: createJSONStorage(() => sessionStorage),
     partialize: ({ results, jobs, sources }) => ({ results, jobs, sources }),
-    merge: mergeTyped,
+    merge: (persisted, current) => {
+      const merged = mergeTyped(persisted, current)
+      return {
+        ...merged,
+        jobs: merged.jobs.filter((job) => typeof job === "string"),
+        sources: keepEntries(merged.sources, (source): source is string | null => source === null || typeof source === "string"),
+        results: merged.results.filter(isResult),
+      }
+    },
   }),
 )
+
+/** A stored run the page can show (sessionStorage edited by hand or written by another app). */
+function isResult(value: unknown): value is ExtrasResult {
+  return (
+    isRecord(value) &&
+    typeof value.jobId === "string" &&
+    typeof value.at === "number" &&
+    isText(value.source) &&
+    isText(value.info) &&
+    Array.isArray(value.outputs) &&
+    value.outputs.every((output) => isRecord(output) && typeof output.id === "string" && typeof output.kind === "string")
+  )
+}
 
 /** The source image of the form when it processes one image ("Single Image"). */
 export function singleSource(core: Record<string, unknown>): string | null {
