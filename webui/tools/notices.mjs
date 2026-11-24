@@ -56,6 +56,16 @@ export async function collectNotices(ids) {
   return [...packages.values()].sort((a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version))
 }
 
+/**
+ * Code copied into the source tree rather than installed: the shadcn/ui components in
+ * src/components/ui and src/styles/shadcn.css come from its registry (tools/shadcn_fetch.py), so
+ * no package.json carries their license.
+ */
+export async function vendoredNotices() {
+  const text = (await readFile(path.join(import.meta.dirname, "shadcn-ui.LICENSE.txt"), "utf8")).trim()
+  return [{ name: "shadcn/ui", version: "(base-nova registry, vendored)", license: "MIT", texts: [text] }]
+}
+
 /** The notices as one plain-text file. */
 export function formatNotices(packages) {
   const head = "Third-party software in the Remi WebUI web interface build\n\nEach package below is bundled into this build under its own license.\n"

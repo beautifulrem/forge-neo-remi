@@ -1,7 +1,7 @@
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 import { readFile } from "node:fs/promises"
-import { collectNotices, cssImportedPackages, formatNotices, packageRoot } from "./notices.mjs"
+import { collectNotices, cssImportedPackages, formatNotices, packageRoot, vendoredNotices } from "./notices.mjs"
 
 const modules = path.resolve(import.meta.dirname, "../node_modules")
 
@@ -27,5 +27,12 @@ describe("third-party notices", () => {
     expect(cssImportedPackages('@import "tailwindcss";\n@import "./local.css";\n@import url("@fontsource-variable/geist/wght.css");')).toEqual(["tailwindcss", "@fontsource-variable/geist"])
     const css = await readFile(path.resolve(import.meta.dirname, "../src/index.css"), "utf8")
     expect(cssImportedPackages(css)).toEqual(expect.arrayContaining(["tailwindcss", "tw-animate-css"]))
+  })
+
+  it("lists the shadcn/ui components copied into src/components/ui, which no package brings", async () => {
+    const notices = await vendoredNotices()
+    const shadcn = notices.find((pkg) => pkg.name === "shadcn/ui")
+    expect(shadcn).toMatchObject({ license: "MIT" })
+    expect(shadcn?.texts.join("\n")).toMatch(/Copyright \(c\) 2023 shadcn/)
   })
 })

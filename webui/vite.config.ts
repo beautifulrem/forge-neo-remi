@@ -8,7 +8,7 @@ import babel from "@rolldown/plugin-babel"
 import tailwindcss from "@tailwindcss/vite"
 import react, { reactCompilerPreset } from "@vitejs/plugin-react"
 import { defineConfig, loadEnv, type Plugin } from "vite"
-import { collectNotices, cssImportedPackages, formatNotices } from "./tools/notices.mjs"
+import { collectNotices, cssImportedPackages, formatNotices, vendoredNotices } from "./tools/notices.mjs"
 
 // The WebUI server (python launch.py) serves the built app from webui/dist;
 // `pnpm dev` proxies its API and WebSocket to that server.
@@ -83,7 +83,7 @@ function precompress(): Plugin {
 /**
  * THIRD-PARTY-NOTICES.txt next to index.html: minification drops the dependencies' license
  * comments, so the build lists every package it ships (bundled code, stylesheets a CSS file
- * imports, fonts, the vendored API viewers) with its license text (tools/notices.mjs). Settings → Licenses links to it.
+ * imports, fonts, the vendored API viewers, the copied shadcn/ui components) with its license text (tools/notices.mjs). Settings → Licenses links to it.
  */
 function thirdPartyNotices(): Plugin {
   return {
@@ -109,7 +109,8 @@ function thirdPartyNotices(): Plugin {
       }
       const notices = await collectNotices(ids)
       if (notices.length === 0) this.error("no bundled package found for THIRD-PARTY-NOTICES.txt")
-      this.emitFile({ type: "asset", fileName: "THIRD-PARTY-NOTICES.txt", source: formatNotices(notices) })
+      const all = [...notices, ...(await vendoredNotices())].sort((a, b) => a.name.localeCompare(b.name))
+      this.emitFile({ type: "asset", fileName: "THIRD-PARTY-NOTICES.txt", source: formatNotices(all) })
     },
   }
 }
