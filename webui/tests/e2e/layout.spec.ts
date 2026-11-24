@@ -685,6 +685,49 @@ for (const [width, height] of [
   })
 }
 
+// The reset dot (a changed value's way back to its default) was a 24 × 20 px target between a
+// label and the row's controls: it takes the room up to them, never reaching one.
+for (const [width, height] of [
+  [1440, 900],
+  [390, 844],
+] as const) {
+  test(`reset dots are 32 px targets that reach no neighbouring control at ${width}×${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await openGenerate(page)
+    const steps = page.getByRole("textbox", { name: "Sampling steps", exact: true }).first()
+    await steps.fill("31")
+    await steps.press("Tab")
+    await page.getByRole("switch", { name: "Enable Hires. fix", exact: true }).click()
+    await setPrompt(page, "a changed prompt")
+    const dots = page.getByRole("button", { name: /^Reset .* to default$/ })
+    await expect(dots.first()).toBeVisible()
+    const boxes = await dots.evaluateAll((buttons) =>
+      buttons
+        .filter((button) => button.getBoundingClientRect().width > 0)
+        .map((button) => {
+          const rect = button.getBoundingClientRect()
+          const after = getComputedStyle(button, "::after")
+          const box = { left: rect.left - -parseFloat(after.left), top: rect.top - -parseFloat(after.top), right: rect.right - parseFloat(after.right), bottom: rect.bottom - parseFloat(after.bottom) }
+          const controls = [...document.querySelectorAll("button, input, textarea, label, a, [role=switch], [role=slider], [contenteditable], [tabindex]:not([tabindex='-1'])")].filter(
+            (element) => element !== button && !element.contains(button) && !button.contains(element),
+          )
+          const reached = controls
+            .filter((element) => {
+              const other = element.getBoundingClientRect()
+              return other.width > 0 && other.left < box.right - 0.5 && other.right > box.left + 0.5 && other.top < box.bottom - 0.5 && other.bottom > box.top + 0.5
+            })
+            .map((element) => element.getAttribute("aria-label") ?? element.textContent?.slice(0, 30))
+          return { name: button.getAttribute("aria-label"), width: Math.round(box.right - box.left), height: Math.round(box.bottom - box.top), reached }
+        }),
+    )
+    expect(boxes.length).toBeGreaterThanOrEqual(3)
+    for (const box of boxes) {
+      expect(Math.min(box.width, box.height), `${box.name}: its target`).toBeGreaterThanOrEqual(32)
+      expect(box.reached, `${box.name}: controls under its target`).toEqual([])
+    }
+  })
+}
+
 // Tabbing down the rail in a short window parked a link flush against the scroller's edge, under
 // the fade, with the bottom of its focus ring cut off.
 test("the rail keeps a focused link out of its faded edges", async ({ page }) => {

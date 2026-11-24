@@ -370,7 +370,9 @@ generated interfaces (sources: Linear's
   ×, the advice bar's buttons) keeps its look and gets
   an invisible `after:` hit box of at least 40 px; the box never reaches a
   neighbouring control, so packed toolbars are not given one (it would take
-  the taps of the next tool). A box that reaches past a scroller's padding
+  the taps of the next tool). A small control between neighbours (a field's
+  reset dot, between its label and the row's controls) gets margin that makes
+  the room for a 32 px box up to them. A box that reaches past a scroller's padding
   makes the scroller scroll: give the scroller the box's reach as room, or
   clip the axis it does not scroll along (`overflow-x-hidden` on the parameters
   under a result). Chart and band colours come from `--chart-2`
