@@ -142,7 +142,9 @@ def test_the_core_conflict_action_locks_the_panel():
     patch, owner = _conflicts({"sampler": {"sampler_name": "Heun"}, "anima_guidance_corrections": {"momentum_enable": True, "dcw_enable": True}})
     assert patch[f"{owner}.momentum_enable"] == {"value": False, "enabled": False}
     assert patch[f"{owner}.dcw_enable"] == {"value": False, "enabled": False}
-    assert "Momentum disabled: unsupported sampler Heun" in patch["__toast__"]["message"]
+    # a catalog message: the runtime's rule texts are its parameter
+    assert patch["__toast__"]["message"]["text"] == "Compatibility: {{notes}}"
+    assert "Momentum disabled: unsupported sampler Heun" in patch["__toast__"]["message"]["params"]["notes"]
 
     # The last switch wins: DCW turned on resets FDG to Standard; FDG is then not offered
     patch, owner = _conflicts({"anima_guidance_corrections": {"guidance_mode": FDG_GUIDANCE, "dcw_enable": True}}, f"{owner}.dcw_enable")

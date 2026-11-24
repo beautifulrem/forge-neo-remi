@@ -120,7 +120,7 @@ def test_apply_sets_every_bound_control_to_the_chosen_preset(webui, tab):
         assert controls[key].get("enabled") is (True if field in PRESET_CONFLICT_CONTROLS else None), key
     assert controls["anima_guidance_corrections.nag_enable"]["value"] is True and controls["core.cfg_scale"]["value"] == 1.0
     assert set(TURBO_NAG_OVERRIDES) <= set(SAFE_BASE_AESTHETIC_PRESET)
-    assert patch["__toast__"] == {"level": "success", "message": f"Applied: {TURBO_NAG_LABEL} ({len(bound)} controls)"}
+    assert patch["__toast__"] == {"level": "success", "message": {"text": "Applied: {{label}} ({{count}} controls)", "params": {"label": TURBO_NAG_LABEL, "count": len(bound)}}}
     assert not any(key.split(".")[0] == script.script_id for key in controls)
 
 
