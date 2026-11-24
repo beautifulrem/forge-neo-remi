@@ -10,7 +10,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, Response
 
 from remi.server import i18n
 from remi.server import models as m
-from remi.server.deps import ServicesDep, UserDep, not_found, opts, publish_options_changed
+from remi.server.deps import ServicesDep, UserDep, is_local_client, not_found, opts, publish_options_changed
 from remi.server.runtime import BUILTIN_TABS
 from remi.setting_values import fit, setting
 
@@ -160,8 +160,10 @@ def bootstrap(request: Request, services: ServicesDep, user: UserDep) -> dict[st
         features.append("sdapi")
     if _pages_module() is not None:
         features.append("pages")
-    if not getattr(shared.cmd_opts, "hide_ui_dir_config", False):
-        features.append("folders.open")  # "open folder" actions (networks, gallery)
+    # "open folder" actions (networks, gallery): they open a window on this machine's desktop, so
+    # a browser elsewhere is not offered them (the server refuses them; require_local_folders)
+    if not getattr(shared.cmd_opts, "hide_ui_dir_config", False) and is_local_client(request):
+        features.append("folders.open")
     pages = [{"id": page.id, "title": page.title, "icon": getattr(page, "icon", None), "widget": getattr(page, "widget", None)} for page in _registered_pages()]
     return {
         "version": f"{forge_version.version} {forge_version.release}",

@@ -725,6 +725,11 @@ def test_bootstrap_says_whether_folders_open(server, monkeypatch):
     assert "folders.open" in server.client.get("/api/v2/app").json()["features"]
     monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", True)
     assert "folders.open" not in server.client.get("/api/v2/app").json()["features"]
+    # A browser on another machine (here: through a proxy) cannot open them either: no action that
+    # can only fail (the networks menu offered one and got a bare refusal)
+    monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", False)
+    remote = server.client.get("/api/v2/app", headers={"X-Forwarded-For": "203.0.113.9"})
+    assert "folders.open" not in remote.json()["features"]
 
 
 class FakeEmbeddingDb:

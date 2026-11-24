@@ -48,7 +48,7 @@ export function useNetworkSettings() {
     /** `lora_preset_filter`: the LoRA browser starts with "compatible only". */
     presetFilter: bootstrapOption(options, "lora_preset_filter") === true,
     defaultSort: defaultSortOf(options),
-    /** "Open folder" works (not `--hide-ui-dir-config`). */
+    /** "Open folder" works (not `--hide-ui-dir-config`, a browser on the WebUI machine). */
     canOpenFolders: Boolean(data?.features.includes("folders.open")),
   }
 }

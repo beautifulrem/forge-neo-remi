@@ -21,7 +21,7 @@ type GalleryDetailsProps = {
 
 export function GalleryDetails({ item, onDelete, onClose, onSelectImage }: GalleryDetailsProps) {
   const { t, i18n } = useTranslation()
-  // "folders.open" is gone under --hide-ui-dir-config (the server answers 403 then).
+  // "folders.open" is gone under --hide-ui-dir-config and for a browser on another machine (the server answers 403 then).
   const canOpenFolders = useQuery({ ...bootstrapQuery, select: (data) => data.features.includes("folders.open") }).data ?? false
   const created = new Date(item.created_at)
   const facts: [string, string][] = [

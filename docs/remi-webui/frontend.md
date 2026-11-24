@@ -998,7 +998,8 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
   preview (this session's results, the paged gallery or an upload; a radio
   group with arrow keys; every opening starts with nothing picked), copy
   path, open folder (only with the bootstrap feature `folders.open`, i.e.
-  not with `--hide-ui-dir-config`). Edit, set preview and open folder are
+  not with `--hide-ui-dir-config` and only in a browser on the WebUI
+  machine). Edit, set preview and open folder are
   hidden for items without a model file (`editable: false`). The
   checkpoint editor no longer offers upstream's unused "Preferred VAE / Text
   encoder(s)" (`vae_te`) field; the key is kept in sidecars that have it.
