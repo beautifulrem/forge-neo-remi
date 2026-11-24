@@ -1,8 +1,9 @@
 /**
  * Every chrome string must have a zh-CN translation. Keys are found the way
  * docs/remi-webui/frontend.md asks them to be written: literal `t("…")`
- * calls, plus `label:` / `group:` / `title=` / `description=` literals in the
- * files that pass English strings to `t()` indirectly.
+ * calls, the values of constant maps translated at render (`t(NAMES[key])`),
+ * plus `label:` / `group:` / `title=` / `description=` literals in the files
+ * that pass English strings to `t()` indirectly.
  */
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
@@ -19,6 +20,19 @@ const sources = import.meta.glob<string>(["../**/*.{ts,tsx}", "!../**/*.test.*",
 /** Files whose English label constants are translated at render time. */
 const INDIRECT = /(app\/(routes|App|AppearanceMenu|Header)\.tsx|pages\/.*\.tsx?|canvas\/.*\.tsx?|components\/PagePlaceholder\.tsx)$/
 
+/** Constant maps whose values are translated at render, `t(NAMES[key])`, wherever they are defined. */
+const translatedMaps = new Set(Object.values(sources).flatMap((source) => [...source.matchAll(/\bt\(\s*([A-Z][A-Z0-9_]*)\[/g)].map((m) => m[1]!)))
+
+/** The English values of the translated maps a file defines (`const NAMES: Record<…, string> = { … }`). */
+function mapLabels(source: string): string[] {
+  const labels: string[] = []
+  for (const m of source.matchAll(/\bconst ([A-Z][A-Z0-9_]*)\b[^=\n]*=\s*\{([^{}]*)\}/g)) {
+    if (!translatedMaps.has(m[1]!)) continue
+    for (const value of m[2]!.matchAll(/:\s*"((?:[^"\\]|\\.)+)"/g)) labels.push(value[1]!)
+  }
+  return labels
+}
+
 function chromeKeys(): Set<string> {
   const keys = new Set<string>()
   for (const [path, source] of Object.entries(sources)) {
@@ -28,6 +42,7 @@ function chromeKeys(): Set<string> {
       if (m[3]) keys.add(`${m[1]}_${m[3]}`)
       else if (!m[2]) keys.add(m[1]!)
     }
+    for (const label of mapLabels(source)) keys.add(label)
     if (INDIRECT.test(path)) {
       // `label: "text" as const` is a typed data tag (a JSON Builder object kind), not a string shown as is
       for (const m of source.matchAll(/\b(?:label|title|description): "([^"]+)"(?! as const)/g)) keys.add(m[1]!)
