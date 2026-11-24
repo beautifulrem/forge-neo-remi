@@ -96,43 +96,53 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
             </DialogDescription>
           </DialogHeader>
           <div className="-mx-1 flex min-h-0 flex-col gap-3 overflow-y-auto px-1 py-1">
+            {/* No fields before the list: an edit made then would start from a blank style and save
+                that blank over the real one. */}
             {styles.isError && !styles.data ? (
               <LoadFailed error={styles.error} message={t("Could not load the styles")} onRetry={() => void styles.refetch()} className="py-0" />
-            ) : null}
-            <div className="flex flex-col gap-1.5">
-              <label id={`${id}-name`} className="text-[0.8rem] font-medium">
-                {t("Style", { context: "prompt" })}
-              </label>
-              <SearchSelect
-                aria-labelledby={`${id}-name`}
-                options={options}
-                value={draft.name || null}
-                onValueChange={select}
-                allowCustom
-                placeholder={t("Choose a style or type a new name")}
-              />
-            </div>
-            {(["prompt", "negative_prompt"] as const).map((field) => (
-              <div key={field} className="flex flex-col gap-1.5">
-                <span id={`${id}-${field}`} className="text-[0.8rem] font-medium">
-                  {field === "prompt" ? t("Prompt") : t("Negative prompt")}
-                </span>
-                <Suspense fallback={<div aria-hidden className="h-20 rounded-sm bg-field" />}>
-                  <LazyPromptEditor
-                    value={draft[field]}
-                    onChange={(value) => setDraft((d) => ({ ...d, [field]: value }))}
-                    ariaLabel={field === "prompt" ? t("Style prompt") : t("Style negative prompt")}
-                    kind={field === "prompt" ? "positive" : "negative"}
-                    minLines={3}
-                    maxLines={10}
+            ) : !styles.data ? (
+              <p role="status" className="py-6 text-center text-sm text-muted-foreground">
+                {t("Loading…")}
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <label id={`${id}-name`} className="text-[0.8rem] font-medium">
+                    {t("Style", { context: "prompt" })}
+                  </label>
+                  <SearchSelect
+                    aria-labelledby={`${id}-name`}
+                    options={options}
+                    value={draft.name || null}
+                    onValueChange={select}
+                    allowCustom
+                    placeholder={t("Choose a style or type a new name")}
                   />
-                </Suspense>
-              </div>
-            ))}
+                </div>
+                {(["prompt", "negative_prompt"] as const).map((field) => (
+                  <div key={field} className="flex flex-col gap-1.5">
+                    <span id={`${id}-${field}`} className="text-[0.8rem] font-medium">
+                      {field === "prompt" ? t("Prompt") : t("Negative prompt")}
+                    </span>
+                    <Suspense fallback={<div aria-hidden className="h-20 rounded-sm bg-field" />}>
+                      <LazyPromptEditor
+                        value={draft[field]}
+                        onChange={(value) => setDraft((d) => ({ ...d, [field]: value }))}
+                        ariaLabel={field === "prompt" ? t("Style prompt") : t("Style negative prompt")}
+                        kind={field === "prompt" ? "positive" : "negative"}
+                        minLines={3}
+                        maxLines={10}
+                      />
+                    </Suspense>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
           <DialogFooter className="flex-wrap gap-2 sm:justify-between">
             <Button
               variant="ghost"
+              disabled={!styles.data}
               onClick={() => {
                 const { prompt, negative } = currentPrompts()
                 setDraft((d) => ({ ...d, prompt, negative_prompt: negative }))

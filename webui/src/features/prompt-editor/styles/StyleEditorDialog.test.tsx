@@ -45,6 +45,19 @@ describe("style editor opened on the form's style", () => {
     expect(saveButton().disabled).toBe(true)
   })
 
+  // Typing while the list was on its way derived the draft from a blank style: once the list
+  // arrived, Save wrote that blank negative prompt over the style.
+  it("takes no edits before the list arrives, and says it is loading", async () => {
+    let answer: (styles: PromptStyle[]) => void = () => {}
+    vi.spyOn(api.styles, "list").mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    renderEditor()
+    expect(screen.getByRole("status")).toHaveTextContent("Loading…")
+    expect(screen.queryByRole("textbox", { name: "Style prompt" })).not.toBeInTheDocument()
+    expect((screen.getByRole("button", { name: "Copy from prompts" }) as HTMLButtonElement).disabled).toBe(true)
+    answer([CINEMATIC])
+    await waitFor(() => expect(negative().value).toBe("cartoon"))
+  })
+
   it("shows a style the list already holds at once", () => {
     queryClient.setQueryData(keys.styles, [CINEMATIC])
     vi.spyOn(api.styles, "list").mockResolvedValue([CINEMATIC])
