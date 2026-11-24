@@ -123,7 +123,8 @@ const EXTENSION_PREFIXES: [prefix: string, group: string][] = [
   ["Forge Couple ", "Forge Couple"],
 ]
 
-const LORA_TAG = /<(?:lora|lyco):([^:>]+):([^>]+)>/gi
+// a tag never spans another "<": "<lora:a<lora:a…" tried every "<" to the end of the text
+const LORA_TAG = /<(?:lora|lyco):([^:<>]+):([^<>]+)>/gi
 
 /** Splits a prompt string into normalized comma/newline tokens (excluding `<lora:...>` tags handled separately). */
 export function tokenizePrompt(prompt: string): string[] {

@@ -15,12 +15,18 @@ export function infotextKeyLabel(t: (key: string) => string, key: string): strin
 
 export type InfotextParts = { prompt: string; negative: string; params: [key: string, value: string][] }
 
-const PARAM = /\s*(\w[\w \-/]+):\s*("(?:\\.|[^\\"])+"|[^,]*)(?:,|$)/g
+/**
+ * upstream's `re_param_code`: a key starts where no key character is before it, and is read in one
+ * go (an atomic group, written as a lookahead and its backreference). It runs on every gallery
+ * card, on text an image carried: tried at every character, a long run without a colon took
+ * seconds per card.
+ */
+const PARAM = /(?<![\w\s\-/])(?=(\s*([\w\s\-/]+)))\1:\s*("(?:\\.|[^\\"])+"|[^,]*)(?:,|$)/g
 
 export function parseParamLine(line: string): [string, string][] {
   const out: [string, string][] = []
   for (const match of line.matchAll(PARAM)) {
-    let value = match[2]!.trim()
+    let value = match[3]!.trim()
     if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
       try {
         value = JSON.parse(value) as string
@@ -28,7 +34,7 @@ export function parseParamLine(line: string): [string, string][] {
         value = value.slice(1, -1)
       }
     }
-    out.push([match[1]!.trim(), value])
+    out.push([match[2]!.trim(), value])
   }
   return out
 }
