@@ -618,6 +618,31 @@ test("a dialog fits a phone held sideways and scrolls inside", async ({ page }) 
   expect(hit).toBe(true)
 })
 
+// Tabbing down the rail in a short window parked a link flush against the scroller's edge, under
+// the fade, with the bottom of its focus ring cut off.
+test("the rail keeps a focused link out of its faded edges", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 340 })
+  await openGenerate(page)
+  const links = page.getByRole("navigation", { name: "Main navigation" }).locator(".overflow-y-auto").getByRole("link")
+  const count = await links.count()
+  await links.first().focus()
+  const parked: string[] = []
+  for (let i = 1; i < count; i++) {
+    await page.keyboard.press("Tab")
+    const room = await page.evaluate(() => {
+      const link = document.activeElement as HTMLElement
+      const scroller = link.closest(".overflow-y-auto") as HTMLElement
+      const [a, s] = [link.getBoundingClientRect(), scroller.getBoundingClientRect()]
+      const startFades = scroller.scrollTop > 1
+      const endFades = scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 1
+      return { name: link.getAttribute("aria-label"), top: a.top - s.top, bottom: s.bottom - a.bottom, startFades, endFades }
+    })
+    // the fade is 1.5rem (24 px)
+    if ((room.startFades && room.top < 24) || (room.endFades && room.bottom < 24)) parked.push(`${room.name}: ${Math.round(room.top)} px / ${Math.round(room.bottom)} px`)
+  }
+  expect(parked).toEqual([])
+})
+
 /** Boxes that scroll sideways though only meant to scroll up and down, and the page itself. */
 async function sidewaysScrolls(page: Page): Promise<string[]> {
   return page.evaluate(() => {

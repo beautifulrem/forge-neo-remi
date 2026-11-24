@@ -3,8 +3,13 @@
  * navigation rail held sideways): its edges fade where there is more to
  * scroll to, and the selected item (`[data-active]`) is kept in view when
  * `active` changes. `axis` is the way it scrolls: "x" sideways, "y" up and down.
+ * An item scrolled into view (focus, `active`) stops clear of the fade.
  */
 import { type CSSProperties, type RefObject, useEffect, useState } from "react"
+
+/** The fade's depth; the room an item scrolled into view keeps from the edge is that plus its focus ring. */
+const FADE = "1.5rem"
+const CLEAR = 28
 
 export function useScrollFade(ref: RefObject<HTMLElement | null>, active: unknown, axis: "x" | "y" = "x"): CSSProperties | undefined {
   const [edges, setEdges] = useState({ start: false, end: false })
@@ -45,15 +50,17 @@ export function useScrollFade(ref: RefObject<HTMLElement | null>, active: unknow
     if (!strip || !item) return
     if (axis === "x") {
       const left = item.offsetLeft - strip.offsetLeft
-      if (left < strip.scrollLeft) strip.scrollLeft = left - 16
-      else if (left + item.offsetWidth > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = left + item.offsetWidth - strip.clientWidth + 16
+      if (left < strip.scrollLeft + CLEAR) strip.scrollLeft = left - CLEAR
+      else if (left + item.offsetWidth > strip.scrollLeft + strip.clientWidth - CLEAR) strip.scrollLeft = left + item.offsetWidth - strip.clientWidth + CLEAR
     } else {
       const top = item.offsetTop - strip.offsetTop
-      if (top < strip.scrollTop) strip.scrollTop = top - 16
-      else if (top + item.offsetHeight > strip.scrollTop + strip.clientHeight) strip.scrollTop = top + item.offsetHeight - strip.clientHeight + 16
+      if (top < strip.scrollTop + CLEAR) strip.scrollTop = top - CLEAR
+      else if (top + item.offsetHeight > strip.scrollTop + strip.clientHeight - CLEAR) strip.scrollTop = top + item.offsetHeight - strip.clientHeight + CLEAR
     }
   }, [ref, active, axis])
   if (!edges.start && !edges.end) return undefined
-  const mask = `linear-gradient(to ${axis === "x" ? "right" : "bottom"}, transparent, #000 ${edges.start ? "1.5rem" : "0rem"}, #000 calc(100% - ${edges.end ? "1.5rem" : "0rem"}), transparent)`
-  return { maskImage: mask, WebkitMaskImage: mask }
+  const mask = `linear-gradient(to ${axis === "x" ? "right" : "bottom"}, transparent, #000 ${edges.start ? FADE : "0rem"}, #000 calc(100% - ${edges.end ? FADE : "0rem"}), transparent)`
+  // the browser scrolls a focused item into view this far from the edge: past the fade, its ring whole
+  const clear = `${CLEAR}px`
+  return { maskImage: mask, WebkitMaskImage: mask, ...(axis === "x" ? { scrollPaddingInline: clear } : { scrollPaddingBlock: clear }) }
 }
