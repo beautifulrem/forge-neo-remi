@@ -10,6 +10,7 @@ import { useId, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { FIELD_BUTTON_CLASS } from "@/components/ui/select-styles"
 import { Toggle } from "@/components/ui/toggle"
 import { cn } from "@/lib/utils"
 import { resetOwners, resetParams } from "@/ui/actions"
@@ -161,12 +162,11 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
                 />
               </div>
               <Toggle
-                variant="outline"
                 pressed={onlyModified}
                 onPressedChange={setOnlyModified}
                 aria-label={t("Only modified")}
                 title={t("Only modified")}
-                className="gap-1"
+                className={cn(FIELD_BUTTON_CLASS, "gap-1 aria-pressed:bg-primary/15 aria-pressed:text-primary dark:aria-pressed:bg-primary/20")}
               >
                 <ListFilter />
                 <span className="hidden sm:inline">{t("Modified")}</span>

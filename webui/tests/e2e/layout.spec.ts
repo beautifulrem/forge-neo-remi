@@ -281,3 +281,43 @@ test.describe("toasts keep clear of the canvas toolbars", () => {
   })
 })
 
+
+test.describe("toggles and control rows", () => {
+  test.use({ viewport: { width: 1440, height: 900 } })
+
+  test("the extensions filter's Modified toggle is a field like the search beside it, and shows when it is on", async ({ page }) => {
+    await openGenerate(page)
+    const filter = page.getByRole("searchbox", { name: "Filter extensions" })
+    if (!(await filter.isVisible())) await page.getByRole("button", { name: /^Extensions/ }).first().click()
+    await expect(filter).toBeVisible()
+    const toggle = page.getByRole("button", { name: "Only modified" })
+    const look = () =>
+      toggle.evaluate((element) => {
+        const style = getComputedStyle(element)
+        const probe = document.createElement("span")
+        probe.style.color = "var(--primary)"
+        document.body.append(probe)
+        const primary = getComputedStyle(probe).color
+        probe.remove()
+        return { background: style.backgroundColor, border: style.borderTopColor, color: style.color, primary }
+      })
+    const fieldFill = await filter.evaluate((element) => getComputedStyle(element).backgroundColor)
+    const off = await look()
+    expect(off.background).toBe(fieldFill) // the same flat fill as the search field, not an outline
+    expect(off.border).toBe("rgba(0, 0, 0, 0)")
+    await toggle.click()
+    await expect(toggle).toHaveAttribute("aria-pressed", "true")
+    await page.mouse.move(0, 0) // hover has its own look; the colours also transition
+    await expect.poll(async () => { const on = await look(); return on.color === on.primary }).toBe(true) // pressed wears the selection colour
+    expect((await look()).background).not.toBe(off.background)
+  })
+
+  test("the checkpoint hashing row's select and button share one height", async ({ page }) => {
+    await page.goto("/#/settings?view=server")
+    const main = page.getByRole("main")
+    const select = main.getByRole("combobox", { name: "Checkpoints hashed at once" })
+    const button = main.getByRole("button", { name: "Hash all checkpoints" })
+    await expect(button).toBeVisible()
+    expect(Math.round((await select.boundingBox())!.height)).toBe(Math.round((await button.boundingBox())!.height))
+  })
+})

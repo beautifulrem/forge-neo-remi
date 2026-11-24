@@ -183,7 +183,7 @@ function CheckpointHashes() {
           ))}
         </SelectContent>
       </Select>
-      <Button variant="outline" disabled={running || start.isPending} onClick={() => start.mutate()}>
+      <Button variant="outline" size="sm" disabled={running || start.isPending} onClick={() => start.mutate()}>
         {running ? <Hourglass aria-hidden /> : start.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Fingerprint aria-hidden />}
         {t("Hash all checkpoints")}
       </Button>
