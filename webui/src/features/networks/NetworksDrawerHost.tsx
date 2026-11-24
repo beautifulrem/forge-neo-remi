@@ -10,11 +10,13 @@ import { type Command, formatShortcut, useRegisterCommands } from "@/app/command
 import { HeaderSlot } from "@/app/header-slot"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
+import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import type { GenerateTab } from "@/features/progress/run-controller"
 import { useTrackPromptFocus } from "./prompt-target"
 import { DRAWER_ID, isNetworksShortcut, NETWORKS_SHORTCUT } from "./shortcut"
 import { useNetworksUi } from "./store"
 import { retryableLazy } from "@/lib/retryable-lazy"
+import { cn } from "@/lib/utils"
 
 const NetworksDrawer = retryableLazy(() => import("./NetworksDrawer"))
 
@@ -75,14 +77,14 @@ export function NetworksDrawerHost({ tab }: { tab: GenerateTab }) {
         <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />
         <Button
           ref={trigger}
-          variant={open ? "secondary" : "ghost"}
+          variant="ghost"
           size="sm"
           aria-pressed={open}
           aria-controls={open ? DRAWER_ID : undefined}
           aria-keyshortcuts="Alt+N"
           title={`${label} (${formatShortcut(NETWORKS_SHORTCUT)})`}
           onClick={() => toggle(!open)}
-          className="gap-1.5"
+          className={cn("gap-1.5", PRESSED_TINT_CLASS)}
         >
           <Layers aria-hidden />
           <span className="hidden lg:inline">{t("Networks")}</span>

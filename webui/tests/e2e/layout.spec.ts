@@ -329,6 +329,20 @@ test.describe("toggles and control rows", () => {
     await expect.poll(tinted).toBe(true) // still under the pointer
     await page.mouse.move(0, 0)
     await expect.poll(tinted).toBe(true)
+    // the header's Networks button is a lone toggle too (it opens the drawer)
+    await page.goto("/#/txt2img")
+    const networks = page.getByRole("banner").getByRole("button", { name: /Networks/ })
+    await networks.click()
+    await expect(networks).toHaveAttribute("aria-pressed", "true")
+    await page.mouse.move(0, 0)
+    await expect.poll(() => networks.evaluate((element) => {
+      const probe = document.createElement("span")
+      probe.style.color = "var(--primary)"
+      document.body.append(probe)
+      const primary = getComputedStyle(probe).color
+      probe.remove()
+      return getComputedStyle(element).color === primary
+    })).toBe(true)
   })
 
   test("the checkpoint hashing row's select and button share one height", async ({ page }) => {

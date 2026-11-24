@@ -189,6 +189,16 @@ test.describe("axe with every accent", () => {
         const generate = page.getByRole("button", { name: /^Generate/ }).first()
         await generate.hover()
         expect(await scan(page), "hovered Generate").toEqual([])
+        // a pressed toggle under the pointer keeps its tinted label readable
+        const filter = page.getByRole("searchbox", { name: "Filter extensions" })
+        if (!(await filter.isVisible())) await page.getByRole("button", { name: /^Extensions/ }).first().click()
+        const modified = page.getByRole("button", { name: "Only modified" })
+        await modified.click()
+        await expect(modified).toHaveAttribute("aria-pressed", "true")
+        await modified.hover()
+        await page.waitForTimeout(300) // the colours transition
+        expect(await scan(page), "hovered pressed toggle").toEqual([])
+        await modified.click()
         // settings: primary-coloured links in help texts
         await page.evaluate(() => (location.hash = "#/settings"))
         await page.getByRole("button", { name: "Saving Videos" }).first().click()
