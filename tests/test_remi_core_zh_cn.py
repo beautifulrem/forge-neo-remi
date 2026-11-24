@@ -91,6 +91,57 @@ def test_the_forms_under_hidden_directories_are_translated(catalog, monkeypatch)
     assert missing == []
 
 
+def _formatted_toasts() -> list[str]:
+    """``toast(...)`` calls in Remi's own Python whose text is formatted on the server
+    (an f-string, ``+``, ``%`` or ``.format``): no catalog can have that sentence."""
+
+    import ast
+
+    roots = [ROOT / "remi", *sorted((ROOT / "extensions-builtin").glob("*/")), ROOT / "scripts", ROOT / "modules" / "processing_scripts"]
+    found = []
+    for root in roots:
+        for path in sorted(root.rglob("*.py")):
+            if "tests" in path.relative_to(ROOT).parts:
+                continue
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if not (isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", None)) == "toast" and node.args):
+                    continue
+                text = node.args[0]
+                formatted = isinstance(text, (ast.JoinedStr, ast.BinOp)) or (isinstance(text, ast.Call) and getattr(text.func, "attr", None) == "format")
+                if formatted:
+                    found.append(f"{path.relative_to(ROOT)}:{node.lineno}")
+    return found
+
+
+def test_toasts_are_catalog_sentences():
+    """An action's failure toast was ``f"Action {name} failed: {error}"``: English in
+    every language. A sentence with variable parts is a ``message(text, **params)``."""
+
+    assert _formatted_toasts() == []
+
+
+def test_the_action_failure_toasts_are_translated(catalog):
+    from remi import ui
+
+    class Owner:
+        @ui.action(timeout=0.05)
+        def slow(self, ctx, values):
+            import time
+
+            time.sleep(0.3)
+
+        @ui.action(timeout=5)
+        def boom(self, ctx, values):
+            raise RuntimeError("disk full")
+
+    ctx = ui.ActionContext(tab="txt2img")
+    for name in ("slow", "boom"):
+        message = ui.call_action_isolated(Owner(), name, ctx, {})["__toast__"]["message"]
+        assert catalog.get(message["text"]), message
+        assert set(message["params"]) == set(_placeholders(message["text"]))
+    assert catalog.get("the setting rejected the value")
+
+
 def test_entries_are_well_formed(catalog):
     assert catalog and all(isinstance(key, str) and isinstance(value, str) and value.strip() for key, value in catalog.items())
     broken = [key for key, value in catalog.items() if _placeholders(key) != _placeholders(value)]

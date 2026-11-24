@@ -102,13 +102,16 @@ def test_action_timeout_and_error_isolation():
         ui.call_action_isolated(script, "bad_input", ctx, {}, extension="test_ext")
 
     # Runtime exception is isolated into an error toast and logged in diagnostics
+    # (a catalog message: the client translates the sentence around the error)
     patch = ui.call_action_isolated(script, "boom", ctx, {}, extension="test_ext")
     assert patch["__toast__"]["level"] == "error"
-    assert "unexpected crash" in patch["__toast__"]["message"]
+    assert patch["__toast__"]["message"]["text"] == "Action {{name}} failed: {{error}}"
+    assert "unexpected crash" in patch["__toast__"]["message"]["params"]["error"]
 
     # Slow action times out cleanly (both toast mode and raise mode)
     timeout_patch = ui.call_action_isolated(script, "slow", ctx, {}, extension="test_ext")
-    assert timeout_patch["__toast__"]["level"] == "error" and "timed out" in timeout_patch["__toast__"]["message"]
+    assert timeout_patch["__toast__"]["level"] == "error"
+    assert timeout_patch["__toast__"]["message"] == {"text": "Action {{name}} timed out after {{seconds}} s", "params": {"name": "slow", "seconds": timeout_patch["__toast__"]["message"]["params"]["seconds"]}}
 
     with pytest.raises(ui.ActionTimeoutError):
         ui.call_action_isolated(script, "slow", ctx, {}, extension="test_ext", return_toast=False)

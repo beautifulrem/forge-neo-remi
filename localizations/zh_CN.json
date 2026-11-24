@@ -941,5 +941,8 @@
   "Video generation": "视频生成",
   "Disabled when launched with --hide-ui-dir-config.": "启动时使用了 --hide-ui-dir-config，此项已禁用。",
   "Applied: {{label}} ({{count}} controls)": "已应用：{{label}}（{{count}} 个控件）",
-  "Compatibility: {{notes}}": "兼容性：{{notes}}"
+  "Compatibility: {{notes}}": "兼容性：{{notes}}",
+  "Action {{name}} failed: {{error}}": "操作 {{name}} 失败：{{error}}",
+  "Action {{name}} timed out after {{seconds}} s": "操作 {{name}} 超时（{{seconds}} 秒）",
+  "the setting rejected the value": "该设置不接受这个值"
 }

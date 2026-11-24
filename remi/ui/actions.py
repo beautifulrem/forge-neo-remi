@@ -165,7 +165,7 @@ def call_action_isolated(
             diagnostics.record_action_error(diag_owner, name, f"{type(error).__name__}: {error}", timed_out=False)
             if not return_toast:
                 raise
-            return toast(f"Action {name} failed: {error}", level="error")
+            return toast(message("Action {{name}} failed: {{error}}", name=name, error=str(error)), level="error")
 
     result_box: dict[str, Any] = {}
     done = threading.Event()
@@ -186,7 +186,7 @@ def call_action_isolated(
         diagnostics.record_action_error(diag_owner, name, msg, timed_out=True)
         if not return_toast:
             raise ActionTimeoutError(f"action {name!r} {msg}")
-        return toast(f"Action {name} {msg}", level="error")
+        return toast(message("Action {{name}} timed out after {{seconds}} s", name=name, seconds=f"{effective_timeout:.1f}"), level="error")
 
     error = result_box.get("error")
     if error is not None:
@@ -196,7 +196,7 @@ def call_action_isolated(
         diagnostics.record_action_error(diag_owner, name, f"{type(error).__name__}: {error}", timed_out=False)
         if not return_toast:
             raise error
-        return toast(f"Action {name} failed: {error}", level="error")
+        return toast(message("Action {{name}} failed: {{error}}", name=name, error=str(error)), level="error")
     return result_box["patch"]
 
 
