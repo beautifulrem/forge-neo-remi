@@ -58,6 +58,13 @@ def _hostname(value: str) -> str | None:
         return None
 
 
+def _netloc(url: str) -> str:
+    try:
+        return urlparse(url).netloc or ""
+    except ValueError:  # "http://[" in --cors-allow-origins
+        return ""
+
+
 def _is_loopback_name(hostname: str) -> bool:
     if hostname == "localhost" or hostname.endswith(".localhost"):
         return True
@@ -98,7 +105,7 @@ def is_rebound_host(request) -> bool:
     hostname = _hostname(host)
     if not hostname or _is_loopback_name(hostname):
         return False
-    allowed = {_hostname(urlparse(origin).netloc or "") for origin in _cors_origins(cmd_opts)}
+    allowed = {_hostname(_netloc(origin)) for origin in _cors_origins(cmd_opts)}
     if hostname in allowed:
         return False
     # A page from an allowed origin served under this Host would send it as Origin
@@ -109,11 +116,11 @@ _DEFAULT_PORTS = {"http": 80, "https": 443, "ws": 80, "wss": 443}
 
 
 def _same_origin(origin: str, request) -> bool:
-    target = urlparse(origin)
-    default_port = _DEFAULT_PORTS.get(target.scheme)
     try:
+        target = urlparse(origin)
+        default_port = _DEFAULT_PORTS.get(target.scheme)
         origin_port = target.port or default_port
-    except ValueError:  # out-of-range or non-numeric port
+    except ValueError:  # an unreadable Origin ("http://["), an out-of-range or non-numeric port
         return False
     forwarded_port = request.headers.get("x-forwarded-port")
     candidates = [request.headers.get("host") or ""]

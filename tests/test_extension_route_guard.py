@@ -490,3 +490,20 @@ def test_api_auth_credentials_on_extension_routes_are_not_failed_webui_logins(mo
     assert not auth.throttle.throttled("testclient")
     assert client.post("/ext/write", headers=_basic("ann", "1")).json() == "written"
     assert client.post("/ext/write").status_code == 401
+
+
+# An Origin urlparse cannot read ("http://[") raised out of the check: a 500 instead of a refusal.
+def test_unreadable_origins_are_cross_site():
+    client = _client()
+    for origin in ("http://[", "http://[::1", "https://[x]:1"):
+        assert client.post("/ext/write", headers={"origin": origin}).status_code == 403, origin
+        read = client.get("/ext/read", headers={"origin": origin, "sec-fetch-site": "cross-site", "sec-fetch-mode": "cors"})
+        assert read.status_code == 403, origin
+
+
+def test_an_unreadable_allowed_origin_does_not_break_the_host_check(monkeypatch):
+    from modules.extension_route_guard import is_rebound_host
+
+    _guard_options(monkeypatch, cors_allow_origins="http://[,https://ui.example")
+    assert is_rebound_host(_get("evil.example:7860"))
+    assert not is_rebound_host(_get("ui.example:7860"))
