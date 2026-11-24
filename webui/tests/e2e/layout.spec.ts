@@ -553,6 +553,29 @@ test("the rail on a phone held sideways keeps its links whole and fades where it
   expect(hit).toBe(true)
 })
 
+// The palette opens a third of the way down with a list up to 60% of the window tall: in a short
+// window (a phone held sideways, a 600 px laptop) it ran off the bottom and cut its last command.
+for (const [width, height] of [
+  [844, 390],
+  [1280, 600],
+] as const) {
+  test(`the command palette fits a ${width}×${height} window`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await openGenerate(page)
+    await page.keyboard.press(`${mod}+K`)
+    const palette = page.getByRole("dialog", { name: "Command palette" })
+    await expect(palette.getByRole("option").first()).toBeVisible()
+    await page.waitForTimeout(300) // the opening zoom
+    const box = (await palette.boundingBox())!
+    expect(Math.round(box.y + box.height), "the palette's bottom").toBeLessThanOrEqual(height)
+    // its last command scrolls into the list and shows whole
+    const last = palette.getByRole("option").last()
+    await last.scrollIntoViewIfNeeded()
+    const [item, list] = await Promise.all([last.boundingBox(), palette.getByRole("listbox").boundingBox()])
+    expect(Math.round(item!.y + item!.height)).toBeLessThanOrEqual(Math.round(Math.min(list!.y + list!.height, height)) + 1)
+  })
+}
+
 /** Boxes that scroll sideways though only meant to scroll up and down, and the page itself. */
 async function sidewaysScrolls(page: Page): Promise<string[]> {
   return page.evaluate(() => {
