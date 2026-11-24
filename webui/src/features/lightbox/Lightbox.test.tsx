@@ -51,6 +51,16 @@ describe("lightbox", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false, expect.anything())
   })
 
+  // The arrows in the Save menu turned the viewer to the next image.
+  it("leaves the arrows to a menu opened from its toolbar", async () => {
+    const { onNavigate } = renderViewer()
+    fireEvent.click(screen.getByRole("button", { name: "Save" }))
+    const entry = await screen.findByRole("menuitem", { name: "Save to the Save folder" })
+    fireEvent.keyDown(entry, { key: "ArrowRight" })
+    fireEvent.keyDown(entry, { key: "End" })
+    expect(onNavigate).not.toHaveBeenCalled()
+  })
+
   it("turns the page on a sideways wheel (once per swipe) and zooms on a vertical one", () => {
     const { onNavigate, image } = renderViewer()
     const viewport = image.parentElement!

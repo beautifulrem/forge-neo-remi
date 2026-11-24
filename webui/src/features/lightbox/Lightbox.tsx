@@ -103,7 +103,10 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
   const toggleZoom = () => setView(isFitted ? { scale: 1, x: 0, y: 0 } : { scale: fitted, x: 0, y: 0 })
 
   const onKeyDown = (event: React.KeyboardEvent) => {
-    if (event.metaKey || event.ctrlKey || event.altKey) return
+    // A menu opened from the toolbar is portaled out of the viewer but React still bubbles its keys
+    // here: its arrows (and keys a control already used) stay with it.
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
+    if (!event.currentTarget.contains(event.target as Node)) return
     const handled: Record<string, () => void> = {
       ArrowLeft: () => go(-1),
       ArrowRight: () => go(1),
