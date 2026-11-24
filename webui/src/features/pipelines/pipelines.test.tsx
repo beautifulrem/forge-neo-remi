@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { queryClient } from "@/api/queries"
 import { i18n } from "@/i18n"
@@ -211,6 +211,24 @@ describe("PipelineBuilder UI", () => {
     fireEvent.change(factor, { target: { value: "" } })
     fireEvent.blur(factor)
     expect(factor).toHaveValue(3)
+  })
+
+  it("says the run list is on its way while it loads, not that there are no runs", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      const method = init?.method ?? (typeof input === "string" ? "GET" : (input as Request).method)
+      if (new URL(url, "http://x").pathname.endsWith("/chains") && method === "GET") return new Promise<Response>(() => {})
+      return new Response(JSON.stringify([]), { status: 200 })
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PipelineBuilder />
+      </QueryClientProvider>,
+    )
+    const runs = screen.getByRole("region", { name: "Recent pipeline runs" })
+    expect(await within(runs).findByRole("status")).toHaveTextContent("Loading…")
+    expect(within(runs).queryByText("No pipeline runs yet")).not.toBeInTheDocument()
+    expect(within(runs).getByRole("heading").textContent).toBe("Recent pipeline runs") // no count of 0
   })
 
   it("keeps a failed run list apart from an empty one and retries it", async () => {

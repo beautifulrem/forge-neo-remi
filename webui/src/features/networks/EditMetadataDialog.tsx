@@ -47,8 +47,8 @@ function Field({ id, label, info, children }: { id: string; label: string; info?
   )
 }
 
-/** A checkpoint's preferred VAE / text encoders: checked modules replace the selection when the card loads the model. */
-function PreferredModules({ id, value, onChange }: { id: string; value: string[]; onChange: (next: string[]) => void }) {
+/** A checkpoint's preferred VAE / text encoders: checked modules replace the selection when the card loads the model. Exported for its tests. */
+export function PreferredModules({ id, value, onChange }: { id: string; value: string[]; onChange: (next: string[]) => void }) {
   const { t } = useTranslation()
   const models = useQuery(modelsQuery)
   const listed = (models.data?.modules ?? [...(models.data?.vae ?? []), ...(models.data?.text_encoders ?? [])]).map((m) => ({ value: m.name, label: m.title ?? m.name }))
@@ -77,7 +77,14 @@ function PreferredModules({ id, value, onChange }: { id: string; value: string[]
             </label>
           </div>
         ))}
-        {rows.length === 0 ? <p className="px-2 py-3 text-center text-sm text-muted-foreground">{t("No modules found")}</p> : null}
+        {models.isError && !models.data ? (
+          <LoadFailed error={models.error} message={t("Could not load the models")} onRetry={() => void models.refetch()} className="px-2" />
+        ) : models.isPending ? (
+          // the list is on its way, not empty (the model bar's picker says the same)
+          <p role="status" className="px-2 py-3 text-center text-sm text-muted-foreground">{t("Loading…")}</p>
+        ) : rows.length === 0 ? (
+          <p className="px-2 py-3 text-center text-sm text-muted-foreground">{t("No modules found")}</p>
+        ) : null}
       </div>
       <p id={`${id}-info`} className="text-xs text-muted-foreground">
         {t("Loading the checkpoint from its card also selects these (none: the selection is kept).")}

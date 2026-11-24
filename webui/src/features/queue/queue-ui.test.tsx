@@ -257,6 +257,14 @@ describe("import dialog", { timeout: 20_000 }, () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Nothing to import was found on this machine.")
     expect(screen.queryByText(/no Agent Scheduler database/)).not.toBeInTheDocument()
   })
+
+  // The dialog showed its title and nothing else, as if there were no sources to import from.
+  it("says the sources could not be listed, with a retry", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ detail: "forbidden" }, { status: 403 }))
+    renderWithClient(<ImportDialog open onOpenChange={() => {}} />)
+    expect(await screen.findByRole("alert")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument()
+  })
 })
 
 describe("editing a queued job in its form", () => {

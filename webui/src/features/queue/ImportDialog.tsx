@@ -16,6 +16,7 @@ import { api } from "@/api/endpoints"
 import type { ImportItem, ImportReport, ImportSource } from "@/api/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { LoadFailed } from "@/components/LoadFailed"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { errorText } from "@/features/errors/error-text"
@@ -130,6 +131,8 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         </DialogHeader>
         {report ? (
           <Report report={report} />
+        ) : sources.isError && !sources.data ? (
+          <LoadFailed error={sources.error} onRetry={() => void sources.refetch()} />
         ) : sources.isPending ? (
           <Skeleton className="h-28 w-full" />
         ) : (

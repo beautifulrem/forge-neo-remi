@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { LoadFailed } from "@/components/LoadFailed"
 import { errorText } from "@/features/errors/error-text"
 import { sendToReferenceWithFeedback } from "@/features/send-to/result-actions"
 import type { SendItem } from "@/features/send-to/send-to"
@@ -333,7 +334,8 @@ export function AssignBoardPopover({ fileIds, activeBoardId, trigger, tone = "de
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [quickName, setQuickName] = useState("")
-  const { data: boards = [] } = useQuery(boardsQuery)
+  const boardsList = useQuery(boardsQuery)
+  const boards = boardsList.data ?? []
 
   const assign = useMutation({
     mutationFn: async (board: Board) => {
@@ -418,6 +420,11 @@ export function AssignBoardPopover({ fileIds, activeBoardId, trigger, tone = "de
                 </li>
               ))}
             </ul>
+          ) : boardsList.isError && !boardsList.data ? (
+            <LoadFailed error={boardsList.error} onRetry={() => void boardsList.refetch()} className="px-1 py-1 text-xs" />
+          ) : boardsList.isPending ? (
+            // the list is on its way, not empty
+            <p role="status" className="px-1 text-xs text-muted-foreground">{t("Loading…")}</p>
           ) : (
             <p className="px-1 text-xs text-muted-foreground">{t("No boards yet")}</p>
           )}

@@ -742,7 +742,7 @@ export function PipelineBuilder() {
         <div className="flex min-h-8 items-center justify-between">
           <h3 className={panelTitleClass(0)}>
             {t("Recent pipeline runs")}
-            <span className="ml-2 font-mono text-xs font-normal text-muted-foreground tabular-nums">{chains.data?.items.length ?? 0}</span>
+            {chains.data ? <span className="ml-2 font-mono text-xs font-normal text-muted-foreground tabular-nums">{chains.data.items.length}</span> : null}
           </h3>
         </div>
         {chains.isError && !chains.data ? (
@@ -752,6 +752,9 @@ export function PipelineBuilder() {
               {t("Retry")}
             </Button>
           </div>
+        ) : chains.isPending ? (
+          // the list is on its way, not empty
+          <p role="status" className="py-3 text-xs text-muted-foreground">{t("Loading…")}</p>
         ) : (chains.data?.items.length ?? 0) === 0 ? (
           <p className="py-3 text-xs text-muted-foreground">{t("No pipeline runs yet")}</p>
         ) : (
