@@ -1668,5 +1668,6 @@
   "Could not import favorites": "无法导入收藏",
   "Could not read the form": "无法读取表单",
   "Could not load the styles": "无法加载样式列表",
-  "Remove from “{{name}}”": "从“{{name}}”移出"
+  "Remove from “{{name}}”": "从“{{name}}”移出",
+  "All metadata ({{count}})": "全部元数据（{{count}}）"
 }

@@ -152,7 +152,7 @@ function Details({ fileId }: { fileId: string }) {
           className="border-b pb-px"
           options={[
             { value: "params", label: t("Parameters"), icon: <SlidersHorizontal aria-hidden /> },
-            { value: "entries", label: `${t("All metadata")} (${data.entries.length})`, icon: <ListTree aria-hidden /> },
+            { value: "entries", label: t("All metadata ({{count}})", { count: data.entries.length }), icon: <ListTree aria-hidden /> },
             { value: "chunks", label: t("PNG chunks"), icon: <Rows3 aria-hidden />, disabled: data.chunks.length === 0 },
           ]}
           value={section}
@@ -241,7 +241,8 @@ export default function PngInfoPage({ route }: { route: Route }) {
             </span>
           </DropZone>
         </div>
-        <Details fileId={fileId} />
+        {/* keyed: another image opens on its parameters (its chunks tab may be disabled) */}
+        <Details key={fileId} fileId={fileId} />
       </div>
     </div>
   )

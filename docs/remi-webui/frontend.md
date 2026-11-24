@@ -1138,7 +1138,8 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
   `#/png-info?file=<id>`): drop, paste (anywhere on the page) or choose an
   image; it is uploaded once and read by `POST /pnginfo`. The infotext panel,
   "send parameters" to txt2img / img2img (page switch), copy, "send image" to
-  img2img / inpaint / Extras, and three tabs: parsed parameters, every
+  img2img / inpaint / Extras, and three tabs (a select when they do not
+  fit; another image opens on the first): parsed parameters, every
   metadata entry grouped (image, text chunks, EXIF IFDs; binary values as
   sizes) and the PNG chunk list. Values are rendered as text only.
 - **Gallery** (`pages/gallery`, `features/library`): `GET /gallery` pages

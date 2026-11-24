@@ -1,10 +1,13 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { queryClient } from "@/api/queries"
 import type { ImageMetadata } from "@/api/types"
 import { toast } from "sonner"
 import { groupEntries } from "@/features/pnginfo/group"
+import { i18n } from "@/i18n"
+import zhCN from "@/locales/zh-CN.json"
 import PngInfoPage from "./index"
 
 const metadata: ImageMetadata = {
@@ -90,6 +93,46 @@ describe("PNG Info page", () => {
     fireEvent.click(screen.getByRole("tab", { name: /PNG chunks/ }))
     const chunks = await screen.findByRole("table", { name: "PNG chunks" })
     expect(within(chunks).getByText("× 3")).toBeInTheDocument()
+  })
+
+  // The section tabs kept their state across images: an image without PNG chunks opened on its
+  // disabled "PNG chunks" tab.
+  it("opens each image on its parameters", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const plain = (await (input as Request).text()).includes('"plain"')
+      const answer = plain ? { ...metadata, name: "plain.jpg", format: "JPEG", chunks: [] } : metadata
+      return new Response(JSON.stringify(answer), { headers: { "Content-Type": "application/json" } })
+    })
+    const page = (file: string) => (
+      <QueryClientProvider client={queryClient}>
+        <PngInfoPage route={{ name: "png-info", query: new URLSearchParams({ file }) }} />
+      </QueryClientProvider>
+    )
+    const view = render(page("abc"))
+    fireEvent.click(await screen.findByRole("tab", { name: /PNG chunks/ }))
+    expect(await screen.findByRole("table", { name: "PNG chunks" })).toBeInTheDocument()
+
+    view.rerender(page("plain"))
+    expect(await screen.findByText("plain.jpg")).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "Parameters" })).toHaveAttribute("aria-selected", "true")
+    expect(screen.getByRole("table", { name: "Generation parameters" })).toBeInTheDocument()
+  })
+
+  // On a phone the section tabs become a select, whose option read "All metadata (3)" glued
+  // from two strings: Chinese got ASCII brackets ("全部元数据 (3)").
+  it("counts the metadata entries in one translated label", async () => {
+    mockServer()
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(1000) // the tabs do not fit
+    const user = userEvent.setup()
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      renderPage("file=abc")
+      await user.click(await screen.findByRole("combobox", { name: "元数据" }))
+      expect(await screen.findByRole("option", { name: "全部元数据（3）" })).toBeInTheDocument()
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
   })
 
   it("disables sending parameters when the image has none", async () => {
