@@ -206,12 +206,15 @@ imperatively).
   shares a row gets a `min-w` for what it cannot fold: too narrow a row then
   wraps instead of sliding it under its neighbour. A grid never leaves an
   empty cell (the img2img mode picker and the phone's More sheet centre a
-  short last row). A tab strip that may not fit (three tabs or more,
-  translated labels) is a `FitTabsList`, which turns into a select rather
-  than scroll, wrap or cut a label (Extensions, the network kinds, PNG
-  Info). A grid whose columns start at a breakpoint is `grid-cols-1` below
-  it: its implicit column is as wide as its longest line (a file name, a tab
-  strip) and would push a phone's page sideways.
+  short last row). A strip of fixed tabs that may not fit a phone (three or
+  more, or labels that grow once translated) is a `FitTabsList`, which turns
+  into a select rather than scroll, wrap or cut a label (Extensions, the
+  network kinds, PNG Info); a strip whose number of items varies scrolls
+  sideways instead (the boards in a `FadeStrip`, the tag groups). A grid that can
+  hold a line that does not wrap (a file name, a module name, a tab strip)
+  and whose columns start at a breakpoint is `grid-cols-1` below it: its
+  implicit column is as wide as that line and pushes a phone's page or
+  dialog sideways (the backups, the model metadata editor).
 - A running job's progress shows once where the user looks: over the stage
   (`ProgressOverlay`, which registers itself in
   `features/progress/stage-overlay.ts`), and in the run bar's status line
@@ -297,9 +300,7 @@ generated interfaces (sources: Linear's
   fixed amber. Touch screens get no number steppers (the numeric keyboard
   types the value), and controls hidden until hover take no taps while
   hidden. A scroller (the JSON Builder column, `FadeStrip`) keeps 4 px of
-  room around its controls so their focus rings are not clipped. A hit box
-  reaches further, so a scroller with one at its edge scrolls only up and
-  down (`overflow-x-hidden`, the parameters under a result). Toolbar
+  room around its controls so their focus rings are not clipped. Toolbar
   controls (header, settings, extensions, gallery) are one 28 px height.
   A pressed toggle wears the selection tint (`--primary` text on a 15 %
   wash, 20 % in the dark theme, 25 % there when hovered), set once in
@@ -352,7 +353,10 @@ generated interfaces (sources: Linear's
   ×, the advice bar's buttons) keeps its look and gets
   an invisible `after:` hit box of at least 40 px; the box never reaches a
   neighbouring control, so packed toolbars are not given one (it would take
-  the taps of the next tool). Chart and band colours come from `--chart-2`
+  the taps of the next tool). A box that reaches past a scroller's padding
+  makes the scroller scroll: give the scroller the box's reach as room, or
+  clip the axis it does not scroll along (`overflow-x-hidden` on the parameters
+  under a result). Chart and band colours come from `--chart-2`
   to `--chart-5`, never fixed Tailwind hues (`--chart-1` follows the accent
   and can match another band).
   Controls in one row share one look: a button among selects (the header's

@@ -355,7 +355,7 @@ export default function ControlNetUnitWidget({ value, onChange, props, disabled,
         />
       </Field>
 
-      <div className="grid gap-x-3 gap-y-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2">
         <Field id={`${id}-module`} label={label("module", "Preprocessor")}>
           <SearchSelect
             id={`${id}-module`}

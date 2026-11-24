@@ -591,4 +591,31 @@ test.describe("no sideways scrolling", () => {
     await expect(page.getByRole("rowheader", { name: "Software" })).toBeVisible()
     expect(await sidewaysScrolls(page)).toEqual([])
   })
+
+  // Below lg the backups page was one column as wide as its longest backup name.
+  test("extension backups on a phone", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openRoute(page, "extensions")
+    await page.getByRole("main").getByRole("combobox", { name: "Extensions" }).click()
+    await page.locator("[data-slot=select-item]").filter({ hasText: "Backup" }).first().click()
+    await page.getByRole("textbox", { name: "Backup name" }).fill("Before trying the new ControlNet and the regional prompter extensions together")
+    await page.getByRole("button", { name: "Back up" }).click()
+    await expect(page.getByRole("option", { name: /^Before trying/ })).toBeVisible()
+    expect(await sidewaysScrolls(page)).toEqual([])
+  })
+
+  // The model metadata form was one column as wide as its longest module name.
+  test("the model metadata editor on a phone", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openRoute(page, "networks")
+    await page.getByRole("main").getByRole("combobox", { name: "Network kinds" }).click()
+    await page.locator("[data-slot=select-item]").filter({ hasText: "Checkpoint" }).first().click()
+    await page.getByRole("main").getByRole("option").first().click({ button: "right" })
+    await page.getByRole("menuitem", { name: "Edit metadata" }).click()
+    const modules = page.getByRole("dialog").getByRole("group", { name: "Preferred VAE / Text encoders" })
+    await expect(modules.getByRole("checkbox").first()).toBeVisible()
+    expect(await sidewaysScrolls(page)).toEqual([])
+    await modules.locator("label").first().evaluate((label) => (label.textContent = "umt5_xxl_fp8_e4m3fn_scaled_with_a_much_longer_suffix.safetensors"))
+    expect(await sidewaysScrolls(page), "a long module name").toEqual([])
+  })
 })

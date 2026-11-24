@@ -126,7 +126,7 @@ function Editor({ meta, kind, onDone }: { meta: NetworkMeta; kind: NetworkKind; 
         save.mutate()
       }}
     >
-      <div className="-mx-4 grid min-h-0 flex-1 gap-4 overflow-y-auto px-4 pb-1 sm:grid-cols-2">
+      <div className="-mx-4 grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto px-4 pb-1 sm:grid-cols-2">
         {has("description") ? (
           <div className="sm:col-span-2">
             <Field id={`${id}-description`} label={t("Description")}>

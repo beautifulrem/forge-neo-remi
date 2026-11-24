@@ -154,7 +154,7 @@ export function BackupView({ access }: { access: boolean }) {
   })
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[18rem_1fr]">
       <div className="flex flex-col gap-3">
         <form
           className="flex gap-2"
