@@ -1520,7 +1520,6 @@
   "Next candidate": "下一张候选",
   "Candidate {{index}} of {{count}}": "候选 {{index}} / {{count}}",
   "Overlay opacity": "叠加不透明度",
-  "Hold to view original": "切换原图对比",
   "Split compare": "分屏对比",
   "Accept as base layer": "采纳为新底图",
   "Discard candidate": "丢弃此候选",
@@ -1669,5 +1668,6 @@
   "Remove from “{{name}}”": "从“{{name}}”移出",
   "All metadata ({{count}})": "全部元数据（{{count}}）",
   "Undo with {{keys}} in the editor.": "可在编辑器中按 {{keys}} 撤销。",
-  "The prompt and the negative prompt are emptied. Undo with {{keys}} in each editor.": "提示词和反向提示词都会被清空。可在各自的编辑器中按 {{keys}} 撤销。"
+  "The prompt and the negative prompt are emptied. Undo with {{keys}} in each editor.": "提示词和反向提示词都会被清空。可在各自的编辑器中按 {{keys}} 撤销。",
+  "Show the original": "显示原图"
 }

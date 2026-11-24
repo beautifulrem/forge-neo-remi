@@ -128,7 +128,7 @@ export function StagingBar({
       </div>
 
       <IconButton
-        label={t("Hold to view original")}
+        label={t("Show the original")}
         pressed={session.compareOriginal}
         onClick={() => onCompareOriginalChange(!session.compareOriginal)}
         disabled={busy}

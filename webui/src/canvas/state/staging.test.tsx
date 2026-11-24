@@ -108,6 +108,18 @@ describe("canvas in-place staging store", () => {
     expect(handlers.onToggleSplit).toHaveBeenCalledOnce()
   })
 
+  // "Hold to view original" was a click toggle: holding showed nothing, and the original stayed
+  // after letting go. The label says what the button does.
+  it("names the comparison with the original as the toggle it is", () => {
+    const session = { candidates: [{ fileId: "cand-1" }], index: 0, opacity: 0.8, compareOriginal: false, splitCompare: false, splitPosition: 0.5 }
+    const handlers = { onPrev: vi.fn(), onNext: vi.fn(), onSelect: vi.fn(), onOpacityChange: vi.fn(), onCompareOriginalChange: vi.fn(), onToggleSplit: vi.fn(), onAccept: vi.fn(), onDiscardCurrent: vi.fn(), onDiscardAll: vi.fn() }
+    render(<StagingBar session={session} docKey="img2img" {...handlers} />)
+    const toggle = screen.getByRole("button", { name: "Show the original" })
+    expect(toggle).toHaveAttribute("aria-pressed", "false")
+    fireEvent.click(toggle)
+    expect(handlers.onCompareOriginalChange).toHaveBeenCalledWith(true)
+  })
+
   it("takes the focus when staged by a button that goes away, and only then", () => {
     const session = { candidates: [{ fileId: "cand-1" }], index: 0, opacity: 0.8, compareOriginal: false, splitCompare: false, splitPosition: 0.5 }
     const handlers = { onPrev: vi.fn(), onNext: vi.fn(), onSelect: vi.fn(), onOpacityChange: vi.fn(), onCompareOriginalChange: vi.fn(), onToggleSplit: vi.fn(), onAccept: vi.fn(), onDiscardCurrent: vi.fn(), onDiscardAll: vi.fn() }
