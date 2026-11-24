@@ -137,6 +137,20 @@ def test_a_checkpoint_is_picked_when_none_is_selected(webui, main_entry, monkeyp
     assert listed == [True] and shared.opts.data["sd_model_checkpoint"] == "mine.safetensors"
 
 
+def test_frozen_settings_still_start_with_a_checkpoint(webui, main_entry, monkeypatch):
+    """``--freeze-settings`` refuses the option setter with an AssertionError: with no
+    checkpoint stored yet, the WebUI exited at startup."""
+
+    from modules import sd_models, shared
+
+    monkeypatch.setattr(sd_models, "checkpoints_list", {"first": SimpleNamespace(name="anima.safetensors")})
+    monkeypatch.setattr(shared.cmd_opts, "freeze_settings", True)
+    monkeypatch.setitem(shared.opts.data, "sd_model_checkpoint", "")
+    runtime.initialize_model_selection()
+    assert shared.opts.data["sd_model_checkpoint"] == "anima.safetensors"
+    assert main_entry.calls == [("refresh_models",), ("refresh_model_loading_parameters",)]
+
+
 def test_no_checkpoint_at_all_leaves_the_selection_empty(webui, main_entry, monkeypatch):
     from modules import sd_models, shared
 
