@@ -267,7 +267,7 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
         }
         footer={
           <>
-            {/* the hash line's room while the status loads: the panels below do not jump when it comes */}
+            {/* the hash line's room while the status loads (a model is usually loaded): then the panels below do not jump */}
             {status.isPending ? <Skeleton className="h-4 w-56" /> : loaded && status.data?.model_hash ? <CheckpointHash hash={status.data.model_hash} /> : null}
             <LoadedWeights />
           </>
