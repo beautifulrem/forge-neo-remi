@@ -191,8 +191,8 @@ fields with `message` (a catalog key, like every server message) and send
 nothing; the server applies the same list. With `--hide-ui-dir-config` the
 inputs that name a path on the server (`input_dir`, `video_input`, and
 img2img's `batch_input_dir` when the batch reads a directory) are refused
-whatever their value, and `core.required` gives that reason as their
-`message`.
+whatever their value: `core.required` gives that reason as the `message` of
+the two it lists, and the server answers it for all three.
 
 A rejected request answers with
 
