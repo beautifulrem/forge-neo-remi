@@ -275,7 +275,9 @@ imperatively).
   the flex value); a dialog or alert dialog is no taller than the window
   less 2rem and scrolls inside (up and down only; the full-screen editor
   opts out with `max-h-none`), and the command dialog no taller than the
-  room below its top, its list shrinking; `number-field.tsx` is ours.
+  room below its top, its list shrinking; a menu or popover gives the focus
+  back to its trigger only while nothing else has taken it (a dialog one of
+  its items opened keeps it, `final-focus.ts`); `number-field.tsx` is ours.
 
 ### Visual rules
 

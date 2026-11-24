@@ -19,6 +19,7 @@ import * as React from "react"
 import { cn } from "cn"
 import { lazyModule, prefetch } from "@/lib/lazy-module"
 import type * as Impl from "./popover-impl"
+import { finalFocus } from "./final-focus"
 
 type Module = typeof Impl
 
@@ -148,7 +149,7 @@ function PopoverContent(props: ContentProps) {
   const { Popover: Root, PopoverContent: Content } = module
   return (
     <Root {...popover.root} open={popover.open} onOpenChange={popover.setOpen}>
-      <Content id={popover.popupId} anchor={popover.anchor} finalFocus={() => popover.anchor ?? true} {...props} />
+      <Content id={popover.popupId} anchor={popover.anchor} finalFocus={finalFocus(popover.anchor, popover.popupId)} {...props} />
     </Root>
   )
 }

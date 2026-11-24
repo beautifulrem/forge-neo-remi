@@ -9,7 +9,8 @@
  * later, so their first load does not carry the menu
  * (docs/research/ui-performance.md, "Bundle").
  *
- * The popup is anchored to the trigger and returns focus to it on close;
+ * The popup is anchored to the trigger and returns focus to it on close
+ * (unless a dialog one of its items opened has taken it, `final-focus.ts`);
  * menu parts (items, separators, ...) render inside the content, after the
  * implementation has loaded.
  */
@@ -17,6 +18,7 @@ import { mergeProps } from "@base-ui/react/merge-props"
 import * as React from "react"
 import { cn } from "cn"
 import type * as Impl from "./dropdown-menu-impl"
+import { finalFocus } from "./final-focus"
 
 type Module = typeof Impl
 
@@ -179,7 +181,7 @@ function DropdownMenuContent(props: ContentProps) {
   const { DropdownMenu: Root, DropdownMenuContent: Content } = implementation
   return (
     <Root {...menu.root} open={menu.open} onOpenChange={menu.setOpen}>
-      <Content id={menu.popupId} anchor={menu.anchor} finalFocus={() => menu.anchor ?? true} {...props} />
+      <Content id={menu.popupId} anchor={menu.anchor} finalFocus={finalFocus(menu.anchor, menu.popupId)} {...props} />
     </Root>
   )
 }

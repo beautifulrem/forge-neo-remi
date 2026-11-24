@@ -18,6 +18,36 @@ test.describe("gallery", () => {
     await expect(page.getByRole("main").locator("[aria-busy=true]")).toHaveCount(0)
   })
 
+  // A dialog opened from a menu item lost the focus to the menu's button once the menu had faded
+  // out: typing went nowhere and Ctrl+A selected the gallery behind the dialog.
+  test("a dialog opened from a menu keeps the focus", async ({ page }) => {
+    await openGallery(page)
+    await page.getByLabel("Boards").getByText("Character references").click()
+    await page.getByRole("button", { name: "Board actions" }).click()
+    await page.getByRole("menuitem", { name: "Rename board" }).click()
+    const dialog = page.getByRole("alertdialog")
+    await expect(dialog).toBeVisible()
+    await expect(page.getByRole("menu")).toHaveCount(0)
+    await page.waitForTimeout(500) // past the menu's fade
+    expect(await page.evaluate(() => Boolean(document.activeElement?.closest("[role=alertdialog]")))).toBe(true)
+    await page.keyboard.type(" v2")
+    await expect(dialog.getByRole("textbox")).toHaveValue(/ v2$/)
+    await page.keyboard.press("Escape")
+    await expect(dialog).toBeHidden()
+    await expect(page.getByRole("button", { name: "Board actions" })).toBeFocused()
+
+    // the second time, once the dialog's code is loaded, it opens within the menu's fade
+    for (let time = 0; time < 2; time++) {
+      await page.getByRole("button", { name: "Appearance" }).click()
+      await page.getByRole("menuitem", { name: /Keyboard shortcuts/ }).click()
+      await expect(page.getByRole("dialog")).toBeVisible()
+      await page.waitForTimeout(500)
+      expect(await page.evaluate(() => Boolean(document.activeElement?.closest("[role=dialog]"))), `time ${time + 1}`).toBe(true)
+      await page.keyboard.press("Escape")
+      await expect(page.getByRole("dialog")).toBeHidden()
+    }
+  })
+
   test("filters by search and opens the viewer with the parameters beside the image", async ({ page }) => {
     const grid = await openGallery(page)
     await page.getByRole("searchbox", { name: "Search the gallery" }).fill("lighthouse")
