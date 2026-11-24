@@ -22,6 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { LoadFailed } from "@/components/LoadFailed"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { LazyPromptEditor } from "../index"
@@ -49,14 +50,19 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
   const { t } = useTranslation()
   const id = useId()
   const styles = useQuery({ ...stylesQuery, enabled: open })
-  const [draft, setDraft] = useState<PromptStyle>({ name: initial ?? "", prompt: "", negative_prompt: "" })
+  // Until the user edits, the editor shows the form's style as the list has it: the list may
+  // arrive after the dialog opens, and an editor left blank would save a blank style over it.
+  const [edited, setEdited] = useState<PromptStyle | null>(null)
+  const initialStyle = styles.data?.find((style) => style.name === initial)
+  const draft = edited ?? (initialStyle ? { ...initialStyle } : { name: initial ?? "", prompt: "", negative_prompt: "" })
+  const setDraft = (update: (draft: PromptStyle) => PromptStyle) => setEdited((current) => update(current ?? draft))
   const [confirmDelete, setConfirmDelete] = useState(false)
   const existing = styles.data?.find((style) => style.name === draft.name)
   const dirty = !existing || existing.prompt !== draft.prompt || existing.negative_prompt !== draft.negative_prompt
 
   const select = (name: string) => {
     const style = styles.data?.find((s) => s.name === name)
-    setDraft(style ? { ...style } : { name, prompt: draft.prompt, negative_prompt: draft.negative_prompt })
+    setEdited(style ? { ...style } : { name, prompt: draft.prompt, negative_prompt: draft.negative_prompt })
   }
 
   const save = useMutation({
@@ -72,7 +78,7 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
     onSuccess: () => {
       refreshStyles()
       toast.success(t("Style “{{name}}” deleted", { name: draft.name }))
-      setDraft({ name: "", prompt: "", negative_prompt: "" })
+      setEdited({ name: "", prompt: "", negative_prompt: "" })
     },
     onError: (error) => toast.error(t("Could not delete the style"), { description: failureText(error) }),
   })
@@ -90,6 +96,9 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
             </DialogDescription>
           </DialogHeader>
           <div className="-mx-1 flex min-h-0 flex-col gap-3 overflow-y-auto px-1 py-1">
+            {styles.isError && !styles.data ? (
+              <LoadFailed error={styles.error} message={t("Could not load the styles")} onRetry={() => void styles.refetch()} className="py-0" />
+            ) : null}
             <div className="flex flex-col gap-1.5">
               <label id={`${id}-name`} className="text-[0.8rem] font-medium">
                 {t("Style", { context: "prompt" })}
@@ -137,7 +146,8 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
                 <Trash2 />
                 {t("Delete")}
               </Button>
-              <Button disabled={!draft.name.trim() || !dirty || save.isPending} onClick={() => save.mutate()}>
+              {/* Without the list, saving could replace a style this editor does not show. */}
+              <Button disabled={!styles.data || !draft.name.trim() || !dirty || save.isPending} onClick={() => save.mutate()}>
                 <Save />
                 {t("Save")}
               </Button>
