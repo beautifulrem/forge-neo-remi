@@ -288,6 +288,9 @@ generated interfaces (sources: Linear's
   hidden. A scroller (the JSON Builder column, `FadeStrip`) keeps 4 px of
   room around its controls so their focus rings are not clipped. Toolbar
   controls (header, settings, extensions, gallery) are one 28 px height.
+  A pressed toggle wears the selection tint (`--primary` text on a 15 %
+  wash, hovered too), set once in `components/ui/toggle.tsx`; a
+  near-black tone alone does not show a lone toggle's state.
   Truncated names and URLs carry their full text in a `title`. A form column (the generate parameters, an
   extension page, the JSON Builder's side column, the Extensions list) is an inspector, not a
   stack of cards: each block is a panel with a hairline above it and no box,

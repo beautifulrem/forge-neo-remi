@@ -114,7 +114,7 @@ export function Img2imgStage({ result, actions, leading, trailing, className }: 
               onPressedChange={setStayOnCanvas}
               aria-label={t("Stage results in canvas")}
               title={t("Stage results in canvas")}
-              className="h-7 gap-1 px-2 text-xs data-[pressed]:bg-primary/15 data-[pressed]:text-primary"
+              className="h-7 gap-1 px-2 text-xs"
             >
               <Layers className="size-3.5" aria-hidden />
               <span className="hidden sm:inline">{t("Stage in canvas")}</span>

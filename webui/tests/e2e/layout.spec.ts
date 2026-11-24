@@ -312,6 +312,25 @@ test.describe("toggles and control rows", () => {
     expect((await look()).background).not.toBe(off.background)
   })
 
+  test("every pressed toggle wears the selection tint, hovered or not", async ({ page }) => {
+    await page.goto("/#/queue")
+    const toggle = page.getByRole("main").getByRole("button", { name: "Starred only" })
+    const tinted = () =>
+      toggle.evaluate((element) => {
+        const probe = document.createElement("span")
+        probe.style.color = "var(--primary)"
+        document.body.append(probe)
+        const primary = getComputedStyle(probe).color
+        probe.remove()
+        return getComputedStyle(element).color === primary
+      })
+    await toggle.click()
+    await expect(toggle).toHaveAttribute("aria-pressed", "true")
+    await expect.poll(tinted).toBe(true) // still under the pointer
+    await page.mouse.move(0, 0)
+    await expect.poll(tinted).toBe(true)
+  })
+
   test("the checkpoint hashing row's select and button share one height", async ({ page }) => {
     await page.goto("/#/settings?view=server")
     const main = page.getByRole("main")

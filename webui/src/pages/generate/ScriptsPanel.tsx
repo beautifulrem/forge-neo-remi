@@ -166,7 +166,7 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
                 onPressedChange={setOnlyModified}
                 aria-label={t("Only modified")}
                 title={t("Only modified")}
-                className={cn(FIELD_BUTTON_CLASS, "gap-1 aria-pressed:bg-primary/15 aria-pressed:text-primary dark:aria-pressed:bg-primary/20")}
+                className={cn(FIELD_BUTTON_CLASS, "gap-1")}
               >
                 <ListFilter />
                 <span className="hidden sm:inline">{t("Modified")}</span>
