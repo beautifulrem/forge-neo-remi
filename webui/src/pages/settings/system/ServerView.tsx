@@ -14,10 +14,12 @@ import { api } from "@/api/endpoints"
 import { ROOT } from "@/api/http"
 import { useProgress } from "@/api/progress"
 import { queryClient } from "@/api/queries"
+import { LoadFailed } from "@/components/LoadFailed"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
 import { requestServerCommand } from "@/features/server-control/server-control"
 import { cn } from "@/lib/utils"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
@@ -212,6 +214,8 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
   })
   const restartable = status.data?.restartable ?? false
   const loaded = status.data?.model_loaded
+  // before the status arrives (or when its request failed) neither "not available" nor "no model" is known
+  const known = status.data !== undefined
   const loadAction = loaded ? "reload" : "load"
 
   return (
@@ -226,6 +230,7 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
           </a>
         </p>
       </header>
+      {status.isError && !status.data ? <LoadFailed error={status.error} message={t("Could not read the server status")} onRetry={() => void status.refetch()} className="py-0" /> : null}
 
       <Panel title="Reload UI" description="Reloads scripts and extensions and rebuilds the app in this process. Use it after enabling, installing or updating extensions, or after editing a script.">
         <Button onClick={() => requestServerCommand("reload")}>
@@ -237,13 +242,13 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
       <Panel
         title="Restart server"
         description="Stops the WebUI process and starts it again (needed for settings marked “Requires restart”)."
-        aside={!status.isPending && !restartable ? <Badge variant="outline">{t("Not available")}</Badge> : null}
+        aside={known && !restartable ? <Badge variant="outline">{t("Not available")}</Badge> : null}
       >
         <Button variant="outline" onClick={() => requestServerCommand("restart")} disabled={!restartable}>
           <Power aria-hidden />
           {t("Restart server")}
         </Button>
-        {!status.isPending && !restartable ? (
+        {known && !restartable ? (
           <p className="text-xs text-muted-foreground">{t("Start the WebUI with webui.sh / webui.bat to restart it from here.")}</p>
         ) : null}
       </Panel>
@@ -252,13 +257,18 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
         title="Model memory"
         description="Unload the model to free RAM and VRAM; load the selected model now instead of at the next generation, or load it again from disk."
         aside={
-          <Badge variant={loaded ? "secondary" : "outline"} className="max-w-56 truncate" title={loaded ?? undefined}>
-            {modelLoading ? t("Loading…") : loaded ? loaded.replace(/\s*\[[0-9a-f]{6,}\]$/i, "") : t("No model loaded")}
-          </Badge>
+          modelLoading || known ? (
+            <Badge variant={loaded ? "secondary" : "outline"} className="max-w-56 truncate" title={loaded ?? undefined}>
+              {modelLoading ? t("Loading…") : loaded ? loaded.replace(/\s*\[[0-9a-f]{6,}\]$/i, "") : t("No model loaded")}
+            </Badge>
+          ) : status.isPending ? (
+            <Skeleton className="h-5 w-28" />
+          ) : null
         }
         footer={
           <>
-            {loaded && status.data?.model_hash ? <CheckpointHash hash={status.data.model_hash} /> : null}
+            {/* the hash line's room while the status loads: the panels below do not jump when it comes */}
+            {status.isPending ? <Skeleton className="h-4 w-56" /> : loaded && status.data?.model_hash ? <CheckpointHash hash={status.data.model_hash} /> : null}
             <LoadedWeights />
           </>
         }
@@ -267,7 +277,7 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
           {model.isPending && model.variables === "unload" ? <Loader2 className="animate-spin" aria-hidden /> : <HardDriveDownload aria-hidden />}
           {t("Unload model")}
         </Button>
-        <Button variant="outline" disabled={model.isPending || modelLoading !== null} onClick={() => model.mutate(loadAction)}>
+        <Button variant="outline" disabled={model.isPending || modelLoading !== null || !known} onClick={() => model.mutate(loadAction)}>
           {/* a load lasts until the model is in memory, often minutes: a still mark */}
           {model.isPending && model.variables !== "unload" ? <Hourglass aria-hidden /> : <Upload aria-hidden />}
           {loaded ? t("Reload model from disk") : t("Load model")}

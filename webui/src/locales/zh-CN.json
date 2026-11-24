@@ -1669,5 +1669,6 @@
   "All metadata ({{count}})": "全部元数据（{{count}}）",
   "Undo with {{keys}} in the editor.": "可在编辑器中按 {{keys}} 撤销。",
   "The prompt and the negative prompt are emptied. Undo with {{keys}} in each editor.": "提示词和反向提示词都会被清空。可在各自的编辑器中按 {{keys}} 撤销。",
-  "Show the original": "显示原图"
+  "Show the original": "显示原图",
+  "Could not read the server status": "无法读取服务器状态"
 }
