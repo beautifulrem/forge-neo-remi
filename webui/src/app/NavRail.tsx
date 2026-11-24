@@ -1,14 +1,15 @@
 /** Slim left navigation rail (desktop) and bottom bar (mobile). */
 import { Ellipsis } from "@/components/icons"
 import * as m from "motion/react-m"
-import { Suspense, useState } from "react"
+import { Suspense, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useScrollFade } from "@/lib/use-scroll-fade"
 import { cn } from "@/lib/utils"
 import { useProgress } from "@/api/progress"
 import { useQueuedCount } from "@/features/queue/status"
 import { isActive, preloadRoute, type NavItem } from "./routes"
-import { type Route, routeHref } from "./router"
+import { type Route, routeHref, routeKey } from "./router"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { retryableLazy } from "@/lib/retryable-lazy"
 
@@ -54,10 +55,11 @@ function RailLink({ item, active }: { item: NavItem; active: boolean }) {
             href={routeHref(item.route)}
             aria-label={described}
             aria-current={active ? "page" : undefined}
+            data-active={active ? "" : undefined}
             onPointerEnter={() => preloadRoute(item.route)}
             onFocus={() => preloadRoute(item.route)}
             className={cn(
-              "group/rail relative grid size-10 place-items-center rounded-md text-rail-muted transition-colors outline-none",
+              "group/rail relative grid size-10 shrink-0 place-items-center rounded-md text-rail-muted transition-colors outline-none",
               "hover:bg-sidebar-accent/70 hover:text-rail-foreground focus-visible:ring-3 focus-visible:ring-rail-foreground/60",
               active && "text-rail-current hover:bg-transparent hover:text-rail-current",
             )}
@@ -100,6 +102,9 @@ export function NavRail({ items, route }: { items: NavItem[]; route: Route }) {
   const { t } = useTranslation()
   const main = items.filter((item) => item.group !== "system")
   const system = items.filter((item) => item.group === "system")
+  // a short window (a phone held sideways) scrolls the pages: their links keep their size, the cut edge fades
+  const scroller = useRef<HTMLDivElement>(null)
+  const fade = useScrollFade(scroller, routeKey(route), "y")
 
   return (
     <nav
@@ -107,7 +112,7 @@ export function NavRail({ items, route }: { items: NavItem[]; route: Route }) {
       className="hidden w-14 shrink-0 flex-col items-center gap-1 border-r border-border bg-rail py-2 md:flex"
     >
       <Logo />
-      <div className="no-scrollbar mt-2 flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto px-2 py-1">
+      <div ref={scroller} style={fade} className="no-scrollbar mt-2 flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto px-2 py-1">
         {main.map((item, index) => {
           const separator = index > 0 && main[index - 1]?.group !== item.group
           return (

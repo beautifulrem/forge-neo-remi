@@ -533,6 +533,26 @@ test.describe("the img2img stage on a phone held sideways", () => {
   }
 })
 
+// Held sideways, the rail's links shrank to 20 px to fit and the last one was cut off, with nothing
+// to say the rail scrolls: a tap where it showed opened Settings instead.
+test("the rail on a phone held sideways keeps its links whole and fades where it scrolls", async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 })
+  await openGenerate(page)
+  const rail = page.getByRole("navigation", { name: "Main navigation" })
+  const heights = await rail.getByRole("link").evaluateAll((links) => links.map((link) => Math.round(link.getBoundingClientRect().height)))
+  expect(Math.min(...heights)).toBeGreaterThanOrEqual(40)
+  const scroller = rail.locator(".overflow-y-auto")
+  await expect.poll(() => scroller.evaluate((element) => getComputedStyle(element).maskImage)).toContain("linear-gradient")
+  // scrolled to its end, the last link is whole and takes its own taps
+  const last = scroller.getByRole("link").last()
+  await scroller.evaluate((element) => (element.scrollTop = element.scrollHeight))
+  const hit = await last.evaluate((link) => {
+    const box = link.getBoundingClientRect()
+    return link.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2))
+  })
+  expect(hit).toBe(true)
+})
+
 /** Boxes that scroll sideways though only meant to scroll up and down, and the page itself. */
 async function sidewaysScrolls(page: Page): Promise<string[]> {
   return page.evaluate(() => {

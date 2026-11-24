@@ -82,7 +82,9 @@ imperatively).
   hover/focus. A page component receives `{ route }` (its own route variant).
 - **Navigation**: `BUILTIN_NAV` plus extension pages from `GET /app`
   (`pages`), ordered/filtered by `Bootstrap.tabs`; Queue, Settings and
-  Extensions are always present. Desktop: slim left rail with tooltips;
+  Extensions are always present. Desktop: slim left rail with tooltips
+  (in a short window, a phone held sideways, its pages scroll: the links
+  keep their 40 px and the cut edge fades);
   below `md`: bottom bar (primary items) + "More" sheet. Both sit on the
   neutral `--rail` surface (the sidebar tone, a shade off the page, never a
   colour of its own); only the current page is marked, by a `--primary`
