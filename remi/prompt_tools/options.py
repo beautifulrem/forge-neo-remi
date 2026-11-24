@@ -92,6 +92,8 @@ TOOL_OPTION_KEYS = tuple(key for key in DEFAULTS if key.startswith("prompt_tools
 def option(name: str, default: Any = None) -> Any:
     """A setting's value (its default here when unset or unregistered)."""
 
+    from remi.setting_values import fit
+
     fallback = DEFAULTS.get(name, default)
     try:
         from modules import shared
@@ -99,7 +101,7 @@ def option(name: str, default: Any = None) -> Any:
         value = getattr(shared.opts, name, fallback)
     except Exception:
         return fallback
-    return fallback if value is None else value
+    return fit(fallback, value)  # a value of another kind (an /sdapi/v1/options write): the default
 
 
 def _files(directory: Callable[[], str | None], suffix: str) -> list[str]:

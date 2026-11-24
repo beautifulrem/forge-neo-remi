@@ -8,6 +8,7 @@ running). Data lives under ``<data path>/remi-data``.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import threading
 from collections.abc import Callable
@@ -187,7 +188,7 @@ class Services:
         from remi.server.settings import option
 
         try:
-            days = float(option("remi_upload_retention_days", 7))
+            days = float(_positive(option("remi_upload_retention_days", 7), 7))
             referenced = self.store.referenced_strings()
             removed = self.files.prune_uploads(days * 86400, keep=referenced)
             if removed:
@@ -249,6 +250,22 @@ _default: Services | None = None
 _default_lock = threading.Lock()
 
 
+def _positive(value: Any, default: float) -> float:
+    """A size or a span: a number above zero, else ``default`` (an upload limit of 0 refused every upload)."""
+
+    return value if type(value) in (int, float) and math.isfinite(value) and value > 0 else default
+
+
+def configured_upload_limit() -> int:
+    """The setting "Largest upload" in bytes. Read on every request (the body
+    limit): a value of the wrong kind, or none above zero, reads as the
+    default rather than failing or refusing them all."""
+
+    from remi.server.settings import option
+
+    return int(_positive(option("remi_upload_max_mb", 64), 64) * 1024 * 1024)
+
+
 def default_services(factory: Callable[[Path], Services] | None = None) -> Services:
     """The services of this process (created on first use)."""
 
@@ -256,7 +273,6 @@ def default_services(factory: Callable[[Path], Services] | None = None) -> Servi
     with _default_lock:
         if _default is None:
             from modules.paths_internal import data_path
-            from remi.server.settings import option
 
             # Not "remi": the data path defaults to the repository root, where remi/ is the package
             root = Path(data_path) / "remi-data"
@@ -266,7 +282,7 @@ def default_services(factory: Callable[[Path], Services] | None = None) -> Servi
                 use_process, use_gpus, use_mlx = worker_options_from_cmd_opts()
                 _default = Services.create(
                     root,
-                    max_upload_bytes=lambda: int(float(option("remi_upload_max_mb", 64)) * 1024 * 1024),
+                    max_upload_bytes=configured_upload_limit,
                     worker_process=use_process,
                     worker_gpus=use_gpus,
                     worker_mlx=use_mlx,

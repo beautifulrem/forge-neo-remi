@@ -69,9 +69,9 @@ def locales() -> list[dict[str, str]]:
 
 
 def default_locale() -> str | None:
-    from modules import shared
+    from remi.setting_values import setting
 
-    value = getattr(shared.opts, "localization", "None")
+    value = setting("localization", "None")
     return value if value and value != "None" and LOCALE_RE.match(value) else None
 
 

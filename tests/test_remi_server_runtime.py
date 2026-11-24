@@ -126,7 +126,11 @@ from modules import scripts
 from remi.jobs import run_inline
 from remi.server import Services, create_app, runtime
 from remi.server.auth import Auth
+from modules import shared
+# a setting of the wrong kind (hand-edited config.json) is repaired before the app reads it
+shared.opts.data.update(ui_tab_order=5, remi_upload_max_mb="x")
 runtime.prepare()
+assert shared.opts.data["ui_tab_order"] == [] and shared.opts.data["remi_upload_max_mb"] == 64, "settings not repaired"
 for name in ("modules.txt2img", "modules.img2img", "modules.postprocessing", "modules.extras", "modules.api.api", "remi.jobs.runner", "remi.server.gallery", "remi.server.routes.extensions"):
     __import__(name)
 app = create_app(services=Services.create({str(tmp_path / "remi")!r}, dispatch=run_inline), auth=Auth(), sdapi=True, start_services=False)

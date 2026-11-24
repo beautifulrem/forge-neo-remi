@@ -27,10 +27,13 @@ def prepare(*, models: bool = True) -> None:
     from modules import script_callbacks, shared, shared_items
     from modules.options import options_section
     from remi.server.settings import register_options
+    from remi.setting_values import repair
 
     script_callbacks.ui_settings_callback()
     shared.opts.data_labels.update(options_section(("callbacks", "Callbacks", "system"), {**shared_items.callbacks_order_settings()}))
     register_options()
+    # every setting is registered now: one of the wrong kind (config.json, /sdapi/v1/options) reads as its default
+    repair(shared.opts)
     apply_warning_filters(bool(getattr(shared.opts, "show_warnings", False)))
     shared.tab_names[:] = [title for _id, title in BUILTIN_TABS]
     initialize_runners()

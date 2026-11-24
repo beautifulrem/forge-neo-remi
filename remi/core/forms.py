@@ -49,9 +49,10 @@ SAME_SCHEDULER = "Use same scheduler"
 
 
 def resolution_step() -> int:
-    from modules import shared
+    from remi.setting_values import setting
 
-    return int(getattr(shared.opts, "res_step", 64) or 64)
+    step = int(setting("res_step", 64))  # a number of its kind, else 64
+    return step if step > 0 else 64
 
 
 def snap_resolution(value: float) -> int:

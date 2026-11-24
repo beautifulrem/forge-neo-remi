@@ -12,6 +12,7 @@ from remi.server import i18n
 from remi.server import models as m
 from remi.server.deps import ServicesDep, UserDep, not_found, opts, publish_options_changed
 from remi.server.runtime import BUILTIN_TABS
+from remi.setting_values import fit, setting
 
 router = APIRouter()
 
@@ -111,9 +112,8 @@ def _page(page_id: str) -> Any:
 def builtin_tabs() -> list[str]:
     """Route ids of the built-in tabs in the user's order, hidden ones out."""
 
-    options = opts()
-    order = {title: index for index, title in enumerate(getattr(options, "ui_tab_order", []) or [])}
-    hidden = set(getattr(options, "hidden_tabs", []) or [])
+    order = {title: index for index, title in enumerate(setting("ui_tab_order", []))}
+    hidden = set(setting("hidden_tabs", []))
     tabs = sorted(BUILTIN_TABS, key=lambda item: order.get(item[1], len(order) + BUILTIN_TABS.index(item)))
     return [route for route, title in tabs if title not in hidden]
 
@@ -122,9 +122,8 @@ def models_summary() -> dict[str, Any]:
     from remi import model_selection
     from remi.networks import module_roots
 
-    options = opts()
     held = model_selection.held()  # picked during the running job: shown as selected
-    selected = lambda key: held[key] if key in held else getattr(options, key, None)  # noqa: E731
+    selected = lambda key: held[key] if key in held else setting(key)  # noqa: E731
     modules = [path for path in selected("forge_additional_modules") or [] if isinstance(path, str)]
     roots = module_roots()
 
@@ -138,7 +137,7 @@ def models_summary() -> dict[str, Any]:
         "vae": vae[0] if vae else None,
         "text_encoders": [os.path.basename(path) for path in modules if not under(path, "vae")],
         "modules": [os.path.basename(path) for path in modules],
-        "preset": getattr(options, "forge_preset", None),
+        "preset": setting("forge_preset"),
         "unet_dtype": selected("forge_unet_storage_dtype"),
     }
 
@@ -171,7 +170,7 @@ def bootstrap(request: Request, services: ServicesDep, user: UserDep) -> dict[st
         "pages": pages,
         "locales": i18n.locales(),
         "locale": i18n.default_locale(),
-        "options": {key: held[key] if key in held else options.data.get(key, info.default) for key in BOOTSTRAP_OPTIONS if (info := options.data_labels.get(key)) is not None},
+        "options": {key: held[key] if key in held else fit(info.default, options.data.get(key, info.default)) for key in BOOTSTRAP_OPTIONS if (info := options.data_labels.get(key)) is not None},
         "models": models_summary(),
         "not_ported": not_ported(),
         "auth": {"required": auth.required, "user": user},
@@ -302,7 +301,7 @@ def preset_list() -> dict[str, Any]:
     from modules.anima_presets import PRESETS, SAFE_BASE_AESTHETIC_LABEL
     from remi.core.presets import ui_preset_choices
 
-    return {"anima": [SAFE_BASE_AESTHETIC_LABEL, *[label for label in PRESETS if label != SAFE_BASE_AESTHETIC_LABEL]], "forge": ui_preset_choices(), "current": getattr(opts(), "forge_preset", None)}
+    return {"anima": [SAFE_BASE_AESTHETIC_LABEL, *[label for label in PRESETS if label != SAFE_BASE_AESTHETIC_LABEL]], "forge": ui_preset_choices(), "current": setting("forge_preset")}
 
 
 @router.get("/presets/{name:path}", response_model=m.ActionPatch, summary="The form patch of an Anima preset")

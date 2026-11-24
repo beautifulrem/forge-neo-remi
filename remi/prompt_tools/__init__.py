@@ -156,7 +156,7 @@ def refresh() -> None:
 def _int_option(name: str) -> int:
     try:
         return int(float(opt.option(name)))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return int(opt.DEFAULTS[name])
 
 

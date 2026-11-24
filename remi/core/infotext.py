@@ -66,6 +66,10 @@ def parse_infotext(text: str, tab: str | None = None, *, ctx: Context | None = N
     text = text if isinstance(text, str) else ""
     if not text.strip():
         text = last_generation_text()
+    if skip_fields is None:  # the setting, read as a list of names (upstream would read any value)
+        from remi.setting_values import setting
+
+        skip_fields = setting("infotext_skip_pasting", [])
     params = infotext_utils.parse_generation_parameters(text, skip_fields)
     script_callbacks.infotext_pasted_callback(text, params)
     tab = tab or detect_tab(params)

@@ -17,6 +17,7 @@ from collections.abc import Callable, Mapping
 from html.parser import HTMLParser
 from typing import Any
 
+from remi.setting_values import fit
 from remi.ui import nodes
 from remi.ui.context import Context, ensure_context
 from remi.ui.schema import SCHEMA_VERSION, jsonable
@@ -211,7 +212,8 @@ def settings_schema(opts, ctx: Context | None = None, *, categories=None, quicks
             open_rows[section] = None
         items = by_section[section]["items"]
 
-        value = held[key] if key in held else getattr(opts, key)  # the stored value, else the default
+        # the stored value, else the default (also for a value of another kind: the field can set it right)
+        value = held[key] if key in held else fit(info.default, getattr(opts, key))
         try:
             node = setting_node(key, info, value)
         except Exception as error:  # an extension option this exporter cannot read
@@ -240,8 +242,8 @@ def settings_schema(opts, ctx: Context | None = None, *, categories=None, quicks
     return {
         "version": SCHEMA_VERSION,
         "categories": result_categories,
-        "quicksettings": list(quicksettings if quicksettings is not None else getattr(opts, "quicksettings_list", []) or []),
-        "values": {key: jsonable(held[key] if key in held else opts.data.get(key, info.default)) for key, info in stored.items()},
+        "quicksettings": list(quicksettings if quicksettings is not None else fit([], getattr(opts, "quicksettings_list", []))),
+        "values": {key: jsonable(held[key] if key in held else fit(info.default, opts.data.get(key, info.default))) for key, info in stored.items()},
         "defaults": {key: jsonable(info.default) for key, info in stored.items()},
     }
 

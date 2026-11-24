@@ -40,7 +40,8 @@ def register_options(opts: Any = None) -> None:
 
 
 def option(name: str, default: Any) -> Any:
-    from modules import shared
+    """A setting read as the kind of ``default`` (:mod:`remi.setting_values`)."""
 
-    value = getattr(shared.opts, name, default)
-    return default if value is None else value
+    from remi.setting_values import setting
+
+    return setting(name, default)

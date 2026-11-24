@@ -444,21 +444,30 @@ def disabled_reason() -> str | None:
 
     if shared.cmd_opts.disable_all_extensions:
         return "--disable-all-extensions"
-    if shared.opts.disable_all_extensions == "all":
+    if _disable_all() == "all":
         return "all"
     if shared.cmd_opts.disable_extra_extensions:
         return "--disable-extra-extensions"
-    if shared.opts.disable_all_extensions == "extra":
+    if _disable_all() == "extra":
         return "extra"
     return None
 
 
+def _disable_all() -> str:
+    """The "disable extensions" setting: "none", "extra" or "all"."""
+
+    from remi.setting_values import setting
+
+    value = setting("disable_all_extensions", "none")
+    return value if value in ("none", "extra", "all") else "none"
+
+
 def listing() -> dict[str, Any]:
-    from modules import restart, shared
+    from modules import restart
 
     return {
         "items": [info(ext) for ext in all_extensions()],
-        "disable_all": shared.opts.disable_all_extensions,
+        "disable_all": _disable_all(),
         "access": access_allowed(),
         "restartable": restart.is_restartable(),
         "disabled_by": disabled_reason(),
