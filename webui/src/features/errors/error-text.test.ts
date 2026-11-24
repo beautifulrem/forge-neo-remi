@@ -24,6 +24,23 @@ describe("errorText", () => {
     expect(errorText(failed(status))).toBe(text)
   })
 
+  // The model bar, a checkpoint card and the quick settings said only "The server rejected the
+  // request." when --freeze-settings (or a narrower form) refused the change.
+  it("gives the reasons a 422 lists, in the UI language", async () => {
+    const frozen = new ApiError(422, "HTTP 422", { errors: [{ owner: "settings", param: "sd_model_checkpoint", message: "changing settings is disabled (--freeze-settings)" }] })
+    expect(errorText(frozen)).toBe("changing settings is disabled (--freeze-settings)")
+    expect(failureText(frozen)).toBe("changing settings is disabled (--freeze-settings)")
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", "changing settings is disabled (--freeze-settings)", "已禁止修改设置（--freeze-settings）")
+    await i18n.changeLanguage("zh-CN")
+    try {
+      expect(errorText(frozen)).toBe("已禁止修改设置（--freeze-settings）")
+    } finally {
+      await i18n.changeLanguage("en")
+    }
+    expect(errorText(frozen, { 422: "Their own sentence." })).toBe("Their own sentence.")
+  })
+
   it("falls back on the status class for other codes", () => {
     expect(errorText(failed(500))).toBe("The server ran into an error (500).")
     expect(errorText(failed(502))).toBe("The server ran into an error (502).")

@@ -3,10 +3,11 @@
  * error details are English (they are for logs and API clients), so the
  * pages show a sentence chosen by status code instead; callers pass their
  * own (already translated) sentence for the statuses that mean something
- * specific to them.
+ * specific to them. A 422 that lists the refused values says why: those
+ * messages are catalog keys (`validationText`).
  */
 import { toast } from "sonner"
-import { ApiError } from "@/api/http"
+import { ApiError, validationErrors } from "@/api/http"
 import { t } from "@/i18n"
 import type { ValidationError } from "@/ui/schema"
 
@@ -29,8 +30,10 @@ export function errorText(error: unknown, texts: StatusTexts = {}): string {
       return t("The file is too large.")
     case 415:
       return t("This file cannot be read as an image.")
-    case 422:
-      return t("The server rejected the request.")
+    case 422: {
+      const errors = validationErrors(error)
+      return errors ? validationText(errors) : t("The server rejected the request.")
+    }
     case 503:
       return t("The server is busy; try again shortly.")
     default:
