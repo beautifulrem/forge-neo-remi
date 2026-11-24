@@ -9,7 +9,7 @@
  * result); it is decoration only, never part of the draft or the prompt.
  */
 import { Eraser, HelpCircle, Image as ImageIcon, ImagePlus, Maximize, ZoomIn, ZoomOut } from "@/components/icons"
-import { type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react"
+import { type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
@@ -33,7 +33,8 @@ type Size = { width: number; height: number }
 
 function useElementSize(element: HTMLElement | null): Size {
   const [size, setSize] = useState<Size>({ width: 0, height: 0 })
-  useEffect(() => {
+  // measured before the first paint: after it, the stage would show at 0 px, then jump to its size
+  useLayoutEffect(() => {
     if (!element) return
     const update = () => setSize({ width: element.clientWidth, height: element.clientHeight })
     update()

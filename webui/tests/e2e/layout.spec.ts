@@ -576,6 +576,27 @@ for (const [width, height] of [
   })
 }
 
+// JSON Builder measured its canvas after the first paint: a load could show a 2 px stage, then the
+// whole one (a layout shift of 0.136). The size it has when the canvas is first inserted, before
+// anything can paint (a microtask after the commit), is the size the first frame shows.
+test("JSON Builder's canvas opens at its size", async ({ page }) => {
+  await page.addInitScript(() => {
+    const found = new MutationObserver(() => {
+      const stage = document.querySelector("[data-testid=json-builder-canvas] > div")
+      if (!stage) return
+      found.disconnect()
+      ;(window as unknown as { firstStage: number }).firstStage = stage.getBoundingClientRect().height
+    })
+    found.observe(document, { childList: true, subtree: true })
+  })
+  await openRoute(page, "ext/json-builder")
+  const canvas = page.getByRole("main").getByTestId("json-builder-canvas")
+  await expect(canvas).toBeVisible()
+  const settled = await canvas.locator(":scope > div").first().evaluate((stage) => stage.getBoundingClientRect().height)
+  expect(settled).toBeGreaterThan(100)
+  expect(await page.evaluate(() => (window as unknown as { firstStage: number }).firstStage)).toBe(settled)
+})
+
 /** Boxes that scroll sideways though only meant to scroll up and down, and the page itself. */
 async function sidewaysScrolls(page: Page): Promise<string[]> {
   return page.evaluate(() => {
