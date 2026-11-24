@@ -354,6 +354,71 @@ def test_an_output_the_scan_indexed_during_its_job_gets_the_job(tmp_path):
     store.close()
 
 
+def _ignores_case(folder: Path) -> bool:
+    probe = folder / "CaseProbe"
+    probe.write_bytes(b"")
+    try:
+        return (folder / "caseprobe").exists()
+    finally:
+        probe.unlink()
+
+
+def test_one_output_under_two_spellings_is_one_record(tmp_path):
+    """macOS keeps the spelling it is given on a volume that ignores case: two settings
+    naming one folder differently made two gallery records of one image, and removing
+    one from the gallery left the other (and the next scan brought it back)."""
+
+    if not _ignores_case(tmp_path):
+        pytest.skip("this volume tells letter case apart")
+    folder = tmp_path / "Saved" / "txt2img"
+    folder.mkdir(parents=True)
+    (folder / "0001.png").write_bytes(png())
+    alias = tmp_path / "saved" / "TXT2IMG"
+    store = FileStore(tmp_path / "data")
+    try:
+        first = store.register_output(folder / "0001.png", job_id="job1", tab="txt2img")
+        assert store.register_output(alias / "0001.png").id == first.id
+        assert store.scan_outputs([alias]) == 0
+        assert store._db.execute("SELECT count(*) FROM files WHERE kind = 'output'").fetchone() == (1,)
+        store.delete(first.id)  # out of the gallery, kept on disk
+        assert store.is_removed(alias / "0001.png")
+        assert store.scan_outputs([alias, folder]) == 0
+        # a job writing the image again brings it back, whichever spelling it uses
+        again = store.register_output(alias / "0001.png", job_id="job2")
+        assert not store.is_removed(folder / "0001.png") and store.scan_outputs([folder]) == 0
+        assert store.get(again.id) is not None
+    finally:
+        store.close()
+
+
+def test_two_files_that_differ_only_in_case_stay_two_records(tmp_path):
+    if _ignores_case(tmp_path):
+        pytest.skip("this volume ignores letter case")
+    (tmp_path / "A.png").write_bytes(png())
+    (tmp_path / "a.png").write_bytes(png(color=(1, 2, 3)))
+    store = FileStore(tmp_path / "data")
+    try:
+        upper = store.register_output(tmp_path / "A.png")
+        assert store.register_output(tmp_path / "a.png").id != upper.id
+        store.delete(upper.id)
+        assert store.is_removed(tmp_path / "A.png") and not store.is_removed(tmp_path / "a.png")
+    finally:
+        store.close()
+
+
+def test_the_category_follows_its_folder_under_another_spelling(tmp_path):
+    from remi.library import category_of
+
+    if not _ignores_case(tmp_path):
+        pytest.skip("this volume tells letter case apart")
+    grids = tmp_path / "Outputs" / "txt2img-grids"
+    grids.mkdir(parents=True)
+    (grids / "grid.png").write_bytes(png())
+    folders = [("grids", os.path.realpath(tmp_path / "outputs" / "txt2img-grids"))]
+    assert category_of(str(grids / "grid.png"), "txt2img", folders) == "grids"
+    assert category_of(str(tmp_path / "Outputs" / "other.png"), "txt2img", folders) == "txt2img"
+
+
 def test_media_files_are_not_gzipped(server):
     file_id = upload(server.client, png(size=(512, 512))).json()["id"]
     served = server.client.get(f"/api/v2/files/{file_id}", headers={"Accept-Encoding": "gzip"})

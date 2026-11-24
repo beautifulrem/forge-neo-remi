@@ -142,10 +142,26 @@ def output_folders() -> list[tuple[str, str]]:
     return found
 
 
+def _inside(path: str, folder: str) -> bool:
+    """``path`` is ``folder`` or below it, also under another spelling of the
+    folder on a volume that ignores case (macOS keeps the spelling it is given)."""
+
+    prefix = folder.rstrip(os.sep)
+    if path == folder or path.startswith(prefix + os.sep):
+        return True
+    lowered = path.lower()
+    if len(lowered) != len(path) or not (lowered == prefix.lower() or lowered.startswith(prefix.lower() + os.sep)):
+        return False
+    try:
+        return os.path.samefile(path[: len(prefix)], prefix)
+    except OSError:
+        return False
+
+
 def category_of(record_path: str, tab: str | None, folders: Iterable[tuple[str, str]]) -> str:
     path = os.path.realpath(record_path)
     for category, folder in folders:
-        if path == folder or path.startswith(folder.rstrip(os.sep) + os.sep):
+        if _inside(path, folder):
             if category in ("grids", "saved") or tab is None:
                 return category
             break

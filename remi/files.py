@@ -191,9 +191,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS files_kind_path ON files(kind, path);
 CREATE INDEX IF NOT EXISTS files_sha ON files(sha256);
 CREATE INDEX IF NOT EXISTS files_job ON files(job_id, kind, created);
 CREATE TABLE IF NOT EXISTS removed (path TEXT PRIMARY KEY);
+CREATE INDEX IF NOT EXISTS files_path_nocase ON files(path COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS removed_path_nocase ON removed(path COLLATE NOCASE);
 """
 # ``removed``: outputs taken out of the gallery but kept on disk (the output
-# folder scan skips them)
+# folder scan skips them). The NOCASE indexes find an output stored under
+# another spelling of its path (see `FileStore._output_at`).
 
 _COLUMNS = "id, kind, path, name, mime, size, width, height, created, job_id, tab, infotext"
 
@@ -264,6 +267,26 @@ class FileStore:
     def _by_path(self, kind: str, path: str) -> FileRecord | None:
         with self._lock:
             return self._record(self._db.execute(f"SELECT {_COLUMNS} FROM files WHERE kind = ? AND path = ?", (kind, path)).fetchone())
+
+    def _output_at(self, path: str) -> FileRecord | None:
+        """The output record of the file at ``path``, also when it is stored
+        under another spelling of that file: on a volume that ignores case,
+        macOS keeps the spelling it is given (two settings can name one
+        folder differently). Only ASCII letters are compared without case."""
+
+        record = self._by_path("output", path)
+        if record is not None:
+            return record
+        with self._lock:
+            rows = self._db.execute(f"SELECT {_COLUMNS} FROM files WHERE path = ? COLLATE NOCASE AND kind = 'output'", (path,)).fetchall()
+        return next((record for record in map(self._record, rows) if record is not None and _same_file(record.path, path)), None)
+
+    def _removed_as(self, path: str) -> list[str]:
+        """The ``removed`` rows naming the file at ``path``, under its spelling or another."""
+
+        with self._lock:
+            rows = [row[0] for row in self._db.execute("SELECT path FROM removed WHERE path = ? COLLATE NOCASE", (path,)).fetchall()]
+        return [row for row in rows if row == path or _same_file(row, path)]
 
     def delete(self, file_id: str, *, delete_file: bool = False, created_before: float | None = None) -> bool:
         """Forget a file; uploads and unsaved outputs are deleted, other
@@ -420,9 +443,10 @@ class FileStore:
         """Index a generated file (idempotent per path)."""
 
         path = os.path.realpath(path)
+        stale = self._removed_as(path)
         with self._lock:
-            self._db.execute("DELETE FROM removed WHERE path = ?", (path,))
-        existing = self._by_path("output", path)
+            self._db.executemany("DELETE FROM removed WHERE path = ?", [(removed,) for removed in stale])
+        existing = self._output_at(path)
         if existing is not None and job_id and existing.job_id not in (None, job_id):
             # Another job's output: this job wrote over it (a fixed file name, "Override"). A record
             # of its own, so the old job's file id neither shows nor deletes this image
@@ -433,7 +457,7 @@ class FileStore:
             try:
                 return self._insert(record)
             except sqlite3.IntegrityError:  # registered concurrently (a folder scan)
-                existing = self._by_path("output", path)
+                existing = self._output_at(path)
                 if existing is None:
                     return record
         return self._claim(existing, job_id, tab, infotext, width, height, created) if job_id and existing.job_id is None else existing
@@ -539,7 +563,7 @@ class FileStore:
             if added >= limit:
                 break
             real = os.path.realpath(path)
-            if self._by_path("output", real) is not None or self._was_removed(real):
+            if self._output_at(real) is not None or self._was_removed(real):
                 continue
             infotext = width = height = None
             try:
@@ -553,8 +577,7 @@ class FileStore:
         return added
 
     def _was_removed(self, path: str) -> bool:
-        with self._lock:
-            return self._db.execute("SELECT 1 FROM removed WHERE path = ?", (path,)).fetchone() is not None
+        return bool(self._removed_as(path))
 
     def is_removed(self, path: str | os.PathLike) -> bool:
         """``path`` was taken out of the gallery (kept on disk)."""
@@ -653,6 +676,13 @@ def _image_size(path: str | os.PathLike, *, max_pixels: int | None = None) -> tu
         # never sent to the client
         log.debug("not a readable image: %s", error)
         raise FileError("not a readable image", 415) from error
+
+
+def _same_file(a: str, b: str) -> bool:
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
 
 
 def _walk_images(directories: Iterable[str | os.PathLike]) -> Iterator[str]:
