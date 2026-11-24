@@ -289,7 +289,7 @@ generated interfaces (sources: Linear's
   room around its controls so their focus rings are not clipped. Toolbar
   controls (header, settings, extensions, gallery) are one 28 px height.
   A pressed toggle wears the selection tint (`--primary` text on a 15 %
-  wash, hovered too), set once in `components/ui/toggle.tsx`; a
+  wash, 20 % in the dark theme, hovered too), set once in `components/ui/toggle.tsx`; a
   near-black tone alone does not show a lone toggle's state.
   Truncated names and URLs carry their full text in a `title`. A form column (the generate parameters, an
   extension page, the JSON Builder's side column, the Extensions list) is an inspector, not a
@@ -706,8 +706,14 @@ mode's schema is prefetched).
   frames, so they keep going with the tab in the background. Submits in flight are a
   counter (an Interrupt cancels every one of them when it answers; a second
   Ctrl/Cmd+Enter while one is pending queues nothing). Jobs in flight are
-  kept in `localStorage` (`remi-run:<tab>`: `{jobs, forever, repeatLeft}`,
-  written from the run state) and re-attached after a reload (`restore.ts`):
+  kept in `sessionStorage` (`remi-run:<tab>`: `{jobs, forever, repeatLeft}`,
+  written from the run state), which a reload keeps and other tabs do not
+  share, so a tab opened meanwhile never takes a running loop over. A
+  duplicated tab starts with a copy of that storage, so before resuming a
+  loop it asks the browser's other tabs on the `remi-run-loops`
+  BroadcastChannel whether one of them runs it (`loop-owner.ts`) and leaves
+  it to that tab (not Web Locks: a server reached with `--listen` over plain
+  HTTP is not a secure context). The jobs are re-attached after a reload (`restore.ts`):
   attached first, then each looked up with `GET /jobs/{id}`, so events
   arriving meanwhile apply; finished ones go to the history. After the
   lookups, Generate forever and the runs left of Generate several times
