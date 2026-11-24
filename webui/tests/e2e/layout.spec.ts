@@ -597,6 +597,27 @@ test("JSON Builder's canvas opens at its size", async ({ page }) => {
   expect(await page.evaluate(() => (window as unknown as { firstStage: number }).firstStage)).toBe(settled)
 })
 
+// A dialog taller than a short window ran off both edges: held sideways (844×390), JSON Builder's
+// "Load prompt" dialog had its title, Close and Load buttons outside the window.
+test("a dialog fits a phone held sideways and scrolls inside", async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 })
+  await openRoute(page, "ext/json-builder")
+  await page.getByRole("button", { name: "Load prompt…" }).click()
+  const dialog = page.getByRole("dialog", { name: "Load prompt" })
+  await expect(dialog).toBeVisible()
+  await page.waitForTimeout(300) // the opening zoom
+  const box = (await dialog.boundingBox())!
+  expect(Math.round(box.y), "the dialog's top").toBeGreaterThanOrEqual(0)
+  expect(Math.round(box.y + box.height), "the dialog's bottom").toBeLessThanOrEqual(390)
+  const load = dialog.getByRole("button", { name: "Load", exact: true })
+  await load.scrollIntoViewIfNeeded()
+  const hit = await load.evaluate((button) => {
+    const rect = button.getBoundingClientRect()
+    return button.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2))
+  })
+  expect(hit).toBe(true)
+})
+
 /** Boxes that scroll sideways though only meant to scroll up and down, and the page itself. */
 async function sidewaysScrolls(page: Page): Promise<string[]> {
   return page.evaluate(() => {

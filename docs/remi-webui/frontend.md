@@ -272,7 +272,10 @@ imperatively).
   registry ships); app code imports it from `@/lib/utils`. Local fixes to
   vendored components: scalar sliders render one thumb and forward
   `getAriaLabel`; a select's value ellipsizes (line-clamp does nothing on
-  the flex value); `number-field.tsx` is ours.
+  the flex value); a dialog or alert dialog is no taller than the window
+  less 2rem and scrolls inside (up and down only; the full-screen editor
+  opts out with `max-h-none`), and the command dialog no taller than the
+  room below its top, its list shrinking; `number-field.tsx` is ours.
 
 ### Visual rules
 

@@ -203,6 +203,8 @@ test.describe("image editor", () => {
     const dialog = page.getByRole("dialog", { name: "Source image" })
     await expect(dialog).toBeVisible()
     await expect(dialog.getByRole("img", { name: /^Image editor, 640×480/ })).toBeVisible()
+    // full screen: the window's height, not the height cap of other dialogs
+    await expect.poll(async () => Math.round((await dialog.boundingBox())!.height)).toBe(page.viewportSize()!.height) // once its zoom ends
     await page.keyboard.press("Escape")
     await expect(dialog).toBeHidden()
   })
