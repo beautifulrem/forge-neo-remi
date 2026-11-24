@@ -694,16 +694,20 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
         for (const [key, value] of Object.entries(vals)) patch[`${owner}.${key}`] = { value }
       }
       const conflicts = b.check_conflicts === false ? {} : conflictPatch(mergedCore, mergedScripts, undefined)
-      // as the server: the derived values join the patch and the merged form
+      // as the server (remi/recipes.py apply_recipe): the recipe's values stay as they are, and a
+      // control joins the patch only when the conflict rules change its value in the merged form
       for (const [target, entry] of Object.entries(conflicts)) {
-        const dot = target.indexOf(".")
-        if (target.startsWith("__") || dot <= 0 || !entry || typeof entry !== "object") continue
-        patch[target] = { ...(patch[target] as object | undefined), ...entry }
-        if ("value" in entry) {
-          const owner = target.slice(0, dot)
-          const values = owner === "core" ? mergedCore : (mergedScripts[owner] ??= {})
-          values[target.slice(dot + 1)] = (entry as { value: unknown }).value
-        }
+        if (target.startsWith("__") || !entry || typeof entry !== "object" || !("value" in entry)) continue
+        const key = target.includes(".") ? target : `core.${target}`
+        if (key in patch) continue
+        const dot = key.indexOf(".")
+        const owner = key.slice(0, dot)
+        const param = key.slice(dot + 1)
+        const values = owner === "core" ? mergedCore : mergedScripts[owner]
+        const value = (entry as { value: unknown }).value
+        if (!values || !Object.hasOwn(values, param) || JSON.stringify(values[param]) === JSON.stringify(value)) continue
+        patch[key] = { value }
+        values[param] = value
       }
       const activeCaps = mockCapabilitiesForPreset(String(bootstrap.options.forge_preset ?? "xl")).capabilities
       const missingCaps = recipe.capabilities.filter((cap) => !activeCaps.includes(cap))
