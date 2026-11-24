@@ -177,6 +177,25 @@ export const useCanvasStaging = create<StagingState>()((set) => ({
   setStayOnCanvas: (enabled) => set({ stayOnCanvas: enabled }),
 }))
 
+/** Docs whose staging bar takes the focus when it shows next, with when that was asked. */
+const focusRequests = new Map<string, number>()
+
+/**
+ * Asks the doc's staging bar to take the focus when it shows: staged by a button that goes away
+ * with the view it sits in (the focus would fall to the page). Results staged on their own (a
+ * finished run) never ask: the user may be typing a prompt.
+ */
+export function requestStagingFocus(docKey: string) {
+  focusRequests.set(docKey, Date.now())
+}
+
+/** Whether the doc's staging bar should take the focus now (once, and only shortly after asked). */
+export function takeStagingFocus(docKey: string): boolean {
+  const asked = focusRequests.get(docKey)
+  focusRequests.delete(docKey)
+  return asked !== undefined && Date.now() - asked < 5_000
+}
+
 let wired = false
 
 /**

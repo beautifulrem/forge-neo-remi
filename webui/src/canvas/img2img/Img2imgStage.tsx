@@ -13,7 +13,7 @@ import { useSession } from "@/features/gallery/session-store"
 import { cn } from "@/lib/utils"
 import { ImageEditor } from "../ImageEditor"
 import { preloadImageEditor } from "../preload"
-import { MAX_STAGED_CANDIDATES, useCanvasStaging, wireImg2imgStaging } from "../state/staging"
+import { MAX_STAGED_CANDIDATES, requestStagingFocus, useCanvasStaging, wireImg2imgStaging } from "../state/staging"
 import { useImg2imgStageView } from "./stage-view"
 import { IMG2IMG, setCoreValues, setSizeFromImage, setSourceImage, useImg2imgBinding, useImg2imgEditorProps, useModeLayers } from "./use-img2img"
 
@@ -100,6 +100,8 @@ export function Img2imgStage({ result, actions, leading, trailing, className }: 
     if (!latestJobId) return
     const batch = img2imgItems.filter((item) => item.jobId === latestJobId).slice(0, MAX_STAGED_CANDIDATES)
     if (batch.length === 0) return
+    // This button goes away with the Result view: the candidate bar takes the focus.
+    requestStagingFocus(IMG2IMG)
     useCanvasStaging.getState().stageCandidates(
       IMG2IMG,
       batch.map((item) => ({ fileId: item.fileId, width: item.width, height: item.height, infotext: item.infotext })),

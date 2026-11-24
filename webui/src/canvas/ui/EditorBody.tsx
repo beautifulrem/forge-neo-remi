@@ -781,23 +781,6 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
             </div>
           ) : null}
 
-          {staging && stagedCandidate ? (
-            <div className="pointer-events-none absolute inset-x-2 bottom-14 flex justify-center">
-              <StagingBar
-                session={staging}
-                busy={busy}
-                onPrev={() => useCanvasStaging.getState().prev(editor.docKey)}
-                onNext={() => useCanvasStaging.getState().next(editor.docKey)}
-                onSelect={(idx) => useCanvasStaging.getState().select(editor.docKey, idx)}
-                onOpacityChange={(val) => useCanvasStaging.getState().setOpacity(editor.docKey, val)}
-                onCompareOriginalChange={(val) => useCanvasStaging.getState().setCompareOriginal(editor.docKey, val)}
-                onToggleSplit={() => useCanvasStaging.getState().toggleSplitCompare(editor.docKey)}
-                onAccept={acceptStaged}
-                onDiscardCurrent={() => useCanvasStaging.getState().discardCurrent(editor.docKey)}
-                onDiscardAll={() => useCanvasStaging.getState().discardAll(editor.docKey)}
-              />
-            </div>
-          ) : null}
 
           <div className="absolute inset-x-2 bottom-2 flex items-end justify-between gap-2">
             <div role="toolbar" aria-label={t("History and zoom")} data-toast-obstacle onKeyDown={toolbarKeys("horizontal")} className={cn(PANEL, "flex h-10 items-center gap-0.5 px-1")}>
@@ -872,6 +855,27 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
               </IconButton>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {/* A staged candidate waits for a decision: its bar stays in view without hover (the other
+        overlays fade with `forge_canvas_toolbar_always` off). */}
+      {hasImage && staging && stagedCandidate ? (
+        <div className="@container/staging pointer-events-none absolute inset-x-2 bottom-14 z-20 flex justify-center">
+          <StagingBar
+            session={staging}
+            docKey={editor.docKey}
+            busy={busy}
+            onPrev={() => useCanvasStaging.getState().prev(editor.docKey)}
+            onNext={() => useCanvasStaging.getState().next(editor.docKey)}
+            onSelect={(idx) => useCanvasStaging.getState().select(editor.docKey, idx)}
+            onOpacityChange={(val) => useCanvasStaging.getState().setOpacity(editor.docKey, val)}
+            onCompareOriginalChange={(val) => useCanvasStaging.getState().setCompareOriginal(editor.docKey, val)}
+            onToggleSplit={() => useCanvasStaging.getState().toggleSplitCompare(editor.docKey)}
+            onAccept={acceptStaged}
+            onDiscardCurrent={() => useCanvasStaging.getState().discardCurrent(editor.docKey)}
+            onDiscardAll={() => useCanvasStaging.getState().discardAll(editor.docKey)}
+          />
         </div>
       ) : null}
 

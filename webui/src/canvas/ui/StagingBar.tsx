@@ -5,15 +5,18 @@
  * losing zoom/pan.
  */
 import { Check, ChevronLeft, ChevronRight, Columns2, Eye, EyeOff, Trash2, X } from "@/components/icons"
+import { useEffect, useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { cn } from "@/lib/utils"
-import type { StagedCandidate, StagingSession } from "../state/staging"
+import { type StagedCandidate, type StagingSession, takeStagingFocus } from "../state/staging"
 import { Divider, IconButton, PANEL } from "./controls"
 
 type StagingBarProps = {
   session: StagingSession
+  /** The canvas document, for a focus request (`requestStagingFocus`). */
+  docKey: string
   busy?: boolean
   onPrev: () => void
   onNext: () => void
@@ -28,6 +31,7 @@ type StagingBarProps = {
 
 export function StagingBar({
   session,
+  docKey,
   busy = false,
   onPrev,
   onNext,
@@ -40,18 +44,28 @@ export function StagingBar({
   onDiscardAll,
 }: StagingBarProps) {
   const { t } = useTranslation()
+  const bar = useRef<HTMLDivElement>(null)
   const count = session.candidates.length
   const active = session.candidates[session.index]
+  // The bar itself takes it, not Accept or Discard: a held Enter must not decide.
+  useEffect(() => {
+    if (takeStagingFocus(docKey)) bar.current?.focus()
+  }, [docKey])
   if (!active) return null
 
   return (
     <div
+      ref={bar}
       role="toolbar"
       aria-label={t("Canvas staging")}
+      tabIndex={-1}
       data-toast-obstacle
       className={cn(
         PANEL,
-        "flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-1 px-2 py-1",
+        // One row: as its `@container/staging` (the canvas width) narrows, the candidate dots go
+        // first (the counter and arrows stay), then the fader, then Accept's label (its icon stays,
+        // named). Measured in English, the longest: 657, 553, 431 and 302 px of bar.
+        "flex max-w-[calc(100%-0.5rem)] items-center gap-1 px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
       )}
     >
       <IconButton label={t("Previous candidate")} keys={["←"]} onClick={onPrev} disabled={count <= 1 || busy}>
@@ -66,7 +80,7 @@ export function StagingBar({
           <span className="sr-only">{t("Candidate {{index}} of {{count}}", { index: session.index + 1, count })}</span>
         </span>
         {count > 1 ? (
-          <div className="hidden items-center sm:flex">
+          <div className="hidden items-center @[43rem]/staging:flex">
             {session.candidates.map((candidate, idx) => (
               <button
                 key={`${candidate.fileId}-${idx}`}
@@ -95,7 +109,7 @@ export function StagingBar({
 
       <Divider />
 
-      <div className="hidden items-center gap-1.5 px-1 @md:flex">
+      <div className="hidden items-center gap-1.5 px-1 @[36.5rem]/staging:flex">
         <Slider
           value={[Math.round(session.opacity * 100)]}
           min={0}
@@ -132,12 +146,14 @@ export function StagingBar({
         size="sm"
         // the editor sits beside Generate (the screen's lamp): accepting is the bar's lead, not a second lamp
         variant="secondary"
-        className="h-7 gap-1 px-2.5 text-xs font-medium"
+        className="h-7 gap-1 px-2 text-xs font-medium @[29rem]/staging:px-2.5"
+        aria-label={t("Accept as base layer")}
+        title={t("Accept as base layer")}
         disabled={busy}
         onClick={() => onAccept(active)}
       >
         <Check className="size-3.5" aria-hidden />
-        <span>{t("Accept as base layer")}</span>
+        <span className="hidden @[29rem]/staging:inline">{t("Accept as base layer")}</span>
       </Button>
 
       <IconButton label={t("Discard candidate")} keys={["Esc"]} onClick={onDiscardCurrent} disabled={busy}>

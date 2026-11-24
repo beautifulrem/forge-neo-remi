@@ -311,7 +311,8 @@ generated interfaces (sources: Linear's
   page title; the settings list's category headings take the 20 px size,
   because each category reads as a page of its own in one long scroller. The slider is a fader: a recessed groove filled with
   `--primary` up to the value and a squared cap with a centre notch (the
-  switch's shape family; `--slider-*` tokens).
+  switch's shape family; `--slider-*` tokens). It fills its row; a width
+  the caller gives (`w-18`) replaces that.
   Radii are concentric: a child's radius is its parent's minus the padding
   between them, never below `sm`. Floating lists (menus, selects, combobox,
   popover, command) are `rounded-xl` with `p-1`, so their items stay
@@ -864,6 +865,15 @@ chunk, `preloadImageEditor()` fetches it early), the img2img integration
   `forge_canvas_consistent_brush`. Canvases follow `devicePixelRatio` (and
   moves between screens). `forge_canvas_plain(_color)` and
   `forge_canvas_toolbar_always` are honoured.
+- **Candidates** (the staging bar): staged results wait for Accept or
+  Discard, so their bar stays in view while the other overlays fade
+  (`forge_canvas_toolbar_always` off). It keeps to one row: as the canvas
+  narrows (`@container/staging`) the candidate dots go first (the counter
+  and arrows stay), then the opacity fader, then Accept's label (the icon
+  stays, named). Staged with "Stage latest result", whose button leaves with
+  the Result view, the bar itself takes the focus (`requestStagingFocus`),
+  never Accept or Discard, which a held Enter would press; results staged by
+  a finished run leave the focus where it is.
 - **Keys** (pointer over the editor - entered, moved or pressed inside, or
   `:hover`, so an editor that appears under a resting pointer takes them -
   or focus inside it, never while typing):

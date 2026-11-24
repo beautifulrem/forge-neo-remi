@@ -420,3 +420,40 @@ test.describe("the img2img stage toolbar", () => {
     })
   }
 })
+
+test.describe("the canvas staging bar", () => {
+  for (const [width, batch] of [
+    [390, 1],
+    [390, 4],
+    [768, 4],
+    [1024, 4],
+    [1440, 4],
+    [1920, 4],
+  ] as const) {
+    test(`at ${width} px with ${batch} candidate(s) is in view, takes the focus and keeps to one row`, async ({ page }) => {
+      await generateOnCanvas(page, width, batch)
+      // staged from the keyboard: the button goes away with the Result view
+      await page.getByRole("button", { name: "Stage latest result" }).focus()
+      await page.keyboard.press("Enter")
+      const bar = page.getByRole("toolbar", { name: "Canvas staging" })
+      await expect(bar).toBeAttached()
+      await page.mouse.move(0, 0) // not hovering the canvas
+      await page.waitForTimeout(400) // the overlay's fade
+      const state = await bar.evaluate((element) => {
+        let opacity = 1
+        for (let node: Element | null = element; node; node = node.parentElement) opacity *= Number(getComputedStyle(node).opacity)
+        const shown = [...element.children].filter((child) => child.getBoundingClientRect().width > 0)
+        const rows = new Set(shown.map((child) => Math.round((child.getBoundingClientRect().top + child.getBoundingClientRect().bottom) / 8))).size
+        const track = element.querySelector("[data-slot=slider-track]")
+        const trackWidth = track && track.getBoundingClientRect().width > 0 ? track.getBoundingClientRect().width : null
+        const focus = document.activeElement
+        return { opacity, rows, trackWidth, focusInBar: element.contains(focus), focusOnAction: focus instanceof HTMLButtonElement }
+      })
+      expect(state.opacity).toBe(1)
+      expect(state.focusInBar).toBe(true)
+      expect(state.focusOnAction).toBe(false) // a held Enter must not accept or discard
+      expect(state.rows).toBe(1)
+      if (state.trackWidth !== null) expect(state.trackWidth).toBeGreaterThanOrEqual(60) // a fader, not a stub
+    })
+  }
+})

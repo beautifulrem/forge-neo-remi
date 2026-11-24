@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useProgress } from "@/api/progress"
-import { MAX_STAGED_CANDIDATES, useCanvasStaging, wireImg2imgStaging } from "./staging"
+import { MAX_STAGED_CANDIDATES, requestStagingFocus, takeStagingFocus, useCanvasStaging, wireImg2imgStaging } from "./staging"
 import { StagingBar } from "../ui/StagingBar"
 
 describe("canvas in-place staging store", () => {
@@ -93,6 +93,7 @@ describe("canvas in-place staging store", () => {
           splitCompare: false,
           splitPosition: 0.5,
         }}
+        docKey="img2img"
         {...handlers}
       />,
     )
@@ -105,5 +106,19 @@ describe("canvas in-place staging store", () => {
     expect(handlers.onDiscardCurrent).toHaveBeenCalledOnce()
     fireEvent.click(screen.getByRole("button", { name: "Split compare" }))
     expect(handlers.onToggleSplit).toHaveBeenCalledOnce()
+  })
+
+  it("takes the focus when staged by a button that goes away, and only then", () => {
+    const session = { candidates: [{ fileId: "cand-1" }], index: 0, opacity: 0.8, compareOriginal: false, splitCompare: false, splitPosition: 0.5 }
+    const handlers = { onPrev: vi.fn(), onNext: vi.fn(), onSelect: vi.fn(), onOpacityChange: vi.fn(), onCompareOriginalChange: vi.fn(), onToggleSplit: vi.fn(), onAccept: vi.fn(), onDiscardCurrent: vi.fn(), onDiscardAll: vi.fn() }
+    // staged by a finished run: the focus stays where the user is
+    const first = render(<StagingBar session={session} docKey="img2img" {...handlers} />)
+    expect(document.activeElement).toBe(document.body)
+    first.unmount()
+    requestStagingFocus("img2img")
+    render(<StagingBar session={session} docKey="img2img" {...handlers} />)
+    // the bar, not Accept or Discard: a held Enter must not decide
+    expect(document.activeElement).toBe(screen.getByRole("toolbar", { name: "Canvas staging" }))
+    expect(takeStagingFocus("img2img")).toBe(false) // asked once, taken once
   })
 })
