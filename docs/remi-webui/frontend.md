@@ -556,8 +556,10 @@ Rules the renderer implements:
   text field, not inside a dialog, menu or popup, and no popup open. In a
   prompt editor it interrupts as in A1111 (the placeholder advertises it)
   unless the editor used it first (closing the completion list, dropping a
-  selection: CodeMirror calls `preventDefault`). Generate keys are ignored
-  while a modal dialog is open.
+  selection: CodeMirror calls `preventDefault`). The interrupt is decided
+  after the event has run its course (`setTimeout`), so the image editor's
+  Escape (discard a staged candidate) wins whichever of the two listened
+  first. Generate keys are ignored while a modal dialog is open.
 - **Rows**: `width` 1–12 = share of 12 columns, `"fill"` = the rest,
   absent/`"auto"` = equal share, buttons hug content. Rows are CSS containers;
   under 30 rem spans and fills go full width (phones stack).
@@ -873,7 +875,10 @@ chunk, `preloadImageEditor()` fetches it early), the img2img integration
   stays, named). Staged with "Stage latest result", whose button leaves with
   the Result view, the bar itself takes the focus (`requestStagingFocus`),
   never Accept or Discard, which a held Enter would press; results staged by
-  a finished run leave the focus where it is.
+  a finished run leave the focus where it is. While candidates wait, ← →
+  pick one, Enter accepts it and Esc discards it, except that Enter on a
+  focused control in the editor (Discard, Remove image…) presses that
+  control (`takesEnter`).
 - **Keys** (pointer over the editor - entered, moved or pressed inside, or
   `:hover`, so an editor that appears under a resting pointer takes them -
   or focus inside it, never while typing):

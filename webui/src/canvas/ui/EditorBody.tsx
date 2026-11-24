@@ -35,7 +35,7 @@ import { usePasteTarget } from "@/ui/paste-targets"
 import { fitView, isEmptyRect, nextZoomStep, type Rect, type View, zoomAt } from "../core/geometry"
 import { aspectFrame, inpaintArea, RESIZE_MODES, scaledSize } from "../core/overlays"
 import { parseHex, toHex } from "../core/pixels"
-import { type Command, commandFor, isHovered, isMac, isTyping } from "../core/shortcuts"
+import { type Command, commandFor, isHovered, isMac, isTyping, takesEnter } from "../core/shortcuts"
 import type { EditorDocument } from "../engine/document"
 import { Interaction, type InteractionContext } from "../engine/interaction"
 import { type Overlays, Renderer } from "../engine/renderer"
@@ -546,6 +546,8 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
           return
         }
         if (event.key === "Enter") {
+          // a focused button (Discard candidate, Remove image…) does its own thing
+          if (takesEnter(event.target)) return
           const picked = activeStaging.candidates[activeStaging.index]
           if (picked) {
             event.preventDefault()

@@ -53,8 +53,11 @@ export function useGenerateShortcuts(tab: GenerateTab) {
         dispatchRun(tab, { type: "skip" })
       } else if (event.key === "Escape" && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
         if (!isBusy(useRuns.getState().runs[tab]) || !escapeIsFree(event)) return
-        event.preventDefault()
-        dispatchRun(tab, { type: "interrupt" })
+        // Decided after the event has run its course: the image editor (staged candidates)
+        // uses Escape too, and it may have started listening before or after this page.
+        setTimeout(() => {
+          if (!event.defaultPrevented) dispatchRun(tab, { type: "interrupt" })
+        })
       }
     }
     window.addEventListener("keydown", onKey)

@@ -120,6 +120,15 @@ export function isTyping(target: EventTarget | null): boolean {
   return Boolean(target.closest("[contenteditable=true], .cm-editor"))
 }
 
+/** Controls that act on Enter themselves (buttons, links, menu items, tabs, toggles, fields). */
+const ENTER_CONTROLS =
+  'button, a[href], input, select, textarea, summary, [role="button"], [role="link"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"], [role="tab"], [role="checkbox"], [role="radio"], [role="switch"], [role="combobox"], [role="slider"]'
+
+/** Whether Enter belongs to the focused control (the editor's own Enter, accept, leaves it alone). */
+export function takesEnter(target: EventTarget | null): boolean {
+  return target instanceof Element && target.matches(ENTER_CONTROLS)
+}
+
 /** Whether the pointer is over `element` (`:hover`; false where the selector is not supported). */
 export function isHovered(element: Element): boolean {
   try {
