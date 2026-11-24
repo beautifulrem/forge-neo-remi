@@ -218,7 +218,9 @@ imperatively).
   more, or labels that grow once translated) is a `FitTabsList`, which turns
   into a select rather than scroll, wrap or cut a label (Extensions, the
   network kinds, PNG Info); a strip whose number of items varies scrolls
-  sideways instead (the boards in a `FadeStrip`, the tag groups). A grid that can
+  sideways instead (the boards in a `FadeStrip`, the tag groups), its edges
+  fading where there is more (`useScrollFade`, which also watches items that
+  arrive after it mounts). A grid that can
   hold a line that does not wrap (a file name, a module name, a tab strip)
   and whose columns start at a breakpoint is `grid-cols-1` below it: its
   implicit column is as wide as that line and pushes a phone's page or
