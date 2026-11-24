@@ -12,6 +12,8 @@ type Props = {
   inline?: boolean
   /** What to show instead of the default message (shell controls: their placeholder, or nothing). */
   fallback?: ReactNode
+  /** Told of the error once it is caught (a panel that closes itself instead of showing it). */
+  onError?: (error: Error) => void
 }
 
 type State = { error: Error | null; resetKey: unknown }
@@ -29,6 +31,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error(error, info.componentStack)
+    this.props.onError?.(error)
   }
 
   componentDidMount() {

@@ -15,8 +15,10 @@ import type { NetworkItem, NetworkQuery } from "@/api/types"
 /** Items per window: about two screens of cards. */
 export const PAGE_SIZE = 100
 
-export type SortKey = "name" | "date" | "created" | "size" | "path"
-export type SortOrder = "asc" | "desc"
+export const SORT_KEYS = ["name", "date", "created", "size", "path"] as const
+export type SortKey = (typeof SORT_KEYS)[number]
+export const SORT_ORDERS = ["asc", "desc"] as const
+export type SortOrder = (typeof SORT_ORDERS)[number]
 
 /** What the browser asks for (the window is added per page). */
 export type ListParams = {

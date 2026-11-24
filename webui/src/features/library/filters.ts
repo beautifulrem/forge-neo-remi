@@ -5,10 +5,12 @@
 import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
 import type { GalleryCategory, GalleryQuery, GallerySort } from "@/api/types"
-import type { TileSize } from "./layout"
-import { mergeTyped } from "@/lib/persist"
+import { CATEGORY_LABELS, SORT_LABELS } from "./labels"
+import { TILE_SIZES, type TileSize } from "./layout"
+import { type FieldRules, mergeTyped } from "@/lib/persist"
 
-export type GalleryLayout = "justified" | "masonry"
+export const GALLERY_LAYOUTS = ["justified", "masonry"] as const
+export type GalleryLayout = (typeof GALLERY_LAYOUTS)[number]
 
 export type GalleryFilters = {
   q: string
@@ -43,6 +45,14 @@ export const NO_FILTERS: Omit<GalleryFilters, "sort"> & { boardId: string | null
   starred: false,
 }
 
+/** The values the stored choices take (a tile size "xl" left the grid empty). */
+const VIEW_RULES: FieldRules<GalleryView> = {
+  category: [...(Object.keys(CATEGORY_LABELS) as GalleryCategory[]), null],
+  sort: Object.keys(SORT_LABELS) as GallerySort[],
+  layout: GALLERY_LAYOUTS,
+  size: Object.keys(TILE_SIZES) as TileSize[],
+}
+
 export const useGalleryView = create<GalleryView>()(
   persist(
     (set) => ({
@@ -59,7 +69,7 @@ export const useGalleryView = create<GalleryView>()(
       storage: createJSONStorage(() => localStorage),
       // The search text is per visit; everything else is kept.
       partialize: ({ category, model, boardId, from, to, starred, sort, layout, size }) => ({ category, model, boardId, from, to, starred, sort, layout, size }),
-      merge: mergeTyped,
+      merge: (persisted, current) => mergeTyped(persisted, current, VIEW_RULES),
     },
   ),
 )

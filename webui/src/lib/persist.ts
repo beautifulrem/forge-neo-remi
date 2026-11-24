@@ -4,9 +4,13 @@
  * default shallow merge lets a field of the wrong type through and the first
  * render that reads it throws. `mergeTyped` keeps a stored field only when its
  * type matches the store's own value (a `null` default stands for "a string
- * or nothing"), and drops empty entries from stored lists. It does not look
- * inside them: a store whose lists or maps hold objects checks each entry
- * (`keepEntries`, a type guard on its items).
+ * or nothing", a number must be finite), and drops empty entries from stored
+ * lists. A field that takes only some values of its type (an enum, a colour)
+ * names them in `rules`: a value of the right type it does not take (an older
+ * build's choice, a hand edit) crashed the pages that look it up. Numbers with
+ * a range are clamped by the store's own `merge`. `mergeTyped` does not look
+ * inside lists or maps: a store whose lists or maps hold objects checks each
+ * entry (`keepEntries`, a type guard on its items).
  */
 export const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value)
 
@@ -18,20 +22,30 @@ export function keepEntries<T>(value: Record<string, unknown>, keep: (item: unkn
   return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, T] => keep(entry[1])))
 }
 
+/** The values a field takes (an enum's, with `null` where it may be unset), or a test of them. */
+export type FieldRules<T> = { [K in keyof T]?: readonly T[K][] | ((value: unknown) => boolean) }
+
 function sameKind(value: unknown, fallback: unknown): boolean {
   if (fallback === null) return value === null || typeof value === "string"
   if (Array.isArray(fallback)) return Array.isArray(value)
   if (isRecord(fallback)) return isRecord(value)
+  // JSON reads 1e999 as Infinity
+  if (typeof fallback === "number") return typeof value === "number" && Number.isFinite(value)
   return typeof value === typeof fallback
 }
 
-export function mergeTyped<T extends object>(persisted: unknown, current: T): T {
+function takes(rule: readonly unknown[] | ((value: unknown) => boolean) | undefined, value: unknown): boolean {
+  if (rule === undefined) return true
+  return typeof rule === "function" ? rule(value) : rule.includes(value)
+}
+
+export function mergeTyped<T extends object>(persisted: unknown, current: T, rules: FieldRules<T> = {}): T {
   if (!isRecord(persisted)) return current
   const out = { ...current } as Record<string, unknown>
   for (const [key, value] of Object.entries(persisted)) {
     if (!(key in current)) continue
     const fallback = (current as Record<string, unknown>)[key]
-    if (typeof fallback === "function" || !sameKind(value, fallback)) continue
+    if (typeof fallback === "function" || !sameKind(value, fallback) || !takes(rules[key as keyof T], value)) continue
     out[key] = Array.isArray(value) ? value.filter((item) => item !== null && item !== undefined) : value
   }
   return out as T

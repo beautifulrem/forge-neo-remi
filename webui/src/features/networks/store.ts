@@ -7,12 +7,14 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import type { GenerateTab } from "@/features/progress/run-controller"
-import type { SortKey, SortOrder } from "./queries"
-import { keepEntries, mergeTyped } from "@/lib/persist"
+import { SORT_KEYS, SORT_ORDERS, type SortKey, type SortOrder } from "./queries"
+import { type FieldRules, keepEntries, mergeTyped } from "@/lib/persist"
 
 export type Surface = "page" | "drawer"
-export type ViewMode = "grid" | "list"
-export type CardSize = "s" | "m" | "l"
+export const VIEW_MODES = ["grid", "list"] as const
+export type ViewMode = (typeof VIEW_MODES)[number]
+export const CARD_SIZES = ["s", "m", "l"] as const
+export type CardSize = (typeof CARD_SIZES)[number]
 export type PromptTarget = "positive" | "negative"
 
 export type SurfaceState = {
@@ -71,6 +73,12 @@ export const DEFAULT_SURFACE: SurfaceState = {
 export const DRAWER_WIDTH = { min: 360, default: 640 }
 export const TREE_WIDTH = { min: 160, max: 480, default: 240 }
 
+/** The values a stored surface's fields take (a card size "xl" crashed the page on every load). */
+const SURFACE_RULES: FieldRules<SurfaceState> = { view: VIEW_MODES, size: CARD_SIZES, sort: [...SORT_KEYS, null], order: [...SORT_ORDERS, null] }
+
+const drawerWidth = (width: number) => Math.max(DRAWER_WIDTH.min, Math.round(width))
+const treeWidth = (width: number) => Math.min(TREE_WIDTH.max, Math.max(TREE_WIDTH.min, Math.round(width)))
+
 export const useNetworksUi = create<NetworksUiState>()(
   persist(
     (set) => ({
@@ -90,10 +98,10 @@ export const useNetworksUi = create<NetworksUiState>()(
           return { surfaces: { ...s.surfaces, [surface]: { ...current, [key]: map } } }
         }),
       setDrawer: (drawerOpen) => set({ drawerOpen }),
-      setDrawerWidth: (width) => set({ drawerWidth: Math.max(DRAWER_WIDTH.min, Math.round(width)) }),
+      setDrawerWidth: (width) => set({ drawerWidth: drawerWidth(width) }),
       setTreeWidth: (width) => {
-        const treeWidth = Math.min(TREE_WIDTH.max, Math.max(TREE_WIDTH.min, Math.round(width)))
-        set((s) => (s.treeWidth === treeWidth ? s : { treeWidth }))
+        const next = treeWidth(width)
+        set((s) => (s.treeWidth === next ? s : { treeWidth: next }))
       },
       setPageForm: (pageForm) => set({ pageForm }),
       setTarget: (target) => set({ target }),
@@ -114,10 +122,10 @@ export const useNetworksUi = create<NetworksUiState>()(
         return saved as PersistedState
       },
       merge: (persisted, current) => {
-        const saved = mergeTyped(persisted, current) as Partial<NetworksUiState>
+        const saved = mergeTyped(persisted, current)
         // a surface's fields keep their kinds too (a stored `query: null` threw on every render)
         const surface = (name: Surface): SurfaceState => {
-          const merged = mergeTyped(saved.surfaces?.[name], current.surfaces[name])
+          const merged = mergeTyped(saved.surfaces[name], current.surfaces[name], SURFACE_RULES)
           return {
             ...merged,
             folder: keepEntries(merged.folder, (value) => typeof value === "string"),
@@ -129,6 +137,8 @@ export const useNetworksUi = create<NetworksUiState>()(
           ...current,
           ...saved,
           surfaces: { page: surface("page"), drawer: surface("drawer") },
+          drawerWidth: drawerWidth(saved.drawerWidth),
+          treeWidth: treeWidth(saved.treeWidth),
           pageForm: saved.pageForm === "img2img" ? "img2img" : "txt2img",
         }
       },

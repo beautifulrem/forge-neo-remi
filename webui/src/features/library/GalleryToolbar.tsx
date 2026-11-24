@@ -16,18 +16,11 @@ import { Toggle } from "@/components/ui/toggle"
 import { FIELD_BUTTON_CLASS } from "@/components/ui/select-styles"
 import { cn } from "@/lib/utils"
 import { activeFilters, useGalleryView } from "./filters"
-import { CATEGORY_LABELS, daysAgo } from "./labels"
+import { CATEGORY_LABELS, daysAgo, SORT_LABELS } from "./labels"
 import { galleryFacetsQuery } from "./queries"
 import { isComposing } from "@/lib/ime"
 
 const ALL = "__all__"
-
-const SORT_LABELS: Record<GallerySort, string> = {
-  newest: "Newest first",
-  oldest: "Oldest first",
-  name: "File name",
-  largest: "Largest first",
-}
 
 function PlainSelect<V extends string>(props: { value: V; onChange: (value: V) => void; options: { value: V; label: string }[]; label: string; className?: string }) {
   return (

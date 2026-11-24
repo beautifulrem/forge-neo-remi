@@ -4,9 +4,10 @@
  */
 import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
-import { mergeTyped } from "@/lib/persist"
+import { isRecord, mergeTyped } from "@/lib/persist"
 
-export type Tool = "brush" | "eraser" | "fill" | "rect" | "lasso" | "eyedropper" | "hand"
+export const TOOLS = ["brush", "eraser", "fill", "rect", "lasso", "eyedropper", "hand"] as const
+export type Tool = (typeof TOOLS)[number]
 
 export type BrushSettings = {
   /** Diameter in px (image px, or screen px with `forge_canvas_consistent_brush`). */
@@ -105,6 +106,19 @@ const fixBrush = (brush: BrushSettings): BrushSettings => ({
   softness: clamp(brush.softness, 0, 1),
 })
 
+/** A colour as the colour inputs give it, `#rrggbb`. */
+const isHex = (value: unknown): value is string => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)
+const finite = (value: unknown, fallback: number) => (typeof value === "number" && Number.isFinite(value) ? value : fallback)
+
+/** A stored brush: each setting a finite number in its range (a string made the size NaN). */
+function storedBrush(value: unknown, fallback: BrushSettings): BrushSettings {
+  const brush = isRecord(value) ? value : {}
+  return fixBrush({ size: finite(brush.size, fallback.size), opacity: finite(brush.opacity, fallback.opacity), softness: finite(brush.softness, fallback.softness) })
+}
+
+/** The values the stored choices take: an unknown tool left the canvas dead. */
+const RULES = { tool: TOOLS, fillSample: ["layer", "image"], wheel: ["zoom", "pan"], maskColor: MASK_COLORS, color: isHex } as const
+
 export const useTools = create<ToolState & ToolActions>()(
   persist(
     (set) => ({
@@ -122,13 +136,15 @@ export const useTools = create<ToolState & ToolActions>()(
       storage: createJSONStorage(() => localStorage),
       // Older or hand-edited values fall back to the defaults key by key.
       merge: (persisted, current) => {
-        const p = mergeTyped(persisted, current) as Partial<ToolState>
+        const p = mergeTyped<ToolState & ToolActions>(persisted, current, RULES)
         return {
-          ...current,
           ...p,
-          brush: fixBrush({ ...DEFAULTS.brush, ...p.brush }),
-          eraser: fixBrush({ ...DEFAULTS.eraser, ...p.eraser }),
-          recent: Array.isArray(p.recent) ? p.recent.filter((c) => typeof c === "string").slice(0, 8) : [],
+          brush: storedBrush(p.brush, DEFAULTS.brush),
+          eraser: storedBrush(p.eraser, DEFAULTS.eraser),
+          recent: p.recent.filter(isHex).slice(0, 8),
+          fillTolerance: clamp(p.fillTolerance, 0, 255),
+          maskOpacity: clamp(p.maskOpacity, 0.05, 1),
+          sketchOpacity: clamp(p.sketchOpacity, 0.05, 1),
         }
       },
     },

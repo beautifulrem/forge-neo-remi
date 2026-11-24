@@ -6,8 +6,10 @@
 import { Layers } from "@/components/icons"
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { toast } from "sonner"
 import { type Command, formatShortcut, useRegisterCommands } from "@/app/commands"
 import { HeaderSlot } from "@/app/header-slot"
+import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
 import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
@@ -15,7 +17,7 @@ import type { GenerateTab } from "@/features/progress/run-controller"
 import { useTrackPromptFocus } from "./prompt-target"
 import { DRAWER_ID, isNetworksShortcut, NETWORKS_SHORTCUT } from "./shortcut"
 import { useNetworksUi } from "./store"
-import { retryableLazy } from "@/lib/retryable-lazy"
+import { retryableLazy, retryFailedLoads } from "@/lib/retryable-lazy"
 import { cn } from "@/lib/utils"
 
 const NetworksDrawer = retryableLazy(() => import("./NetworksDrawer"))
@@ -92,10 +94,22 @@ export function NetworksDrawerHost({ tab }: { tab: GenerateTab }) {
           <Kbd className="hidden 2xl:inline-flex touch-only:hidden!">{formatShortcut(NETWORKS_SHORTCUT)}</Kbd>
         </Button>
       </HeaderSlot>
+      {/* The drawer stays open across reloads: one that fails to render closes (and says so)
+          rather than taking Generate down with it on every load. */}
       {open ? (
-        <Suspense fallback={null}>
-          <NetworksDrawer tab={tab} autoFocus={userOpened} onClose={() => toggle(false)} returnFocus={() => trigger.current?.focus()} />
-        </Suspense>
+        <ErrorBoundary
+          fallback={null}
+          onError={(error) => {
+            toggle(false)
+            toast.error(t("The networks panel could not be shown"), { description: error.message })
+            // a chunk that failed to load is fetched again when the panel is next opened (closed, it does not render)
+            retryFailedLoads()
+          }}
+        >
+          <Suspense fallback={null}>
+            <NetworksDrawer tab={tab} autoFocus={userOpened} onClose={() => toggle(false)} returnFocus={() => trigger.current?.focus()} />
+          </Suspense>
+        </ErrorBoundary>
       ) : null}
     </>
   )

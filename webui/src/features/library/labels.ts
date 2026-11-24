@@ -1,5 +1,5 @@
 /** Display labels of the gallery (English keys, translated at render). */
-import type { GalleryCategory } from "@/api/types"
+import type { GalleryCategory, GallerySort } from "@/api/types"
 
 export const CATEGORY_LABELS: Record<GalleryCategory, string> = {
   txt2img: "txt2img",
@@ -8,6 +8,13 @@ export const CATEGORY_LABELS: Record<GalleryCategory, string> = {
   grids: "Grids",
   saved: "Saved",
   other: "Other",
+}
+
+export const SORT_LABELS: Record<GallerySort, string> = {
+  newest: "Newest first",
+  oldest: "Oldest first",
+  name: "File name",
+  largest: "Largest first",
 }
 
 export function formatBytes(size: number, locale?: string): string {

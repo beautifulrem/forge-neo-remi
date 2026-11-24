@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { useSession } from "@/features/gallery/session-store"
 import { useExtrasRuns } from "@/features/extras/run"
 import { useGalleryView } from "@/features/library/filters"
-import { useNetworksUi } from "@/features/networks/store"
+import { DRAWER_WIDTH, TREE_WIDTH, useNetworksUi } from "@/features/networks/store"
 import { usePromptViews } from "@/features/prompt-tools/view-store"
 import { useLocale } from "@/i18n"
 import { useTools } from "@/canvas/state/tools"
@@ -83,5 +83,73 @@ describe("persisted stores", () => {
     const { surfaces } = useNetworksUi.getState()
     expect(surfaces.page).toMatchObject({ kind: "lora", query: "", folder: {}, archs: {}, compatible: {} })
     expect(surfaces.drawer).toMatchObject({ query: "lora", folder: { lyco: "sub" }, archs: { lyco: ["sdxl"] }, compatible: { lyco: true } })
+  })
+
+  // Values of the right type that a field does not take (an older build's choice, a hand edit, a
+  // number out of range): a card size "xl" crashed the Networks page on every load, and Generate
+  // with it while the drawer was kept open; an unknown tool left the canvas dead.
+  const outOfRange: { name: string; store: Hydratable; stored: string; expected: Record<string, unknown> }[] = [
+    {
+      name: "networks",
+      store: useNetworksUi,
+      stored: '{"state":{"surfaces":{"page":{"size":"xl","view":"tiles","sort":"rating","order":"up"},"drawer":{"size":"xl","sort":"name","order":"desc"}},"drawerWidth":1e999,"treeWidth":5},"version":2}',
+      expected: {
+        surfaces: { page: expect.objectContaining({ size: "m", view: "grid", sort: null, order: null }), drawer: expect.objectContaining({ size: "s", sort: "name", order: "desc" }) },
+        drawerWidth: DRAWER_WIDTH.default,
+        treeWidth: TREE_WIDTH.min,
+      },
+    },
+    {
+      name: "gallery view",
+      store: useGalleryView,
+      stored: '{"state":{"category":"videos","sort":"random","layout":"grid","size":"xl","starred":true},"version":1}',
+      expected: { category: null, sort: "newest", layout: "justified", size: "m", starred: true },
+    },
+    {
+      name: "appearance",
+      store: useAppearance,
+      stored: '{"state":{"theme":"light","themeChosen":true,"density":"cozy","accent":"purple"},"version":3}',
+      expected: { theme: "light", density: "comfortable", accent: "blue" },
+    },
+    {
+      name: "canvas tools",
+      store: useTools,
+      stored:
+        '{"state":{"tool":"spray","fillSample":"all","wheel":"scroll","maskColor":"red","color":"blue","recent":["#00ff00","nope"],"fillTolerance":900,"maskOpacity":7,"sketchOpacity":-1,"brush":{"size":"big","opacity":null,"softness":3},"eraser":{"size":1e999}},"version":1}',
+      expected: {
+        tool: "brush",
+        fillSample: "layer",
+        wheel: "zoom",
+        maskColor: "#ff3b6b",
+        color: "#ff3b30",
+        recent: ["#00ff00"],
+        fillTolerance: 255,
+        maskOpacity: 1,
+        sketchOpacity: 0.05,
+        brush: { size: 48, opacity: 1, softness: 1 },
+        eraser: { size: 48, opacity: 1, softness: 0 },
+      },
+    },
+    {
+      name: "prompt views",
+      store: usePromptViews,
+      stored: '{"state":{"views":{"positive:Prompt":"tags","negative:Negative prompt":"chips","x":5}},"version":1}',
+      expected: { views: { "negative:Negative prompt": "chips" } },
+    },
+    {
+      name: "json builder",
+      store: useBuilder,
+      stored: '{"state":{"canvas":"triple","format":"xml","ar":"7:3","mp":-1,"width":1e999,"height":512},"version":1}',
+      expected: { canvas: "single", format: "moss", ar: "1:1", mp: 1, width: 1024, height: 1024 },
+    },
+  ]
+
+  it.each(outOfRange)("$name keeps only the values its fields take", async ({ store, stored, expected }) => {
+    const full = store as Hydratable & { getInitialState: () => object; setState: (state: object, replace: true) => void }
+    full.setState(full.getInitialState(), true)
+    localStorage.setItem(store.persist.getOptions().name!, stored)
+    await store.persist.rehydrate()
+    const state = store.getState() as Record<string, unknown>
+    for (const [key, value] of Object.entries(expected)) expect(state[key], key).toEqual(value)
   })
 })

@@ -4,7 +4,8 @@ import { persist } from "zustand/middleware"
 import { mergeTyped } from "@/lib/persist"
 
 export type Theme = "light" | "dark" | "system"
-export type Density = "comfortable" | "compact"
+export const DENSITIES = ["comfortable", "compact"] as const
+export type Density = (typeof DENSITIES)[number]
 export const ACCENTS = ["blue", "iris", "teal", "green", "amber", "coral", "rose"] as const
 export type Accent = (typeof ACCENTS)[number]
 
@@ -72,7 +73,7 @@ export const useAppearance = create<AppearanceState>()(
       },
       // A theme never picked follows the server's `--theme` (it may have changed since).
       merge: (persisted, current) => {
-        const state = mergeTyped(persisted, current) as Partial<AppearanceState>
+        const state = mergeTyped(persisted, current, { density: DENSITIES, accent: ACCENTS }) as Partial<AppearanceState>
         const chosen = state.themeChosen === true && isTheme(state.theme)
         return { ...current, ...state, theme: chosen ? state.theme! : current.theme, themeChosen: chosen }
       },
