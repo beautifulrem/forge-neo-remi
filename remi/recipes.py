@@ -450,16 +450,23 @@ def apply_recipe(
             derived = conflict_patch(effective_tab, {**merged_scripts, "core": merged_core})
             if isinstance(derived, Mapping):
                 conflicts = dict(derived)
+                # The conflict patch is the rules' whole state (every group member, every role,
+                # core params bare). The form writes each patch entry and counts it as applied,
+                # so only a control whose value the rules actually change joins the recipe's
+                # own values; the recipe's values stay as the recipe has them (the form resolves
+                # its conflicts again once they are written).
                 for target, entry in conflicts.items():
-                    if target.startswith("__") or not isinstance(entry, Mapping):
+                    if target.startswith("__") or not isinstance(entry, Mapping) or "value" not in entry:
                         continue
-                    patch[target] = {**patch.get(target, {}), **entry}
-                    if "value" in entry and "." in target:
-                        owner, param = target.split(".", 1)
-                        if owner == "core":
-                            merged_core[param] = entry["value"]
-                        else:
-                            merged_scripts.setdefault(owner, {})[param] = entry["value"]
+                    key = target if "." in target else f"core.{target}"
+                    if key in patch:
+                        continue
+                    owner, param = key.split(".", 1)
+                    values = merged_core if owner == "core" else merged_scripts.get(owner)
+                    if values is None or param not in values or values[param] == entry["value"]:
+                        continue
+                    patch[key] = {"value": entry["value"]}
+                    values[param] = entry["value"]
         except Exception:
             pass
 

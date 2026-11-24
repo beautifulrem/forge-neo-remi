@@ -533,6 +533,42 @@ def test_conflict_patch(webui):
     assert "Refiner cleared" in patch["__toast__"]["message"]
 
 
+def test_applying_a_recipe_patches_its_own_values_and_what_the_conflicts_change(webui, monkeypatch):
+    """The apply response's ``patch`` is what the form must write: the recipe's
+    values and the controls the conflict rules actually change, never the
+    rules' whole state (each entry the SPA writes counts as applied and
+    overwrites what the user changed meanwhile)."""
+
+    from modules.anima_feature_conflicts import PID_HIRES_GROUP
+    from remi.core import conflicts
+    from remi.recipes import Recipe, apply_recipe
+
+    layouts = _tab_layouts(webui)
+    layouts["pid"] = ui.ScriptLayout(ui.Section("PiD", enable=ui.Toggle("enable", False, preset="pid.enabled", exclusive=(PID_HIRES_GROUP, "pid"))), owner="pid")
+    monkeypatch.setattr(conflicts, "_layouts", lambda tab: layouts)
+    form_core = {"prompt": "x", "enable_hr": False, "hr_scale": 2.0}
+    form_scripts = {
+        "pid": {"enable": True},
+        "sampler": {"sampler_name": "Euler", "steps": 20},
+        "anima_guidance": {"mode": "APG", "momentum": False, "dcw": False},
+        "anima_freefuse": {"enable": False},
+        "refiner": {"enable": False, "checkpoint": "None"},
+    }
+
+    unrelated = Recipe(id="r1", name="scale", tab="txt2img", core_patch={"hr_scale": 1.5})
+    applied = apply_recipe(unrelated, tab="txt2img", core=form_core, scripts=form_scripts, active_capabilities=[])
+    assert {key for key in applied["patch"] if not key.startswith("__")} == {"core.hr_scale"}
+    assert applied["core"]["hr_scale"] == 1.5 and applied["scripts"]["pid"] == {"enable": True}
+
+    hires = Recipe(id="r2", name="hires", tab="txt2img", core_patch={"enable_hr": True})
+    applied = apply_recipe(hires, tab="txt2img", core=form_core, scripts=form_scripts, active_capabilities=[])
+    patch = {key: entry for key, entry in applied["patch"].items() if not key.startswith("__")}
+    assert all("." in key for key in patch)  # core targets carry their owner
+    assert patch["core.enable_hr"] == {"value": True}
+    assert set(patch) <= {"core.enable_hr", "pid.enable"}
+    assert applied["core"]["enable_hr"] is True
+
+
 def test_role_rules_and_exclusive_groups_agree(webui, monkeypatch):
     """A role rule that switches a group member off frees its group: one entry
     per control, values in order, ``enabled`` from every lock."""
