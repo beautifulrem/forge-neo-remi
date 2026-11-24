@@ -73,6 +73,24 @@ def test_every_core_string_is_translated(strings, catalog):
     assert missing == [], f"localizations/zh_CN.json lacks {len(missing)} core strings: {missing[:40]}"
 
 
+def test_the_forms_under_hidden_directories_are_translated(catalog, monkeypatch):
+    """``--hide-ui-dir-config`` appended a sentence to the img2img Batch help, so
+    the whole paragraph was a key no catalog had and showed in English."""
+
+    from modules import shared
+    from remi.core.tabs import tab_schema
+
+    found: set[str] = set()
+    with webui_state():
+        monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", True)
+        for tab in strings_module.TABS:
+            strings_module._text_strings(tab_schema(tab)["core"]["layout"], found)
+        dynamic = strings_module._dynamic_names()
+    spa = strings_module.spa_catalog()
+    missing = sorted(text for text in found if text not in dynamic and not strings_module._is_data(text) and not (catalog.get(text) or "").strip() and text not in spa)
+    assert missing == []
+
+
 def test_entries_are_well_formed(catalog):
     assert catalog and all(isinstance(key, str) and isinstance(value, str) and value.strip() for key, value in catalog.items())
     broken = [key for key, value in catalog.items() if _placeholders(key) != _placeholders(value)]

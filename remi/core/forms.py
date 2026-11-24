@@ -365,8 +365,9 @@ def _img2img_image() -> ui.Node:
         "Process images in a directory on the same machine where the server is running.\n"
         "Use an empty output directory to save pictures normally instead of writing to the output directory.\n"
         "Add inpaint batch mask directory to enable inpaint batch processing."
-        + ("\nDisabled when launched with --hide-ui-dir-config." if hide_dirs else "")
     )
+    # a node of its own: appended to the help, the paragraph was a key no catalog has
+    hidden_note = [ui.Markdown("Disabled when launched with --hide-ui-dir-config.")] if hide_dirs else []
     batch = ui.Tab(
         "Batch",
         ui.Choice("batch_source", BATCH_SOURCES, "upload", label="Batch source", hidden=True),
@@ -375,6 +376,7 @@ def _img2img_image() -> ui.Node:
             ui.Tab(
                 "From directory",
                 ui.Markdown(directory_help),
+                *hidden_note,
                 ui.Text("batch_input_dir", "", label="Input directory", hidden=hide_dirs),
                 ui.Text("batch_output_dir", "", label="Output directory", hidden=hide_dirs),
                 ui.Text("batch_inpaint_mask_dir", "", label="Inpaint batch mask directory (required for inpaint batch processing only)", hidden=hide_dirs),

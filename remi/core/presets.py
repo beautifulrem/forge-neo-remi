@@ -18,6 +18,7 @@ from typing import Any
 
 from remi.core import hints
 from remi.ui import Context, ParamError, ValidationError
+from remi.ui.actions import message as catalog_message
 from remi.ui.nodes import _NO_VALUE
 from remi.ui.types import Patch
 
@@ -244,5 +245,5 @@ def anima_preset_patch(
         resolved = {prop: value for prop, value in entry.items() if prop != "value" or key in known}
         if resolved:
             patch.setdefault(key, {}).update(resolved)
-    patch["__toast__"] = {"level": "success", "message": f"Applied: {label} ({len(bound)} controls)"}
+    patch["__toast__"] = {"level": "success", "message": catalog_message("Applied: {{label}} ({{count}} controls)", label=label, count=len(bound))}
     return patch

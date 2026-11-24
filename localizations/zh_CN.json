@@ -938,5 +938,8 @@
   "Prefix KV Cache": "前缀 KV 缓存",
   "Per-block torch.compile": "逐块 torch.compile 编译",
   "Spectrum forecasting": "Spectrum 特征预测",
-  "Video generation": "视频生成"
+  "Video generation": "视频生成",
+  "Disabled when launched with --hide-ui-dir-config.": "启动时使用了 --hide-ui-dir-config，此项已禁用。",
+  "Applied: {{label}} ({{count}} controls)": "已应用：{{label}}（{{count}} 个控件）",
+  "Compatibility: {{notes}}": "兼容性：{{notes}}"
 }

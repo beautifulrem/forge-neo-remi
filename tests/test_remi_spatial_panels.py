@@ -94,7 +94,7 @@ def test_freefuse_locks_the_refiner_switch(webui):
     assert patch[f"{freefuse}.enable"]["value"] is True
     assert patch["refiner.enable"] == {"value": False, "enabled": False}
     assert patch["refiner.checkpoint"]["enabled"] is False
-    assert "Refiner cleared" in patch["__toast__"]["message"]
+    assert "Refiner cleared" in patch["__toast__"]["message"]["params"]["notes"]
     assert f"{freefuse}.enable" in _conflict_params("txt2img")
 
 

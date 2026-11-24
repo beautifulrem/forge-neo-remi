@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from remi.ui import Context, ParamError
+from remi.ui.actions import message as catalog_message
 from remi.ui.types import Patch
 
 # Roles without a preset field, bound by the built-in scripts
@@ -130,7 +131,8 @@ def conflict_patch(tab: str, values: Mapping[str, Mapping[str, Any]], selected: 
             entry["choices"] = [{"value": choice, "label": choice} for choice in choices[ref]]
         patch[_ref(*ref)] = entry
     if messages:
-        patch["__toast__"] = {"level": "warning", "message": "Compatibility: " + "; ".join(messages)}
+        # the notes are the runtime's rule texts (modules/anima_feature_conflicts.py): a parameter of a catalog message
+        patch["__toast__"] = {"level": "warning", "message": catalog_message("Compatibility: {{notes}}", notes="; ".join(messages))}
 
     from remi.core.capabilities import derive_advice
 

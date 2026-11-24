@@ -563,11 +563,13 @@ def test_conflict_patch(webui):
     # The newest switch wins: Momentum was not the last change, so APG stays
     assert patch["anima_guidance.momentum"]["value"] is False
     assert patch["anima_guidance.mode"]["value"] == "APG"
-    assert "Momentum disabled" in patch["__toast__"]["message"]
+    # a catalog message: its prefix translates, the notes (the runtime's rule texts) are its parameter
+    assert patch["__toast__"]["message"]["text"] == "Compatibility: {{notes}}"
+    assert "Momentum disabled" in patch["__toast__"]["message"]["params"]["notes"]
     # Regional won the group, so FreeFuse (now off) no longer clears the Refiner
     assert patch["refiner.enable"] == {"value": True, "enabled": True}
     assert patch["refiner.checkpoint"] == {"value": "None", "enabled": True}
-    assert "Refiner cleared" not in patch["__toast__"]["message"]
+    assert "Refiner cleared" not in patch["__toast__"]["message"]["params"]["notes"]
 
     patch = conflict_patch("txt2img", {**values, "anima_regional": {"enable": False}}, "anima_guidance.momentum", layouts=layouts)
     assert patch["anima_guidance.mode"]["value"] == "Standard / preserve existing" and patch["anima_guidance.momentum"]["value"] is True
@@ -575,7 +577,7 @@ def test_conflict_patch(webui):
     # FreeFuse (on) wins over a Refiner switched on without a checkpoint, and locks it
     assert patch["refiner.enable"] == {"value": False, "enabled": False}
     assert patch["refiner.checkpoint"] == {"value": "None", "enabled": False}
-    assert "Refiner cleared" in patch["__toast__"]["message"]
+    assert "Refiner cleared" in patch["__toast__"]["message"]["params"]["notes"]
 
 
 def test_applying_a_recipe_patches_its_own_values_and_what_the_conflicts_change(webui, monkeypatch):
@@ -629,7 +631,7 @@ def test_role_rules_and_exclusive_groups_agree(webui, monkeypatch):
     assert patch["refiner.enable"] == {"value": True, "enabled": True} and patch["refiner.checkpoint"] == {"value": "X", "enabled": True}
     # FreeFuse is off now: the spatial group is free again
     assert patch["anima_regional.enable"] == {"value": False, "enabled": True} and patch["artist_mixer.enable"] == {"value": False, "enabled": True}
-    assert "FreeFuse disabled" in patch["__toast__"]["message"]
+    assert "FreeFuse disabled" in patch["__toast__"]["message"]["params"]["notes"]
 
     # The next member in line takes over when the Refiner pushes FreeFuse out
     values["anima_regional"] = {"enable": True}
@@ -675,6 +677,8 @@ def test_anima_preset_patch(webui):
     # A localized own value is kept, the table's value otherwise
     assert patch["artist_mixer.optimization"] == {"value": "平衡"}
     assert patch["__toast__"]["level"] == "success"
+    # a catalog message, not an English sentence put together on the server
+    assert patch["__toast__"]["message"] == {"text": "Applied: {{label}} ({{count}} controls)", "params": {"label": TURBO_NAG_LABEL, "count": patch["__toast__"]["message"]["params"]["count"]}}
     with pytest.raises(KeyError):
         preset_named_values(TURBO_NAG_LABEL, [("prompt.positive", "core", "prompt", None)])
 
