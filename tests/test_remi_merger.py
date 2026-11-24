@@ -237,6 +237,9 @@ def test_the_page_checks_its_inputs_before_starting(server, models):
         # a blank No Interpolation name is model A's own name
         ({"primary_model_name": "a.safetensors", "interp_method": "No Interpolation"}, "The filename is one of the models being merged; choose another"),
     ]
+    # macOS and Windows volumes ignore case by default: "B" is the file "b.safetensors" there
+    if (models.folder / "B.safetensors").exists():
+        cases.append(({**base, "custom_name": "B"}, "The filename is one of the models being merged; choose another"))
     for values, message in cases:
         answer = _act(server, "merge", values)
         assert answer == {"__toast__": {"level": "warning", "message": message}}, values

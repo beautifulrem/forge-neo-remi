@@ -106,9 +106,12 @@ def _overwrites_input(values: dict[str, Any]) -> bool:
             return False
         name = primary.model_name  # what run_modelmerger names a blank No Interpolation save
     target = extras.merge_output_path(name)
+    if not os.path.exists(target):
+        return False
     for name in _inputs(values):
         info = sd_models.checkpoint_aliases.get(name)
-        if info is not None and os.path.realpath(info.filename) == target:
+        # samefile, not equal paths: "B" names "b.safetensors" on a volume that ignores case
+        if info is not None and os.path.exists(info.filename) and os.path.samefile(info.filename, target):
             return True
     return False
 
