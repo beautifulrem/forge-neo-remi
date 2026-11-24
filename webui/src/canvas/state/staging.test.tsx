@@ -121,4 +121,18 @@ describe("canvas in-place staging store", () => {
     expect(document.activeElement).toBe(screen.getByRole("toolbar", { name: "Canvas staging" }))
     expect(takeStagingFocus("img2img")).toBe(false) // asked once, taken once
   })
+
+  // The other candidates' dots were muted-foreground at 45 %: 2.1:1 (light) against the bar, too
+  // faint for the only mark of a button. The current one is told apart by its width and colour.
+  it("draws the other candidates' dots in a solid tone", () => {
+    const session = { candidates: [{ fileId: "a" }, { fileId: "b" }, { fileId: "c" }], index: 1, opacity: 0.8, compareOriginal: false, splitCompare: false, splitPosition: 0.5 }
+    const handlers = { onPrev: vi.fn(), onNext: vi.fn(), onSelect: vi.fn(), onOpacityChange: vi.fn(), onCompareOriginalChange: vi.fn(), onToggleSplit: vi.fn(), onAccept: vi.fn(), onDiscardCurrent: vi.fn(), onDiscardAll: vi.fn() }
+    render(<StagingBar session={session} docKey="img2img" {...handlers} />)
+    const dot = (index: number) => screen.getByRole("button", { name: `Candidate ${index} of 3` }).querySelector("span")!.className.split(" ")
+    for (const other of [1, 3]) {
+      expect(dot(other)).toContain("bg-muted-foreground")
+      expect(dot(other).filter((name) => name.startsWith("bg-muted-foreground/"))).toEqual([])
+    }
+    expect(dot(2)).toContain("bg-foreground")
+  })
 })

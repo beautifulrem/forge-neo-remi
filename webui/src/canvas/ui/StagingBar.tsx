@@ -94,7 +94,7 @@ export function StagingBar({
                   aria-hidden
                   className={cn(
                     "block h-1.5 rounded-full transition-colors duration-150",
-                    idx === session.index ? "w-4 bg-foreground" : "w-1.5 bg-muted-foreground/45 group-hover:bg-muted-foreground",
+                    idx === session.index ? "w-4 bg-foreground" : "w-1.5 bg-muted-foreground group-hover:bg-foreground",
                   )}
                 />
               </button>
