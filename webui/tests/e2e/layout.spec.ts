@@ -354,3 +354,45 @@ test.describe("toggles and control rows", () => {
     expect(Math.round((await select.boundingBox())!.height)).toBe(Math.round((await button.boundingBox())!.height))
   })
 })
+
+test.describe("the img2img stage toolbar", () => {
+  for (const width of [768, 1280]) {
+    test(`at ${width} px keeps its canvas controls on one row and the result actions whole on the next, nothing cut`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+      await openGenerate(page, "img2img")
+      const png = await page.evaluate(() => {
+        const canvas = document.createElement("canvas")
+        canvas.width = 640
+        canvas.height = 480
+        canvas.getContext("2d")!.fillRect(0, 0, 640, 480)
+        return canvas.toDataURL("image/png").split(",")[1]!
+      })
+      const chooser = page.waitForEvent("filechooser")
+      await page.getByRole("button", { name: "Add a source image" }).click()
+      await (await chooser).setFiles({ name: "source.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") })
+      await expect(page.getByRole("img", { name: /^Image editor/ })).toBeVisible()
+      await page.keyboard.press(`${mod}+Enter`)
+      const view = page.getByRole("tablist", { name: "Image view" })
+      await expect(view.getByRole("tab", { name: "Result" })).toHaveAttribute("aria-selected", "true", { timeout: 20_000 })
+      await expect(page.getByRole("button", { name: "Stage latest result" })).toBeVisible()
+      const layout = await view.evaluate((switcher) => {
+        const bar = switcher.parentElement!
+        const right = bar.getBoundingClientRect().right
+        // a row is a vertical centre (the segmented tabs sit 2 px inside their track)
+        const row = (element: Element) => {
+          const box = element.getBoundingClientRect()
+          return Math.round((box.top + box.bottom) / 8)
+        }
+        const actions = bar.querySelector("[role=toolbar]")!
+        const cut = [...bar.querySelectorAll("button, [role=tab]")]
+          .filter((element) => element.getBoundingClientRect().width > 0 && element.getBoundingClientRect().right > right + 1)
+          .map((element) => element.getAttribute("aria-label") || element.textContent)
+        const parameters = [...bar.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Parameters")!
+        return { cut, rows: new Set([...bar.children].filter((element) => element.getBoundingClientRect().width > 0).map(row)).size, actionsWithParameters: row(actions) === row(parameters) }
+      })
+      expect(layout.cut).toEqual([])
+      expect(layout.rows).toBeLessThanOrEqual(2)
+      expect(layout.actionsWithParameters).toBe(true) // the result's own row, not split across two
+    })
+  }
+})

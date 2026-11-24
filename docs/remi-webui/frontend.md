@@ -198,7 +198,9 @@ imperatively).
   its own with a "View options" menu (sort, layout, size) beside it and the
   filters on a second row that scrolls sideways (`GalleryToolbar`,
   `@container/gallerybar`; the network browser folds card size and refresh
-  into one menu). It never wraps into ragged rows. A grid never leaves an
+  into one menu; the img2img stage gives the result actions a row of their
+  own under its canvas controls, `Img2imgStage`). It never wraps into
+  ragged rows. A grid never leaves an
   empty cell (the img2img mode picker and the phone's More sheet centre a
   short last row).
 - A running job's progress shows once where the user looks: over the stage

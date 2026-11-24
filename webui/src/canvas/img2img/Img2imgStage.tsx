@@ -117,18 +117,26 @@ export function Img2imgStage({ result, actions, leading, trailing, className }: 
               className="h-7 gap-1 px-2 text-xs"
             >
               <Layers className="size-3.5" aria-hidden />
-              <span className="hidden sm:inline">{t("Stage in canvas")}</span>
+              <span className="hidden @[32rem]/actions:inline">{t("Stage in canvas")}</span>
             </Toggle>
             {shown === "result" && img2imgItems.length > 0 ? (
-              <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={stageLatest}>
+              <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" aria-label={t("Stage latest result")} title={t("Stage latest result")} onClick={stageLatest}>
                 <Layers className="size-3.5" aria-hidden />
-                <span className="hidden md:inline">{t("Stage latest result")}</span>
+                <span className="hidden @[32rem]/actions:inline">{t("Stage latest result")}</span>
               </Button>
             ) : null}
           </>
         ) : null}
-        {shown === "result" && actions ? actions : <div className="min-w-0 flex-1" />}
-        {trailing}
+        {/* The labels above go by the bar's width (the stage's `@container/actions`). A wide bar is
+            one row; a narrow one gives the result actions a row of their own under the canvas
+            controls (a planned second row, not a wrap), where they fold into "More actions" by the
+            room they have. */}
+        {shown === "result" && actions ? (
+          <div className="@container/actions order-last flex min-w-0 grow basis-full items-center gap-1 @[46rem]/actions:order-none @[46rem]/actions:basis-0">{actions}</div>
+        ) : (
+          <div className="min-w-0 flex-1" />
+        )}
+        {trailing ? <div className="ml-auto flex items-center">{trailing}</div> : null}
       </div>
       {shown === "source" && binding ? (
         <div role="tabpanel" id="img2img-stage-source" aria-labelledby="img2img-stage-tab-source" className="flex min-h-0 flex-1 flex-col">
