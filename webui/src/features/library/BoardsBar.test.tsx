@@ -39,4 +39,18 @@ describe("Add to board", () => {
     fireEvent.click(retry)
     expect(await screen.findByText("No boards yet")).toBeInTheDocument()
   })
+
+  // It read "Removed from “Portraits”", a done state, though nothing had been removed yet.
+  it("names the removal from the board being viewed as an action", async () => {
+    const board = { id: "b1", name: "Portraits", description: "", item_count: 1, cover_file_id: null, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" }
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify([board]), { status: 200 }))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AssignBoardPopover fileIds={["file-1"]} activeBoardId="b1" />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Add to board" }))
+    expect(await screen.findByRole("button", { name: "Remove from “Portraits”" })).toBeInTheDocument()
+    expect(screen.queryByText("Removed from “Portraits”")).not.toBeInTheDocument()
+  })
 })

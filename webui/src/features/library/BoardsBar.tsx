@@ -437,7 +437,7 @@ export function AssignBoardPopover({ fileIds, activeBoardId, trigger, tone = "de
               onClick={() => unassign.mutate(activeBoard)}
             >
               <Trash2 className="size-3.5" aria-hidden />
-              {t("Removed from “{{name}}”", { name: activeBoard.name })}
+              {t("Remove from “{{name}}”", { name: activeBoard.name })}
             </Button>
           ) : null}
           <form
