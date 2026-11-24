@@ -4,7 +4,7 @@ import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { useOptionWrite } from "@/features/model-bar/model-options"
 import { api } from "./endpoints"
-import { bootstrap } from "./mock/fixtures"
+import { bootstrap, models } from "./mock/fixtures"
 import { keys, modelsQuery, queryClient } from "./queries"
 
 // The server usually runs on this machine: a laptop that drops its Wi-Fi still reaches it, so the
@@ -17,10 +17,10 @@ describe("the app's query client while the browser reports offline", () => {
   })
 
   it("still asks the server for data", async () => {
-    vi.spyOn(api, "models").mockResolvedValue([])
+    vi.spyOn(api, "models").mockResolvedValue(models)
     onlineManager.setOnline(false)
     const answer = await Promise.race([queryClient.fetchQuery(modelsQuery), new Promise((resolve) => setTimeout(() => resolve("paused"), 200))])
-    expect(answer).toEqual([])
+    expect(answer).toEqual(models)
   })
 
   it("sends a model switch to the server instead of only showing it", async () => {
