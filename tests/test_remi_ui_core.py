@@ -315,6 +315,24 @@ def test_inputs_that_read_server_paths_are_refused_with_hidden_dirs(webui, monke
     assert errors("extras", {"mode": "Single Video", "video_input": "/private/clip.mp4"}) == set()
 
 
+def test_the_client_check_gives_the_reason_a_hidden_path_input_is_refused(webui, monkeypatch):
+    """The client checks ``core.required`` before submitting: with --hide-ui-dir-config the
+    Extras directory and video inputs are hidden, so "an input directory is required" asked for
+    a field the user cannot see. The check says why instead."""
+
+    from modules import shared
+    from remi.core import forms
+
+    def messages():
+        return {entry["param"]: entry["message"] for entry in forms.required_inputs("extras")}
+
+    monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", True)
+    assert messages()["input_dir"] == messages()["video_input"] == forms.SERVER_PATHS_REFUSED
+    assert messages()["image"] == "an image is required"
+    monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", False)
+    assert messages()["input_dir"] == "an input directory is required"
+
+
 def test_the_tab_schema_lists_the_required_inputs(webui):
     """``core.required``: what the client checks before submitting, the same
     rules the server applies (an empty required input never reaches POST /jobs)."""

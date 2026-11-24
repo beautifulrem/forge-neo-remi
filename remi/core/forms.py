@@ -546,9 +546,14 @@ SERVER_PATHS_REFUSED = "paths on the server are disabled (--hide-ui-dir-config)"
 
 
 def required_inputs(tab: str) -> list[dict[str, Any]]:
-    """``core.required`` of the tab schema: ``[{"param", "message", "when"}]``."""
+    """``core.required`` of the tab schema: ``[{"param", "message", "when"}]``. A server path
+    input hidden by ``--hide-ui-dir-config`` gives the reason it is refused, not "required"
+    for a field the user cannot see."""
 
-    return [{"param": name, "message": message, "when": when} for name, message, when in REQUIRED_INPUTS.get(tab, ())]
+    from modules import shared
+
+    hidden = {name for name, _ in SERVER_PATH_INPUTS.get(tab, ())} if getattr(shared.cmd_opts, "hide_ui_dir_config", False) else set()
+    return [{"param": name, "message": SERVER_PATHS_REFUSED if name in hidden else message, "when": when} for name, message, when in REQUIRED_INPUTS.get(tab, ())]
 
 
 def _empty(value: Any) -> bool:
