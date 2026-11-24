@@ -456,6 +456,32 @@ test.describe("the canvas staging bar", () => {
       if (state.trackWidth !== null) expect(state.trackWidth).toBeGreaterThanOrEqual(60) // a fader, not a stub
     })
   }
+
+  // Enter anywhere in the editor accepted the candidate: on "Discard candidate" it replaced the
+  // source and dropped the rest. Escape interrupted a running job instead of discarding, when the
+  // editor had appeared after the page (as here: the Source view after "Stage latest result").
+  test("leaves Enter to a focused button and Escape to the candidates while a job runs", async ({ page }) => {
+    await generateOnCanvas(page, 1440, 4)
+    await page.getByRole("button", { name: "Stage latest result" }).focus()
+    await page.keyboard.press("Enter")
+    const bar = page.getByRole("toolbar", { name: "Canvas staging" })
+    await expect(bar.getByText("Candidate 1 of 4")).toBeAttached()
+    await bar.getByRole("button", { name: /Discard candidate/ }).focus()
+    await page.keyboard.press("Enter")
+    await expect(bar.getByText("Candidate 1 of 3")).toBeAttached()
+    await expect(page.getByText("Accepted candidate as new base layer")).toHaveCount(0)
+    // a new job shows the Result view; staging the last batch while it runs brings the editor back
+    await page.keyboard.press(`${mod}+Enter`)
+    const interrupt = page.getByRole("button", { name: "Interrupt" }).first()
+    await expect(interrupt).toBeVisible()
+    await page.getByRole("button", { name: "Stage latest result" }).focus()
+    await page.keyboard.press("Enter")
+    await expect(bar.getByText("Candidate 1 of 4")).toBeAttached()
+    await page.keyboard.press("Escape")
+    await expect(bar.getByText("Candidate 1 of 3")).toBeAttached()
+    await page.waitForTimeout(300)
+    await expect(interrupt).toBeVisible()
+  })
 })
 
 test.describe("the img2img stage on a phone held sideways", () => {

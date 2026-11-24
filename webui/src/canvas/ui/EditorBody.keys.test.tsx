@@ -48,7 +48,7 @@ function newDoc() {
 }
 
 /** The generate page's shortcuts, and the editor shown with it or later (the Source view after "Stage latest result"). */
-function Page({ editorFirst = false, onAcceptStaged = () => {} }: { editorFirst?: boolean; onAcceptStaged?: (candidate: unknown) => void }) {
+function Page({ editorFirst = false, busy = false, onAcceptStaged = () => {} }: { editorFirst?: boolean; busy?: boolean; onAcceptStaged?: (candidate: unknown) => void }) {
   useGenerateShortcuts("img2img")
   const [shown, setShown] = useState(editorFirst)
   const [doc] = useState(newDoc)
@@ -66,7 +66,7 @@ function Page({ editorFirst = false, onAcceptStaged = () => {} }: { editorFirst?
           toolbarAlways
           maximized={false}
           onMaximize={() => {}}
-          busy={false}
+          busy={busy}
           ready
           loadFailed={false}
           onRetry={() => {}}
@@ -111,6 +111,17 @@ describe("Enter with a staged candidate", () => {
     bar.focus()
     fireEvent.keyDown(bar, { key: "Enter", code: "Enter" })
     expect(accept).toHaveBeenCalledWith(expect.objectContaining({ fileId: "c1" }))
+  })
+
+  // The bar's Accept is disabled while the editor loads or uploads; Enter accepted anyway.
+  it("waits while the editor is busy, as the bar's Accept does", () => {
+    stage()
+    const accept = vi.fn()
+    render(<Page editorFirst busy onAcceptStaged={accept} />)
+    const bar = screen.getByRole("toolbar", { name: "Canvas staging" })
+    bar.focus()
+    fireEvent.keyDown(bar, { key: "Enter", code: "Enter" })
+    expect(accept).not.toHaveBeenCalled()
   })
 })
 

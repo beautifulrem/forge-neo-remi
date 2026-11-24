@@ -190,7 +190,7 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
   const fixed = { size: editor.fixedSize, opacity: editor.fixedOpacity, softness: editor.fixedSoftness }
 
   // What the event handlers read (they live as long as the renderer).
-  const snapshot = () => ({ docKey: editor.docKey, activeKey, kind, pickable, fixedColor: editor.fixedColor, fixed, screenBrush, paintable, noUpload: editor.noUpload, onFiles })
+  const snapshot = () => ({ docKey: editor.docKey, activeKey, kind, pickable, fixedColor: editor.fixedColor, fixed, screenBrush, paintable, noUpload: editor.noUpload, onFiles, busy })
   const latest = useRef(snapshot())
   useEffect(() => {
     latest.current = snapshot()
@@ -546,8 +546,9 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
           return
         }
         if (event.key === "Enter") {
-          // a focused button (Discard candidate, Remove image…) does its own thing
-          if (takesEnter(event.target)) return
+          // a focused button (Discard candidate, Remove image…) does its own thing; a busy editor
+          // (loading, uploading) waits, as the bar's disabled Accept does
+          if (takesEnter(event.target) || latest.current.busy) return
           const picked = activeStaging.candidates[activeStaging.index]
           if (picked) {
             event.preventDefault()
