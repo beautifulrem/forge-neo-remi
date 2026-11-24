@@ -1302,9 +1302,13 @@ older server) nothing is shown.
   `t("Reset to default")`, `t("Step {{step}} of {{steps}}", { step, steps })`.
   Keep constants that are translated later as `label:` / `group:` /
   `title=` / `description=` literals (routes, commands, placeholders). No
-  string concatenation. Prefer sentences that work without plural forms
-  (`Saved: {{count}}`). A count followed by a noun (`{{count}} steps`) gets
-  its English singular in `en.json` as `"{{count}} steps_one": "{{count}} step"`;
+  string concatenation. A sentence that names keys takes them from
+  `formatShortcut` through a placeholder (`Undo with {{keys}} in the
+  editor.`): `locales.test.ts` fails on a chrome string that spells a
+  modifier (`Ctrl+`, `Cmd+`, `Alt+`, `⌘`, `⌥`). Prefer sentences that work
+  without plural forms (`Saved: {{count}}`). A count followed by a noun
+  (`{{count}} steps`) gets its English singular in `en.json` as
+  `"{{count}} steps_one": "{{count}} step"`;
   the key itself is the plural; `zh-CN.json` needs no plural forms. `locales.test.ts`
   fails on a `{{count}} <plural noun>` key without its `_one` form.
 - Schema strings are passed to `t()` as-is (`t(node.label)`); `markdown` and

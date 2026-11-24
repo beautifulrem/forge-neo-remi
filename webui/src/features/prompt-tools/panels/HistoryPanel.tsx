@@ -4,6 +4,7 @@
  * entries are kept when the history is trimmed), delete, clear.
  */
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query"
+import { formatShortcut } from "@/app/commands"
 import { Check, ListPlus, Pencil, Star, Trash2 } from "@/components/icons"
 import { type ReactNode, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -58,7 +59,7 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
   const use = (item: HistoryItem) => {
     setValue(textOf(item))
     close()
-    toast.success(t("Prompt replaced"), { description: t("Undo with Ctrl+Z in the editor.") })
+    toast.success(t("Prompt replaced"), { description: t("Undo with {{keys}} in the editor.", { keys: formatShortcut("Mod+Z") }) })
   }
 
   const favorite = async (item: HistoryItem) => {

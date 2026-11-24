@@ -929,7 +929,6 @@
   "The model is loaded": "模型已加载",
   "The model was unloaded": "模型已卸载",
   "The preset was not applied": "预设未能应用",
-  "The prompt and the negative prompt are emptied. Undo with Ctrl+Z in each editor.": "提示词和反向提示词都会被清空。可在各自的编辑器中按 Ctrl+Z 撤销。",
   "The prompts of every generation are kept here.": "每次生成所用的提示词都会保存在这里。",
   "The queue is empty": "队列为空",
   "The queue is paused": "队列已暂停",
@@ -982,7 +981,6 @@
   "UI preset": "界面预设",
   "Unbalanced brackets: {{count}}": "括号不匹配：{{count}} 处",
   "Undo": "撤销",
-  "Undo with Ctrl+Z in the editor.": "可在编辑器中按 Ctrl+Z 撤销。",
   "Uninstall": "卸载",
   "Uninstall {{name}}?": "卸载 {{name}}？",
   "Uninstall…": "卸载…",
@@ -1669,5 +1667,7 @@
   "Could not read the form": "无法读取表单",
   "Could not load the styles": "无法加载样式列表",
   "Remove from “{{name}}”": "从“{{name}}”移出",
-  "All metadata ({{count}})": "全部元数据（{{count}}）"
+  "All metadata ({{count}})": "全部元数据（{{count}}）",
+  "Undo with {{keys}} in the editor.": "可在编辑器中按 {{keys}} 撤销。",
+  "The prompt and the negative prompt are emptied. Undo with {{keys}} in each editor.": "提示词和反向提示词都会被清空。可在各自的编辑器中按 {{keys}} 撤销。"
 }

@@ -5,6 +5,7 @@
  * the negative prompt has text with `paste_safe_guard`), "clear"
  * (confirmed) and image drops that read the image's parameters.
  */
+import { formatShortcut } from "@/app/commands"
 import { ClipboardPaste, Eraser } from "@/components/icons"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -82,7 +83,7 @@ export function PromptsPanel({ prompt, negative, styles }: { prompt: TextNode | 
         open={confirmClear}
         onOpenChange={setConfirmClear}
         title={t("Clear both prompts?")}
-        description={t("The prompt and the negative prompt are emptied. Undo with Ctrl+Z in each editor.")}
+        description={t("The prompt and the negative prompt are emptied. Undo with {{keys}} in each editor.", { keys: formatShortcut("Mod+Z") })}
         confirmLabel={t("Clear")}
         destructive
         onConfirm={() => {

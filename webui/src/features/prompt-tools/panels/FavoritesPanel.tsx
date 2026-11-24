@@ -4,6 +4,7 @@
  * create / rename / delete collections; export and import as JSON.
  */
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query"
+import { formatShortcut } from "@/app/commands"
 import { ArrowUp, Check, Download, FolderInput, FolderPlus, ListPlus, Pencil, Plus, Trash2, Upload, X } from "@/components/icons"
 import { type ReactNode, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -141,7 +142,7 @@ export default function FavoritesPanel({ value, setValue, kind, disabled, close 
     if (item.kind === "tags") setValue(appendText(value, item.text))
     else {
       setValue(item.text)
-      toast.success(t("Prompt replaced"), { description: t("Undo with Ctrl+Z in the editor.") })
+      toast.success(t("Prompt replaced"), { description: t("Undo with {{keys}} in the editor.", { keys: formatShortcut("Mod+Z") }) })
     }
     close()
   }

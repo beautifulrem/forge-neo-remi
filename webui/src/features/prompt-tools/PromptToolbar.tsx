@@ -4,6 +4,7 @@
  * OpenAI-compatible provider, writing a prompt from a description (each
  * panel is its own lazy chunk, loaded when first opened).
  */
+import { formatShortcut } from "@/app/commands"
 import { BrushCleaning, History, KeyRound, Languages, LayoutGrid, Sparkles, Star, Tags, TextCursorInput } from "@/components/icons"
 import { type ReactNode, Suspense, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -137,7 +138,7 @@ function TranslateTool({ value, setValue, disabled, config, viewKey }: PromptToo
         return
       }
       setValue(result.text)
-      toast.success(t("Translated {{count}} tags into English", { count: result.translated }), { description: t("Undo with Ctrl+Z in the editor.") })
+      toast.success(t("Translated {{count}} tags into English", { count: result.translated }), { description: t("Undo with {{keys}} in the editor.", { keys: formatShortcut("Mod+Z") }) })
     })
 
   const showTranslations = () =>
@@ -217,7 +218,7 @@ export default function PromptToolbar(props: PromptToolbarProps) {
             return
           }
           props.setValue(tidy)
-          toast.success(t("Separators tidied up"), { description: t("Undo with Ctrl+Z in the editor.") })
+          toast.success(t("Separators tidied up"), { description: t("Undo with {{keys}} in the editor.", { keys: formatShortcut("Mod+Z") }) })
         }}
       >
         <BrushCleaning />

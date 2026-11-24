@@ -55,6 +55,15 @@ describe("zh-CN chrome catalog", () => {
   })
 })
 
+describe("shortcut hints", () => {
+  // "Undo with Ctrl+Z" was wrong on macOS, where the editors undo with ⌘Z: a sentence that names
+  // keys takes them from formatShortcut through a placeholder.
+  it("never spell a modifier key in a chrome string", () => {
+    const spelt = [...chromeKeys()].filter((key) => /\b(?:Ctrl|Cmd|Alt)\+|[⌘⌥]/.test(key))
+    expect(spelt).toEqual([])
+  })
+})
+
 describe("en chrome catalog", () => {
   it("holds only plural forms of chrome strings, with the key's placeholders", () => {
     const keys = chromeKeys()
