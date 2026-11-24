@@ -532,6 +532,19 @@ REQUIRED_INPUTS: dict[str, tuple[tuple[str, str, ui.conditions.Condition], ...]]
 }
 
 
+# The inputs that name a path on the server, (param, when). ``--hide-ui-dir-config`` hides them,
+# and :func:`check_core` refuses a request that still uses one: the upstream runners assert this
+# for directories, but a video path was opened as given.
+SERVER_PATH_INPUTS: dict[str, tuple[tuple[str, ui.conditions.Condition], ...]] = {
+    "img2img": (("batch_input_dir", ui.all_of(ui.param("mode", eq="Batch"), ui.param("batch_source", eq="from dir"))),),
+    "extras": (
+        ("input_dir", ui.param("mode", eq="Batch from Directory")),
+        ("video_input", ui.param("mode", eq="Single Video")),
+    ),
+}
+SERVER_PATHS_REFUSED = "paths on the server are disabled (--hide-ui-dir-config)"
+
+
 def required_inputs(tab: str) -> list[dict[str, Any]]:
     """``core.required`` of the tab schema: ``[{"param", "message", "when"}]``."""
 
@@ -546,12 +559,18 @@ def _empty(value: Any) -> bool:
 
 def check_core(tab: str, values: Mapping[str, Any]) -> list[ui.ParamError]:
     """Rules across params of a coerced core form: the images each img2img
-    mode needs, the source of an Extras run (:data:`REQUIRED_INPUTS`)."""
+    mode needs, the source of an Extras run (:data:`REQUIRED_INPUTS`), and no
+    server path with ``--hide-ui-dir-config`` (:data:`SERVER_PATH_INPUTS`)."""
 
-    return [
+    from modules import shared
+
+    refused = set()
+    if getattr(shared.cmd_opts, "hide_ui_dir_config", False):
+        refused = {name for name, when in SERVER_PATH_INPUTS.get(tab, ()) if ui.evaluate(when, values)}
+    return [ui.ParamError(SERVER_PATHS_REFUSED, owner="core", param=name) for name in sorted(refused)] + [
         ui.ParamError(message, owner="core", param=name)
         for name, message, when in REQUIRED_INPUTS.get(tab, ())
-        if ui.evaluate(when, values) and _empty(values.get(name))
+        if name not in refused and ui.evaluate(when, values) and _empty(values.get(name))
     ]
 
 

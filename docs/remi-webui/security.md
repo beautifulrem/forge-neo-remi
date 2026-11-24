@@ -152,6 +152,10 @@ attackers who already have a login (they are administrators by design).
   that is a bundle (`Some.app`) is revealed in Finder, never launched.
 - Path settings are refused with `--hide-ui-dir-config` (`restricted_opts`),
   and `--freeze-settings*` freeze settings for `/api/v2` and `/sdapi` alike.
+  So are job inputs that name a path on the server (img2img batch from a
+  directory, Extras batch from a directory and its video clip): the form
+  hides them and `check_core` (`remi/core/forms.py`) refuses a request that
+  still sends one, whichever way the job arrives.
 
 ### Extensions (`remi/extensions_admin.py`)
 

@@ -288,6 +288,33 @@ def test_img2img_masks_and_required_images(webui, anima_checkpoint):
     assert errors({"mode": "Batch"}) == {("batch_upload", "upload the images to process")}
 
 
+def test_inputs_that_read_server_paths_are_refused_with_hidden_dirs(webui, monkeypatch):
+    """--hide-ui-dir-config hides the directory and video inputs; a request that still names a
+    path on the server (the API, a replayed job) is refused before it runs. The upstream runners
+    assert this for directories, but Extras opened any video path."""
+
+    from modules import shared
+    from remi.core import forms
+    from remi.core.tabs import processing_args
+
+    def errors(tab, values):
+        return {(problem.param, problem.message) for problem in forms.check_core(tab, values)}
+
+    refused = "paths on the server are disabled (--hide-ui-dir-config)"
+    monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", True)
+    assert errors("extras", {"mode": "Single Video", "video_input": "/private/clip.mp4"}) == {("video_input", refused)}
+    assert errors("extras", {"mode": "Batch from Directory", "input_dir": "/srv/images"}) == {("input_dir", refused)}
+    assert errors("extras", {"mode": "Batch from Directory", "input_dir": ""}) == {("input_dir", refused)}  # not also "required"
+    assert errors("img2img", {"mode": "Batch", "batch_source": "from dir", "batch_input_dir": "/srv/images"}) == {("batch_input_dir", refused)}
+    assert errors("img2img", {"mode": "Batch", "batch_source": "upload", "batch_upload": ["id"]}) == set()
+    assert errors("extras", {"mode": "Single Image", "image": "id"}) == set()
+    with pytest.raises(ui.ValidationError) as caught:
+        processing_args("extras", {"mode": "Single Video", "video_input": "/private/clip.mp4"}, {})
+    assert {(error["param"], error["message"]) for error in caught.value.to_json()["errors"]} == {("video_input", refused)}
+    monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", False)
+    assert errors("extras", {"mode": "Single Video", "video_input": "/private/clip.mp4"}) == set()
+
+
 def test_the_tab_schema_lists_the_required_inputs(webui):
     """``core.required``: what the client checks before submitting, the same
     rules the server applies (an empty required input never reaches POST /jobs)."""
