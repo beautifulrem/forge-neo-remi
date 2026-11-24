@@ -227,6 +227,25 @@ describe("import dialog", { timeout: 20_000 }, () => {
     expect(screen.getByText("The queue was paused so you can review the imported jobs first.")).toBeInTheDocument()
   })
 
+  it("marks each imported task's outcome with a neutral badge (status badges are not filled)", async () => {
+    const items = [
+      { source_id: "a", title: "first task", outcome: "queued", job_id: "j1", notes: [] },
+      { source_id: "b", title: "second task", outcome: "history", job_id: "j2", notes: [] },
+    ]
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const path = new URL((input as Request).url).pathname.replace("/api/v2", "")
+      if (path === "/queue/import") return Response.json([{ id: "agent-scheduler", label: "Agent Scheduler", available: true, count: 2, path: null }])
+      if (path === "/queue/import/agent-scheduler") return Response.json({ ...report, total: 2, queued: 1, history: 1, items })
+      return Response.json({})
+    })
+    renderWithClient(<ImportDialog open onOpenChange={() => {}} />)
+    fireEvent.click(await screen.findByRole("button", { name: "Import" }))
+    const list = await screen.findByRole("list", { name: "Imported tasks" })
+    const badges = [...list.querySelectorAll("[data-slot=badge]")]
+    expect(badges).toHaveLength(2)
+    for (const badge of badges) expect(badge.getAttribute("data-variant")).not.toBe("default")
+  })
+
   it("explains a missing database in the UI language's words, not the server's", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const path = new URL((input as Request).url).pathname.replace("/api/v2", "")

@@ -22,8 +22,8 @@ import { errorText } from "@/features/errors/error-text"
 import { noteText } from "./notes"
 import { act, importSourcesQuery, refreshQueue } from "./queries"
 
-const OUTCOMES: Record<ImportItem["outcome"], { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
-  queued: { label: "Queued", variant: "default" },
+const OUTCOMES: Record<ImportItem["outcome"], { label: string; variant: "secondary" | "outline" | "destructive" }> = {
+  queued: { label: "Queued", variant: "secondary" },
   history: { label: "History", variant: "secondary" },
   refused: { label: "Not replayable", variant: "outline" },
   invalid: { label: "Needs editing", variant: "outline" },
