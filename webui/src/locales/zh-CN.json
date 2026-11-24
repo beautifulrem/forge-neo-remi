@@ -1665,5 +1665,6 @@
   "{{reused}}/{{total}} cached": "复用缓存 {{reused}}/{{total}}",
   "Paused": "已暂停",
   "This file is not a favorites export.": "这个文件不是收藏导出文件。",
-  "Could not import favorites": "无法导入收藏"
+  "Could not import favorites": "无法导入收藏",
+  "Could not read the form": "无法读取表单"
 }

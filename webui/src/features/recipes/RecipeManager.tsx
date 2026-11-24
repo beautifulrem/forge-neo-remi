@@ -30,7 +30,7 @@ import { getFormStore } from "@/ui/form-store"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import { applyRecipeApi, createRecipeApi, deleteRecipeApi, exportRecipesApi, importRecipesApi, recipesQuery, refreshRecipes } from "./api"
 import { CATEGORY_LABELS } from "@/features/library/labels"
-import { appliedRecipeValues, applyRecipeEntries, captureFormOverrides, countRecipeParams, recipeHighlights } from "./capture"
+import { appliedRecipeValues, applyRecipeEntries, type CapturedOverrides, captureTabOverrides, countRecipeParams, recipeHighlights } from "./capture"
 import type { Recipe } from "./types"
 import { LoadFailed } from "@/components/LoadFailed"
 import { recipeFileName } from "./file-name"
@@ -66,7 +66,19 @@ export function RecipeManager() {
   const list = useQuery({ ...recipesQuery({ ...(q ? { q } : {}), ...(family ? { model_family: family } : {}) }), placeholderData: keepPreviousData })
   const recipes = list.data?.items ?? []
 
-  const captured = captureOpen ? captureFormOverrides(captureTab) : { core_patch: {}, scripts_patch: {}, count: 0 }
+  // what the capture dialog read from the source form (null while it reads: a form never opened loads its schema first)
+  const [capture, setCapture] = useState<{ tab: FormTab; overrides?: CapturedOverrides; error?: unknown } | null>(null)
+  const captureRequest = useRef(0)
+  const readForm = (tab: FormTab) => {
+    setCaptureTab(tab)
+    setCapture(null)
+    const request = ++captureRequest.current
+    captureTabOverrides(tab).then(
+      (overrides) => request === captureRequest.current && setCapture({ tab, overrides }),
+      (error: unknown) => request === captureRequest.current && setCapture({ tab, error }),
+    )
+  }
+  const captured = capture?.overrides ?? { core_patch: {}, scripts_patch: {}, count: 0 }
 
   const save = useMutation({
     mutationFn: () =>
@@ -87,6 +99,7 @@ export function RecipeManager() {
       setCaptureOpen(false)
       setName("")
       setDescription("")
+      setModelFamily("")
       setTagsText("")
       toast.success(t("Recipe saved"))
     },
@@ -220,7 +233,10 @@ export function RecipeManager() {
             size="sm"
             variant="secondary"
             className="h-7 gap-1.5 px-3 text-xs font-medium"
-            onClick={() => setCaptureOpen(true)}
+            onClick={() => {
+              setCaptureOpen(true)
+              readForm(captureTab)
+            }}
           >
             <Plus className="size-3.5" aria-hidden />
             {t("Capture from form")}
@@ -333,7 +349,7 @@ export function RecipeManager() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{t("Capture recipe")}</DialogTitle>
-            <DialogDescription>{t("Captured overrides: {{count}}", { count: captured.count })}</DialogDescription>
+            <DialogDescription>{capture?.overrides ? t("Captured overrides: {{count}}", { count: captured.count }) : capture?.error ? t("Could not read the form") : t("Reading…")}</DialogDescription>
           </DialogHeader>
           <form
             className="flex flex-col gap-3"
@@ -348,7 +364,7 @@ export function RecipeManager() {
                 size="sm"
                 aria-label={t("Source form")}
                 value={captureTab}
-                onValueChange={(value) => setCaptureTab(value)}
+                onValueChange={(value) => readForm(value)}
                 options={[
                   { value: "txt2img", label: t(CATEGORY_LABELS.txt2img) },
                   { value: "img2img", label: t(CATEGORY_LABELS.img2img) },
@@ -357,7 +373,9 @@ export function RecipeManager() {
               />
             </div>
 
-            {captured.count === 0 ? (
+            {capture === null ? null : capture.error !== undefined ? (
+              <LoadFailed error={capture.error} onRetry={() => readForm(captureTab)} className="py-0" />
+            ) : captured.count === 0 ? (
               <p className="rounded-md bg-background px-3 py-2 text-xs text-muted-foreground">
                 {t("No modified parameters found on {{tab}}.", { tab: t(CATEGORY_LABELS[captureTab]) })}
               </p>
@@ -392,7 +410,7 @@ export function RecipeManager() {
               <Button type="button" variant="ghost" size="sm" onClick={() => setCaptureOpen(false)}>
                 {t("Cancel")}
               </Button>
-              <Button type="submit" size="sm" disabled={!name.trim() || save.isPending}>
+              <Button type="submit" size="sm" disabled={!name.trim() || save.isPending || !capture?.overrides}>
                 {t("Save recipe")}
               </Button>
             </DialogFooter>

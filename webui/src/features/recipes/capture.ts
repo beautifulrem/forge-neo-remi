@@ -3,10 +3,12 @@
  * non-default, persistable parameters from a form store so Recipes stay clean,
  * minimal and safe to apply across models.
  */
+import { queryClient, schemaQuery } from "@/api/queries"
 import type { FormTab, ParamValues } from "@/api/types"
 import { t } from "@/i18n"
 import type { PasteEntry } from "@/features/infotext/paste"
 import { deliver } from "@/features/send-to/send-to"
+import { ensureSchemaLoaded } from "@/pages/generate/use-form-loader"
 import { jsonEqual } from "@/ui/conditions"
 import { getFormStore } from "@/ui/form-store"
 import { isPersisted } from "@/ui/values"
@@ -18,7 +20,11 @@ export type CapturedOverrides = {
   count: number
 }
 
-/** Captures every modified, persistable parameter from `tab`'s form store. */
+/**
+ * Captures every modified, persistable parameter from `tab`'s form store. A value counts as
+ * modified only against a default (as `isModified`): a form that was never loaded holds its drafts
+ * and no defaults, so read it through `captureTabOverrides`.
+ */
 export function captureFormOverrides(tab: FormTab): CapturedOverrides {
   const state = getFormStore(tab).getState()
   const core_patch: ParamValues = {}
@@ -33,7 +39,7 @@ export function captureFormOverrides(tab: FormTab): CapturedOverrides {
       const node = nodes?.get(name)
       // Never capture transient uploads or `persist: false` fields into portable recipes.
       if (node && (!isPersisted(node) || node.persist === false)) continue
-      if (Object.hasOwn(defaults, name) && jsonEqual(value, defaults[name])) continue
+      if (!Object.hasOwn(defaults, name) || jsonEqual(value, defaults[name])) continue
       diff[name] = value
       count++
     }
@@ -43,6 +49,13 @@ export function captureFormOverrides(tab: FormTab): CapturedOverrides {
   }
 
   return { core_patch, scripts_patch, count }
+}
+
+/** `captureFormOverrides` for a form that may not be open: loads its schema into the store first. */
+export async function captureTabOverrides(tab: FormTab): Promise<CapturedOverrides> {
+  const store = getFormStore(tab)
+  if (store.getState().revision === 0) ensureSchemaLoaded(store, await queryClient.ensureQueryData(schemaQuery(tab)))
+  return captureFormOverrides(tab)
 }
 
 /** Total parameter count inside a recipe (`core_patch` + every script's overrides). */

@@ -7,7 +7,7 @@ import { i18n } from "@/i18n"
 import zhCN from "@/locales/zh-CN.json"
 import { getFormStore } from "@/ui/form-store"
 import { tabOwners } from "@/ui/tab"
-import { captureFormOverrides, countRecipeParams, recipeHighlights } from "./capture"
+import { captureFormOverrides, captureTabOverrides, countRecipeParams, recipeHighlights } from "./capture"
 import { recipeFileName } from "./file-name"
 import { RecipeManager } from "./RecipeManager"
 import type { Recipe } from "./types"
@@ -48,6 +48,21 @@ describe("Recipes capture and manager UI", () => {
     expect(countRecipeParams(SAMPLE_RECIPE)).toBe(5)
     expect(recipeHighlights(SAMPLE_RECIPE)).toContain("8 steps")
     expect(recipeHighlights(SAMPLE_RECIPE)).toContain("CFG 1")
+  })
+
+  it("reads a form the app has not opened yet against its schema, so only its drafted changes count", async () => {
+    const schema = tabSchema("img2img")
+    const defaults = tabOwners(schema).find((spec) => spec.owner === "core")!.defaults
+    // the drafts hydrated from localStorage before the img2img page ever loaded: every value, one of them changed
+    getFormStore("img2img").setState({ values: { core: { ...defaults, cfg_scale: 3.5 } } })
+    expect(captureFormOverrides("img2img").count).toBe(0) // no defaults yet: nothing reads as changed
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify(schema), { status: 200, headers: { "Content-Type": "application/json" } }))
+    const captured = await captureTabOverrides("img2img")
+    expect(captured.core_patch).toEqual({ cfg_scale: 3.5 })
+    expect(captured.scripts_patch).toEqual({})
+    expect(captured.count).toBe(1)
+    expect(fetch).toHaveBeenCalledTimes(1) // the schema
+    expect(getFormStore("img2img").getState().revision).toBe(1)
   })
 
   it("keeps the recipes when a refetch fails", async () => {

@@ -42,8 +42,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { CATEGORY_LABELS } from "@/features/library/labels"
-import { errorText } from "@/features/errors/error-text"
-import { captureFormOverrides } from "@/features/recipes/capture"
+import { errorText, failureText } from "@/features/errors/error-text"
+import { captureTabOverrides } from "@/features/recipes/capture"
 import { cn } from "@/lib/utils"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import {
@@ -262,14 +262,18 @@ export function PipelineBuilder() {
     const stage = stages[index]
     if (!stage) return
     const tab = stage.tab ?? STAGE_META[stage.kind].defaultTab ?? "txt2img"
-    const captured = captureFormOverrides(tab)
-    updateStage(index, (prev) => ({
-      ...prev,
-      tab,
-      core: { ...prev.core, ...captured.core_patch },
-      scripts: { ...prev.scripts, ...captured.scripts_patch },
-    }))
-    toast.success(t("Pulled overrides from {{tab}}", { tab: t(CATEGORY_LABELS[tab]) }))
+    captureTabOverrides(tab).then(
+      (captured) => {
+        updateStage(index, (prev) => ({
+          ...prev,
+          tab,
+          core: { ...prev.core, ...captured.core_patch },
+          scripts: { ...prev.scripts, ...captured.scripts_patch },
+        }))
+        toast.success(t("Pulled overrides from {{tab}}", { tab: t(CATEGORY_LABELS[tab]) }))
+      },
+      (error: unknown) => toast.error(t("Could not read the form"), { description: failureText(error) }),
+    )
   }
 
   // the built-in starters are named in the current language; saved templates keep the name they were given

@@ -62,14 +62,21 @@ export function loadSchema(store: FormStore, schema: TabSchema) {
 /** The schema each store was last loaded with. */
 const loadedWith = new WeakMap<FormStore, TabSchema>()
 
+/**
+ * Loads `schema` into `store` unless it already holds it: the form page does this before its first
+ * paint, and code that reads a form away from its page (capturing a recipe on the Queue page) does
+ * it first too, since until then the store holds only the drafts, with no defaults to compare them to.
+ */
+export function ensureSchemaLoaded(store: FormStore, schema: TabSchema) {
+  if (loadedWith.get(store) === schema) return
+  loadedWith.set(store, schema)
+  loadSchema(store, schema)
+}
+
 /** True once `schema` is loaded into `store` (loaded before paint; `load` bumps the revision that re-renders). */
 export function useFormLoader(store: FormStore, schema: TabSchema): boolean {
   // Read the revision into the result so a memoising compiler re-evaluates after `load`.
   const revision = useStore(store, (s) => s.revision)
-  useLayoutEffect(() => {
-    if (loadedWith.get(store) === schema) return
-    loadedWith.set(store, schema)
-    loadSchema(store, schema)
-  }, [store, schema])
+  useLayoutEffect(() => ensureSchemaLoaded(store, schema), [store, schema])
   return revision > 0 && loadedWith.get(store) === schema
 }
