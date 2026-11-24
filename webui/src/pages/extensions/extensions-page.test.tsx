@@ -259,4 +259,31 @@ describe("available extensions", { timeout: 20_000 }, () => {
     fireEvent.click(await screen.findByRole("button", { name: "Install ext-7" }))
     await waitFor(() => expect(install).toHaveBeenCalledWith({ url: "https://github.com/u/ext-7" }))
   })
+
+  // When the extension list failed, the tab showed a disabled, empty URL field and nothing else.
+  it("says why it cannot load the index when the extension list failed, with a Retry", async () => {
+    const list = vi.spyOn(api.extensions, "list").mockRejectedValue(new ApiError(409, "busy")) // a client error: not retried
+    renderPage("tab=available")
+    const alert = await screen.findByRole("alert", {}, { timeout: 8000 })
+    expect(alert).toHaveTextContent("busy")
+    expect(screen.getByRole("button", { name: "Load index" })).toBeDisabled()
+    list.mockResolvedValue(listing([]))
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }))
+    await waitFor(() => expect(screen.getByRole("button", { name: "Load index" })).toBeEnabled())
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  // An index that failed to load was a red line with no way to try again but the form above.
+  it("offers a retry when the index fails to load", async () => {
+    const index = vi.spyOn(api.extensions, "index").mockRejectedValue(new ApiError(404, "The index was not found"))
+    renderPage("tab=available")
+    const load = await screen.findByRole("button", { name: "Load index" }, { timeout: 8000 })
+    await waitFor(() => expect(load).toBeEnabled()) // once the extension list says access is on
+    fireEvent.click(load)
+    const alert = await screen.findByRole("alert")
+    expect(alert).toHaveTextContent("The index was not found")
+    index.mockResolvedValue(indexOf(20))
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }))
+    expect(await screen.findByRole("list", { name: "Available extensions" })).toBeInTheDocument()
+  })
 })

@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
 import { queryClient } from "@/api/queries"
+import { LoadFailed } from "@/components/LoadFailed"
 import { Segmented } from "@/components/Segmented"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -243,7 +244,12 @@ export function AvailableView() {
         <p className="basis-full text-xs text-muted-foreground">{t("This index is maintained by third parties. Please verify an extension before installing it.")}</p>
       </form>
 
-      {!access ? null : url === null ? (
+      {installed.isPending ? (
+        <Skeleton className="h-40 w-full" aria-busy="true" />
+      ) : installed.isError && !installed.data ? (
+        // without the extension list neither the index URL nor the access is known: say why the form is off
+        <LoadFailed error={installed.error} message={adminErrorMessage(installed.error, t)} onRetry={() => void installed.refetch()} />
+      ) : !access ? null : url === null ? (
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -254,9 +260,7 @@ export function AvailableView() {
           </EmptyHeader>
         </Empty>
       ) : index.isError && !index.data ? (
-        <p role="alert" className="text-sm text-destructive">
-          {adminErrorMessage(index.error, t)}
-        </p>
+        <LoadFailed error={index.error} message={adminErrorMessage(index.error, t)} onRetry={() => void index.refetch()} />
       ) : !index.data ? (
         <div className="flex flex-col gap-2" aria-busy="true">
           {Array.from({ length: 5 }, (_, i) => (
