@@ -106,6 +106,14 @@ describe("model bar when the model list does not load", () => {
     expect(alert.textContent).toContain("Retry")
     expect(screen.queryByText("No modules found")).toBeNull()
   })
+
+  it("says the modules are loading while the model list is on its way, not that there are none", async () => {
+    vi.spyOn(api, "models").mockImplementation(() => new Promise(() => {})) // a slow server (or a retry after a failure)
+    renderBar()
+    fireEvent.click(modulesTriggers()[0]!)
+    expect(await screen.findByText("Loading…")).toBeInTheDocument()
+    expect(screen.queryByText("No modules found")).toBeNull()
+  })
 })
 
 describe("worker health pill single-status-dot rule", () => {

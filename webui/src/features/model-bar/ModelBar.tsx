@@ -207,6 +207,9 @@ function ModulesPicker({ className, segmented = false }: { className?: string; s
           )}
           {models.isError && !models.data ? (
             <LoadFailed error={models.error} message={t("Could not load the models")} onRetry={() => void models.refetch()} className="px-2" />
+          ) : models.isPending ? (
+            // a first load or a retry after a failure: the list is not empty yet, it is on its way
+            <p role="status" className="px-2 py-4 text-center text-sm text-muted-foreground">{t("Loading…")}</p>
           ) : modules.length === 0 ? (
             <p className="px-2 py-4 text-center text-sm text-muted-foreground">{t("No modules found")}</p>
           ) : null}
