@@ -9130,7 +9130,8 @@
           "infotext_a": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 200000
               },
               {
                 "type": "null"
@@ -9141,7 +9142,8 @@
           "infotext_b": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 200000
               },
               {
                 "type": "null"
