@@ -27,6 +27,8 @@ from typing import Any
 
 from PIL import Image, PngImagePlugin
 
+from remi.image_meta import MAX_INFOTEXT_CHARS
+
 log = logging.getLogger(__name__)
 
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
@@ -440,8 +442,11 @@ class FileStore:
     # region Outputs
 
     def register_output(self, path: str | os.PathLike, *, job_id: str | None = None, tab: str | None = None, infotext: str | None = None, width: int | None = None, height: int | None = None, created: float | None = None) -> FileRecord:
-        """Index a generated file (idempotent per path)."""
+        """Index a generated file (idempotent per path). Its infotext is kept up
+        to :data:`~remi.image_meta.MAX_INFOTEXT_CHARS` (an image's own text can be any size)."""
 
+        if infotext is not None and len(infotext) > MAX_INFOTEXT_CHARS:
+            infotext = infotext[:MAX_INFOTEXT_CHARS]
         path = os.path.realpath(path)
         stale = self._removed_as(path)
         with self._lock:

@@ -7,6 +7,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import Field
 
+from remi.image_meta import MAX_INFOTEXT_CHARS
 from remi.library import BoardError, board_json, compare_outputs, gallery_for
 from remi.server import models as m
 from remi.server.deps import ServicesDep, iso
@@ -82,8 +83,8 @@ class AssetLineage(m.Model):
 class CompareRequest(m.Model):
     id_a: str | None = None
     id_b: str | None = None
-    infotext_a: str | None = None
-    infotext_b: str | None = None
+    infotext_a: str | None = Field(None, max_length=MAX_INFOTEXT_CHARS)
+    infotext_b: str | None = Field(None, max_length=MAX_INFOTEXT_CHARS)
 
 
 class PromptTokenDiff(m.Model):

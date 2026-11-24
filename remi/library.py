@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from remi.files import ID_RE, FileRecord, FileStore, connect
+from remi.image_meta import MAX_INFOTEXT_CHARS
 
 Sort = Literal["newest", "oldest", "name", "largest"]
 SORTS: tuple[Sort, ...] = ("newest", "oldest", "name", "largest")
@@ -1073,8 +1074,14 @@ def extract_job_parents(job: Any, *, job_store: Any = None, files: FileStore | N
 
 # region Structured Parameter Diff
 
-_LORA_TAG_RE = re.compile(r"<(?:lora|lyco):([^:>]+):([^>]+)>", re.IGNORECASE)
-_KV_RE = re.compile(r'\s*([^:,\n]+?):\s*("(?:\\.|[^"\\])*"|\{[^{}]*\}|\[[^\[\]]*\]|[^,\n]*?)(?:,|$)')
+# Both run on text of any size (an image's own infotext, the compare form) under the GIL, so they
+# stay linear. A tag never spans another "<" ("<lora:a<lora:a..." tried every "<" to the end of the
+# text; "<lora:sty <lora:style:0.7>" now reads the inner tag). A key starts the line or follows a
+# comma or a colon, the only places the first try at a chunk can fail and the next one succeed, and
+# has no leading space to give back (a run without a colon was tried at every character); a key of
+# only spaces still matches (and is skipped) as before.
+_LORA_TAG_RE = re.compile(r"<(?:lora|lyco):([^:<>]+):([^<>]+)>", re.IGNORECASE)
+_KV_RE = re.compile(r'(?<![^,:])(\s*+[^\s:,][^:,\n]*?|\s++):\s*+("(?:\\.|[^"\\])*"|\{[^{}]*\}|\[[^\[\]]*\]|[^,\n]*?)(?:,|$)')
 
 _CORE_PARAM_MAP: dict[str, str] = {
     "Steps": "scripts.sampler.steps",
@@ -1236,7 +1243,8 @@ def _looks_like_params_line(line: str) -> bool:
 def parse_infotext_fields(infotext: str | None) -> dict[str, Any]:
     """Parse A1111/Forge/Remi infotext into prompt, negative, params and LoRAs."""
 
-    text = (infotext or "").replace("\r\n", "\n").strip()
+    # rows stored before infotext was capped on ingest may be longer
+    text = (infotext or "")[:MAX_INFOTEXT_CHARS].replace("\r\n", "\n").strip()
     if not text:
         return {"prompt": "", "negative_prompt": "", "params": {}, "loras": {}}
 
