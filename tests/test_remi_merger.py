@@ -7,6 +7,7 @@ validation and output paths that stay inside the checkpoint folder."""
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -240,6 +241,9 @@ def test_the_page_checks_its_inputs_before_starting(server, models):
     # macOS and Windows volumes ignore case by default: "B" is the file "b.safetensors" there
     if (models.folder / "B.safetensors").exists():
         cases.append(({**base, "custom_name": "B"}, "The filename is one of the models being merged; choose another"))
+    # another name for the same file (a hard link): the same file on every volume
+    os.link(models.folder / "b.safetensors", models.folder / "alias.safetensors")
+    cases.append(({**base, "custom_name": "alias"}, "The filename is one of the models being merged; choose another"))
     for values, message in cases:
         answer = _act(server, "merge", values)
         assert answer == {"__toast__": {"level": "warning", "message": message}}, values
