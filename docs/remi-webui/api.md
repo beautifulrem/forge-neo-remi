@@ -293,6 +293,8 @@ server sends `hello`, then a snapshot: `queue.changed`, and `job.started` +
 | `outputs.changed` | `ids` | gallery stars or removals |
 | `model.loading` | `stage`, `model` | a checkpoint is being loaded |
 | `model.loaded` | `model`, `error`? | loading finished |
+| `chain.updated` | `chain_id` and the rest of the pipeline, as `GET /chains/{id}` returns it | a pipeline or one of its stages changed |
+| `chain.stage_completed` | `chain_id`, `stage_index`, `kind`, `status`, `cached`, `job_id`, `output_file_ids`, `output_prompt` | a pipeline stage ended |
 | `pong` | – | answer to `ping` |
 | `resync` | `dropped` | the client fell behind; a fresh snapshot follows, refetch what you show |
 
