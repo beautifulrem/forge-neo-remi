@@ -5,7 +5,7 @@
  * line (queue position, step, ETA, forever / repeat state).
  */
 import { useQuery } from "@tanstack/react-query"
-import { Ban, Bell, ChevronDown, Infinity as InfinityIcon, Loader2, Repeat, RotateCcw, SkipForward, X } from "@/components/icons"
+import { Ban, Bell, ChevronDown, Infinity as InfinityIcon, Loader2, Plus, Repeat, RotateCcw, SkipForward, X } from "@/components/icons"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
@@ -178,9 +178,11 @@ export function GenerateBar({ tab, className, showAdvice = true }: { tab: Genera
             onClick={() => dispatchRun(tab, { type: "generate" })}
             disabled={phase === "submitting"}
             aria-keyshortcuts="Control+Enter Meta+Enter"
+            title={busy ? t("Queue another") : undefined}
           >
-            {phase === "submitting" ? <Loader2 className="animate-spin" aria-hidden /> : null}
-            <span className="truncate">{busy ? t("Queue another") : t("Generate")}</span>
+            {phase === "submitting" ? <Loader2 className="animate-spin" aria-hidden /> : busy ? <Plus aria-hidden /> : null}
+            {/* beside Skip and Interrupt a narrow column has no room for "Queue another" (it read "Qu…"): the plus alone, the label read out */}
+            <span className={cn("truncate", busy && "@max-[12rem]/generate:sr-only")}>{busy ? t("Queue another") : t("Generate")}</span>
             {busy ? null : (
               <Kbd className="ml-1 hidden border border-glow-foreground/30 bg-transparent font-normal text-glow-foreground/75 @min-[14rem]/generate:inline-flex touch-only:hidden!">
                 {formatShortcut("Mod+Enter")}

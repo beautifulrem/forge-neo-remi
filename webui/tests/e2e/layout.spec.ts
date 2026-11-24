@@ -635,6 +635,32 @@ test("a popover fits a phone held sideways and scrolls inside", async ({ page })
   await expect(popover.getByRole("textbox", { name: "Search modules" })).toBeInViewport()
 })
 
+// While a job runs the Generate button shares its row with Skip and Interrupt: from 768 to 932 px
+// its "Queue another" was cut to "Qu…", with nothing to read the rest from.
+for (const [width, height] of [
+  [768, 1024],
+  [900, 1024],
+  [844, 390],
+  [932, 430],
+  [1440, 900],
+] as const) {
+  test(`the running Generate button is never a cut label at ${width}×${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await openGenerate(page)
+    await page.keyboard.press(`${mod}+Enter`)
+    const queue = page.getByRole("button", { name: "Queue another" })
+    await expect(queue).toBeVisible()
+    const label = await queue.evaluate((button) => {
+      const text = [...button.querySelectorAll("span")].find((span) => span.textContent === "Queue another")!
+      const hidden = getComputedStyle(text).position === "absolute" // read out, not shown
+      return { cut: !hidden && text.scrollWidth > text.clientWidth + 1, hidden, title: button.getAttribute("title") }
+    })
+    expect(label.cut, "a cut label").toBe(false)
+    if (label.hidden) expect(label.title).toBe("Queue another")
+    await page.getByRole("button", { name: "Interrupt" }).click()
+  })
+}
+
 // Tabbing down the rail in a short window parked a link flush against the scroller's edge, under
 // the fade, with the bottom of its focus ring cut off.
 test("the rail keeps a focused link out of its faded edges", async ({ page }) => {
