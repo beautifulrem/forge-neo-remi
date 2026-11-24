@@ -661,6 +661,30 @@ for (const [width, height] of [
   })
 }
 
+// In a short window the empty stage's frame kept its minimum height and the stage cut off what
+// was below it: held sideways, the next step ("Write a prompt, then press …") was not shown.
+for (const [width, height] of [
+  [844, 390],
+  [932, 430],
+  [1280, 720],
+] as const) {
+  test(`the empty stage shows its next step at ${width}×${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await openGenerate(page)
+    const hint = page.getByText(/^Write a prompt, then press/)
+    await expect(hint).toBeVisible()
+    const cut = await hint.evaluate((node) => {
+      const rect = node.getBoundingClientRect()
+      let box = node.parentElement
+      while (box && getComputedStyle(box).overflowY === "visible") box = box.parentElement
+      const frame = box!.getBoundingClientRect()
+      return { top: Math.round(rect.top - frame.top), bottom: Math.round(frame.bottom - rect.bottom) }
+    })
+    expect(cut.top, "room above the hint").toBeGreaterThanOrEqual(0)
+    expect(cut.bottom, "room below the hint").toBeGreaterThanOrEqual(0)
+  })
+}
+
 // Tabbing down the rail in a short window parked a link flush against the scroller's edge, under
 // the fade, with the bottom of its focus ring cut off.
 test("the rail keeps a focused link out of its faded edges", async ({ page }) => {

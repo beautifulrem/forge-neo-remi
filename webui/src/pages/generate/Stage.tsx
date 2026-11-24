@@ -65,9 +65,11 @@ function EmptyViewfinder({ tab, waiting }: { tab: GenerateTab; waiting: boolean 
   const ratioValue = metrics.width / metrics.height
 
   return (
-    <div className="flex size-full flex-col items-center justify-center gap-4 p-6 sm:p-8">
+    // a short stage (a phone held sideways) gives up the frame's room, never the next step's: the
+    // frame shrinks, and goes when there is too little of it to read as one
+    <div className="flex size-full flex-col items-center justify-center gap-4 p-6 sm:p-8 [@media(max-height:32rem)]:gap-2 [@media(max-height:32rem)]:py-3">
       <div
-        className="flex min-h-32 w-full max-w-md flex-1 items-center justify-center"
+        className="flex min-h-0 w-full max-w-md flex-1 items-center justify-center [@container(max-height:3rem)]:*:hidden"
         style={{ containerType: "size" }}
       >
         <div
