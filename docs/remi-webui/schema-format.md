@@ -188,7 +188,11 @@ needs `init_img` in every mode but "Batch", `mask` in "Inpaint", `sketch` in
 the core values under which `param` must not be empty (`null`, a blank
 string or an empty list). Clients check them before submitting, mark the
 fields with `message` (a catalog key, like every server message) and send
-nothing; the server applies the same list.
+nothing; the server applies the same list. With `--hide-ui-dir-config` the
+inputs that name a path on the server (`input_dir`, `video_input`, and
+img2img's `batch_input_dir` when the batch reads a directory) are refused
+whatever their value, and `core.required` gives that reason as their
+`message`.
 
 A rejected request answers with
 
