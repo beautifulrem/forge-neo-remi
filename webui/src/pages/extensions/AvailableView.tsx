@@ -9,6 +9,7 @@ import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { Check, Download, ExternalLink, Loader2, PackageSearch, Search, Star } from "@/components/icons"
 import { useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useRouteParams, useRouteSearch } from "@/app/route-params"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
@@ -183,6 +184,9 @@ function IndexList({ items, tags, access }: { items: IndexEntry[]; tags: Record<
   )
 }
 
+/** The filters in the address (`#/extensions?tab=available&q=lora&sort=stars&tags=ads`). */
+const AVAILABLE_PARAMS = { q: "", sort: "newest", recent: "1", tags: [...DEFAULT_HIDDEN_TAGS].sort().join(","), tagmode: "hide", match: "any" }
+
 export function AvailableView() {
   const { t } = useTranslation()
   const installed = useQuery(installedQuery)
@@ -190,12 +194,13 @@ export function AvailableView() {
   const access = installed.data?.access ?? false
   const [urlDraft, setUrlDraft] = useState<string | null>(null)
   const [url, setUrl] = useState<string | null>(null)
-  const [query, setQuery] = useState("")
-  const [tagSet, setTagSet] = useState<ReadonlySet<string>>(() => new Set(DEFAULT_HIDDEN_TAGS))
-  const [tagMode, setTagMode] = useState<"hide" | "show">("hide")
-  const [match, setMatch] = useState<"any" | "all">("any")
-  const [sort, setSort] = useState<IndexSort>("newest")
-  const [recentOnly, setRecentOnly] = useState(true)
+  const [params, setParams] = useRouteParams(AVAILABLE_PARAMS)
+  const [query, setQuery] = useRouteSearch(params.q, (q) => setParams({ q }))
+  const tagSet = useMemo<ReadonlySet<string>>(() => new Set(params.tags.split(",").filter(Boolean)), [params.tags])
+  const tagMode = params.tagmode === "show" ? "show" : "hide"
+  const match = params.match === "all" ? "all" : "any"
+  const sort: IndexSort = (SORTS as readonly string[]).includes(params.sort) ? (params.sort as IndexSort) : "newest"
+  const recentOnly = params.recent !== "0"
   const source = url ?? defaultUrl
   const index = useQuery({
     queryKey: extensionKeys.index(source),
@@ -267,7 +272,7 @@ export function AvailableView() {
               </InputGroupAddon>
               <InputGroupInput className="h-full" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("Search extensions")} aria-label={t("Search extensions")} />
             </InputGroup>
-            <Select<IndexSort> items={SORTS.map((value) => ({ value, label: t(SORT_LABELS[value]) }))} value={sort} onValueChange={(value) => value && setSort(value)}>
+            <Select<IndexSort> items={SORTS.map((value) => ({ value, label: t(SORT_LABELS[value]) }))} value={sort} onValueChange={(value) => value && setParams({ sort: value })}>
               <SelectTrigger size="sm" aria-label={t("Sort order")} className="min-w-40">
                 <SelectValue />
               </SelectTrigger>
@@ -279,7 +284,7 @@ export function AvailableView() {
                 ))}
               </SelectContent>
             </Select>
-            <Toggle size="sm" pressed={recentOnly} onPressedChange={setRecentOnly} title={t("Only extensions updated after {{date}}", { date: RECENT_SINCE })} className={cn(FIELD_BUTTON_CLASS, "h-7 px-2 text-xs")}>
+            <Toggle size="sm" pressed={recentOnly} onPressedChange={(pressed) => setParams({ recent: pressed ? "1" : "0" })} title={t("Only extensions updated after {{date}}", { date: RECENT_SINCE })} className={cn(FIELD_BUTTON_CLASS, "h-7 px-2 text-xs")}>
               {t("2025+")}
             </Toggle>
             <span className="ml-auto text-xs text-muted-foreground tabular-nums" role="status" aria-live="polite">
@@ -295,7 +300,7 @@ export function AvailableView() {
                 { value: "show", label: t("Only tagged") },
               ]}
               value={tagMode}
-              onValueChange={setTagMode}
+              onValueChange={(tagmode) => setParams({ tagmode })}
             />
             <Segmented
               size="sm"
@@ -305,7 +310,7 @@ export function AvailableView() {
                 { value: "all", label: t("All tags") },
               ]}
               value={match}
-              onValueChange={setMatch}
+              onValueChange={(next) => setParams({ match: next })}
             />
             <div role="group" aria-label={t("Tags")} className="flex flex-wrap gap-1">
               {allTags.map((tag) => (
@@ -314,14 +319,12 @@ export function AvailableView() {
                   size="sm"
                   variant="outline"
                   pressed={tagSet.has(tag)}
-                  onPressedChange={(pressed) =>
-                    setTagSet((current) => {
-                      const next = new Set(current)
-                      if (pressed) next.add(tag)
-                      else next.delete(tag)
-                      return next
-                    })
-                  }
+                  onPressedChange={(pressed) => {
+                    const next = new Set(tagSet)
+                    if (pressed) next.add(tag)
+                    else next.delete(tag)
+                    setParams({ tags: [...next].sort().join(",") })
+                  }}
                   title={index.data.tags[tag] || undefined}
                   className={cn("h-6 px-2 text-xs", tagSet.has(tag) && tagMode === "hide" && "line-through")}
                 >

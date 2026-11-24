@@ -56,4 +56,5 @@ afterEach(() => {
   cleanup()
   localStorage.clear()
   sessionStorage.clear()
+  window.history.replaceState(null, "", "/")
 })

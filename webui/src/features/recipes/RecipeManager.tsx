@@ -7,6 +7,7 @@
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
 import { BookOpen, ClipboardPaste, Download, Plus, Search, Trash2, Upload } from "@/components/icons"
 import { useDeferredValue, useRef, useState } from "react"
+import { useRouteParams, useRouteSearch } from "@/app/route-params"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import type { FormTab } from "@/api/types"
@@ -47,10 +48,15 @@ function downloadJson(filename: string, data: unknown) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+/** The filters in the address, beside the queue's (`#/queue?view=recipes&recipes=turbo&family=Qwen`). */
+const RECIPE_PARAMS = { recipes: "", family: "" }
+
 export function RecipeManager() {
   const { t } = useTranslation()
-  const [search, setSearch] = useState("")
-  const [family, setFamily] = useState("")
+  const [params, setParams] = useRouteParams(RECIPE_PARAMS)
+  const [search, setSearch] = useRouteSearch(params.recipes, (recipes) => setParams({ recipes }))
+  const family = params.family
+  const setFamily = (next: string) => setParams({ family: next })
   const [captureOpen, setCaptureOpen] = useState(false)
   const [captureTab, setCaptureTab] = useState<FormTab>("txt2img")
   const [name, setName] = useState("")
@@ -269,7 +275,7 @@ export function RecipeManager() {
               size="sm"
               onClick={() => {
                 setSearch("")
-                setFamily("")
+                setParams({ recipes: "", family: "" })
               }}
             >
               {t("Clear filters")}

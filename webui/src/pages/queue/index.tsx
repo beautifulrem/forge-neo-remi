@@ -7,13 +7,14 @@
  */
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { Ban, BookOpen, Eraser, GitMerge, Import, Infinity as InfinityIcon, ListOrdered, MoreHorizontal, Pause, Play, Search, Star } from "@/components/icons"
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
 import { queueItemsQuery } from "@/api/queries"
 import type { FormTab, Job, QueueStatus } from "@/api/types"
 import { HeaderSlot } from "@/app/header-slot"
-import { navigate, type Route } from "@/app/router"
+import { useRouteParams, useRouteSearch } from "@/app/route-params"
+import { currentRoute, navigate, type Route } from "@/app/router"
 import { LoadFailed } from "@/components/LoadFailed"
 import { Segmented } from "@/components/Segmented"
 import {
@@ -57,15 +58,10 @@ function parseQueueView(value: string | null | undefined): QueueViewMode {
 }
 
 const ALL_TABS = "__all__"
+const FORMS: readonly string[] = ["txt2img", "img2img", "extras"]
 
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), ms)
-    return () => clearTimeout(timer)
-  }, [value, ms])
-  return debounced
-}
+/** The history filters in the address (`#/queue?status=failed&form=img2img&starred=1&q=cat`). */
+const HISTORY_PARAMS = { status: "all", form: ALL_TABS, starred: "", q: "" }
 
 function Pending({ status }: { status: QueueStatus | undefined }) {
   const { t } = useTranslation()
@@ -97,11 +93,13 @@ function Pending({ status }: { status: QueueStatus | undefined }) {
 
 function History({ onView }: { onView: (job: Job, index: number) => void }) {
   const { t } = useTranslation()
-  const [text, setText] = useState("")
-  const q = useDebounced(text.trim(), 300)
-  const [filter, setFilter] = useState<HistoryFilter>("all")
-  const [starred, setStarred] = useState(false)
-  const [tab, setTab] = useState<FormTab | typeof ALL_TABS>(ALL_TABS)
+  // in the address: a reload, or Back from a job opened in its form, keeps them
+  const [params, setParams] = useRouteParams(HISTORY_PARAMS)
+  const [text, setText] = useRouteSearch(params.q, (q) => setParams({ q }))
+  const q = params.q
+  const filter: HistoryFilter = Object.hasOwn(HISTORY_STATUSES, params.status) ? (params.status as HistoryFilter) : "all"
+  const starred = params.starred === "1"
+  const tab = FORMS.includes(params.form) ? (params.form as FormTab) : ALL_TABS
   const query = { status: HISTORY_STATUSES[filter], ...(q ? { q } : {}), ...(starred ? { starred: true } : {}), ...(tab !== ALL_TABS ? { tab } : {}) }
   const history = useInfiniteQuery(historyQuery(query))
   const jobs = history.data?.pages.flatMap((page) => page.items) ?? []
@@ -124,7 +122,7 @@ function History({ onView }: { onView: (job: Job, index: number) => void }) {
           <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input type="search" value={text} onChange={(event) => setText(event.target.value)} placeholder={t("Search prompts and parameters…")} aria-label={t("Search the history")} className="h-7 pl-7 text-[0.8rem]" />
         </div>
-        <Toggle size="sm" className={FIELD_BUTTON_CLASS} pressed={starred} onPressedChange={setStarred} aria-label={t("Starred only")} title={t("Starred only")}>
+        <Toggle size="sm" className={FIELD_BUTTON_CLASS} pressed={starred} onPressedChange={(pressed) => setParams({ starred: pressed ? "1" : "" })} aria-label={t("Starred only")} title={t("Starred only")}>
           <Star className={cn(starred && "fill-star text-star")} aria-hidden />
         </Toggle>
       </div>
@@ -133,7 +131,7 @@ function History({ onView }: { onView: (job: Job, index: number) => void }) {
           size="sm"
           aria-label={t("Status")}
           value={filter}
-          onValueChange={setFilter}
+          onValueChange={(status) => setParams({ status })}
           options={[
             { value: "all", label: t("All") },
             { value: "completed", label: t("Completed") },
@@ -141,7 +139,7 @@ function History({ onView }: { onView: (job: Job, index: number) => void }) {
             { value: "stopped", label: t("Stopped") },
           ]}
         />
-        <Select items={tabs} value={tab} onValueChange={(value) => value !== null && setTab(value as FormTab | typeof ALL_TABS)}>
+        <Select items={tabs} value={tab} onValueChange={(value) => value !== null && setParams({ form: value })}>
           <SelectTrigger size="sm" aria-label={t("Form")}>
             <SelectValue />
           </SelectTrigger>
@@ -188,7 +186,12 @@ export default function QueuePage({ route }: { route?: Route } = {}) {
   }
   const setMode = (next: QueueViewMode) => {
     setLocalMode(next)
-    if (route) navigate({ name: "queue", query: next === "queue" ? undefined : new URLSearchParams({ view: next }) }, { replace: true })
+    if (!route) return
+    // the view joins the filters in the address
+    const params = new URLSearchParams(currentRoute().query)
+    if (next === "queue") params.delete("view")
+    else params.set("view", next)
+    navigate({ name: "queue", query: params.size > 0 ? params : undefined }, { replace: true })
   }
   const [importing, setImporting] = useState(false)
   const [confirm, setConfirm] = useState<Confirm>(null)

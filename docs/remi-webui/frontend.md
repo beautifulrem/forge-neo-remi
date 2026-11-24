@@ -69,6 +69,14 @@ imperatively).
   still opens them), optional `?query`). Hash routing
   keeps the server contract to "serve `index.html` at `/`". Use
   `navigate(route)`, `routeHref(route)` for links, `useRoute()` to read.
+  The filters of the queue history, the recipes, the available extensions
+  and the diagnostics live in the address (`app/route-params.ts`:
+  `useRouteParams`, and `useRouteSearch` for a search field, written after a
+  pause), so a reload, a link and Back restore them; an Extensions tab starts
+  with no filters. Settings keep theirs in a module store mirrored into the
+  address (`settings-filters.ts`); the gallery's filters and the network
+  browser's persist (`remi-gallery-view`, `remi-networks`); the gallery's
+  search text and the installed extensions' filter are per visit.
 - **Pages** are code-split: `app/routes.tsx` maps each route name to a
   `retryableLazy(() => import("@/pages/…"))`; nav items preload their chunk on
   hover/focus. A page component receives `{ route }` (its own route variant).
@@ -1091,7 +1099,9 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
   written as they change (continuous kinds debounced; a refusal reverts with
   the message). Pins are set from the settings rows (optimistic
   `PATCH quicksettings_list`).
-- **Extensions** (`pages/extensions`, `#/extensions?tab=installed|available|url|backup`):
+- **Extensions** (`pages/extensions`, `#/extensions?tab=installed|available|url|backup|diagnostics`,
+  plus the filters of Available, `q sort recent tags tagmode match`, and of
+  Diagnostics, `q filter`):
   installed list (user and built-in apart; switches and update marks are
   staged, then "Save" or "Apply and reload UI"; per-extension or bulk update
   checks with progress, one request each, four at a time, stoppable;
@@ -1170,7 +1180,9 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
   infotext panel; its toolbar has the result actions ("use parameters",
   send to, download). `outputs.changed` and finished jobs refresh it;
   "Rescan" indexes the output folders.
-- **Queue** (`pages/queue`, `features/queue`): two columns on wide screens
+- **Queue** (`pages/queue`, `features/queue`, `#/queue?view=pipelines|recipes`,
+  plus the history's `status form starred q` and the recipes' `recipes
+  family`): two columns on wide screens
   (queue | history), tabs below 64 rem. The running card (live preview frames
   of the running job, step / batch / ETA, skip, interrupt), "Up next" in run
   order from `GET /queue/items` (`queue.changed` keeps it current) and the

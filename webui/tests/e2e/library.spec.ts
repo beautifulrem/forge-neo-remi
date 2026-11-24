@@ -86,6 +86,24 @@ async function go(page: Page, hash: string) {
 }
 
 test.describe("queue", () => {
+  // The history filters were the page's own state: a reload, or Back after opening a job in its
+  // form, showed every job again.
+  test("keeps the history filters through a reload and Back", async ({ page }) => {
+    await page.goto("/#/queue")
+    const history = page.getByRole("region", { name: "History" })
+    await history.getByRole("radio", { name: "Failed" }).click()
+    await history.getByRole("searchbox", { name: "Search the history" }).fill("cat")
+    await expect(page).toHaveURL(/#\/queue\?status=failed&q=cat$/)
+    await page.reload()
+    await expect(history.getByRole("radio", { name: "Failed" })).toBeChecked()
+    await expect(history.getByRole("searchbox", { name: "Search the history" })).toHaveValue("cat")
+    await go(page, "#/gallery")
+    await expect(page.getByRole("list", { name: "Images" })).toBeVisible()
+    await page.goBack()
+    await expect(history.getByRole("radio", { name: "Failed" })).toBeChecked()
+    await expect(history.getByRole("searchbox", { name: "Search the history" })).toHaveValue("cat")
+  })
+
   test("lines jobs up while paused, reorders them from the keyboard and resumes", async ({ page }) => {
     await page.goto("/#/queue")
     await page.getByRole("button", { name: "Pause" }).click()

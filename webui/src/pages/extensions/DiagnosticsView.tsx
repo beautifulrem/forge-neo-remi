@@ -6,7 +6,7 @@
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { RefreshCw, RotateCw, Search } from "@/components/icons"
-import { useState } from "react"
+import { useRouteParams, useRouteSearch } from "@/app/route-params"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { ApiError } from "@/api/http"
@@ -67,10 +67,15 @@ function HealthIndicator({ health }: { health: ExtensionDiagnosticItem["health"]
   )
 }
 
+/** The filters in the address (`#/extensions?tab=diagnostics&filter=issues&q=lora`). */
+const DIAGNOSTICS_PARAMS = { q: "", filter: "all" }
+const DIAG_FILTERS: readonly string[] = ["all", "issues", "manifest", "disabled"]
+
 export function DiagnosticsView() {
   const { t } = useTranslation()
-  const [search, setSearch] = useState("")
-  const [filter, setFilter] = useState<DiagFilter>("all")
+  const [params, setParams] = useRouteParams(DIAGNOSTICS_PARAMS)
+  const [search, setSearch] = useRouteSearch(params.q, (q) => setParams({ q }))
+  const filter = (DIAG_FILTERS.includes(params.filter) ? params.filter : "all") as DiagFilter
 
   const diag = useQuery(extensionDiagnosticsQuery)
   const workers = useQuery(workersStatusQuery)
@@ -311,7 +316,7 @@ export function DiagnosticsView() {
                 key={btn.id}
                 type="button"
                 aria-pressed={filter === btn.id}
-                onClick={() => setFilter(btn.id)}
+                onClick={() => setParams({ filter: btn.id })}
                 className={cn(
                   "relative h-7 rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                   filter === btn.id
