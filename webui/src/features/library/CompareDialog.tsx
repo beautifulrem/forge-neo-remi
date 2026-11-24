@@ -37,7 +37,7 @@ export function CompareDialog({ images, onOpenChange }: CompareDialogProps) {
   return (
     <Dialog open={images !== null} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[94dvh] w-[min(96vw,1400px)] max-w-none flex-col gap-3 sm:max-w-none">
-        <DialogHeader className="flex-row flex-wrap items-center justify-between gap-2">
+        <DialogHeader className="flex-row flex-wrap items-center justify-between gap-2 pr-8">
           <div className="min-w-0">
             <DialogTitle>{t("Compare images")}</DialogTitle>
             <DialogDescription className="truncate" title={a && b ? `${a.name} · ${b.name}` : undefined}>

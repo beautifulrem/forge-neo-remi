@@ -53,6 +53,19 @@ test.describe("gallery", () => {
       await slider.press("Home")
       await expect(slider).toHaveAttribute("aria-valuenow", "0", { timeout: 500 })
     }).toPass()
+    // the close button in the corner covers none of the header's controls (a click there closed the dialog)
+    for (const width of [1440, 1024]) {
+      await page.setViewportSize({ width, height: 900 })
+      const covered = await dialog.evaluate((root) => {
+        const close = [...root.querySelectorAll<HTMLElement>("[data-slot=dialog-close]")].at(-1)!.getBoundingClientRect()
+        return [...root.querySelectorAll<HTMLElement>("button, [role=radio]")]
+          .filter((element) => element.getAttribute("data-slot") !== "dialog-close")
+          .map((element) => ({ name: element.getAttribute("aria-label") || element.textContent?.trim() || "", box: element.getBoundingClientRect() }))
+          .filter(({ box }) => box.width > 0 && Math.min(box.right, close.right) - Math.max(box.left, close.left) > 0.5 && Math.min(box.bottom, close.bottom) - Math.max(box.top, close.top) > 0.5)
+          .map(({ name }) => name)
+      })
+      expect(covered, `at ${width} px`).toEqual([])
+    }
   })
 
   test("sends an image's parameters to txt2img through PNG Info", async ({ page }) => {
