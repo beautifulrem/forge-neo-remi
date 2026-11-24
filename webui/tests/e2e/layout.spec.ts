@@ -457,3 +457,52 @@ test.describe("the canvas staging bar", () => {
     })
   }
 })
+
+test.describe("the img2img stage on a phone held sideways", () => {
+  // The editor kept its 16rem floor in a column that had less room: it overflowed onto the history
+  // strip, whose thumbnails then covered the editor's history and zoom controls.
+  for (const [width, height] of [
+    [844, 390],
+    [932, 430],
+  ] as const) {
+    test(`at ${width}×${height} keeps the history strip below the editor`, async ({ page }) => {
+      await page.setViewportSize({ width, height })
+      await openGenerate(page, "img2img")
+      const history = page.getByRole("region", { name: "History" })
+      const editor = page.locator("#img2img-stage-source > *").first()
+      const apart = async () => {
+        const [top, bottom] = await Promise.all([editor.boundingBox(), history.boundingBox()])
+        return Math.round(bottom!.y - (top!.y + top!.height))
+      }
+      expect(await apart(), "empty editor").toBeGreaterThanOrEqual(0)
+      const png = await page.evaluate(() => {
+        const canvas = document.createElement("canvas")
+        canvas.width = 640
+        canvas.height = 480
+        canvas.getContext("2d")!.fillRect(0, 0, 640, 480)
+        return canvas.toDataURL("image/png").split(",")[1]!
+      })
+      const chooser = page.waitForEvent("filechooser")
+      await page.getByRole("button", { name: "Add a source image" }).click()
+      await (await chooser).setFiles({ name: "source.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") })
+      await expect(page.getByRole("img", { name: /^Image editor/ })).toBeVisible()
+      expect(await apart(), "with a source image").toBeGreaterThanOrEqual(0)
+      // the editor keeps room to work in, and the history is a scroll away, not under it
+      expect((await editor.boundingBox())!.height).toBeGreaterThanOrEqual(256)
+      const heading = history.getByRole("heading", { name: "History" })
+      await heading.scrollIntoViewIfNeeded()
+      const hit = await heading.evaluate((element) => {
+        const box = element.getBoundingClientRect()
+        return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2))
+      })
+      expect(hit).toBe(true)
+      // the result view: its picture scales down to the room there is
+      await page.keyboard.press(`${mod}+Enter`)
+      await expect(page.getByRole("tab", { name: "Result" })).toHaveAttribute("aria-selected", "true", { timeout: 20_000 })
+      const picture = page.getByRole("button", { name: "Open image viewer" }).filter({ has: page.getByRole("img", { name: "Generated image" }) })
+      await expect(picture).toBeVisible()
+      const [shown, strip] = await Promise.all([picture.boundingBox(), history.boundingBox()])
+      expect(Math.round(strip!.y - (shown!.y + shown!.height)), "result view").toBeGreaterThanOrEqual(0)
+    })
+  }
+})

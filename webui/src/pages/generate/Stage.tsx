@@ -134,6 +134,13 @@ type StageProps = {
 /** Below this height the parameters panel starts collapsed: the image keeps the room. */
 const COMPACT_STAGE_PX = 520
 
+/**
+ * In the img2img Source view the editor's floor (16rem) holds the stage open: a column with less
+ * room (a phone held sideways) scrolls, and the history strip follows the editor instead of lying
+ * under it. The result view has no floor: its picture scales down (the viewer shows it whole).
+ */
+const SOURCE_FLOOR = "has-[#img2img-stage-source]:min-h-fit"
+
 export function Stage({ tab, onOpenViewer, className, leading, trailing, toolbar }: StageProps) {
   const { t } = useTranslation()
   const job = useOwnRunningJob()
@@ -176,7 +183,7 @@ export function Stage({ tab, onOpenViewer, className, leading, trailing, toolbar
   }, [])
 
   const image = (
-    <div data-lit={job ? "" : undefined} className="relative flex min-h-48 flex-1 items-center justify-center overflow-hidden rounded-md bg-canvas data-lit:shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--glow)_30%,transparent),inset_0_0_80px_-20px_var(--glow-dim)]">
+    <div data-lit={job ? "" : undefined} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-md bg-canvas data-lit:shadow-[inset_0_0_0_1px_color-mix(in_oklch,var(--glow)_30%,transparent),inset_0_0_80px_-20px_var(--glow-dim)]">
       {video && item ? (
         // A generated video (e.g. Wan): played here; its frames stay in the history and the viewer.
         <video
@@ -262,10 +269,10 @@ export function Stage({ tab, onOpenViewer, className, leading, trailing, toolbar
 
   if (tab === "img2img") {
     return (
-      <section ref={section} aria-label={t("Image area")} className={cn("@container/actions flex min-h-0 flex-col gap-2", className)}>
+      <section ref={section} aria-label={t("Image area")} className={cn("@container/actions flex min-h-0 flex-col gap-2", className, SOURCE_FLOOR)}>
         {toolbarRow}
         <Img2imgStage
-          className="min-h-0 flex-1"
+          className={cn("min-h-0 flex-1", SOURCE_FLOOR)}
           leading={toolbar ? null : leading}
           trailing={toolbar ? null : trailing}
           actions={actions}

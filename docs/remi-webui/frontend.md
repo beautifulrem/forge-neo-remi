@@ -653,7 +653,10 @@ mode's schema is prefetched).
   history strip first, then the parameters with the run controls stuck to
   the bottom (and the stacked model bar). The run controls are sticky at the
   top of the parameters pane; with the pane collapsed they move to the stage
-  header.
+  header. A short window (a phone held sideways) scrolls the stage column:
+  the img2img Source view keeps the editor's 16rem floor (`SOURCE_FLOOR`
+  holds the stage open) and the history strip follows it, never under it;
+  the result picture has no floor and scales down to the room there is.
 - **Form loading** (`use-form-loader.ts`): the page loads its schema itself
   (not `TabForm`), once per schema object. On a reload (options changed, UI
   preset) image ids survive and params still at their old default follow

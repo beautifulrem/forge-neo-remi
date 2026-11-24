@@ -201,7 +201,9 @@ function DesktopLayout({ tab, openViewer, wide }: { tab: GenerateTab; openViewer
       </ResizablePanel>
       <ResizableHandle withHandle aria-label={t("Resize the parameters panel")} />
       <ResizablePanel id="stage" minSize={320}>
-        <div className="flex h-full flex-col gap-2 p-3">
+        {/* A short window (a phone held sideways) scrolls the column: the img2img editor keeps its
+            floor and the history strip follows it instead of lying under it. */}
+        <div className="flex h-full flex-col gap-2 overflow-y-auto overscroll-contain p-3">
           <Stage
             tab={tab}
             onOpenViewer={() => openViewer()}
@@ -210,7 +212,7 @@ function DesktopLayout({ tab, openViewer, wide }: { tab: GenerateTab; openViewer
             trailing={wide ? <PaneToggle side="right" collapsed={historyCollapsed} onToggle={() => toggle(historyRef)} /> : null}
             toolbar={paramsCollapsed ? <GenerateBar tab={tab} showAdvice={false} className="min-w-0 flex-1" /> : null}
           />
-          {wide ? null : <HistoryPane onOpen={openViewer} orientation="strip" />}
+          {wide ? null : <HistoryPane onOpen={openViewer} orientation="strip" className="shrink-0" />}
         </div>
       </ResizablePanel>
       {wide ? (

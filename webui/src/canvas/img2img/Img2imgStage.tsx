@@ -150,7 +150,7 @@ export function Img2imgStage({ result, actions, leading, trailing, className }: 
         {trailing ? <div className="ml-auto flex items-center">{trailing}</div> : null}
       </div>
       {shown === "source" && binding ? (
-        <div role="tabpanel" id="img2img-stage-source" aria-labelledby="img2img-stage-tab-source" className="flex min-h-0 flex-1 flex-col">
+        <div role="tabpanel" id="img2img-stage-source" aria-labelledby="img2img-stage-tab-source" className="flex flex-1 flex-col">
           <ImageEditor
             docKey={IMG2IMG}
             pendingKey={IMG2IMG}
