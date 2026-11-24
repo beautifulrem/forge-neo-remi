@@ -1,6 +1,8 @@
+import { renderHook } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import * as toasts from "@/lib/toast"
 import { createFormStore } from "./form-store"
-import { MAX_PREVIEWS, previewUrlOf, releaseUpload, uploadFile } from "./uploads"
+import { MAX_PREVIEWS, previewUrlOf, releaseUpload, uploadFile, useUploader } from "./uploads"
 
 let n = 0
 function mockUploads() {
@@ -49,5 +51,17 @@ describe("upload previews", () => {
     // Every id is referenced, so only the cap evicts the oldest ones.
     expect(revoked.length).toBeGreaterThanOrEqual(2)
     expect(previewUrlOf(ids.at(-1)!)).toBeDefined()
+  })
+})
+
+describe("upload failures", () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it("explain a refused upload by its status, in the UI language", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ detail: "Request body exceeds 50 MB" }), { status: 413, headers: { "Content-Type": "application/json" } }))
+    const toast = vi.spyOn(toasts, "showToast").mockImplementation(() => {})
+    const { result } = renderHook(() => useUploader())
+    expect(await result.current.upload([image()])).toEqual([])
+    expect(toast).toHaveBeenCalledWith("error", "Upload failed", "The file is too large.")
   })
 })

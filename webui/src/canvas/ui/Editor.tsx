@@ -11,6 +11,7 @@ import { useClientOption } from "@/api/app-options"
 import { api } from "@/api/endpoints"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { failureText } from "@/features/errors/error-text"
 import { showToast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import { describeFile, imageFiles, previewUrlOf, uploadFile, useUploadInfo } from "@/ui/uploads"
@@ -21,7 +22,7 @@ import type { ImageEditorProps } from "../types"
 import { EditorBody } from "./EditorBody"
 import { useDocValue } from "./use-doc"
 
-const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
+const errorText = (error: unknown) => failureText(error)
 
 export default function Editor(props: ImageEditorProps) {
   const { t } = useTranslation()

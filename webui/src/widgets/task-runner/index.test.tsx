@@ -88,7 +88,7 @@ describe("task-runner widget", () => {
     const store = setup()
     await waitFor(() => expect(polls).toBe(1))
     fireEvent.click(screen.getByRole("button", { name: "Caption image" }))
-    await waitFor(() => expect(store.getState().outputs[OWNER]?.["task:caption"]).toMatchObject({ state: "failed", done: true }))
+    await waitFor(() => expect(store.getState().outputs[OWNER]?.["task:caption"]).toMatchObject({ state: "failed", done: true, error: "It is no longer there." }))
     await waitFor(() => expect(screen.getByRole("button", { name: "Caption image" })).toBeEnabled())
     expect(polls).toBe(2) // refused once: not asked again
   })

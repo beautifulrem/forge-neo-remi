@@ -71,4 +71,11 @@ describe("settings import", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("The file does not contain settings.")
     await waitFor(() => expect(screen.getByRole("button", { name: "Stage changes" })).toBeDisabled())
   })
+
+  it("explains a check the server could not run in the UI language, not the browser's error", async () => {
+    vi.spyOn(api, "validateOptions").mockRejectedValue(new TypeError("Failed to fetch"))
+    render(<ImportDialog open onOpenChange={() => {}} onStaged={() => {}} />)
+    upload({ format: EXPORT_FORMAT, version: 1, exported_at: "", values: { samples_save: false } })
+    expect(await screen.findByRole("alert")).toHaveTextContent("The server cannot be reached.")
+  })
 })

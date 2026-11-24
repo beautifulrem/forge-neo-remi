@@ -11,6 +11,7 @@ import { api } from "@/api/endpoints"
 import { validationErrors } from "@/api/http"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { failureText } from "@/features/errors/error-text"
 import { type ImportPlan, planImport } from "./settings-model"
 import { editorValues, stageValues, useSettingsEditor } from "./settings-store"
 
@@ -46,7 +47,7 @@ export function ImportDialog({ open, onOpenChange, onStaged }: { open: boolean; 
       }
       setChecked({ plan, rejected })
     } catch (failure) {
-      setError(failure instanceof Error ? t(failure.message) : String(failure))
+      setError(t(failureText(failure)))
     } finally {
       setBusy(false)
     }

@@ -12,6 +12,7 @@ import { create } from "zustand"
 import { api } from "@/api/endpoints"
 import type { Upload } from "@/api/types"
 import { t } from "@/i18n"
+import { failureText } from "@/features/errors/error-text"
 import { showToast } from "@/lib/toast"
 import { allFormStores } from "./form-store"
 
@@ -186,7 +187,7 @@ export function useUploader() {
       const failed = settled.filter((r) => r.status === "rejected")
       if (failed.length > 0) {
         const reason = (failed[0] as PromiseRejectedResult).reason
-        showToast("error", t("Upload failed"), reason instanceof Error ? reason.message : String(reason))
+        showToast("error", t("Upload failed"), failureText(reason))
       }
       return settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []))
     } finally {

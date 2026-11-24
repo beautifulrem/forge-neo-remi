@@ -9,6 +9,7 @@
 import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
 import type { ActionExtra } from "@/api/types"
+import { failureText } from "@/features/errors/error-text"
 import { type ActionContext, actionRequest, applyResponse, splitResponse } from "@/ui/actions"
 import type { Message } from "@/ui/messages"
 
@@ -63,7 +64,7 @@ function giveUp(ctx: ActionContext, owner: string, task: string, id: string, err
   const current = ctx.store.getState().outputs[owner]?.[outputKey(task)]
   if (isTaskStatus(current) && current.id !== id) return // a newer task is shown: not this follower's to fail
   const base = isTaskStatus(current) ? current : { id, name: task, progress: null, text: null }
-  const message = error instanceof Error ? error.message : String(error)
+  const message = failureText(error)
   ctx.store.getState().setOutputs(owner, { [outputKey(task)]: { ...base, state: "failed", done: true, error: message } satisfies TaskStatus })
 }
 
