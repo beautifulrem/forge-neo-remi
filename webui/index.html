@@ -12,10 +12,15 @@
     <title>Remi WebUI</title>
     <script>
       // Apply persisted appearance before first paint (see src/lib/theme.ts).
+      // Storage that throws (blocked site data) or a broken stored state only loses the user's
+      // pick: the URL's and the server's theme still apply.
+      var p = {}
+      try {
+        p = JSON.parse(localStorage.getItem("remi-appearance") || "{}") || {}
+      } catch (e) {}
       try {
         // Theme: ?__theme=… in the URL, else the user's pick, else the server's --theme, else dark.
-        var p = JSON.parse(localStorage.getItem("remi-appearance") || "{}")
-        var s = p.state || {}
+        var s = (typeof p.state === "object" && p.state) || {}
         var d = document.documentElement
         var themes = { light: 1, dark: 1, system: 1 }
         var q = new URLSearchParams(location.search).get("__theme")

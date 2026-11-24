@@ -157,6 +157,38 @@ describe("theme in effect", () => {
     expect(chevrons).toEqual(muted)
   })
 
+  // One try covered the storage and the theme: storage that throws (blocked site data) or a broken
+  // stored state dropped ?__theme and --theme as well, and the page painted dark, then turned light.
+  it("the first-paint script keeps the URL's and the server's theme when the stored state cannot be read", async () => {
+    const { readFileSync } = await import("node:fs")
+    const script = /<script>([\s\S]*?)<\/script>/.exec(readFileSync("index.html", "utf8"))![1]!
+    const root = document.documentElement
+    const meta = document.head.appendChild(Object.assign(document.createElement("meta"), { name: "theme-color" }))
+    const paint = () => {
+      root.classList.add("dark")
+      new Function(script)()
+      return root.classList.contains("dark") ? "dark" : "light"
+    }
+    try {
+      window.history.replaceState(null, "", "/?__theme=light")
+      const blocked = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+        throw new DOMException("The operation is insecure.", "SecurityError")
+      })
+      expect(paint(), "storage that throws").toBe("light")
+      blocked.mockRestore()
+
+      window.history.replaceState(null, "", "/")
+      window.__REMI_THEME__ = "light"
+      for (const stored of ["{", "null", '{"state":5}']) {
+        localStorage.setItem("remi-appearance", stored)
+        expect(paint(), stored).toBe("light")
+      }
+    } finally {
+      meta.remove()
+      root.classList.remove("dark")
+    }
+  })
+
   it("ignores an unknown server theme and an unreadable stored state", async () => {
     expect((await load({ server: "sepia" })).serverTheme()).toBeNull()
     localStorage.setItem("remi-appearance", "{not json")
