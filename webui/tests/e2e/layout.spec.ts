@@ -1,11 +1,11 @@
 /**
  * Layout and feedback checks that need a real browser: the header at
  * 1280×720 (idle and while a job runs), the Generate panes' hide / show
- * toggles (real pane sizes), tab strips on a phone, platform
+ * toggles (real pane sizes), tab strips on a phone, boxes that scroll sideways, platform
  * shortcut hints and generation warnings.
  */
 import { expect, type Page, test } from "@playwright/test"
-import { mod, openGenerate, presetStorage, setPrompt } from "./helpers"
+import { mod, openGenerate, openRoute, presetStorage, setPrompt } from "./helpers"
 
 /** Pairs of header controls whose boxes overlap, and kbd hints cut by their button. */
 async function headerProblems(page: Page): Promise<string[]> {
@@ -531,4 +531,64 @@ test.describe("the img2img stage on a phone held sideways", () => {
       expect(Math.round(strip!.y - (shown!.y + shown!.height)), "result view").toBeGreaterThanOrEqual(0)
     })
   }
+})
+
+/** Boxes that scroll sideways though only meant to scroll up and down, and the page itself. */
+async function sidewaysScrolls(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const found = [...document.querySelectorAll<HTMLElement>("body *")]
+      .filter((element) => {
+        const classes = element.getAttribute("class") ?? ""
+        // strips meant to scroll sideways say so
+        if (!["auto", "scroll"].includes(getComputedStyle(element).overflowX) || /overflow-x-auto|\[scrollbar-width:none\]/.test(classes)) return false
+        return element.clientWidth > 0 && element.scrollWidth > element.clientWidth
+      })
+      .map((element) => `"${(element.getAttribute("class") ?? "").slice(0, 60)}" scrolls sideways by ${element.scrollWidth - element.clientWidth}px`)
+    const page = document.documentElement.scrollWidth - innerWidth
+    return page > 0 ? [...found, `the page scrolls sideways by ${page}px`] : found
+  })
+}
+
+test.describe("no sideways scrolling", () => {
+  // The copy button's hit area reaches 8 px past it, the panel left it 4 px: the parameters
+  // panel scrolled sideways under every result (a scrollbar under it where scrollbars show).
+  test("the parameters under a result", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await openGenerate(page)
+    await page.keyboard.press(`${mod}+Enter`)
+    // the parameters panel shows once the run is done
+    await expect(page.getByRole("region", { name: "Result" }).getByRole("heading", { name: "Prompt", exact: true })).toBeVisible({ timeout: 20_000 })
+    expect(await sidewaysScrolls(page)).toEqual([])
+  })
+
+  // Below two columns the page was one column as wide as its widest line: the three section
+  // tabs (or a long file name) pushed the page past a phone's window.
+  test("PNG Info on a phone", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openRoute(page, "png-info")
+    const png = await page.evaluate(() => {
+      const canvas = document.createElement("canvas")
+      canvas.width = 64
+      canvas.height = 48
+      canvas.getContext("2d")!.fillRect(0, 0, 64, 48)
+      return canvas.toDataURL("image/png").split(",")[1]!
+    })
+    const chooser = page.waitForEvent("filechooser")
+    await page.getByRole("button", { name: "Choose an image to read" }).click()
+    await (await chooser).setFiles({ name: "source.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") })
+    await expect(page.getByRole("main").locator("section h2")).toBeVisible()
+    expect(await sidewaysScrolls(page)).toEqual([])
+    // the section tabs do not fit: a select stands in for them
+    const sections = page.getByRole("main").getByRole("combobox", { name: "Metadata" })
+    await expect(sections).toBeVisible()
+
+    await page.getByRole("main").locator("section h2").first().evaluate((title) => (title.textContent = `${"a".repeat(120)}.png`))
+    expect(await sidewaysScrolls(page), "a long file name").toEqual([])
+
+    // the select switches sections as the tabs do
+    await sections.click()
+    await page.locator("[data-slot=select-item]").filter({ hasText: "All metadata" }).click()
+    await expect(page.getByRole("rowheader", { name: "Software" })).toBeVisible()
+    expect(await sidewaysScrolls(page)).toEqual([])
+  })
 })

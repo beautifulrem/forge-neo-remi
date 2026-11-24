@@ -206,7 +206,12 @@ imperatively).
   shares a row gets a `min-w` for what it cannot fold: too narrow a row then
   wraps instead of sliding it under its neighbour. A grid never leaves an
   empty cell (the img2img mode picker and the phone's More sheet centre a
-  short last row).
+  short last row). A tab strip that may not fit (three tabs or more,
+  translated labels) is a `FitTabsList`, which turns into a select rather
+  than scroll, wrap or cut a label (Extensions, the network kinds, PNG
+  Info). A grid whose columns start at a breakpoint is `grid-cols-1` below
+  it: its implicit column is as wide as its longest line (a file name, a tab
+  strip) and would push a phone's page sideways.
 - A running job's progress shows once where the user looks: over the stage
   (`ProgressOverlay`, which registers itself in
   `features/progress/stage-overlay.ts`), and in the run bar's status line
@@ -292,7 +297,9 @@ generated interfaces (sources: Linear's
   fixed amber. Touch screens get no number steppers (the numeric keyboard
   types the value), and controls hidden until hover take no taps while
   hidden. A scroller (the JSON Builder column, `FadeStrip`) keeps 4 px of
-  room around its controls so their focus rings are not clipped. Toolbar
+  room around its controls so their focus rings are not clipped. A hit box
+  reaches further, so a scroller with one at its edge scrolls only up and
+  down (`overflow-x-hidden`, the parameters under a result). Toolbar
   controls (header, settings, extensions, gallery) are one 28 px height.
   A pressed toggle wears the selection tint (`--primary` text on a 15 %
   wash, 20 % in the dark theme, 25 % there when hovered), set once in

@@ -13,9 +13,10 @@ import { toast } from "sonner"
 import { api } from "@/api/endpoints"
 import { navigate, type Route } from "@/app/router"
 import { HeaderSlot } from "@/app/header-slot"
+import { FitTabsList } from "@/components/FitTabsList"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent, TabsTrigger } from "@/components/ui/tabs"
 import { errorText } from "@/features/errors/error-text"
 import { copyText } from "@/features/gallery/files"
 import { InfotextPanel } from "@/features/infotext/InfotextPanel"
@@ -113,6 +114,7 @@ function Actions({ fileId, infotext }: { fileId: string; infotext: string | null
 function Details({ fileId }: { fileId: string }) {
   const { t } = useTranslation()
   const info = useQuery({ queryKey: ["pnginfo", fileId], queryFn: ({ signal }) => api.pngInfo(fileId, signal), staleTime: Infinity })
+  const [section, setSection] = useState("params")
   if (info.isPending) return <Skeleton className="h-64 w-full" />
   if (info.isError)
     return (
@@ -142,8 +144,20 @@ function Details({ fileId }: { fileId: string }) {
           <Actions fileId={fileId} infotext={data.infotext ?? null} />
         </div>
       </section>
-      <Tabs defaultValue="params" className={panelClass(0)}>
-        <TabsList variant="line" className="w-full justify-start border-b pb-px">
+      <Tabs value={section} onValueChange={(value) => setSection(String(value))} className={panelClass(0)}>
+        {/* on a phone the three tabs do not fit: they become a select */}
+        <FitTabsList
+          aria-label={t("Metadata")}
+          variant="line"
+          className="border-b pb-px"
+          options={[
+            { value: "params", label: t("Parameters"), icon: <SlidersHorizontal aria-hidden /> },
+            { value: "entries", label: `${t("All metadata")} (${data.entries.length})`, icon: <ListTree aria-hidden /> },
+            { value: "chunks", label: t("PNG chunks"), icon: <Rows3 aria-hidden />, disabled: data.chunks.length === 0 },
+          ]}
+          value={section}
+          onValueChange={setSection}
+        >
           <TabsTrigger value="params" className="flex-none px-2.5">
             <SlidersHorizontal aria-hidden />
             {t("Parameters")}
@@ -157,7 +171,7 @@ function Details({ fileId }: { fileId: string }) {
             <Rows3 aria-hidden />
             {t("PNG chunks")}
           </TabsTrigger>
-        </TabsList>
+        </FitTabsList>
         <TabsContent value="params" className="pt-2">
           <ParametersTable params={data.params} />
         </TabsContent>
@@ -216,7 +230,8 @@ export default function PngInfoPage({ route }: { route: Route }) {
           <span className="hidden sm:inline">{t("Clear")}</span>
         </Button>
       </HeaderSlot>
-      <div className="mx-auto grid w-full max-w-6xl gap-4 p-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:items-start">
+      {/* one column below lg, as wide as the window whatever its longest line (a file name, the tabs) */}
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-4 p-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:items-start">
         <div className="flex flex-col gap-2 lg:sticky lg:top-4">
           <DropZone onFiles={onFiles} accept={ACCEPT} disabled={busy} aria-label={t("Replace the image")} className="overflow-hidden border-solid">
             <img src={api.fileUrl(fileId)} alt={t("The image being read")} className="max-h-[70dvh] w-full bg-checker object-contain" />

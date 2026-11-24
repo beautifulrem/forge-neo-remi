@@ -257,8 +257,9 @@ export function Stage({ tab, onOpenViewer, className, leading, trailing, toolbar
     </>
   )
 
-  // Never more than about a quarter of the stage: the image keeps the room.
-  const info = infoOpen && item && !live ? <InfotextPanel infotext={item.infotext} className="max-h-[max(4.5rem,min(12rem,25%))] shrink-0 overflow-y-auto rounded-sm px-1 py-1.5" /> : null
+  // Never more than about a quarter of the stage: the image keeps the room. It scrolls only up and
+  // down: the copy button's hit box reaches past the panel's 4 px of room.
+  const info = infoOpen && item && !live ? <InfotextPanel infotext={item.infotext} className="max-h-[max(4.5rem,min(12rem,25%))] shrink-0 overflow-x-hidden overflow-y-auto rounded-sm px-1 py-1.5" /> : null
   const toolbarRow = toolbar ? (
     <div className="flex items-center gap-1">
       {leading}
