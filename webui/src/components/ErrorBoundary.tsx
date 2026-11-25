@@ -75,9 +75,10 @@ class Boundary extends Component<Props & { onRetry: () => void }, State> {
     if (this.props.fallback !== undefined) return this.props.fallback
     if (this.props.inline) {
       return (
-        <div role="alert" className="rounded-lg bg-destructive/5 p-2 text-xs text-destructive">
+        // in the field's place, like the field's own message: a plain line, no box
+        <p role="alert" className="text-xs leading-snug text-destructive">
           {t("This control failed to render")}: {renderFailureText(error)}
-        </div>
+        </p>
       )
     }
     return (

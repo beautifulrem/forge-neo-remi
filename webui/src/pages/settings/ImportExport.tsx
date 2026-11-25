@@ -104,8 +104,10 @@ export function ImportDialog({ open, onOpenChange, onStaged }: { open: boolean; 
               {t("{{same}} already match, {{unknown}} unknown here (ignored)", { same: checked.plan.same.length, unknown: checked.plan.unknown.length })}
             </p>
             {rejected.length > 0 ? (
-              <div className="rounded-lg bg-destructive/10 px-3 py-2">
-                <p className="font-medium text-destructive">{t("{{count}} values are not valid here and are skipped:", { count: rejected.length })}</p>
+              <div>
+                <p role="alert" className="font-medium text-destructive">
+                  {t("{{count}} values are not valid here and are skipped:", { count: rejected.length })}
+                </p>
                 <ul className="mt-1 max-h-32 overflow-y-auto text-xs">
                   {rejected.map(([key, message]) => (
                     <li key={key}>

@@ -165,7 +165,8 @@ function ResultStage() {
   if (job && preview && !item) {
     view = <img src={preview} alt={t("Live preview")} className="max-h-full max-w-full rounded-lg object-contain" />
   } else if (result?.error) {
-    view = <p className="max-w-md rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">{jobErrorText(result.error, result.errors, i18n.language)}</p>
+    // the "Generation failed" toast announces it; the result area keeps it in view, as a plain line
+    view = <p className="max-w-md text-sm text-destructive">{jobErrorText(result.error, result.errors, i18n.language)}</p>
   } else if (!item) {
     view = (
       <div className="flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
