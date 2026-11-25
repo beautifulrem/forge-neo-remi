@@ -271,6 +271,24 @@ def test_options_patch_rejects_everything_when_one_value_is_bad(server, webui, m
     assert webui.opts.jpeg_quality == 80
 
 
+def test_an_extension_option_whose_arguments_raise_is_refused_not_a_500(server, webui, monkeypatch):
+    # the settings page shows such an option as an error, not a field; a PATCH of it read the
+    # arguments twice (the lock check, the field) and the first raise made the whole request a 500
+    from modules.options import OptionInfo
+
+    def boom():
+        raise RuntimeError("an extension's component_args")
+
+    monkeypatch.setitem(webui.opts.data_labels, "ext_throwing_args", OptionInfo("a", "Broken extension option", component_args=boom))
+    monkeypatch.setitem(webui.opts.data, "ext_throwing_args", "a")
+    monkeypatch.setitem(webui.opts.data, "jpeg_quality", 80)
+    response = server.client.patch("/api/v2/options", json={"ext_throwing_args": "b", "jpeg_quality": 90})
+    assert response.status_code == 422, response.text
+    assert [error["param"] for error in response.json()["errors"]] == ["ext_throwing_args"]
+    assert (webui.opts.data["ext_throwing_args"], webui.opts.jpeg_quality) == ("a", 80)
+    assert server.client.get("/api/v2/options").status_code == 200
+
+
 def test_text_utf8_cannot_write_is_refused_and_the_settings_file_stays_whole(server, webui, monkeypatch, tmp_path):
     # an unpaired surrogate ("\\udc80", a broken emoji pasted into a field) stopped the UTF-8 write of
     # config.json half way: the request failed, the file was cut short and the WebUI would not start

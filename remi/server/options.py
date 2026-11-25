@@ -34,7 +34,10 @@ def frozen_reason(opts: Any, key: str, cmd_opts: Any) -> str | None:
         return "not a stored setting"
     # ``restrict_api`` guards the A1111 API (/sdapi/v1/options); /api/v2 is the
     # WebUI's own API, behind the same login as the Gradio settings page was.
-    args = info.component_args() if callable(info.component_args) else info.component_args
+    try:
+        args = info.component_args() if callable(info.component_args) else info.component_args
+    except Exception:  # an extension's arguments that fail to build: coerce_values refuses the value
+        args = None
     if isinstance(args, dict) and args.get("visible", True) is False:
         return "this setting is hidden"
     sections = getattr(cmd_opts, "freeze_settings_in_sections", None)
@@ -87,7 +90,10 @@ def coerce_values(opts: Any, values: Any, cmd_opts: Any) -> dict[str, Any]:
                 problems.extend(_error(key, problem.message) for problem in error.errors)
             continue
         current = getattr(opts, key)
-        node = setting_node(key, opts.data_labels[key], current)
+        try:
+            node = setting_node(key, opts.data_labels[key], current)
+        except Exception:  # an extension option the settings page shows as an error, not a field
+            node = None
         if not isinstance(node, nodes.Input):
             problems.append(_error(key, "not a setting"))
             continue
