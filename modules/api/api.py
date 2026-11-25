@@ -685,12 +685,15 @@ class Api:
         # (set here it switched the running job's model between its batches)
         from remi import model_selection
 
+        from remi.ui import ParamError, Sentence, ValidationError
+        from remi.ui.settings import check_api_values
+
+        order = list(req)
         req = dict(req)
         picks = {key: req.pop(key) for key in model_selection.MODEL_OPTIONS if key in req}
+        problems: list[ParamError] = []
         if (name := picks.get("sd_model_checkpoint")) is not None and (not isinstance(name, str) or name not in sd_models.checkpoint_aliases):
-            raise HTTPException(status_code=422, detail=f"unknown checkpoint: {name}"[:1000])
-        from remi.ui import ParamError
-
+            problems.append(ParamError(Sentence("unknown checkpoint {{value}}", value=repr(name)), owner="settings", param="sd_model_checkpoint"))  # A1111's exact names
         for key in ("forge_additional_modules", "forge_unet_storage_dtype"):  # checked as PATCH /api/v2/options checks them
             value, stored = picks.get(key), shared.opts.data.get(key)
             if isinstance(value, list) and isinstance(stored, list) and all(isinstance(item, str) for item in value + stored):
@@ -699,16 +702,16 @@ class Api:
                 try:
                     picks[key] = model_selection.check_value(key, picks[key])  # module file names, as PATCH stores them
                 except ParamError as error:
-                    raise HTTPException(status_code=422, detail=f"invalid settings: {key}: {error}"[:1000]) from None
+                    problems.append(ParamError(error.message, owner="settings", param=key))
         # Remi: a changed value is checked as the settings page checks it (kind, range, choices); one
         # of the wrong kind reached upstream readers and broke them until the next start
-        from remi.ui import ValidationError
-        from remi.ui.settings import check_api_values
-
         try:
             req = check_api_values(shared.opts, req)
         except ValidationError as error:
-            raise HTTPException(status_code=422, detail=f"invalid settings: {error}"[:1000]) from None
+            problems += error.errors
+        if problems:  # every refused value, in the order sent
+            problems.sort(key=lambda problem: order.index(problem.param) if problem.param in order else len(order))
+            raise HTTPException(status_code=422, detail=f"invalid settings: {ValidationError(problems)}"[:1000])
         set_config(req, is_api=True)  # restrict_api settings (URL fetching) stay out of the API's reach
         for key, value in picks.items():
             if value is not None:

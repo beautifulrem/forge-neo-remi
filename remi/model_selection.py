@@ -46,7 +46,8 @@ def check_value(key: str, value: Any, dtypes: Callable[[], list[str]] | None = N
     """A model pick (one of :data:`MODEL_OPTIONS`) as the settings store it,
     or :class:`remi.ui.ParamError`: a checkpoint the WebUI knows, a list of
     known VAE / text encoder names (their file names), an offered dtype.
-    Both ``PATCH /api/v2/options`` and ``/sdapi/v1/options`` check with it.
+    Both ``PATCH /api/v2/options`` and ``/sdapi/v1/options`` check with it
+    (the latter a checkpoint by A1111's exact names instead).
     ``dtypes``: the offered dtypes (:func:`unet_dtypes`)."""
 
     from remi.ui import ParamError, Sentence

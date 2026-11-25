@@ -412,8 +412,11 @@ What changed underneath, and what it means for clients:
   `override_settings` of `/sdapi/v1/txt2img` and `img2img`): saving one
   stopped half way and cut `config.json` short (checked first: such a
   request names only its too-deep values). A value it refuses
-  answers `422 {"detail": "invalid settings: …"}` naming each one, and
-  nothing in the request is set. A1111 stored any value; a client that
+  answers `422 {"detail": "invalid settings: …"}` naming each one in the
+  order sent, the model selection included, and nothing in the request is
+  set. `sd_model_checkpoint` must be a title, name or hash as
+  `GET /sdapi/v1/sd-models` lists it, as A1111 required; `PATCH
+  /api/v2/options` also takes the closest match. A1111 stored any value; a client that
   sent, say, a number where a list belongs now gets the 422. A value equal
   to the stored one passes unchecked, so posting back what `GET` answered
   still works. Not checked, as before: a setting set elsewhere

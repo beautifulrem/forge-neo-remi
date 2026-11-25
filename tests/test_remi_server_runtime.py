@@ -788,6 +788,36 @@ def test_sdapi_options_checks_the_model_selection_as_the_settings_page_does(webu
         services.close()
 
 
+def test_sdapi_options_names_every_refused_value_in_the_order_sent(webui_tmp, monkeypatch):
+    """A refused model pick answered alone and first: a client fixing it learned of its other
+    refused values one request at a time. Every refused value is named, in the request's order."""
+    from fastapi.testclient import TestClient
+
+    from modules import shared
+    from remi import model_selection
+    from remi.jobs import run_inline
+    from remi.server import Services, create_app
+    from remi.server.auth import Auth
+
+    config = webui_tmp / "config.json"
+    monkeypatch.setattr(shared, "config_filename", str(config))
+    shared.opts.save(str(config))
+    monkeypatch.setattr(model_selection, "select", lambda key, value: None)
+    services = Services.create(webui_tmp, dispatch=run_inline, realtime=False, housekeeping=False)
+    try:
+        app = create_app(services=services, auth=Auth(), sdapi=True, start_services=False)
+        with TestClient(app, base_url="http://127.0.0.1:7860", raise_server_exceptions=False) as client:
+            body = {"jpeg_quality": "loud", "sd_model_checkpoint": "missing.safetensors", "samples_save": "maybe", "forge_unet_storage_dtype": 5, "forge_additional_modules": "x"}
+            response = client.post("/sdapi/v1/options", json=body)
+            assert response.status_code == 422, response.text
+            detail = response.json()["detail"]
+            assert detail.startswith("invalid settings: ")
+            assert [detail.index(f"settings.{key}:") for key in body] == sorted(detail.index(f"settings.{key}:") for key in body), detail
+            assert "unknown checkpoint 'missing.safetensors'" in detail
+    finally:
+        services.close()
+
+
 def test_sdapi_override_settings_nested_too_deep_are_refused():
     """A generation's ``override_settings`` go into ``opts.data`` (``processing.py``), kept
     there with ``override_settings_restore_afterwards: false`` or while another route saves:
