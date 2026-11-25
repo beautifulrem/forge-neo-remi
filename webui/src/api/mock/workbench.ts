@@ -303,7 +303,7 @@ const MOCK_MLX = {
 }
 
 const MOCK_DIAGNOSTICS = {
-  api_version: "1.1",
+  api_version: "1.0",
   schema_version: 1,
   summary: { total: 4, healthy: 2, degraded: 1, error: 0, disabled: 1, with_manifest: 3 },
   items: [

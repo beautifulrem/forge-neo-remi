@@ -53,9 +53,12 @@ imports `gradio` fails to import: Gradio is not installed.
 
 ### API versioning & `remi-extension.json` manifest
 
-`remi.ui.version.REMI_API_VERSION` (currently `"1.1"`) defines the public SemVer
-contract for `remi.ui`. 1.1 added `ui.Sentence` (a message the WebUI translates)
-and `ui.extension_of_owner`; an extension that uses them declares `"^1.1"`. Extensions may include an optional `remi-extension.json`
+`remi.ui.version.REMI_API_VERSION` (currently `"1.0"`) defines the public SemVer
+contract for `remi.ui`. It stays `"1.0"` while the API only grows: a bare
+`"1.0"` in a manifest means 1.0.x, so a minor bump would refuse every extension
+that declares it. Later 1.0 builds added `ui.Sentence` (a message the WebUI
+translates) and `ui.extension_of_owner`; to run on an older build too, read
+them with `getattr(ui, "Sentence", None)`. Extensions may include an optional `remi-extension.json`
 manifest at the extension root so Remi can validate compatibility explicitly and
 display health/metadata in the Extensions → Diagnostics view:
 

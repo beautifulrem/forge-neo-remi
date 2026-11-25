@@ -16,9 +16,9 @@ from remi.testing import assert_extension_contract, verify_extension_contract, w
 
 
 def test_semver_parsing_and_api_compatibility():
-    assert ui.REMI_API_VERSION == "1.1"  # 1.1: ui.Sentence, ui.extension_of_owner
-    assert ui.check_api_compatibility("^1.1", ui.REMI_API_VERSION).compatible is True
-    assert ui.check_api_compatibility("^1.0", ui.REMI_API_VERSION).compatible is True
+    # 1.0 while the API only grows: a manifest's bare "1.0" (the guide's example) means 1.0.x
+    assert ui.REMI_API_VERSION == "1.0"
+    assert all(ui.check_api_compatibility(declared, ui.REMI_API_VERSION).compatible for declared in ("1.0", "^1.0", "~1.0", ">=1.0,<2.0"))
     assert ui.parse_semver("1.0") == ui.SemVer(1, 0, 0)
     assert ui.parse_semver("v1.2.3-beta.1") == ui.SemVer(1, 2, 3, "beta.1")
 

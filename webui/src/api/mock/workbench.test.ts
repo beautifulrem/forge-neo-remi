@@ -266,7 +266,7 @@ describe("mock workbench routes", () => {
   it("supports Extension Diagnostics, Workers status/restart, and Multimodal PUP upsample", async () => {
     const diag = await call("GET", "/extensions/diagnostics")
     expect(diag.status).toBe(200)
-    expect(diag.data.api_version).toBe("1.1")
+    expect(diag.data.api_version).toBe("1.0")
     expect(diag.data.summary.total).toBe(4)
 
     const workers = await call("GET", "/workers")
