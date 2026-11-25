@@ -5,7 +5,22 @@ from typing import Final
 
 from lib_spectrum import logger
 
-PRESET_FILE: Final[os.PathLike] = os.path.join(os.path.dirname(os.path.dirname(__file__)), "presets.json")
+# The presets are the user's: they live in the data folder (--data-dir, Docker's volume), not beside
+# the code, which an update or a new container replaces. The file an older version kept beside the
+# extension is read until the first save writes the data folder's (and is left where it was).
+LEGACY_PRESET_FILE: Final[str] = os.path.join(os.path.dirname(os.path.dirname(__file__)), "presets.json")
+PRESET_FILE: os.PathLike | str | None = None  # tests point it at a file of their own
+
+
+def preset_file() -> str:
+    """Where the presets are written: ``<data dir>/extension-data/sd_forge_spectrum/presets.json``."""
+
+    if PRESET_FILE is not None:
+        return str(PRESET_FILE)
+    from modules.anima_user_data import data_file
+
+    return str(data_file("sd_forge_spectrum", "presets.json"))
+
 # Infotext key of the enable switch: written only when Spectrum runs, so
 # pasting (UI, "Send to", API infotext) turns Spectrum back on. It is not a
 # CONTROLS entry: presets store the settings, never the switch.
@@ -44,16 +59,16 @@ class PresetManager:
         if cls.presets is not None:
             return
 
-        if not os.path.isfile(PRESET_FILE):
-            with open(PRESET_FILE, "w+", encoding="utf-8") as json_file:
-                dump({}, json_file)
-
-            logger.debug("Creating new empty Presets...")
+        path = preset_file()
+        if PRESET_FILE is None and not os.path.isfile(path) and os.path.isfile(LEGACY_PRESET_FILE):
+            path = LEGACY_PRESET_FILE
+        if not os.path.isfile(path):  # written on the first save: loading writes nothing
+            logger.debug("No Presets yet...")
             cls.presets = {}
             return
 
         try:
-            with open(PRESET_FILE, "r", encoding="utf-8") as json_file:
+            with open(path, "r", encoding="utf-8") as json_file:
                 cls.presets = load(json_file)
         except Exception:
             logger.error("Failed to load Presets...")
@@ -117,5 +132,7 @@ class PresetManager:
 
     @classmethod
     def _write(cls) -> None:
-        with open(PRESET_FILE, "w", encoding="utf-8") as json_file:
+        path = preset_file()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as json_file:
             dump(cls.presets, json_file)

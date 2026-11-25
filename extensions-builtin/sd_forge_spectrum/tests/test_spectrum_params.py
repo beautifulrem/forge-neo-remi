@@ -156,3 +156,30 @@ def test_zh_cn_covers_the_panel():
 
 def test_imports_standalone():
     harness.assert_imports_standalone([SCRIPT])
+
+
+# The presets were written beside the extension's code: an update, or a new Docker container (whose
+# volume is the data folder), lost them without a word
+def test_presets_live_in_the_data_folder(monkeypatch, tmp_path):
+    import lib_spectrum.presets as presets
+
+    from modules import paths_internal
+
+    legacy = tmp_path / "code" / "presets.json"
+    legacy.parent.mkdir()
+    legacy.write_text('{"old": [0.5]}', encoding="utf-8")
+    monkeypatch.setattr(paths_internal, "data_path", str(tmp_path / "data"))
+    monkeypatch.setattr(presets, "PRESET_FILE", None)
+    monkeypatch.setattr(presets, "LEGACY_PRESET_FILE", str(legacy))
+    monkeypatch.setattr(PresetManager, "presets", None)
+
+    stored = tmp_path / "data" / "extension-data" / "sd_forge_spectrum" / "presets.json"
+    PresetManager.load_presets()  # the old file is read; loading writes nothing
+    assert PresetManager.presets == {"old": [0.5]} and not stored.parent.exists()
+    PresetManager.save_preset("mine", *DEFAULTS)
+    assert json.loads(stored.read_text(encoding="utf-8")) == {"old": [0.5], "mine": DEFAULTS}
+    assert json.loads(legacy.read_text(encoding="utf-8")) == {"old": [0.5]}  # left where it was
+
+    monkeypatch.setattr(PresetManager, "presets", None)
+    PresetManager.load_presets()  # from now on the data folder's file
+    assert PresetManager.presets == {"old": [0.5], "mine": DEFAULTS}

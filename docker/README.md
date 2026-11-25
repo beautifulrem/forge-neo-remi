@@ -70,6 +70,7 @@ Everything the WebUI keeps is in the data folder, `/home/remi/data` (`--data-dir
 | `models/` | Checkpoints (`Stable-diffusion`), `text_encoder`, `VAE`, `Lora`, `ControlNet`, `ESRGAN`, `embeddings` |
 | `output/` | Generated images |
 | `extensions/` | User-installed extensions |
+| `extension-data/` | Presets, templates and lists saved by the built-in extensions |
 | `config.json`, `styles.csv`, `user.css` | Settings, prompt styles, custom CSS |
 | `remi-data/` | The queue, history, gallery stars and prompt tools data |
 
