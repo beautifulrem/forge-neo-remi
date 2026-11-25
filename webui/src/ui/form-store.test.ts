@@ -112,6 +112,18 @@ describe("form store", () => {
     expect(s.open["ext::enable"]).toBe(true)
   })
 
+  // A multichoice that allows custom entries took a stored list as it was: a number or null from a
+  // damaged draft reached the chips widget, which expects text.
+  it("restores only text entries of a draft's custom multichoice", () => {
+    const custom: OwnerSpec[] = [
+      { owner: "core", layout: { type: "multichoice", name: "tags", label: "Tags", allow_custom: true, choices: [{ value: "a", label: "a" }] }, defaults: { tags: [] } },
+    ]
+    localStorage.setItem(draftKey("t-custom"), JSON.stringify({ state: { values: { core: { tags: [1, "mine", null, "a", { x: 1 }] } } }, version: 1 }))
+    const store = createFormStore("t-custom")
+    store.getState().load(custom)
+    expect(store.getState().values.core!.tags).toEqual(["mine", "a"])
+  })
+
   it.each([
     ["values: null", { values: null, open: {}, tabs: {} }],
     ["values: a string", { values: "x", open: null, tabs: 3 }],

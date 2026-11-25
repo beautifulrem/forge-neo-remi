@@ -75,7 +75,8 @@ function acceptDraft(node: InputNode, value: unknown): unknown {
       return node.allow_custom && typeof value === "string" ? value : NOT_ACCEPTED
     case "multichoice": {
       if (!Array.isArray(value)) return NOT_ACCEPTED
-      return node.allow_custom ? value : value.filter((v) => node.choices.some((c) => c.value === v))
+      // a custom entry is text, as the chips widget types it
+      return value.filter((v) => node.choices.some((c) => c.value === v) || (node.allow_custom && typeof v === "string"))
     }
     // Upload ids are short-lived on the server; never restore them from drafts.
     case "image":
