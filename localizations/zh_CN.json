@@ -619,7 +619,7 @@
   "allow you to drag-and-drop images onto the input similar to AUTOMATIC1111 behavior": "允许像 AUTOMATIC1111 一样把图像拖放到输入框",
   "amount of VRAM that Forge can access": "Forge 可使用的显存量",
   "buttons will only display the contents of the directory, without acting as a search filter": "按钮只显示目录内容，不作为搜索过滤",
-  "days; uploads still used by queued jobs are kept; images generated with saving turned off are deleted after this unless starred or on a board": "天；排队任务仍在使用的上传文件会保留；关闭保存时生成的图像在此之后删除，已加星或已加入看板的除外",
+  "days; uploads still used by queued jobs are kept; images generated with saving turned off are deleted after this unless they are starred, on a board or from a starred job": "天；排队任务仍在使用的上传文件会保留；关闭保存时生成的图像在此之后删除，已加星、已加入看板或所属任务已加星的除外",
   "directory is hidden if its name starts with \".\"": "名称以“.”开头的目录视为隐藏",
   "disabled: checkerboard pattern ; enabled: solid color": "关闭：棋盘格；开启：纯色",
   "disabled: toolbar only appears when hovering the canvas": "关闭时：工具栏仅在鼠标悬停画布时出现",

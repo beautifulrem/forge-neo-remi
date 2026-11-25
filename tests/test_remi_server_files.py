@@ -306,6 +306,29 @@ def test_unsaved_outputs_a_queued_job_reads_are_kept(tmp_path):
     store.close()
 
 
+def test_unsaved_outputs_of_a_starred_job_are_kept(tmp_path):
+    import time
+
+    from remi.jobs import JobStore
+    from remi.jobs.store import COMPLETED
+
+    store = FileStore(tmp_path)
+    jobs = JobStore(tmp_path / "jobs.db")
+    kept, pruned = (store.save_output_image(Image.new("RGB", (8, 8)), None) for _ in range(2))
+    starred, plain = (jobs.add("txt2img", {}, {}) for _ in range(2))
+    jobs.finish(starred.id, COMPLETED, outputs=[{"id": kept.id, "kind": "image"}, "not an output"])
+    jobs.finish(plain.id, COMPLETED, outputs=[{"id": pruned.id, "kind": "image"}])
+    jobs.set_starred([starred.id], True)
+    assert jobs.starred_output_ids() == {kept.id}
+    store._db.execute("UPDATE files SET created = ?", (time.time() - 7200,))
+    assert store.prune_unsaved(3600, keep=jobs.starred_output_ids()) == 1
+    assert store.get(kept.id) is not None and store.get(pruned.id) is None
+    jobs.set_starred([starred.id], False)
+    assert jobs.starred_output_ids() == set()
+    jobs.close()
+    store.close()
+
+
 def test_a_data_folder_reached_through_a_symlink_still_owns_its_unsaved_outputs(tmp_path):
     import time
 

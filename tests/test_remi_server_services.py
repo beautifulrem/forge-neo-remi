@@ -116,12 +116,19 @@ def _housekeeping_setup(services, monkeypatch, *, retention=7, prune_uploads=Non
 
 
 def test_housekeeping_prunes_with_the_retention_setting_and_indexes_outputs(services, monkeypatch, caplog):
+    from remi.jobs.store import COMPLETED
+
     recorders = _housekeeping_setup(services, monkeypatch, retention=0.5)
+    # a starred job keeps its outputs, saved or not (its star is on the job, not on the images)
+    starred, plain = (services.store.add("txt2img", {}, {}) for _ in range(2))
+    services.store.finish(starred.id, COMPLETED, outputs=[{"id": "starred-job-output", "kind": "image"}])
+    services.store.finish(plain.id, COMPLETED, outputs=[{"id": "plain-job-output", "kind": "image"}])
+    services.store.set_starred([starred.id], True)
     with caplog.at_level(logging.INFO, logger="remi.server.services"):
         services.housekeeping()
     [(args, kwargs)] = recorders["prune_uploads"].calls
     assert args == (0.5 * 86400,) and kwargs == {"keep": services.store.referenced_strings()}
-    assert recorders["prune_unsaved"].calls == [((0.5 * 86400,), {"keep": services.store.referenced_strings() | {"starred-file"}})]
+    assert recorders["prune_unsaved"].calls == [((0.5 * 86400,), {"keep": services.store.referenced_strings() | {"starred-file", "starred-job-output"}})]
     assert recorders["prune_exports"].calls == [((), {})]
     assert recorders["scan_outputs"].calls == [((["/outputs/txt2img"],), {})]
     messages = [record.getMessage() for record in caplog.records]

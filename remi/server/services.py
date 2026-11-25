@@ -214,8 +214,9 @@ class Services:
                 log.info("Removed %d old upload(s)", removed)
             from remi.library import gallery_for
 
-            # a starred image or one on a board was chosen to be kept, saved or not
-            removed = self.files.prune_unsaved(days * 86400, keep=referenced | gallery_for(self.files).kept_ids())
+            # a starred image, one on a board or one of a starred job was chosen to be kept, saved or not
+            kept = gallery_for(self.files).kept_ids() | self.store.starred_output_ids()
+            removed = self.files.prune_unsaved(days * 86400, keep=referenced | kept)
             if removed:
                 log.info("Removed %d old unsaved output(s)", removed)
         except Exception:

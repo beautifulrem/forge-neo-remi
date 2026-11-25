@@ -504,6 +504,24 @@ class JobStore:
         with self._lock:
             return self._db.execute(f"UPDATE jobs SET starred = ? WHERE id IN ({','.join('?' * len(ids))})", (int(starred), *ids)).rowcount
 
+    def starred_output_ids(self) -> set[str]:
+        """The output file ids of the starred jobs (kept, saved or not, by the
+        unsaved-output clean-up)."""
+
+        with self._lock:
+            rows = self._db.execute("SELECT outputs FROM jobs WHERE starred = 1").fetchall()
+        found: set[str] = set()
+        for (raw,) in rows:
+            try:
+                outputs = json.loads(raw or "[]")
+            except ValueError:
+                continue
+            for output in outputs if isinstance(outputs, list) else []:
+                file_id = output.get("id") if isinstance(output, dict) else None
+                if isinstance(file_id, str):
+                    found.add(file_id)
+        return found
+
     def update_params(self, job_id: str, core: dict, scripts: dict, *, layout_hash: str, schema_version: int, summary: str) -> Job | None:
         """Replace a queued job's parameters; None when it is not queued (any more)."""
 

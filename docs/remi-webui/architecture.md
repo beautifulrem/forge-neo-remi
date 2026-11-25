@@ -505,6 +505,10 @@ client has a bounded event queue and one preview slot.
   stage cache entries no pipeline reused for as long (a re-run then runs
   that stage again), and
   indexes the output folders.
+  What a queued job or an active pipeline still reads is kept, and so are
+  unsaved outputs starred in the gallery, on a board
+  (`GalleryIndex.kept_ids()`) or from a starred job
+  (`JobStore.starred_output_ids()`).
 - Pipelines (`remi/jobs/chains.py`): each generation stage is a queued job
   (`meta.chain_id`, `meta.stage_index`); the queue's completion hook moves
   the chain on. Every way a stage job ends reaches it: a queued job that is
