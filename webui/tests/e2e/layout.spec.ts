@@ -393,8 +393,10 @@ test.describe("a deferred view's placeholder", () => {
       await expect(card).toBeVisible()
       await expect(page.getByRole("textbox", { name: "CFG Scale", exact: true })).toBeVisible()
       const cardHeight = () => card.evaluate((element) => element.getBoundingClientRect().height)
-      // settled: the mode's options render in the stand-in as they will in the panel
-      let before = await cardHeight()
+      // the stand-in (busy), not the block before its chunk is in, and settled: the mode's options
+      // render in it as they will in the panel; two reads 250 ms apart agree
+      await expect(card.locator("[aria-busy=true]")).toBeAttached()
+      let before = -1
       await expect.poll(async () => before === (before = await cardHeight()), { intervals: [250] }).toBe(true)
       await expect(card.getByRole("radiogroup", { name: "Mode" })).toHaveCount(0)
       release()
