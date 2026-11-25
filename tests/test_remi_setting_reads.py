@@ -44,6 +44,7 @@ OPTIONS_MEMBERS = {
     "set",
     "get_default",
     "save",
+    "hold_for_run",
     "same_type",
     "load",
     "onchange",
