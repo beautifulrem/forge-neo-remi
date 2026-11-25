@@ -8,7 +8,7 @@ import { isMac } from "@/lib/platform"
 import { shortcutList } from "../core/shortcuts"
 import { Hint } from "./controls"
 
-const GROUPS = ["Tools", "Brush", "Edit", "View"] as const
+const GROUPS = ["Tools", "Brush", "Edit", "View", "Candidates"] as const
 
 /** Key names that are words get translated; key caps (Shift, Ctrl), symbols and letters stay. */
 function useKeyName() {
@@ -42,9 +42,10 @@ export function ShortcutsPopover({ open, onOpenChange }: { open: boolean; onOpen
       </Hint>
       <PopoverContent aria-label={t("Keyboard shortcuts")} side="top" align="end" className="max-h-[min(32rem,70vh)] w-[min(34rem,calc(100vw-2rem))] overflow-y-auto">
         <h3 className="text-sm font-medium">{t("Keyboard shortcuts")}</h3>
-        <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+        {/* columns, as the app's shortcuts dialog: an odd number of groups leaves no empty cell */}
+        <div className="gap-x-6 sm:columns-2">
           {GROUPS.map((group) => (
-            <section key={group} aria-label={t(group)} className="flex flex-col gap-1">
+            <section key={group} aria-label={t(group)} className="mb-3 flex break-inside-avoid flex-col gap-1 last:mb-0">
               <h4 className="text-xs font-medium text-muted-foreground">{t(group)}</h4>
               <dl className="flex flex-col gap-1">
                 {list

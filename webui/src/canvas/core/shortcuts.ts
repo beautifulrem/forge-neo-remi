@@ -79,7 +79,7 @@ export function commandFor(event: KeyLike, mac = false): Command | null {
   return null
 }
 
-export type ShortcutHelp = { keys: string[]; label: string; group: "Tools" | "Brush" | "Edit" | "View" }
+export type ShortcutHelp = { keys: string[]; label: string; group: "Tools" | "Brush" | "Edit" | "View" | "Candidates" }
 
 /** What the help popover lists (labels are English chrome keys, translated at render). */
 export function shortcutList(mac: boolean): ShortcutHelp[] {
@@ -100,6 +100,7 @@ export function shortcutList(mac: boolean): ShortcutHelp[] {
     { keys: [mod, "Z"], label: "Undo", group: "Edit" },
     { keys: [mod, "Y"], label: "Redo", group: "Edit" },
     { keys: [mod, "X"], label: "Clear layer", group: "Edit" },
+    { keys: ["Delete"], label: "Clear layer", group: "Edit" },
     { keys: [mod, "I"], label: "Invert mask", group: "Edit" },
     { keys: ["Wheel"], label: "Zoom at the cursor", group: "View" },
     { keys: ["Space", "Drag"], label: "Pan", group: "View" },
@@ -108,6 +109,11 @@ export function shortcutList(mac: boolean): ShortcutHelp[] {
     { keys: ["1"], label: "Actual size", group: "View" },
     { keys: ["+", "−"], label: "Zoom in or out", group: "View" },
     { keys: ["F"], label: "Maximize", group: "View" },
+    // while staged results wait (EditorBody; Enter leaves a focused control's own Enter alone)
+    { keys: ["←"], label: "Previous candidate", group: "Candidates" },
+    { keys: ["→"], label: "Next candidate", group: "Candidates" },
+    { keys: ["Enter"], label: "Accept as base layer", group: "Candidates" },
+    { keys: ["Esc"], label: "Discard candidate", group: "Candidates" },
   ]
 }
 

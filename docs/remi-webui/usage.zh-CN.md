@@ -265,7 +265,7 @@ docker run --device /dev/kfd --device /dev/dri --group-add video -p 127.0.0.1:78
 | 全局 | Ctrl+K / ⌘K 命令面板 · ? 键盘快捷键 · Alt+N 模型网络抽屉 |
 | 生成 | Ctrl/⌘+Enter 生成（运行中：中止并立即重新生成；开启“让 [Ctrl + Enter] 恢复为仅中断生成”设置后只中止）· Ctrl/⌘+Shift+Enter 加入队列 · Alt+Enter 跳过 · Esc 中止（不在文本框和对话框内时）· 结果：← / → 选择、Enter 打开、Delete 移除 |
 | 提示词编辑器 | Ctrl/⌘+↑ / ↓ 调整选中内容的权重 · Alt+← / → 移动标签 · Tab 或 Enter 接受补全 · Ctrl/⌘+Z 撤销 · Ctrl+Y / ⌘⇧Z 重做 |
-| 图像编辑器 | B 画笔 · E 橡皮擦 · G 填充 · M 矩形 · L 套索 · I 取色器 · H 抓手 · [ / ] 画笔大小 · 按住 Shift 擦除 · Ctrl/⌘+Z / Y 撤销 / 重做 · Ctrl/⌘+X 清空图层 · Ctrl/⌘+I 反转蒙版 · R 或 0 适应窗口 · 1 实际大小 · + / − 缩放 · F 最大化 · 空格+拖动 平移 · ? 帮助 |
+| 图像编辑器 | B 画笔 · E 橡皮擦 · G 填充 · M 矩形 · L 套索 · I 取色器 · H 抓手 · [ / ] 画笔大小 · W / A / S + 滚轮 调整画笔大小 / 不透明度 / 柔和度 · 按住 Shift 擦除 · Ctrl/⌘+Z / Y 撤销 / 重做 · Ctrl/⌘+X 或 Delete 清空图层 · Ctrl/⌘+I 反转蒙版 · R 或 0 适应窗口 · 1 实际大小 · + / − 缩放 · F 最大化 · 空格+拖动或右键拖动 平移 · 暂存的候选图：← / → 切换、Enter 采纳、Esc 丢弃 · ? 帮助 |
 | 查看器 | ← / → 上一张 / 下一张 · Home / End · + / − / 0 / 1 缩放 · S 下载 · T 平铺预览 · B 切换 RGBA 底板 · Esc 关闭 |
 | 图库 | 方向键移动 · Enter 打开 · 空格选择（Shift 扩展选择）· F 星标 · Ctrl/⌘+A 全选 · Delete 移除 · Esc 清除选择 |
 | 模型网络 | / 搜索 · 方向键移动 · Enter 应用 · I 元数据 · E 编辑 · Shift+F10 条目菜单 |

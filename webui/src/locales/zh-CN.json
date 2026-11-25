@@ -1687,5 +1687,6 @@
   "The model could not be loaded.": "模型未能加载。",
   "the backup {{name}} is in the installation folder's config_states/, which is only read: move it to the data folder to delete it here": "备份 {{name}} 位于安装目录的 config_states/ 中，这里只读取不修改：把它移到数据目录后才能在这里删除",
   "Select all images": "全选图像",
-  "Remove the selected images": "移除所选图像"
+  "Remove the selected images": "移除所选图像",
+  "Candidates": "候选图"
 }
