@@ -155,6 +155,19 @@ function serverCatalog(): Record<string, string> {
   return merged
 }
 
+describe("zh-CN catalog file", () => {
+  // JSON.parse keeps the last of a key written twice: "Changed" read "变更" where the filter next to
+  // "已固定" and "未保存" meant "已更改", and an edit to the first entry did nothing.
+  it("holds each key once", () => {
+    const raw = readFileSync(join(process.cwd(), "src", "locales", "zh-CN.json"), "utf8")
+    const keys = [...raw.matchAll(/^\s*("(?:[^"\\]|\\.)*")\s*:/gm)].map((m) => JSON.parse(m[1]!) as string)
+    expect(new Set(keys).size).toBe(Object.keys(zh).length) // the scan found every key
+    const seen = new Set<string>()
+    const twice = keys.filter((key) => seen.size === seen.add(key).size)
+    expect(twice).toEqual([])
+  })
+})
+
 describe("zh-CN chrome vs server catalogs", () => {
   it("never overrides a server translation with a different one", () => {
     // t() looks in the chrome catalog first: a chrome key that the server translates
