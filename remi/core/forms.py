@@ -536,6 +536,7 @@ REQUIRED_INPUTS: dict[str, tuple[tuple[str, str, ui.conditions.Condition], ...]]
         ("sketch", "paint the area to inpaint", ui.param("mode", eq="Inpaint sketch")),
         ("mask_upload", "a mask image is required", ui.param("mode", eq="Inpaint upload")),
         ("batch_upload", "upload the images to process", ui.all_of(ui.param("mode", eq="Batch"), ui.param("batch_source", eq="upload"))),
+        ("batch_input_dir", "an input directory is required", ui.all_of(ui.param("mode", eq="Batch"), ui.param("batch_source", eq="from dir"))),
     ),
     "extras": (
         ("image", "an image is required", ui.param("mode", eq="Single Image")),

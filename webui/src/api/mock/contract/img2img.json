@@ -848,6 +848,22 @@
       }
      ]
     }
+   },
+   {
+    "param": "batch_input_dir",
+    "message": "an input directory is required",
+    "when": {
+     "all": [
+      {
+       "param": "mode",
+       "eq": "Batch"
+      },
+      {
+       "param": "batch_source",
+       "eq": "from dir"
+      }
+     ]
+    }
    }
   ]
  },

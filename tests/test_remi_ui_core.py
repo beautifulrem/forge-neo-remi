@@ -370,6 +370,7 @@ def test_inputs_that_read_server_paths_are_refused_with_hidden_dirs(webui, monke
     assert errors("extras", {"mode": "Batch from Directory", "input_dir": "/srv/images"}) == {("input_dir", refused)}
     assert errors("extras", {"mode": "Batch from Directory", "input_dir": ""}) == {("input_dir", refused)}  # not also "required"
     assert errors("img2img", {"mode": "Batch", "batch_source": "from dir", "batch_input_dir": "/srv/images"}) == {("batch_input_dir", refused)}
+    assert errors("img2img", {"mode": "Batch", "batch_source": "from dir", "batch_input_dir": ""}) == {("batch_input_dir", refused)}  # not also "required"
     assert errors("img2img", {"mode": "Batch", "batch_source": "upload", "batch_upload": ["id"]}) == set()
     assert errors("extras", {"mode": "Single Image", "image": "id"}) == set()
     with pytest.raises(ui.ValidationError) as caught:
@@ -478,6 +479,11 @@ def test_the_tab_schema_lists_the_required_inputs(webui):
     # blank strings and empty lists are empty, as the client sees them
     assert {problem.param for problem in forms.check_core("extras", {"mode": "Batch from Directory", "input_dir": "  "})} == {"input_dir"}
     assert forms.check_core("extras", {"mode": "Single Image", "image": "abc"}) == []
+    # a batch from a directory needs the directory (an empty one ran and "completed" with no image)
+    from_dir = {"mode": "Batch", "batch_source": "from dir", "batch_input_dir": " "}
+    assert {problem.param for problem in forms.check_core("img2img", from_dir)} == {"batch_input_dir"}
+    assert forms.check_core("img2img", {**from_dir, "batch_input_dir": "/srv/in"}) == []
+    assert forms.check_core("img2img", {**from_dir, "batch_source": "upload", "batch_upload": ["id"]}) == []
 
 
 def test_compose_inputs_matches_each_legacy_mode():
