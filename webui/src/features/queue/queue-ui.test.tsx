@@ -305,6 +305,10 @@ describe("import dialog", { timeout: 20_000 }, () => {
     const badges = [...list.querySelectorAll("[data-slot=badge]")]
     expect(badges).toHaveLength(2)
     for (const badge of badges) expect(badge.getAttribute("data-variant")).not.toBe("default")
+    // the counts are a section title's size, not the page title's (text-xl)
+    const dialog = screen.getByRole("dialog")
+    expect(dialog.querySelector(".text-xl")).toBeNull()
+    expect(dialog.querySelector("dd")).toHaveClass("text-[0.9375rem]", "font-medium", "tabular-nums")
   })
 
   it("explains a missing database in the UI language's words, not the server's", async () => {
