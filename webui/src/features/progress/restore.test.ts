@@ -8,6 +8,7 @@ import { useWs } from "@/api/ws"
 import { tabSchema } from "@/api/mock/fixtures"
 import { useSession } from "@/features/gallery/session-store"
 import { FakeSocket } from "@/test/fake-socket"
+import { loopRunsElsewhere } from "./loop-owner"
 import { resetRestore, restoreRuns, wireRunSync } from "./restore"
 import { dispatchRun, MAX_RUNS, persistedJobs, persistedRun, persistKey, resetRunControllers, useRuns, wireRunControllers } from "./run-controller"
 import { phaseOf } from "./run-machine"
@@ -153,6 +154,21 @@ describe("restoreRuns", () => {
     } finally {
       asker.close()
     }
+  })
+
+  // A tab duplicated just as the loop moved on asked about the job its storage copy named, which
+  // the loop had finished a moment before: no tab answered, and both tabs ran the loop.
+  it("answers for a job its loop has just finished", async () => {
+    vi.spyOn(api.jobs, "create").mockResolvedValue(created("f1"))
+    const ws = await socket()
+    dispatchRun("txt2img", { type: "forever", on: true })
+    await vi.waitFor(() => expect(useRuns.getState().runs.txt2img).toMatchObject({ forever: true, jobs: ["f1"] }))
+    vi.spyOn(api.jobs, "create").mockResolvedValue(created("f2"))
+    send(ws, { type: "job.completed", job_id: "f1", seq: 1, status: "completed", outputs: [] })
+    await vi.waitFor(() => expect(useRuns.getState().runs.txt2img.jobs).toEqual(["f2"]))
+    expect(await loopRunsElsewhere("txt2img", ["f1"])).toBe(true)
+    // a job this tab never ran is still not its loop
+    expect(await loopRunsElsewhere("txt2img", ["elsewhere"])).toBe(false)
   })
 
   it("does not start Generate forever again when its job ended while the page was closed", async () => {

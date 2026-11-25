@@ -172,10 +172,21 @@ function ownerOf(jobId: string): GenerateTab | null {
 /** Whether one of the forms is waiting for a `POST /jobs` answer. */
 const submitting = () => GENERATE_FORMS.some((tab) => useRuns.getState().runs[tab].pending > 0)
 
+/**
+ * The last jobs each form's loop finished. A tab duplicated just as the loop moved on asks about
+ * the job its copy of the storage names, which this tab may have finished a moment before: it is
+ * still this tab's loop.
+ */
+const loopFinished = new Map<GenerateTab, string[]>()
+const LOOP_FINISHED_KEPT = 8
+
 function finished(jobId: string, outcome: (tab: GenerateTab | null) => JobOutcome) {
   const tab = ownerOf(jobId)
-  if (tab) dispatchRun(tab, { type: "finished", jobId, outcome: outcome(tab) })
-  else if (submitting()) remember(jobId, { outcome: outcome(null) })
+  if (tab) {
+    const run = useRuns.getState().runs[tab]
+    if (run.forever || run.repeatLeft > 0) loopFinished.set(tab, [...(loopFinished.get(tab) ?? []), jobId].slice(-LOOP_FINISHED_KEPT))
+    dispatchRun(tab, { type: "finished", jobId, outcome: outcome(tab) })
+  } else if (submitting()) remember(jobId, { outcome: outcome(null) })
 }
 
 let wired = false
@@ -187,7 +198,8 @@ export function wireRunControllers() {
   // a duplicated tab asks before it resumes a loop this tab runs (restoreRuns)
   answerLoopQueries((tab, jobs) => {
     const run = useRuns.getState().runs[tab]
-    return (run.forever || run.repeatLeft > 0) && run.jobs.some((id) => jobs.includes(id))
+    const recent = loopFinished.get(tab) ?? []
+    return (run.forever || run.repeatLeft > 0) && [...run.jobs, ...recent].some((id) => jobs.includes(id))
   })
   const started = (jobId: string) => {
     const tab = ownerOf(jobId)
@@ -217,6 +229,7 @@ export function upscaleResult(source: UpscaleSource) {
 /** Tests: back to idle, nothing persisted. */
 export function resetRunControllers() {
   early.clear()
+  loopFinished.clear()
   useRuns.setState({ runs: { txt2img: IDLE, img2img: IDLE } })
   for (const tab of GENERATE_FORMS) sessionStorage.removeItem(persistKey(tab))
 }
