@@ -617,6 +617,78 @@ def test_sdapi_options_checks_values_as_the_settings_page_does(webui_tmp, monkey
         services.close()
 
 
+def test_sdapi_options_leaves_alone_what_the_settings_page_does_not_check(webui_tmp, monkeypatch):
+    """What the check leaves as upstream's ``set_config`` had it: a setting set elsewhere
+    (``sd_vae``, ``interactive=False``: "None" is A1111's usual value, and refusing it lost the
+    checkpoint switch posted with it), an extension option the settings page cannot read either
+    (it was a 500 for the whole request) and a ``restrict_api`` setting (the API may not change
+    it: ignored with a 200 as before, not a 422). A list setting without a widget (a ``Json``
+    node, which checks nothing) still takes only a list: ``disabled_extensions: 5`` was stored
+    and the next start failed in ``launch.list_extensions``."""
+    from fastapi.testclient import TestClient
+
+    from modules import shared
+    from modules.options import OptionInfo
+    from remi.jobs import run_inline
+    from remi.server import Services, create_app
+    from remi.server.auth import Auth
+
+    def boom():
+        raise RuntimeError("an extension's component_args")
+
+    config = webui_tmp / "config.json"
+    monkeypatch.setattr(shared, "config_filename", str(config))
+    monkeypatch.setitem(shared.opts.data_labels, "ext_throwing_args", OptionInfo("a", "Broken extension option", component_args=boom))
+    monkeypatch.setitem(shared.opts.data_labels, "my-ext.opt", OptionInfo("a", "Extension option with a dotted name"))
+    for key in ("sd_vae", "jpeg_quality", "api_forbid_local_requests", "disabled_extensions", "ext_throwing_args", "my-ext.opt"):
+        monkeypatch.setitem(shared.opts.data, key, shared.opts.data.get(key, shared.opts.data_labels[key].default))
+    shared.opts.save(str(config))
+    services = Services.create(webui_tmp, dispatch=run_inline, realtime=False, housekeeping=False)
+    try:
+        app = create_app(services=services, auth=Auth(), sdapi=True, start_services=False)
+        with TestClient(app, base_url="http://127.0.0.1:7860", raise_server_exceptions=False) as client:
+            response = client.post("/sdapi/v1/options", json={"sd_vae": "None", "jpeg_quality": 91})
+            assert response.status_code == 200, response.text
+            assert (shared.opts.data["sd_vae"], shared.opts.data["jpeg_quality"]) == ("None", 91)
+            response = client.post("/sdapi/v1/options", json={"ext_throwing_args": "b", "my-ext.opt": "c", "jpeg_quality": 92})
+            assert response.status_code == 200, response.text
+            assert (shared.opts.data["ext_throwing_args"], shared.opts.data["my-ext.opt"], shared.opts.data["jpeg_quality"]) == ("b", "c", 92)
+            response = client.post("/sdapi/v1/options", json={"api_forbid_local_requests": "maybe", "jpeg_quality": 93})
+            assert response.status_code == 200, response.text
+            assert (shared.opts.data["api_forbid_local_requests"], shared.opts.data["jpeg_quality"]) == (True, 93)
+            stored = dict(shared.opts.data)
+            for value in (5, "ext", [1], [["nested"]]):
+                response = client.post("/sdapi/v1/options", json={"disabled_extensions": value})
+                assert response.status_code == 422 and "disabled_extensions" in response.json()["detail"], (value, response.text)
+                assert shared.opts.data == stored
+            assert client.post("/sdapi/v1/options", json={"disabled_extensions": ["some-extension"]}).status_code == 200
+            assert shared.opts.data["disabled_extensions"] == ["some-extension"]
+    finally:
+        services.close()
+
+
+def test_sdapi_options_refuses_a_value_too_deep_to_check():
+    """A value the check cannot read (nested deeper than the recursion limit) is refused,
+    not a 500: written, it stopped ``config.json``'s save half way."""
+    import pytest
+
+    from modules.options import OptionInfo
+    from remi.ui import ValidationError
+    from remi.ui.settings import check_api_values
+
+    class Opts:
+        data_labels = {"ext_json": OptionInfo([], "A list setting")}
+        data: dict = {"ext_json": []}
+        ext_json: list = []
+
+    deep: list = []
+    for _ in range(100_000):
+        deep = [deep]
+    with pytest.raises(ValidationError) as error:
+        check_api_values(Opts(), {"ext_json": deep})
+    assert "ext_json" in str(error.value)
+
+
 def test_sdapi_infotext_fills_request_fields_and_script_args(webui_tmp):
     from modules.api import api, models
 

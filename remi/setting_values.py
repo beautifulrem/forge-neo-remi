@@ -1,8 +1,9 @@
 """Settings read as the kind of value their default is.
 
 A setting can hold a value of the wrong kind: a hand-edited config.json (the
-WebUI only warns about it) or an ``/sdapi/v1/options`` write, which checks no
-types. Read as is, one such value took every request down (the upload limit
+WebUI only warns about it), an extension's assignment, or an
+``/sdapi/v1/options`` write to a setting its check leaves alone
+(``remi.ui.settings.check_api_values``). Read as is, one such value took every request down (the upload limit
 is read by the body-limit middleware) or the app's bootstrap and the settings
 page, the only places to set it right. So:
 

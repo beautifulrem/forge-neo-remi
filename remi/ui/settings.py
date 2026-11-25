@@ -22,6 +22,7 @@ from remi.ui import nodes
 from remi.ui.context import Context, ensure_context
 from remi.ui.errors import ParamError, ValidationError
 from remi.ui.schema import SCHEMA_VERSION, jsonable
+from remi.ui.sentence import Sentence
 
 REMI_WIDGETS = (nodes.Toggle, nodes.Slider, nodes.Number, nodes.Text, nodes.Choice, nodes.MultiChoice, nodes.Color, nodes.State, nodes.Json, nodes.Markdown, nodes.Html, nodes.Separator, nodes.Row)
 
@@ -255,25 +256,47 @@ def check_api_values(opts, values: Mapping[str, Any]) -> dict[str, Any]:
     range and choices), or :class:`ValidationError` listing every refused one
     (nothing is set then). A value equal to the stored one passes as it is, as
     upstream's ``set_config`` skips it (a client posting back what GET
-    answered). The route takes out the model selection and refuses unknown
-    settings itself; which settings the API may change (``restrict_api``,
-    ``--freeze-settings``) stays ``Options.set``'s call. Here rather than in
+    answered). A setting without a widget that checks it (a ``Json`` node)
+    takes only a value of its default's kind (a list of names where the
+    default is one: ``disabled_extensions: 5`` stopped the next start).
+
+    Left as upstream had them: a setting set elsewhere (``interactive=False``:
+    ``sd_vae``, whose offered choices are not what a client sends), an
+    extension option the settings page cannot read either, and a
+    ``restrict_api`` one (``Options.set`` ignores it for the API). The route
+    takes out the model selection and refuses unknown settings itself;
+    ``--freeze-settings`` stays ``Options.set``'s call. Here rather than in
     ``remi.server.options``: ``modules/api`` does not import the server."""
+
+    from remi.setting_values import fit
 
     ctx = Context()
     result = dict(values)
     problems: list[ParamError] = []
     for key, value in values.items():
         info = opts.data_labels.get(key)
-        if info is None or value == opts.data.get(key):
+        if info is None or value == opts.data.get(key) or getattr(info, "restrict_api", False):
             continue
-        node = setting_node(key, info, setting(key, opts=opts))
+        try:
+            if component_args(info).get("interactive") is False:
+                continue
+            node = setting_node(key, info, setting(key, opts=opts))
+        except Exception:  # an extension option the settings page shows as an error: unchecked
+            continue
         if not isinstance(node, nodes.Input):  # a help block: nothing to check
             continue
         try:
-            result[key] = node.coerce(value, ctx)
+            coerced = node.coerce(value, ctx)
         except ParamError as error:
             problems.append(ParamError(error.message, owner="settings", param=key))
+            continue
+        except Exception:  # nested past the recursion limit: its save would stop half way
+            problems.append(ParamError("this value cannot be read", owner="settings", param=key))
+            continue
+        if isinstance(node, nodes.Json) and info.default is not None and fit(info.default, coerced) is info.default and coerced != info.default:
+            problems.append(ParamError(Sentence("expected a value like {{default}}", default=repr(info.default)), owner="settings", param=key))
+            continue
+        result[key] = coerced
     if problems:
         raise ValidationError(problems)
     return result

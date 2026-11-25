@@ -401,12 +401,20 @@ What changed underneath, and what it means for clients:
 - `/sdapi/v1/options` cannot change settings marked "restricted"; the
   WebUI's own `PATCH /api/v2/options` can.
 - `/sdapi/v1/options` checks a changed value as `PATCH /api/v2/options`
-  does: its kind, its slider's range (a number beyond it is set to the
-  nearest end) and its fixed choices. A value it refuses answers
-  `422 {"detail": "invalid settings: …"}` naming each one, and nothing in
-  the request is set. A1111 stored any value; a client that sent, say, a
-  number where a list belongs now gets the 422. A value equal to the stored
-  one passes unchecked, so posting back what `GET` answered still works.
+  does: its kind, its slider's range and step (a number beyond the range is
+  set to the nearest end, one between steps is rounded: `150.5` for an
+  integer setting stores `151`) and its fixed choices. `null` is checked
+  like any other value (a checkbox stores `false`, a text `""`, a number or
+  a choice refuses it). A list setting without a widget
+  (`disabled_extensions`) takes only a list of names. A value it refuses
+  answers `422 {"detail": "invalid settings: …"}` naming each one, and
+  nothing in the request is set. A1111 stored any value; a client that
+  sent, say, a number where a list belongs now gets the 422. A value equal
+  to the stored one passes unchecked, so posting back what `GET` answered
+  still works. Not checked, as before: a setting set elsewhere
+  (`sd_vae`), an extension option the settings page cannot show either,
+  the preset name (`forge_preset`, which the settings page checks against
+  the presets) and a "restricted" setting (ignored, as above).
 - The Agent Scheduler (`/agent-scheduler/v1/*`) and Prompt Queue
   (`/prompt-queue/*`) APIs are **not** kept: use `POST /api/v2/jobs` and the
   `/api/v2/queue/*` routes. Their data is imported with
