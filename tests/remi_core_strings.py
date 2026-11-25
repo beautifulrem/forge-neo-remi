@@ -174,12 +174,12 @@ def message_strings() -> set[str]:
 
 
 def job_strings() -> set[str]:
-    """The fixed sentences a job or a model load ends with (shown in the
-    history and the failure toasts)."""
+    """The fixed sentences a job, a model load or a pipeline ends with (shown in
+    the history, the failure toasts and the pipeline runs)."""
 
-    from remi.jobs.texts import JOB_TEXTS
+    from remi.jobs.texts import CHAIN_TEXTS, JOB_TEXTS
 
-    return set(JOB_TEXTS)
+    return set(JOB_TEXTS) | set(CHAIN_TEXTS)
 
 
 # Model families' workflow advice (the bar above Generate; the notes a job ends with) and why a

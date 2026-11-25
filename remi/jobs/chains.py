@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from remi.files import FileStore, connect, decode_cursor, encode_cursor, transaction
+from remi.jobs import texts
 from remi.jobs.queue import JobError, JobQueue, Submission
 from remi.jobs.store import CANCELLED, CHAIN_SCHEMA, COMPLETED, FAILED, INTERRUPTED, Job, JobStore
 from remi.realtime import EventBus
@@ -1182,7 +1183,7 @@ class ChainRunner:
                 if job is not None and job.status in FINISHED:
                     finished_jobs.append(job)
                 elif job is None:
-                    error = "the server stopped while the stage ran" if stage.kind == "prompt_upsample" or not stage.job_id else "the stage job was deleted"
+                    error = texts.STAGE_SERVER_STOPPED if stage.kind == "prompt_upsample" or not stage.job_id else texts.STAGE_JOB_DELETED
                     self.store.update_stage(chain.id, stage.index, status="cancelled", error=error, finished=now)
                     updated = self.store.update_chain(chain.id, status="cancelled", error=error, finished=now)
                     self.store.set_forced(chain.id, set())
@@ -1413,7 +1414,7 @@ class ChainRunner:
                     self.queue.recheck_done()
                     return
                 if error is not None or result is None:
-                    self._fail_chain(chain_id, stage.index, error or "prompt upsampling returned nothing")
+                    self._fail_chain(chain_id, stage.index, error or texts.UPSAMPLE_NOTHING)
                     self.queue.recheck_done()  # the pipeline ended here, where no job's end looks at the queue
                     return
                 self.store.update_stage(chain_id, stage.index, status="completed", output_prompt=result, finished=time.time())
@@ -1460,7 +1461,7 @@ class ChainRunner:
                 return
             output_ids = _stage_images(job)
             if job.status == COMPLETED and not output_ids:
-                self._fail_chain(chain_id, stage_index, "the stage made no image to pass on")
+                self._fail_chain(chain_id, stage_index, texts.STAGE_NO_IMAGE)
                 return
             if job.status == COMPLETED:
                 # keyed by the model it ran on, not the one loaded when it was queued; when that is
@@ -1489,9 +1490,9 @@ class ChainRunner:
                 self._publish_chain(updated)
                 should_advance = updated.status in ("running", "queued")
             elif job.status in (CANCELLED, INTERRUPTED):
-                self._fail_chain(chain_id, stage_index, job.error or job.status, status="cancelled")
+                self._fail_chain(chain_id, stage_index, job.error or texts.STAGE_JOB_STOPPED, status="cancelled")
             elif job.status == FAILED:
-                self._fail_chain(chain_id, stage_index, job.error or "stage job failed")
+                self._fail_chain(chain_id, stage_index, job.error or texts.STAGE_JOB_FAILED)
         if should_advance:
             self._advance(chain_id)
 

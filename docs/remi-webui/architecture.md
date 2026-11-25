@@ -532,7 +532,10 @@ client has a bounded event queue and one preview slot.
   asks the prompt tools' endpoint does not (and fails while the prompt tools
   are off, as `/prompt-tools/upsample` answers 409 then). A failed upsample
   stage's `error` is the prompt tool's sentence, as the route answers it
-  (`detail`), never the exception's class name. A stage's cache key covers its parameters, its upstream
+  (`detail`), never the exception's class name. The pipeline's own reasons
+  (a stage job that failed or stopped, a stage that made no image) are fixed
+  sentences in `remi/jobs/texts.py` (`CHAIN_TEXTS`), which the SPA translates
+  under a failed or stopped run. A stage's cache key covers its parameters, its upstream
   stage's hash, images and prompt, and the server-side model fingerprint
   (checkpoint name and file identity, VAE and text encoders, clip skip and
   the other settings that change every image), read again when the job

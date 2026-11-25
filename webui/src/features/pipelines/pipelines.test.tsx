@@ -402,6 +402,38 @@ describe("starter pipelines", () => {
     expect(screen.getByText(/复用缓存 1\/2/)).toBeInTheDocument()
   })
 
+  // A run that failed or was stopped said only "failed": why, and at which stage, was in the
+  // server's record and nowhere on the page.
+  it("says why a run ended, at which stage, in the current language", async () => {
+    const stages = [defaultStage("generate"), defaultStage("finish")]
+    const failed = completedRun(stages)
+    failed.id = "chain-failed"
+    failed.status = "failed"
+    failed.current_stage = 1
+    failed.error = "stage job failed"
+    failed.stages[1] = { ...failed.stages[1]!, status: "failed", error: "stage job failed", output_file_ids: [] }
+    const cancelled = { ...completedRun(stages), id: "chain-cancelled", status: "cancelled" as ChainStatus, error: null }
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (url.includes("/chains/templates")) return new Response(JSON.stringify([]), { status: 200 })
+      if (url.includes("/chains/preview")) return new Response(JSON.stringify({ stages: [] }), { status: 200 })
+      if (url.includes("/chains")) return new Response(JSON.stringify({ items: [failed, cancelled], total: 2 }), { status: 200 })
+      return new Response("{}", { status: 200 })
+    })
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    i18n.addResourceBundle("zh-CN", "server", { "stage job failed": "阶段任务失败" }, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PipelineBuilder />
+      </QueryClientProvider>,
+    )
+    const reason = await screen.findByText(`阶段 2：${zhCN["Finish / Upscale / PiD"]}：阶段任务失败`)
+    expect(reason).toHaveClass("text-destructive")
+    // a run the user stopped has no reason to give
+    expect(screen.getAllByText(/阶段任务失败/)).toHaveLength(1)
+  })
+
   it("keeps the built-in starters in the menu next to saved templates", async () => {
     const saved = { id: "t1", name: "My chain", description: "", model_family: "universal", stages: [], tags: [], created_at: "2026-11-20T10:00:00Z", updated_at: "2026-11-20T10:00:00Z" }
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {

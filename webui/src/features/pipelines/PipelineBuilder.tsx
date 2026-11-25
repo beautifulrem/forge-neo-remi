@@ -44,7 +44,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { CATEGORY_LABELS } from "@/features/library/labels"
-import { errorText, failureText } from "@/features/errors/error-text"
+import { errorText, failureText, serverText } from "@/features/errors/error-text"
 import { captureTabOverrides } from "@/features/recipes/capture"
 import { cn } from "@/lib/utils"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
@@ -810,6 +810,7 @@ export function PipelineBuilder() {
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {chain.stages.map((s) => t(STAGE_META[s.kind]?.label ?? s.kind)).join(" → ")}
                     </p>
+                    {chain.error ? <RunEndReason chain={chain} /> : null}
                   </div>
                   {outputs.length > 0 ? (
                     <div className="flex items-center gap-1">
@@ -828,5 +829,20 @@ export function PipelineBuilder() {
         )}
       </section>
     </div>
+  )
+}
+
+/**
+ * Why a run failed or stopped, at the stage where it ended. The server keeps the reason in
+ * English: its fixed sentences translate, anything else (an unexpected error) shows as it came.
+ */
+function RunEndReason({ chain }: { chain: JobChain }) {
+  const { t, i18n } = useTranslation()
+  const stage = chain.stages.find((s) => s.error === chain.error) ?? chain.stages[chain.current_stage]
+  const where = stage ? t("{{label}}: ", { label: t("Stage {{n}}: {{name}}", { n: stage.index + 1, name: t(STAGE_META[stage.kind]?.label ?? stage.kind) }) }) : ""
+  return (
+    <p className={cn("mt-0.5 text-xs [overflow-wrap:anywhere]", chain.status === "failed" ? "text-destructive" : "text-muted-foreground")}>
+      {where + serverText(chain.error ?? "", i18n.language)}
+    </p>
   )
 }

@@ -235,6 +235,22 @@ def test_deleting_a_queued_stage_job_cancels_the_chain(tmp_path):
         assert r.runner.rerun_chain(chain.id).status == "running"  # not stuck: it can run again
 
 
+def test_a_pipeline_ends_with_a_sentence_the_ui_translates(tmp_path):
+    """A stage job cancelled while queued ended the pipeline with its status word ("cancelled"),
+    which names no reason: the pipeline says its stage job was stopped. Every fixed sentence a
+    pipeline ends with is a catalog key (``texts.CHAIN_TEXTS``, collected for the core catalog), so
+    the pipelines list says it in the UI language."""
+
+    from remi.jobs import texts
+
+    with rig(tmp_path, start=False) as r:
+        chain = r.runner.create_chain(seeded(5))
+        r.queue.interrupt(r.runner.store.get_chain(chain.id).stages[0].job_id)
+        done = r.runner.store.get_chain(chain.id)
+        assert done.status == "cancelled" and done.error == texts.STAGE_JOB_STOPPED
+    assert {texts.STAGE_SERVER_STOPPED, texts.STAGE_JOB_DELETED, texts.STAGE_NO_IMAGE, texts.STAGE_JOB_FAILED, texts.STAGE_JOB_STOPPED, texts.UPSAMPLE_NOTHING} <= set(texts.CHAIN_TEXTS)
+
+
 def test_cancelling_a_finished_chain_is_refused(tmp_path):
     with rig(tmp_path) as r:
         chain = r.wait(r.runner.create_chain(seeded(5)[:1]).id)

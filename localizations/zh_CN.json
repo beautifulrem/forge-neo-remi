@@ -1179,5 +1179,11 @@
   "local Qwen3.5 PUP execution failed: {{error}}": "本地 Qwen3.5 PUP 运行失败：{{error}}",
   "local Qwen3.5 PUP answered with an empty prompt": "本地 Qwen3.5 PUP 返回了空的提示词",
   "local_model_path is disabled under --hide-ui-dir-config": "已通过 --hide-ui-dir-config 禁用本地模型路径（local_model_path）",
-  "no reference image {{id}}": "没有参考图 {{id}}"
+  "no reference image {{id}}": "没有参考图 {{id}}",
+  "the server stopped while the stage ran": "服务器在该阶段运行时停止了",
+  "the stage job was deleted": "该阶段的任务已被删除",
+  "the stage made no image to pass on": "该阶段没有生成可传给下一阶段的图像",
+  "stage job failed": "阶段任务失败",
+  "the stage job was stopped": "该阶段的任务已被停止",
+  "prompt upsampling returned nothing": "提示词扩写没有返回内容"
 }
