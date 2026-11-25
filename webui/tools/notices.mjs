@@ -28,6 +28,15 @@ export function cssImportedPackages(css) {
   return [...names]
 }
 
+/**
+ * The packages the app depends on at run time (package.json `dependencies`): all of them ship.
+ * One whose modules only re-export another package (`motion/react` re-exports framer-motion)
+ * never shows in the bundle's module list, so the build adds these by name.
+ */
+export function runtimeDependencies(manifest) {
+  return Object.keys(manifest.dependencies ?? {})
+}
+
 const LICENSE_FILE = /^(?:licen[cs]e|copying|notice)(?:[.-].*)?$/i
 
 /**

@@ -1,7 +1,7 @@
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 import { readdir, readFile } from "node:fs/promises"
-import { collectNotices, cssImportedPackages, formatNotices, packageRoot, vendoredNotices } from "./notices.mjs"
+import { collectNotices, cssImportedPackages, formatNotices, packageRoot, runtimeDependencies, vendoredNotices } from "./notices.mjs"
 
 const modules = path.resolve(import.meta.dirname, "../node_modules")
 
@@ -37,6 +37,15 @@ describe("third-party notices", () => {
     expect(cssImportedPackages('@import "tailwindcss";\n@import "./local.css";\n@import url("@fontsource-variable/geist/wght.css");')).toEqual(["tailwindcss", "@fontsource-variable/geist"])
     const css = await readFile(path.resolve(import.meta.dirname, "../src/index.css"), "utf8")
     expect(cssImportedPackages(css)).toEqual(expect.arrayContaining(["tailwindcss", "tw-animate-css"]))
+  })
+
+  // `motion/react` only re-exports framer-motion: no module of `motion` itself reaches the bundle
+  it("lists every runtime dependency, including one whose modules all re-export another package", async () => {
+    const manifest = JSON.parse(await readFile(path.resolve(import.meta.dirname, "../package.json"), "utf8"))
+    const names = runtimeDependencies(manifest)
+    expect(names).toEqual(expect.arrayContaining(["motion", "react", "@base-ui/react"]))
+    expect(names).not.toContain("vite")
+    expect(runtimeDependencies({ devDependencies: { vite: "8" } })).toEqual([])
   })
 
   it("lists the shadcn/ui components copied into src/components/ui, which no package brings", async () => {

@@ -8,7 +8,7 @@ import babel from "@rolldown/plugin-babel"
 import tailwindcss from "@tailwindcss/vite"
 import react, { reactCompilerPreset } from "@vitejs/plugin-react"
 import { defineConfig, loadEnv, type Plugin } from "vite"
-import { collectNotices, cssImportedPackages, formatNotices, vendoredNotices } from "./tools/notices.mjs"
+import { collectNotices, cssImportedPackages, formatNotices, runtimeDependencies, vendoredNotices } from "./tools/notices.mjs"
 
 // The WebUI server (python launch.py) serves the built app from webui/dist;
 // `pnpm dev` proxies its API and WebSocket to that server.
@@ -83,7 +83,8 @@ function precompress(): Plugin {
 /**
  * THIRD-PARTY-NOTICES.txt next to index.html: minification drops the dependencies' license
  * comments, so the build lists every package it ships (bundled code, stylesheets a CSS file
- * imports, fonts, the vendored API viewers, the copied shadcn/ui components) with its license text (tools/notices.mjs). Settings → Licenses links to it.
+ * imports, fonts, the vendored API viewers, every runtime dependency, the copied shadcn/ui
+ * components) with its license text (tools/notices.mjs). Settings → Licenses links to it.
  */
 function thirdPartyNotices(): Plugin {
   return {
@@ -95,10 +96,12 @@ function thirdPartyNotices(): Plugin {
         if (output.type === "chunk") for (const id of output.moduleIds) ids.add(id)
         else for (const name of output.originalFileNames) ids.add(path.resolve(import.meta.dirname, name))
       }
-      // packages a stylesheet imports (Tailwind inlines them) and the vendored API viewers (apiDocs())
+      // packages a stylesheet imports (Tailwind inlines them), the vendored API viewers (apiDocs())
+      // and every runtime dependency (one that only re-exports another package has no module of its own)
       const modules = path.resolve(import.meta.dirname, "node_modules")
       const styles = path.resolve(import.meta.dirname, "src")
-      const names = new Set(["swagger-ui-dist", "redoc"])
+      const manifest = JSON.parse(await readFile(path.resolve(import.meta.dirname, "package.json"), "utf8")) as { dependencies?: Record<string, string> }
+      const names = new Set(["swagger-ui-dist", "redoc", ...runtimeDependencies(manifest)])
       for (const file of await readdir(styles, { recursive: true })) {
         if (file.endsWith(".css")) for (const name of cssImportedPackages(await readFile(path.join(styles, file), "utf8"))) names.add(name)
       }
