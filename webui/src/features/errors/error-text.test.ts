@@ -47,6 +47,24 @@ describe("errorText", () => {
     expect(errorText(frozen, { 422: "Their own sentence." })).toBe("Their own sentence.")
   })
 
+  // A board or collection name, or a network's user metadata, refused with no owner: the body names
+  // only the field. These answered free English text, or FastAPI's own 422, shown as "The server
+  // rejected the request.".
+  it("gives the sentence of a refused value that has no owner", async () => {
+    const template = "board name must be at most {{maximum}} characters"
+    const tooLong = new ApiError(422, "HTTP 422", { errors: [{ owner: null, param: "name", message: "board name must be at most 120 characters", template, params: { maximum: "120" } }] })
+    expect(errorText(tooLong)).toBe("board name must be at most 120 characters")
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", template, "看板名称不能超过 {{maximum}} 个字符")
+    await i18n.changeLanguage("zh-CN")
+    try {
+      expect(errorText(tooLong)).toBe("看板名称不能超过 120 个字符")
+      expect(failureText(tooLong)).toBe("看板名称不能超过 120 个字符")
+    } finally {
+      await i18n.changeLanguage("en")
+    }
+  })
+
   // A metadata edit refused because the sidecar next to the model cannot be read: the sentence
   // names the file (a template with its values), in the UI language.
   it("gives a refused value's sentence with the values it names", async () => {
