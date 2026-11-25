@@ -18,9 +18,10 @@ import { Header } from "./Header"
 import { availableLocales } from "./locales"
 import { MotionRoot } from "./MotionRoot"
 import { BottomBar, NavRail } from "./NavRail"
-import { buildNav, pageFor, type NavItem } from "./routes"
+import { routeTitle } from "./route-title"
+import { buildNav, type NavItem, pageFor } from "./routes"
 import { onShortcutsKey, useShortcutsHelp } from "./shortcuts-help"
-import { navigate, type Route, routeKey, useRoute } from "./router"
+import { navigate, routeKey, useRoute } from "./router"
 import { useToastBottomOffset } from "./toast-offset"
 import { useUserStylesheet } from "./user-stylesheet"
 import { useWsBridge } from "./ws-bridge"
@@ -91,12 +92,6 @@ function AppToaster() {
       closeButtonAriaLabel={t("Close notification")}
     />
   )
-}
-
-function routeTitle(route: Route, nav: NavItem[]): string {
-  if (route.name === "generate") return "Generate"
-  if (route.name === "not-found") return "Not found"
-  return nav.find((item) => routeKey(item.route) === routeKey(route))?.label ?? route.name
 }
 
 export function App() {
