@@ -14,8 +14,9 @@ their reads; the server's start (``repair()``) leaves them values of their
 kind.
 
 The guard flags every read of ``shared.opts`` (a name bound to it,
-``shared.opts``, ``modules.shared.opts``, or a call of a function named for
-it, ``_opts()`` or ``_resolve_opts(...)``) that is not a method of
+``shared.opts`` under any name the file gives the module, ``modules.shared.opts``,
+or a call of a function named for it, ``_opts()`` or ``_resolve_opts(...)``)
+that is not a method of
 ``Options``: attribute reads, ``getattr(opts, ...)`` and the raw ``opts.data``
 mapping. Assignments, ``del`` and the ``opts.data`` methods called only to
 write (``update``, ``clear``, a ``pop`` whose result is unused) pass. A place
@@ -24,6 +25,7 @@ passed the settings under another name is out of its sight.
 """
 
 import ast
+from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,23 +61,32 @@ RAW = {
 DATA_WRITES = {"update", "clear", "pop", "setdefault"}
 
 
-def _is_shared(node: ast.AST) -> bool:
-    """``shared`` or ``modules.shared``."""
+@dataclass
+class _Names:
+    """What a file calls the settings (``opts``, ``options = shared.opts``) and
+    the module that holds them (``shared``, ``import modules.shared as sh``)."""
+
+    opts: set[str] = field(default_factory=lambda: {"opts"})
+    shared: set[str] = field(default_factory=lambda: {"shared"})
+
+
+def _is_shared(node: ast.AST, names: _Names) -> bool:
+    """``shared`` (or a name bound to it) or ``modules.shared``."""
 
     if isinstance(node, ast.Name):
-        return node.id == "shared"
+        return node.id in names.shared
     return isinstance(node, ast.Attribute) and node.attr == "shared" and isinstance(node.value, ast.Name) and node.value.id == "modules"
 
 
-def _is_opts(node: ast.AST, names: set[str]) -> bool:
+def _is_opts(node: ast.AST, names: _Names) -> bool:
     """``shared.opts`` (``modules.shared.opts``), a name bound to it, or a call
     of a function named for it: ``opts()``, ``_opts()``, ``self.opts()``,
     ``_resolve_opts(opts)``."""
 
     if isinstance(node, ast.Name):
-        return node.id in names
+        return node.id in names.opts
     if isinstance(node, ast.Attribute):
-        return node.attr == "opts" and _is_shared(node.value)
+        return node.attr == "opts" and _is_shared(node.value, names)
     if isinstance(node, ast.Call):
         func = node.func
         name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else ""
@@ -83,32 +94,37 @@ def _is_opts(node: ast.AST, names: set[str]) -> bool:
     return False
 
 
-def _is_data(node: ast.AST, names: set[str]) -> bool:
+def _is_data(node: ast.AST, names: _Names) -> bool:
     return isinstance(node, ast.Attribute) and node.attr == "data" and _is_opts(node.value, names)
 
 
-def _aliases(tree: ast.AST) -> set[str]:
-    """``opts`` and the names a file binds to the settings: ``from modules.shared
-    import opts as o``, ``options = shared.opts``."""
+def _aliases(tree: ast.AST) -> _Names:
+    """The names a file binds to the settings (``from modules.shared import
+    opts as o``, ``options = shared.opts``) and to their module (``from modules
+    import shared as s``, ``import modules.shared as sh``)."""
 
-    names = {"opts"}
+    names = _Names()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module == "modules.shared":
-            names |= {alias.asname or alias.name for alias in node.names if alias.name == "opts"}
+            names.opts |= {alias.asname or alias.name for alias in node.names if alias.name == "opts"}
+        elif isinstance(node, ast.ImportFrom) and node.module == "modules":
+            names.shared |= {alias.asname or alias.name for alias in node.names if alias.name == "shared"}
+        elif isinstance(node, ast.Import):
+            names.shared |= {alias.asname for alias in node.names if alias.name == "modules.shared" and alias.asname}
     changed = True
     while changed:
         changed = False
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign) and _is_opts(node.value, names):
                 for target in node.targets:
-                    if isinstance(target, ast.Name) and target.id not in names:
-                        names.add(target.id)
+                    if isinstance(target, ast.Name) and target.id not in names.opts:
+                        names.opts.add(target.id)
                         changed = True
     return names
 
 
 class _Reads(ast.NodeVisitor):
-    def __init__(self, names: set[str]) -> None:
+    def __init__(self, names: _Names) -> None:
         self.found: list[tuple[int, str, str]] = []
         self.function = ""
         self.names = names
@@ -190,11 +206,18 @@ def f(opts=None):
     opts.data.clear()
     c = opts.data.pop("taken", None)
     d = _cmd_opts().lora_dir
+
+def g():
+    import modules.shared as sh
+    from modules import shared as s
+    return sh.opts.outdir_save, s.opts.live_preview_fps, sh.cmd_opts.ckpt
 """
     assert [what for _line, _function, what in reads_in(source, "probe.py")] == [
         "getattr(opts, 'forge_preset')",
         "opts.samples_format",
         "opts.data",
+        "opts.outdir_save",
+        "opts.live_preview_fps",
     ]
 
 
