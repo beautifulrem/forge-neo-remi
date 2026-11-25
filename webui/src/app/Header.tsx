@@ -45,18 +45,30 @@ export function ConnectionDot() {
         {label}
       </span>
       <Tooltip>
-        {/* the word fills the dot's own room first: a phone's header has no more */}
-        <TooltipTrigger render={<span aria-hidden className="flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-sm" />}>
-          <span
-            className={cn(
-              "size-1.5 shrink-0 rounded-full",
-              status === "open" && "bg-success",
-              // still, not pulsing: a reconnect can last as long as a job runs
-              (status === "connecting" || status === "idle" || status === "reconnecting") && "bg-warning",
-              status === "closed" && "bg-destructive",
-            )}
-          />
-          {lost ? <span className="text-[0.6875rem] whitespace-nowrap text-muted-foreground">{t("Offline")}</span> : null}
+        {/* The word fills the dot's own room first: a phone's header has no more. Where a phone's header
+            has none even for that (beside a page's tabs: 320 px in English with a quick setting pinned),
+            the box shrinks toward the dot's 28 px and the word wraps to a second line it clips: the dot
+            shows alone, its state still read out and in the tooltip. */}
+        <TooltipTrigger
+          render={
+            <span
+              aria-hidden
+              className="flex h-7 min-w-7 shrink-0 flex-wrap content-start items-center justify-center gap-1 overflow-hidden rounded-sm max-sm:shrink"
+            />
+          }
+        >
+          <span className="flex h-7 items-center">
+            <span
+              className={cn(
+                "size-1.5 shrink-0 rounded-full",
+                status === "open" && "bg-success",
+                // still, not pulsing: a reconnect can last as long as a job runs
+                (status === "connecting" || status === "idle" || status === "reconnecting") && "bg-warning",
+                status === "closed" && "bg-destructive",
+              )}
+            />
+          </span>
+          {lost ? <span className="flex h-7 items-center text-[0.6875rem] whitespace-nowrap text-muted-foreground">{t("Offline")}</span> : null}
         </TooltipTrigger>
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
@@ -109,7 +121,7 @@ export function Header({ title, locales }: { title: string; locales: LocaleInfo[
       </h1>
       <div ref={setSlot} className="flex shrink-0 items-center gap-2" />
       {/* 4 px apart on a phone: room for a page's tabs beside four of them at 320 px */}
-      <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 max-sm:gap-1 sm:shrink">
+      <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 max-sm:gap-1 max-sm:group-has-data-page-tabs/header:shrink sm:shrink">
         <div className="hidden min-w-0 sm:block">
           <ErrorBoundary fallback={null}>
             <Suspense fallback={<div aria-hidden className="h-7 w-[min(22rem,40vw)] rounded-sm bg-field" />}>

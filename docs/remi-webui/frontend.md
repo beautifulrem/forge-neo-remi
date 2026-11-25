@@ -246,7 +246,12 @@ imperatively).
     header; a lost connection adds the word "Offline" beside it (a touch
     screen cannot hover its tooltip), in the dot's own 28 px room first; on a
     phone the page title then yields to it (truncated, its full text as a
-    title, or not shown beside the page's own tabs), never the controls. `WorkerHealthPill` (`GET /api/v2/workers`) stays a calm borderless
+    title, or not shown beside the page's own tabs), never the controls.
+    Where even then a phone's header has no room for it (beside Generate's
+    tabs with a quick setting pinned, in English below 333 px), the word
+    gives way to the dot: its box shrinks toward 28 px and the word wraps
+    to a second line the box clips, the state still read out (`role=status`)
+    and in the tooltip. `WorkerHealthPill` (`GET /api/v2/workers`) stays a calm borderless
     ghost monochrome readout (`CPU MPS` / `CUDA` / `1/2 GPU`) when healthy and
     only shows an amber/red indicator dot when a worker is degraded or failed.
   - **Live Darkroom Aspect-Ratio Viewfinder**: when the Generate stage has no

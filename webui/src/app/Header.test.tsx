@@ -76,6 +76,28 @@ describe("the header on a phone, on a page with its own tabs", () => {
     expect(header.querySelector("[data-page-tabs]")).toBe(screen.getByRole("navigation", { name: "Mode" }))
   })
 
+  // At 320 px in English with a quick setting pinned and the connection lost, the word "Offline"
+  // took the last 13 px: the appearance menu left the window. There the word gives way to the dot
+  // (wraps to a second line its box clips), its state still read out; wherever it fits it shows.
+  it("lets the word Offline give way to the dot where even the page's tabs leave no room", () => {
+    useWs.setState({ status: "closed" })
+    try {
+      render(<Header title="Generate" locales={[]} />)
+      const word = screen.getByText("Offline")
+      const box = word.parentElement!
+      expect(box).toHaveClass("h-7", "min-w-7", "flex-wrap", "content-start", "overflow-hidden", "shrink-0", "max-sm:shrink")
+      // the word and the dot each a line 28 px tall: a wrapped word is below the box, not beside the dot
+      expect(word).toHaveClass("h-7")
+      expect(box.firstElementChild).toHaveClass("h-7")
+      expect(screen.getByRole("status")).toHaveTextContent("Disconnected")
+      // only on a phone, and only beside a page's tabs, does the row shrink the box (no title to cut first)
+      const controls = screen.getAllByRole("button", { name: "Search" })[0]!.parentElement!
+      expect(controls).toHaveClass("shrink-0", "max-sm:group-has-data-page-tabs/header:shrink")
+    } finally {
+      act(() => useWs.setState({ status: "idle" }))
+    }
+  })
+
   // At 320 px in English Generate's tabs, the networks button and four 28 px controls (a quick
   // setting pinned) left the appearance menu past the window: the controls sit 4 px apart there.
   it("sets the controls 4 px apart below sm", () => {

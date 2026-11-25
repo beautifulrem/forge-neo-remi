@@ -37,6 +37,32 @@ async function headerProblems(page: Page): Promise<string[]> {
   })
 }
 
+/** Pins the first setting on the settings page to the quick settings (the mock keeps it for the visit). */
+async function pinQuickSetting(page: Page) {
+  await page.goto("/#/settings")
+  const pin = page.getByRole("button", { name: /^(Pin .*quick settings|将.*固定)/ }).first()
+  await pin.click()
+  await expect(pin).toHaveAttribute("aria-pressed", "true")
+}
+
+/** Where the header's last control ends past its content box (into its right padding), in px. */
+async function pastPadding(page: Page): Promise<number> {
+  return page.locator("header").first().evaluate((header) => {
+    const contentRight = header.getBoundingClientRect().right - parseFloat(getComputedStyle(header).paddingRight)
+    const rights = [...header.querySelectorAll<HTMLElement>("button, a[href]")].map((element) => element.getBoundingClientRect()).filter((rect) => rect.width > 0).map((rect) => rect.right)
+    return Math.max(...rights) - contentRight
+  })
+}
+
+/** Whether the word beside the connection dot is on the dot's line (a word that has no room wraps out of its box). */
+async function besideDot(word: Locator): Promise<boolean> {
+  return word.evaluate((element) => {
+    const rect = element.getBoundingClientRect()
+    const box = element.parentElement!.getBoundingClientRect()
+    return rect.top >= box.top - 0.5 && rect.bottom <= box.bottom + 0.5 && rect.left >= box.left - 0.5 && rect.right <= box.right + 0.5
+  })
+}
+
 test.describe("layout at 1280×720", () => {
   test.use({ viewport: { width: 1280, height: 720 } })
 
@@ -92,9 +118,28 @@ test.describe("the header on a phone while offline", () => {
         expect(await header.evaluate((element) => element.scrollWidth <= element.clientWidth + 0.5), "the header overflows").toBe(true)
         const word = await header.getByText(offline, { exact: true }).evaluate((element) => element.scrollWidth <= element.clientWidth + 0.5)
         expect(word, "the word is cut").toBe(true)
+        expect(await besideDot(header.getByText(offline, { exact: true })), "the word is not beside the dot").toBe(true)
       })
     }
   }
+
+  // At 320 px in English with a quick setting pinned even the page's tabs leave no room for the word:
+  // it took the last 13 px and the appearance menu left the window. The dot shows alone there.
+  test("gives the word's room to the controls at 320 px with a quick setting pinned (en)", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 })
+    await presetStorage(page, { locale: "en" })
+    await pinQuickSetting(page)
+    await page.evaluate(() => (location.hash = "#/txt2img"))
+    await expect(page.getByRole("textbox", { name: "Prompt", exact: true })).toBeVisible()
+    const header = page.locator("header").first()
+    await expect(header.getByRole("button", { name: "Quick settings" })).toBeVisible()
+    await goOffline(page)
+    await expect(header.getByRole("status").filter({ hasText: "Disconnected" })).toBeAttached()
+    await expect.poll(() => besideDot(header.getByText("Offline", { exact: true }))).toBe(false)
+    await expect.poll(() => headerProblems(page)).toEqual([])
+    expect(await header.evaluate((element) => element.scrollWidth <= element.clientWidth + 0.5), "the header overflows").toBe(true)
+    expect(await pastPadding(page), "a control is in the header's padding").toBeLessThanOrEqual(0.5)
+  })
 })
 
 // Beside Generate's txt2img / img2img tabs the page title was cut to a stub on a phone ("G…" at
@@ -102,16 +147,6 @@ test.describe("the header on a phone while offline", () => {
 // title gives way to the page's own tabs there (still the page's heading); a page without them
 // keeps its title whole.
 test.describe("the header on a phone with a quick setting pinned", () => {
-  /** Where the header's last control ends past its content box (its right padding), in px. */
-  async function pastPadding(page: Page): Promise<number> {
-    return page.locator("header").first().evaluate((header) => {
-      const style = getComputedStyle(header)
-      const contentRight = header.getBoundingClientRect().right - parseFloat(style.paddingRight)
-      const rights = [...header.querySelectorAll<HTMLElement>("button, a[href]")].map((element) => element.getBoundingClientRect()).filter((rect) => rect.width > 0).map((rect) => rect.right)
-      return Math.max(...rights) - contentRight
-    })
-  }
-
   for (const [locale, title, gallery] of [
     ["en", "Generate", "Gallery"],
     ["zh-CN", "生成", "图库"],
@@ -119,10 +154,7 @@ test.describe("the header on a phone with a quick setting pinned", () => {
     test(`the title is whole or gives way to the page's tabs at 360 px (${locale})`, async ({ page }) => {
       await page.setViewportSize({ width: 360, height: 800 })
       await presetStorage(page, { locale })
-      await page.goto("/#/settings")
-      const pin = page.getByRole("button", { name: /^(Pin .*quick settings|将.*固定)/ }).first()
-      await pin.click()
-      await expect(pin).toHaveAttribute("aria-pressed", "true")
+      await pinQuickSetting(page)
       await page.evaluate(() => (location.hash = "#/txt2img"))
       await expect(page.getByRole("textbox", { name: /^(Prompt|提示词)$/ })).toBeVisible()
       const header = page.locator("header").first()
