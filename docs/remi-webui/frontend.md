@@ -405,9 +405,13 @@ imperatively).
   keyboard cursor drawn in the token (the networks grid's current item: an
   outline on the tile's `after:` layer, an inset ring on a list row); a 2 px
   ring read thinner than the rings beside it. `ring-0` takes the ring off a
-  control whose group draws it, and shadcn's 1 px outline in the tabs and the
-  scroll area sits inside its 3 px ring (`lib/design-guards.test.ts`, "focus
-  rings"). A focus nothing else marks (a link in text, the skip link) draws
+  control whose group draws it, and shadcn's 1 px outline in the tabs sits
+  inside its 3 px ring (`lib/design-guards.test.ts`, "focus rings"). The
+  scroll area's viewport, a tab stop while it scrolls, shows its focus with
+  the 3 px ring alone: its 1 px outline never drew, since `outline-none` and
+  `outline-hidden` set the outline style a width class reads, so beside them
+  a width needs a style class of its own (`outline-solid`) or it is dead (the
+  same test fails on one). A focus nothing else marks (a link in text, the skip link) draws
   the token as a 3 px outline at its edge, where `ring-3` draws it (the
   `:focus-visible` rule of the `index.css` base layer), never the browser's
   own `outline: auto`, whose width and colour are the browser's. A control

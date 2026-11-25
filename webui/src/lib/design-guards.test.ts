@@ -237,7 +237,7 @@ describe("focus rings", () => {
   it("are 3 px wide", () => {
     // frontend.md: a focus ring is `ring-3` in --focus-ring (or a 3 px outline over an image). A 2 px
     // ring read thinner than every other focus ring beside it. `ring-0` takes the ring off a control
-    // whose group draws it; shadcn's 1 px outline sits on the edge inside a 3 px ring.
+    // whose group draws it; shadcn's 1 px outline sits on the tabs' edge inside a 3 px ring.
     // every class in the sources (a run outside quotes, braces and spaces), brackets included
     const rings = files.flatMap(({ file, source }) =>
       (source.match(/[^\s"'`{}]+/g) ?? [])
@@ -264,7 +264,7 @@ describe("focus rings", () => {
     )
     expect(rings.filter(({ width }) => width === "3").length).toBeGreaterThan(40)
     expect(cursors.length).toBeGreaterThan(1)
-    const SHADCN_EDGE = new Set(["components/ui/tabs.tsx", "components/ui/scroll-area.tsx"])
+    const SHADCN_EDGE = new Set(["components/ui/tabs.tsx"])
     const off = [...rings, ...cursors].filter(({ file, kind, width }) => width !== "3" && width !== "0" && !(kind === "outline" && width === "1" && SHADCN_EDGE.has(file)))
     expect(off.map(({ file, cls }) => `${file}: ${cls}`)).toEqual([])
   })
@@ -382,6 +382,31 @@ describe("focus rings", () => {
     )
     expect(halos.length).toBeGreaterThan(25)
     expect([...new Set(halos.filter(({ scoped }) => !scoped).map(({ where }) => where))]).toEqual([])
+  })
+
+  it("draw no outline width that outline-none leaves without a style", () => {
+    // `outline-none` and `outline-hidden` set --tw-outline-style to none, and a width class
+    // (`focus-visible:outline-1`) takes its style from it: beside them, a width with no style class of
+    // its own draws nothing (the scroll area's 1 px outline never drew). An outline on a pseudo-element
+    // (`after:`) or a child keeps its own style: the variable does not inherit.
+    const ELSEWHERE = /^(?:before|after|placeholder|file|marker|selection|first-line|first-letter|backdrop|\*|\*\*)$|^\[.*[\s_>~+].*\]$/
+    let checked = 0
+    const dead = files.flatMap(({ file, source }) =>
+      classScopes(source).flatMap((scope) => {
+        const classes = scope.match(/[^\s"'`{}]+/g) ?? []
+        if (!classes.some((cls) => cls === "outline-none" || cls === "outline-hidden")) return []
+        return classes.flatMap((cls) => {
+          const chain = variants(cls)
+          if (!/^-?outline-(?:[1-9]\d*|\[\d*\.?\d+px\])$/.test(utility(cls))) return []
+          checked++
+          if (chain.some((variant) => ELSEWHERE.test(variant))) return []
+          const styled = classes.some((other) => /^outline-(?:solid|dashed|dotted|double)$/.test(utility(other)) && variants(other).every((variant) => chain.includes(variant)))
+          return styled ? [] : [`${file}: ${cls}`]
+        })
+      }),
+    )
+    expect(checked).toBeGreaterThan(0)
+    expect([...new Set(dead)]).toEqual([])
   })
 })
 
