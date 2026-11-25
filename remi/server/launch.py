@@ -132,9 +132,11 @@ def worker_mode_summary(cmd_opts: Any) -> str | None:
         mode_desc = "subprocess (isolated worker)"
     else:
         mode_desc = "inprocess"
+    # the flags are a preview: the queue does not dispatch to these workers (docs/remi-webui/usage.md)
+    preview = " (preview: queued jobs still run in this process)"
     if use_mlx:
-        return f"Worker mode: {mode_desc}, MLX sidecar enabled"
-    return f"Worker mode: {mode_desc}"
+        return f"Worker mode: {mode_desc}, MLX sidecar enabled{preview}"
+    return f"Worker mode: {mode_desc}{preview}"
 
 
 class RootPathFix:

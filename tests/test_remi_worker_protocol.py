@@ -391,14 +391,15 @@ def test_cli_worker_flags_parsing_and_mode_selection(tmp_path, monkeypatch):
     for key in ("REMI_WORKER_PROCESS", "REMI_WORKER_GPUS", "REMI_WORKER_MLX"):
         monkeypatch.delenv(key, raising=False)
 
-    # 2. worker_options_from_cmd_opts + launch.worker_mode_summary
+    # 2. worker_options_from_cmd_opts + launch.worker_mode_summary; the line says the flags are a
+    # preview (it read as if jobs ran in the isolated workers, which the queue does not dispatch to)
     assert services_mod.worker_options_from_cmd_opts(defaults) == (False, None, False)
     assert launch.worker_mode_summary(defaults) is None
     assert services_mod.worker_options_from_cmd_opts(parsed_sub) == (True, None, False)
-    assert launch.worker_mode_summary(parsed_sub) == "Worker mode: subprocess (isolated worker)"
+    assert launch.worker_mode_summary(parsed_sub) == "Worker mode: subprocess (isolated worker) (preview: queued jobs still run in this process)"
     assert services_mod.worker_options_from_cmd_opts(parsed_pool) == (False, "0,1", True)
-    assert launch.worker_mode_summary(parsed_pool) == "Worker mode: pool (GPUs: 0, 1), MLX sidecar enabled"
-    assert launch.worker_mode_summary(SimpleNamespace(worker_process=False, worker_gpus=None, worker_mlx=True)) == "Worker mode: inprocess, MLX sidecar enabled"
+    assert launch.worker_mode_summary(parsed_pool) == "Worker mode: pool (GPUs: 0, 1), MLX sidecar enabled (preview: queued jobs still run in this process)"
+    assert launch.worker_mode_summary(SimpleNamespace(worker_process=False, worker_gpus=None, worker_mlx=True)) == "Worker mode: inprocess, MLX sidecar enabled (preview: queued jobs still run in this process)"
 
     # 3. Services.create mode selection: default in-process, subprocess, multi-GPU pool, and MLX sidecar
     svc_default = services_mod.Services.create(tmp_path / "inproc", dispatch=run_inline, realtime=False, housekeeping=False)
