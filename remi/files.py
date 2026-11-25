@@ -793,15 +793,31 @@ def _same_file(a: str, b: str) -> bool:
 
 
 def _walk_images(directories: Iterable[str | os.PathLike]) -> Iterator[str]:
-    seen: set[str] = set()
+    """The image files below ``directories``, each folder walked once: two
+    settings can name one folder in different case (macOS keeps the case it
+    is given, realpath too), or one folder inside another."""
+
+    seen: set[tuple[int, int]] = set()
+
+    def first_visit(path: str) -> bool:
+        try:
+            stat = os.stat(path, follow_symlinks=False)  # a link is not walked: its own identity
+        except OSError:
+            return False
+        key = (stat.st_dev, stat.st_ino)
+        if key in seen:
+            return False
+        seen.add(key)
+        return True
+
     for directory in directories:
         if not directory or not os.path.isdir(directory):
             continue
         real = os.path.realpath(directory)
-        if real in seen:
+        if not first_visit(real):
             continue
-        seen.add(real)
-        for current, _dirs, files in os.walk(real):
+        for current, dirs, files in os.walk(real):
+            dirs[:] = [name for name in dirs if first_visit(os.path.join(current, name))]
             for name in files:
                 if name.lower().endswith(IMAGE_EXTENSIONS):
                     yield os.path.join(current, name)

@@ -496,6 +496,25 @@ def test_an_insert_that_fails_is_retried_not_returned_as_a_record(tmp_path, monk
         store.close()
 
 
+def test_the_output_scan_walks_each_folder_once(tmp_path):
+    """Two settings naming one folder in different case, or a folder inside another
+    configured one, were walked twice on every scan (realpath keeps the case it is given)."""
+
+    from remi.files import _walk_images
+
+    folder = tmp_path / "Saved"
+    (folder / "sub").mkdir(parents=True)
+    (folder / "1.png").write_bytes(png())
+    (folder / "sub" / "2.png").write_bytes(png())
+    (tmp_path / "Saved-link").symlink_to(folder / "sub", target_is_directory=True)  # not followed, not marked seen
+    for directories in ([folder, folder / "sub"], [folder / "sub", folder], [tmp_path / "Saved-link", folder]):
+        found = list(_walk_images(directories))
+        assert sorted(os.path.basename(path) for path in found) == ["1.png", "2.png"], directories
+    if _ignores_case(tmp_path):
+        found = list(_walk_images([folder, tmp_path / "saved"]))
+        assert sorted(os.path.basename(path) for path in found) == ["1.png", "2.png"]
+
+
 def test_two_files_that_differ_only_in_case_stay_two_records(tmp_path):
     if _ignores_case(tmp_path):
         pytest.skip("this volume ignores letter case")
