@@ -62,6 +62,14 @@ describe("queue helpers", () => {
     expect(formatDuration(3720)).toBe("1 h 02 min")
   })
 
+  // The seconds were rounded after the unit was chosen: "60 s", "1 min 60 s", "59 min 60 s".
+  it("rounds a duration before choosing its units", () => {
+    expect(formatDuration(9.96)).toBe("10 s")
+    expect(formatDuration(59.6)).toBe("1 min 00 s")
+    expect(formatDuration(119.6)).toBe("2 min 00 s")
+    expect(formatDuration(3599.6)).toBe("1 h 00 min")
+  })
+
   it("turns a job into one paste entry per owner", () => {
     expect(jobEntries({ core: { prompt: "x" }, scripts: { seed: { seed: 3 }, broken: 5 as unknown as Record<string, unknown> } })).toEqual([
       { owner: "core", values: { prompt: "x" } },

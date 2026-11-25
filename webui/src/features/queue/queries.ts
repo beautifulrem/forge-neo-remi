@@ -102,9 +102,13 @@ export function durationOf(job: Pick<Job, "started_at" | "finished_at">): number
 /** "42 s", "3 min 05 s", "1 h 02 min" (localized units). */
 export function formatDuration(seconds: number, language = i18n.language): string {
   const lng = language
-  if (seconds < 60) return t("{{seconds}} s", { seconds: seconds < 10 ? seconds.toFixed(1) : Math.round(seconds), lng })
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return t("{{minutes}} min {{seconds}} s", { minutes, seconds: String(Math.round(seconds % 60)).padStart(2, "0"), lng })
+  // rounded before the units are chosen: 59.6 s is "1 min 00 s", never "60 s"
+  const tenths = Math.round(seconds * 10) / 10
+  if (tenths < 10) return t("{{seconds}} s", { seconds: tenths.toFixed(1), lng })
+  const whole = Math.round(seconds)
+  if (whole < 60) return t("{{seconds}} s", { seconds: whole, lng })
+  const minutes = Math.floor(whole / 60)
+  if (minutes < 60) return t("{{minutes}} min {{seconds}} s", { minutes, seconds: String(whole % 60).padStart(2, "0"), lng })
   return t("{{hours}} h {{minutes}} min", { hours: Math.floor(minutes / 60), minutes: String(minutes % 60).padStart(2, "0"), lng })
 }
 
