@@ -1001,6 +1001,40 @@ def test_sdapi_options_checks_the_model_selection_as_the_settings_page_does(webu
         services.close()
 
 
+def test_sdapi_options_pass_a_stored_checkpoint_no_longer_offered(webui_tmp, monkeypatch):
+    """Posted back as GET answered, the stored checkpoint was checked against the checkpoints
+    the server has: once its file was removed, every post-back was a 422 ("unknown
+    checkpoint"), though upstream's set_config skips a value that did not change and the other
+    model picks are checked only when changed. A changed one is still checked."""
+    from fastapi.testclient import TestClient
+
+    from modules import sd_models, shared
+    from remi import model_selection
+    from remi.jobs import run_inline
+    from remi.server import Services, create_app
+    from remi.server.auth import Auth
+
+    monkeypatch.setattr(shared, "config_filename", str(webui_tmp / "config.json"))
+    monkeypatch.setitem(shared.opts.data, "sd_model_checkpoint", "gone.safetensors")
+    monkeypatch.setitem(shared.opts.data, "jpeg_quality", shared.opts.data.get("jpeg_quality", shared.opts.data_labels["jpeg_quality"].default))
+    monkeypatch.setattr(sd_models, "checkpoint_aliases", {"other.safetensors": object()})
+    picks = []
+    monkeypatch.setattr(model_selection, "select", lambda key, value: picks.append((key, value)))
+    quality = 61 if shared.opts.data["jpeg_quality"] != 61 else 62
+    services = Services.create(webui_tmp, dispatch=run_inline, realtime=False, housekeeping=False)
+    try:
+        app = create_app(services=services, auth=Auth(), sdapi=True, start_services=False)
+        with TestClient(app, base_url="http://127.0.0.1:7860", raise_server_exceptions=False) as client:
+            response = client.post("/sdapi/v1/options", json={"sd_model_checkpoint": "gone.safetensors", "jpeg_quality": quality})
+            assert response.status_code == 200, response.text
+            assert shared.opts.data["jpeg_quality"] == quality
+            response = client.post("/sdapi/v1/options", json={"sd_model_checkpoint": "missing.safetensors", "jpeg_quality": 70})
+            assert response.status_code == 422 and "settings.sd_model_checkpoint: unknown checkpoint 'missing.safetensors'" in response.json()["detail"], response.text
+            assert shared.opts.data["jpeg_quality"] == quality and shared.opts.data["sd_model_checkpoint"] == "gone.safetensors"
+    finally:
+        services.close()
+
+
 def test_sdapi_options_names_every_refused_value_in_the_order_sent(webui_tmp, monkeypatch):
     """A refused model pick answered alone and first: a client fixing it learned of its other
     refused values one request at a time. Every refused value is named, in the request's order."""

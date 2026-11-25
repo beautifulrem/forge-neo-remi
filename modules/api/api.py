@@ -706,7 +706,8 @@ class Api:
             else:
                 frozen[key] = reason
         problems += [ParamError(reason, owner="settings", param=key) for key, reason in frozen.items()]
-        if "sd_model_checkpoint" not in frozen and (name := picks.get("sd_model_checkpoint")) is not None and (not isinstance(name, str) or name not in sd_models.checkpoint_aliases):
+        # posted back unchanged, as the other picks: a stored checkpoint whose file was removed passes, as upstream skips it
+        if "sd_model_checkpoint" not in frozen and (name := picks.get("sd_model_checkpoint")) is not None and name != shared.opts.data.get("sd_model_checkpoint") and (not isinstance(name, str) or name not in sd_models.checkpoint_aliases):
             problems.append(ParamError(Sentence("unknown checkpoint {{value}}", value=repr(name)), owner="settings", param="sd_model_checkpoint"))  # A1111's exact names
         for key in ("forge_additional_modules", "forge_unet_storage_dtype"):  # checked as PATCH /api/v2/options checks them
             if key in frozen:
