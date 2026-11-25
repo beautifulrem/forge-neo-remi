@@ -12,6 +12,7 @@ import { useStore } from "zustand"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { MODEL_BAR_KEYS, QUICKSETTINGS_KEY, setPinned, useIsPinned } from "@/features/quicksettings/pinned"
 import { cn } from "@/lib/utils"
@@ -39,7 +40,7 @@ function RowAction(props: { label: string; onClick: () => void; children: React.
             aria-pressed={props.pressed}
             disabled={props.disabled}
             onClick={props.onClick}
-            className={cn("text-muted-foreground", props.pressed && "text-primary")}
+            className={cn("text-muted-foreground", PRESSED_TINT_CLASS)}
           />
         }
       >

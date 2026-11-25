@@ -15,6 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { usePopupTooltip } from "@/components/popup-tooltip"
 import { Spinner } from "@/components/ui/spinner"
+import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { PromptDecoratorProps } from "@/features/prompt-editor/decorators"
 import { cn } from "@/lib/utils"
@@ -60,7 +61,7 @@ function ToolButton({ label, pressed, disabled, onClick, children }: { label: st
             aria-pressed={pressed}
             disabled={disabled}
             onClick={onClick}
-            className={cn("text-muted-foreground", pressed && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary")}
+            className={cn("text-muted-foreground", PRESSED_TINT_CLASS)}
           />
         }
       >

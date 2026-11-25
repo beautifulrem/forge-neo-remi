@@ -219,9 +219,8 @@ export default function QueuePage({ route }: { route?: Route } = {}) {
   const header = (
     <HeaderSlot>
       <Button
-        variant={paused ? "default" : "outline"}
+        variant="outline"
         size="sm"
-        aria-pressed={paused}
         onClick={() => void act(() => (paused ? api.queue.resume() : api.queue.pause()), paused ? t("Could not resume the queue") : t("Could not pause the queue"))}
       >
         {paused ? <Play aria-hidden /> : <Pause aria-hidden />}

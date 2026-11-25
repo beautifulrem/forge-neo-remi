@@ -9,6 +9,7 @@ import { useDeferredValue, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { Spinner } from "@/components/ui/spinner"
+import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { toServerLocale, useLocale } from "@/i18n"
 import { useScrollFade } from "@/lib/use-scroll-fade"
 import { cn } from "@/lib/utils"
@@ -38,8 +39,8 @@ function TagButton({ item, pressed, disabled, onToggle }: { item: FlatTag; press
       onClick={onToggle}
       className={cn(
         "flex max-w-full min-w-0 flex-col items-start rounded-md border px-2 py-1 text-left text-xs leading-tight transition-colors outline-none",
-        "hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-focus-ring disabled:opacity-50",
-        pressed ? "border-primary/50 bg-primary/10 text-primary hover:bg-primary/15" : "border-border bg-background",
+        "border-border bg-background hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-focus-ring disabled:opacity-50 aria-pressed:border-primary/50",
+        PRESSED_TINT_CLASS,
       )}
     >
       <span className="max-w-full truncate font-medium">{shown ?? item.tag}</span>

@@ -34,3 +34,44 @@ describe("type scale", () => {
     expect(off).toEqual([])
   })
 })
+
+describe("pressed toggles", () => {
+  const TINT = "PRESSED_TINT_CLASS"
+  const toggles = files.filter(({ file, source }) => file !== "components/ui/toggle.tsx" && /\baria-pressed=/.test(source))
+  // Pressed state drawn another way, with the reason.
+  const OWN_LOOK = new Set([
+    // White on the viewer's black backdrop, over the picture: the tint would not read there.
+    "features/lightbox/Lightbox.tsx",
+  ])
+
+  it("wear the selection tint instead of a hand-written one", () => {
+    // A tint written by hand (an aria-pressed: class, a primary wash) instead of the shared one.
+    const handWritten = toggles.filter(({ file, source }) => !OWN_LOOK.has(file) && /\baria-pressed:|\bbg-primary\/\d/.test(source) && !source.includes(TINT))
+    expect(handWritten.map(({ file }) => file)).toEqual([])
+    // Toggles that drew their pressed state with a fill, a variant or a colour of their own.
+    for (const file of [
+      "features/networks/NetworkBrowser.tsx",
+      "pages/generate/SizeTools.tsx",
+      "features/prompt-tools/PromptToolbar.tsx",
+      "pages/settings/SettingRow.tsx",
+      "features/compare/ParamDiffPanel.tsx",
+      "features/recipes/RecipeManager.tsx",
+      "pages/extensions/DiagnosticsView.tsx",
+    ]) {
+      expect(sources[`../${file}`], file).toContain(TINT)
+    }
+  })
+
+  it("keep one variant in both states", () => {
+    // A variant swapped on the pressed value draws a filled button once pressed, not the tint.
+    const swapped = toggles.flatMap(({ file, source }) =>
+      [...source.matchAll(/aria-pressed=\{([^}]+)\}/g)].flatMap((m) => {
+        const value = (m[1] ?? "").trim()
+        const around = source.slice(Math.max(0, m.index - 300), m.index + 400)
+        const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        return new RegExp(`variant=\\{${escaped}\\s*\\?`).test(around) ? [file] : []
+      }),
+    )
+    expect(swapped).toEqual([])
+  })
+})

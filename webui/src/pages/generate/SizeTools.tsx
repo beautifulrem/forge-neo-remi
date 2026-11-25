@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { cn } from "@/lib/utils"
 import { useFormState } from "@/ui/hooks"
 import { ASPECTS, aspectSize, matchAspect, parseSize } from "./size"
@@ -41,9 +42,9 @@ export function SizeTools({ className }: { className?: string }) {
             return (
               <Button
                 key={aspect.join(":")}
-                variant={active ? "secondary" : "ghost"}
+                variant="ghost"
                 aria-pressed={active}
-                className="h-auto flex-col gap-0 py-1.5"
+                className={cn("h-auto flex-col gap-0 py-1.5", PRESSED_TINT_CLASS)}
                 onClick={() => {
                   setSize(size)
                   setOpen(false)

@@ -11,6 +11,7 @@ import { toast } from "sonner"
 import type { FormTab } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { errorText } from "@/features/errors/error-text"
 import { cn } from "@/lib/utils"
 import { applyCompareDiffToForm, fetchCompareDiff, type TokenDiff, totalDiffCount } from "./param-diff"
@@ -165,11 +166,11 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground @max-[24rem]/diffbar:col-span-2 @max-[24rem]/diffbar:justify-self-start"
+              className={cn("h-7 px-2 text-xs text-muted-foreground hover:text-foreground @max-[24rem]/diffbar:col-span-2 @max-[24rem]/diffbar:justify-self-start", PRESSED_TINT_CLASS)}
               aria-pressed={onlyDiffs}
               onClick={() => setOnlyDiffs((v) => !v)}
             >
-              {onlyDiffs ? t("Show all") : t("Only differences")}
+              {t("Only differences")}
             </Button>
             {count > 0 ? (
               <>

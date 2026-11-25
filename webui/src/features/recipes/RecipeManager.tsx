@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { errorText } from "@/features/errors/error-text"
 import { cn } from "@/lib/utils"
 import { getFormStore } from "@/ui/form-store"
@@ -207,9 +208,9 @@ export function RecipeManager() {
               aria-pressed={family === item}
               onClick={() => setFamily(item)}
               className={cn(
-                "h-7 rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+                "h-7 rounded-sm px-2 text-xs font-medium text-muted-foreground transition-colors outline-none hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-focus-ring",
                 item && "font-mono",
-                family === item ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                PRESSED_TINT_CLASS,
               )}
             >
               {item ? item : t("All families")}

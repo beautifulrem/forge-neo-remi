@@ -14,6 +14,7 @@ import { ApiError } from "@/api/http"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { errorText } from "@/features/errors/error-text"
 import { cn } from "@/lib/utils"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
@@ -319,10 +320,8 @@ export function DiagnosticsView() {
                 aria-pressed={filter === btn.id}
                 onClick={() => setParams({ filter: btn.id })}
                 className={cn(
-                  "relative h-7 rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-                  filter === btn.id
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                  "relative h-7 rounded-sm px-2 text-xs font-medium text-muted-foreground transition-colors outline-none hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-focus-ring",
+                  PRESSED_TINT_CLASS,
                 )}
               >
                 {btn.text}

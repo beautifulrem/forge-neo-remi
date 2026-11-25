@@ -52,7 +52,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsTrigger } from "@/components/ui/tabs"
-import { Toggle } from "@/components/ui/toggle"
+import { PRESSED_TINT_CLASS, Toggle } from "@/components/ui/toggle"
+
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { errorText, failureText } from "@/features/errors/error-text"
 import { presetLabel } from "@/features/model-bar/model-options"
@@ -111,8 +112,8 @@ function Chip({ on, onClick, children, label }: { on: boolean; onClick: () => vo
       onClick={onClick}
       className={cn(
         "inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-2.5 text-xs whitespace-nowrap transition-colors outline-none select-none",
-        "focus-visible:ring-2 focus-visible:ring-focus-ring",
-        on ? "border-primary/40 bg-primary/12 text-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+        "border-border text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-focus-ring aria-pressed:border-primary/40",
+        PRESSED_TINT_CLASS,
       )}
     >
       {on ? <Check className="size-3 text-primary" aria-hidden /> : null}
