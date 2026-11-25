@@ -61,13 +61,26 @@ def preferred_modules(user: Mapping[str, Any]) -> list[str]:
     return list(dict.fromkeys(os.path.basename(str(name).replace("\\", "/")) for name in value if isinstance(name, str) and name.strip() and name != "Built in"))[:PREFERRED_MODULES_LIMIT]
 
 
+def _finite(text: str) -> float | None:
+    number = float(text)
+    return number if math.isfinite(number) else None
+
+
+def loads(text: str | bytes) -> Any:
+    """JSON with ``Infinity``, ``NaN`` and numbers out of a float's range
+    (``1e999``) read as None: model files and sidecars are anyone's, and
+    no answer of the API can hold those (nor can ``int()`` take them)."""
+
+    return json.loads(text, parse_constant=lambda _name: None, parse_float=_finite)
+
+
 def parse_json(value: Any) -> Any:
     """``value`` decoded when it is a JSON object/array string (safetensors
     headers keep nested values as strings)."""
 
     if isinstance(value, str) and value[:1] in ("{", "["):
         try:
-            return utf8_text(json.loads(value))
+            return utf8_text(loads(value))
         except (ValueError, RecursionError):
             return value
     return value
@@ -97,7 +110,7 @@ def build_tags(metadata: Mapping[str, Any]) -> list[tuple[str, int]]:
                     continue
                 try:
                     tags[tag] = tags.get(tag, 0) + int(count)
-                except (TypeError, ValueError):
+                except (TypeError, ValueError, OverflowError):
                     continue
 
     if tags and _is_non_comma_tagset(tags):
@@ -186,7 +199,7 @@ def training_info(metadata: Mapping[str, Any]) -> dict[str, Any]:
             try:
                 width, height = bucket["resolution"]
                 resolutions[f"{int(width)}x{int(height)}"] = resolutions.get(f"{int(width)}x{int(height)}", 0) + int(bucket.get("count", 0))
-            except (KeyError, TypeError, ValueError):
+            except (KeyError, TypeError, ValueError, OverflowError):
                 continue
         if resolutions:
             info["resolutions"] = [{"resolution": name, "count": count} for name, count in sorted(resolutions.items(), key=lambda item: -item[1])]

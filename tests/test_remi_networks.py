@@ -141,6 +141,29 @@ def test_training_tags_are_summed_and_sorted():
     assert nm.build_tags({"ss_tag_frequency": "not json"}) == [] and nm.build_tags({}) == []
 
 
+def test_non_finite_numbers_in_metadata_are_left_out():
+    assert nm.build_tags({"ss_tag_frequency": '{"a": {"x": Infinity, "y": 1e999, "z": 2, "w": NaN}}'}) == [("z", 2)]
+    info = nm.training_info({"ss_bucket_info": '{"buckets": {"0": {"resolution": [512, 512], "count": 1e999}, "1": {"resolution": [Infinity, 64], "count": 3}, "2": {"resolution": [64, 64], "count": 2}}}'})
+    assert info["resolutions"] == [{"resolution": "64x64", "count": 2}]
+    assert nm.parse_json('{"a": -Infinity, "b": [1.5, 1e999]}') == {"a": None, "b": [1.5, None]}
+
+
+def test_metadata_with_non_finite_numbers_is_served(lora, lora_root):
+    metadata = {"ss_tag_frequency": '{"a": {"x": Infinity, "z": 2}}', "ss_bucket_info": '{"buckets": {"0": {"resolution": [512, 512], "count": 1e999}}}'}
+    safetensors(lora_root / "odd.safetensors", metadata)
+    header = b'{"__metadata__": {"ss_output_name": "odd", "weird": Infinity}}'
+    (lora_root / "odder.safetensors").write_bytes(len(header).to_bytes(8, "little") + header)
+    (lora_root / "odd.json").write_text('{"preferred weight": 0.5, "notes": NaN}', encoding="utf8")
+    sys.modules["networks"].list_available_networks()
+    lora.client.post("/api/v2/networks/lora/refresh")
+    response = lora.client.get("/api/v2/networks/lora/odd/meta")
+    assert response.status_code == 200, response.text
+    assert response.json()["dataset_tags"] == [{"tag": "z", "count": 2}]
+    response = lora.client.get("/api/v2/networks/lora/odder/meta")
+    assert response.status_code == 200, response.text
+    assert response.json()["metadata"]["weird"] is None
+
+
 @pytest.mark.parametrize(
     ("metadata", "arch"),
     [

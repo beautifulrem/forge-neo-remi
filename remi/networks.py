@@ -232,8 +232,8 @@ def read_safetensors_metadata(filename: str) -> dict[str, Any]:
             size = int.from_bytes(file.read(8), "little")
             if not 0 < size < 64 * 1024 * 1024:
                 return {}
-            header = json.loads(file.read(size))
-    except (OSError, ValueError):
+            header = nm.loads(file.read(size))
+    except (OSError, ValueError, RecursionError):
         return {}
     metadata = header.get("__metadata__") if isinstance(header, dict) else None
     return dict(metadata) if isinstance(metadata, dict) else {}
@@ -247,7 +247,7 @@ def read_user_metadata(entry: NetworkEntry) -> dict[str, Any]:
         return {}
     try:
         with open(entry.base + ".json", encoding="utf-8-sig") as file:
-            data = json.load(file)
+            data = nm.loads(file.read())
     except (OSError, ValueError, RecursionError):  # nested past the parser: as unreadable, not a failed listing
         return {}
     return utf8_text(data) if isinstance(data, dict) else {}
