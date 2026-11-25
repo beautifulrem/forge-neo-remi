@@ -45,8 +45,9 @@ export function Segmented<V extends string | number>(props: SegmentedProps<V>) {
           className={cn(
             "min-w-0 truncate rounded-[calc(var(--radius-lg)-2px)] px-2.5 text-[0.8rem] font-medium text-muted-foreground transition-colors outline-none select-none",
             "hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring data-disabled:pointer-events-none",
-            // tone only: shadows are for what floats
-            "data-checked:bg-card data-checked:text-foreground dark:data-checked:bg-accent",
+            // a tone and an inset edge, no shadow (shadows are for what floats): the tone alone is too
+            // close to the track to show which segment is on (frontend.md)
+            "data-checked:bg-card data-checked:text-foreground data-checked:inset-ring data-checked:inset-ring-muted-foreground dark:data-checked:bg-accent",
             props.size === "sm" ? "h-6" : "h-7",
           )}
         >

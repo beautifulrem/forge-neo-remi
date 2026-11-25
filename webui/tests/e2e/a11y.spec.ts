@@ -3,7 +3,7 @@
  * violations (WCAG 2.x A/AA rules plus axe best practices).
  */
 import AxeBuilder from "@axe-core/playwright"
-import { expect, type Page, test } from "@playwright/test"
+import { expect, type Locator, type Page, test } from "@playwright/test"
 import { injectFaults, openRoute, presetStorage, type Theme } from "./helpers"
 
 /** A 96×64 solid PNG. */
@@ -289,6 +289,94 @@ test("a gallery tile shows its focus ring under the pointer", async ({ page }) =
   const focused = await edge()
   await tile.evaluate((element: HTMLElement) => element.blur())
   expect(focused.equals(await edge())).toBe(false)
+})
+
+/**
+ * How a segmented control or tab strip marks its selected segment: the contrast of the segment's
+ * tone against its track, and of the edge drawn inside it (an inset box shadow) against the track
+ * and against that tone. A WCAG 1.4.11 state indicator needs 3:1 against what is next to it.
+ */
+async function selectedSegment(group: Locator) {
+  await group.page().waitForFunction(() => document.getAnimations().every((animation) => animation.playState !== "running" || animation.effect?.getTiming().iterations === Infinity))
+  return group.evaluate((element) => {
+    const canvas = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!
+    /** The colour as sRGB channels (0..1) and alpha, whatever notation the computed style uses. */
+    const rgba = (color: string) => {
+      canvas.clearRect(0, 0, 1, 1)
+      canvas.fillStyle = "#000"
+      canvas.fillStyle = color
+      canvas.fillRect(0, 0, 1, 1)
+      const [r, g, b, a] = canvas.getImageData(0, 0, 1, 1).data
+      return { rgb: [r!, g!, b!].map((x) => x / 255), alpha: a! / 255 }
+    }
+    const over = (color: string, under: number[]) => {
+      const { rgb, alpha } = rgba(color)
+      return rgb.map((x, i) => alpha * x + (1 - alpha) * under[i]!)
+    }
+    const luminance = (rgb: number[]) => {
+      const [r, g, b] = rgb.map((x) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)) as [number, number, number]
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+    const contrast = (a: number[], b: number[]) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number]
+      return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100
+    }
+    // the track: the group's own fill, or the first filled box around it
+    let trackColor = "rgba(0, 0, 0, 0)"
+    for (let node: Element | null = element; node && rgba(trackColor).alpha === 0; node = node.parentElement) trackColor = getComputedStyle(node).backgroundColor
+    const track = rgba(trackColor).rgb
+    const selected = element.querySelector<HTMLElement>('[aria-selected="true"], [aria-checked="true"]')
+    if (!selected) return { name: element.getAttribute("aria-label"), selected: null }
+    const style = getComputedStyle(selected)
+    const tone = over(style.backgroundColor, track)
+    // the inset layers of its box shadow that draw something
+    const edges = style.boxShadow
+      .split(/,(?![^(]*\))/)
+      .filter((layer) => /\binset\b/.test(layer))
+      .map((layer) => ({ color: /^\s*([a-z-]+\([^)]*\)|#\w+|[a-z]+)/i.exec(layer)?.[1] ?? "transparent", lengths: [...layer.matchAll(/(-?[\d.]+)px/g)].map((m) => Number(m[1])) }))
+      .filter(({ color, lengths }) => rgba(color).alpha > 0 && (lengths[3] ?? 0) > 0)
+    const edge = edges.map(({ color }) => over(color, tone))
+    const edgeContrast = edge.length ? Math.max(...edge.map((painted) => Math.min(contrast(painted, track), contrast(painted, tone)))) : 0
+    return { name: element.getAttribute("aria-label"), selected: selected.textContent?.trim(), tone: contrast(tone, track), edge: edgeContrast, indicator: Math.max(contrast(tone, track), edgeContrast) }
+  })
+}
+
+// The selected segment was a tone a step off its track: 1.18:1 in the light theme and 1.10:1 in the
+// dark one, too close to tell which segment is on (the img2img stage's Source / Result switch, every
+// Segmented, the kit's tab strips, the img2img mode tiles).
+test.describe("selected segments", () => {
+  for (const theme of ["light", "dark"] satisfies Theme[]) {
+    test(`${theme}: stand out from their track by 3:1`, async ({ page }) => {
+      await presetStorage(page, { theme })
+      await openRoute(page, "img2img")
+      const groups = [
+        page.getByRole("tablist", { name: "Image view" }),
+        page.getByRole("tablist", { name: "Resize" }),
+        page.getByRole("radiogroup").filter({ has: page.getByRole("radio", { name: "Balanced" }) }).first(),
+        page.getByRole("radiogroup").filter({ has: page.getByRole("radio", { name: "img2img" }) }).first(),
+      ]
+      const marks = []
+      for (const group of groups) {
+        await expect(group).toBeVisible()
+        marks.push(await selectedSegment(group))
+      }
+      // a track inside a dialog (the page tone in the dark theme)
+      await page.evaluate(() => (location.hash = "#/gallery"))
+      const tiles = page.getByRole("list", { name: "Images" }).getByRole("listitem")
+      const bulk = page.getByRole("toolbar", { name: "Selected images" })
+      for (const index of [0, 1]) {
+        await tiles.nth(index).hover()
+        await tiles.nth(index).getByRole("checkbox").click()
+        await expect(bulk).toContainText(`${index + 1} selected`)
+      }
+      await bulk.getByRole("button", { name: "Compare" }).click()
+      const view = page.getByRole("dialog", { name: "Compare images" }).getByRole("radiogroup", { name: "Comparison view" })
+      await expect(view).toBeVisible()
+      marks.push(await selectedSegment(view))
+      expect(marks.every((mark) => mark.selected)).toBe(true)
+      expect(marks.filter((mark) => !("indicator" in mark) || (mark.indicator ?? 0) < 3)).toEqual([])
+    })
+  }
 })
 
 // A bar pinned over a scroller (the run bar, the apply bars, the send bar) covered the control Tab

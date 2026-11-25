@@ -460,8 +460,18 @@ generated interfaces (sources: Linear's
   borders; one border tone (`--border`); no card inside a card. Radii follow
   hierarchy (controls `sm`/`md`, panels `lg`), not one radius everywhere;
   shadows only on what floats (menus, dialogs, dragged items, and the
-  slider's cap, the handle a drag holds); a segmented control's selection is
-  a tone, not a raised pill. One depth cue per element, never an edge and
+  slider's cap, the handle a drag holds); a segmented control's or a tab
+  strip's selected segment (`Segmented`, the kit's tabs, the img2img
+  stage's Source / Result switch and mode tiles) is a tone with an inset
+  1 px edge in `--muted-foreground` (`inset-ring`, which leaves `ring-*` to
+  the focus ring), not a raised pill. The tone alone (`--card`, `--accent`
+  in the dark theme) is 1.18:1 against its `--muted` track in the light
+  theme and 1.10:1 in the dark one, under the 3:1 a state indicator needs
+  (WCAG 1.4.11); no surface tone can sit 3:1 off the track and still be a
+  quiet surface, so the edge carries the state, at 6:1 or more against the
+  track (a popover's page-tone track too) and the tone, with no new token
+  (`tests/e2e/a11y.spec.ts`, "selected segments"; `lib/design-guards.test.ts`).
+  A line tab strip keeps its underline alone. One depth cue per element, never an edge and
   a shadow together, and no one-sided edge: a field (input, select, number,
   the prompt editor, `FIELD_BUTTON_CLASS`) is a flat fill (`--field`) with
   no underline or bottom shadow, and focus rings it evenly (`border-ring`

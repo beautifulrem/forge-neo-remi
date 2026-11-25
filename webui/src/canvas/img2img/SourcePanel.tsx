@@ -97,7 +97,7 @@ function ModePicker({ tabs, modeNode }: { tabs: TabsNode; modeNode: InputNode })
                 options.length <= 5 ? "@[22rem]:col-span-1" : "@[30rem]:col-span-1",
                 index === centredIndex(options.length) && (options.length <= 5 ? "col-start-2 @[22rem]:col-start-auto" : "col-start-2 @[30rem]:col-start-auto"),
                 "hover:bg-background/60 hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring",
-                "data-checked:bg-card data-checked:text-foreground dark:data-checked:bg-accent",
+                "data-checked:bg-card data-checked:text-foreground data-checked:inset-ring data-checked:inset-ring-muted-foreground dark:data-checked:bg-accent",
               )}
             >
               <Icon className="size-4 shrink-0 group-data-checked/mode:text-primary" aria-hidden />
