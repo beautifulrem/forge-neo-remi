@@ -8,6 +8,7 @@ import { Copy, FolderOpen, ImagePlus, Info, MinusCircle, Pencil, PlusCircle, Pow
 import { useTranslation } from "react-i18next"
 import type { NetworkItem, NetworkKind } from "@/api/types"
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu-impl"
+import { useCollisionPadding } from "@/lib/safe-area"
 import { isEditable, type MenuAnchor } from "./items"
 
 export type MenuCommand = "apply" | "metadata" | "edit" | "preview" | "copy" | "folder"
@@ -37,6 +38,7 @@ export function ItemMenu({
   onCommand: (command: MenuCommand, item: NetworkItem) => void
 }) {
   const { t } = useTranslation()
+  const collisionPadding = useCollisionPadding()
   const open = Boolean(item && anchor)
   const atPointer = Boolean(anchor && !(anchor instanceof HTMLElement))
   const editable = item ? isEditable(item) : false
@@ -62,7 +64,7 @@ export function ItemMenu({
       }}
     >
       <Menu.Portal>
-        <Menu.Positioner anchor={positionerAnchor(anchor)} side="bottom" align={atPointer ? "start" : "end"} sideOffset={atPointer ? 2 : 4} className="isolate z-50 outline-none">
+        <Menu.Positioner collisionPadding={collisionPadding} anchor={positionerAnchor(anchor)} side="bottom" align={atPointer ? "start" : "end"} sideOffset={atPointer ? 2 : 4} className="isolate z-50 outline-none">
           <Menu.Popup
             aria-label={item?.title}
             className="z-50 max-h-(--available-height) min-w-48 origin-(--transform-origin) overflow-y-auto rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-150 outline-none data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95"

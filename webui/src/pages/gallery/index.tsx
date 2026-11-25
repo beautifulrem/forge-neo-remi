@@ -218,7 +218,8 @@ export default function GalleryPage() {
       <BoardsBar activeItems={activeBoardSendItems} count={items.length} total={total} failed={list.isError && !list.data} />
       <div className="min-h-0 flex-1">{body}</div>
       {selection.ids.size > 0 ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))] flex justify-center px-3">
+        // a phone's bottom navigation keeps the home indicator's room below the page; from md the page reaches the screen's edge
+        <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-3 md:bottom-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]">
           <BulkBar
             count={selection.ids.size}
             selectedIds={selectedIds}

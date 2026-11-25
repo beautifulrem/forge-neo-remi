@@ -925,7 +925,33 @@ test.describe("overlays on a phone held sideways", () => {
     expect(outside((await menu.boundingBox())!)).toEqual([])
   })
 
+  test("a select and a popover at the screen's edges", async ({ page }) => {
+    await openGenerate(page)
+    const main = page.getByRole("main")
+    // the lowest select of the form, scrolled to the bottom of the window
+    const select = main.locator("[data-slot=select-trigger]:visible").last()
+    await select.evaluate((element) => element.scrollIntoView({ block: "end" }))
+    await select.click()
+    const options = page.locator("[data-slot=select-content]")
+    await expect(options.getByRole("option").first()).toBeVisible()
+    await page.waitForTimeout(300)
+    expect(outside((await options.boundingBox())!), "the select").toEqual([])
+    await page.keyboard.press("Escape")
+
+    // the right-most popover trigger on the page
+    const triggers = page.locator("[data-slot=popover-trigger]:visible")
+    const lefts = await triggers.evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().right))
+    expect(lefts.length, "a popover on the page").toBeGreaterThan(0)
+    await triggers.nth(lefts.indexOf(Math.max(...lefts))).click()
+    const popover = page.locator("[data-slot=popover-content]")
+    await expect(popover).toBeVisible()
+    await page.waitForTimeout(300)
+    expect(outside((await popover.boundingBox())!), "the popover").toEqual([])
+  })
+
   test("a toast", async ({ page }) => {
+    // the browser records 250 resources by default; the dev server loads more modules than that
+    await page.addInitScript(() => performance.setResourceTimingBufferSize(10_000))
     await openGenerate(page)
     // the app's own sonner (the dev server's module of it), as any feature calls it
     await page.evaluate(async () => {
@@ -1095,6 +1121,26 @@ test.describe("the comparison fits its frame to its row", () => {
       for (const height of heights) expect(height).toBeGreaterThanOrEqual(100)
     })
   }
+})
+
+// Upright, the page ends at the bottom navigation, which keeps the home indicator's room itself: the
+// selection bar keeps its 16 px above it, the inset is not counted twice.
+test.describe("the selection bar on a phone held upright", () => {
+  test("stands 16 px above the bottom navigation", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send("Emulation.setSafeAreaInsetsOverride" as never, { insets: { top: 47, left: 0, bottom: 34, right: 0 } } as never)
+    await page.goto("/#/gallery")
+    const tile = page.getByRole("list", { name: "Images" }).getByRole("listitem").first()
+    await tile.hover()
+    await tile.getByRole("checkbox").click()
+    const bulk = page.getByRole("toolbar", { name: "Selected images" })
+    await expect(bulk).toContainText("1 selected")
+    await page.waitForTimeout(300)
+    const nav = page.getByRole("navigation", { name: "Main navigation" }).last()
+    const gap = (await nav.boundingBox())!.y - ((await bulk.boundingBox())!.y + (await bulk.boundingBox())!.height)
+    expect(Math.round(gap)).toBe(16)
+  })
 })
 
 // Settings > Server: while the status loaded, the model's place beside "Model memory" held a short
