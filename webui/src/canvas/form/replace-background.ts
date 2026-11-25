@@ -34,14 +34,17 @@ export function writeValues({ store, formId, owner }: Pick<BackgroundTarget, "st
   return kept
 }
 
-/** Sets the background to `id` (null: removes it), clearing the painted layers; undoable when they had paint. */
-export async function replaceBackground(target: BackgroundTarget, id: string | null): Promise<void> {
+/**
+ * Sets the background to `id` (null: removes it), clearing the painted layers; undoable when they
+ * had paint. False when a lock kept the background as it was: it is not `id`.
+ */
+export async function replaceBackground(target: BackgroundTarget, id: string | null): Promise<boolean> {
   const { store, formId, owner, background, painted } = target
   // the layers' last strokes only: an upload replacing the image is a pending write itself
   await flushPendingWrites(formId, { values: false }).catch(() => {})
   const current = store.getState().values[owner] ?? {}
   const old = current[background] ?? null
-  if (old === id) return
+  if (old === id) return true
   const values: Record<string, unknown> = { [background]: id }
   const previous: Record<string, unknown> = { [background]: old }
   let hadPaint = false
@@ -51,13 +54,13 @@ export async function replaceBackground(target: BackgroundTarget, id: string | n
     if (previous[param]) hadPaint = true
   }
   // a lock on the image (or a layer) keeps all of it: paint stays with the image it was painted over
-  if (writeValues(target, values, { whole: true }).length > 0) return
+  if (writeValues(target, values, { whole: true }).length > 0) return false
   const release = () => {
     if (typeof old === "string" && store.getState().values[owner]?.[background] !== old) releaseUpload(old)
   }
   if (!hadPaint) {
     release()
-    return
+    return true
   }
   // The old image stays referenced by the undo until the toast goes.
   toast(id ? t("Image replaced") : t("Image removed"), {
@@ -66,4 +69,5 @@ export async function replaceBackground(target: BackgroundTarget, id: string | n
     onAutoClose: release,
     onDismiss: release,
   })
+  return true
 }

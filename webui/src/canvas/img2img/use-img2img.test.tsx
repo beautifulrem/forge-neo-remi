@@ -145,6 +145,15 @@ describe("source and size writes", () => {
     expect(core()).toMatchObject({ init_img: null, width: 1024, height: 768 })
   })
 
+  it("keeps the size of the image a lock kept", async () => {
+    set({ init_img: "kept", width: 512, height: 512, resize_tab: "Resize by" })
+    queryClient.setQueryData<Bootstrap>(keys.app, bootstrapWith({ img2img_autosize: true }))
+    // a toggle that locks the source image (`locks: "core.init_img"`) is on
+    store().setState((s) => ({ locks: [{ owner: "keep", name: "image", target: ["core", "init_img"] }], values: { ...s.values, keep: { image: true } } }))
+    await setSourceImage(binding, "rejected", { width: 1024, height: 768 })
+    expect(core()).toMatchObject({ init_img: "kept", width: 512, height: 512, resize_tab: "Resize by" })
+  })
+
   it("snaps the image size to the sliders' step and bounds, including action overrides", () => {
     setSizeFromImage({ width: 5000, height: 10 })
     expect(core()).toMatchObject({ width: 2048, height: 64 })

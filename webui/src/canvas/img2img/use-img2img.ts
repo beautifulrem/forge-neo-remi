@@ -57,12 +57,13 @@ export function setCoreValues(values: Record<string, unknown>) {
  * (undoable from a toast when they had paint, see `replaceBackground`).
  */
 export async function setSourceImage(binding: EditorBinding, id: string | null, size?: { width: number; height: number } | null): Promise<void> {
-  await replaceBackground(
+  const replaced = await replaceBackground(
     { store: getFormStore(IMG2IMG), formId: IMG2IMG, owner: "core", background: binding.background, painted: binding.layers.filter((layer) => layer.painted).map((layer) => layer.param) },
     id,
   )
-  // "Automatically update the Width and Height when uploading image to img2img input"
-  if (id && size && size.width > 0 && size.height > 0 && clientOption("img2img_autosize")) setSizeFromImage(size)
+  // "Automatically update the Width and Height when uploading image to img2img input" (not the size
+  // of an image a lock kept out)
+  if (replaced && id && size && size.width > 0 && size.height > 0 && clientOption("img2img_autosize")) setSizeFromImage(size)
 }
 
 /** The size sliders' step (the server's resolution step), from the schema and its overrides. */
