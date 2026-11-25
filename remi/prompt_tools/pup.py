@@ -607,13 +607,13 @@ class LocalQwen35PUPRunner:
                     from transformers import AutoModelForImageTextToText
 
                     processor = AutoProcessor.from_pretrained(self.model_path, local_files_only=True)
-                    model = AutoModelForImageTextToText.from_pretrained(self.model_path, torch_dtype=dtype, local_files_only=True).to(device).eval()
+                    model = AutoModelForImageTextToText.from_pretrained(self.model_path, dtype=dtype, local_files_only=True).to(device).eval()
                 except Exception:
                     processor = AutoTokenizer.from_pretrained(self.model_path, local_files_only=True)
-                    model = AutoModelForCausalLM.from_pretrained(self.model_path, torch_dtype=dtype, local_files_only=True).to(device).eval()
+                    model = AutoModelForCausalLM.from_pretrained(self.model_path, dtype=dtype, local_files_only=True).to(device).eval()
             else:
                 processor = AutoTokenizer.from_pretrained(self.model_path, local_files_only=True)
-                model = AutoModelForCausalLM.from_pretrained(self.model_path, torch_dtype=dtype, local_files_only=True).to(device).eval()
+                model = AutoModelForCausalLM.from_pretrained(self.model_path, dtype=dtype, local_files_only=True).to(device).eval()
 
             messages = [{"role": "system", "content": system}, {"role": "user", "content": user_text}]
             if hasattr(processor, "apply_chat_template"):

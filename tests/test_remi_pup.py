@@ -422,6 +422,7 @@ def test_local_qwen35_runner_gguf_transformers_and_release_vram(tmp_path, monkey
     hf_dir = tmp_path / "qwen35-hf"
     hf_dir.mkdir()
     moved_to_cpu = []
+    loaded = []
     tf_state = {"vlm_fail": False, "gen_fail": False, "has_template": True}
 
     class FakeInputs(dict):
@@ -460,7 +461,11 @@ def test_local_qwen35_runner_gguf_transformers_and_release_vram(tmp_path, monkey
 
     class FakeModel:
         @classmethod
-        def from_pretrained(cls, _path, **_kw):
+        def from_pretrained(cls, _path, **kw):
+            # transformers 4.57 logs "`torch_dtype` is deprecated! Use `dtype` instead!"
+            if "torch_dtype" in kw:
+                raise TypeError("torch_dtype is deprecated: pass dtype")
+            loaded.append((cls.__name__, kw["dtype"]))
             return cls()
 
         def to(self, device):
@@ -479,8 +484,8 @@ def test_local_qwen35_runner_gguf_transformers_and_release_vram(tmp_path, monkey
     fake_tf = types.ModuleType("transformers")
     fake_tf.AutoTokenizer = FakeTokenizer
     fake_tf.AutoProcessor = FakeVLMProcessor
-    fake_tf.AutoModelForCausalLM = FakeModel
-    fake_tf.AutoModelForImageTextToText = FakeModel
+    fake_tf.AutoModelForCausalLM = type("FakeCausalLM", (FakeModel,), {})
+    fake_tf.AutoModelForImageTextToText = type("FakeImageTextToText", (FakeModel,), {})
     from transformers.generation import stopping_criteria as real_stopping
 
     fake_tf.StoppingCriteria = real_stopping.StoppingCriteria
@@ -501,6 +506,9 @@ def test_local_qwen35_runner_gguf_transformers_and_release_vram(tmp_path, monkey
         tf_state["vlm_fail"] = True
         out_fb = pup.LocalQwen35PUPRunner(hf_dir).generate("sys", "edit fallback", pil_images=[ref_im])
         assert out_fb == "Upsampled via Transformers text"
+    # each of the three loads passes the precision as `dtype`
+    assert [name for name, _dtype in loaded] == ["FakeCausalLM", "FakeImageTextToText", "FakeCausalLM"]
+    assert {dtype for _name, dtype in loaded} <= {torch.float32, torch.bfloat16}
 
     # Generate failure raises 502 and still cleans up
     tf_state["gen_fail"] = True
@@ -845,7 +853,9 @@ def _fake_transformers(monkeypatch, generate):
 
     class FakeModel:
         @classmethod
-        def from_pretrained(cls, _path, **_kw):
+        def from_pretrained(cls, _path, **kw):
+            if "torch_dtype" in kw or "dtype" not in kw:  # transformers 4.57 deprecates torch_dtype for dtype
+                raise TypeError("pass dtype, not torch_dtype")
             return cls()
 
         def to(self, device):
