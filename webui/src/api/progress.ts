@@ -6,7 +6,7 @@
  * model-loading state.
  */
 import { create } from "zustand"
-import type { FieldMessage } from "@/ui/schema"
+import type { RefusedValue } from "@/ui/schema"
 import type { WsEventMap } from "./events"
 import { fieldMessages } from "./http"
 import type { FormTab, JobOutput } from "./types"
@@ -28,7 +28,7 @@ export type FinishedJob = {
   infotext?: string | null
   error?: string
   /** The values a failed job refused when it ran (`jobErrorText` shows them translated). */
-  errors?: FieldMessage[]
+  errors?: RefusedValue[]
 }
 
 /** How many owned / finished jobs are remembered. */

@@ -1679,6 +1679,11 @@ older server) nothing is shown.
   the `job.failed` and `model.loaded` toasts) goes through `serverText`: a
   fixed sentence (`remi/jobs/texts.py`, a key of the server catalogs) is
   translated by its exact key; a job's own exception stays as it is. The
+  values a job refused when it ran (`job.errors`, `job.failed`'s `errors`:
+  each names its `owner` and `param` like a refused submission's) are said
+  by `jobErrorText`, each named by its field's label in the job's form
+  (`schemaIndex` of the form's schema; the Queue page fetches it only for
+  such a job) as `toastInvalid` names a refused submission's values. The
   model bar names the server's stage (`model.loading`, only ever "loading")
   with its own key.
 - **Server sentences**: what the server says comes in one of three forms.

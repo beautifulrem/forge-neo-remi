@@ -3,11 +3,13 @@
  * output thumbnails (open the viewer), star, queue again, open in its form,
  * remove. Imported jobs that cannot run as they are say why.
  */
+import { useQuery } from "@tanstack/react-query"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import { AlertTriangle, CheckCircle2, CircleSlash, FileInput, ImageOff, Loader2, RotateCw, Star, Trash2, XCircle } from "@/components/icons"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
+import { schemaQuery } from "@/api/queries"
 import type { Job, JobStatus } from "@/api/types"
 import { LoadMoreStatus } from "@/components/LoadMoreStatus"
 import { Badge } from "@/components/ui/badge"
@@ -15,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { jobErrorText } from "@/features/errors/error-text"
 import { cn } from "@/lib/utils"
+import { schemaIndex } from "@/ui/tab"
 import { openJob } from "./edit-session"
 import { noteText } from "./notes"
 import { durationOf, formatDuration, formLabel, jobTitle, removeJob, requeue, starJob } from "./queries"
@@ -67,6 +70,9 @@ function HistoryRow({ job, onView }: { job: Job; onView: (job: Job, index: numbe
   const created = new Date(job.created_at)
   const duration = durationOf(job)
   const [notesOpen, setNotesOpen] = useState(false)
+  // the job's form names the values it refused (its schema is fetched only for such a job)
+  const { data: schema } = useQuery({ ...schemaQuery(job.tab), enabled: Boolean(job.errors?.length) })
+  const failure = job.error ? jobErrorText(job.error, job.errors, i18n.language, schema ? schemaIndex(schema) : undefined) : null
   return (
     <div className="flex items-center gap-3 py-2.5">
       <div className="flex shrink-0 gap-1">
@@ -113,9 +119,9 @@ function HistoryRow({ job, onView }: { job: Job; onView: (job: Job, index: numbe
             </Badge>
           ) : null}
         </p>
-        {job.error ? (
-          <p title={jobErrorText(job.error, job.errors, i18n.language)} className="line-clamp-2 text-xs break-words text-destructive">
-            {jobErrorText(job.error, job.errors, i18n.language)}
+        {failure ? (
+          <p title={failure} className="line-clamp-2 text-xs break-words text-destructive">
+            {failure}
           </p>
         ) : null}
         {job.warnings.length > 0 ? (

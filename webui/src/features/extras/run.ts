@@ -17,7 +17,7 @@ import { errorText, toastInvalid } from "@/features/errors/error-text"
 import { t } from "@/i18n"
 import { getFormStore } from "@/ui/form-store"
 import { flushPendingWrites } from "@/ui/pending-writes"
-import type { FieldMessage } from "@/ui/schema"
+import type { RefusedValue } from "@/ui/schema"
 import { jobRequest, missingInputs } from "@/ui/tab"
 import { bestEffortStorage, isRecord, isText, keepEntries, mergeTyped } from "@/lib/persist"
 import { sessionIsOwn } from "@/lib/tab-identity"
@@ -30,7 +30,7 @@ export type ExtrasResult = {
   info: string | null
   error?: string
   /** The values a failed run refused when it ran (shown translated). */
-  errors?: FieldMessage[]
+  errors?: RefusedValue[]
   at: number
 }
 
@@ -152,7 +152,7 @@ export function interruptExtras() {
 }
 
 /** Records a finished job of this page (from the progress store). */
-export function finishExtras(result: { jobId: string; outputs: JobOutput[]; infotext?: string | null; error?: string; errors?: FieldMessage[] }) {
+export function finishExtras(result: { jobId: string; outputs: JobOutput[]; infotext?: string | null; error?: string; errors?: RefusedValue[] }) {
   useExtrasRuns.setState((s) => {
     if (!s.jobs.includes(result.jobId) && !(result.jobId in s.sources)) return s
     const finished: ExtrasResult = {

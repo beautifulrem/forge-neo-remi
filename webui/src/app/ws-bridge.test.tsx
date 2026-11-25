@@ -187,4 +187,29 @@ describe("ws-bridge", () => {
       await i18n.changeLanguage("en")
     }
   })
+
+  // The toast listed the refused values' messages without the fields they are about.
+  it("names the field of each value a failed job refused, by its form's label", async () => {
+    vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue()
+    const error = vi.spyOn(toast, "error").mockReturnValue(0)
+    const { tabSchema } = await import("@/api/mock/fixtures")
+    const { keys } = await import("@/api/queries")
+    queryClient.setQueryData(keys.schema("txt2img"), tabSchema("txt2img"))
+    const { i18n } = await import("@/i18n")
+    const choice = "{{value}} is not one of the choices ({{choices}})"
+    i18n.addResource("zh-CN", "server", choice, "{{value}} 不在可选项（{{choices}}）中")
+    i18n.addResourceBundle("zh-CN", "chrome", { Styles: "样式", "{{field}}: {{message}}": "{{field}}：{{message}}" }, true, true)
+    await i18n.changeLanguage("zh-CN")
+    try {
+      const { hook, send } = await connected()
+      useProgress.getState().track("f4", "txt2img")
+      const refused = { owner: "core", param: "styles", message: "'Watercolor' is not one of the choices ('Cinematic')", template: choice, params: { value: "'Watercolor'", choices: "'Cinematic'" } }
+      send({ type: "job.failed", job_id: "f4", tab: "txt2img", status: "failed", error: "core.styles: 'Watercolor' is not one of the choices ('Cinematic')", errors: [refused] })
+      expect(error.mock.calls[0]![1]).toEqual({ description: "样式：'Watercolor' 不在可选项（'Cinematic'）中" })
+      hook.unmount()
+    } finally {
+      queryClient.removeQueries({ queryKey: keys.schema("txt2img") })
+      await i18n.changeLanguage("en")
+    }
+  })
 })

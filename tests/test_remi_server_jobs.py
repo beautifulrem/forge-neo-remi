@@ -148,6 +148,32 @@ def test_a_failing_job_reports_its_error(webui, tmp_path):
         assert failed and failed[0]["error"] == "RuntimeError: boom"
 
 
+def test_a_job_refusing_values_when_it_runs_keeps_their_fields(webui, tmp_path):
+    """A value the job refused only when it ran (a style deleted while it waited): the stored
+    errors and the job.failed event name its owner and param next to the sentence, as the 422
+    of a submission does, so the UI can say which field it is about."""
+
+    from remi.ui import ParamError, Sentence, ValidationError
+
+    refused = ValidationError([ParamError(Sentence("unknown style {{name}}", name="'gone'"), owner="core", param="styles"), ParamError("unknown parameter", owner="sampler", param="nope")])
+    state = FakeState()
+    executor = StubExecutor(state, error=refused)
+    with server_app(tmp_path, state=state, executor=executor) as server:
+        events = events_of(server.services)
+        created = submit(server)
+        assert server.services.queue.wait_idle()
+        expected = [
+            {"owner": "core", "param": "styles", "message": "unknown style 'gone'", "template": "unknown style {{name}}", "params": {"name": "'gone'"}},
+            {"owner": "sampler", "param": "nope", "message": "unknown parameter"},
+        ]
+        job = server.client.get(f"/api/v2/jobs/{created['job_id']}").json()
+        assert job["status"] == FAILED and job["errors"] == [{**entry, "template": entry.get("template"), "params": entry.get("params")} for entry in expected]
+        listed = next(item for item in server.client.get("/api/v2/jobs").json()["items"] if item["id"] == created["job_id"])
+        assert listed["errors"] == job["errors"]
+        [failed] = [event for event in events if isinstance(event, dict) and event["type"] == "job.failed"]
+        assert failed["errors"] == expected
+
+
 def test_a_job_failing_with_text_utf8_cannot_hold_still_ends_failed(webui, tmp_path):
     """An exception naming a file whose name is not UTF-8 (Linux keeps its bytes as
     surrogates): SQLite refused the error text, so the job never ended."""

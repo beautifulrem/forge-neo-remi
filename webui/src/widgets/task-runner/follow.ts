@@ -11,6 +11,7 @@ import { ApiError, fieldMessages } from "@/api/http"
 import type { ActionExtra, ActionToast } from "@/api/types"
 import { failureText, jobErrorText } from "@/features/errors/error-text"
 import { type ActionContext, actionRequest, applyResponse, splitResponse } from "@/ui/actions"
+import type { FormIndex } from "@/ui/form-index"
 import { isMessage, type Message } from "@/ui/messages"
 
 export type TaskStatus = {
@@ -114,7 +115,7 @@ async function poll(ctx: ActionContext, owner: string, task: string, extra: Reco
   const body = actionRequest(ctx, owner, { task, ...extra } as unknown as ActionExtra)
   const split = splitResponse(owner, await api.action(owner, "__task__", body))
   const status = split.outputs?.[outputKey(task)]
-  if (split.toast && isTaskStatus(status)) split.toast = refusalToast(split.toast, status)
+  if (split.toast && isTaskStatus(status)) split.toast = refusalToast(split.toast, status, ctx.store.getState().index)
   applyResponse(ctx.store, owner, split)
   return isTaskStatus(status) ? status : null
 }
@@ -124,8 +125,8 @@ async function poll(ctx: ActionContext, owner: string, task: string, extra: Reco
  * in the UI language: the server could only join their English messages (a single one is its own
  * toast, already translated).
  */
-function refusalToast(toast: ActionToast, status: TaskStatus): ActionToast {
+function refusalToast(toast: ActionToast, status: TaskStatus, index: FormIndex): ActionToast {
   const { message } = toast
   if (status.state !== "failed" || !isMessage(message) || message.text !== "Failed: {{error}}" || fieldMessages(status.errors).length === 0) return toast
-  return { ...toast, message: { ...message, params: { ...message.params, error: jobErrorText(status.error ?? "", status.errors) } } }
+  return { ...toast, message: { ...message, params: { ...message.params, error: jobErrorText(status.error ?? "", status.errors, undefined, index) } } }
 }

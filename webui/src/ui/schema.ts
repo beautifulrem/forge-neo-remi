@@ -352,6 +352,8 @@ export type SettingsSchema = {
 /** A rejected value's message: English, with its catalog key when it names the value (schema-format.md §3). */
 export type FieldMessage = { message: string; template?: string; params?: SentenceParams }
 export type ValidationError = FieldMessage & { owner: string; param: string }
+/** A value a job refused when it ran, as the server stores it: with its field when the entry names one. */
+export type RefusedValue = FieldMessage & { owner?: string; param?: string }
 
 /** Body of a rejected request (§3). */
 export type ValidationErrors = { errors: ValidationError[] }

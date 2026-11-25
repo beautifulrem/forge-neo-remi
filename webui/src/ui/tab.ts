@@ -1,7 +1,7 @@
 /** Tab-form helpers: owners of a tab schema and the job body built from a form. */
 import type { JobRequest } from "@/api/types"
 import { evaluate } from "./conditions"
-import type { OwnerSpec } from "./form-index"
+import { buildIndex, type FormIndex, type OwnerSpec } from "./form-index"
 import type { FormStore } from "./form-store"
 import type { TabSchema, ValidationError } from "./schema"
 
@@ -10,6 +10,21 @@ export function tabOwners(schema: TabSchema): OwnerSpec[] {
     { owner: "core", layout: schema.core.layout, defaults: schema.core.defaults ?? {} },
     ...schema.scripts.map((script) => ({ owner: script.id, layout: script.layout, defaults: script.defaults ?? {} })),
   ]
+}
+
+const indexes = new WeakMap<TabSchema, FormIndex>()
+
+/**
+ * The index of a tab schema's inputs (their labels), built once per schema: what names a field
+ * away from the form, which may never have been loaded (a failed job on the Queue page).
+ */
+export function schemaIndex(schema: TabSchema): FormIndex {
+  let index = indexes.get(schema)
+  if (!index) {
+    index = buildIndex(tabOwners(schema))
+    indexes.set(schema, index)
+  }
+  return index
 }
 
 /** The job body for the current values of a tab form (without `submit: false` inputs). */

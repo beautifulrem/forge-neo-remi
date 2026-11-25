@@ -11,6 +11,8 @@ import { onNewOutputs, onOutputsChanged } from "@/features/library/cache"
 import { networksFollowOptions } from "@/features/networks/queries"
 import { reloadServerCatalog, t } from "@/i18n"
 import { noteText } from "@/features/queue/notes"
+import type { TabSchema } from "@/ui/schema"
+import { schemaIndex } from "@/ui/tab"
 
 /** `model.loading` stages that end a load (besides the `model.loaded` event). */
 const TERMINAL_STAGES = new Set(["done", "loaded", "error", "failed"])
@@ -72,7 +74,11 @@ export function useWsBridge() {
         void queryClient.invalidateQueries({ queryKey: keys.jobs })
         // Cancelled / interrupted jobs (e.g. the queue was cleared) are not failures.
         const stopped = e.status === "cancelled" || e.status === "interrupted"
-        if (mine && !stopped) toast.error(t("Generation failed"), { description: e.error ? jobErrorText(e.error, e.errors) : undefined })
+        if (mine && !stopped) {
+          // the form the job came from (loaded: this client queued it) names the refused values' fields
+          const schema = e.tab ? queryClient.getQueryData<TabSchema>(keys.schema(e.tab)) : undefined
+          toast.error(t("Generation failed"), { description: e.error ? jobErrorText(e.error, e.errors, undefined, schema ? schemaIndex(schema) : undefined) : undefined })
+        }
       }),
       onWsEvent("queue.changed", (e) => {
         // Also sent right after a (re)connect: drops the progress of a job that ended while the socket was down.

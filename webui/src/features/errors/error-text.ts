@@ -18,7 +18,7 @@ import { ApiError, fieldMessages, RequestError, sentenceParams, validationErrors
 import { i18n, t } from "@/i18n"
 import { sentenceText } from "@/ui/messages"
 import type { FormIndex } from "@/ui/form-index"
-import type { FieldMessage, ValidationError } from "@/ui/schema"
+import type { FieldMessage, RefusedValue, ValidationError } from "@/ui/schema"
 
 export type StatusTexts = Partial<Record<number, string>>
 
@@ -132,12 +132,19 @@ export function fieldErrorText(errors: readonly FieldMessage[] | undefined, lang
  */
 export function toastInvalid(errors: readonly ValidationError[], index?: FormIndex): void {
   const language = i18n.language
-  const lines = errors.map((error) => {
-    const message = validationMessage(error, language)
-    const label = index?.inputs.get(error.owner)?.get(error.param)?.label
-    return label ? t("{{field}}: {{message}}", { field: t(label), message }) : message
-  })
+  const lines = errors.map((error) => fieldMessage(error, index, language))
   toast.error(t("Some parameters are invalid"), { description: [...new Set(lines)].join(" · ") })
+}
+
+/**
+ * A refused value's message in `language`, named by its field's label in `index` ("Sampling
+ * steps: must be at most 150, got 200"); the message alone when the entry names no field or the
+ * form does not show it (a script no longer loaded).
+ */
+function fieldMessage(error: RefusedValue, index: FormIndex | undefined, language: string): string {
+  const message = validationMessage(error, language)
+  const label = error.owner !== undefined && error.param !== undefined ? index?.inputs.get(error.owner)?.get(error.param)?.label : undefined
+  return label ? t("{{field}}: {{message}}", { field: t(label, { lng: language }), message, lng: language }) : message
 }
 
 /**
@@ -151,11 +158,12 @@ export function serverText(text: string, language = i18n.language): string {
 
 /**
  * Why a job failed, in `language`: the values it refused when it ran (`errors`, as the server
- * stores and sends them: their templates translate) where it has them, else its error text
- * (`serverText`). A value can be refused only then: a style deleted, an image removed or a model
- * gone while the job waited.
+ * stores and sends them: their templates translate), each named by its field's label in `index`
+ * (the job's form) as the toast of a refused submission names them, where it has them; else its
+ * error text (`serverText`). A value can be refused only then: a style deleted, an image removed
+ * or a model gone while the job waited.
  */
-export function jobErrorText(error: string, errors: unknown, language = i18n.language): string {
+export function jobErrorText(error: string, errors: unknown, language = i18n.language, index?: FormIndex): string {
   const messages = fieldMessages(errors)
-  return messages.length > 0 ? validationText(messages, language) : serverText(error, language)
+  return messages.length > 0 ? [...new Set(messages.map((message) => fieldMessage(message, index, language)))].join(" · ") : serverText(error, language)
 }

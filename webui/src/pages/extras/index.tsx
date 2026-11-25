@@ -6,11 +6,12 @@
  * runs stay in a strip below.
  */
 import { Ban, ImageIcon, ImageUpscale, Loader2, Maximize2 } from "@/components/icons"
+import { useQuery } from "@tanstack/react-query"
 import { Suspense, useEffect, useLayoutEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
 import { progressFraction, runningFor, useProgress } from "@/api/progress"
-import { useSchema } from "@/api/queries"
+import { schemaQuery, useSchema } from "@/api/queries"
 import { useWs } from "@/api/ws"
 import { formatShortcut } from "@/app/commands"
 import { Segmented } from "@/components/Segmented"
@@ -35,6 +36,7 @@ import { getFormStore } from "@/ui/form-store"
 import { ScriptsProvider, Slot } from "@/ui/layout/Slot"
 import { ImageFieldSkeleton, LabelSkeleton } from "@/ui/lazy-views"
 import { RenderLayout } from "@/ui/Renderer"
+import { schemaIndex } from "@/ui/tab"
 import { retryableLazy } from "@/lib/retryable-lazy"
 import { usePinnedBar } from "@/lib/use-pinned-bar"
 
@@ -161,13 +163,16 @@ function ResultStage() {
   const job = useProgress((s) => runningFor(s, "extras"))
   const preview = useWs((s) => (job && s.preview && (job.seq === undefined || s.preview.jobSeq === job.seq) ? s.preview.url : null))
   const comparable = Boolean(result?.source && item && items.length === 1)
+  // the form names the values a run refused (the page has its schema)
+  const { data: schema } = useQuery({ ...schemaQuery("extras"), enabled: Boolean(result?.errors?.length) })
+  const index = schema ? schemaIndex(schema) : undefined
 
   let view: React.ReactNode
   if (job && preview && !item) {
     view = <img src={preview} alt={t("Live preview")} className="max-h-full max-w-full rounded-lg object-contain" />
   } else if (result?.error) {
     // the "Generation failed" toast announces it; the result area keeps it in view, as a plain line
-    view = <p className="max-w-md text-sm text-destructive">{jobErrorText(result.error, result.errors, i18n.language)}</p>
+    view = <p className="max-w-md text-sm text-destructive">{jobErrorText(result.error, result.errors, i18n.language, index)}</p>
   } else if (!item) {
     view = (
       <div className="flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">

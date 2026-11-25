@@ -6,7 +6,7 @@ import { ApiError, RequestError, validationErrors } from "@/api/http"
 import { tabSchema } from "@/api/mock/fixtures"
 import { buildIndex } from "@/ui/form-index"
 import { tabOwners } from "@/ui/tab"
-import { errorText, failureText, renderFailureText, serverText, serviceFailureText, toastInvalid, validationText } from "./error-text"
+import { errorText, failureText, jobErrorText, renderFailureText, serverText, serviceFailureText, toastInvalid, validationText } from "./error-text"
 
 const failed = (status: number) => new ApiError(status, `HTTP ${status}`, { detail: "English detail for the logs" })
 
@@ -152,6 +152,31 @@ describe("toastInvalid", () => {
     })
     toastInvalid(validationErrors(refused)!, buildIndex(tabOwners(tabSchema("txt2img"))))
     expect(failed).toHaveBeenCalledWith("Some parameters are invalid", { description: "Sampling steps: must be at most 150, got 200 · the script is not loaded" })
+  })
+})
+
+// A job that refused values when it ran listed only their messages, where the 422 of a submission
+// names the field of each.
+describe("jobErrorText", () => {
+  const stored = [
+    { owner: "sampler", param: "steps", message: "must be at most 150, got 200", template: "must be at most {{maximum}}, got {{value}}", params: { maximum: "150", value: "200" } },
+    { owner: "gone", param: "x", message: "the script is not loaded" },
+    { owner: null, param: null, message: "tab is one of txt2img, img2img, extras" },
+  ]
+
+  it("names the field of each refused value, in the given language", async () => {
+    const index = buildIndex(tabOwners(tabSchema("txt2img")))
+    expect(jobErrorText("sampler.steps: must be at most 150, got 200", stored, "en", index)).toBe("Sampling steps: must be at most 150, got 200 · the script is not loaded · tab is one of txt2img, img2img, extras")
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", "must be at most {{maximum}}, got {{value}}", "不能大于 {{maximum}}，当前为 {{value}}")
+    i18n.addResource("zh-CN", "server", "Sampling steps", "采样步数")
+    i18n.addResource("zh-CN", "chrome", "{{field}}: {{message}}", "{{field}}：{{message}}")
+    // the language asked for, not the one the app is in
+    expect(jobErrorText("", stored, "zh-CN", index)).toBe("采样步数：不能大于 150，当前为 200 · the script is not loaded · tab is one of txt2img, img2img, extras")
+  })
+
+  it("says the messages alone without a form to name them by", () => {
+    expect(jobErrorText("", stored, "en")).toBe("must be at most 150, got 200 · the script is not loaded · tab is one of txt2img, img2img, extras")
   })
 })
 

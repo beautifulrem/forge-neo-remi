@@ -4,7 +4,7 @@
  * Callers use the functions in `endpoints.ts`, never URLs.
  */
 import createClient from "openapi-fetch"
-import type { FieldMessage, SentenceParams, ValidationError } from "@/ui/schema"
+import type { RefusedValue, SentenceParams, ValidationError } from "@/ui/schema"
 import type { paths } from "./gen/schema"
 import { sessionRefused } from "./session"
 
@@ -161,18 +161,20 @@ export function sentenceParams(value: unknown): SentenceParams | undefined {
 }
 
 /**
- * The messages of a job's refused values as the server stores and sends them (`errors` of a job
- * or of `job.failed`; an entry may name no field), with a template only with its values. Entries
- * of another shape (stored by hand) are left out.
+ * A job's refused values as the server stores and sends them (`errors` of a job or of
+ * `job.failed`): each message with a template only with its values, and the field it is about
+ * (`owner` and `param`) when the entry names one. Entries of another shape (stored by hand) are
+ * left out.
  */
-export function fieldMessages(value: unknown): FieldMessage[] {
+export function fieldMessages(value: unknown): RefusedValue[] {
   if (!Array.isArray(value)) return []
-  return value.flatMap((entry: unknown): FieldMessage[] => {
+  return value.flatMap((entry: unknown): RefusedValue[] => {
     if (!entry || typeof entry !== "object") return []
-    const { message, template, params } = entry as Record<string, unknown>
+    const { message, template, params, owner, param } = entry as Record<string, unknown>
     if (typeof message !== "string") return []
     const values = sentenceParams(params)
-    return [typeof template === "string" && values ? { message, template, params: values } : { message }]
+    const field = typeof owner === "string" && typeof param === "string" ? { owner, param } : {}
+    return [typeof template === "string" && values ? { message, template, params: values, ...field } : { message, ...field }]
   })
 }
 

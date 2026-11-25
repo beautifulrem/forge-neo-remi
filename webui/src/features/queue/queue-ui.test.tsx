@@ -208,7 +208,7 @@ describe("history list", () => {
 
   it("shows why a job failed and what it noted in the UI language", async () => {
     // a value refused when the job ran (a style deleted while it waited): its template, not the English
-    mockFetch({})
+    mockFetch({ "GET /schema/txt2img": [200, tabSchema("txt2img")] })
     const { i18n } = await import("@/i18n")
     const choice = "{{value}} is not one of the choices ({{choices}})"
     const edit = "Anima Edit model/LoRA detected with an input or reference image while '[Anima] Enable Reference' (anima_do_reference) is off: enable it so Anima stacks the reference frame instead of running plain img2img."
@@ -227,6 +227,31 @@ describe("history list", () => {
       expect(row).toHaveTextContent("'Watercolor' 不在可选项（'Cinematic'）中")
       expect(row).not.toHaveTextContent("is not one of the choices")
       expect(row).toHaveTextContent("检测到 Anima Edit 模型，但参考模式未开启。")
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
+  })
+
+  // The 422 of a submission names the field of each refused value; a job that refused them when it
+  // ran listed only their messages.
+  it("names the field of each value a failed job refused, by its form's label", async () => {
+    mockFetch({ "GET /schema/txt2img": [200, tabSchema("txt2img")] })
+    const { i18n } = await import("@/i18n")
+    const choice = "{{value}} is not one of the choices ({{choices}})"
+    i18n.addResourceBundle("zh-CN", "server", { [choice]: "{{value}} 不在可选项（{{choices}}）中" }, true, true)
+    i18n.addResourceBundle("zh-CN", "chrome", { Styles: "样式", "{{field}}: {{message}}": "{{field}}：{{message}}" }, true, true)
+    const failed: Job = {
+      ...jobOf("labelled", "failed"),
+      seq: 10,
+      error: "core.styles: 'Watercolor' is not one of the choices ('Cinematic')",
+      errors: [{ owner: "core", param: "styles", message: "'Watercolor' is not one of the choices ('Cinematic')", template: choice, params: { value: "'Watercolor'", choices: "'Cinematic'" } }],
+    }
+    renderWithClient(<HistoryList jobs={[failed]} total={1} hasMore={false} loadingMore={false} onLoadMore={() => {}} onView={() => {}} />)
+    const row = screen.getByRole("listitem")
+    await waitFor(() => expect(row).toHaveTextContent("Styles: 'Watercolor' is not one of the choices ('Cinematic')"))
+    try {
+      await act(() => i18n.changeLanguage("zh-CN"))
+      expect(row).toHaveTextContent("样式：'Watercolor' 不在可选项（'Cinematic'）中")
     } finally {
       await act(() => i18n.changeLanguage("en"))
     }

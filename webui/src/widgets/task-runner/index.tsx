@@ -35,6 +35,7 @@ export default function TaskRunner({ props, disabled, id }: WidgetProps<null, Pr
   const run = useRunAction()
   const task = props.task ?? props.action
   const raw = useFormState((s) => s.outputs[owner]?.[outputKey(task)])
+  const index = useFormState((s) => s.index)
   const status = isTaskStatus(raw) ? raw : null
   const [starting, setStarting] = useState(false)
   const active = starting || (status !== null && !status.done)
@@ -118,7 +119,7 @@ export default function TaskRunner({ props, disabled, id }: WidgetProps<null, Pr
         </div>
       ) : status?.state === "failed" && status.error ? (
         <p className="text-xs text-destructive" role="alert">
-          {tw("Failed: {{error}}", { error: jobErrorText(status.error, status.errors, i18n.language) })}
+          {tw("Failed: {{error}}", { error: jobErrorText(status.error, status.errors, i18n.language, index) })}
         </p>
       ) : null}
     </div>
