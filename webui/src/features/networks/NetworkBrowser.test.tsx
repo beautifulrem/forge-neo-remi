@@ -303,6 +303,67 @@ describe("network browser: windows, filters, errors", { timeout: 60_000 }, () =>
     await within(await listbox()).findAllByRole("option", {}, slow)
   })
 
+  /** Holds the answers to the requests `matches` picks until `release` (the rest are answered as before). */
+  function holdRequests(matches: (path: string, url: URL) => boolean) {
+    const fetch = vi.mocked(globalThis.fetch)
+    const answer = fetch.getMockImplementation()!
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    fetch.mockImplementation(async (input, init) => {
+      const url = new URL((input as Request).url)
+      if (matches(url.pathname.replace("/api/v2", ""), url)) await held
+      return answer(input, init)
+    })
+    return () => act(async () => release())
+  }
+
+  // A refetch of a list without data goes back to "pending": the pane's error gave way to a
+  // skeleton under the focused Retry until the retry failed again.
+  it("keeps the list's error up while its retry runs, its Retry busy", async () => {
+    seedBootstrap()
+    let broken = true
+    mockApi({ fail: (call) => broken && call.path === "/networks/lora" })
+    layout(1200, 800)
+    renderBrowser()
+    const alert = await screen.findByRole("alert", {}, slow)
+    expect(alert).toHaveTextContent("Could not load LoRA")
+    broken = false
+    const release = holdRequests((path) => path === "/networks/lora")
+    const retry = within(alert).getByRole("button", { name: "Retry" })
+    fireEvent.click(retry)
+    await waitFor(() => expect(retry).toHaveAttribute("aria-disabled", "true"))
+    expect(alert).toBeInTheDocument()
+    expect(alert).toHaveAttribute("aria-busy", "true")
+    expect(document.querySelector("[data-slot=skeleton]")).toBeNull()
+    await release()
+    await within(await listbox()).findAllByRole("option", {}, slow)
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  // The list keeps the previous search's cards as the next search's placeholder: the retry of a
+  // search that failed brought those cards back, as if they were its results.
+  it("does not show the previous search's cards while a failed search is retried", async () => {
+    seedBootstrap()
+    let broken = false
+    mockApi({ fail: (call) => broken && call.path === "/networks/lora" && call.url.searchParams.get("q") === "ink" })
+    layout(1200, 800)
+    renderBrowser()
+    await within(await listbox()).findAllByRole("option", {}, slow)
+    broken = true
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search networks" }), { target: { value: "ink" } })
+    const alert = await screen.findByRole("alert", {}, slow)
+    expect(alert).toHaveTextContent("Could not load LoRA")
+    broken = false
+    const release = holdRequests((path, url) => path === "/networks/lora" && url.searchParams.get("q") === "ink")
+    const retry = within(alert).getByRole("button", { name: "Retry" })
+    fireEvent.click(retry)
+    await waitFor(() => expect(retry).toHaveAttribute("aria-disabled", "true"))
+    expect(alert).toBeInTheDocument()
+    expect(screen.queryByRole("listbox", { name: "LoRA" })).toBeNull()
+    await release()
+    await within(await listbox()).findAllByRole("option", {}, slow)
+  })
+
   // The kinds row kept a loading skeleton for good when the kinds failed, beside the error.
   it("shows no loading skeleton once the network kinds failed", async () => {
     seedBootstrap()

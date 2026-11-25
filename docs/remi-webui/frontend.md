@@ -545,10 +545,13 @@ generated interfaces (sources: Linear's
   placeholder (a dimmed glyph over one muted line: the stage, Extras, the
   history). Error views follow three: a list or panel that could not load is
   `LoadFailed` (what failed in a destructive line, then Retry; never an empty
-  list), a page that could not load is `PagePlaceholder` with a Retry
+  list; another way out follows the Retry as its children, a license text's
+  page on the web), a page that could not load is `PagePlaceholder` with a Retry
   (`RetryButton`), and both stay while their retry runs, the Retry busy but
   focused (`useLoadFailure` in `api/load-failure.ts`: a refetch of a query with
-  no data goes back to "pending" and drops its error), and an
+  no data goes back to "pending" and drops its error; a load that is no query,
+  the image editor's picture or the recipe capture's read of a form, keeps its
+  error in its own state and marks it retrying instead of clearing it), and an
   action's error is a plain destructive line by the action (`role="alert"`,
   `text-sm text-destructive`, no tinted box; the settings import's skipped
   values too, read with the rest of its check in that check's polite live
@@ -558,7 +561,8 @@ generated interfaces (sources: Linear's
   A destructive fill is left to one tone among others (a text output's
   status, workflow advice) and to round tinted icons. The network browser's
   pane, a next page that failed (`LoadMoreStatus`), the image editor's stage
-  and the model picker keep their own Retry; `components/error-views.test.ts`
+  and the model picker keep their own Retry (the pane's, the stage's and the
+  picker's stay up and busy the same way); `components/error-views.test.ts`
   checks every class and every Retry against this, announced or not.
   Image surfaces (the stage, Extras, the image editor) are one borderless
   `bg-canvas` (the JSON Builder's layout canvas too). In the light theme the

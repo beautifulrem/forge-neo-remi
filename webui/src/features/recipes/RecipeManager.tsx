@@ -82,11 +82,12 @@ export function RecipeManager() {
   const recipes = list.data?.items ?? []
 
   // what the capture dialog read from the source form (null while it reads: a form never opened loads its schema first)
-  const [capture, setCapture] = useState<{ tab: FormTab; overrides?: CapturedOverrides; error?: unknown } | null>(null)
+  const [capture, setCapture] = useState<{ tab: FormTab; overrides?: CapturedOverrides; error?: unknown; retrying?: boolean } | null>(null)
   const captureRequest = useRef(0)
-  const readForm = (tab: FormTab) => {
+  /** Reads `tab`; a retry of its failed read keeps the failure up, its Retry busy, until the read ends. */
+  const readForm = (tab: FormTab, retry = false) => {
     setCaptureTab(tab)
-    setCapture(null)
+    setCapture((current) => (retry && current?.error !== undefined && current.tab === tab ? { ...current, retrying: true } : null))
     const request = ++captureRequest.current
     captureTabOverrides(tab).then(
       (overrides) => request === captureRequest.current && setCapture({ tab, overrides }),
@@ -406,7 +407,7 @@ export function RecipeManager() {
               {capture === null ? (
                 <div aria-hidden className="h-full rounded-md bg-background" />
               ) : capture.error !== undefined ? (
-                <LoadFailed error={capture.error} onRetry={() => readForm(captureTab)} className="h-full justify-center rounded-md bg-background px-3 py-0" />
+                <LoadFailed error={capture.error} retrying={capture.retrying} onRetry={() => readForm(captureTab, true)} className="h-full justify-center rounded-md bg-background px-3 py-0" />
               ) : captured.count === 0 ? (
                 <p className="flex h-full items-center justify-center rounded-md bg-background px-3 text-center text-xs text-muted-foreground">
                   {t("No modified parameters found on {{tab}}.", { tab: t(CATEGORY_LABELS[captureTab]) })}

@@ -44,15 +44,19 @@ export default function Editor(props: ImageEditorProps) {
   const canvasHeight = useClientOption("forge_canvas_height")
   const [uploading, setUploading] = useState(0)
   const [maximized, setMaximized] = useState(false)
-  /** A background that could not be loaded (no endless spinner): the editor shows an error with Retry. */
-  const [failed, setFailed] = useState<string | null>(null)
+  /**
+   * A background that could not be loaded (no endless spinner): the editor shows an error with Retry,
+   * kept up, its Retry busy, while the retry loads it again.
+   */
+  const [failed, setFailed] = useState<{ id: string; retrying: boolean } | null>(null)
   /** Bumped by Retry: loads the background again. */
   const [attempt, setAttempt] = useState(0)
   const imageUrl = useUploadInfo(props.image)?.url ?? null
   /** The background id the document holds; layers load only over their own background, and painting waits for it. */
   const loadedId = useDocValue(doc, (d) => d.imageId)
   const ready = loadedId === props.image
-  const loadFailed = props.image !== null && failed === props.image
+  const loadFailed = props.image !== null && failed?.id === props.image
+  const retrying = loadFailed && failed.retrying
   const busy = uploading > 0 || (props.image !== null && !ready && !loadFailed)
 
   // Committed layer uploads go to whoever renders the editor now.
@@ -91,7 +95,7 @@ export default function Editor(props: ImageEditorProps) {
         if (cancelled) return
         // Never leave the old picture (and its layers) editable under the new value.
         doc.setBackground(null, { width: 0, height: 0 }, null)
-        setFailed(id)
+        setFailed({ id, retrying: false })
         showToast("error", t("Could not load the image"), errorText(error))
       })
     return () => {
@@ -173,7 +177,7 @@ export default function Editor(props: ImageEditorProps) {
   }
 
   const onRetry = () => {
-    setFailed(null)
+    setFailed((current) => current && { ...current, retrying: true })
     setAttempt((n) => n + 1)
   }
 
@@ -208,6 +212,7 @@ export default function Editor(props: ImageEditorProps) {
       busy={busy}
       ready={ready}
       loadFailed={loadFailed}
+      retrying={retrying}
       onRetry={onRetry}
       onFiles={onFiles}
       onBlank={onBlank}

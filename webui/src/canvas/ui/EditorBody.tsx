@@ -71,6 +71,8 @@ type BodyProps = {
   ready: boolean
   /** The form's image could not be loaded: an error with Retry instead of the editor. */
   loadFailed: boolean
+  /** The failed image is being loaded again (its failure stays, the Retry busy). */
+  retrying: boolean
   onRetry: () => void
   onFiles: (files: File[]) => void
   onBlank: () => void
@@ -150,7 +152,7 @@ const offered = (tool: Tool, pickable: boolean) => tool !== "eyedropper" || pick
 /** Popups that portal outside the editor and handle their own keys. */
 const POPUPS = '[data-slot="popover-content"], [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]'
 
-export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways, maximized, onMaximize, busy, ready, loadFailed, onRetry, onFiles, onBlank, onRemove, onAcceptStaged }: BodyProps) {
+export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways, maximized, onMaximize, busy, ready, loadFailed, retrying, onRetry, onFiles, onBlank, onRemove, onAcceptStaged }: BodyProps) {
   const { t } = useTranslation()
   const mod = isMac() ? "⌘" : "Ctrl"
   const rootRef = useRef<HTMLDivElement>(null)
@@ -735,6 +737,7 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
           hint={editor.hint}
           error={editor.error}
           loadFailed={loadFailed}
+          retrying={retrying}
           onRetry={onRetry}
           onFiles={onFiles}
           onBlank={onBlank}

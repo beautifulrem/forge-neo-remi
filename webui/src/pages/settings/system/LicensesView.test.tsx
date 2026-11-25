@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
@@ -60,6 +60,40 @@ describe("LicensesView", () => {
     expect(screen.getByRole("link", { name: "Bare" })).toHaveClass("after:-top-2.5", "after:-bottom-0.5")
     expect(toggles[1]).toHaveClass("after:-top-0.5", "after:-bottom-2.5")
     expect(toggles[1]).not.toHaveClass("after:-inset-y-2.5")
+  })
+
+  // A license text that could not load offered only its page on the web: no Retry.
+  it("offers a Retry for a license text that did not load, kept up while it runs", async () => {
+    vi.spyOn(api.system, "licenses").mockResolvedValue({ groups: [{ title: "", items: [{ id: "a", name: "Some library", license_url: "https://example.com/LICENSE" }] }] } as never)
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    // two failures: the text's own query tries once more before it gives up
+    const fetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("", { status: 503 }))
+      .mockResolvedValueOnce(new Response("", { status: 503 }))
+      .mockImplementationOnce(async () => {
+        await held
+        return new Response("MIT License", { status: 200 })
+      })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <LicensesView />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole("button", { name: "Show license" }))
+    const alert = await screen.findByRole("alert", {}, { timeout: 5_000 })
+    expect(alert).toHaveTextContent("Could not load the license text.")
+    // its page on the web stays a way out
+    expect(within(alert).getByRole("link", { name: "Open it on the web" })).toHaveAttribute("href", "https://example.com/LICENSE")
+    const retry = within(alert).getByRole("button", { name: "Retry" })
+    fireEvent.click(retry)
+    await waitFor(() => expect(retry).toHaveAttribute("aria-disabled", "true"))
+    expect(alert).toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledTimes(3)
+    await act(async () => release())
+    expect(await screen.findByText("MIT License")).toBeInTheDocument()
+    expect(screen.queryByRole("alert")).toBeNull()
   })
 
   it("says the list did not load in the UI language, with a Retry", async () => {

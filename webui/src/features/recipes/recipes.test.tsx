@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { tabSchema } from "@/api/mock/fixtures"
 import { queryClient } from "@/api/queries"
@@ -314,6 +314,42 @@ describe("Recipes capture and manager UI", () => {
     // (what was read depends on the form: its changes, or a line saying there are none)
     await waitFor(() => expect(slot()?.textContent).not.toBe(""), { timeout: 5_000 })
     expect(slot()).toHaveClass("h-28")
+  })
+
+  // Retry emptied the slot while the form was read again: the failure, and the Retry under the
+  // focus, went away until the read failed again.
+  it("keeps a failed read of the form up while its retry runs, its Retry busy", async () => {
+    getFormStore("img2img").setState({ revision: 0, values: {} })
+    let schema: "fail" | "hold" = "fail"
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(typeof input === "string" ? input : (input as Request).url, "http://x")
+      if (url.pathname.endsWith("/schema/img2img")) {
+        // a 4xx is not retried: the failure shows at once
+        if (schema === "fail") return Response.json({ detail: "gone" }, { status: 404 })
+        await held
+        return Response.json(tabSchema("img2img"))
+      }
+      return Response.json({ items: [], total: 0 })
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole("button", { name: "Capture from form" }))
+    const dialog = await screen.findByRole("dialog", { name: "Capture recipe" })
+    fireEvent.click(within(dialog).getByRole("radio", { name: "img2img" }))
+    const alert = await within(dialog).findByRole("alert")
+    schema = "hold"
+    const retry = within(alert).getByRole("button", { name: "Retry" })
+    fireEvent.click(retry)
+    await waitFor(() => expect(retry).toHaveAttribute("aria-disabled", "true"))
+    expect(alert).toBeInTheDocument()
+    await act(async () => release())
+    await waitFor(() => expect(within(dialog).queryByRole("alert")).toBeNull())
+    expect(dialog.querySelector("[data-capture-result]")?.textContent).not.toBe("")
   })
 
   it("stacks the model family and tags fields on a phone, where two columns cut their placeholders", async () => {

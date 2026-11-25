@@ -27,17 +27,18 @@ async function fetchLicense(url: string, signal: AbortSignal): Promise<string> {
 function LicenseText({ url }: { url: string }) {
   const { t } = useTranslation()
   const text = useQuery({ queryKey: ["license", url], queryFn: ({ signal }) => fetchLicense(url, signal), staleTime: Infinity, retry: 1 })
-  if (text.isPending) return <Skeleton className="mt-1 h-24" />
-  if (text.isError) {
+  const failure = useLoadFailure(text)
+  if (failure) {
+    // its upstream page stays a way out beside the Retry
     return (
-      <p className="pt-1 text-sm text-muted-foreground">
-        {t("Could not load the license text.")}{" "}
+      <LoadFailed error={failure.error} retrying={failure.retrying} message={t("Could not load the license text.")} onRetry={() => void text.refetch()} className="pt-1 pb-0">
         <a href={url} target="_blank" rel="noreferrer noopener" className="text-primary underline-offset-2 hover:underline">
           {t("Open it on the web")}
         </a>
-      </p>
+      </LoadFailed>
     )
   }
+  if (text.data === undefined) return <Skeleton className="mt-1 h-24" />
   // a flat fill, no edge: the entry above it is a panel, not a card
   return <pre className="mt-1 max-h-96 overflow-auto rounded-md bg-muted/50 px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap">{text.data}</pre>
 }

@@ -332,6 +332,7 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
   const facets = useQuery({ ...facetsQuery(kindId, facetParams), enabled: Boolean(kind) })
   const facetsFailure = useLoadFailure(facets)
   const { items, total } = list
+  const listFailure = list.failure
   const isActive = useActiveTest(kind, form)
   const currentArch = facets.data?.current_arch
 
@@ -420,6 +421,9 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
     <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
       {kindsFailure ? (
         <ErrorState title={t("Could not load the network kinds")} error={kindsFailure.error} retrying={kindsFailure.retrying} onRetry={retry} />
+      ) : listFailure && kind ? (
+        // kept while its retry runs: not a skeleton, nor the previous search's cards (its placeholder)
+        <ErrorState title={t("Could not load {{kind}}", { kind: kindTitle(kind) })} error={listFailure.error} retrying={listFailure.retrying} onRetry={retry} />
       ) : list.isPending || !kind ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2.5 p-2" role="status" aria-busy="true" aria-label={t("Loading…")}>
           {Array.from({ length: 12 }, (_, i) => (
@@ -427,13 +431,16 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
           ))}
         </div>
       ) : list.isError && total === 0 ? (
-        <ErrorState title={t("Could not load {{kind}}", { kind: kindTitle(kind) })} error={list.error} onRetry={retry} />
+        // a refresh of an empty list that failed: its retry keeps the error (the list has data)
+        <ErrorState title={t("Could not load {{kind}}", { kind: kindTitle(kind) })} error={list.error} retrying={list.isFetching} onRetry={retry} />
       ) : total === 0 ? (
         <EmptyState filtered={filtered} kindTitle={kindTitle(kind)} onClear={clearFilters} />
       ) : (
         <>
           {/* a refresh that failed keeps the cards it already showed */}
-          {list.isError || kinds.isError ? <LoadFailed error={list.error ?? kinds.error} onRetry={retry} className="shrink-0 px-3 py-1.5" /> : null}
+          {list.isError || kinds.isError ? (
+            <LoadFailed error={list.error ?? kinds.error} retrying={(list.isError && list.isFetching) || (kinds.isError && kinds.isFetching)} onRetry={retry} className="shrink-0 px-3 py-1.5" />
+          ) : null}
           <NetworkGrid
             key={gridKey}
             ref={gridRef}
@@ -452,7 +459,7 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
           />
         </>
       )}
-      {list.isFetching && !list.isPending ? <Loader2 className="pointer-events-none absolute top-2 right-3 size-4 animate-spin text-muted-foreground" aria-hidden /> : null}
+      {list.isFetching && !list.isPending && !listFailure ? <Loader2 className="pointer-events-none absolute top-2 right-3 size-4 animate-spin text-muted-foreground" aria-hidden /> : null}
     </div>
   )
 

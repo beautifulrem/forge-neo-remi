@@ -70,6 +70,7 @@ function Page({ editorFirst = false, busy = false, withMask = false, onAcceptSta
           busy={busy}
           ready
           loadFailed={false}
+          retrying={false}
           onRetry={() => {}}
           onFiles={() => {}}
           onBlank={() => {}}

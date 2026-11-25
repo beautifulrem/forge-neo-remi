@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
@@ -86,6 +86,33 @@ describe("ServerView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }))
     expect(await screen.findByRole("alert")).toBeInTheDocument()
     expect(within(screen.getByRole("table", { name: "Weights in memory" })).getByText("anima.safetensors")).toBeInTheDocument()
+  })
+
+  // A first load that failed showed its line and nothing else: the Refresh in the panel's corner,
+  // disabled while it ran, took the focus with it, and the line gave way to a spinner.
+  it("says the weights could not load, with a Retry kept up and busy while it runs", async () => {
+    vi.spyOn(api.system, "status").mockResolvedValue(STATUS as never)
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    const weights = vi.spyOn(api.system, "loadedModels").mockRejectedValueOnce(new ApiError(404, "boom", { detail: "boom" })) // a 4xx is not retried
+    weights.mockImplementationOnce(async () => {
+      await held
+      return { items: [{ name: "anima.safetensors", memory_mb: 6144, device: "cuda:0" }] } as never
+    })
+    renderView()
+    fireEvent.click(screen.getByRole("button", { name: "Show the weights in memory" }))
+    const alert = await screen.findByRole("alert")
+    const retry = within(alert).getByRole("button", { name: "Retry" })
+    fireEvent.click(retry)
+    await waitFor(() => expect(retry).toHaveAttribute("aria-disabled", "true"))
+    expect(alert).toBeInTheDocument()
+    expect(screen.queryByLabelText("Loading…")).toBeNull()
+    // the corner's Refresh stays in the Tab order while a load runs too
+    expect(screen.getByRole("button", { name: "Refresh" })).toHaveAttribute("aria-disabled", "true")
+    expect(screen.getByRole("button", { name: "Refresh" })).not.toBeDisabled()
+    await act(async () => release())
+    expect(within(await screen.findByRole("table", { name: "Weights in memory" })).getByText("anima.safetensors")).toBeInTheDocument()
+    expect(screen.queryByRole("alert")).toBeNull()
   })
 
   // "Finished: 1 checkpoints hashed"

@@ -24,7 +24,7 @@ vi.mock("./EditorBody", () => ({
   EditorBody: (props: BodyProps) => {
     body.props = props
     return (
-      <div data-testid="body" data-ready={String(props.ready)} data-failed={String(props.loadFailed)} data-busy={String(props.busy)}>
+      <div data-testid="body" data-ready={String(props.ready)} data-failed={String(props.loadFailed)} data-retrying={String(props.retrying)} data-busy={String(props.busy)}>
         <button type="button" onClick={props.onRetry}>
           retry
         </button>
@@ -38,10 +38,11 @@ const H = 6
 
 /**
  * Documents on memory rasters (jsdom has no 2D canvas), uploads to a counter,
- * images by upload id in the URL: "broken" ones fail to load, "mask-upload"
- * ones are opaque white (an uploaded black-and-white mask: white = masked).
+ * images by upload id in the URL: "broken" ones fail to load, "flaky" ones
+ * fail while `flaky.failing` and wait for `flaky.gate`, "mask-upload" ones
+ * are opaque white (an uploaded black-and-white mask: white = masked).
  */
-const loads = vi.hoisted(() => ({ calls: [] as string[] }))
+const loads = vi.hoisted(() => ({ calls: [] as string[], flaky: { failing: true, gate: Promise.resolve() } }))
 vi.mock("../engine/registry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../engine/registry")>()
   const { createMemoryRaster, testImage } = await import("../engine/memory-raster")
@@ -64,6 +65,10 @@ vi.mock("../engine/registry", async (importOriginal) => {
     loadImage: async (url: string) => {
       loads.calls.push(url)
       if (url.includes("broken")) throw new Error("decode failed")
+      if (url.includes("flaky")) {
+        await loads.flaky.gate
+        if (loads.flaky.failing) throw new Error("decode failed")
+      }
       // what image.decode() rejects with for a file that is not a picture the browser can read
       if (url.includes("undecodable")) throw new DOMException("The source image cannot be decoded.", "EncodingError")
       if (url.includes("mask-upload")) return testImage(W, H, [255, 255, 255, 255])
@@ -143,6 +148,27 @@ describe("Editor binding", () => {
     fireEvent.click(screen.getByRole("button", { name: "retry" }))
     await waitFor(() => expect(loads.calls.length).toBe(before + 1))
     await waitFor(() => expect(stub().dataset.failed).toBe("true"))
+  })
+
+  // Retry dropped the failure at once: the editor showed an empty, busy stage instead, and the
+  // Retry that held the focus went with it until the load failed again.
+  it("keeps a failed image's failure up while its retry loads it, then shows the image", async () => {
+    loads.flaky = { failing: true, gate: Promise.resolve() }
+    const { doc } = setup({ image: "flaky-1", layers: { mask: { kind: "mask", value: null } }, activeLayer: "mask" })
+    await waitFor(() => expect(stub().dataset.failed).toBe("true"))
+    expect(stub().dataset.retrying).toBe("false")
+    let release = () => {}
+    loads.flaky = { failing: false, gate: new Promise<void>((resolve) => (release = resolve)) }
+    const before = loads.calls.length
+    fireEvent.click(screen.getByRole("button", { name: "retry" }))
+    await waitFor(() => expect(loads.calls.length).toBe(before + 1))
+    expect(stub().dataset.failed).toBe("true")
+    expect(stub().dataset.retrying).toBe("true")
+    expect(stub().dataset.busy).toBe("false")
+    await act(async () => release())
+    await waitFor(() => expect(doc.imageId).toBe("flaky-1"))
+    expect(stub().dataset.failed).toBe("false")
+    expect(stub().dataset.retrying).toBe("false")
   })
 
   it("commits painted layers to their params", async () => {

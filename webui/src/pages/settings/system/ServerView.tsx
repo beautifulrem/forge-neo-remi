@@ -65,6 +65,7 @@ function LoadedWeights() {
   const { t, i18n } = useTranslation()
   const [shown, setShown] = useState(false)
   const loaded = useQuery({ ...loadedModelsQuery, enabled: shown })
+  const failure = useLoadFailure(loaded)
   if (!shown) {
     return (
       <Button variant="ghost" size="sm" className="self-start" onClick={() => setShown(true)}>
@@ -81,7 +82,9 @@ function LoadedWeights() {
           variant="ghost"
           size="icon-xs"
           aria-label={t("Refresh")}
+          // busy but focusable: the focus stays on it while it loads
           disabled={loaded.isFetching}
+          focusableWhenDisabled
           onClick={() => void loaded.refetch()}
           // alone in its row: a 40 px target
           className="relative after:absolute after:-inset-2"
@@ -90,12 +93,14 @@ function LoadedWeights() {
         </Button>
       </div>
       {/* a failed refresh keeps the list it had: the error goes above it */}
-      {loaded.isError ? (
+      {loaded.isError && loaded.data ? (
         <p role="alert" className="px-1 text-xs text-destructive">
           {adminErrorMessage(loaded.error, t)}
         </p>
       ) : null}
-      {loaded.isError && !loaded.data ? null : !loaded.data ? (
+      {failure ? (
+        <LoadFailed error={failure.error} retrying={failure.retrying} message={adminErrorMessage(failure.error, t)} onRetry={() => void loaded.refetch()} className="px-1 py-0.5 text-xs" />
+      ) : !loaded.data ? (
         <Loader2 className="mx-auto size-4 animate-spin text-muted-foreground" aria-label={t("Loading…")} />
       ) : loaded.data.items.length === 0 ? (
         <p className="px-1 text-xs text-muted-foreground">{t("Nothing is loaded.")}</p>

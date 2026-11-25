@@ -10,6 +10,7 @@
  */
 import { queryOptions, useQueries, useQuery } from "@tanstack/react-query"
 import { api } from "@/api/endpoints"
+import { type LoadFailure, useLoadFailure } from "@/api/load-failure"
 import type { NetworkItem, NetworkQuery } from "@/api/types"
 
 /** Items per window: about two screens of cards. */
@@ -116,6 +117,8 @@ export type NetworkWindow = {
   isPending: boolean
   isError: boolean
   error: Error | null
+  /** The first window failed with nothing of its own to show (`useLoadFailure`): kept while its retry runs. */
+  failure: LoadFailure | null
   isFetching: boolean
   /** The items shown are a previous search's while the new one loads. */
   isPlaceholder: boolean
@@ -133,6 +136,7 @@ export function useNetworkWindow(kind: string, params: ListParams, range: IndexR
     enabled,
     placeholderData: (previous, previousQuery) => (previousQuery?.queryKey[2] === kind ? previous : undefined),
   })
+  const failure = useLoadFailure(first)
   const total = first.data?.total ?? 0
   const more = first.isPlaceholderData ? [] : pagesFor(range, total).filter((page) => page > 0)
   const rest = useQueries({ queries: more.map((page) => ({ ...pageQuery(kind, params, page), enabled })) })
@@ -154,6 +158,7 @@ export function useNetworkWindow(kind: string, params: ListParams, range: IndexR
     isPending: first.isPending,
     isError: Boolean(failed),
     error: failed?.error ?? null,
+    failure,
     isFetching: first.isFetching || rest.some((query) => query.isFetching),
     isPlaceholder: first.isPlaceholderData,
     refetch: () => {
