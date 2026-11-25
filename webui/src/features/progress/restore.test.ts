@@ -258,3 +258,14 @@ describe("a stored repeat count", () => {
     sessionStorage.removeItem(persistKey("txt2img"))
   })
 })
+
+// A stored run is read back on every load: a damaged one (cut short, edited by hand, another app on
+// this origin) must restore no run rather than throw before the page has started.
+describe("a damaged stored run", () => {
+  afterEach(() => sessionStorage.removeItem(persistKey("txt2img")))
+
+  it.each(["{not json", "null", "5", '"j1"', '{"jobs": "j1", "forever": "yes", "repeatLeft": "3"}', '{"jobs": [1, null], "repeatLeft": null}'])("restores no run from %s", (raw) => {
+    sessionStorage.setItem(persistKey("txt2img"), raw)
+    expect(persistedRun("txt2img")).toEqual({ jobs: [], forever: false, repeatLeft: 0 })
+  })
+})
