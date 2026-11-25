@@ -154,6 +154,28 @@ describe("RGBA 4-backdrop & CompareDialog UI", () => {
     expect(document.querySelector('[data-backdrop="white"]')).toBeInTheDocument()
   })
 
+  // `truncate` on a cell of an auto-layout table does not truncate: the column grows to the name and
+  // the table scrolls sideways. A fixed layout keeps the columns a third each; the name is cut
+  // with an ellipsis and carries its full text in a title.
+  it("cuts a long LoRA name in its column, with the full name in its title", async () => {
+    const name = "an_extremely_long_lora_name_that_would_widen_the_table_v12"
+    const info = (weight: string) => `a cat, <lora:${name}:${weight}>\nSteps: 28, Seed: 1`
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CompareDialog
+          images={[
+            { id: "a1", name: "a.png", width: 832, height: 1216, infotext: info("0.5") },
+            { id: "b1", name: "b.png", width: 832, height: 1216, infotext: info("0.9") },
+          ]}
+          onOpenChange={() => {}}
+        />
+      </QueryClientProvider>,
+    )
+    const cell = await screen.findByTitle(name)
+    expect(cell.className.split(" ")).toContain("truncate")
+    expect(cell.closest("table")!.className.split(" ")).toContain("table-fixed")
+  })
+
   it("wraps model and file names between their parts, not at any letter", async () => {
     const info = (model: string) => `a cat\nSteps: 28, Seed: 1, Model: ${model}, ADetailer model: face_yolov8n.pt`
     render(

@@ -257,7 +257,8 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
                 <div className="flex flex-col gap-1.5 border-t border-border/60 pt-2">
                   <h4 className="text-xs font-medium text-foreground">{t("LoRAs")}</h4>
                   <div className="overflow-x-auto rounded-md bg-background">
-                    <table className="w-full border-collapse text-xs font-mono tabular-nums">
+                    {/* fixed: a third per column, so a long name is cut (its title has it whole) instead of widening the table */}
+                    <table className="w-full table-fixed border-collapse text-xs font-mono tabular-nums">
                       <tbody className="divide-y divide-border/50">
                         {diff.lora_diffs.map((lora) => (
                           <tr key={lora.name}>
