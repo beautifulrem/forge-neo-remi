@@ -241,6 +241,22 @@ def test_old_uploads_are_pruned_unless_a_queued_job_needs_them(tmp_path):
     store.close()
 
 
+def test_a_prune_removes_partial_uploads_a_killed_process_left(tmp_path):
+    import time
+
+    store = FileStore(tmp_path)
+    store.uploads_dir.mkdir(parents=True, exist_ok=True)
+    stale = store.uploads_dir / ".incoming-0123456789abcdef"
+    fresh = store.uploads_dir / ".incoming-fedcba9876543210"
+    stale.write_bytes(b"half an upload")
+    fresh.write_bytes(b"an upload streaming in")
+    old = time.time() - 2 * 3600
+    os.utime(stale, (old, old))
+    store.prune_uploads(3600)
+    assert not stale.exists() and fresh.exists()
+    store.close()
+
+
 # endregion
 
 # region Outputs gallery

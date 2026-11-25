@@ -469,7 +469,8 @@ class FileStore:
         return file_id
 
     def prune_uploads(self, max_age: float, keep: set[str] | frozenset[str] = frozenset()) -> int:
-        """Delete uploads older than ``max_age`` seconds, except ``keep``."""
+        """Delete uploads older than ``max_age`` seconds, except ``keep``, and
+        partial uploads (``.incoming-*``) a killed process left that long ago."""
 
         cutoff = time.time() - max_age
         with self._lock:
@@ -478,6 +479,10 @@ class FileStore:
         for (file_id,) in rows:
             if file_id not in keep and self.delete(file_id, created_before=cutoff):
                 removed += 1
+        for partial in self.uploads_dir.glob(".incoming-*"):
+            with contextlib.suppress(OSError):  # finished or removed meanwhile
+                if partial.stat().st_mtime < cutoff:
+                    partial.unlink()
         return removed
 
     def prune_unsaved(self, max_age: float, keep: set[str] | frozenset[str] = frozenset()) -> int:
