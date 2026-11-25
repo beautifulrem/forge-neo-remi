@@ -3,7 +3,9 @@
  * send bar) must not hide the control the keyboard focus moves to (WCAG
  * 2.4.11): Tab scrolled the next control just into the scroller's box, under
  * the bar. The scroller gets scroll padding on that edge as deep as the bar
- * reaches into it, so a control scrolled into view stops clear of the bar.
+ * reaches into it, so a control scrolled into view stops clear of the bar,
+ * and the same depth as `--pinned-top` / `--pinned-bottom`, so a page can lay
+ * out what sits at that edge clear of the bar (JSON Builder's stacked canvas).
  */
 import { useCallback } from "react"
 
@@ -33,6 +35,10 @@ function pad(scroller: HTMLElement) {
   }
   scroller.style.scrollPaddingTop = top > 0 ? `${top}px` : ""
   scroller.style.scrollPaddingBottom = bottom > 0 ? `${bottom}px` : ""
+  for (const [name, depth] of [["--pinned-top", top], ["--pinned-bottom", bottom]] as const) {
+    if (depth > 0) scroller.style.setProperty(name, `${depth}px`)
+    else scroller.style.removeProperty(name)
+  }
 }
 
 function release(scroller: HTMLElement, bar: HTMLElement) {

@@ -66,6 +66,17 @@ describe("JSON Builder page", () => {
     expect(within(canvas).getAllByRole("group")).toHaveLength(1)
   })
 
+  // On a phone held sideways (852×393) the stacked canvas took 75vh and ran under the send bar
+  // pinned to the page's bottom, with its zoom bar half hidden there. The page is a size container
+  // and the canvas ends the send bar's depth (`--pinned-bottom`, use-pinned-bar.ts) above its foot.
+  it("keeps the stacked canvas clear of the send bar pinned to the page's foot", () => {
+    renderPage()
+    const canvas = screen.getByTestId("json-builder-canvas")
+    const page = canvas.closest<HTMLElement>("[data-scroll-root]")!
+    expect(page.className.split(" ")).toContain("max-lg:[container-type:size]")
+    expect(canvas.className.split(" ")).toContain("max-h-[min(75vh,calc(100cqh-var(--pinned-bottom,0px)-var(--spacing)*4))]")
+  })
+
   it("marks the empty fields instead of sending", () => {
     const load = getFormStore("txt2img").getState()
     load.load(tabOwners(tabSchema("txt2img")))
