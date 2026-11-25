@@ -4,6 +4,7 @@ import { useProgress } from "@/api/progress"
 import { keys, queryClient } from "@/api/queries"
 import { getFormStore } from "@/ui/form-store"
 import { registerPendingWrite } from "@/ui/pending-writes"
+import { claimTabId, TAB_CHANNEL, TAB_ID_KEY, type TabClaim } from "@/lib/tab-identity"
 import { tabOwners } from "@/ui/tab"
 import { finishExtras, interruptExtras, resetExtrasRuns, resyncExtras, runExtras, singleSource, useExtrasRuns, wireExtrasRuns } from "./run"
 
@@ -181,6 +182,58 @@ describe("extras runs", () => {
       expect(fresh.results.map((run) => run.jobId)).toEqual(["j1"])
     } finally {
       sessionStorage.removeItem("remi-extras-runs")
+    }
+  })
+})
+
+describe("extras jobs a page load left in flight", () => {
+  let original: TabClaim | null = null
+  afterEach(() => {
+    original?.close()
+    original = null
+    vi.restoreAllMocks()
+  })
+
+  /** A new page load of the tab `id`, whose session storage names `jobs` in flight. */
+  async function loadPage(id: string, jobs: string[]) {
+    sessionStorage.setItem(TAB_ID_KEY, id)
+    sessionStorage.setItem("remi-extras-runs", JSON.stringify({ state: { results: [], jobs, sources: Object.fromEntries(jobs.map((job) => [job, null])) }, version: 1 }))
+    vi.resetModules()
+    const identity = await import("@/lib/tab-identity")
+    identity.resetTabIdentity({ wait: 30 })
+    const run = await import("./run")
+    const { useProgress: progress } = await import("@/api/progress")
+    return { run, progress, identity }
+  }
+
+  it("are followed again after a reload of the same tab", async () => {
+    const calls = mockFetch(() => [200, { id: "e1", status: "running", outputs: [] }])
+    const { run, progress, identity } = await loadPage("extras-reloaded", ["e1"])
+    try {
+      run.wireExtrasRuns()
+      await vi.waitFor(() => expect(calls.map((call) => call.path)).toContain("/jobs/e1"))
+      expect(progress.getState().owned).toEqual({ e1: "extras" })
+      expect(run.useExtrasRuns.getState().jobs).toEqual(["e1"])
+    } finally {
+      identity.resetTabIdentity()
+    }
+  })
+
+  // Duplicating a tab copies its session storage: both tabs followed the job and kept its result.
+  it("are left to the open tab a duplicated tab copied them from", async () => {
+    const storage = new Map([[TAB_ID_KEY, "extras-duplicated"]])
+    original = claimTabId({ storage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => void storage.set(key, value) }, channel: new BroadcastChannel(TAB_CHANNEL), wait: 10 })
+    expect(await original.owned).toBe(true)
+    const calls = mockFetch(() => [200, { id: "e2", status: "running", outputs: [] }])
+    const { run, progress, identity } = await loadPage("extras-duplicated", ["e2"])
+    try {
+      run.wireExtrasRuns()
+      await vi.waitFor(() => expect(run.useExtrasRuns.getState().jobs).toEqual([]))
+      expect(run.useExtrasRuns.getState().sources).toEqual({})
+      expect(progress.getState().owned).toEqual({})
+      expect(calls).toEqual([])
+    } finally {
+      identity.resetTabIdentity()
     }
   })
 })

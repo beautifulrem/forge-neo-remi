@@ -11,12 +11,18 @@ import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { AuthGate } from "@/features/auth/SignIn"
 import { activateLocale, i18n, initialLocale } from "@/i18n"
 import { installChunkReload } from "@/lib/chunk-reload"
+import { sessionIsOwn } from "@/lib/tab-identity"
 import "@/features/prompt-tools/register"
 import "./index.css"
 
 // A tab opened before the WebUI was updated loads the new build when a page
 // needs a chunk the server no longer has (and only then: lib/chunk-reload.ts).
 installChunkReload()
+
+// Whether the jobs this tab's session storage remembers are its own or the
+// copy of a tab still open (a duplicated tab); asked now, so the answer is in
+// before a page restores them, and this tab answers its copies from the start.
+void sessionIsOwn()
 
 const root = createRoot(document.getElementById("root")!)
 

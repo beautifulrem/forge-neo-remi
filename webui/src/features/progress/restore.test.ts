@@ -7,6 +7,7 @@ import type { JobDetail } from "@/api/types"
 import { useWs } from "@/api/ws"
 import { tabSchema } from "@/api/mock/fixtures"
 import { useSession } from "@/features/gallery/session-store"
+import { claimTabId, resetTabIdentity, TAB_CHANNEL, TAB_ID_KEY, type TabClaim } from "@/lib/tab-identity"
 import { FakeSocket } from "@/test/fake-socket"
 import { loopRunsElsewhere } from "./loop-owner"
 import { resetRestore, restoreRuns, wireRunSync } from "./restore"
@@ -198,8 +199,10 @@ describe("restoreRuns", () => {
     const ws = await socket()
     sessionStorage.setItem(persistKey("txt2img"), JSON.stringify(["r"]))
     let answer!: (value: JobDetail) => void
-    vi.spyOn(api.jobs, "get").mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    const get = vi.spyOn(api.jobs, "get").mockReturnValue(new Promise((resolve) => (answer = resolve)))
     const restored = restoreRuns()
+    // (the jobs are attached once the tab knows they are its own, then looked up)
+    await vi.waitFor(() => expect(get).toHaveBeenCalled())
     // The job finishes before the (stale) lookup answer arrives.
     send(ws, { type: "job.completed", job_id: "r", seq: 1, status: "completed", outputs: [] })
     answer(job("r", "running"))
@@ -211,13 +214,76 @@ describe("restoreRuns", () => {
   it("does not drop a job submitted while the restore is pending", async () => {
     sessionStorage.setItem(persistKey("txt2img"), JSON.stringify(["old"]))
     let answer!: (value: JobDetail) => void
-    vi.spyOn(api.jobs, "get").mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    const lookup = new Promise<JobDetail>((resolve) => (answer = resolve))
+    // (a job queued before the restored ones are attached is looked up with them)
+    vi.spyOn(api.jobs, "get").mockImplementation((id) => (id === "old" ? lookup : Promise.resolve(job(id, "queued"))))
     const restored = restoreRuns()
     dispatchRun("txt2img", { type: "submitted", jobIds: ["new"] })
     answer(job("old", "completed"))
     await restored
     expect(useRuns.getState().runs.txt2img.jobs).toEqual(["new"])
     expect(persistedJobs("txt2img")).toEqual(["new"])
+  })
+})
+
+describe("runs a duplicated tab copied", () => {
+  let original: TabClaim | null = null
+  afterEach(() => {
+    original?.close()
+    original = null
+    resetTabIdentity()
+  })
+
+  /** This page load starts as the tab `id` (its session storage says so). */
+  function startAs(id: string) {
+    sessionStorage.setItem(TAB_ID_KEY, id)
+    resetTabIdentity({ wait: 30 })
+  }
+
+  /** The tab `id` is open in another browser tab. */
+  async function openElsewhere(id: string) {
+    const storage = new Map([[TAB_ID_KEY, id]])
+    original = claimTabId({ storage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => void storage.set(key, value) }, channel: new BroadcastChannel(TAB_CHANNEL), wait: 10 })
+    expect(await original.owned).toBe(true)
+  }
+
+  // no other tab has its id: its own question must not come back as another tab's answer
+  it("are restored by a reload of the same tab", async () => {
+    startAs("restore-reloaded")
+    sessionStorage.setItem(persistKey("txt2img"), JSON.stringify({ jobs: ["r1"], forever: false, repeatLeft: 0 }))
+    serverJobs({ r1: job("r1", "running") })
+    await restoreRuns()
+    expect(useRuns.getState().runs.txt2img).toMatchObject({ jobs: ["r1"], running: "r1" })
+    expect(useProgress.getState().owned).toMatchObject({ r1: "txt2img" })
+    expect(sessionStorage.getItem(TAB_ID_KEY)).toBe("restore-reloaded")
+  })
+
+  // Duplicating a tab copies its session storage: both tabs followed the same jobs, filed their
+  // results and ran the loop.
+  it("are left to the open tab it was duplicated from", async () => {
+    await openElsewhere("restore-duplicated")
+    startAs("restore-duplicated")
+    sessionStorage.setItem(persistKey("txt2img"), JSON.stringify({ jobs: ["d1"], forever: true, repeatLeft: 0 }))
+    sessionStorage.setItem(persistKey("img2img"), JSON.stringify({ jobs: ["d2"], forever: false, repeatLeft: 0 }))
+    const ws = await socket()
+    const get = serverJobs({ d1: job("d1", "running"), d2: job("d2", "queued") })
+    const restored = restoreRuns()
+    // a job the copy queues while it asks is its own
+    dispatchRun("img2img", { type: "submitted", jobIds: ["own"] })
+    await restored
+    expect(get).not.toHaveBeenCalled()
+    expect(useProgress.getState().owned).toEqual({})
+    expect(useRuns.getState().runs.txt2img).toMatchObject({ jobs: [], forever: false })
+    expect(useRuns.getState().runs.img2img.jobs).toEqual(["own"])
+    expect(sessionStorage.getItem(persistKey("txt2img"))).toBeNull()
+    expect(persistedJobs("img2img")).toEqual(["own"])
+    // it is a tab of its own from now on: its next reload restores its own runs
+    expect(sessionStorage.getItem(TAB_ID_KEY)).not.toBe("restore-duplicated")
+    // the original's loop goes on in the original only
+    const create = vi.spyOn(api.jobs, "create").mockResolvedValue(created("next"))
+    send(ws, { type: "job.completed", job_id: "d1", seq: 1, status: "completed", outputs: [] })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(create).not.toHaveBeenCalled()
   })
 })
 

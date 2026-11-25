@@ -69,6 +69,14 @@ export function persistedRun(tab: GenerateTab): PersistedRun {
   }
 }
 
+/**
+ * Drops the run a previous page load stored for `tab` (another tab's, copied into a duplicated
+ * tab), keeping what this page has queued since.
+ */
+export function forgetStoredRun(tab: GenerateTab) {
+  persist(tab, useRuns.getState().runs[tab])
+}
+
 /** Job ids a previous page load left in flight. */
 export const persistedJobs = (tab: GenerateTab): string[] => persistedRun(tab).jobs
 

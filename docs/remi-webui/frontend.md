@@ -52,10 +52,10 @@ components/ui/      vendored shadcn components (edit sparingly; lint-exempt)
 i18n/               i18next setup, locale store, catalog loading
 locales/            chrome translations, one JSON per locale (zh-CN.json; en.json: English plural forms only)
 lib/                appearance store (theme.ts), toast, media query, cn(), persisted-store guard
-                    (persist.ts), stale-chunk reload, retryable-lazy / lazy-module (loads that
-                    retry, modules fetched on first intent), IME keys, safe area, platform (isMac),
-                    layout hooks (use-label-fits, use-fitting-placeholder, use-pinned-bar,
-                    use-scroll-fade), motion features
+                    (persist.ts), the tab's identity (tab-identity.ts), stale-chunk reload,
+                    retryable-lazy / lazy-module (loads that retry, modules fetched on first
+                    intent), IME keys, safe area, platform (isMac), layout hooks (use-label-fits,
+                    use-fitting-placeholder, use-pinned-bar, use-scroll-fade), motion features
 styles/             fonts.css, shadcn.css (keyframes and variants the vendored components use)
 test/               setup.ts (jsdom shims, jest-dom, i18n init), fake-socket.ts (WebSocket double),
                     api-fixtures.ts (complete API models), fetch-recorder.ts (records and answers
@@ -997,12 +997,26 @@ mode's schema is prefetched).
   kept in `sessionStorage` (`remi-run:<tab>`: `{jobs, forever, repeatLeft}`,
   written from the run state), which a reload keeps and other tabs do not
   share, so a tab opened meanwhile never takes a running loop over. A
-  duplicated tab starts with a copy of that storage, so before resuming a
-  loop it asks the browser's other tabs on the `remi-run-loops`
-  BroadcastChannel whether one of them runs it (`loop-owner.ts`) and leaves
-  it to that tab (not Web Locks: a server reached with `--listen` over plain
-  HTTP is not a secure context). The jobs are re-attached after a reload (`restore.ts`):
-  attached first, then each looked up with `GET /jobs/{id}`, so events
+  duplicated tab starts with a copy of that storage. Decision: a restored
+  run belongs to one tab. Each tab keeps an id in its session storage
+  (`remi-tab-id`, `lib/tab-identity.ts`), and at boot (`main.tsx`) a tab
+  that has one asks the browser's other tabs on the `remi-tabs`
+  BroadcastChannel whether one of them is open with it (`sessionIsOwn`).
+  A tab that is answers, and the asking tab is its copy: it takes a new id
+  and drops the runs it copied without touching them on the server (their
+  progress and results stay the original's; finished results it copied stay
+  in its session gallery). No answer within 250 ms is a reload (or the
+  original was closed), which restores as before; a tab without an id is
+  new, or stored by a build before the ids, and restores at once. Two tabs
+  asking at once (a tab duplicated while its original reloads) leave the id
+  to the one whose page load sorts first. Not Web Locks: a server reached
+  with `--listen` over plain HTTP is not a secure context. The same holds
+  for the Extras page's jobs in flight (`remi-extras-runs`). A loop the
+  restoring tab copied is still checked with the other tabs before it
+  resumes (`loop-owner.ts`, the `remi-run-loops` channel: one of them may
+  run it). The jobs are re-attached after a reload (`restore.ts`), once the
+  tab knows they are its own (the run is read first, so a job queued while
+  it asks is kept): attached first, then each looked up with `GET /jobs/{id}`, so events
   arriving meanwhile apply; finished ones go to the history. After the
   lookups, Generate forever and the runs left of Generate several times
   resume (`resume` event: the menu item is checked again and the next run

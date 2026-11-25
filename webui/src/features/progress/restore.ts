@@ -1,7 +1,8 @@
 /**
  * Keeps the run controllers in step with the server where WebSocket events
  * can be missed: after a reload (`restoreRuns` re-attaches the jobs the
- * previous page load left in flight) and after a reconnect or a queue change
+ * previous page load left in flight, unless this tab is a copy of one still
+ * open: `sessionIsOwn`) and after a reconnect or a queue change
  * that contradicts the local state (`wireRunSync`). Each job of a form is
  * looked up with `GET /jobs/{id}`; what finished meanwhile is settled and its
  * results filed into the session.
@@ -16,24 +17,32 @@ import { useProgress } from "@/api/progress"
 import type { Job } from "@/api/types"
 import { onWsEvent } from "@/api/ws"
 import { useSession } from "@/features/gallery/session-store"
-import { dispatchRun, GENERATE_FORMS, type GenerateTab, type PersistedRun, persistedRun, useRuns } from "./run-controller"
+import { sessionIsOwn } from "@/lib/tab-identity"
+import { dispatchRun, forgetStoredRun, GENERATE_FORMS, type GenerateTab, type PersistedRun, persistedRun, useRuns } from "./run-controller"
 import type { JobOutcome } from "./run-machine"
 import { loopRunsElsewhere } from "./loop-owner"
 
 let restoring: Promise<void> | null = null
 
-/** Once per page load: re-attaches the persisted jobs, then checks them. */
+/** Once per page load: re-attaches the persisted jobs (this tab's own), then checks them. */
 export function restoreRuns(): Promise<void> {
   restoring ??= restore().catch(() => {})
   return restoring
 }
 
 async function restore() {
+  // read before asking below: a job queued meanwhile rewrites the stored run
   const saved = new Map<GenerateTab, PersistedRun>()
   for (const tab of GENERATE_FORMS) {
     const run = persistedRun(tab)
-    if (run.jobs.length === 0) continue
-    saved.set(tab, run)
+    if (run.jobs.length > 0) saved.set(tab, run)
+  }
+  // A duplicated tab copied these runs with the session storage: they stay the original tab's.
+  if (saved.size > 0 && !(await sessionIsOwn())) {
+    for (const tab of saved.keys()) forgetStoredRun(tab)
+    return
+  }
+  for (const [tab, run] of saved) {
     for (const id of run.jobs) useProgress.getState().track(id, tab)
     dispatchRun(tab, { type: "restore", jobs: run.jobs, running: null })
   }

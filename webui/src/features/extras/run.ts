@@ -20,6 +20,7 @@ import { flushPendingWrites } from "@/ui/pending-writes"
 import type { FieldMessage } from "@/ui/schema"
 import { jobRequest, missingInputs } from "@/ui/tab"
 import { bestEffortStorage, isRecord, isText, keepEntries, mergeTyped } from "@/lib/persist"
+import { sessionIsOwn } from "@/lib/tab-identity"
 
 export type ExtrasResult = {
   jobId: string
@@ -181,11 +182,27 @@ export function wireExtrasRuns() {
     const job = s.last.extras
     if (job && job !== prev.last.extras) finishExtras(job)
   })
-  // Jobs still in flight when the page was reloaded: follow them again.
-  for (const id of useExtrasRuns.getState().jobs) useProgress.getState().track(id, "extras")
-  void resyncExtras()
+  // Jobs still in flight when the page was reloaded: follow them again. A duplicated tab copied
+  // them with the session storage: they stay the original tab's.
+  const restored = useExtrasRuns.getState().jobs
+  if (restored.length > 0) {
+    void sessionIsOwn().then((own) => {
+      if (!own) return forgetJobs(restored)
+      for (const id of restored) useProgress.getState().track(id, "extras")
+      void resyncExtras()
+    })
+  }
   // a reconnect: a job that ended while the socket was down sent its event to nobody
-  onWsEvent("hello", () => void resyncExtras())
+  onWsEvent("hello", () => void sessionIsOwn().then(() => resyncExtras()))
+}
+
+/** Stops counting `ids` as this page's jobs, without touching them on the server. */
+function forgetJobs(ids: readonly string[]) {
+  useExtrasRuns.setState((s) => {
+    const sources = { ...s.sources }
+    for (const id of ids) delete sources[id]
+    return { jobs: s.jobs.filter((id) => !ids.includes(id)), sources }
+  })
 }
 
 /**

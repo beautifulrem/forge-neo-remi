@@ -3,8 +3,11 @@
  * loop its session storage remembers (`restoreRuns`); a duplicated tab starts with a copy of that
  * storage, so before resuming it asks the other tabs of this browser whether one still runs that
  * loop (owns one of its jobs in flight), and leaves it to that tab. Another tab's own loop of the
- * same form does not answer: its jobs are its own. A BroadcastChannel, not Web Locks: those exist
- * only in secure contexts, and a server reached with `--listen` over plain HTTP is not one.
+ * same form does not answer: its jobs are its own. A copy of a tab that answers for its id drops
+ * the copied runs before this question (`sessionIsOwn`, lib/tab-identity.ts); this one still
+ * catches a loop another tab runs although it did not answer for the id (a tab opened before the
+ * ids, or that answered too late). A BroadcastChannel, not Web Locks: those exist only in secure
+ * contexts, and a server reached with `--listen` over plain HTTP is not one.
  */
 import type { GenerateTab } from "./run-controller"
 
