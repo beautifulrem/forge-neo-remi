@@ -259,7 +259,8 @@ export default function QueuePage({ route }: { route?: Route } = {}) {
 
   const modeBar = (
     <div className="flex items-center border-b border-border bg-background px-4">
-      <div role="tablist" aria-label={t("Queue")} className="flex items-stretch gap-1">
+      {/* main clips at its top edge: 4 px of room above the tabs for their focus ring, the tabs as much shorter */}
+      <div role="tablist" aria-label={t("Queue")} className="flex items-stretch gap-1 pt-1">
         {(
           [
             ["queue", t("Queue & History"), ListOrdered],
@@ -276,7 +277,7 @@ export default function QueuePage({ route }: { route?: Route } = {}) {
               aria-selected={active}
               onClick={() => setMode(id)}
               className={cn(
-                "relative inline-flex h-9 items-center gap-1.5 px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+                "relative inline-flex h-8 items-center gap-1.5 px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
                 active
                   ? "text-foreground after:absolute after:inset-x-1 after:bottom-0 after:h-0.5 after:bg-primary"
                   : "text-muted-foreground hover:text-foreground",

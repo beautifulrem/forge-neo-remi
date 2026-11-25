@@ -398,7 +398,9 @@ generated interfaces (sources: Linear's
   fixed amber. Touch screens get no number steppers (the numeric keyboard
   types the value), and controls hidden until hover take no taps while
   hidden. A scroller (the JSON Builder column, `FadeStrip`) keeps 4 px of
-  room around its controls so their focus rings are not clipped. Toolbar
+  room around its controls so their focus rings are not clipped, and so does
+  a control at an edge of `main`, which clips (the queue's mode tabs: 4 px
+  above them, the tabs as much shorter so the bar keeps its height). Toolbar
   controls (header, settings, extensions, gallery) are one 28 px height.
   A pressed toggle wears the selection tint (`--primary` text on a 15 %
   wash, 20 % in the dark theme, 25 % there when hovered), set once in
