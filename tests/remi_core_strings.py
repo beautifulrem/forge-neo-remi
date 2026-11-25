@@ -219,8 +219,10 @@ def advice_strings() -> set[str]:
 # Calls that make a rejected value's error, with the index of their message
 # argument: ParamError and the helpers that wrap one
 PARAM_ERROR_CALLS = {"ParamError": 0, "_error": 1, "bad_input": 1}
-# Remi's own sources that reject values (upstream-shared files are left as they are)
-PARAM_ERROR_SOURCES = ("remi",)
+# Remi's own sources that reject values, and modules/scripts.py, whose value checks
+# (``selector_index``, ``script_args_from_values``) Remi wrote; the rest of the shared runtime
+# is left as it is
+PARAM_ERROR_SOURCES = ("remi", "modules/scripts.py")
 
 
 def _call_name(node) -> str | None:

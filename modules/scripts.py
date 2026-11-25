@@ -742,7 +742,7 @@ class ScriptRunner:
     def selector_index(self, title) -> int:
         """Slot 0's value for the selected script's title (0: none)."""
 
-        from remi.ui import ParamError, ValidationError
+        from remi.ui import ParamError, Sentence, ValidationError
 
         if title in (None, "", "None"):
             return 0
@@ -750,7 +750,7 @@ class ScriptRunner:
             return title
         if title in self.titles:
             return self.titles.index(title) + 1
-        raise ValidationError([ParamError(f"unknown script {title!r}", owner="core", param="script")])
+        raise ValidationError([ParamError(Sentence("unknown script {{title}}", title=repr(title)), owner="core", param="script")])
 
     def script_args_from_values(self, selected, values: dict | None, ctx: "Context | None" = None, *, unknown: str = "error") -> list:
         """The full ``p.script_args`` for named values ``{script_id: {param:
@@ -758,13 +758,13 @@ class ScriptRunner:
         selected script's title. Missing params take their defaults; the
         unselected selectable scripts get their defaults."""
 
-        from remi.ui import Context, ParamError, ValidationError
+        from remi.ui import Context, ParamError, Sentence, ValidationError
 
         ctx = ctx or Context()
         if values is None:
             values = {}
         elif not isinstance(values, Mapping):
-            raise ValidationError([ParamError(f"scripts: expected an object of values by script id, got {type(values).__name__}")])
+            raise ValidationError([ParamError(Sentence("scripts: expected an object of values by script id, got {{type}}", type=type(values).__name__))])
         problems = []
         if unknown == "error":
             problems += [ParamError("unknown script", owner=owner) for owner in values if owner not in self.by_id]
@@ -780,7 +780,7 @@ class ScriptRunner:
             owner_values = None if (not script.alwayson and script is not chosen) else values.get(script.script_id)
             if isinstance(owner_values, (list, tuple)):
                 if len(owner_values) > len(layout.names):
-                    problems.append(ParamError(f"{len(owner_values)} values for {len(layout.names)} params", owner=script.script_id))
+                    problems.append(ParamError(Sentence("{{given}} values for {{expected}} params", given=len(owner_values), expected=len(layout.names)), owner=script.script_id))
                     continue
                 owner_values = dict(zip(layout.names, owner_values))
             try:

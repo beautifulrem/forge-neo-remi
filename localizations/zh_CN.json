@@ -1031,5 +1031,9 @@
   "uploads are not pasted from infotext": "上传文件不会从生成信息粘贴",
   "{{path}} must be a finite number, got {{value}}": "{{path}} 须为有限数值，当前为 {{value}}",
   "{{value}} is not one of the choices ({{choices}})": "{{value}} 不在可选项中（{{choices}}）",
-  "{{value}}: there are no choices": "{{value}}：没有可选项"
+  "{{value}}: there are no choices": "{{value}}：没有可选项",
+  "unknown script": "未知的脚本",
+  "unknown script {{title}}": "未知的脚本 {{title}}",
+  "scripts: expected an object of values by script id, got {{type}}": "scripts：应为以脚本 id 为键的取值对象，实际为 {{type}}",
+  "{{given}} values for {{expected}} params": "{{expected}} 个参数却给了 {{given}} 个值"
 }

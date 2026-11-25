@@ -122,10 +122,14 @@ export async function unwrap<T>(call: Promise<Result<T>>): Promise<T> {
   return data as T
 }
 
-function isValidationError(value: unknown): value is ValidationError {
+/** A rejected value as the server sends it: `owner` and `param` are null when it names no single field. */
+type SentError = Omit<ValidationError, "owner" | "param"> & { owner: string | null; param: string | null }
+
+function isValidationError(value: unknown): value is SentError {
   if (!value || typeof value !== "object") return false
   const { owner, param, message } = value as Record<string, unknown>
-  return typeof owner === "string" && typeof param === "string" && typeof message === "string"
+  const name = (part: unknown) => part === null || part === undefined || typeof part === "string"
+  return name(owner) && name(param) && typeof message === "string"
 }
 
 /** A sentence's values as the server sends them (`remi.ui.Sentence`): text, or a list of names. */
@@ -152,8 +156,14 @@ export function fieldMessages(value: unknown): FieldMessage[] {
   })
 }
 
-/** A rejected value with only the fields the client reads (a template only with its values). */
-function validationEntry({ owner, param, message, template, params }: ValidationError): ValidationError {
+/**
+ * A rejected value with only the fields the client reads (a template only with its values). One
+ * that names no single field (a script no longer loaded) gets "" there: it marks no field, and
+ * its message still says why.
+ */
+function validationEntry({ owner: sentOwner, param: sentParam, message, template, params }: SentError): ValidationError {
+  const owner = sentOwner ?? ""
+  const param = sentParam ?? ""
   const values = sentenceParams(params)
   return typeof template === "string" && values ? { owner, param, message, template, params: values } : { owner, param, message }
 }
@@ -174,7 +184,13 @@ export function validationErrors(error: unknown): ValidationError[] | null {
  */
 function errorMessage(status: number, payload: unknown): string {
   const errors = validationErrors(payload)
-  if (errors) return errors.map((e) => `${e.owner === "core" ? "" : `${e.owner}.`}${e.param}: ${e.message}`).join("; ")
+  if (errors)
+    return errors
+      .map((e) => {
+        const name = [e.owner === "core" ? "" : e.owner, e.param].filter(Boolean).join(".")
+        return name ? `${name}: ${e.message}` : e.message
+      })
+      .join("; ")
   if (payload && typeof payload === "object" && "detail" in payload) {
     const detail = (payload as { detail: unknown }).detail
     if (typeof detail === "string") return detail

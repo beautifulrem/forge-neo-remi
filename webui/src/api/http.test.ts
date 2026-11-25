@@ -30,6 +30,18 @@ describe("http errors", () => {
     expect(validationErrors(error)).toBeNull()
     expect(validationErrors(new ApiError(400, "x", { errors: [{ owner: 1 }] }))).toBeNull()
   })
+
+  it("keeps a refusal that names no single field (a script no longer loaded)", async () => {
+    // dropping it left only "the server rejected the request", without the reason
+    reply({ errors: [{ owner: "some_disabled_extension", param: null, message: "unknown script" }, { owner: null, param: null, message: "scripts: expected an object of values by script id, got list", template: "scripts: expected an object of values by script id, got {{type}}", params: { type: "list" } }] }, 422)
+    const error = await submit()
+    expect((error as ApiError).message).toBe("some_disabled_extension: unknown script; scripts: expected an object of values by script id, got list")
+    expect(validationErrors(error)).toEqual([
+      { owner: "some_disabled_extension", param: "", message: "unknown script" },
+      { owner: "", param: "", message: "scripts: expected an object of values by script id, got list", template: "scripts: expected an object of values by script id, got {{type}}", params: { type: "list" } },
+    ])
+    expect(validationErrors(new ApiError(422, "x", { errors: [{ owner: null, param: null, message: 5 }] }))).toBeNull()
+  })
 })
 
 describe("generated client requests", () => {
