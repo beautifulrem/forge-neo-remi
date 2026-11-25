@@ -108,7 +108,8 @@ export function Header({ title, locales }: { title: string; locales: LocaleInfo[
         {title}
       </h1>
       <div ref={setSlot} className="flex shrink-0 items-center gap-2" />
-      <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:shrink">
+      {/* 4 px apart on a phone: room for a page's tabs beside four of them at 320 px */}
+      <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 max-sm:gap-1 sm:shrink">
         <div className="hidden min-w-0 sm:block">
           <ErrorBoundary fallback={null}>
             <Suspense fallback={<div aria-hidden className="h-7 w-[min(22rem,40vw)] rounded-sm bg-field" />}>

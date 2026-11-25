@@ -75,4 +75,12 @@ describe("the header on a phone, on a page with its own tabs", () => {
     expect(title).toHaveClass("max-sm:group-has-data-page-tabs/header:sr-only")
     expect(header.querySelector("[data-page-tabs]")).toBe(screen.getByRole("navigation", { name: "Mode" }))
   })
+
+  // At 320 px in English Generate's tabs, the networks button and four 28 px controls (a quick
+  // setting pinned) left the appearance menu past the window: the controls sit 4 px apart there.
+  it("sets the controls 4 px apart below sm", () => {
+    render(<Header title="Generate" locales={[]} />)
+    const controls = screen.getAllByRole("button", { name: "Search" })[0]!.parentElement!
+    expect(controls).toHaveClass("gap-1.5", "max-sm:gap-1")
+  })
 })

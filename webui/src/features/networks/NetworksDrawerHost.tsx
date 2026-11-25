@@ -76,8 +76,9 @@ export function NetworksDrawerHost({ tab }: { tab: GenerateTab }) {
   return (
     <>
       <HeaderSlot>
-        {/* a hairline after the txt2img / img2img tabs: this opens a drawer, it is not a third mode */}
-        <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />
+        {/* a hairline after the txt2img / img2img tabs: this opens a drawer, it is not a third mode (on a
+            phone, which has no room for it, the button's icon alone sets it apart from the tabs' words) */}
+        <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border max-sm:hidden" />
         <Button
           ref={trigger}
           variant="ghost"

@@ -1,7 +1,7 @@
 import { QueryClientProvider } from "@tanstack/react-query"
 import { act, render, screen, waitFor, within } from "@testing-library/react"
 import { toast } from "sonner"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { ApiError } from "@/api/http"
 import { queryClient } from "@/api/queries"
 import { useHeaderSlotTarget } from "@/app/header-slot-store"
@@ -24,25 +24,36 @@ describe("networks drawer host", () => {
     useNetworksUi.setState({ drawerOpen: false })
   })
 
-  // Below lg, where its label is hidden, the button was 36 px wide beside the header's 28 px icon
-  // buttons, which a phone's header has no room for.
-  it("is a 28 px square where its label is hidden", () => {
-    const header = document.createElement("div")
-    document.body.append(header)
-    act(() => useHeaderSlotTarget.getState().setElement(header))
-    try {
+  describe("in the header", () => {
+    let header: HTMLElement
+    beforeEach(() => {
+      header = document.createElement("div")
+      document.body.append(header)
+      act(() => useHeaderSlotTarget.getState().setElement(header))
       render(
         <QueryClientProvider client={queryClient}>
           <NetworksDrawerHost tab="txt2img" />
         </QueryClientProvider>,
       )
+    })
+    afterEach(() => {
+      act(() => useHeaderSlotTarget.getState().setElement(null))
+      header.remove()
+    })
+
+    // Below lg, where its label is hidden, the button was 36 px wide beside the header's 28 px icon
+    // buttons, which a phone's header has no room for.
+    it("is a 28 px square where its label is hidden", () => {
       const label = within(header).getByText("Networks")
       expect(label).toHaveClass("hidden", "lg:inline")
       expect(label.closest("button")).toHaveClass("max-lg:size-7", "max-lg:px-0")
-    } finally {
-      act(() => useHeaderSlotTarget.getState().setElement(null))
-      header.remove()
-    }
+    })
+
+    // On a 320 px phone the hairline after the tabs and its margins were the room a pinned quick
+    // setting needed; there the button's icon sets it apart from the tabs' words.
+    it("leaves out the hairline after the tabs on a phone", () => {
+      expect(header.querySelector(".w-px")).toHaveClass("max-sm:hidden")
+    })
   })
 
   // The drawer stays open across reloads: one that fails to render took Generate down with it on

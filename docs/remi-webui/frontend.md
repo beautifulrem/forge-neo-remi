@@ -107,7 +107,9 @@ imperatively).
   A header button showing its icon alone is a 28 px square like search and
   the appearance menu: the networks button wherever its label is hidden
   (below `lg`), the quick settings button on a phone, its count of pinned
-  settings waiting for `sm`.
+  settings waiting for `sm`. On a phone the header's controls sit 4 px
+  apart, and the hairline that sets the networks button apart from
+  Generate's tabs is left out (its icon does that there).
 - **Command palette** (Ctrl/Cmd+K, `cmdk`, its own chunk loaded on first
   open). Register commands with
   `useRegisterCommands(source, commands)`; labels and groups are English and
