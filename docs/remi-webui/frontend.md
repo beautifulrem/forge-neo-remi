@@ -409,7 +409,8 @@ imperatively).
   own `outline: auto`, whose width and colour are the browser's. A control
   that draws a ring takes the outline off (`outline-none` or
   `outline-hidden`: utilities, which win over the base rule), or it shows
-  both. `tests/e2e/a11y.spec.ts` ("visible focus") tabs through every main
+  both (`lib/design-guards.test.ts`, "focus rings", reads each tag and class
+  call that draws a focus ring for one). `tests/e2e/a11y.spec.ts` ("visible focus") tabs through every main
   page and measures each stop's indicator: a 3 px ring or outline in
   `--focus-ring`, on the stop or on the wrapper that draws it, and fails on
   the browser's outline, a 1 or 2 px one, another colour, or an outline and

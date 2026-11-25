@@ -282,6 +282,48 @@ describe("focus rings", () => {
     expect(colours.filter(({ value }) => value === "focus-ring").length).toBeGreaterThan(70)
     expect(colours.filter(({ value }) => value !== "focus-ring").map(({ file, cls }) => `${file}: ${cls}`)).toEqual([])
   })
+
+  /** The end of the call opened at `open` (its `(`), skipping strings, or -1. */
+  function callEnd(source: string, open: number): number {
+    let depth = 0
+    let quote = ""
+    for (let i = open; i < source.length; i++) {
+      const c = source[i]
+      if (quote) {
+        if (c === "\\") i++
+        else if (c === quote) quote = ""
+      } else if (c === '"' || c === "'" || c === "`") quote = c
+      else if (c === "(") depth++
+      else if (c === ")" && --depth === 0) return i
+    }
+    return -1
+  }
+
+  it("take the outline off where they draw a ring", () => {
+    // frontend.md: a focus nothing else marks draws a 3 px outline (the index.css base layer); a
+    // control that draws its own ring takes it off (outline-none or outline-hidden), or it shows both.
+    // shadcn's 1 px outline inside the tabs' ring is an edge, not a second ring. Read per element:
+    // a JSX tag, or the class call (cn, cva) a class string outside one is in.
+    const RING = /(?:^|[\s"'`])(?:dark:)?(?:focus|focus-visible):ring-(?:[1-9]\d*|\[\d+px\])(?=[\s"'`]|$)/
+    const OFF = /(?:^|[\s"'`:])outline-(?:none|hidden)(?=[\s"'`]|$)|(?:^|[\s"'`])focus-visible:outline-1(?=[\s"'`]|$)/
+    let drawn = 0
+    const both = files.flatMap(({ file, source: raw }) => {
+      const { source, tags } = openingTags(raw)
+      const fromTags = tags.filter(({ tag }) => RING.test(tag)).map(({ name, tag }) => ({ where: `<${name}>`, scope: tag }))
+      const calls = [...source.matchAll(/\b(?:cn|cva|clsx)\(/g)].map((m) => ({ start: m.index, end: callEnd(source, m.index + m[0].length - 1) }))
+      const fromCalls = [...source.matchAll(/"[^"\n]*"|'[^'\n]*'|`[^`]*`/g)]
+        .filter((m) => RING.test(m[0]) && !tags.some(({ index, tag }) => m.index >= index && m.index < index + tag.length))
+        .map((m) => {
+          const call = calls.filter(({ start, end }) => start < m.index && end > m.index).at(-1)
+          return { where: m[0].slice(0, 50), scope: call ? source.slice(call.start, call.end + 1) : m[0] }
+        })
+      const ringed = [...fromTags, ...fromCalls]
+      drawn += ringed.length
+      return ringed.filter(({ scope }) => !OFF.test(scope)).map(({ where }) => `${file}: ${where}`)
+    })
+    expect(drawn).toBeGreaterThan(60)
+    expect(both).toEqual([])
+  })
 })
 
 describe("selected segments", () => {
