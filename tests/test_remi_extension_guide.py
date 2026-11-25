@@ -58,3 +58,23 @@ def test_guide_example_extension_passes_its_own_tests(tmp_path):
     )
     assert result.returncode == 0, result.stdout[-4000:] + result.stderr[-4000:]
     assert re.search(r"\b6 passed\b", result.stdout), result.stdout[-2000:]
+
+
+def test_the_guide_quotes_the_code_it_describes():
+    """Facts the guide restates: the DeGrid example's ``order`` (the real
+    script's), the keys of a patch entry, and the page id rule."""
+
+    from remi.pages import PAGE_ID_RE
+    from remi.ui.actions import PATCH_KEYS
+
+    text = GUIDE.read_text(encoding="utf-8")
+    degrid = text[text.index("class ScriptPostprocessingDegrid") :]
+    script = (REPO / "scripts" / "degrid.py").read_text(encoding="utf-8")
+    assert re.search(r"order = (\d+)", degrid)[1] == re.search(r"^    order = (\d+)", script, re.M)[1]
+
+    entry = text[text.index("- A patch entry is") :]
+    entry = entry[: entry.index("}}")]
+    assert set(re.findall(r'"(\w+)"\?', entry)) == PATCH_KEYS
+
+    assert PAGE_ID_RE.pattern == r"^[a-z0-9][a-z0-9_-]{0,63}$"
+    assert "The id is `[a-z0-9][a-z0-9_-]*`, at most 64 characters;" in " ".join(text.split())

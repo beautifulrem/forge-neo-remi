@@ -367,7 +367,7 @@ def refresh_models(self, ctx: ui.ActionContext, values: dict) -> dict:
       return {"tile_width": ui.update(value=size[0]), "tile_height": ui.update(value=size[1])}
   ```
 - A patch entry is `{param: {"value"?, "choices"?, "visible"?, "enabled"?,
-  "label"?, "info"?, "minimum"?, "maximum"?, "step"?}}`; `"owner.param"`
+  "label"?, "info"?, "hint"?, "minimum"?, "maximum"?, "step"?}}`; `"owner.param"`
   patches another owner (`"core.width"`). Special keys: `__toast__` (use
   `ui.toast(message, level)`, levels `info`, `success`, `warning`,
   `error`), `__outputs__` (`{output name: value}` for `Output` / `Gallery`
@@ -461,7 +461,7 @@ from remi import ui
 
 class ScriptPostprocessingDegrid(scripts_postprocessing.ScriptPostprocessing):
     name = "DeGrid"
-    order = 2000
+    order = 900
 
     def params(self):
         return ui.Section(
@@ -522,8 +522,9 @@ pages.register(FolderIndex("folder-index", "Folder Index", "database", send_to=[
 ```
 
 - `Page(id, title, icon=None, *, params=None, actions=None, widget=None,
-  send_to=(), on_load=None)`. The id is `[a-z0-9][a-z0-9_-]*`; the owner id is
-  `page:<id>` (`POST /api/v2/actions/page:folder-index/index`). Icons are
+  send_to=(), on_load=None)`. The id is `[a-z0-9][a-z0-9_-]*`, at most 64
+  characters; the owner id is `page:<id>`
+  (`POST /api/v2/actions/page:folder-index/index`). Icons are
   names from the SPA's curated set of Lucide icons (`webui/src/app/icons.ts`:
   `camera`, `database`, `image`, `wand`, `wrench`, …; unknown names show a puzzle
   piece).
