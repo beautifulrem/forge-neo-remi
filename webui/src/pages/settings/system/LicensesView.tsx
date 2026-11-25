@@ -45,6 +45,9 @@ function LicenseText({ url }: { url: string }) {
 function LicenseEntry({ entry, depth }: { entry: Entry; depth: number }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  // The name's and the Show license toggle's hit boxes share the room between them: 20 px with a
+  // description, 10 each; 4 px without one, 2 each (32 px boxes). Above, the name's reaches the hairline.
+  const roomy = Boolean(entry.description) || !entry.license_url
   return (
     // a panel (`ui/layout/panel.ts`), a level down when its group has a titled panel of its own
     <li className={cn("flex flex-col gap-1", panelClass(depth))}>
@@ -52,7 +55,15 @@ function LicenseEntry({ entry, depth }: { entry: Entry; depth: number }) {
         <div className="min-w-0 flex-1">
           <p className={panelTitleClass(depth)}>
             {entry.url ? (
-              <a href={entry.url} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 underline-offset-2 hover:underline">
+              <a
+                href={entry.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className={cn(
+                  "relative inline-flex items-center gap-1 underline-offset-2 after:absolute after:inset-x-0 after:-top-2.5 hover:underline",
+                  roomy ? "after:-bottom-2.5" : "after:-bottom-0.5",
+                )}
+              >
                 {entry.name}
                 <ExternalLink className="size-3 text-muted-foreground" aria-hidden />
               </a>
@@ -65,7 +76,12 @@ function LicenseEntry({ entry, depth }: { entry: Entry; depth: number }) {
       </div>
       {entry.license_url ? (
         <Collapsible open={open} onOpenChange={setOpen}>
-          <CollapsibleTrigger className="relative flex w-fit items-center gap-1.5 rounded-sm py-0.5 text-left after:absolute after:-inset-x-2 after:-inset-y-2.5 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring">
+          <CollapsibleTrigger
+            className={cn(
+              "relative flex w-fit items-center gap-1.5 rounded-sm py-0.5 text-left after:absolute after:-inset-x-2 after:-bottom-2.5 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring",
+              entry.description || !entry.url ? "after:-top-2.5" : "after:-top-0.5",
+            )}
+          >
             <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} aria-hidden />
             {open ? t("Hide license") : t("Show license")}
           </CollapsibleTrigger>

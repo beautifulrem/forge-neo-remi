@@ -962,7 +962,9 @@ test("the licences page's small links are 40 px tall targets on a phone", async 
   await page.goto("/#/settings?view=licenses")
   const main = page.getByRole("main")
   await expect(main.getByRole("button", { name: "Show license" }).first()).toBeVisible()
-  const targets = [main.getByRole("link", { name: /Web interface libraries/ }), main.getByRole("button", { name: "Show license" }).first()]
+  // an entry's name links to its project: one more line of text, its box shared with the toggle below
+  const targets = [main.getByRole("link", { name: /Web interface libraries/ }), main.getByRole("button", { name: "Show license" }).first(), main.getByRole("link", { name: "ComfyUI" })]
+  const boxes: { top: number; bottom: number }[] = []
   for (const target of targets) {
     const box = await target.evaluate((element) => {
       const rect = element.getBoundingClientRect()
@@ -975,13 +977,16 @@ test("the licences page's small links are 40 px tall targets on a phone", async 
           return r.width > 0 && r.left < box.right - 0.5 && r.right > box.left + 0.5 && r.top < box.bottom - 0.5 && r.bottom > box.top + 0.5
         })
         .map((other) => other.getAttribute("aria-label") ?? other.textContent?.slice(0, 30))
-      return { name: element.textContent, width: Math.round(box.right - box.left), ownWidth: Math.round(rect.width), height: Math.round(box.bottom - box.top), reached }
+      return { name: element.textContent, top: box.top, bottom: box.bottom, width: Math.round(box.right - box.left), ownWidth: Math.round(rect.width), height: Math.round(box.bottom - box.top), reached }
     })
+    boxes.push(box)
     expect(box.height, `${box.name}: its target`).toBeGreaterThanOrEqual(40)
     // an after: box given only its top and bottom is as wide as its (empty) content: none
     expect(box.width, `${box.name}: its target's width`).toBeGreaterThanOrEqual(box.ownWidth)
     expect(box.reached, `${box.name}: controls under its target`).toEqual([])
   }
+  // ComfyUI's name and its Show license toggle: the two boxes meet, neither takes the other's taps
+  expect(boxes[2]!.bottom, "the name's box reaches into the toggle's").toBeLessThanOrEqual(boxes[1]!.top + 0.5)
 })
 
 // The recipe capture dialog changed height as it read a form (nothing), found no changes (a line) and
