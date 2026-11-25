@@ -196,6 +196,40 @@ def test_processing_comments_become_job_warnings(webui, tmp_path):
     assert _from_processed(SimpleNamespace(images=[], infotexts=[], info="", comments="")).warnings == []
 
 
+def test_processing_comments_keep_their_sentence(webui, monkeypatch):
+    """A note the processing left as a ``Sentence`` (model advice) reaches
+    the job's warnings as its template and values, which the UI translates;
+    ``Processed`` keeps only the joined English, so the runner gives the
+    processing a comments dict of its own (the real ``prepare`` and
+    ``StableDiffusionProcessing.comment`` here)."""
+    from types import SimpleNamespace
+
+    from modules import processing, txt2img
+    from remi.core import JobContext
+    from remi.jobs import runner
+    from remi.ui.sentence import Sentence
+
+    ctx, said = runner.collect_comments(JobContext(extra={"remi_job": 1}))
+    p = txt2img.prepare_txt2img({"prompt": "cat"}, {}, ctx)
+    assert p.remi_job == 1
+    advice = Sentence("Anima-Turbo checkpoint with CFG {{cfg}} / {{steps}} steps: it is distilled for CFG 1 and 8-12 steps (see the Official Turbo preset); higher values over-cook it.", cfg="4.5", steps=36)
+    p.comment(advice)
+    p.comment(Sentence(str(advice)))  # the same English: once
+    p.comment("LoRA not found or failed to load: x")
+    monkeypatch.setattr(processing, "state", SimpleNamespace(job_timestamp="0"))  # (no generation ran)
+    notes = runner._from_processed(processing.Processed(p, []), said).warnings
+    assert notes == [
+        {"message": advice.template, "values": {"cfg": "4.5", "steps": "36"}},
+        {"message": "{{note}}", "values": {"note": "LoRA not found or failed to load: x"}},
+    ]
+    # a note only in the joined text (a script's own processing object) still shows, once
+    other = SimpleNamespace(images=[], infotexts=[], info="", comments=f"{advice}\nother\n")
+    assert runner._from_processed(other, said).warnings == [*notes, {"message": "{{note}}", "values": {"note": "other"}}]
+    # a list param (capability names) stays a list: the UI translates each name
+    listed = runner.comment_notes([Sentence("Requires {{capabilities}}", capabilities=["Inpainting", "Edit"])])
+    assert listed == [{"message": "Requires {{capabilities}}", "values": {"capabilities": ["Inpainting", "Edit"]}}]
+
+
 def test_repeat_queues_copies(server):
     server.services.queue.set_paused(True)
     created = submit(server, repeat=3)

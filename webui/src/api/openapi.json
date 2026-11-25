@@ -13489,6 +13489,12 @@
                 },
                 {
                   "type": "integer"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 }
               ]
             },
@@ -13502,7 +13508,7 @@
           "message"
         ],
         "title": "Note",
-        "description": "A translatable note: an English message with ``{{name}}`` placeholders and their values."
+        "description": "A translatable note: an English message with ``{{name}}`` placeholders\nand their values. A list value holds names the catalogs have (capability\nlabels): the UI translates each and joins them its own way."
       },
       "Ok": {
         "properties": {

@@ -181,8 +181,9 @@ def job_strings() -> set[str]:
     return set(JOB_TEXTS)
 
 
-# Model families' workflow advice (the bar above Generate) and why a script does not apply
-ADVICE_SOURCES = ("backend/nn",)
+# Model families' workflow advice (the bar above Generate; the notes a job ends with) and why a
+# script does not apply: folders or files
+ADVICE_SOURCES = ("backend/nn", "modules/anima_presets.py")
 
 
 def advice_strings() -> set[str]:
@@ -195,8 +196,10 @@ def advice_strings() -> set[str]:
     def constant(node) -> str | None:
         return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value.strip() else None
 
-    for folder in ADVICE_SOURCES:
-        for path in sorted((REPO / folder).rglob("*.py")):
+    for source in ADVICE_SOURCES:
+        base = REPO / source
+        assert base.exists(), source
+        for path in [base] if base.is_file() else sorted(base.rglob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef) and node.name.endswith("workflow_advice"):

@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 
+from remi.ui.sentence import Sentence
 
 
 SAFE_BASE_AESTHETIC_LABEL = "Official Base/Aesthetic — Safe (Recommended)"
@@ -339,22 +340,19 @@ def turbo_settings_advice(
     prompts: Iterable[str] | str | None = None,
 ) -> str | None:
     """A hint when the settings clearly do not match the Anima checkpoint
-    (distilled Turbo vs Base/Aesthetic), judged by its file name and active LoRAs."""
+    (distilled Turbo vs Base/Aesthetic), judged by its file name and active LoRAs.
+    The hints here are the advice bar's sentences (``backend/nn/dit_registry.py``),
+    word for word: one catalog entry translates both, and a job that notes both
+    shows the note once."""
 
     name = str(checkpoint or "").lower()
     is_turbo = "turbo" in name
     if is_turbo and (cfg_scale > 1.5 or steps > 16):
-        return (
-            f"Anima-Turbo checkpoint with CFG {cfg_scale:g} / {steps} steps: it is distilled for "
-            "CFG 1 and 8-12 steps (see the Official Turbo preset); higher values over-cook it"
-        )
+        return Sentence("Anima-Turbo checkpoint with CFG {{cfg}} / {{steps}} steps: it is distilled for CFG 1 and 8-12 steps (see the Official Turbo preset); higher values over-cook it.", cfg=f"{cfg_scale:g}", steps=int(steps))
     if not is_turbo and "anima" in name and cfg_scale <= 1.0 and steps <= 12:
         if has_distilled_lora(prompts):
             return None
-        return (
-            f"Non-Turbo Anima checkpoint with CFG {cfg_scale:g} / {steps} steps: Base/Aesthetic need "
-            "about 30-50 steps and CFG 4-5 (Turbo checkpoints are meant for these settings)"
-        )
+        return Sentence("Non-Turbo Anima checkpoint with CFG {{cfg}} / {{steps}} steps: Base/Aesthetic need about 30-50 steps and CFG 4-5 (Turbo checkpoints are meant for these settings).", cfg=f"{cfg_scale:g}", steps=int(steps))
     return None
 
 
@@ -405,17 +403,14 @@ def anima_workflow_advice(p, *, opts=None) -> list[str]:
     ):
         messages.append(
             "Anima Edit model/LoRA detected with an input or reference image while '[Anima] Enable Reference' "
-            "(anima_do_reference) is off: enable it so Anima stacks the reference frame instead of running plain img2img"
+            "(anima_do_reference) is off: enable it so Anima stacks the reference frame instead of running plain img2img."
         )
 
     vae = getattr(getattr(sd_model, "forge_objects", None), "vae", None)
     if getattr(vae, "output_channels", 3) == 4 and init_images and any(_has_transparent_alpha(img) for img in init_images):
         bg = getattr(opts, "img2img_background_color", "#808080") if opts is not None else "#808080"
         if not _is_white_background(bg):
-            messages.append(
-                f"Anima RGBA (4-channel) VAE with a transparent img2img input and img2img_background_color={bg!r}: "
-                "set img2img_background_color to #ffffff (white) to avoid dark-fringe alpha artifacts"
-            )
+            messages.append(Sentence("Anima RGBA (4-channel) VAE with a transparent img2img input and img2img_background_color={{color}}: set img2img_background_color to #ffffff (white) to avoid dark-fringe alpha artifacts.", color=repr(bg)))
 
     return messages
 

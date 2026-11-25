@@ -389,6 +389,10 @@ def refresh_models(self, ctx: ui.ActionContext, values: dict) -> dict:
   `ui.Sentence("must be at most {{maximum}}", maximum=...)` (its template is the
   key), never an f-string. Prefer returning a warning toast for expected
   problems.
+- A note for the user at the end of a job (a setting that does not suit the
+  model, a step skipped) is `p.comment(text)` in a processing hook: it
+  shows with the job's warnings. A `ui.Sentence` is translated by its
+  template, a fixed sentence when your catalog has it word for word.
 
 Built-in examples: `sd_forge_multidiffusion` (`detect_size`: reads the
 img2img source image size through `ctx.files`), `sd_forge_controlnet`

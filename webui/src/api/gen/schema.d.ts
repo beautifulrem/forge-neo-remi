@@ -4298,7 +4298,9 @@ export interface components {
         };
         /**
          * Note
-         * @description A translatable note: an English message with ``{{name}}`` placeholders and their values.
+         * @description A translatable note: an English message with ``{{name}}`` placeholders
+         *     and their values. A list value holds names the catalogs have (capability
+         *     labels): the UI translates each and joins them its own way.
          */
         Note: {
             /** Message */
@@ -4308,7 +4310,7 @@ export interface components {
              * @default {}
              */
             values: {
-                [key: string]: string | number;
+                [key: string]: string | number | string[];
             };
         };
         /** Ok */

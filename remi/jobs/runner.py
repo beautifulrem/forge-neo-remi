@@ -8,12 +8,13 @@ the worker only indexes the files for ``/api/v2/files/{id}``.
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass, field
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from remi.core import JobContext
 from remi.jobs.store import Job
+from remi.ui.sentence import Sentence
 
 
 @dataclass
@@ -40,18 +41,20 @@ def run_job(job: Job, ctx: JobContext) -> JobResult:
     extras); raises ``remi.ui.ValidationError`` for bad values."""
 
     if job.tab == "txt2img":
+        ctx, said = collect_comments(ctx)
         if source := job.meta.get("upscale_from"):
             from modules.txt2img import run_txt2img_upscale
 
             image = upscale_source(ctx, source)
-            return _from_processed(run_txt2img_upscale(job.core, job.scripts, ctx, image, _source_infotext(image)))
+            return _from_processed(run_txt2img_upscale(job.core, job.scripts, ctx, image, _source_infotext(image)), said)
         from modules.txt2img import run_txt2img
 
-        return _from_processed(run_txt2img(job.core, job.scripts, ctx))
+        return _from_processed(run_txt2img(job.core, job.scripts, ctx), said)
     if job.tab == "img2img":
         from modules.img2img import run_img2img
 
-        return _from_processed(run_img2img(job.core, job.scripts, ctx))
+        ctx, said = collect_comments(ctx)
+        return _from_processed(run_img2img(job.core, job.scripts, ctx), said)
     if job.tab == "extras":
         from modules.postprocessing import run_extras_named
 
@@ -112,7 +115,20 @@ def _as_image(image: Any) -> Any:
     return image
 
 
-def _from_processed(processed: Any) -> JobResult:
+def collect_comments(ctx: JobContext) -> tuple[JobContext, dict[Any, int]]:
+    """``ctx`` with a comments dict of the runner's own for the processing
+    object (``JobContext.extra`` becomes attributes of ``p``), and that dict.
+    ``p.comment(text)`` stores ``text`` as a key, a ``Sentence`` with its
+    template, while ``Processed.comments`` keeps only the joined English.
+    The dict is set when ``p`` has been built, before processing: every
+    ``p.comment()`` comes from processing (samplers, LoRA, scripts'
+    ``process`` hooks)."""
+
+    said: dict[Any, int] = {}
+    return replace(ctx, extra={**ctx.extra, "comments": said}), said
+
+
+def _from_processed(processed: Any, said: Iterable[Any] = ()) -> JobResult:
     main = list(getattr(processed, "images", None) or [])
     first = getattr(processed, "index_of_first_image", 0)
     first = first if isinstance(first, int) else 0
@@ -125,20 +141,33 @@ def _from_processed(processed: Any) -> JobResult:
     texts = [infotexts[index] if index < len(infotexts) else (_image_infotext(image) or info) for index, image in enumerate(images)]
     video = getattr(processed, "video_path", None)
     files = [video] if isinstance(video, str) and video else []
-    return JobResult(images=images, infotexts=texts, info=info if isinstance(info, str) else None, files=files, roles=[role for _, role in pairs], warnings=comment_notes(getattr(processed, "comments", None)))
+    return JobResult(images=images, infotexts=texts, info=info if isinstance(info, str) else None, files=files, roles=[role for _, role in pairs], warnings=comment_notes([*said, *_lines(getattr(processed, "comments", None))]))
+
+
+def _lines(comments: Any) -> list[Any]:
+    return comments.splitlines() if isinstance(comments, str) else list(comments or [])
 
 
 def comment_notes(comments: Any) -> list[dict[str, Any]]:
-    """``Processed.comments`` (one ``p.comment()`` per line; the old UI showed
-    them under the image) as job warnings."""
+    """The notes the processing left (``p.comment()``; the old UI showed
+    them under the image) as job warnings, each English text once: a
+    ``Sentence`` with values as its template and values (the UI translates
+    it), any other text as ``{{note}}`` (the UI translates it when a catalog
+    has it verbatim). ``comments``: ``Processed.comments`` (one per line) or
+    the comments themselves. Plain values only: the warnings are stored and
+    cross the worker boundary."""
 
-    lines = comments.splitlines() if isinstance(comments, str) else list(comments or [])
     notes: list[dict[str, Any]] = []
-    for line in lines:
-        text = str(line).strip()
-        note = {"message": "{{note}}", "values": {"note": text}}
-        if text and note not in notes:
-            notes.append(note)
+    seen: set[str] = set()
+    for comment in _lines(comments):
+        text = str(comment).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        if isinstance(comment, Sentence) and comment.params:
+            notes.append({"message": comment.template, "values": {name: list(value) if isinstance(value, list) else value for name, value in comment.params.items()}})
+        else:
+            notes.append({"message": "{{note}}", "values": {"note": text}})
     return notes
 
 

@@ -288,10 +288,12 @@ class JobProgress(Model):
 
 
 class Note(Model):
-    """A translatable note: an English message with ``{{name}}`` placeholders and their values."""
+    """A translatable note: an English message with ``{{name}}`` placeholders
+    and their values. A list value holds names the catalogs have (capability
+    labels): the UI translates each and joins them its own way."""
 
     message: str
-    values: dict[str, str | int] = {}
+    values: dict[str, str | int | list[str]] = {}
 
 
 class Job(Model):

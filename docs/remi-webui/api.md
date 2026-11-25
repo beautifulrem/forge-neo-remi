@@ -309,6 +309,14 @@ server sends `hello`, then a snapshot: `queue.changed`, and `job.started` +
 
 Unknown types must be ignored (new events may be added).
 
+A warning is `{"message", "values"}`: an English message with `{{name}}`
+placeholders and their values. A note the processing left as a
+`remi.ui.Sentence` (model advice) is its template and values, where a list
+value holds names the catalogs have; any other note is
+`{"message": "{{note}}", "values": {"note": text}}`. The `errors` of
+`job.failed` (and of the stored job) are the values refused when the job ran
+(a style deleted or an image removed while it waited), shaped as in a 422.
+
 **Client messages:** `{"type": "ping"}`, `{"type": "hello", "features":
 [...], "visible": bool}` and `{"type": "visibility", "visible": bool}`. After a
 client `hello` the server only sends previews in the formats listed
