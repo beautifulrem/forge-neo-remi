@@ -133,7 +133,8 @@ def test_a_failed_save_leaves_the_saved_presets_whole(presets, tmp_path):
     del presets["broken"]
     PresetManager.save_preset("next", *SETTINGS)
     assert sorted(json.loads(stored.read_text(encoding="utf-8"))) == ["kept", "next"]
-    assert stored.stat().st_mode & 0o777 == 0o640  # a replaced file keeps its permissions
+    if sys.platform != "win32":
+        assert stored.stat().st_mode & 0o777 == 0o640  # a replaced file keeps its permissions
 
 
 def test_delete_removes_the_preset_and_clears_the_name(presets):

@@ -300,6 +300,7 @@ def test_reveal_is_guarded(library, server, monkeypatch):
     assert len(opened) == 1
 
 
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="time.tzset is POSIX only")
 def test_a_since_or_until_without_an_offset_is_utc(monkeypatch):
     monkeypatch.setenv("TZ", "Asia/Shanghai")
     time.tzset()

@@ -546,6 +546,7 @@ def shanghai_time(monkeypatch):
     time.tzset()
 
 
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="time.tzset is POSIX only")
 def test_a_tag_import_reads_its_times_as_utc(store, tmp_path, shanghai_time):
     legacy = tmp_path / "tag_frequency.db"
     with closing(sqlite3.connect(legacy)) as db, db:  # TagComplete stores CURRENT_TIMESTAMP, which is UTC
