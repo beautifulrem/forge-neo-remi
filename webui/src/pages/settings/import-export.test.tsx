@@ -2,7 +2,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
-import { ApiError } from "@/api/http"
+import { ApiError, RequestError } from "@/api/http"
 import type { SettingsSchema } from "@/ui/schema"
 import { ImportDialog } from "./ImportExport"
 import { EXPORT_FORMAT } from "./settings-model"
@@ -78,7 +78,7 @@ describe("settings import", () => {
   })
 
   it("explains a check the server could not run in the UI language, not the browser's error", async () => {
-    vi.spyOn(api, "validateOptions").mockRejectedValue(new TypeError("Failed to fetch"))
+    vi.spyOn(api, "validateOptions").mockRejectedValue(new RequestError(new TypeError("Failed to fetch")))
     render(<ImportDialog open onOpenChange={() => {}} onStaged={() => {}} />)
     upload({ format: EXPORT_FORMAT, version: 1, exported_at: "", values: { samples_save: false } })
     expect(await screen.findByRole("alert")).toHaveTextContent("The server cannot be reached.")

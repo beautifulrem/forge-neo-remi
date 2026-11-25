@@ -44,11 +44,12 @@ export function errorText(error: unknown, texts: StatusTexts = {}): string {
 
 /**
  * A failure that is either a request (explained by its status, as `errorText`) or the app's own
- * error, whose message is already a sentence in the UI language. A `TypeError` is `fetch` failing
- * to reach the server.
+ * error, whose message is already a sentence in the UI language. A request that got no answer is a
+ * `RequestError` (marked where it is made, `api/http.ts`); any other `TypeError` is a bug and keeps
+ * its message, as a bug does in an error boundary.
  */
 export function failureText(error: unknown, texts: StatusTexts = {}): string {
-  return error instanceof Error && !(error instanceof ApiError) && !(error instanceof TypeError) ? error.message : errorText(error, texts)
+  return error instanceof Error && !(error instanceof ApiError) && !(error instanceof RequestError) ? error.message : errorText(error, texts)
 }
 
 /**

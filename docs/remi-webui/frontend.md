@@ -1547,8 +1547,9 @@ older server) nothing is shown.
   failed, a body that is not JSON, a lazy chunk whose import failed: it could
   not be fetched, and a chunk that throws as it runs reads the same) is
   marked where it happens as a `RequestError` (`api/http.ts` `request` /
-  `unwrap`, `lib/retryable-lazy.ts`), so a boundary can tell it from a bug;
-  the caller's own abort is left as it is. Admin errors (extensions,
+  `unwrap`, `lib/retryable-lazy.ts`), so a boundary and `failureText` can
+  tell it from a bug (any other `TypeError` keeps its own message); the
+  caller's own abort is left as it is. Admin errors (extensions,
   Settings > Server) are said by their `template` and `params`, anything
   else by status (`adminErrorMessage`). `features/errors/failure-text.test.ts`
   fails on any read of an error's message, detail or text outside

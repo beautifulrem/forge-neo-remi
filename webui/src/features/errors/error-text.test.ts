@@ -82,9 +82,16 @@ describe("failureText", () => {
   it("explains a request by its status and keeps the app's own (translated) message", () => {
     expect(failureText(failed(500))).toBe("The server ran into an error (500).")
     expect(failureText(failed(404), { 404: "The image was deleted." })).toBe("The image was deleted.")
-    expect(failureText(new TypeError("Failed to fetch"))).toBe("The server cannot be reached.")
+    expect(failureText(new RequestError(new TypeError("Failed to fetch")))).toBe("The server cannot be reached.")
     expect(failureText("offline")).toBe("The server cannot be reached.")
     expect(failureText(new Error("The preset was not applied"))).toBe("The preset was not applied")
+  })
+
+  // Any TypeError was read as fetch failing, so a bug in the app ("Cannot read properties of
+  // undefined") told the user the server could not be reached. A request that got no answer is
+  // marked as a RequestError where it is made (api/http.ts).
+  it("keeps a bug's own message instead of blaming the server", () => {
+    expect(failureText(new TypeError("Cannot read properties of undefined (reading 'width')"))).toBe("Cannot read properties of undefined (reading 'width')")
   })
 })
 
@@ -100,7 +107,7 @@ describe("serviceFailureText", () => {
     expect(serviceFailureText(new ApiError(409, "no translation provider is configured"))).toBe("Set up the service in Settings first.")
     expect(serviceFailureText(new ApiError(413, "too much text to translate at once"))).toBe("The text is too long.")
     expect(serviceFailureText(failed(500))).toBe("The server ran into an error (500).")
-    expect(serviceFailureText(new TypeError("Failed to fetch"))).toBe("The server cannot be reached.")
+    expect(serviceFailureText(new RequestError(new TypeError("Failed to fetch")))).toBe("The server cannot be reached.")
     expect(serviceFailureText(new ApiError(409, "x"), { 409: "Choose a model first." })).toBe("Choose a model first.")
   })
 })

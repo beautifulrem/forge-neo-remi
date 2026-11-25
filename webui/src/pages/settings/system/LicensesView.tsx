@@ -8,7 +8,7 @@ import { ChevronRight, ExternalLink } from "@/components/icons"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
-import { ROOT } from "@/api/http"
+import { request, ROOT } from "@/api/http"
 import { LoadFailed } from "@/components/LoadFailed"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -18,7 +18,7 @@ import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 type Entry = { id: string; name: string; url?: string | null; description?: string; license_url?: string | null }
 
 async function fetchLicense(url: string, signal: AbortSignal): Promise<string> {
-  const response = await fetch(url, { signal, credentials: "omit", referrerPolicy: "no-referrer" })
+  const response = await request(url, { signal, credentials: "omit", referrerPolicy: "no-referrer" })
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
   return response.text()
 }
