@@ -1005,7 +1005,10 @@ mode's schema is prefetched).
   A tab that is answers, and the asking tab is its copy: it takes a new id
   and drops the runs it copied without touching them on the server (their
   progress and results stay the original's; finished results it copied stay
-  in its session gallery). No answer within 250 ms is a reload (or the
+  in its session gallery). It drops them at boot whatever page it shows
+  (`features/progress/copied-runs.ts`, which loads the run modules only in
+  a copy): left in its session storage, its next reload, under its new id,
+  would take them over. No answer within 250 ms is a reload (or the
   original was closed), which restores as before; a tab without an id is
   new, or stored by a build before the ids, and restores at once. Two tabs
   asking at once (a tab duplicated while its original reloads) leave the id

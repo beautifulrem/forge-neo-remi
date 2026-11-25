@@ -65,6 +65,9 @@ export const useExtrasRuns = create<ExtrasRunState>()(
   }),
 )
 
+/** The jobs a previous page load left in flight (the session storage's, read as the store was made). */
+const storedJobs = useExtrasRuns.getState().jobs
+
 /** A stored run the page can show (sessionStorage edited by hand or written by another app). */
 function isResult(value: unknown): value is ExtrasResult {
   return (
@@ -184,11 +187,10 @@ export function wireExtrasRuns() {
   })
   // Jobs still in flight when the page was reloaded: follow them again. A duplicated tab copied
   // them with the session storage: they stay the original tab's.
-  const restored = useExtrasRuns.getState().jobs
-  if (restored.length > 0) {
+  if (storedJobs.length > 0) {
     void sessionIsOwn().then((own) => {
-      if (!own) return forgetJobs(restored)
-      for (const id of restored) useProgress.getState().track(id, "extras")
+      if (!own) return forgetCopiedJobs()
+      for (const id of storedJobs) useProgress.getState().track(id, "extras")
       void resyncExtras()
     })
   }
@@ -196,12 +198,15 @@ export function wireExtrasRuns() {
   onWsEvent("hello", () => void sessionIsOwn().then(() => resyncExtras()))
 }
 
-/** Stops counting `ids` as this page's jobs, without touching them on the server. */
-function forgetJobs(ids: readonly string[]) {
+/**
+ * In a duplicated tab: stops counting the jobs a previous page load left (its original's) as this
+ * page's, without touching them on the server; jobs queued here since stay.
+ */
+export function forgetCopiedJobs() {
   useExtrasRuns.setState((s) => {
     const sources = { ...s.sources }
-    for (const id of ids) delete sources[id]
-    return { jobs: s.jobs.filter((id) => !ids.includes(id)), sources }
+    for (const id of storedJobs) delete sources[id]
+    return { jobs: s.jobs.filter((id) => !storedJobs.includes(id)), sources }
   })
 }
 

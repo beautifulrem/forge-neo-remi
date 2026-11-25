@@ -9,6 +9,7 @@ import { tabSchema } from "@/api/mock/fixtures"
 import { useSession } from "@/features/gallery/session-store"
 import { claimTabId, resetTabIdentity, TAB_CHANNEL, TAB_ID_KEY, type TabClaim } from "@/lib/tab-identity"
 import { FakeSocket } from "@/test/fake-socket"
+import { forgetCopiedRuns } from "./copied-runs"
 import { loopRunsElsewhere } from "./loop-owner"
 import { resetRestore, restoreRuns, wireRunSync } from "./restore"
 import { dispatchRun, MAX_RUNS, persistedJobs, persistedRun, persistKey, resetRunControllers, useRuns, wireRunControllers } from "./run-controller"
@@ -234,10 +235,13 @@ describe("runs a duplicated tab copied", () => {
     resetTabIdentity()
   })
 
-  /** This page load starts as the tab `id` (its session storage says so). */
-  function startAs(id: string) {
+  /**
+   * This page load starts as the tab `id` (its session storage says so). An answer comes at once,
+   * so a tab that expects one waits long; one that expects none waits briefly.
+   */
+  function startAs(id: string, { answered = false } = {}) {
     sessionStorage.setItem(TAB_ID_KEY, id)
-    resetTabIdentity({ wait: 30 })
+    resetTabIdentity({ wait: answered ? 5000 : 30 })
   }
 
   /** The tab `id` is open in another browser tab. */
@@ -262,7 +266,7 @@ describe("runs a duplicated tab copied", () => {
   // results and ran the loop.
   it("are left to the open tab it was duplicated from", async () => {
     await openElsewhere("restore-duplicated")
-    startAs("restore-duplicated")
+    startAs("restore-duplicated", { answered: true })
     sessionStorage.setItem(persistKey("txt2img"), JSON.stringify({ jobs: ["d1"], forever: true, repeatLeft: 0 }))
     sessionStorage.setItem(persistKey("img2img"), JSON.stringify({ jobs: ["d2"], forever: false, repeatLeft: 0 }))
     const ws = await socket()
@@ -284,6 +288,32 @@ describe("runs a duplicated tab copied", () => {
     send(ws, { type: "job.completed", job_id: "d1", seq: 1, status: "completed", outputs: [] })
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(create).not.toHaveBeenCalled()
+  })
+
+  // The copy took a new id at boot but dropped the runs only when a generate page restored them:
+  // a copy showing the queue kept them, and its next reload (under its new id) took them.
+  it("are dropped at boot by a copy that shows no generate page", async () => {
+    await openElsewhere("restore-copied-elsewhere")
+    startAs("restore-copied-elsewhere", { answered: true })
+    sessionStorage.setItem(persistKey("txt2img"), JSON.stringify({ jobs: ["c1"], forever: true, repeatLeft: 0 }))
+    // the copy's first page load: the boot (main.tsx), no generate page
+    await forgetCopiedRuns()
+    expect(sessionStorage.getItem(persistKey("txt2img"))).toBeNull()
+    // its next reload, the original still open
+    resetTabIdentity({ wait: 30 })
+    resetRestore()
+    const get = serverJobs({ c1: job("c1", "running") })
+    await restoreRuns()
+    expect(get).not.toHaveBeenCalled()
+    expect(useProgress.getState().owned).toEqual({})
+    expect(useRuns.getState().runs.txt2img).toMatchObject({ jobs: [], forever: false })
+  })
+
+  it("are kept at boot by a reload of the same tab", async () => {
+    startAs("restore-kept-at-boot")
+    sessionStorage.setItem(persistKey("txt2img"), JSON.stringify({ jobs: ["k1"], forever: false, repeatLeft: 0 }))
+    await forgetCopiedRuns()
+    expect(persistedJobs("txt2img")).toEqual(["k1"])
   })
 })
 

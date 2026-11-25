@@ -194,21 +194,36 @@ describe("extras jobs a page load left in flight", () => {
     vi.restoreAllMocks()
   })
 
-  /** A new page load of the tab `id`, whose session storage names `jobs` in flight. */
-  async function loadPage(id: string, jobs: string[]) {
+  /** The tab `id`'s session storage names `jobs` in flight. */
+  function store(id: string, jobs: string[]) {
     sessionStorage.setItem(TAB_ID_KEY, id)
     sessionStorage.setItem("remi-extras-runs", JSON.stringify({ state: { results: [], jobs, sources: Object.fromEntries(jobs.map((job) => [job, null])) }, version: 1 }))
+  }
+
+  /**
+   * A new page load of the tab, with the session storage the last one left. An answer comes at
+   * once, so a tab that expects one waits long; one that expects none waits briefly.
+   */
+  async function loadPage({ answered = false } = {}) {
     vi.resetModules()
     const identity = await import("@/lib/tab-identity")
-    identity.resetTabIdentity({ wait: 30 })
+    identity.resetTabIdentity({ wait: answered ? 5000 : 30 })
     const run = await import("./run")
     const { useProgress: progress } = await import("@/api/progress")
     return { run, progress, identity }
   }
 
+  /** The tab `id` is open in another browser tab. */
+  async function openElsewhere(id: string) {
+    const storage = new Map([[TAB_ID_KEY, id]])
+    original = claimTabId({ storage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => void storage.set(key, value) }, channel: new BroadcastChannel(TAB_CHANNEL), wait: 10 })
+    expect(await original.owned).toBe(true)
+  }
+
   it("are followed again after a reload of the same tab", async () => {
     const calls = mockFetch(() => [200, { id: "e1", status: "running", outputs: [] }])
-    const { run, progress, identity } = await loadPage("extras-reloaded", ["e1"])
+    store("extras-reloaded", ["e1"])
+    const { run, progress, identity } = await loadPage()
     try {
       run.wireExtrasRuns()
       await vi.waitFor(() => expect(calls.map((call) => call.path)).toContain("/jobs/e1"))
@@ -221,15 +236,39 @@ describe("extras jobs a page load left in flight", () => {
 
   // Duplicating a tab copies its session storage: both tabs followed the job and kept its result.
   it("are left to the open tab a duplicated tab copied them from", async () => {
-    const storage = new Map([[TAB_ID_KEY, "extras-duplicated"]])
-    original = claimTabId({ storage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => void storage.set(key, value) }, channel: new BroadcastChannel(TAB_CHANNEL), wait: 10 })
-    expect(await original.owned).toBe(true)
+    await openElsewhere("extras-duplicated")
     const calls = mockFetch(() => [200, { id: "e2", status: "running", outputs: [] }])
-    const { run, progress, identity } = await loadPage("extras-duplicated", ["e2"])
+    store("extras-duplicated", ["e2"])
+    const { run, progress, identity } = await loadPage({ answered: true })
     try {
       run.wireExtrasRuns()
       await vi.waitFor(() => expect(run.useExtrasRuns.getState().jobs).toEqual([]))
       expect(run.useExtrasRuns.getState().sources).toEqual({})
+      expect(progress.getState().owned).toEqual({})
+      expect(calls).toEqual([])
+    } finally {
+      identity.resetTabIdentity()
+    }
+  })
+
+  // The copy dropped them only when it showed the Extras page: its next reload took them.
+  it("are dropped at boot by a copy that shows another page", async () => {
+    await openElsewhere("extras-copied-elsewhere")
+    store("extras-copied-elsewhere", ["e3"])
+    const boot = await loadPage({ answered: true })
+    try {
+      const { forgetCopiedRuns } = await import("@/features/progress/copied-runs")
+      await forgetCopiedRuns()
+    } finally {
+      boot.identity.resetTabIdentity()
+    }
+    // its next reload, the original still open
+    const calls = mockFetch(() => [200, { id: "e3", status: "running", outputs: [] }])
+    const { run, progress, identity } = await loadPage()
+    try {
+      expect(run.useExtrasRuns.getState().jobs).toEqual([])
+      run.wireExtrasRuns()
+      await new Promise((resolve) => setTimeout(resolve, 60))
       expect(progress.getState().owned).toEqual({})
       expect(calls).toEqual([])
     } finally {

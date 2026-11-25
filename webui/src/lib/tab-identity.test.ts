@@ -12,7 +12,10 @@ function memoryStorage(entries: Record<string, string> = {}) {
 
 const claims: TabClaim[] = []
 
-/** A tab starting with `storage` (a copy of another's, for a duplicated tab). */
+/**
+ * A tab starting with `storage` (a copy of another's, for a duplicated tab). An answer comes at
+ * once: a tab that expects one waits long, one that expects none briefly.
+ */
 function openTab(storage: ReturnType<typeof memoryStorage>, wait = 30) {
   const claim = claimTabId({ storage, channel: new BroadcastChannel(CHANNEL), wait })
   claims.push(claim)
@@ -41,7 +44,7 @@ describe("a tab's identity", () => {
     const original = memoryStorage({ [TAB_ID_KEY]: "tab-original" })
     expect(await openTab(original).owned).toBe(true)
     const copy = memoryStorage({ [TAB_ID_KEY]: "tab-original" })
-    const copyTab = openTab(copy)
+    const copyTab = openTab(copy, 5000)
     expect(await copyTab.owned).toBe(false)
     expect(copy.getItem(TAB_ID_KEY)).not.toBe("tab-original")
     expect(original.getItem(TAB_ID_KEY)).toBe("tab-original")
@@ -54,16 +57,17 @@ describe("a tab's identity", () => {
   it("is the original's again when the copy asks after the original has answered once", async () => {
     const original = memoryStorage({ [TAB_ID_KEY]: "tab-twice" })
     await openTab(original).owned
-    expect(await openTab(memoryStorage({ [TAB_ID_KEY]: "tab-twice" })).owned).toBe(false)
-    expect(await openTab(memoryStorage({ [TAB_ID_KEY]: "tab-twice" })).owned).toBe(false)
+    expect(await openTab(memoryStorage({ [TAB_ID_KEY]: "tab-twice" }), 5000).owned).toBe(false)
+    expect(await openTab(memoryStorage({ [TAB_ID_KEY]: "tab-twice" }), 5000).owned).toBe(false)
   })
 
   // a tab duplicated while the original reloads: both ask at once
   it("is kept by exactly one of two tabs that ask for it at the same time", async () => {
-    // the page loads' random names sort either way: a few rounds take both turns
-    for (let round = 0; round < 8; round++) {
-      const first = openTab(memoryStorage({ [TAB_ID_KEY]: `tab-race-${round}` }))
-      const second = openTab(memoryStorage({ [TAB_ID_KEY]: `tab-race-${round}` }))
+    // the page loads' random names sort either way: a few rounds take both turns (the one that
+    // keeps the id waits out the answer it does not get)
+    for (let round = 0; round < 5; round++) {
+      const first = openTab(memoryStorage({ [TAB_ID_KEY]: `tab-race-${round}` }), 300)
+      const second = openTab(memoryStorage({ [TAB_ID_KEY]: `tab-race-${round}` }), 300)
       const owned = await Promise.all([first.owned, second.owned])
       expect(owned.filter(Boolean)).toHaveLength(1)
     }

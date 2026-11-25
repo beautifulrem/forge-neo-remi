@@ -9,9 +9,9 @@ import { App } from "@/app/App"
 import { BOOT_WAIT, settleWithin } from "@/app/boot"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { AuthGate } from "@/features/auth/SignIn"
+import { forgetCopiedRuns } from "@/features/progress/copied-runs"
 import { activateLocale, i18n, initialLocale } from "@/i18n"
 import { installChunkReload } from "@/lib/chunk-reload"
-import { sessionIsOwn } from "@/lib/tab-identity"
 import "@/features/prompt-tools/register"
 import "./index.css"
 
@@ -20,9 +20,10 @@ import "./index.css"
 installChunkReload()
 
 // Whether the jobs this tab's session storage remembers are its own or the
-// copy of a tab still open (a duplicated tab); asked now, so the answer is in
-// before a page restores them, and this tab answers its copies from the start.
-void sessionIsOwn()
+// copy of a tab still open (a duplicated tab, which drops them); asked now, so
+// the answer is in before a page restores them, and this tab answers its
+// copies from the start (lib/tab-identity.ts).
+void forgetCopiedRuns().catch(() => {})
 
 const root = createRoot(document.getElementById("root")!)
 
