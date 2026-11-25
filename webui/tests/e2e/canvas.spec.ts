@@ -209,6 +209,27 @@ test.describe("image editor", () => {
     await expect(dialog).toBeHidden()
   })
 
+  // Leaving full screen dropped the focus on the page: the button that opened it is replaced while
+  // the editor is full screen, so the dialog had nothing to give the focus back to, and the next Tab
+  // went to "Skip to content".
+  test("gives the focus back to its full screen button when full screen ends", async ({ page }) => {
+    await openWithImage(page)
+    const enter = page.getByRole("button", { name: "Edit in full screen" })
+    const dialog = page.getByRole("dialog", { name: "Source image" })
+    await enter.focus()
+    await page.keyboard.press("Enter")
+    await expect(dialog).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(dialog).toBeHidden()
+    await expect(enter).toBeFocused()
+    // and from its shortcut, twice
+    await page.keyboard.press("f")
+    await expect(dialog).toBeVisible()
+    await page.keyboard.press("f")
+    await expect(dialog).toBeHidden()
+    await expect(enter).toBeFocused()
+  })
+
   test("takes its shortcuts when it appears under a resting pointer (no pointer enter)", async ({ page }) => {
     const surface = await openWithImage(page)
     await mode(page, "Inpaint").click()

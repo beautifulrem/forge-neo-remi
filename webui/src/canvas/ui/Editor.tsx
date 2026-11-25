@@ -47,6 +47,7 @@ export default function Editor(props: ImageEditorProps) {
 
   // Committed layer uploads go to whoever renders the editor now.
   const handlers = useRef({ onLayerChange: props.onLayerChange, onImageChange: props.onImageChange })
+  const group = useRef<HTMLDivElement>(null)
   useEffect(() => {
     handlers.current = { onLayerChange: props.onLayerChange, onImageChange: props.onImageChange }
   })
@@ -203,6 +204,7 @@ export default function Editor(props: ImageEditorProps) {
 
   return (
     <div
+      ref={group}
       role="group"
       aria-label={props.label ?? t("Image editor")}
       data-fill={props.fill ? "" : undefined}
@@ -223,6 +225,9 @@ export default function Editor(props: ImageEditorProps) {
       <Dialog open={maximized} onOpenChange={setMaximized}>
         <DialogContent
           showCloseButton={false}
+          // the button that opened full screen was replaced while it lasted: give the focus to the
+          // editor's own full screen button, mounted again by then (else it fell on the page)
+          finalFocus={() => group.current?.querySelector<HTMLElement>(`button[aria-label="${CSS.escape(t("Edit in full screen"))}"]`) ?? true}
           className="top-0 left-0 flex h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 gap-0 rounded-none bg-canvas p-0 pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] ring-0 sm:max-w-none"
         >
           <DialogTitle className="sr-only">{props.label ?? t("Image editor")}</DialogTitle>
