@@ -14,6 +14,7 @@ import { api } from "@/api/endpoints"
 import { navigate, type Route } from "@/app/router"
 import { HeaderSlot } from "@/app/header-slot"
 import { FitTabsList } from "@/components/FitTabsList"
+import { LoadFailed } from "@/components/LoadFailed"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsTrigger } from "@/components/ui/tabs"
@@ -116,11 +117,14 @@ function Details({ fileId }: { fileId: string }) {
   const info = useQuery({ queryKey: ["pnginfo", fileId], queryFn: ({ signal }) => api.pngInfo(fileId, signal), staleTime: Infinity })
   const [section, setSection] = useState("params")
   if (info.isPending) return <Skeleton className="h-64 w-full" />
-  if (info.isError)
+  // a failed refetch (a reconnect invalidates every query) keeps the metadata already shown
+  if (info.isError && !info.data)
     return (
-      <p role="alert" className="text-sm text-destructive">
-        {errorText(info.error, { 404: t("The image is no longer there."), 415: t("This file cannot be read as an image (or it is too large to read).") })}
-      </p>
+      <LoadFailed
+        error={info.error}
+        message={errorText(info.error, { 404: t("The image is no longer there."), 415: t("This file cannot be read as an image (or it is too large to read).") })}
+        onRetry={() => void info.refetch()}
+      />
     )
   const data = info.data
   return (

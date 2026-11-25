@@ -160,6 +160,30 @@ describe("PNG Info page", () => {
     expect(await screen.findByRole("tabpanel")).toHaveTextContent("Nothing found in the image.")
   })
 
+  // A WebSocket resync invalidates every query: a failed refetch replaced the metadata on screen
+  it("keeps the metadata shown when a refetch fails", async () => {
+    mockServer()
+    renderPage("file=cat")
+    expect(await screen.findByRole("heading", { name: "cat.png" })).toBeInTheDocument()
+    vi.mocked(globalThis.fetch).mockImplementation(async () => new Response(JSON.stringify({ detail: "gone" }), { status: 404, headers: { "Content-Type": "application/json" } }))
+    await act(() => queryClient.invalidateQueries())
+    await waitFor(() => expect(queryClient.getQueryState(["pnginfo", "cat"])?.status).toBe("error"))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+    expect(screen.getByRole("heading", { name: "cat.png" })).toBeInTheDocument()
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  it("offers a retry when the metadata cannot be read", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ detail: "boom" }), { status: 404, headers: { "Content-Type": "application/json" } }))
+    renderPage("file=cat")
+    const alert = await screen.findByRole("alert")
+    expect(alert).toHaveTextContent("The image is no longer there.")
+    vi.restoreAllMocks()
+    mockServer()
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }))
+    expect(await screen.findByRole("heading", { name: "cat.png" })).toBeInTheDocument()
+  })
+
   it("groups entries in order", () => {
     expect(groupEntries(metadata.entries).map(([group, rows]) => [group, rows.length])).toEqual([
       ["Image", 1],
