@@ -241,7 +241,10 @@ traceback, so no client (the public login form included) can flood the log.
 That holds for bodies with `1e999` or `NaN` too: the error responses encode
 non-finite numbers as text, and `/api/v2` models refuse them as values.
 `POST /sdapi/v1/options` with a setting that does not exist is a 422 that
-sets nothing (it was a `KeyError`, a 500).
+sets nothing (it was a `KeyError`, a 500). So is a changed value its
+setting's widget refuses (the wrong kind, a choice not offered): it reached
+upstream code that reads the setting as it is stored and failed there until
+the next start.
 
 Text UTF-8 cannot hold (an unpaired surrogate, which JSON can escape) is
 refused with a 422 in any JSON body, `/api/v2` and `/sdapi/v1` alike

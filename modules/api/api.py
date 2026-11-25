@@ -659,6 +659,15 @@ class Api:
         picks = {key: req.pop(key) for key in model_selection.MODEL_OPTIONS if key in req}
         if (name := picks.get("sd_model_checkpoint")) is not None and name not in sd_models.checkpoint_aliases:
             raise HTTPException(status_code=422, detail=f"unknown checkpoint: {name}"[:1000])
+        # Remi: a changed value is checked as the settings page checks it (kind, range, choices); one
+        # of the wrong kind reached upstream readers and broke them until the next start
+        from remi.server.options import check_api_values
+        from remi.ui import ValidationError
+
+        try:
+            req = check_api_values(shared.opts, req)
+        except ValidationError as error:
+            raise HTTPException(status_code=422, detail=f"invalid settings: {error}"[:1000]) from None
         set_config(req, is_api=True)  # restrict_api settings (URL fetching) stay out of the API's reach
         for key, value in picks.items():
             if value is not None:

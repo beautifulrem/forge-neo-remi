@@ -397,6 +397,13 @@ What changed underneath, and what it means for clients:
   queue's worker, and `/api/v2/interrupt` stops them.
 - `/sdapi/v1/options` cannot change settings marked "restricted"; the
   WebUI's own `PATCH /api/v2/options` can.
+- `/sdapi/v1/options` checks a changed value as `PATCH /api/v2/options`
+  does: its kind, its slider's range (a number beyond it is set to the
+  nearest end) and its fixed choices. A value it refuses answers
+  `422 {"detail": "invalid settings: …"}` naming each one, and nothing in
+  the request is set. A1111 stored any value; a client that sent, say, a
+  number where a list belongs now gets the 422. A value equal to the stored
+  one passes unchecked, so posting back what `GET` answered still works.
 - The Agent Scheduler (`/agent-scheduler/v1/*`) and Prompt Queue
   (`/prompt-queue/*`) APIs are **not** kept: use `POST /api/v2/jobs` and the
   `/api/v2/queue/*` routes. Their data is imported with

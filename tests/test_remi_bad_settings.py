@@ -1,5 +1,6 @@
 """A setting holding a value of the wrong kind (a hand-edited config.json, an
-/sdapi/v1/options write, which checks no types) reads as its default: the
+extension's assignment, an /sdapi/v1/options write before it checked values)
+reads as its default: the
 pages and the API keep working, and the settings page can set it right.
 ``remi_upload_max_mb = "x"`` made every request a 500, ``ui_tab_order = 5``
 the app's bootstrap and the settings page."""
@@ -23,8 +24,9 @@ EXTREMES = [1e303, -1e303, 1e-9]
 def _id(value):
     return repr(value)[:12]
 # Read by upstream code on these routes (modules/scripts.py, scripts_postprocessing.py, infotext_utils.py),
-# which Remi does not change: a value of the wrong kind written while the server runs still breaks them
-# until the next start repairs it (test_the_server_repairs_settings_when_it_starts).
+# which Remi does not change: a value of the wrong kind set while the server runs (an extension's assignment;
+# /sdapi/v1/options now refuses one) still breaks them until the next start repairs it
+# (test_the_server_repairs_settings_when_it_starts).
 UPSTREAM_READS = {"ui_reorder_list", "postprocessing_disable_in_extras", "sd_model_checkpoint"}
 
 

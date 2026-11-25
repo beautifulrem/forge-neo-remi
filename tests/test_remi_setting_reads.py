@@ -1,8 +1,8 @@
 """Remi reads settings through ``remi.setting_values.setting()``.
 
 A setting can hold a value of the wrong kind or out of range: a hand-edited
-config.json, an ``/sdapi/v1/options`` write (which checks no types) or an
-extension's assignment. Read as is, one such value took down a page, a route or
+config.json, an extension's assignment or, before it checked values, an
+``/sdapi/v1/options`` write. Read as is, one such value took down a page, a route or
 the server (B13-1: the extensions page with ``disabled_extensions = 5``, the
 LoRA list with a multiplier of ``10**400``, the gallery's Save, the Detail
 Daemon form). ``setting()`` reads the value as the kind of its default, within
@@ -51,6 +51,7 @@ OPTIONS_MEMBERS = {
 RAW = {
     # (path, function): why the stored value is read as it is
     ("remi/server/options.py", "coerce_values"): "compares the posted value with the stored one (an unchanged value outside stale choices is kept)",
+    ("remi/server/options.py", "check_api_values"): "skips a posted value equal to the stored one, as upstream's set_config does",
     ("remi/server/options.py", "apply_values"): "tells a setting that refused the value (its stored value unchanged) from one that took it",
     ("remi/prompt_tools/options.py", "register_tag_options"): "moves values stored under the tools' earlier names to the current ones",
     ("remi/prompt_tools/options.py", "take_legacy_translation_key"): "removes the API key an earlier version stored in the settings",

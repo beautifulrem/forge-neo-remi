@@ -577,6 +577,46 @@ def test_sdapi_refuses_text_utf8_cannot_write(webui_tmp, monkeypatch):
         services.close()
 
 
+def test_sdapi_options_checks_values_as_the_settings_page_does(webui_tmp, monkeypatch):
+    """``/sdapi/v1/options`` checks a changed value as ``PATCH /api/v2/options`` does (its
+    widget's kind, range and choices). It stored anything: a value of the wrong kind written
+    while the server ran reached upstream readers (``ui_reorder_list``, the postprocessing
+    scripts) and made the schema a 500 until the next start. A refused request sets nothing;
+    a value equal to the stored one passes as it is (a client posting back what GET answered)."""
+    from fastapi.testclient import TestClient
+
+    from modules import shared
+    from remi.jobs import run_inline
+    from remi.server import Services, create_app
+    from remi.server.auth import Auth
+
+    config = webui_tmp / "config.json"
+    monkeypatch.setattr(shared, "config_filename", str(config))
+    for key in ("jpeg_quality", "ui_reorder_list", "postprocessing_disable_in_extras", "enable_pnginfo"):
+        monkeypatch.setitem(shared.opts.data, key, shared.opts.data.get(key, shared.opts.data_labels[key].default))
+    shared.opts.save(str(config))
+    before, stored = config.read_bytes(), dict(shared.opts.data)
+    services = Services.create(webui_tmp, dispatch=run_inline, realtime=False, housekeeping=False)
+    try:
+        app = create_app(services=services, auth=Auth(), sdapi=True, start_services=False)
+        with TestClient(app, base_url="http://127.0.0.1:7860", raise_server_exceptions=False) as client:
+            refused = [({"ui_reorder_list": 5}, "ui_reorder_list"), ({"postprocessing_disable_in_extras": "x"}, "postprocessing_disable_in_extras"), ({"jpeg_quality": "high"}, "jpeg_quality"), ({"enable_pnginfo": "maybe"}, "enable_pnginfo"), ({"jpeg_quality": 90, "ui_reorder_list": 5}, "ui_reorder_list")]
+            for body, key in refused:
+                response = client.post("/sdapi/v1/options", json=body)
+                assert response.status_code == 422, (body, response.text)
+                assert key in response.json()["detail"]
+                assert config.read_bytes() == before and shared.opts.data == stored  # nothing set, nothing saved
+            assert client.post("/sdapi/v1/options", json={"jpeg_quality": 90, "enable_pnginfo": "false"}).status_code == 200
+            assert (shared.opts.data["jpeg_quality"], shared.opts.data["enable_pnginfo"]) == (90, False)  # stored as their kind
+            assert client.post("/sdapi/v1/options", json={"jpeg_quality": 1000}).status_code == 200
+            assert shared.opts.data["jpeg_quality"] == 100  # within the slider, as the settings page sets it
+            # posted back unchanged, a stored value the check would refuse passes
+            shared.opts.data["jpeg_quality"] = "legacy"
+            assert client.post("/sdapi/v1/options", json={"jpeg_quality": "legacy", "enable_pnginfo": True}).status_code == 200
+    finally:
+        services.close()
+
+
 def test_sdapi_infotext_fills_request_fields_and_script_args(webui_tmp):
     from modules.api import api, models
 
