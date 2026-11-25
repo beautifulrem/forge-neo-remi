@@ -455,3 +455,21 @@ def test_a_page_of_chains_loads_its_stages_in_one_query(tmp_path):
             store._db.set_trace_callback(None)
         assert total == 5 and {chain.id: chain for chain in items} == singly
         assert len([sql for sql in statements if "FROM stage_runs" in sql]) == 1
+
+
+def test_stages_with_non_finite_numbers_are_refused(tmp_path):
+    """JSON would store them as null (or not at all): 1e999 is refused like a recipe's."""
+
+    body = '{"name": "inf", "stages": [{"kind": "generate", "core": {"cfg_scale": 1e999}}]}'
+    with webui_state(), server_app(tmp_path, validate=lambda tab, core, scripts: None) as server:
+        headers = {"Content-Type": "application/json"}
+        template = server.client.post("/api/v2/chains/templates", content=body, headers=headers)
+        assert template.status_code == 422 and "cfg_scale" in template.json()["detail"]
+        chain = server.client.post("/api/v2/chains", content=body.replace("cfg_scale", "steps").replace('"stages"', '"run_now": false, "stages"'), headers=headers)
+        assert chain.status_code == 422
+        store = server.services.chains.store
+        assert store.list_templates() == [] and store.list_chains()[2] == 0
+        # one stored before this check still reads (json writes it as Infinity)
+        store.create_template("old", [StageSpec(kind="generate")])
+        store._db.execute("UPDATE chain_templates SET stages = ?", ('[{"kind": "generate", "core": {"cfg_scale": Infinity}}]',))
+        assert server.client.get("/api/v2/chains/templates").status_code == 200

@@ -24,6 +24,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import math
 import secrets
 import sqlite3
 import threading
@@ -181,6 +182,26 @@ class CachedStageOutput:
     infotext: str | None
     job_id: str | None
     created: float
+
+
+def _check_finite(value: Any, path: str) -> None:
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ChainError(f"{path} must not contain NaN or Infinity", status=422)
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            _check_finite(item, f"{path}.{key}")
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            _check_finite(item, f"{path}[{index}]")
+
+
+def check_stages_finite(stages: Sequence[StageSpec]) -> None:
+    """Refuse NaN and Infinity in what a chain or template stores (JSON has
+    neither: the stored stage would no longer read back as it was sent)."""
+
+    for index, spec in enumerate(stages):
+        for part in ("core", "scripts", "config"):
+            _check_finite(getattr(spec, part), f"stages[{index}].{part}")
 
 
 def _random_seed(value: Any) -> bool:
@@ -423,6 +444,7 @@ class ChainStore:
             raise ChainError("a chain requires at least one stage", status=422)
         if len(stages) > MAX_STAGES:
             raise ChainError(f"a chain may have at most {MAX_STAGES} stages", status=422)
+        check_stages_finite(stages)
         chain_id = secrets.token_hex(8)
         now = time.time()
         clean_name = (name or "").strip()[:200] or f"Pipeline {chain_id[:6]}"
@@ -518,6 +540,7 @@ class ChainStore:
     def replace_stages(self, chain_id: str, stages: Sequence[StageSpec]) -> None:
         if not stages or len(stages) > MAX_STAGES:
             raise ChainError(f"stages count must be between 1 and {MAX_STAGES}", status=422)
+        check_stages_finite(stages)
         with self._transaction():
             self._db.execute("DELETE FROM stage_runs WHERE chain_id = ?", (chain_id,))
             self._insert_stages(chain_id, stages)
@@ -711,6 +734,7 @@ class ChainStore:
             raise ChainError("template name is required", status=422)
         if not stages or len(stages) > MAX_STAGES:
             raise ChainError(f"template must contain 1..{MAX_STAGES} stages", status=422)
+        check_stages_finite(stages)
         template_id = secrets.token_hex(8)
         now = time.time()
         clean_tags = list(dict.fromkeys(str(t).strip() for t in tags if str(t).strip()))
