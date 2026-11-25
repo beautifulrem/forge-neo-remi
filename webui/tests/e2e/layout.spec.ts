@@ -985,3 +985,57 @@ test.describe("overlays on a phone held sideways", () => {
     expect(await unsafe(editor)).toEqual([])
   })
 })
+
+// The comparison's frame took 60 % of the screen's height whatever its row had left: with the
+// parameters diff open (its default) it spilled out of the row over the header (the description,
+// "Side by side") and the diff, and side by side showed both images 0 px high on a phone held
+// sideways. The route sweeps never opened it.
+test.describe("the comparison fits its frame to its row", () => {
+  for (const { name, size, insets } of [
+    { name: "a laptop", size: { width: 1280, height: 720 }, insets: { top: 0, left: 0, bottom: 0, right: 0 } },
+    { name: "a phone held sideways", size: { width: 844, height: 390 }, insets: { top: 0, left: 47, bottom: 21, right: 47 } },
+  ]) {
+    test(`on ${name}`, async ({ page }) => {
+      await page.setViewportSize(size)
+      const cdp = await page.context().newCDPSession(page)
+      await cdp.send("Emulation.setSafeAreaInsetsOverride" as never, { insets } as never)
+      await page.goto("/#/gallery")
+      const tiles = page.getByRole("list", { name: "Images" }).getByRole("listitem")
+      const bulk = page.getByRole("toolbar", { name: "Selected images" })
+      for (const index of [0, 1]) {
+        await tiles.nth(index).hover()
+        await tiles.nth(index).getByRole("checkbox").click()
+        await expect(bulk).toContainText(`${index + 1} selected`)
+      }
+      await bulk.getByRole("button", { name: "Compare" }).click()
+      const dialog = page.getByRole("dialog", { name: "Compare images" })
+      const slider = dialog.getByRole("slider", { name: "Comparison divider" })
+      await expect(slider).toBeVisible()
+      await expect(dialog.getByRole("button", { name: /Parameters diff/ })).toHaveAttribute("aria-expanded", "true")
+      await page.waitForTimeout(300) // the opening zoom
+
+      // the frame stays inside its row, and nothing it would cover is hidden under it
+      const spill = await slider.evaluate((handle) => {
+        const frame = handle.parentElement!
+        const own = frame.getBoundingClientRect()
+        const row = frame.parentElement!.getBoundingClientRect()
+        return [own.top - row.top, row.bottom - own.bottom, own.left - row.left, row.right - own.right].map((gap) => Math.round(gap))
+      })
+      expect(Math.min(...spill), `frame inside its row (gaps ${spill.join(", ")})`).toBeGreaterThanOrEqual(0)
+      for (const control of [dialog.locator("[data-slot=dialog-description]"), dialog.getByRole("radio", { name: "Side by side" }), dialog.getByRole("button", { name: /Parameters diff/ })]) {
+        await control.scrollIntoViewIfNeeded()
+        const hit = await control.evaluate((element) => {
+          const box = element.getBoundingClientRect()
+          return element.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2))
+        })
+        expect(hit, `${await control.textContent()} can be clicked`).toBe(true)
+      }
+
+      // side by side: both images have room
+      await dialog.getByRole("radio", { name: "Side by side" }).click()
+      const heights = await dialog.locator("figure img").evaluateAll((images) => images.map((image) => Math.round(image.getBoundingClientRect().height)))
+      expect(heights).toHaveLength(2)
+      for (const height of heights) expect(height).toBeGreaterThanOrEqual(100)
+    })
+  }
+})

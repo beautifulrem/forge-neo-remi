@@ -36,7 +36,9 @@ export function CompareDialog({ images, onOpenChange }: CompareDialogProps) {
   const surface = backdropSurface(backdrop)
   return (
     <Dialog open={images !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[calc(94dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-[min(calc(96vw-env(safe-area-inset-left)-env(safe-area-inset-right)),1400px)] max-w-none flex-col gap-3 sm:max-w-none">
+      {/* A definite height: the images take what the header and the parameters diff leave (at least
+          10rem; a screen too short for that scrolls the dialog), and the frame fits that row. */}
+      <DialogContent className="flex h-[calc(94dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-[min(calc(96vw-env(safe-area-inset-left)-env(safe-area-inset-right)),1400px)] max-w-none flex-col gap-3 sm:max-w-none">
         <DialogHeader className="flex-row flex-wrap items-center justify-between gap-2 pr-8">
           <div className="min-w-0">
             <DialogTitle>{t("Compare images")}</DialogTitle>
@@ -62,19 +64,19 @@ export function CompareDialog({ images, onOpenChange }: CompareDialogProps) {
         {a && b ? (
           <>
             {mode === "slider" ? (
-              <div className="flex min-h-0 flex-1 items-center justify-center">
+              <div className="flex min-h-40 flex-1 items-center justify-center [container-type:size]">
                 <CompareSlider
                   before={api.fileUrl(a.id)}
                   after={api.fileUrl(b.id)}
                   beforeLabel={t("A")}
                   afterLabel={t("B")}
                   aspect={a.width && a.height ? a.width / a.height : undefined}
-                  fitHeight="60dvh"
+                  fitHeight="100cqh"
                   backdrop={backdrop}
                 />
               </div>
             ) : (
-              <div className="grid min-h-0 flex-1 grid-cols-2 gap-2">
+              <div className="grid min-h-40 flex-1 grid-cols-2 gap-2">
                 {[a, b].map((image, index) => (
                   <figure key={image.id} className="flex min-h-0 flex-col gap-1">
                     <img
