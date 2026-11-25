@@ -4,6 +4,8 @@ import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { ApiError } from "@/api/http"
 import { queryClient } from "@/api/queries"
+import { i18n } from "@/i18n"
+import zhCN from "@/locales/zh-CN.json"
 import { type Favorite, type FavoritesPage, type HistoryItem, promptToolsApi } from "../api"
 import { TEST_CONFIG } from "../testing"
 import FavoritesPanel from "./FavoritesPanel"
@@ -179,6 +181,22 @@ describe("writing a prompt", () => {
     fireEvent.change(screen.getByLabelText("Describe the image"), { target: { value: "a cat" } })
     fireEvent.click(screen.getByRole("button", { name: "Write" }))
     expect(await screen.findByRole("alert")).toHaveTextContent("Set up the service in Settings first.")
+  })
+
+  // The panel kept the failure as text in the language of the moment it failed.
+  it("says its failure again in a language picked after it", async () => {
+    vi.spyOn(promptToolsApi, "generate").mockRejectedValue(new ApiError(409, "not set up"))
+    render(<GeneratePanel {...panelProps("")} />, { wrapper })
+    fireEvent.change(screen.getByLabelText("Describe the image"), { target: { value: "a cat" } })
+    fireEvent.click(screen.getByRole("button", { name: "Write" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent("Set up the service in Settings first.")
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      expect(screen.getByRole("alert")).toHaveTextContent(zhCN["Set up the service in Settings first."])
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
   })
 })
 

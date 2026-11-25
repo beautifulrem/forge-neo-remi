@@ -1,8 +1,10 @@
 /** The settings import dialog: reads a file, validates the differences on the server, stages the valid ones. */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { ApiError, RequestError } from "@/api/http"
+import { i18n } from "@/i18n"
+import zhCN from "@/locales/zh-CN.json"
 import type { SettingsSchema } from "@/ui/schema"
 import { ImportDialog } from "./ImportExport"
 import { EXPORT_FORMAT } from "./settings-model"
@@ -82,5 +84,13 @@ describe("settings import", () => {
     render(<ImportDialog open onOpenChange={() => {}} onStaged={() => {}} />)
     upload({ format: EXPORT_FORMAT, version: 1, exported_at: "", values: { samples_save: false } })
     expect(await screen.findByRole("alert")).toHaveTextContent("The server cannot be reached.")
+    // and again in a language picked after it
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      expect(screen.getByRole("alert")).toHaveTextContent(zhCN["The server cannot be reached."])
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
   })
 })

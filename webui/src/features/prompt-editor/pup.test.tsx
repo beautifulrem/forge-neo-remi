@@ -180,6 +180,14 @@ describe("PupTrigger & lazy PupUpsamplerDialog", () => {
     await screen.findByRole("dialog", {}, { timeout: 15_000 })
     fireEvent.click(screen.getByRole("button", { name: "Upsample" }))
     expect(await screen.findByText("The service failed: local GGUF PUP execution failed: out of memory")).toBeVisible()
+    // the failure is said again in a language picked after it
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      expect(screen.getByText("服务出错：local GGUF PUP execution failed: out of memory")).toBeVisible()
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
   }, 20_000)
 
   // On a phone the footer's own row of Close and Apply (and the Revert beside it) kept DialogFooter from

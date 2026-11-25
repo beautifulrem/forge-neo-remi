@@ -27,7 +27,8 @@ export function PosePanel({ pose, busy, disabled, onApply }: PosePanelProps) {
   const id = useId()
   const initial = poseText(pose)
   const [text, setText] = useState(initial)
-  const [error, setError] = useState<string | null>(null)
+  // the problem itself, said at render: a language picked after it says it again
+  const [problem, setProblem] = useState<PoseProblem | null>(null)
   const file = useRef<HTMLInputElement>(null)
 
   const problemText = (problem: PoseProblem): string => {
@@ -45,13 +46,15 @@ export function PosePanel({ pose, busy, disabled, onApply }: PosePanelProps) {
     }
   }
 
+  const error = problem ? problemText(problem) : null
+
   const apply = (source: string) => {
     const parsed = parsePose(source)
     if (!parsed.ok) {
-      setError(problemText(parsed.problem))
+      setProblem(parsed.problem)
       return
     }
-    setError(null)
+    setProblem(null)
     onApply(parsed.pose)
   }
 

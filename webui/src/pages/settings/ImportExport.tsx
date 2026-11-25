@@ -22,11 +22,12 @@ export function ImportDialog({ open, onOpenChange, onStaged }: { open: boolean; 
   const { t, i18n } = useTranslation()
   const inputId = useId()
   const [checked, setChecked] = useState<Checked | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  // the failure itself, said at render: a language picked after it says it again
+  const [failed, setFailed] = useState<{ error: unknown } | null>(null)
   const [busy, setBusy] = useState(false)
   const reset = () => {
     setChecked(null)
-    setError(null)
+    setFailed(null)
   }
 
   const read = async (file: File) => {
@@ -48,7 +49,7 @@ export function ImportDialog({ open, onOpenChange, onStaged }: { open: boolean; 
       }
       setChecked({ plan, rejected })
     } catch (failure) {
-      setError(t(failureText(failure)))
+      setFailed({ error: failure })
     } finally {
       setBusy(false)
     }
@@ -88,10 +89,10 @@ export function ImportDialog({ open, onOpenChange, onStaged }: { open: boolean; 
             }}
           />
         </label>
-        {error ? (
+        {failed ? (
           <p role="alert" className="flex items-center gap-2 text-sm text-destructive">
             <AlertTriangle className="size-4" aria-hidden />
-            {error}
+            {t(failureText(failed.error, {}, i18n.language))}
           </p>
         ) : null}
         {checked ? (

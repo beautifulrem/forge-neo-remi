@@ -1599,8 +1599,9 @@ older server) nothing is shown.
   texts for a failed request (`errorText`, `failureText`,
   `serviceFailureText`, `renderFailureText`) take the language too; the
   error boundary's wrapper passes it to the class that renders the fallback.
-  A text a component keeps in its state when the failure happens (a dialog's
-  error line) stays in the language it was made in.
+  A component keeps the failure itself in its state, not its text (a
+  dialog's error line holds `{ error }`, the pose editor its problem), and
+  makes the text at render, so a switch says it again.
 - `src/locales/zh-CN.json` must contain every chrome key:
   `locales/locales.test.ts` scans the sources and fails on a missing key or a
   mismatched `{{placeholder}}`.

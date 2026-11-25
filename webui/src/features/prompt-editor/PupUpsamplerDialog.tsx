@@ -59,7 +59,7 @@ function ReferencePreview({ id, index }: { id: string; index: number }) {
 }
 
 export default function PupUpsamplerDialog({ open, onOpenChange, value, previousValue, onApply, onRevert, disabled }: PupUpsamplerDialogProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const id = useId()
   const { store } = useForm()
   const preset = useClientOption("forge_preset")
@@ -80,7 +80,8 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
   const [includeRatio, setIncludeRatio] = useState(true)
   const [instructions, setInstructions] = useState("")
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // the failure itself, said at render: a language picked after it says it again
+  const [failed, setFailed] = useState<{ error: unknown } | null>(null)
   const [result, setResult] = useState<PupResponse | null>(null)
   const [edited, setEdited] = useState("")
   const [editing, setEditing] = useState(false)
@@ -91,7 +92,7 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
     setLastOpen(open)
     if (open) {
       setFamily(detectedFamily)
-      setError(null)
+      setFailed(null)
       // a result for another prompt (edited since) must not be applied over this one
       if (result && result.original_prompt !== value.trim()) {
         setResult(null)
@@ -120,7 +121,7 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
     const prompt = value.trim()
     if (!prompt || busy) return
     setBusy(true)
-    setError(null)
+    setFailed(null)
     request.current?.abort()
     const controller = new AbortController()
     request.current = controller
@@ -140,7 +141,7 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
       setEditing(false)
     } catch (failure) {
       if (controller.signal.aborted) return
-      setError(serviceFailureText(failure))
+      setFailed({ error: failure })
     } finally {
       if (request.current === controller) request.current = null
       setBusy(false)
@@ -264,9 +265,9 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
             </Button>
           </div>
 
-          {error ? (
+          {failed ? (
             <p role="alert" className="text-sm text-destructive">
-              {error}
+              {serviceFailureText(failed.error, {}, i18n.language)}
             </p>
           ) : null}
 

@@ -17,23 +17,24 @@ import { PanelHeader } from "./panel"
 import { appendText, type PanelProps } from "./helpers"
 
 export default function GeneratePanel({ value, setValue, kind, disabled, close }: PanelProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const id = useId()
   const [description, setDescription] = useState("")
   const [buildOn, setBuildOn] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // the failure itself, said at render: a language picked after it says it again
+  const [failed, setFailed] = useState<{ error: unknown } | null>(null)
   const negative = kind === "negative"
 
   const run = async () => {
     if (!description.trim() || busy) return
     setBusy(true)
-    setError(null)
+    setFailed(null)
     try {
       setResult(await promptToolsApi.generate({ description: description.trim(), prompt: buildOn ? value : "", negative }))
     } catch (failure) {
-      setError(serviceFailureText(failure))
+      setFailed({ error: failure })
     } finally {
       setBusy(false)
     }
@@ -82,9 +83,9 @@ export default function GeneratePanel({ value, setValue, kind, disabled, close }
           </Button>
           <p className="text-xs text-muted-foreground">{t("Sent to the OpenAI-compatible service set up for translation.")}</p>
         </div>
-        {error ? (
+        {failed ? (
           <p role="alert" className="text-sm text-destructive">
-            {error}
+            {serviceFailureText(failed.error, {}, i18n.language)}
           </p>
         ) : null}
       </form>

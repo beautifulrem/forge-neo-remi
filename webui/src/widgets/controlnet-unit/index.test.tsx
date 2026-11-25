@@ -250,6 +250,9 @@ describe("controlnet-unit widget", { timeout: 30_000 }, () => {
       fireEvent.change(within(unit).getByRole("textbox", { name: "姿势（OpenPose JSON）" }), { target: { value: '{"canvas_width": 0, "canvas_height": 32}' } })
       fireEvent.click(within(unit).getByRole("button", { name: "应用姿势" }))
       expect(within(unit).getByText("姿势的 canvas_width 应为 1 到 4096 之间的尺寸")).toBeInTheDocument()
+      // and again in a language picked after it
+      await act(() => i18n.changeLanguage("en"))
+      expect(within(unit).getByText("The pose's canvas_width must be a size between 1 and 4096")).toBeInTheDocument()
     } finally {
       await act(() => i18n.changeLanguage("en"))
     }
