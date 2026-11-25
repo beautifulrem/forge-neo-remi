@@ -52,8 +52,10 @@ export function PreferredModules({ id, value, onChange }: { id: string; value: s
   const { t } = useTranslation()
   const models = useQuery(modelsQuery)
   const listed = (models.data?.modules ?? [...(models.data?.vae ?? []), ...(models.data?.text_encoders ?? [])]).map((m) => ({ value: m.name, label: m.title ?? m.name }))
-  // chosen files that are no longer listed stay visible so they can be removed
-  const rows = [...value.filter((name) => !listed.some((m) => m.value === name)).map((name) => ({ value: name, label: name, missing: true })), ...listed.map((m) => ({ ...m, missing: false }))]
+  // chosen files that are no longer listed stay visible so they can be removed; they are marked
+  // missing only once the list has loaded (while it loads or after it failed, nothing is known)
+  const loaded = models.data !== undefined
+  const rows = [...value.filter((name) => !listed.some((m) => m.value === name)).map((name) => ({ value: name, label: name, missing: loaded })), ...listed.map((m) => ({ ...m, missing: false }))]
   const current = clientOption("forge_additional_modules").map(fileName)
   return (
     <div className="flex flex-col gap-1.5 sm:col-span-2">
@@ -111,7 +113,6 @@ function Editor({ meta, kind, onDone }: { meta: NetworkMeta; kind: NetworkKind; 
       void queryClient.invalidateQueries({ queryKey: ["networks", "list", meta.kind] })
       void queryClient.invalidateQueries({ queryKey: ["networks", "facets", meta.kind] })
       toast.success(t("Saved"))
-      onDone()
     },
     onError: (error) => toast.error(t("Could not save the metadata"), { description: failureText(error) }),
   })
@@ -123,7 +124,9 @@ function Editor({ meta, kind, onDone }: { meta: NetworkMeta; kind: NetworkKind; 
       className="flex min-h-0 flex-1 flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
-        save.mutate()
+        // closes only while this editor is still open: a save that answers after the user moved
+        // on to another item must not close that one
+        save.mutate(undefined, { onSuccess: onDone })
       }}
     >
       <div className="-mx-4 grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto px-4 pb-1 sm:grid-cols-2">
