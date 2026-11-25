@@ -120,11 +120,11 @@ describe("pp-send widget", () => {
     const failure = vi.spyOn(toast, "error")
     // the image arrived, its mode was locked
     vi.mocked(deliver).mockResolvedValueOnce({ count: 1, locked: ["core.mode"] })
-    fireEvent.click(screen.getByRole("button", { name: "Apply PP → Send to inpaint" }))
+    fireEvent.click(screen.getByRole("button", { name: "Post-process and send to inpaint" }))
     await waitFor(() => expect(success).toHaveBeenCalledWith("Post-processed image sent to inpaint", expect.objectContaining({ description: "Overridden by a lock: Mode" })))
     // nothing arrived: the failure says why
     vi.mocked(deliver).mockResolvedValueOnce({ count: 0, locked: ["core.init_img", "core.mode"] })
-    fireEvent.click(screen.getByRole("button", { name: "Apply PP → Send to inpaint" }))
+    fireEvent.click(screen.getByRole("button", { name: "Post-process and send to inpaint" }))
     await waitFor(() => expect(failure).toHaveBeenCalledWith("Could not send the post-processed image", expect.objectContaining({ description: expect.stringMatching(/^Overridden by a lock: .+ and Mode$/) })))
   })
 
