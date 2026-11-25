@@ -157,7 +157,17 @@ imperatively).
   swallowed and the store silently starts empty (the next write then
   overwrites what was stored). Test a store's restore by seeding the
   storage and importing the module afresh (`vi.resetModules()`), not by
-  calling its `merge` directly.
+  calling its `merge` directly. What the storage holds was written by an
+  older build, by hand or by another app on the origin, so `merge` keeps
+  only what is of the store's own types: `mergeTyped` (`lib/persist.ts`),
+  with `rules` naming the values a field takes (an enum, a colour) and
+  `keepEntries` checking the items of a list or map of objects; a store
+  that restores its state its own way (the form drafts, the locale, the
+  JSON Builder) checks each field it reads as strictly.
+  `lib/persist-stores.test.ts` loads every store from damaged snapshots:
+  add a new one to its table (it fails on a module that imports zustand's
+  `persist` and is neither there nor on its list of stores tested
+  elsewhere).
 
 ## Design system
 

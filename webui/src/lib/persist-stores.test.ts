@@ -16,17 +16,24 @@ import { APPEARANCE_KEY, useAppearance } from "./theme"
 
 type Hydratable = { persist: { rehydrate: () => Promise<void> | void; getOptions: () => { name?: string } }; getState: () => object }
 
-const stores: [string, Hydratable, Storage][] = [
-  ["gallery view", useGalleryView, localStorage],
-  ["session results", useSession, sessionStorage],
-  ["extras runs", useExtrasRuns, sessionStorage],
-  ["prompt views", usePromptViews, localStorage],
-  ["networks", useNetworksUi, localStorage],
-  ["appearance", useAppearance, localStorage],
-  ["locale", useLocale, localStorage],
-  ["canvas tools", useTools, localStorage],
-  ["json builder", useBuilder, localStorage],
+/** Each persisted store: its name, the store, where it keeps its state and its module (under src/). */
+const stores: [string, Hydratable, Storage, string][] = [
+  ["gallery view", useGalleryView, localStorage, "features/library/filters.ts"],
+  ["session results", useSession, sessionStorage, "features/gallery/session-store.ts"],
+  ["extras runs", useExtrasRuns, sessionStorage, "features/extras/run.ts"],
+  ["prompt views", usePromptViews, localStorage, "features/prompt-tools/view-store.ts"],
+  ["networks", useNetworksUi, localStorage, "features/networks/store.ts"],
+  ["appearance", useAppearance, localStorage, "lib/theme.ts"],
+  ["locale", useLocale, localStorage, "i18n/index.ts"],
+  ["canvas tools", useTools, localStorage, "canvas/state/tools.ts"],
+  ["json builder", useBuilder, localStorage, "pages/custom/json-builder/store.ts"],
 ]
+
+/** Modules that persist a store tested elsewhere, and where. */
+const TESTED_ELSEWHERE: Record<string, string> = {
+  // one store per form, created on demand (no module-level store to rehydrate here)
+  "ui/form-store.ts": "form drafts: form-store.test.ts loads the defaults from damaged drafts",
+}
 
 /** Each field's kind: a damaged snapshot must leave the same kinds. */
 const kinds = (state: object) =>
@@ -48,6 +55,21 @@ describe("persisted stores", () => {
   afterEach(() => {
     localStorage.clear()
     sessionStorage.clear()
+  })
+
+  // the table was kept by hand: a store added later loaded damaged snapshots untested
+  it("are all in the table, or tested elsewhere", async () => {
+    const { readFileSync, readdirSync } = await import("node:fs")
+    const { join, sep } = await import("node:path")
+    const files = (readdirSync("src", { recursive: true }) as string[]).filter((file) => /\.tsx?$/.test(file) && !/\.test\.tsx?$/.test(file))
+    // keyed on the import: a module may have a function of its own named `persist`
+    const persisting = files
+      .filter((file) => /import\s*\{[^}]*\bpersist\b[^}]*\}\s*from\s*"zustand\/middleware"/.test(readFileSync(join("src", file), "utf8")))
+      .map((file) => file.split(sep).join("/"))
+      .sort()
+    expect(persisting.length).toBeGreaterThan(5) // the scan works
+    const listed = [...stores.map((row) => row[3]), ...Object.keys(TESTED_ELSEWHERE)].sort()
+    expect(persisting).toEqual(listed)
   })
 
   it.each(stores)("%s survives a damaged snapshot", async (_name, store, storage) => {
