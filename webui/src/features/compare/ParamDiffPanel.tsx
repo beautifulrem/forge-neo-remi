@@ -283,22 +283,23 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
                 <div className="flex flex-col gap-1.5 border-t border-border/60 pt-2">
                   <h4 className="text-xs font-medium text-foreground">{t("Active extensions")}</h4>
                   <div className="overflow-x-auto rounded-md bg-background">
-                    <table className="w-full border-collapse text-xs font-mono tabular-nums">
+                    {/* fixed: a third per column, so a long value wraps in its column instead of widening the table */}
+                    <table className="w-full table-fixed border-collapse text-xs font-mono tabular-nums">
                       <tbody className="divide-y divide-border/50">
                         {diff.extension_diffs.map((ext) => (
                           <tr key={`${ext.group}:${ext.key}`}>
-                            <td className="w-1/3 px-2.5 py-1 font-sans text-muted-foreground">
+                            <td className="w-1/3 px-2.5 py-1 font-sans text-muted-foreground [overflow-wrap:anywhere]">
                               <span className="font-mono text-[0.6875rem] text-foreground">{ext.group}</span>
                               <span className="mx-1 text-muted-foreground/50" aria-hidden>
                                 /
                               </span>
                               {ext.key}
                             </td>
-                            <td className={cn("w-1/3 px-2.5 py-1", ext.a ? "bg-diff-del-bg/60 text-diff-del" : "text-muted-foreground")}>
-                              {ext.a ?? "—"}
+                            <td className={cn("w-1/3 px-2.5 py-1 [overflow-wrap:anywhere]", ext.a ? "bg-diff-del-bg/60 text-diff-del" : "text-muted-foreground")}>
+                              {ext.a ? nameBreaks(ext.a) : "—"}
                             </td>
-                            <td className={cn("w-1/3 px-2.5 py-1", ext.b ? "bg-diff-add-bg/60 font-medium text-diff-add" : "text-muted-foreground")}>
-                              {ext.b ?? "—"}
+                            <td className={cn("w-1/3 px-2.5 py-1 [overflow-wrap:anywhere]", ext.b ? "bg-diff-add-bg/60 font-medium text-diff-add" : "text-muted-foreground")}>
+                              {ext.b ? nameBreaks(ext.b) : "—"}
                             </td>
                           </tr>
                         ))}

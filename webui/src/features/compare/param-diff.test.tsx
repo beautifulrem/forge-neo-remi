@@ -176,6 +176,28 @@ describe("RGBA 4-backdrop & CompareDialog UI", () => {
     expect(cell.closest("table")!.className.split(" ")).toContain("table-fixed")
   })
 
+  // The extensions table had an auto layout too: a long value without spaces (a model file, a
+  // prompt joined by commas) widened it and the panel scrolled sideways.
+  it("keeps a long extension value in its column", async () => {
+    const model = "an_extremely_long_adetailer_model_name_that_would_widen_the_table_v12.pt"
+    const info = (value: string) => `a cat\nSteps: 28, Seed: 1, ADetailer model: ${value}`
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CompareDialog
+          images={[
+            { id: "a1", name: "a.png", width: 832, height: 1216, infotext: info(model) },
+            { id: "b1", name: "b.png", width: 832, height: 1216, infotext: info("face_yolov8n.pt") },
+          ]}
+          onOpenChange={() => {}}
+        />
+      </QueryClientProvider>,
+    )
+    const cell = (await screen.findByText("ADetailer model")).closest("td")!.nextElementSibling as HTMLElement
+    expect(cell.textContent).toBe(model)
+    expect(cell.className).toMatch(/\[overflow-wrap:anywhere\]/)
+    expect(cell.closest("table")!.className.split(" ")).toContain("table-fixed")
+  })
+
   it("wraps model and file names between their parts, not at any letter", async () => {
     const info = (model: string) => `a cat\nSteps: 28, Seed: 1, Model: ${model}, ADetailer model: face_yolov8n.pt`
     render(
