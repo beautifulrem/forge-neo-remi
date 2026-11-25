@@ -495,6 +495,11 @@ def test_the_build_stamp_covers_every_file_the_build_reads():
     assert "tools/notices.mjs" in local
     for path in local:
         assert any(path == name or path.startswith(name + "/") for name in launch_utils.WEBUI_SOURCES), path
+    # the licence texts tools/notices.mjs reads beside itself
+    licences = sorted(f"tools/{file.name}" for file in (launch_utils.WEBUI_DIR / "tools").glob("*.LICENSE.txt"))
+    assert "tools/react-remove-scroll-bar.LICENSE.txt" in licences
+    for path in licences:
+        assert path in launch_utils.WEBUI_SOURCES, path
 
 
 @pytest.mark.parametrize(("value", "skips"), [("1", True), ("true", True), ("yes", True), ("0", False), ("false", False), ("no", False), ("off", False), ("", False)])

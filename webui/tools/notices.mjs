@@ -30,6 +30,12 @@ export function cssImportedPackages(css) {
 
 const LICENSE_FILE = /^(?:licen[cs]e|copying|notice)(?:[.-].*)?$/i
 
+/**
+ * Packages whose npm release leaves out the license file their repository has: its text, vendored
+ * beside this file (react-remove-scroll-bar: github.com/theKashey/react-remove-scroll-bar, LICENSE).
+ */
+const VENDORED_LICENSES = { "react-remove-scroll-bar": "react-remove-scroll-bar.LICENSE.txt" }
+
 /** Name, version, license and license texts of each package the bundle uses, sorted by name. */
 export async function collectNotices(ids) {
   const roots = new Set()
@@ -50,6 +56,8 @@ export async function collectNotices(ids) {
     const files = (await readdir(root)).filter((name) => LICENSE_FILE.test(name)).sort()
     const texts = []
     for (const name of files) texts.push((await readFile(path.join(root, name), "utf8")).trim())
+    const vendored = VENDORED_LICENSES[manifest.name]
+    if (texts.length === 0 && vendored) texts.push((await readFile(path.join(import.meta.dirname, vendored), "utf8")).trim())
     const license = typeof manifest.license === "string" ? manifest.license : (manifest.license?.type ?? "see the text below")
     packages.set(key, { name: manifest.name, version: manifest.version, license, texts })
   }

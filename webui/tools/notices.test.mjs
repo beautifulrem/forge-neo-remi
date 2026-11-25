@@ -1,6 +1,6 @@
 import path from "node:path"
 import { describe, expect, it } from "vitest"
-import { readFile } from "node:fs/promises"
+import { readdir, readFile } from "node:fs/promises"
 import { collectNotices, cssImportedPackages, formatNotices, packageRoot, vendoredNotices } from "./notices.mjs"
 
 const modules = path.resolve(import.meta.dirname, "../node_modules")
@@ -21,6 +21,16 @@ describe("third-party notices", () => {
     expect(notices[0].texts.join("\n")).toMatch(/Copyright \(c\) Meta Platforms/)
     const text = formatNotices(notices)
     expect(text).toContain(`react ${notices[0].version}\nLicense: MIT`)
+  })
+
+  // its npm release has no license file (its repository has one): the notice cited only package.json
+  it("takes the vendored license text of a package whose release ships none", async () => {
+    const store = path.join(modules, ".pnpm")
+    const folder = (await readdir(store)).find((name) => name.startsWith("react-remove-scroll-bar@"))
+    const root = path.join(store, folder, "node_modules/react-remove-scroll-bar")
+    const [notice] = await collectNotices([path.join(root, "dist/es2015/index.js")])
+    expect(notice).toMatchObject({ name: "react-remove-scroll-bar", license: "MIT" })
+    expect(notice.texts.join("\n")).toMatch(/Copyright \(c\) \d{4} Anton Korzunov[\s\S]*Permission is hereby granted/)
   })
 
   it("finds the packages the stylesheets import, which never reach the bundle's module list", async () => {
