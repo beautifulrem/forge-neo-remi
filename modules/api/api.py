@@ -692,7 +692,10 @@ class Api:
         from remi.ui import ParamError
 
         for key in ("forge_additional_modules", "forge_unet_storage_dtype"):  # checked as PATCH /api/v2/options checks them
-            if picks.get(key) is not None and picks[key] != shared.opts.data.get(key):  # posted back unchanged: as before
+            value, stored = picks.get(key), shared.opts.data.get(key)
+            if isinstance(value, list) and isinstance(stored, list) and all(isinstance(item, str) for item in value + stored):
+                value, stored = sorted(value), sorted(stored)  # the same modules in another order (modules_change sorts them)
+            if value is not None and value != stored:  # posted back unchanged: as before
                 try:
                     picks[key] = model_selection.check_value(key, picks[key])  # module file names, as PATCH stores them
                 except ParamError as error:

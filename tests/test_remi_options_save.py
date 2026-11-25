@@ -61,3 +61,25 @@ def test_a_deep_value_json_can_write_is_saved_whole_and_reads_back(tmp_path, mon
     monkeypatch.setitem(opts.data, "remi_test_deep", _deep(3000))
     opts.save(str(config))
     assert json.loads(config.read_text(encoding="utf-8"))["remi_test_deep"] == _deep(3000)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX modes and hard links")
+def test_a_read_only_file_still_refuses_the_save_and_a_hard_link_is_kept(tmp_path, monkeypatch, opts):
+    """Swapping a new file in replaced a ``chmod 444`` settings file (the directory allowed it),
+    where upstream's ``open(..., "w")`` refused: the file stays locked. A hard link would be cut
+    from the new file: such a file is written in place, as before."""
+    config = tmp_path / "config.json"
+    config.write_text("{}", encoding="utf-8")
+    os.chmod(config, 0o444)
+    monkeypatch.setitem(opts.data, "remi_test_value", "new")
+    with pytest.raises(PermissionError):
+        opts.save(str(config))
+    assert config.read_text(encoding="utf-8") == "{}"
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["config.json"]
+
+    os.chmod(config, 0o644)
+    other = tmp_path / "other-name.json"
+    os.link(config, other)
+    opts.save(str(config))
+    assert json.loads(other.read_text(encoding="utf-8"))["remi_test_value"] == "new"
+    assert config.stat().st_ino == other.stat().st_ino

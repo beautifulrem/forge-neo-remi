@@ -780,6 +780,10 @@ def test_sdapi_options_checks_the_model_selection_as_the_settings_page_does(webu
             response = client.post("/sdapi/v1/options", json=body)
             assert response.status_code == 200, response.text
             assert shared.opts.data["jpeg_quality"] == 67 and len(picks) == 2
+            # the same modules in another order are the same selection (modules_change sorts them)
+            monkeypatch.setitem(shared.opts.data, "forge_additional_modules", ["/gone/VAE/missing.safetensors", "/m/VAE/ae.safetensors"])
+            body = {"forge_additional_modules": ["/m/VAE/ae.safetensors", "/gone/VAE/missing.safetensors"]}
+            assert client.post("/sdapi/v1/options", json=body).status_code == 200
     finally:
         services.close()
 

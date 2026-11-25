@@ -133,12 +133,19 @@ def write_whole(filename, data: bytes):
     """Remi: ``data`` written to ``filename`` whole: into a new file next to it (next to the link's
     target for a symlink, with the file's mode), then swapped in, so a failed write or a crash leaves
     the old file. Where the swap is refused (a file bind-mounted on its own, one another process
-    holds open on Windows) the bytes, already encoded, are written in place."""
+    holds open on Windows) the bytes, already encoded, are written in place. So is a hard-linked
+    file (a new one would leave the other name behind), and a read-only one refuses the save as
+    ``open(..., "w")`` did (the directory would have let a new file in)."""
     target = os.path.realpath(filename)
     try:
-        mode = os.stat(target).st_mode & 0o777
+        status = os.stat(target)
     except OSError:
-        mode = None
+        status = None
+    if status is not None and (status.st_nlink > 1 or not os.access(target, os.W_OK)):
+        with open(target, "wb") as file:
+            file.write(data)
+        return
+    mode = status.st_mode & 0o777 if status is not None else None
     temporary = f"{target}.{uuid.uuid4().hex}.tmp"
     try:
         with open(temporary, "xb") as file:
