@@ -47,6 +47,8 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
   const [query, setQuery] = useState("")
   const search = useDebouncedValue(query.trim(), 250)
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
+  // a rename on its way takes no second Enter (it sent the same request twice)
+  const [savingName, setSavingName] = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
 
   const history = useInfiniteQuery({
@@ -78,7 +80,8 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
   }
 
   const rename = async () => {
-    if (!renaming) return
+    if (!renaming || savingName) return
+    setSavingName(true)
     try {
       // the list is grouped by this prompt: the name goes to every entry of the group
       await promptToolsApi.history.rename(renaming.id, renaming.name, field)
@@ -86,6 +89,8 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
       await refresh()
     } catch (error) {
       failed(t("Could not update the history"), error)
+    } finally {
+      setSavingName(false)
     }
   }
 
@@ -173,7 +178,7 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
                         }
                       }}
                     />
-                    <Action label={t("Save")} onClick={() => void rename()}>
+                    <Action label={t("Save")} disabled={savingName} onClick={() => void rename()}>
                       <Check />
                     </Action>
                   </form>
