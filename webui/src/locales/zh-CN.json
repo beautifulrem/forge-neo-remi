@@ -1682,5 +1682,6 @@
   "Spanish": "西班牙语",
   "LibreTranslate": "LibreTranslate",
   "DeepL": "DeepL",
-  "Page unavailable": "页面不可用"
+  "Page unavailable": "页面不可用",
+  "No generation parameters. The image's other metadata is under All metadata.": "没有生成参数。图像的其他元数据在“全部元数据”中。"
 }

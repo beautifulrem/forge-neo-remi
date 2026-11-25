@@ -143,6 +143,23 @@ describe("PNG Info page", () => {
     expect(screen.getByRole("button", { name: "Extras" })).toBeEnabled()
   })
 
+  // The Parameters tab said "Nothing found in the image." under a note that the other metadata is there
+  it("says where the other metadata is when there are no parameters, and when there is none", async () => {
+    mockServer({ infotext: null, params: {} })
+    renderPage("file=plain")
+    const parameters = await screen.findByRole("tabpanel")
+    expect(parameters).toHaveTextContent("No generation parameters. The image's other metadata is under All metadata.")
+    expect(screen.queryByText("Nothing found in the image.")).not.toBeInTheDocument()
+  })
+
+  it("says the image holds nothing when it holds nothing", async () => {
+    mockServer({ infotext: null, params: {}, entries: [] })
+    renderPage("file=bare")
+    expect(await screen.findByRole("tabpanel")).toHaveTextContent("Nothing found in the image.")
+    fireEvent.click(screen.getByRole("tab", { name: /All metadata/ }))
+    expect(await screen.findByRole("tabpanel")).toHaveTextContent("Nothing found in the image.")
+  })
+
   it("groups entries in order", () => {
     expect(groupEntries(metadata.entries).map(([group, rows]) => [group, rows.length])).toEqual([
       ["Image", 1],

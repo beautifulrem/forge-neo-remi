@@ -173,7 +173,7 @@ function Details({ fileId }: { fileId: string }) {
           </TabsTrigger>
         </FitTabsList>
         <TabsContent value="params" className="pt-2">
-          <ParametersTable params={data.params} />
+          <ParametersTable params={data.params} others={data.entries.length} />
         </TabsContent>
         <TabsContent value="entries" className="pt-2">
           <EntriesTable entries={data.entries} />

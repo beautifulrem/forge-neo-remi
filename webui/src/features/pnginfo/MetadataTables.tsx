@@ -32,9 +32,9 @@ function CopyValue({ value, label }: { value: string; label: string }) {
 }
 
 /** `label`: what the key column shows (a translated infotext key); the raw key is its tooltip. */
-function Rows({ rows, caption }: { rows: { key: string; label?: string; value: string; kind?: string }[]; caption: string }) {
+function Rows({ rows, caption, empty }: { rows: { key: string; label?: string; value: string; kind?: string }[]; caption: string; empty?: string }) {
   const { t } = useTranslation()
-  if (rows.length === 0) return <p className="px-1 py-3 text-sm text-muted-foreground">{t("Nothing found in the image.")}</p>
+  if (rows.length === 0) return <Empty text={empty ?? t("Nothing found in the image.")} />
   return (
     <table className="w-full table-fixed border-collapse text-sm">
       <caption className="sr-only">{caption}</caption>
@@ -60,15 +60,22 @@ function Rows({ rows, caption }: { rows: { key: string; label?: string; value: s
   )
 }
 
-export function ParametersTable({ params }: { params: ImageMetadata["params"] }) {
+function Empty({ text }: { text: string }) {
+  return <p className="px-1 py-3 text-sm text-muted-foreground">{text}</p>
+}
+
+/** `others`: how many other metadata entries the image has (the empty text says where they are). */
+export function ParametersTable({ params, others }: { params: ImageMetadata["params"]; others: number }) {
   const { t } = useTranslation()
   const rows = Object.entries(params).map(([key, value]) => ({ key, label: infotextKeyLabel(t, key), value }))
-  return <Rows rows={rows} caption={t("Generation parameters")} />
+  const empty = others > 0 ? t("No generation parameters. The image's other metadata is under All metadata.") : undefined
+  return <Rows rows={rows} caption={t("Generation parameters")} empty={empty} />
 }
 
 export function EntriesTable({ entries }: { entries: readonly MetadataEntry[] }) {
   const { t } = useTranslation()
   const groups = groupEntries(entries)
+  if (groups.length === 0) return <Empty text={t("Nothing found in the image.")} />
   return (
     <div className="flex flex-col gap-4">
       {groups.map(([group, rows]) => (
@@ -83,7 +90,7 @@ export function EntriesTable({ entries }: { entries: readonly MetadataEntry[] })
 
 export function ChunksTable({ chunks }: { chunks: ImageMetadata["chunks"] }) {
   const { t, i18n } = useTranslation()
-  if (chunks.length === 0) return <p className="px-1 py-3 text-sm text-muted-foreground">{t("Not a PNG file: it has no chunks.")}</p>
+  if (chunks.length === 0) return <Empty text={t("Not a PNG file: it has no chunks.")} />
   return (
     <table className="w-full border-collapse text-sm">
       <caption className="sr-only">{t("PNG chunks")}</caption>
