@@ -948,6 +948,58 @@ def test_generate_route_uses_the_openai_compatible_provider(server, webui, monke
     assert server.client.post(f"{api}/generate", json={"description": ""}).status_code == 422
 
 
+def test_a_prompt_tool_says_why_it_cannot_run_in_a_sentence_the_ui_translates(server, webui, monkeypatch):
+    """A prompt tool that cannot run (no provider, the tools off) or was given too much answered
+    its English detail alone, which the UI could only say by the status ("The text is too long."
+    for an image that was too large): it is a refused request with the sentence's template and
+    values. A service that failed (502) keeps its own answer as the detail."""
+
+    import base64
+    import io
+
+    from PIL import Image
+
+    import remi.files
+
+    api = "/api/v2/prompt-tools"
+
+    def refused(response, status, template, **params):
+        assert response.status_code == status, response.text
+        assert response.json() == {"detail": response.json()["detail"], "template": template, "params": params}
+
+    refused(server.client.post(f"{api}/translate", json={"texts": ["长发"]}), 409, "no translation provider is configured")
+    refused(server.client.post(f"{api}/generate", json={"description": "a cat"}), 409, "writing prompts needs the OpenAI-compatible translation provider with its URL and model")
+    monkeypatch.setitem(webui.opts.data, "prompt_tools_translation_provider", "dictionary")
+    refused(server.client.post(f"{api}/translate", json={"texts": ["a" * 10_001, "b" * 10_000]}), 413, "too much text to translate at once")
+    refused(
+        server.client.post(f"{api}/upsample", json={"prompt": "a cat"}),
+        409,
+        "prompt upsampling needs either an OpenAI-compatible VLM endpoint (llama.cpp / Ollama / MLX-LM / vLLM / cloud) or local_model_path",
+    )
+    monkeypatch.setitem(webui.opts.data, "prompt_tools_translation_provider", "openai")
+    monkeypatch.setitem(webui.opts.data, "prompt_tools_translation_url", "http://127.0.0.1:11434/v1")
+    monkeypatch.setitem(webui.opts.data, "prompt_tools_translation_model", "qwen")
+    refused(server.client.post(f"{api}/generate", json={"description": "a" * 3000, "prompt": "b" * 2000}), 413, "the description is too long")
+    refused(server.client.post(f"{api}/upsample", json={"prompt": "a" * 8000, "current": "b" * 5000}), 413, "the prompt is too long for upsampling")
+    monkeypatch.setattr(remi.files, "MAX_UPLOAD_PIXELS", 40 * 40 - 1)
+    with io.BytesIO() as buffer, Image.new("RGB", (40, 40), (1, 2, 3)) as image:
+        image.save(buffer, format="PNG")
+        uri = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+    refused(server.client.post(f"{api}/upsample", json={"prompt": "a cat", "reference_images": [uri]}), 413, "reference_images[{{index}}] is too large ({{width}}×{{height}})", index="0", width="40", height="40")
+
+    # the service's own answer: nothing in it to translate
+    def unreachable(*_args, **_kwargs):
+        raise TranslationError("translation service unreachable: connection refused")
+
+    monkeypatch.setattr(pt, "generate_prompt", unreachable)
+    failed = server.client.post(f"{api}/generate", json={"description": "a cat"})
+    assert failed.status_code == 502 and failed.json() == {"detail": "translation service unreachable: connection refused"}
+
+    monkeypatch.setattr(pt.registry, "group_dirs", [])
+    for path, body in (("translate", {"texts": ["cat"]}), ("generate", {"description": "a cat"}), ("upsample", {"prompt": "a cat"})):
+        refused(server.client.post(f"{api}/{path}", json=body), 409, "the prompt tools are disabled")
+
+
 def test_upsample_loads_a_local_model_path_only_without_hide_ui_dir_config(server, webui, monkeypatch):
     """``local_model_path`` names a model file or folder anywhere on the server, which the
     upsampler loads (llama-cpp, or transformers from the folder): --hide-ui-dir-config refuses

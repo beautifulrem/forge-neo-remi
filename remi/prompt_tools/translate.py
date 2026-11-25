@@ -24,6 +24,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from remi.ui.sentence import Sentence
+
 log = logging.getLogger(__name__)
 
 PROVIDERS = ("none", "dictionary", "libretranslate", "openai", "deepl")
@@ -39,7 +41,10 @@ CJK_RE = re.compile(r"[぀-ヿ㐀-䶿一-鿿가-힯豈-﫿]")
 class TranslationError(RuntimeError):
     """A prompt tool that failed, with the HTTP status that says why. A refused value (422) names
     its request field (``param``), and its ``message`` is a catalog key or a :class:`Sentence`: the
-    route lists it as a rejected value, which the UI translates."""
+    route lists it as a rejected value, which the UI translates. A tool that cannot run (409) or was
+    given too much (413) says why with a :class:`Sentence`, which the route answers as a refused
+    request. A failed service (502) says what the service answered, in English: the route passes it
+    on as it is."""
 
     def __init__(self, message: str, status: int = 502, *, param: str | None = None) -> None:
         super().__init__(message)
@@ -53,7 +58,7 @@ class GenerationInterrupted(TranslationError):
     transformers run): no answer, and no half-written one either. The upsample route answers 409
     with it; a pipeline's upsample stage ends cancelled, as an interrupted generation stage does."""
 
-    def __init__(self, message: str = "the prompt upsampling was interrupted") -> None:
+    def __init__(self, message: str = Sentence("the prompt upsampling was interrupted")) -> None:
         super().__init__(message, 409)
 
 
@@ -242,12 +247,12 @@ def generate_prompt(
     """
 
     if config.provider != "openai" or not config.enabled:
-        raise TranslationError("writing prompts needs the OpenAI-compatible translation provider with its URL and model", 409)
+        raise TranslationError(Sentence("writing prompts needs the OpenAI-compatible translation provider with its URL and model"), 409)
     description = description.strip()
     if not description:
         raise TranslationError("describe the image first", 422, param="description")
     if max_chars is not None and len(description) + len(current) > max_chars:
-        raise TranslationError("the description is too long", 413)
+        raise TranslationError(Sentence("the description is too long"), 413)
     system = instructions.strip() or (NEGATIVE_INSTRUCTIONS if negative else DEFAULT_INSTRUCTIONS)
     request = description if not current.strip() else f"Current prompt: {current.strip()}\n\nChange it as follows: {description}"
     user_content: Any = request
@@ -311,10 +316,10 @@ def translate(
     cache, then the configured network provider (in one batch)."""
 
     if not config.enabled:
-        raise TranslationError("no translation provider is configured", 409)
+        raise TranslationError(Sentence("no translation provider is configured"), 409)
     texts = [str(text) for text in texts][:MAX_TEXTS]
     if sum(len(text) for text in texts) > MAX_CHARS:
-        raise TranslationError("too much text to translate at once", 413)
+        raise TranslationError(Sentence("too much text to translate at once"), 413)
     result: dict[str, str] = dictionary_translate(texts, dictionary, target)
     if config.network:
         missing = [text for text in dict.fromkeys(texts) if text.strip() and text not in result]

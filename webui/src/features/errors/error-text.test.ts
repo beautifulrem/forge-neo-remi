@@ -248,6 +248,30 @@ describe("serviceFailureText", () => {
       await i18n.changeLanguage("en")
     }
   })
+
+  // A tool that cannot run or was given too much said only its status's sentence: "The text is too
+  // long." for a reference image that was too large. The server says why now, as a sentence the
+  // shipped catalog translates, and it comes before those.
+  it("says why a tool cannot run, in the UI language", async () => {
+    const sentence = (status: number, detail: string, template: string, params: Record<string, string> = {}) => new ApiError(status, detail, { detail, template, params })
+    const off = sentence(409, "no translation provider is configured", "no translation provider is configured")
+    const image = sentence(413, "reference_images[0] is too large (9000×9000)", "reference_images[{{index}}] is too large ({{width}}×{{height}})", { index: "0", width: "9000", height: "9000" })
+    expect(serviceFailureText(off)).toBe("no translation provider is configured")
+    expect(serviceFailureText(image)).toBe("reference_images[0] is too large (9000×9000)")
+    const catalog = JSON.parse(readFileSync(join(process.cwd(), "..", "localizations", "zh_CN.json"), "utf8")) as Record<string, string>
+    const { i18n } = await import("@/i18n")
+    for (const template of ["no translation provider is configured", "reference_images[{{index}}] is too large ({{width}}×{{height}})"]) {
+      expect(catalog[template]).toBeTruthy()
+      i18n.addResource("zh-CN", "server", template, catalog[template]!)
+    }
+    await i18n.changeLanguage("zh-CN")
+    try {
+      expect(serviceFailureText(off)).toBe(catalog["no translation provider is configured"])
+      expect(serviceFailureText(image)).toBe(catalog["reference_images[{{index}}] is too large ({{width}}×{{height}})"]!.replace("{{index}}", "0").replace("{{width}}", "9000").replace("{{height}}", "9000"))
+    } finally {
+      await i18n.changeLanguage("en")
+    }
+  })
 })
 
 // An error boundary showed a request that got no answer (the server down, a chunk that could not be

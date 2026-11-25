@@ -380,7 +380,7 @@ def prepare_reference_images(
         from remi.files import MAX_UPLOAD_PIXELS
 
         if opened.width * opened.height > MAX_UPLOAD_PIXELS:
-            raise TranslationError(f"reference_images[{idx}] is too large ({opened.width}×{opened.height})", 413)
+            raise TranslationError(Sentence("reference_images[{{index}}] is too large ({{width}}×{{height}})", index=idx, width=opened.width, height=opened.height), 413)
         opened.load()
         return opened
 
@@ -707,7 +707,7 @@ def upsample_prompt(
     if not original:
         raise TranslationError("describe the image first", 422, param="prompt")
     if len(original) + len(current or "") > _MAX_PUP_CHARS:
-        raise TranslationError("the prompt is too long for upsampling", 413)
+        raise TranslationError(Sentence("the prompt is too long for upsampling"), 413)
 
     family = (model_family or "auto").strip().lower()
     if family in ("", "auto"):
@@ -781,7 +781,7 @@ def upsample_prompt(
             backend = "openai_vlm"
             if config is None or config.provider != "openai" or not config.enabled:
                 raise TranslationError(
-                    "prompt upsampling needs either an OpenAI-compatible VLM endpoint (llama.cpp / Ollama / MLX-LM / vLLM / cloud) or local_model_path",
+                    Sentence("prompt upsampling needs either an OpenAI-compatible VLM endpoint (llama.cpp / Ollama / MLX-LM / vLLM / cloud) or local_model_path"),
                     409,
                 )
             # the whole request: its prompt is already held to _MAX_PUP_CHARS above (a cut request

@@ -853,7 +853,7 @@ def _default_upsampler(stage: StageRun, upstream_prompt: str | None, upstream_ou
 
         # the endpoint is the prompt tools' provider: off with them, as the upsample route is
         if not registry.tools_enabled:
-            raise TranslationError("the prompt tools are disabled", 409)
+            raise TranslationError(Sentence("the prompt tools are disabled"), 409)
     from remi.prompt_tools.pup import upsample_prompt
 
     res = upsample_prompt(

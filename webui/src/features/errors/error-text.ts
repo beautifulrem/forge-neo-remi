@@ -83,8 +83,9 @@ export function failureText(error: unknown, texts: StatusTexts = {}, language = 
 /**
  * A failed prompt tool (translating, writing or upsampling a prompt). A service that failed (502:
  * the translation service, the chat model, a local model) is explained only by its own answer, so
- * that answer follows a sentence in the UI language. A 413 here is text that is too long, a 409 a
- * service that is not set up.
+ * that answer follows a sentence in the UI language. A tool that cannot run (409) or was given too
+ * much (413) says why with the sentence its body carries; without one, a 413 here is text that is
+ * too long, a 409 a service that is not set up.
  */
 export function serviceFailureText(error: unknown, texts: StatusTexts = {}, language = i18n.language): string {
   const lng = language

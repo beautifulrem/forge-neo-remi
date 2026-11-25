@@ -435,9 +435,10 @@ def test_every_rejected_value_has_a_catalog_key(catalog):
 
 def test_every_refused_request_is_a_catalog_sentence(catalog):
     """An operation the server refuses says why in the UI language: its error
-    (``JobError``, ``RecipeError``, ``Refused`` and their subclasses) is a
-    ``Sentence``, whose template the HTTP error body carries and the catalog
-    translates."""
+    (``JobError``, ``RecipeError``, ``Refused`` and their subclasses, and a
+    prompt tool's ``TranslationError`` that is neither a refused value nor a
+    failed service) is a ``Sentence``, whose template the HTTP error body
+    carries and the catalog translates."""
 
     assert {"ChainError", "NetworkReadOnly"} <= strings_module.request_error_classes()
     templates, unchecked = strings_module.request_error_messages()
@@ -449,6 +450,11 @@ def test_every_refused_request_is_a_catalog_sentence(catalog):
         "{{name}} has no model file to keep metadata or a preview next to",
         "changing settings is disabled (--freeze-settings)",
         "the checkpoints are being hashed already",
+        # a prompt tool that cannot run (409) or was given too much (413)
+        "the prompt tools are disabled",
+        "no translation provider is configured",
+        "too much text to translate at once",
+        "reference_images[{{index}}] is too large ({{width}}×{{height}})",
     } <= templates
     missing = sorted(text for text in templates if not (catalog.get(text) or "").strip())
     assert missing == [], f"localizations/zh_CN.json lacks {missing}"

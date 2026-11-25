@@ -329,6 +329,8 @@ or the built-in one). Both answer 409 when the prompt tools or the provider
 are not set up, 413 when the input is too long in all (`/translate`: over
 20,000 characters; `/generate`: description and prompt together over 4,000
 characters) and 502 when the provider fails or answers something unusable.
+The 409 and 413 carry their sentence's `template` and `params`, as a refused
+operation does; a 502's `detail` is the provider's own answer, as it is.
 A field over its own limit is a 422 in FastAPI's `{"detail": [...]}` shape
 (`/translate`: over 200 texts; `/generate`: a description or prompt over
 4,000 characters); `/generate` also answers 422 for an empty description.

@@ -42,10 +42,14 @@ ToolsDep = Annotated[pt.PromptTools, Depends(tools)]
 
 def _tool_error(error: pt.TranslationError) -> Exception:
     """A failed prompt tool as its HTTP error: a refused value (422) as a rejected value, whose
-    message (a catalog key or a ``Sentence``) the UI translates; anything else as ``detail``."""
+    message (a catalog key or a ``Sentence``) the UI translates; a tool that cannot run (409) or was
+    given too much (413) as a refused request, with its ``Sentence``; a failed service (502) with
+    what the service answered as ``detail``."""
 
     if error.status == 422:
         return ValidationError([ParamError(error.message, param=error.param)])
+    if isinstance(error.message, Sentence):
+        return Refused(error.message, error.status)
     return HTTPException(status_code=error.status, detail=str(error))
 
 
@@ -403,7 +407,7 @@ def upsample(body: PromptUpsampleRequest, tools: ToolsDep, services: ServicesDep
             raise HTTPException(status_code=403, detail="local_model_path is disabled under --hide-ui-dir-config")
     elif not pt.registry.tools_enabled:
         # the endpoint is the prompt tools' provider: off with them, as translating and writing are
-        raise HTTPException(status_code=409, detail="the prompt tools are disabled")
+        raise Refused(Sentence("the prompt tools are disabled"))
 
     def run(should_stop: Callable[[], bool] | None = None) -> Any:
         return upsample_prompt(

@@ -335,22 +335,50 @@ def request_error_classes(folder: str = "remi") -> set[str]:
         found |= derived
 
 
+# Errors that name the HTTP status they answer with, each with its status when left out: a prompt tool's
+# (``TranslationError(message, status)``). The route answers one as a refused request, except a
+# refused value (422: listed under its request field, a catalog key, tests/test_remi_pup.py) and a
+# failed service (502: the service's own answer, passed on as it is)
+STATUS_ERRORS = {"TranslationError": 502}
+PASSED_ON_STATUSES = (422, 502)
+
+
+def _status(node: ast.Call, default: int) -> int | None:
+    """The status a :data:`STATUS_ERRORS` call names (its second argument or ``status=``); None when it is computed."""
+
+    arg = node.args[1] if len(node.args) > 1 else next((keyword.value for keyword in node.keywords if keyword.arg == "status"), None)
+    if arg is None:
+        return default
+    return arg.value if isinstance(arg, ast.Constant) and isinstance(arg.value, int) else None
+
+
 def request_error_messages(folder: str = "remi") -> tuple[set[str], list[str]]:
     """``(templates, unchecked)``: the ``Sentence`` templates of the refused
-    requests (:func:`request_error_classes`) and, as ``path:line``, each one
-    made with anything else: an f-string or a constant cannot carry the
-    sentence's template to the UI (the HTTP error body's ``template``)."""
+    requests (:func:`request_error_classes`, and the :data:`STATUS_ERRORS`
+    with a status other than :data:`PASSED_ON_STATUSES`) and, as
+    ``path:line``, each one made with anything else: an f-string or a
+    constant cannot carry the sentence's template to the UI (the HTTP error
+    body's ``template``). A message passed on from a caught error
+    (``error.message``) was checked where it was made."""
 
     classes = request_error_classes(folder)
     templates: set[str] = set()
     unchecked: list[str] = []
     for path in sorted((REPO / folder).rglob("*.py")):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if not isinstance(node, ast.Call) or _call_name(node) not in classes:
+            if not isinstance(node, ast.Call):
+                continue
+            name = _call_name(node)
+            if name in STATUS_ERRORS:
+                if _status(node, STATUS_ERRORS[name]) in PASSED_ON_STATUSES:
+                    continue
+            elif name not in classes:
                 continue
             arg = node.args[0] if node.args else None
             if isinstance(arg, ast.Call) and _call_name(arg) == "Sentence" and arg.args and (text := _constant(arg.args[0])):
                 templates.add(text)
+            elif isinstance(arg, ast.Attribute) and arg.attr == "message":
+                pass  # passed on from a caught error (``error.message``): checked where it was made
             else:
                 unchecked.append(f"{path.relative_to(REPO).as_posix()}:{node.lineno}")
     return templates, unchecked

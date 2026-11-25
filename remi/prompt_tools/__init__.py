@@ -30,6 +30,7 @@ from remi.prompt_tools.sources import ChantIndex, WildcardCache, network_items, 
 from remi.prompt_tools.store import PromptToolsStore, StoreError
 from remi.prompt_tools.tags import FrequencyConfig, IndexCache, TagFiles, TagIndex, TagMatch, rank, tag_key, usage_bias
 from remi.prompt_tools.translate import ProviderConfig, TranslationError, generate_prompt, translate
+from remi.ui.sentence import Sentence
 
 __all__ = ["PromptTools", "StoreError", "TranslationError", "attach", "register_tag_data", "register_tool_data", "tools_for", "unregister_tag_data", "unregister_tool_data"]
 
@@ -540,7 +541,7 @@ class PromptTools:
 
     def translate(self, texts: Sequence[str], target: str) -> list[str | None]:
         if not registry.tools_enabled:
-            raise TranslationError("the prompt tools are disabled", 409)
+            raise TranslationError(Sentence("the prompt tools are disabled"), 409)
         config = self.translation_config()
         language = display_language()
         dictionary: dict[str, str] = {}
@@ -562,7 +563,7 @@ class PromptTools:
         translation provider (Prompt All-in-One's "ChatGPT prompt")."""
 
         if not registry.tools_enabled:
-            raise TranslationError("the prompt tools are disabled", 409)
+            raise TranslationError(Sentence("the prompt tools are disabled"), 409)
         instructions = str(opt.option("prompt_tools_generate_instructions") or "")
         if not instructions.strip() and not negative and _flux3_loaded():
             # FLUX.3 is trained on its prompt upsampler's long captions: write one (any OpenAI-compatible

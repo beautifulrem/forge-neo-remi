@@ -1140,5 +1140,13 @@
   "a collection name must be at most {{maximum}} characters": "收藏夹名称不能超过 {{maximum}} 个字符",
   "the prompt upsampling was interrupted": "提示词扩写已中止",
   "requires Remi {{required}} or newer; this is Remi {{running}}": "需要 Remi {{required}} 或更新版本；当前为 Remi {{running}}",
-  "requires remi.ui API {{required}}, but runtime provides {{current}}": "需要 remi.ui API {{required}}，但当前运行的是 {{current}}"
+  "requires remi.ui API {{required}}, but runtime provides {{current}}": "需要 remi.ui API {{required}}，但当前运行的是 {{current}}",
+  "the prompt tools are disabled": "提示词工具未启用",
+  "no translation provider is configured": "尚未在设置中选择翻译服务",
+  "too much text to translate at once": "一次要翻译的文本过多",
+  "writing prompts needs the OpenAI-compatible translation provider with its URL and model": "撰写提示词需要在设置中将翻译服务设为 OpenAI 兼容接口，并填写其地址和模型",
+  "the description is too long": "描述过长",
+  "the prompt is too long for upsampling": "提示词过长，无法扩写",
+  "prompt upsampling needs either an OpenAI-compatible VLM endpoint (llama.cpp / Ollama / MLX-LM / vLLM / cloud) or local_model_path": "提示词扩写需要 OpenAI 兼容的 VLM 接口（llama.cpp / Ollama / MLX-LM / vLLM / 云服务）或本地模型路径（local_model_path）",
+  "reference_images[{{index}}] is too large ({{width}}×{{height}})": "reference_images[{{index}}] 的图像过大（{{width}}×{{height}}）"
 }
