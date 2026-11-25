@@ -14,7 +14,7 @@ Run in `webui/`:
 
 | command | what it does |
 |---|---|
-| `pnpm dev` | Vite dev server; proxies `/api` (incl. WS), `/sdapi`, `/files` to `REMI_BACKEND` (default `http://127.0.0.1:7860`) |
+| `pnpm dev` | Vite dev server; proxies `/api` (incl. WS), `/sdapi`, `/internal` (the server's API prefixes) to `REMI_BACKEND` (default `http://127.0.0.1:7860`) |
 | `pnpm dev:mock` | No backend: `vite --mode mock` (`.env.mock` sets `VITE_MOCK=1`; `VITE_MOCK=1` in the environment does the same in any mode), API answered in the browser from fixtures, jobs simulated with live previews |
 | `pnpm build` | `tsc -b` then the production build into `webui/dist` (served by the Python server) |
 | `pnpm preview` | serves the built `webui/dist` (Vite preview, port 4173) with the same proxies as `pnpm dev`: the production bundle against a running server |

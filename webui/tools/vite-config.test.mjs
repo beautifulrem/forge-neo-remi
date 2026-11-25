@@ -53,6 +53,16 @@ describe("the dev server", () => {
     else process.env.VITE_MOCK = saved
   })
 
+  // the SPA pings /internal/ping (endpoints.ts, server-control.ts); the server has no top-level /files
+  it("proxies to the WebUI server exactly the prefixes the server keeps for its APIs", async () => {
+    const spa = readFileSync(path.resolve(webui, "../remi/server/spa.py"), "utf8")
+    const prefixes = /^API_PREFIXES = \(([^)]*)\)/m.exec(spa)[1].match(/"[^"]+"/g).map((quoted) => JSON.parse(quoted).replace(/\/$/, ""))
+    expect(prefixes).toContain("/internal")
+    const { proxy } = (await serveConfig("development")).server
+    expect(Object.keys(proxy).sort()).toEqual([...prefixes].sort())
+    expect(proxy["/api"]).toMatchObject({ ws: true })
+  })
+
   // `VITE_MOCK=1 vite` is POSIX shell syntax: Windows' cmd.exe cannot run it
   it("runs every package script in any shell: no NAME=value prefix", () => {
     const posixEnv = Object.entries(manifest.scripts).filter(([, command]) => /^\s*[A-Z_][A-Z0-9_]*=\S*\s/.test(command))

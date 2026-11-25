@@ -233,7 +233,8 @@ export default defineConfig(({ mode }) => {
         : {
             "/api": { target: backend, ws: true },
             "/sdapi": backend,
-            "/files": backend,
+            // the server's ping (Reload UI / restart wait for it); the prefixes of remi/server/spa.py API_PREFIXES
+            "/internal": backend,
           },
     },
     experimental: {
