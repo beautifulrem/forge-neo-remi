@@ -6,6 +6,7 @@ setting. ``modules/options.py`` is upstream's (upstream-absorption.md §1.2)."""
 import json
 import os
 import sys
+import time
 
 import pytest
 
@@ -83,3 +84,46 @@ def test_a_read_only_file_still_refuses_the_save_and_a_hard_link_is_kept(tmp_pat
     opts.save(str(config))
     assert json.loads(other.read_text(encoding="utf-8"))["remi_test_value"] == "new"
     assert config.stat().st_ino == other.stat().st_ino
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX owners and groups")
+def test_a_save_keeps_the_files_owner_and_group(tmp_path, monkeypatch, opts):
+    """A new file swapped in belongs to the process: a settings file of another group (one shared
+    with another account) or of another user changed hands at every save, where upstream's
+    ``open(..., "w")`` kept them. The new file is given them, or the file is written in place when
+    it cannot be (another user's file)."""
+    config = tmp_path / "config.json"
+    config.write_text("{}", encoding="utf-8")
+    groups = [gid for gid in os.getgroups() if gid != config.stat().st_gid]
+    if not groups:
+        pytest.skip("the user is in one group only")
+    os.chown(config, -1, groups[0])
+    monkeypatch.setitem(opts.data, "remi_test_value", "new")
+    opts.save(str(config))
+    assert config.stat().st_gid == groups[0] and json.loads(config.read_text(encoding="utf-8"))["remi_test_value"] == "new"
+
+    def refused(*args, **kwargs):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(os, "chown", refused)  # as for a file of another user
+    inode = config.stat().st_ino
+    monkeypatch.setitem(opts.data, "remi_test_value", "newer")
+    opts.save(str(config))
+    assert config.stat().st_ino == inode and config.stat().st_gid == groups[0]
+    assert json.loads(config.read_text(encoding="utf-8"))["remi_test_value"] == "newer"
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["config.json"]
+
+
+def test_a_temporary_file_a_crash_left_is_removed_at_the_next_save(tmp_path, opts):
+    config = tmp_path / "config.json"
+    config.write_text("{}", encoding="utf-8")
+    stale = tmp_path / f"config.json.{'a' * 32}.tmp"
+    under_way = tmp_path / f"config.json.{'b' * 32}.tmp"  # another process's save, still being written
+    other = tmp_path / "config.json.backup.tmp"
+    for path in (stale, under_way, other):
+        path.write_text("{", encoding="utf-8")
+    hour_ago = time.time() - 3600
+    os.utime(stale, (hour_ago, hour_ago))
+    os.utime(other, (hour_ago, hour_ago))
+    opts.save(str(config))
+    assert sorted(path.name for path in tmp_path.iterdir()) == sorted(["config.json", under_way.name, other.name])

@@ -1,7 +1,9 @@
 import contextlib
 import json
 import os
+import re
 import sys
+import time
 import uuid
 from dataclasses import dataclass
 
@@ -135,8 +137,12 @@ def write_whole(filename, data: bytes):
     the old file. Where the swap is refused (a file bind-mounted on its own, one another process
     holds open on Windows) the bytes, already encoded, are written in place. So is a hard-linked
     file (a new one would leave the other name behind), and a read-only one refuses the save as
-    ``open(..., "w")`` did (the directory would have let a new file in)."""
+    ``open(..., "w")`` did (the directory would have let a new file in). The new file gets the old
+    one's owner and group; where it cannot (another user's file) the file is written in place, as
+    upstream did, rather than change hands. A new file a crash left behind is removed at the next
+    save."""
     target = os.path.realpath(filename)
+    _remove_stale_temporaries(target)
     try:
         status = os.stat(target)
     except OSError:
@@ -152,6 +158,10 @@ def write_whole(filename, data: bytes):
             file.write(data)
             file.flush()
             os.fsync(file.fileno())
+        if status is not None and hasattr(os, "chown"):
+            created = os.stat(temporary)
+            if (created.st_uid, created.st_gid) != (status.st_uid, status.st_gid):
+                os.chown(temporary, status.st_uid, status.st_gid)  # refused for another user's file
         if mode is not None:
             os.chmod(temporary, mode)
         os.replace(temporary, target)
@@ -160,6 +170,21 @@ def write_whole(filename, data: bytes):
             os.remove(temporary)
         with open(target, "wb") as file:
             file.write(data)
+
+
+_STALE_AFTER = 60.0
+"""Seconds after which a new file of ``write_whole`` was left by a crash, not a save under way."""
+
+
+def _remove_stale_temporaries(target: str) -> None:
+    folder, name = os.path.split(target)
+    pattern = re.compile(re.escape(name) + r"\.[0-9a-f]{32}\.tmp")
+    with contextlib.suppress(OSError), os.scandir(folder or ".") as entries:
+        for entry in entries:
+            if pattern.fullmatch(entry.name):
+                with contextlib.suppress(OSError):
+                    if entry.is_file(follow_symlinks=False) and time.time() - entry.stat(follow_symlinks=False).st_mtime > _STALE_AFTER:
+                        os.remove(entry.path)
 
 
 class Options:
