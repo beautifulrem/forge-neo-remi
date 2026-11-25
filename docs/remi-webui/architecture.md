@@ -552,7 +552,8 @@ client has a bounded event queue and one preview slot.
   routes, with `window.__REMI_ROOT__` and prefixed asset URLs under
   `--subpath`. `launch.py` builds it when missing or when its sources or
   lockfile changed since the build (a stamp in `dist/`), with pnpm and the
-  lockfile (installed pnpm, corepack, or `npx pnpm@12`; without Node a
+  lockfile (installed pnpm, corepack, or `npx pnpm@12`, each switching to the
+  exact pnpm `webui/package.json` pins in `packageManager`; without Node a
   stale build is used with a warning; `REMI_SKIP_WEBUI_BUILD=1` skips).
 
 ## Frontend

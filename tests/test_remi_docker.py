@@ -10,6 +10,7 @@ and leaves Gradio-era files (``ui-config.json``) out.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
@@ -80,6 +81,11 @@ def test_pytorch_and_pnpm_follow_the_launcher():
     packages = arg_default("TORCH_PACKAGES")
     assert f"pip install {packages} --extra-index-url {arg_default('TORCH_INDEX_URL')}" == command
     assert f"pnpm@{arg_default('PNPM_VERSION')}" == launch_utils.PNPM_FALLBACK
+    # the SPA pins the exact pnpm (corepack and pnpm itself switch to it); the fallback names its major
+    pinned = json.loads((ROOT / "webui" / "package.json").read_text(encoding="utf-8")).get("packageManager", "")
+    match = re.fullmatch(r"pnpm@(\d+)\.\d+\.\d+", pinned)
+    assert match, f"webui/package.json packageManager: {pinned!r}"
+    assert f"pnpm@{match[1]}" == launch_utils.PNPM_FALLBACK
     # a floating major tag: the newest release of that major
     assert launch_utils.node_version_problem(f"v{arg_default('NODE_VERSION')}.99.0") is None
     # the image ships the build: the launcher must not try to rebuild it without Node.js

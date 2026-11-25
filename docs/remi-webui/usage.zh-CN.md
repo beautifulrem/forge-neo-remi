@@ -129,7 +129,7 @@ export COMMANDLINE_ARGS="--uv"
 
 ### 网页界面的构建
 
-界面是从 `webui/` 构建到 `webui/dist` 的静态应用。启动器（`launch.py`，由 `webui.sh` / `webui-user.bat` 调用）会在 `webui/dist` 缺失或比源码旧时自动构建：即首次克隆后，以及每次改动了 `webui/` 的更新之后。它使用找到的 pnpm（已安装的 pnpm，其次 Corepack，最后 `npx pnpm@12`）执行 `pnpm install --frozen-lockfile` 和 `pnpm build`，并为构建结果打上标记，源码未变时不会重复构建。
+界面是从 `webui/` 构建到 `webui/dist` 的静态应用。启动器（`launch.py`，由 `webui.sh` / `webui-user.bat` 调用）会在 `webui/dist` 缺失或比源码旧时自动构建：即首次克隆后，以及每次改动了 `webui/` 的更新之后。它使用找到的 pnpm（已安装的 pnpm，其次 Corepack，最后 `npx pnpm@12`；无论哪一种，都会运行 `webui/package.json` 固定的那个 pnpm 版本）执行 `pnpm install --frozen-lockfile` 和 `pnpm build`，并为构建结果打上标记，源码未变时不会重复构建。
 
 机器上没有 Node.js 时：
 

@@ -129,7 +129,7 @@ See the upstream [Unix installation guide](https://github.com/Haoming02/sd-webui
 
 ### The web interface build
 
-The interface is a static app built from `webui/` into `webui/dist`. The launcher (`launch.py`, run by `webui.sh` / `webui-user.bat`) builds it automatically when `webui/dist` is missing or older than its sources: after a fresh clone and after every update that touched `webui/`. It runs `pnpm install --frozen-lockfile` and `pnpm build` with the pnpm it finds (installed pnpm, then Corepack, then `npx pnpm@12`), and stamps the build so unchanged sources are not rebuilt.
+The interface is a static app built from `webui/` into `webui/dist`. The launcher (`launch.py`, run by `webui.sh` / `webui-user.bat`) builds it automatically when `webui/dist` is missing or older than its sources: after a fresh clone and after every update that touched `webui/`. It runs `pnpm install --frozen-lockfile` and `pnpm build` with the pnpm it finds (installed pnpm, then Corepack, then `npx pnpm@12`; each one runs the exact pnpm version that `webui/package.json` pins), and stamps the build so unchanged sources are not rebuilt.
 
 Without Node.js on the machine:
 
