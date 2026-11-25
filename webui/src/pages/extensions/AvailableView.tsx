@@ -10,6 +10,7 @@ import { useVirtualizer } from "@tanstack/react-virtual"
 import { Check, Download, ExternalLink, Loader2, PackageSearch, Search, Star } from "@/components/icons"
 import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useRouteParams, useRouteSearch } from "@/app/route-params"
+import type { TFunction } from "i18next"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
@@ -43,6 +44,14 @@ import {
 import { extensionKeys, installedQuery } from "./queries"
 import { safeUrl } from "@/ui/rich-text"
 
+/**
+ * A tag's description: the index's own as it is, except "installed", which the server adds
+ * (`remi.extensions_admin`) and the SPA translates.
+ */
+function tagTitle(tag: string, tags: Record<string, string>, t: TFunction): string | undefined {
+  return tag === "installed" ? t("extensions that are already installed") : tags[tag] || undefined
+}
+
 function EntryRow({ entry, tags, access, installing, onInstall }: { entry: IndexEntry; tags: Record<string, string>; access: boolean; installing: boolean; onInstall: () => void }) {
   const { t, i18n } = useTranslation()
   const updated = formatDate(entry.commit_time, i18n.language)
@@ -56,7 +65,7 @@ function EntryRow({ entry, tags, access, installing, onInstall }: { entry: Index
         {entry.description ? <p title={entry.description} className="mt-0.5 line-clamp-2 text-[0.8rem] text-muted-foreground">{entry.description}</p> : null}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           {entryTags(entry).map((tag) => (
-            <Badge key={tag} variant="outline" className="h-4.5 px-1.5 text-[0.6875rem] font-normal" title={tags[tag] || undefined}>
+            <Badge key={tag} variant="outline" className="h-4.5 px-1.5 text-[0.6875rem] font-normal" title={tagTitle(tag, tags, t)}>
               {tag}
             </Badge>
           ))}
@@ -354,7 +363,7 @@ export function AvailableView() {
                     else next.delete(tag)
                     setParams({ tags: [...next].sort().join(",") })
                   }}
-                  title={index.data.tags[tag] || undefined}
+                  title={tagTitle(tag, index.data.tags, t)}
                   className={cn("h-6 px-2 text-xs", tagSet.has(tag) && tagMode === "hide" && "line-through")}
                 >
                   {tag}

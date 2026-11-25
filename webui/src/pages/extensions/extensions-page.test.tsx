@@ -6,6 +6,7 @@ import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
 import { queryClient } from "@/api/queries"
 import { i18n } from "@/i18n"
+import zhCN from "@/locales/zh-CN.json"
 import ExtensionsPage from "./index"
 import type { ConfigStateDetail, ExtensionIndex, ExtensionInfo, ExtensionList } from "./extensions-model"
 
@@ -353,6 +354,26 @@ describe("available extensions", { timeout: 20_000 }, () => {
     fireEvent.click(load)
     expect(await screen.findByText("Nothing matches")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Clear filters" })).toBeNull()
+  })
+
+
+  // The "installed" tag is Remi's own, not the index's: its description showed in English in every language.
+  it("describes the installed tag in the user's language", async () => {
+    vi.spyOn(api.extensions, "index").mockResolvedValue({ ...indexOf(20), tags: { script: "scripts", installed: "extensions that are already installed" } })
+    renderPage("tab=available")
+    const load = await screen.findByRole("button", { name: "Load index" }, { timeout: 8000 })
+    await waitFor(() => expect(load).toBeEnabled())
+    fireEvent.click(load)
+    const installed = await screen.findByRole("button", { name: "installed" })
+    expect(installed).toHaveAttribute("title", "extensions that are already installed")
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      expect(screen.getByRole("button", { name: "installed" })).toHaveAttribute("title", "已安装的扩展")
+      expect(screen.getByRole("button", { name: "script" })).toHaveAttribute("title", "scripts") // the index's own descriptions stay as they are
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
   })
 
   // When the extension list failed, the tab showed a disabled, empty URL field and nothing else.
