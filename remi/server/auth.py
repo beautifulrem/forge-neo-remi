@@ -237,7 +237,8 @@ class Auth:
             return None
         if expiry < (now or time.time()) or user not in self.credentials:
             return None
-        if not hmac.compare_digest(signature, self._signature(user, expiry)):
+        # compare_digest raises on non-ASCII text: a forged cookie is refused, not a 500 before any route
+        if not signature.isascii() or not hmac.compare_digest(signature, self._signature(user, expiry)):
             return None
         return None if signature in self._revocations() else user
 

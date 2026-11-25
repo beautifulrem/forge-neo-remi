@@ -341,3 +341,12 @@ def test_websocket_with_a_session_cookie(locked):
 
 
 # endregion
+
+
+def test_a_session_cookie_signed_with_non_ascii_bytes_is_refused_not_a_server_error(locked):
+    # compare_digest raised on non-ASCII text: with such a cookie (a sibling subdomain can set one)
+    # every request was a 500 before any route, the sign-in status and logout included
+    user = base64.urlsafe_b64encode(b"ann").decode().rstrip("=")
+    cookie = b"remi_session=" + f"{user}.{int(time.time()) + 3600}.".encode() + b"\xe9" * 43
+    for method, path, status in (("GET", "/api/v2/queue", 401), ("GET", "/api/v2/auth/status", 200), ("POST", "/api/v2/auth/logout", 204)):
+        assert locked.client.request(method, path, headers=[(b"cookie", cookie)]).status_code == status, path
