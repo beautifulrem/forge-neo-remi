@@ -137,8 +137,13 @@ def _as_stored(key: str, value: Any) -> Any:
 
 def select(key: str, value: Any, apply: Callable[[str, Any], bool] | None = None) -> bool:
     """Select ``value`` for the model option ``key``; ``True`` when the
-    selection the settings show changed (applied now, or held)."""
+    selection the settings show changed (applied now, or held). A frozen
+    setting (``--freeze-settings*``) raises ``AssertionError``, as
+    ``Options.set`` does, also when the pick would be held: the waiter's
+    later apply failed there, only logged, after the request had answered
+    as if it worked."""
 
+    _check_not_frozen(key)
     lock = _generation_lock()
     if lock.acquire(blocking=False):
         try:
@@ -153,6 +158,15 @@ def select(key: str, value: Any, apply: Callable[[str, Any], bool] | None = None
         _start_waiter()
     log.info("Model selection %s=%r held until the running generation ends", key, value)
     return True
+
+
+def _check_not_frozen(key: str) -> None:
+    from modules import shared
+    from remi.setting_values import frozen_reason
+
+    reason = frozen_reason(shared.opts, key, shared.cmd_opts)
+    if reason is not None:
+        raise AssertionError(f"not possible to set '{key}': {reason}")
 
 
 def held() -> dict[str, Any]:

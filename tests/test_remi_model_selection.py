@@ -136,6 +136,32 @@ def test_sdapi_options_hold_the_pick_too(applied, monkeypatch):
         api.set_config({"sd_model_checkpoint": "missing.safetensors"})
 
 
+@pytest.mark.parametrize(("flag", "value"), [("freeze_settings", True), ("freeze_specific_settings", "sd_model_checkpoint"), ("freeze_settings_in_sections", "sd")])
+def test_a_frozen_model_setting_is_refused_also_while_a_job_runs(applied, monkeypatch, flag, value):
+    """A pick made during a generation was held without the freeze check: the request
+    answered as if it had worked, and the waiter's apply failed later, only logged."""
+
+    from fastapi import FastAPI
+
+    from modules import sd_models, shared
+    from modules.api.api import Api
+    from modules.call_queue import queue_lock
+
+    monkeypatch.setattr(model_selection, "_start_waiter", lambda: None)
+    monkeypatch.setattr(sd_models, "checkpoint_aliases", {"second.safetensors": object()})
+    monkeypatch.setattr(shared.cmd_opts, flag, value)
+    assert shared.opts.data_labels["sd_model_checkpoint"].section[0] == "sd"
+    with queue_lock:
+        with pytest.raises(AssertionError, match=r"frozen|disabled"):
+            model_selection.select("sd_model_checkpoint", "second.safetensors")
+        with pytest.raises(AssertionError):
+            Api(FastAPI(), queue_lock).set_config({"sd_model_checkpoint": "second.safetensors"})
+    assert model_selection.held() == {} and applied == []
+    with pytest.raises(AssertionError):  # and with the lock free, as Options.set refuses it
+        model_selection.select("sd_model_checkpoint", "second.safetensors")
+    assert applied == []
+
+
 def test_held_picks_reach_the_model_manager_as_it_stores_them(webui, monkeypatch, tmp_path):
     """The real main_entry functions (not a faked ``_apply_now``): a modules pick held during a
     generation is shown as the sorted paths modules_change stores, and applying the held picks
