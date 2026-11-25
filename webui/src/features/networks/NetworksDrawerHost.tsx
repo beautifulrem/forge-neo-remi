@@ -87,7 +87,8 @@ export function NetworksDrawerHost({ tab }: { tab: GenerateTab }) {
           aria-keyshortcuts="Alt+N"
           title={`${label} (${formatShortcut(NETWORKS_SHORTCUT)})`}
           onClick={() => toggle(!open)}
-          className={cn("gap-1.5", PRESSED_TINT_CLASS)}
+          // below lg, its label hidden, a 28 px square like the header's other icon buttons
+          className={cn("gap-1.5 max-lg:size-7 max-lg:px-0", PRESSED_TINT_CLASS)}
         >
           <Layers aria-hidden />
           <span className="hidden lg:inline">{t("Networks")}</span>

@@ -39,7 +39,8 @@ export default function QuickSettings() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="gap-1 px-2"
+                  // on a phone a 28 px square like the header's other icon buttons: the count waits for sm
+                  className="gap-1 px-2 max-sm:size-7 max-sm:px-0"
                   aria-label={t("Quick settings")}
                   onPointerEnter={preloadPanel}
                   onFocus={preloadPanel}
@@ -50,7 +51,7 @@ export default function QuickSettings() {
           }
         >
           <Zap aria-hidden />
-          <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[0.625rem] tabular-nums">
+          <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[0.625rem] tabular-nums max-sm:hidden">
             {pinned.length}
           </Badge>
         </TooltipTrigger>

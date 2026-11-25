@@ -1,9 +1,10 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { act, render, screen, waitFor } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import { toast } from "sonner"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { ApiError } from "@/api/http"
 import { queryClient } from "@/api/queries"
+import { useHeaderSlotTarget } from "@/app/header-slot-store"
 import { NetworksDrawerHost } from "./NetworksDrawerHost"
 import { useNetworksUi } from "./store"
 
@@ -21,6 +22,27 @@ describe("networks drawer host", () => {
     vi.restoreAllMocks()
     drawer.error = new Error("the drawer broke")
     useNetworksUi.setState({ drawerOpen: false })
+  })
+
+  // Below lg, where its label is hidden, the button was 36 px wide beside the header's 28 px icon
+  // buttons, which a phone's header has no room for.
+  it("is a 28 px square where its label is hidden", () => {
+    const header = document.createElement("div")
+    document.body.append(header)
+    act(() => useHeaderSlotTarget.getState().setElement(header))
+    try {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <NetworksDrawerHost tab="txt2img" />
+        </QueryClientProvider>,
+      )
+      const label = within(header).getByText("Networks")
+      expect(label).toHaveClass("hidden", "lg:inline")
+      expect(label.closest("button")).toHaveClass("max-lg:size-7", "max-lg:px-0")
+    } finally {
+      act(() => useHeaderSlotTarget.getState().setElement(null))
+      header.remove()
+    }
   })
 
   // The drawer stays open across reloads: one that fails to render took Generate down with it on

@@ -104,6 +104,10 @@ imperatively).
   page's `h1`), as the tabs and the bottom bar name the page, rather than
   cut to a stub ("G…"); a page without tabs there keeps its title,
   truncated with its full text as a `title` once its controls take the row.
+  A header button showing its icon alone is a 28 px square like search and
+  the appearance menu: the networks button wherever its label is hidden
+  (below `lg`), the quick settings button on a phone, its count of pinned
+  settings waiting for `sm`.
 - **Command palette** (Ctrl/Cmd+K, `cmdk`, its own chunk loaded on first
   open). Register commands with
   `useRegisterCommands(source, commands)`; labels and groups are English and
