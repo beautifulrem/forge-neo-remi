@@ -333,8 +333,8 @@ test.describe("hints and warnings", () => {
 test.describe("a deferred view's placeholder", () => {
   // A tabs node's placeholder was a 96 px block, where img2img's resize tabs (their strip over the
   // width and height sliders) are taller: what came after them jumped when the code arrived.
-  // Measured from the strip, not the window: the Source card above loads on its own and grows 4 px
-  // as it lands (its 160 px stand-in, a 164 px panel), at any time around the tabs.
+  // Measured from the strip, not the window: the Source card above loads on its own, at any time
+  // around the tabs (its stand-in is as tall as the panel, below).
   test("a tabs placeholder is as tall as the tabs", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 })
     let release = () => {}
@@ -358,6 +358,55 @@ test.describe("a deferred view's placeholder", () => {
     const tabs = main.getByRole("tablist").filter({ has: page.getByRole("tab", { name: "Resize to" }) })
     expect(Math.abs((await below(tabs)) - before)).toBeLessThan(1)
   })
+
+  // img2img's Source card loads its panel on its own. Its stand-in was a 160 px block, where the
+  // panel is 149 px (one row of modes), 164 px (two rows) or 200 px and more (two-line labels or
+  // hint) by the width, and taller again in a mode with options or a mask line, which a draft
+  // restores: what came after the card jumped when the panel arrived. The stand-in is the panel's
+  // frame without its controls.
+  for (const [width, height, mode] of [
+    [1280, 720, null],
+    [1920, 1080, null],
+    [768, 1024, null],
+    [390, 844, null],
+    [667, 375, null],
+    [360, 640, null],
+    [1280, 720, "Inpaint"],
+    [390, 844, "Inpaint upload"],
+    [360, 640, "Sketch"],
+  ] as const) {
+    test(`the Source card's stand-in is as tall as the card at ${width}×${height}${mode ? ` in ${mode}` : ""}`, async ({ page }) => {
+      await page.setViewportSize({ width, height })
+      if (mode) {
+        await page.addInitScript((mode) => {
+          localStorage.setItem("remi-form:img2img", JSON.stringify({ state: { values: { core: { mode } }, open: {}, tabs: {} }, version: 1 }))
+        }, mode)
+      }
+      let release = () => {}
+      const held = new Promise<void>((resolve) => (release = resolve))
+      await page.route("**/src/canvas/img2img/SourcePanel.tsx*", async (route) => {
+        await held
+        await route.continue()
+      })
+      await page.goto("/#/img2img")
+      const card = page.locator("[data-slot=img2img-source]")
+      await expect(card).toBeVisible()
+      await expect(page.getByRole("textbox", { name: "CFG Scale", exact: true })).toBeVisible()
+      const cardHeight = () => card.evaluate((element) => element.getBoundingClientRect().height)
+      // settled: the mode's options render in the stand-in as they will in the panel
+      let before = await cardHeight()
+      await expect.poll(async () => before === (before = await cardHeight()), { intervals: [250] }).toBe(true)
+      await expect(card.getByRole("radiogroup", { name: "Mode" })).toHaveCount(0)
+      release()
+      const modes = card.getByRole("radiogroup", { name: "Mode" })
+      await expect(modes).toBeVisible()
+      if (mode) await expect(modes.getByRole("radio", { name: mode, exact: true })).toBeChecked()
+      await expect.poll(cardHeight).toBeCloseTo(before, 0)
+      // and stays so
+      await page.waitForTimeout(300)
+      expect(Math.abs((await cardHeight()) - before), `${await cardHeight()} px after a ${before} px stand-in`).toBeLessThan(1)
+    })
+  }
 })
 
 test.describe("schema rows on extension pages", () => {

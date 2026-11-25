@@ -3,49 +3,23 @@
  * (from the schema), which layer the current mode edits, the values, and
  * the writes (user edits: errors cleared, change effects run).
  */
-import { useQuery } from "@tanstack/react-query"
 import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
 import { useStore } from "zustand"
 import { clientOption } from "@/api/app-options"
-import { schemaQuery } from "@/api/queries"
 import { fieldErrorText } from "@/features/errors/error-text"
 import { getFormStore } from "@/ui/form-store"
 import type { SliderNode } from "@/ui/schema"
-import { editorBinding, type EditorBinding, modeLayers, type ModeLayers } from "../core/modes"
+import type { EditorBinding, ModeLayers } from "../core/modes"
 import { replaceBackground, writeValues } from "../form/replace-background"
 import type { EditorLayer, ImageEditorProps } from "../types"
+import { IMG2IMG } from "./binding"
 
-export const IMG2IMG = "img2img"
+export { IMG2IMG, useImg2imgBinding, useModeLayers } from "./binding"
 
 const LAYER_LABELS: Record<string, string> = { sketch: "Sketch", mask: "Mask", mask_upload: "Uploaded mask" }
 
-/** The img2img editor binding from the (cached) schema; null until it loads or without image inputs. */
-export function useImg2imgBinding(): EditorBinding | null {
-  const { data: schema } = useQuery(schemaQuery(IMG2IMG))
-  const layout = schema?.core.layout ?? null
-  return useMemo(() => (layout ? editorBinding(layout) : null), [layout])
-}
-
 const core = (s: ReturnType<ReturnType<typeof getFormStore>["getState"]>, name: string) => s.values.core?.[name]
-
-/** Mode layers for the current values (re-renders only when they change). */
-export function useModeLayers(binding: EditorBinding | null): ModeLayers {
-  const store = getFormStore(IMG2IMG)
-  const signature = useStore(store, (s) => {
-    if (!binding) return "none"
-    const layers = modeLayers(binding, (owner, name) => s.values[owner]?.[name])
-    return `${layers.canvas ? 1 : 0}|${layers.active?.param ?? ""}|${layers.mask ?? ""}`
-  })
-  return useMemo(() => {
-    const [canvas, active, mask] = signature.split("|")
-    return {
-      canvas: canvas === "1",
-      active: binding?.layers.find((layer) => layer.param === active) ?? null,
-      mask: (mask || null) as ModeLayers["mask"],
-    }
-  }, [signature, binding])
-}
 
 /** Writes core params as a user edit. */
 export function setCoreValues(values: Record<string, unknown>) {

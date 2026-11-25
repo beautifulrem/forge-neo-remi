@@ -432,7 +432,7 @@ describe("selected segments", () => {
       }),
     )
     expect(segments.map(({ file }) => file).sort()).toEqual(
-      expect.arrayContaining(["canvas/img2img/Img2imgStage.tsx", "canvas/img2img/SourcePanel.tsx", "components/Segmented.tsx", "components/ui/tabs.tsx", "features/networks/FolderTree.tsx"]),
+      expect.arrayContaining(["canvas/img2img/Img2imgStage.tsx", "canvas/img2img/source-frame.ts", "components/Segmented.tsx", "components/ui/tabs.tsx", "features/networks/FolderTree.tsx"]),
     )
     const bare = segments.filter(({ state, classes }) => !classes.includes(`${state}:inset-ring`) || !classes.includes(`${state}:inset-ring-muted-foreground`))
     expect(bare.map(({ file }) => file)).toEqual([])

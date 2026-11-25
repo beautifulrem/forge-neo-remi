@@ -2062,6 +2062,17 @@ Keeping a first view small:
 - Dialogs and surfaces that open on demand (img2img's source panel and
   stage, the networks item dialogs, the lightbox, the style editor) are
   `retryableLazy()` and mounted on first use.
+- img2img's Source card stands in for its panel with the panel's frame
+  without the controls (`canvas/img2img/SourceFrame.tsx`): the mode grid
+  with its labels, the mode's hint, the image lines as they start and the
+  mode's options, from the same classes and parts as the panel
+  (`source-frame.ts`), so it is as tall as the panel at every width and in
+  the mode a draft restores. A fixed block cannot be: the panel is 149 px
+  (one row of modes) to 204 px (two rows, two-line labels) by the width,
+  and up to 438 px with a mode's options or mask line. The stand-in is a
+  small chunk of its own (the parameter form is txt2img's too, at the edge
+  of its budget), fetched as the img2img stage renders, before the form's
+  code and schema are in; a block stands in for it until then.
 - Every code-split component is `retryableLazy()` (`lib/retryable-lazy.ts`),
   never a plain `lazy()`: `lazy()` keeps a failed import for good, so a chunk
   that failed once (offline, a build replaced under the page) stayed failed

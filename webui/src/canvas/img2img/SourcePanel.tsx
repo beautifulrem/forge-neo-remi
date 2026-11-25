@@ -10,62 +10,58 @@
 import { Radio } from "@base-ui/react/radio"
 import { RadioGroup } from "@base-ui/react/radio-group"
 import { Brush, ImageIcon, ImageUp, Images, Palette, PaintbrushVertical, PencilRuler, Proportions, Upload, X, type IconComponent } from "@/components/icons"
-import { type CSSProperties, type ReactNode, useEffect, useId, useRef, useState } from "react"
+import { type ReactNode, useEffect, useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { fieldErrorText } from "@/features/errors/error-text"
 import { scrollBehavior } from "@/lib/motion"
 import { cn } from "@/lib/utils"
-import { evaluate } from "@/ui/conditions"
-import { OwnerProvider } from "@/ui/context"
 import { useForm, useFormState, useParam } from "@/ui/hooks"
-import { RenderChildren, RenderNode } from "@/ui/Renderer"
 import { pendingWrite } from "@/ui/pending-writes"
 import type { InputNode, Node, SliderNode, TabsNode } from "@/ui/schema"
 import { imageFiles, releaseUpload, useUploader, useUploadInfo } from "@/ui/uploads"
 import type { EditorBinding } from "../core/modes"
 import { scaledSize } from "../core/overlays"
 import { useImageSize } from "./image-size"
-import { pruneSource } from "./source-layout"
+import {
+  IMAGE_LABEL,
+  IMAGE_LINE,
+  IMAGE_LINES,
+  IMAGE_TEXT,
+  IMAGE_THUMB,
+  MODE_HINT,
+  MODE_PICKER,
+  MODE_TEXT,
+  modeGrid,
+  modeLabel,
+  modeTile,
+  PAINT_HINT,
+  useModeOptions,
+  useSourceParts,
+} from "./source-frame"
+import { ModeTileFace, SourceLayout } from "./SourceFrame"
 import { useStageView } from "./stage-view"
 import { setCoreValues, setSizeFromImage, setSourceImage, useImg2imgBinding, useModeLayers } from "./use-img2img"
 
-/**
- * The core form's modes (`remi.core.forms.IMG2IMG_MODES`): icon, chrome label
- * (the tiles are app chrome, translated without the server catalog) and a
- * short description shown under the picker. Unknown modes use the tab title.
- */
-const MODES: Record<string, { icon: IconComponent; label: string; description: string }> = {
-  img2img: { icon: ImageIcon, label: "img2img", description: "Redraws the whole image." },
-  Sketch: { icon: Brush, label: "Sketch", description: "Paint colours over the image; the result is redrawn." },
-  Inpaint: { icon: PaintbrushVertical, label: "Inpaint", description: "Paint a mask; only the masked area is redrawn." },
-  "Inpaint sketch": { icon: Palette, label: "Inpaint sketch", description: "Paint colours; the painted area is redrawn with them." },
-  "Inpaint upload": { icon: ImageUp, label: "Inpaint upload", description: "Upload a mask image; its white (or opaque) areas are redrawn." },
-  Batch: { icon: Images, label: "Batch", description: "Processes many images with the same settings." },
+/** The modes' icons (`MODE_TEXT` has their labels); unknown modes take the image icon. */
+const MODE_ICONS: Record<string, IconComponent> = {
+  img2img: ImageIcon,
+  Sketch: Brush,
+  Inpaint: PaintbrushVertical,
+  "Inpaint sketch": Palette,
+  "Inpaint upload": ImageUp,
+  Batch: Images,
 }
-
-/**
- * The mode grid: one row when there is room, otherwise two balanced rows (3 + 3; 3 + 2 with the
- * short row centred, never an empty cell). Two tracks per mode, so an odd last row can start
- * half a mode in.
- */
-function modeColumns(count: number): CSSProperties {
-  const perRow = count > 4 ? Math.ceil(count / 2) : count
-  return { "--cols": perRow * 2, "--cols-wide": count } as CSSProperties
-}
-
-/** The mode that opens a short second row (odd counts above 4), which starts one track in to centre the row. */
-const centredIndex = (count: number) => (count > 4 && count % 2 === 1 ? Math.ceil(count / 2) : -1)
 
 function ModePicker({ tabs, modeNode }: { tabs: TabsNode; modeNode: InputNode }) {
   const { t } = useTranslation()
   const param = useParam<string>(modeNode)
   const labelId = useId()
-  const visible = useFormState((s) => tabs.children.map((tab) => (evaluate(tab.visible_if, "core", (o, n) => s.values[o]?.[n]) ? "1" : "0")).join(""))
-  const options = tabs.children.filter((_, i) => visible[i] === "1" && tabs.children[i]?.value !== undefined)
-  const hint = MODES[String(param.value)]?.description
+  const options = useModeOptions(tabs)
+  const hint = MODE_TEXT[String(param.value)]?.description
+  const grid = modeGrid(options.length)
   return (
-    <div className="@container flex flex-col gap-2">
+    <div className={MODE_PICKER}>
       <span id={labelId} className="sr-only">
         {t("Mode")}
       </span>
@@ -74,42 +70,21 @@ function ModePicker({ tabs, modeNode }: { tabs: TabsNode; modeNode: InputNode })
         onValueChange={(value) => param.setValue(value as string)}
         aria-labelledby={labelId}
         disabled={!param.enabled}
-        style={modeColumns(options.length)}
-        // one row from 22rem for up to five modes (the parameter column is wider than that), from 30rem for more
-        className={cn(
-          "grid grid-cols-[repeat(var(--cols),minmax(0,1fr))] gap-1 rounded-md bg-muted p-1",
-          options.length <= 5 ? "@[22rem]:grid-cols-[repeat(var(--cols-wide),minmax(0,1fr))]" : "@[30rem]:grid-cols-[repeat(var(--cols-wide),minmax(0,1fr))]",
-        )}
+        style={grid.style}
+        className={grid.className}
       >
         {options.map((tab, index) => {
           const value = String(tab.value)
-          const mode = MODES[value]
-          const Icon = mode?.icon ?? ImageIcon
-          const label = t(mode?.label ?? tab.title)
+          const Icon = MODE_ICONS[value] ?? ImageIcon
+          const label = t(modeLabel(tab))
           return (
-            <Radio.Root
-              key={value}
-              value={value}
-              nativeButton
-              render={<button type="button" title={label} />}
-              className={cn(
-                "group/mode col-span-2 flex min-w-0 flex-col items-center justify-start gap-1 rounded-lg px-0.5 py-1.5 text-muted-foreground transition-colors outline-none select-none",
-                options.length <= 5 ? "@[22rem]:col-span-1" : "@[30rem]:col-span-1",
-                index === centredIndex(options.length) && (options.length <= 5 ? "col-start-2 @[22rem]:col-start-auto" : "col-start-2 @[30rem]:col-start-auto"),
-                "hover:bg-background/60 hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring",
-                "data-checked:bg-card data-checked:text-foreground data-checked:inset-ring data-checked:inset-ring-muted-foreground dark:data-checked:bg-accent",
-              )}
-            >
-              <Icon className="size-4 shrink-0 group-data-checked/mode:text-primary" aria-hidden />
-              {/* the tiles of a row share its height: a one-line label sits centred in the room a two-line one takes */}
-              <span className="flex w-full flex-1 items-center justify-center">
-                <span className="line-clamp-2 w-full text-center text-xs leading-tight font-medium break-words">{label}</span>
-              </span>
+            <Radio.Root key={value} value={value} nativeButton render={<button type="button" title={label} />} className={modeTile(options.length, index)}>
+              <ModeTileFace icon={<Icon className="size-4 shrink-0 group-data-checked/mode:text-primary" aria-hidden />} label={label} />
             </Radio.Root>
           )
         })}
       </RadioGroup>
-      {hint ? <p className="px-0.5 text-xs text-muted-foreground">{t(hint)}</p> : null}
+      {hint ? <p className={MODE_HINT}>{t(hint)}</p> : null}
     </div>
   )
 }
@@ -151,7 +126,7 @@ function ImageRow({ label, id, error, emptyText, mask, onFile, onRemove, busy, e
   const known = size && size.id === id ? size : null
   return (
     <div
-      className={cn("flex items-center gap-2.5 rounded-lg border border-transparent p-1 transition-colors", dragging && "border-dashed border-primary bg-primary/5", error && "border-destructive/50")}
+      className={cn(IMAGE_LINE, dragging && "border-dashed border-primary bg-primary/5", error && "border-destructive/50")}
       onDragOver={(event) => {
         if (!event.dataTransfer.types.includes("Files")) return
         event.preventDefault()
@@ -167,12 +142,12 @@ function ImageRow({ label, id, error, emptyText, mask, onFile, onRemove, busy, e
         if (file) void onFile(file)
       }}
     >
-      <div className={cn("grid size-12 shrink-0 place-items-center overflow-hidden rounded-md border", mask ? "bg-checker" : "bg-muted")}>
+      <div className={cn(IMAGE_THUMB, mask ? "bg-checker" : "bg-muted")}>
         {id ? <Thumb id={id} onSize={(s) => setSize({ id, ...s })} /> : <ImageIcon className="size-4 text-muted-foreground" aria-hidden />}
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
-        <span title={label} className="truncate text-sm font-medium">{label}</span>
-        <span id={errorId} className={cn("line-clamp-2 text-xs break-words tabular-nums", error ? "text-destructive" : "text-muted-foreground")} role={error ? "alert" : undefined}>
+        <span title={label} className={IMAGE_LABEL}>{label}</span>
+        <span id={errorId} className={cn(IMAGE_TEXT, error ? "text-destructive" : "text-muted-foreground")} role={error ? "alert" : undefined}>
           {error ? t(error) : busy ? t("Uploading…") : id ? (known ? `${known.width}×${known.height}` : "…") : emptyText}
         </span>
       </div>
@@ -230,7 +205,7 @@ function SourceImages({ binding }: { binding: EditorBinding }) {
     })
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className={IMAGE_LINES}>
       <ImageRow
         label={t("Source image")}
         id={image}
@@ -280,7 +255,7 @@ function SourceImages({ binding }: { binding: EditorBinding }) {
           }}
         />
       ) : active ? (
-        <p className={cn("flex items-center gap-1.5 px-1 text-xs", layerError ? "text-destructive" : "text-muted-foreground")} role={layerError ? "alert" : undefined}>
+        <p className={cn(PAINT_HINT, layerError ? "text-destructive" : "text-muted-foreground")} role={layerError ? "alert" : undefined}>
           {layerError ? layerError : active.kind === "mask" ? t("Paint the mask on the stage.") : t("Paint on the stage.")}
           {layerError ? (
             <Button variant="link" size="xs" className="h-auto p-0" onClick={() => showEditor(setView)}>
@@ -317,28 +292,13 @@ export function Img2imgSourcePanel({ nodes }: { nodes: readonly Node[] }) {
   const binding = useImg2imgBinding()
   useScaleByResolution(binding)
   const layers = useModeLayers(binding)
-  const handled = new Set(binding ? [binding.background, ...binding.layers.map((layer) => layer.param)] : [])
-  const found: { tabs: TabsNode | null } = { tabs: null }
-  const modeParam = "mode"
-  const rest = pruneSource(nodes, handled, modeParam, found)
-  const modeNode = useFormState((s) => s.index.inputs.get("core")?.get(modeParam) ?? null)
-  const mode = useFormState((s) => s.values.core?.[modeParam])
-  const selected = found.tabs?.children.find((tab) => tab.value === mode) ?? null
-
+  const { tabs, modeNode, selected, rest } = useSourceParts(nodes, binding)
   return (
-    <OwnerProvider owner="core">
-      <div className="flex flex-col gap-3">
-        {found.tabs && modeNode ? <ModePicker tabs={found.tabs} modeNode={modeNode} /> : null}
-        {binding && layers.canvas ? <SourceImages binding={binding} /> : null}
-        {selected && selected.children.length > 0 ? (
-          <div className="flex flex-col gap-3">
-            <RenderChildren nodes={selected.children} />
-          </div>
-        ) : null}
-        {rest.map((node, index) => (
-          <RenderNode key={index} node={node} />
-        ))}
-      </div>
-    </OwnerProvider>
+    <SourceLayout
+      selected={selected}
+      rest={rest}
+      picker={tabs && modeNode ? <ModePicker tabs={tabs} modeNode={modeNode} /> : null}
+      images={binding && layers.canvas ? <SourceImages binding={binding} /> : null}
+    />
   )
 }
