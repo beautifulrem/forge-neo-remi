@@ -1019,6 +1019,8 @@ class NetworkIndex:
         self._lock = threading.Lock()
         self._build_locks: dict[str, threading.Lock] = {}
         """one listing per kind at a time (the list and facet requests arrive together)"""
+        self._sidecar_lock = threading.Lock()
+        """one sidecar edit at a time: each reads what the one before it wrote"""
         self._generation: dict[str, int] = {}
         """bumped by :meth:`invalidate`: a listing started before is not kept"""
         self.cache_dir = Path(files.root) / "networks"
@@ -1360,14 +1362,15 @@ class NetworkIndex:
         # The limit is on what the client sends: a larger sidecar another tool wrote stays editable
         if len(json.dumps(changes, indent=4, ensure_ascii=False).encode()) > USER_METADATA_LIMIT:
             raise ParamError("user metadata is too large", param="user_metadata")
-        # An unreadable sidecar is refused (SidecarUnreadable), not read as empty and overwritten; replace drops it on purpose
-        data = {} if replace else read_sidecar(entry)
-        for key, value in changes.items():
-            if value is None:
-                data.pop(key, None)
-            else:
-                data[key] = value
-        write_user_metadata(entry, data)
+        with self._sidecar_lock:
+            # An unreadable sidecar is refused (SidecarUnreadable), not read as empty and overwritten; replace drops it on purpose
+            data = {} if replace else read_sidecar(entry)
+            for key, value in changes.items():
+                if value is None:
+                    data.pop(key, None)
+                else:
+                    data[key] = value
+            write_user_metadata(entry, data)
         self._forget(entry)
         return self.meta(kind, name)
 

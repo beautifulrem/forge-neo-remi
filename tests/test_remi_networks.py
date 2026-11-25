@@ -522,26 +522,50 @@ def test_set_preview_from_an_output_and_refresh(lora, lora_root):
     assert sys.modules["networks"].listed == before + 1
 
 
-def test_concurrent_metadata_edits_each_write_a_whole_sidecar(lora, lora_root, monkeypatch):
-    # two edits at once: both reach the rename together (the threadpool runs them side by side)
+def test_two_writers_of_one_file_each_write_a_temporary_file_of_their_own(tmp_path):
+    # both writers are half way at once: each has its own temporary file, and the last one wins whole
+    target = tmp_path / "watercolor.json"
     meet = threading.Barrier(2, timeout=5)
-    replace = os.replace
-
-    def rename(source, target, *args, **kwargs):
-        if str(target).endswith("watercolor.json"):
-            meet.wait()
-        return replace(source, target, *args, **kwargs)
-
-    monkeypatch.setattr(module.os, "replace", rename)
     errors = []
 
-    def edit(text):
+    def write(text):
         try:
-            lora.services.networks.update_user_metadata("lora", "watercolor", {"activation text": text})
+            with module.replacing(target) as file:
+                file.write(text.encode())
+                meet.wait()
         except Exception as error:
             errors.append(error)
 
-    threads = [threading.Thread(target=edit, args=(text,)) for text in ("first", "second")]
+    threads = [threading.Thread(target=write, args=(text,)) for text in ("first", "second")]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == []
+    assert target.read_text() in ("first", "second")
+    assert [path.name for path in tmp_path.iterdir() if path.name.endswith(".tmp")] == []
+
+
+def test_concurrent_metadata_edits_keep_each_others_changes(lora, lora_root, monkeypatch):
+    # two edits of different fields at once: each read the sidecar before the other wrote it, and the
+    # second write dropped the first edit's field
+    read = module.read_sidecar
+
+    def slow_read(entry):
+        data = read(entry)
+        time.sleep(0.2)
+        return data
+
+    monkeypatch.setattr(module, "read_sidecar", slow_read)
+    errors = []
+
+    def edit(values):
+        try:
+            lora.services.networks.update_user_metadata("lora", "watercolor", values)
+        except Exception as error:
+            errors.append(error)
+
+    threads = [threading.Thread(target=edit, args=(values,)) for values in ({"activation text": "brush"}, {"notes": "soft edges"})]
     for thread in threads:
         thread.start()
     for thread in threads:
@@ -549,7 +573,8 @@ def test_concurrent_metadata_edits_each_write_a_whole_sidecar(lora, lora_root, m
     monkeypatch.undo()
     assert errors == []
     sidecar = json.loads((lora_root / "styles" / "watercolor.json").read_text(encoding="utf8"))
-    assert sidecar["activation text"] in ("first", "second")
+    assert sidecar["activation text"] == "brush"
+    assert sidecar["notes"] == "soft edges"
     assert [path.name for path in (lora_root / "styles").iterdir() if path.name.endswith(".tmp")] == []
 
 
