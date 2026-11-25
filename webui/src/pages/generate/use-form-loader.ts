@@ -73,10 +73,15 @@ export function ensureSchemaLoaded(store: FormStore, schema: TabSchema) {
   loadSchema(store, schema)
 }
 
-/** True once `schema` is loaded into `store` (loaded before paint; `load` bumps the revision that re-renders). */
-export function useFormLoader(store: FormStore, schema: TabSchema): boolean {
+/**
+ * The schema `store` holds, to render the form with: null until the first one is loaded (before
+ * paint; `load` bumps the revision that re-renders). A refetched schema is loaded the same way, and
+ * until then the form keeps rendering the one the store holds, so it stays mounted (focus, open
+ * sections) instead of flashing back to skeletons for a commit.
+ */
+export function useFormLoader(store: FormStore, schema: TabSchema): TabSchema | null {
   // Read the revision into the result so a memoising compiler re-evaluates after `load`.
   const revision = useStore(store, (s) => s.revision)
   useLayoutEffect(() => ensureSchemaLoaded(store, schema), [store, schema])
-  return revision > 0 && loadedWith.get(store) === schema
+  return revision > 0 ? (loadedWith.get(store) ?? null) : null
 }

@@ -44,14 +44,15 @@ wireExtrasRuns()
 
 function ExtrasForm({ onShown }: { onShown: () => void }) {
   const { t } = useTranslation()
-  const { data: schema } = useSchema("extras")
+  const { data: latest } = useSchema("extras")
   const store = getFormStore("extras")
-  const ready = useFormLoader(store, schema)
+  const schema = useFormLoader(store, latest)
+  const ready = schema !== null
   // before paint, so the result area comes in the same frame as the form
   useLayoutEffect(() => {
     if (ready) onShown()
   }, [ready, onShown])
-  if (!ready) return <FormSkeleton />
+  if (!schema) return <FormSkeleton />
   const hasDefaultSlot = store.getState().index.slots.has(DEFAULT_SLOT)
   return (
     <FormProvider formId="extras" store={store}>

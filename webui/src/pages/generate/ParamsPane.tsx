@@ -24,13 +24,12 @@ function SelectedSeedSource({ children }: { children: ReactNode }) {
   return <SeedSourceProvider infotext={infotext}>{children}</SeedSourceProvider>
 }
 
-export function ParamsPane({ schema, tab, showModelBar = false }: { schema: TabSchema; tab: GenerateTab; showModelBar?: boolean }) {
+export function ParamsPane({ schema: latest, tab, showModelBar = false }: { schema: TabSchema; tab: GenerateTab; showModelBar?: boolean }) {
   const { t } = useTranslation()
   const store = getFormStore(tab)
-  const ready = useFormLoader(store, schema)
-  const curated = curateCore(schema.core.layout)
+  const schema = useFormLoader(store, latest)
 
-  if (!ready) {
+  if (!schema) {
     return (
       <div className="flex flex-col gap-3" aria-busy>
         <Skeleton className="h-28 rounded-md" />
@@ -40,6 +39,7 @@ export function ParamsPane({ schema, tab, showModelBar = false }: { schema: TabS
     )
   }
 
+  const curated = curateCore(schema.core.layout)
   return (
     <FormProvider formId={tab} store={store}>
       <SelectedSeedSource>
