@@ -288,4 +288,21 @@ test.describe("focus after a dialog", () => {
       await expect(opener).toBeFocused()
     })
   }
+
+  // the popovers whose name field takes the focus as they open
+  const popovers: { route: string; before?: (page: Page) => Promise<void>; opener: string; field: string }[] = [
+    { route: "gallery", opener: "New board", field: "Board name" },
+    { route: "queue", before: (page) => page.getByRole("tab", { name: "Pipelines" }).click(), opener: "Save template", field: "Pipeline name" },
+  ]
+  for (const item of popovers) {
+    test(`${item.opener} focuses its name field and gives the focus back`, async ({ page }) => {
+      await openRoute(page, item.route)
+      await item.before?.(page)
+      const opener = page.getByRole("button", { name: item.opener, exact: true })
+      await opener.click()
+      await expect(page.getByRole("dialog", { name: item.opener }).getByRole("textbox", { name: item.field })).toBeFocused()
+      await page.keyboard.press("Escape")
+      await expect(opener).toBeFocused()
+    })
+  }
 })
