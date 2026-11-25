@@ -24,7 +24,7 @@ def _module(monkeypatch, error: Exception):
 
 def test_a_failed_connection_prints_no_token(monkeypatch, capsys):
     token = "2abcDEFghiJKLmnoPQRstu_secretpart"
-    module = _module(monkeypatch, RuntimeError(f"authentication failed: {token} is not valid"))
+    module = _module(monkeypatch, RuntimeError(f"authentication failed: {token} is not valid; basic auth ann:hunter22 / hunter22"))
     module.connect(f"{token}:ann:hunter22", 7860, {})
     out = capsys.readouterr().out
     assert "ngrok connection aborted" in out
@@ -44,3 +44,13 @@ def test_a_short_token_is_not_shown(monkeypatch, capsys):
     module.connect("abcd1234", 7860, {})
     out = capsys.readouterr().out
     assert "abcd1234" not in out and "1234" not in out
+
+
+def test_secrets_from_the_options_and_the_environment_stay_out(monkeypatch, capsys):
+    """``--ngrok-options '{"basic_auth": [...]}'`` (the help's own example) and the token
+    ngrok reads from ``NGROK_AUTHTOKEN`` (``authtoken_from_env``) are secrets too."""
+    monkeypatch.setenv("NGROK_AUTHTOKEN", "ENVTOKENabcdefghijkl_env")
+    module = _module(monkeypatch, RuntimeError("basic_auth user:optionsSecret99 rejected; authtoken ENVTOKENabcdefghijkl_env"))
+    module.connect(None, 7860, {"authtoken_from_env": True, "basic_auth": ["user:optionsSecret99"]})
+    out = capsys.readouterr().out
+    assert "optionsSecret99" not in out and "ENVTOKENabcdefghijkl_env" not in out

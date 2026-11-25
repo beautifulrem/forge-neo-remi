@@ -1,3 +1,5 @@
+import os
+
 import ngrok
 
 # Connect to ngrok for ingress
@@ -24,10 +26,14 @@ def connect(token, port, options):
         public_url = ngrok.connect(f"127.0.0.1:{port}", **options).url()
     except Exception as e:
         # the console is often logged: name the token by its end only, and keep secrets out of the reason
+        secrets = [token, os.environ.get('NGROK_AUTHTOKEN')]
+        auths = options.get('basic_auth') or []  # the token's user:password, or --ngrok-options'
+        for auth in [auths] if isinstance(auths, str) else auths:
+            if isinstance(auth, str):
+                secrets += [auth, auth.split(':', 1)[-1]]
         reason = str(e)
-        for secret in (token, account, account and account.split(':', 1)[1]):
-            if secret and len(secret) > 4:
-                reason = reason.replace(secret, '***')
+        for secret in sorted((secret for secret in secrets if secret and len(secret) > 4), key=len, reverse=True):
+            reason = reason.replace(secret, '***')
         shown = token if token == 'None' else f'...{token[-4:]}' if len(token) > 8 else '***'
         print(f'Invalid ngrok authtoken? ngrok connection aborted due to: {reason}\n'
               f'Your token: {shown}, get the right one on https://dashboard.ngrok.com/get-started/your-authtoken')
