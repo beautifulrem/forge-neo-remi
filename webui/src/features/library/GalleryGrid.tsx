@@ -138,8 +138,9 @@ const Tile = memo(function Tile({ item, width, height, selected, selecting, inde
             onStar(item)
           }
         }}
-        // the focus ring is an outline drawn inside the tile: an inset ring (a box shadow) paints under the image
-        className="block size-full cursor-zoom-in outline-none focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-solid focus-visible:outline-ring data-[selecting]:cursor-pointer"
+        // the focus ring is an outline on a layer over the image (after:): an inset ring (a box shadow) and
+        // the button's own outline paint under it once the hover zoom puts the image on a layer of its own
+        className="relative block size-full cursor-zoom-in outline-none after:pointer-events-none after:absolute after:inset-0 focus-visible:after:outline-3 focus-visible:after:-outline-offset-3 focus-visible:after:outline-solid focus-visible:after:outline-ring data-[selecting]:cursor-pointer"
         data-selecting={selecting || undefined}
       >
         <img

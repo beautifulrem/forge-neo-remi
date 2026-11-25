@@ -353,10 +353,15 @@ generated interfaces (sources: Linear's
   the prompt editor, `FIELD_BUTTON_CLASS`) is a flat fill (`--field`) with
   no underline or bottom shadow, and focus rings it evenly (`border-ring`
   plus a 3 px `ring-ring/50`). Image tiles (network cards) keep a hairline
-  ring and no shadow. A focus ring over an image is an outline drawn inside
-  the tile (`outline-3 -outline-offset-3`): an inset ring is a box shadow,
-  painted under the image that fills the tile (the gallery's tiles, the
-  Extras run strip). A star mark uses `--star` (≥ 3:1 on the paper), not a
+  ring and no shadow. A focus ring over an image is drawn where the image
+  cannot cover it: an inset ring is a box shadow and the tile's own outline
+  is painted before its content, so an image that fills the tile hides
+  both once it is on a layer of its own (a hover zoom, a selection layer
+  over it). It is an outline on the tile's `after:` layer
+  (`focus-visible:after:outline-3 focus-visible:after:-outline-offset-3`;
+  the gallery's tiles), or a ring outside the tile where its scroller keeps
+  4 px of room (the Extras strips), which leaves a selection mark inside
+  visible with it. A star mark uses `--star` (≥ 3:1 on the paper), not a
   fixed amber. Touch screens get no number steppers (the numeric keyboard
   types the value), and controls hidden until hover take no taps while
   hidden. A scroller (the JSON Builder column, `FadeStrip`) keeps 4 px of

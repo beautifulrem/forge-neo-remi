@@ -214,7 +214,8 @@ function ResultStage() {
       </div>
       <div className="relative flex min-h-0 flex-1 items-center justify-center rounded-md bg-canvas p-2">{view}</div>
       {items.length > 1 ? (
-        <div role="listbox" aria-label={t("Images of this run")} className="flex gap-1.5 overflow-x-auto pb-1">
+        // 4 px of room around the thumbnails: the scroll box would cut their focus ring
+        <div role="listbox" aria-label={t("Images of this run")} className="-mx-1 flex gap-1.5 overflow-x-auto p-1">
           {items.map((entry) => (
             <button
               key={entry.key}
@@ -223,10 +224,9 @@ function ResultStage() {
               aria-selected={entry.key === item?.key}
               onClick={() => setCurrent(entry.key)}
               className={cn(
-                "relative size-16 shrink-0 overflow-hidden rounded-md bg-checker outline-none",
-                // drawn inside, as an outer ring is cut by the strip's scroll box: the focus ring an
-                // outline (an inset ring, a box shadow, paints under the image), the selection a layer over it
-                "focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-solid focus-visible:outline-ring",
+                // the focus ring outside the thumbnail, the selection a layer inside it over the image:
+                // the selected one shows the focus too (a ring drawn inside sat under that layer)
+                "relative size-16 shrink-0 overflow-hidden rounded-md bg-checker outline-none focus-visible:ring-3 focus-visible:ring-ring",
                 "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit]",
                 entry.key === item?.key && "after:shadow-[inset_0_0_0_2px_var(--primary),inset_0_0_0_3px_var(--background)]",
               )}

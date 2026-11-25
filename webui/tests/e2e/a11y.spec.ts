@@ -230,6 +230,9 @@ async function stopsWithoutFocusRing(page: Page, presses: number): Promise<strin
       const shows = (node: Element) => {
         const style = getComputedStyle(node)
         if (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0) return true
+        // or on the layer over the content (`after:`), where an image cannot cover it
+        const after = getComputedStyle(node, "::after")
+        if (after.content !== "none" && after.outlineStyle !== "none" && parseFloat(after.outlineWidth) > 0) return true
         if (style.boxShadow === "none" || style.boxShadow === "") return false
         // the visible part of the shadow: drop transparent layers, then inset ones over covered content
         const layers = style.boxShadow.split(/,(?![^(]*\))/).filter((layer) => !/rgba\(0, 0, 0, 0\)/.test(layer))
@@ -265,6 +268,27 @@ test.describe("visible focus", () => {
       expect(await stopsWithoutFocusRing(page, 70)).toEqual([])
     })
   }
+})
+
+// The focus ring is drawn inside the tile, over the image. The image zooms in under the pointer,
+// which lifted it onto a layer of its own over the ring: a tile focused from the keyboard showed
+// no ring while the pointer rested on it.
+test("a gallery tile shows its focus ring under the pointer", async ({ page }) => {
+  await openRoute(page, "gallery")
+  await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" })
+  const tile = page.locator('[aria-describedby="gallery-grid-keys"]').first()
+  await expect.poll(() => tile.locator("img").evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true)
+  await tile.focus()
+  expect(await tile.evaluate((element) => element.matches(":focus-visible"))).toBe(true)
+  await tile.hover()
+  // the left edge, away from the corner controls: the ring is there only while the tile has the focus
+  const edge = async () => {
+    const box = (await tile.boundingBox())!
+    return page.screenshot({ clip: { x: box.x, y: box.y + box.height / 3, width: 4, height: box.height / 3 } })
+  }
+  const focused = await edge()
+  await tile.evaluate((element: HTMLElement) => element.blur())
+  expect(focused.equals(await edge())).toBe(false)
 })
 
 test.describe("axe on a phone", () => {

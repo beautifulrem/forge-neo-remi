@@ -335,3 +335,30 @@ test.describe("the result toolbar", () => {
     })
   }
 })
+
+// The selected image of a run is marked by a layer over the thumbnail, which also covered the
+// focus ring drawn inside it: Tab landed on the selected thumbnail first, and nothing showed it.
+test("the selected image of a run shows the focus", async ({ page }) => {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("remi-extras-runs")) return
+    const outputs = [0, 1, 2].map((i) => ({ id: `mock-run-${i}-${i * 120}`, kind: "image", width: 512, height: 512, infotext: null }))
+    const result = { jobId: "job-1", outputs, source: null, info: null, at: Date.now() }
+    sessionStorage.setItem("remi-extras-runs", JSON.stringify({ state: { results: [result], jobs: [], sources: {} }, version: 1 }))
+  })
+  await openRoute(page, "extras")
+  await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" })
+  const strip = page.getByRole("listbox", { name: "Images of this run" })
+  const selected = strip.getByRole("option", { selected: true })
+  await expect(strip.getByRole("option")).toHaveCount(3)
+  await selected.focus()
+  expect(await selected.evaluate((element) => element.matches(":focus-visible"))).toBe(true)
+  // the middle of the left edge, 3 px either side of it (not the corners, whose antialiasing differs
+  // either way): something there changes when the focus arrives
+  const edge = async () => {
+    const box = (await selected.boundingBox())!
+    return page.screenshot({ clip: { x: box.x - 3, y: box.y + box.height / 3, width: 6, height: box.height / 3 } })
+  }
+  const focused = await edge()
+  await selected.evaluate((element: HTMLElement) => element.blur())
+  expect(focused.equals(await edge())).toBe(false)
+})
