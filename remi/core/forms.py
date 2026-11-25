@@ -264,9 +264,23 @@ def hires_resolution_layout() -> ui.ScriptLayout:
     return ui.ScriptLayout(ui.Group(_enable_hr(), *_dimensions("txt2img"), *_hr_target()), owner="core")
 
 
+class OverrideSettings(ui.MultiChoice):
+    """``"Infotext key: value"`` items: processing splits each on its first colon
+    (``infotext_utils.create_override_settings_dict``), so one without a key there is
+    refused here instead of failing the job when it runs."""
+
+    def coerce(self, value: Any, ctx: ui.Context) -> list[Any]:
+        items = super().coerce(value, ctx)
+        for item in items:
+            key, colon, _value = str(item).partition(":")
+            if not colon or not key.strip():
+                raise ui.ParamError(ui.Sentence('{{value}} is not a "setting: value" pair', value=repr(item)))
+        return items
+
+
 def _override_settings() -> ui.Node:
     # Filled by infotext paste (settings the infotext differs in); shown when not empty
-    return ui.MultiChoice("override_settings", [], [], allow_custom=True, label="Override settings", visible_if=ui.param("override_settings"))
+    return OverrideSettings("override_settings", [], [], allow_custom=True, label="Override settings", visible_if=ui.param("override_settings"))
 
 
 def _script_selector(runner: ScriptRunner | None) -> ui.Node:

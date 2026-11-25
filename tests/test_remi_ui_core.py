@@ -220,6 +220,22 @@ def test_entry_points_reject_bad_values_with_every_error(webui):
     assert {(error["owner"], error["param"]) for error in caught.value.to_json()["errors"]} == {("core", "width"), ("core", "cfg_scale"), ("core", "script"), ("seed", "seed")}
 
 
+@pytest.mark.parametrize("tab", ["txt2img", "img2img"])
+def test_override_settings_are_setting_value_pairs(webui, tab):
+    """An item without "key: value" (an API client's ``override_settings_texts``, an imported
+    job) passed and failed the job when it ran (``create_override_settings_dict`` splits on
+    the colon): it is refused with the other values."""
+    from remi.core.tabs import core_layout
+
+    layout = core_layout(tab)
+    assert layout.coerce({"override_settings": ["Clip skip: 2", "VAE/TE: []"]})["override_settings"] == ["Clip skip: 2", "VAE/TE: []"]
+    for bad in ("Clip skip 2", ": 2"):
+        with pytest.raises(ui.ValidationError) as caught:
+            layout.coerce({"override_settings": ["Clip skip: 2", bad]})
+        (error,) = caught.value.to_json()["errors"]
+        assert error["param"] == "override_settings" and error["template"] == '{{value}} is not a "setting: value" pair' and error["params"] == {"value": repr(bad)}
+
+
 def test_selected_script_is_checked_when_core_values_fail(webui):
     from modules import scripts
     from remi.core.tabs import processing_args
