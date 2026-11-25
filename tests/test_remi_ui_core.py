@@ -872,6 +872,7 @@ def test_tab_schema_and_validation_follow_the_ui_preset(webui):
 def test_forge_preset_action_switches_the_model_on_the_server(webui, monkeypatch):
     import sys
 
+    from modules import shared
     from remi.core.actions import core_actions
 
     calls = []
@@ -900,6 +901,19 @@ def test_forge_preset_action_switches_the_model_on_the_server(webui, monkeypatch
         with pytest.raises(ui.ValidationError, match="core actions run on txt2img or img2img"):
             ui.call_action(core_actions, "__forge_preset__", ui.ActionContext(tab="extras", extra={"preset": "sd"}), {})
         assert calls == [] and webui.opts.forge_preset == "anima"
+
+
+
+        # frozen settings: refused with the reason (the setter asserted: a 500), nothing changed
+        calls.clear()
+        for flag, value, reason in (("freeze_settings", True, "changing settings is disabled (--freeze-settings)"), ("freeze_specific_settings", "sd_model_checkpoint", "this setting is frozen")):
+            with monkeypatch.context() as frozen:
+                frozen.setattr(shared.cmd_opts, flag, value, raising=False)
+                with pytest.raises(ui.ValidationError) as refused:
+                    ui.call_action(core_actions, "__forge_preset__", ui.ActionContext(tab="txt2img", extra={"preset": "sd"}), {})
+            [error] = refused.value.errors
+            assert (error.message, error.owner, error.param) == (reason, "settings", "forge_preset")
+        assert webui.opts.data["forge_preset"] == "anima" and calls == []
     finally:
         webui.opts.data.clear()
         webui.opts.data.update(saved)

@@ -175,6 +175,18 @@ def forge_preset_settings(preset: str, opts: Any = None) -> dict[str, Any]:
     }
 
 
+def _refuse_frozen(opts: Any, cmd_opts: Any, preset: str) -> None:
+    """:class:`ValidationError` when a ``--freeze-settings*`` flag keeps a
+    setting the switch writes (the setter would fail an assertion half way)."""
+
+    from remi.ui.settings import frozen_reason
+
+    keys = ("forge_preset", "sd_model_checkpoint", "forge_additional_modules", "forge_unet_storage_dtype")
+    for key in (*keys, *(f"{key}_{preset}" for key in ("forge_checkpoint", *keys[2:]))):
+        if key in opts.data_labels and (reason := frozen_reason(opts, key, cmd_opts)) is not None:
+            raise ValidationError([ParamError(reason, owner="settings", param="forge_preset")])
+
+
 def apply_forge_preset(preset: str) -> dict[str, Any]:
     """Select the UI preset ``preset`` on the server: store it, switch the
     model loading parameters to its checkpoint, modules and dtype (as
@@ -187,6 +199,7 @@ def apply_forge_preset(preset: str) -> dict[str, Any]:
 
     preset = check_preset(preset)
     settings = forge_preset_settings(preset)
+    _refuse_frozen(shared.opts, shared.cmd_opts, preset)
     shared.opts.set("forge_preset", preset)
     changed = main_entry.dtype_change(settings["forge_unet_storage_dtype"], preset, save=False, refresh=False)
     changed = main_entry.modules_change(settings["forge_additional_modules"], preset, save=False, refresh=False) or changed
