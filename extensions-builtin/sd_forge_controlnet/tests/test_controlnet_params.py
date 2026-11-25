@@ -433,13 +433,15 @@ def test_enabled_units_are_checked_before_the_job(cn, registry, files):
         ({"module": "nope"}, "unknown preprocessor"),
         ({"image": None}, "upload a control image"),
         ({"image": "missing-upload-id"}, "unknown upload"),
+        # the colour layer painted over the image: read with it, so checked with it
+        ({"sketch": "missing-upload-id"}, "unknown upload"),
     ):
         with pytest.raises(ui.ValidationError) as error:
             lay.values_to_args({"unit_0": {**good, **change}}, ctx)
         assert message in str(error.value), change
     # A model-free preprocessor, a disabled unit with stale uploads, a preview used as input
     lay.values_to_args({"unit_0": {**good, "module": "reference_test", "model": "None"}}, ctx)
-    lay.values_to_args({"unit_0": {**good, "enabled": False, "image": "missing-upload-id", "model": "gone"}}, ctx)
+    lay.values_to_args({"unit_0": {**good, "enabled": False, "image": "missing-upload-id", "sketch": "missing-upload-id", "model": "gone"}}, ctx)
     lay.values_to_args({"unit_0": {**good, "image": None, "generated_image": image, "use_preview_as_input": True}}, ctx)
 
 

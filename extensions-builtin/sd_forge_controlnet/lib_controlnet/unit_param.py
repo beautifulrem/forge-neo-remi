@@ -408,8 +408,11 @@ class ControlNetUnitParam(ui.Custom):
             return unit  # the img2img image (and mask) are the input, as before
 
         image = self._load(ctx, value["image"])
+        # the colour layer painted over the image: read with it, so also checked with it when the
+        # job is submitted (validation resolves no image, only checks the ids)
+        sketch = self._load(ctx, value["sketch"]) if value["image"] else None
         if image is not None:
-            unit.image = rgba(with_sketch(image, self._load(ctx, value["sketch"])))
+            unit.image = rgba(with_sketch(image, sketch))
         fg = self._load(ctx, value["image_fg"])
         unit.image_fg = mask_layer(fg) if fg is not None else None
         if value["mask_upload"]:
