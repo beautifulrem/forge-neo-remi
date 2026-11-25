@@ -906,6 +906,10 @@ class ChainRunner:
         self._lock = threading.RLock()
         self._threads: set[threading.Thread] = set()
         self._run_fingerprints: dict[str, str] = {}
+        self._local_upsample_guard = threading.Lock()
+        self._local_upsample: str | None = None
+        """the chain whose local model's upsample stage runs now, behind the generation lock (one at
+        a time): set while the queue's state is that stage's to flip, so Cancel stops it as Interrupt does"""
         """job id → the model fingerprint when the stage job started"""
         self._unhook = queue.add_completion_hook(self.on_job_finished)
         self._unhook_start: Callable[[], None] | None = queue.add_start_hook(self._on_job_started)
@@ -1124,6 +1128,13 @@ class ChainRunner:
                 self.queue.interrupt(job_id)
             except Exception:
                 pass
+        # a local model's upsample stage is no job: it stops on the queue's state, which is its own
+        # while it runs (it holds the generation lock); a stage asking an endpoint runs beside jobs
+        with self._local_upsample_guard:
+            if self._local_upsample == chain_id:
+                state = self.queue.state()
+                if state is not None:
+                    state.interrupt()
         assert updated is not None
         self._publish_chain(updated)
         return updated
@@ -1361,7 +1372,14 @@ class ChainRunner:
         def run_local() -> str:
             # Interrupt flips the queue's state while this holds the lock: the local model stops on it
             with self.queue.interruptible():
-                return self.upsampler(stage, upstream_prompt, upstream_outputs)
+                with self._local_upsample_guard:
+                    self._local_upsample = chain_id
+                try:
+                    return self.upsampler(stage, upstream_prompt, upstream_outputs)
+                finally:
+                    # before interruptible() clears the flag: one Cancel set cannot reach what runs next
+                    with self._local_upsample_guard:
+                        self._local_upsample = None
 
         try:
             result: str | None = None

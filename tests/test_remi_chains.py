@@ -591,3 +591,47 @@ def test_an_interrupted_local_upsample_stage_ends_the_pipeline_cancelled(tmp_pat
         runner.close()
         files.close()
         jobs.close()
+
+
+def test_cancelling_a_pipeline_stops_its_local_upsample_stage(tmp_path):
+    """Cancel stops a local model's upsample stage as Interrupt does: it holds the generation lock,
+    so the queue's state is flipped for it (and cleared after, for whatever runs next). A stage that
+    only asks the prompt tools' endpoint runs beside jobs: cancelling it leaves the state alone."""
+
+    from remi.prompt_tools.translate import GenerationInterrupted
+
+    files = FileStore(tmp_path / "files")
+    jobs = JobStore(tmp_path / "jobs.db")
+    bus = EventBus()
+    state = FakeState()
+    queue = JobQueue(jobs, files, bus, executor=lambda job, ctx: None, dispatch=run_inline, lock=threading.Lock(), validate=lambda *a: None, state=lambda: state, hash_layout=lambda tab: "h")
+    started = threading.Event()
+    seen: list[bool] = []
+
+    def upsampler(stage, upstream_prompt, upstream_outputs):
+        started.set()
+        deadline = time.monotonic() + 1
+        while not state.interrupted and time.monotonic() < deadline:
+            time.sleep(0.01)
+        seen.append(state.interrupted)
+        if state.interrupted:
+            raise GenerationInterrupted()
+        return "fox, detailed"
+
+    runner = ChainRunner(ChainStore(jobs), queue, files, bus, upsampler=upsampler, model_fingerprint=lambda: "m")
+    try:
+        for config, stopped in (({"local_model_path": "/srv/qwen.gguf"}, True), ({}, False)):
+            started.clear()
+            chain = runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "fox"}, config=config), StageSpec(kind="generate", core={"prompt": "fox"})])
+            assert started.wait(5)
+            assert runner.cancel_chain(chain.id).status == "cancelled"
+            assert runner.wait_idle(5)
+            assert seen.pop() is stopped
+            done = runner.store.get_chain(chain.id)
+            assert done.status == "cancelled" and done.stages[1].job_id is None
+            assert runner.store.get_cached(done.stages[0].stage_hash or "") is None
+            assert state.interrupted is False
+    finally:
+        runner.close()
+        files.close()
+        jobs.close()

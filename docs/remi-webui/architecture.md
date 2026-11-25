@@ -526,7 +526,9 @@ client has a bounded event queue and one preview slot.
   running. `prompt_upsample` stages run on a background thread; one with a
   local model also takes the generation lock (it loads into VRAM) and stops on
   Interrupt as the upsample route's does, ending the pipeline `cancelled` (nothing
-  cached) as an interrupted generation stage does; one that
+  cached) as an interrupted generation stage does; cancelling the pipeline
+  stops it the same way (`cancel_chain` flips the queue's state, which is the
+  stage's own while it holds the lock, and only then); one that
   asks the prompt tools' endpoint does not (and fails while the prompt tools
   are off, as `/prompt-tools/upsample` answers 409 then). A stage's cache key covers its parameters, its upstream
   stage's hash, images and prompt, and the server-side model fingerprint
