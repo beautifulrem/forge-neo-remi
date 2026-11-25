@@ -148,9 +148,10 @@ export function RecipeManager() {
       return { recipe, count: Math.max(0, applied.count - resolved.length), warnings, overridden: overridden.length > 0 ? lockedLabels(index, overridden) : null }
     },
     onSuccess: ({ recipe, count, warnings, overridden }) => {
-      const notes = [warnings.join("; "), overridden ? t("Overridden by a lock: {{names}}", { names: overridden }) : ""].filter(Boolean)
+      // (toast descriptions do not break lines)
+      const notes = [...warnings, ...(overridden ? [t("Overridden by a lock: {{names}}", { names: overridden })] : [])]
       toast.success(t("Recipe “{{name}}” applied ({{count}} params)", { name: recipe.name, count }), {
-        description: notes.length > 0 ? notes.join("\n") : undefined,
+        description: notes.length > 0 ? notes.join("; ") : undefined,
       })
     },
     onError: (error) => toast.error(t("Could not apply recipe"), { description: errorText(error) }),

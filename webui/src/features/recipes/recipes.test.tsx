@@ -185,7 +185,7 @@ describe("Recipes capture and manager UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply recipe" }))
     await waitFor(() =>
       expect(success).toHaveBeenCalledWith("Recipe “Qwen Turbo 8-step” applied (3 params)", {
-        description: "Active model lacks required capabilities: distilled_cfg1\nOverridden by a lock: Width and Sampling steps",
+        description: "Active model lacks required capabilities: distilled_cfg1; Overridden by a lock: Width and Sampling steps",
       }),
     )
     expect(store.getState().values.core?.width).toBe(width)
