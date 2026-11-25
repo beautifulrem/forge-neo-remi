@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import binascii
 import contextlib
+import copy
 import json
 import os
 import re
@@ -94,7 +95,13 @@ CREATE TABLE IF NOT EXISTS asset_lineage (
 CREATE INDEX IF NOT EXISTS asset_lineage_parent ON asset_lineage(parent_id);
 CREATE INDEX IF NOT EXISTS asset_lineage_job ON asset_lineage(job_id);
 CREATE INDEX IF NOT EXISTS asset_lineage_chain ON asset_lineage(chain_id, stage_index);
+CREATE INDEX IF NOT EXISTS files_kind_name ON files(kind, name);
+CREATE INDEX IF NOT EXISTS files_kind_area ON files(kind, COALESCE(width * height, 0));
+CREATE INDEX IF NOT EXISTS gallery_meta_starred ON gallery_meta(starred, file_id);
 """
+# The last three serve the gallery's sorts by name and by size (the expression is the one
+# GalleryIndex.list orders by) and its star filter, which read and sorted every output without
+# them. ``IF NOT EXISTS``: a database an older version made gets them when it is next opened.
 
 LINEAGE_RELATIONS = ("init_img", "mask", "upscale_from", "retry_of", "reference", "chain_stage")
 MAX_LINEAGE_DEPTH = 8
@@ -209,6 +216,8 @@ class GalleryIndex:
         changes when another connection — the file store's — commits)"""
         self._missing: tuple[float, int, tuple[str, ...]] | None = None
         """``(checked at, data_version, roots)`` of :meth:`_missing_roots`"""
+        self._facets: tuple[tuple[Any, ...], dict[str, Any]] | None = None
+        """``(key, answer)`` of the last :meth:`facets`"""
 
     def close(self) -> None:
         with self._lock:
@@ -342,8 +351,9 @@ class GalleryIndex:
             where.append("f.created < ?")
             args.append(float(q.until))
         if q.starred is not None:
-            where.append("g.starred = ?")
-            args.append(int(q.starred))
+            # starred: the few starred rows through gallery_meta_starred; unstarred (most rows): the
+            # unary + keeps that index out, so the page is read in its order as without the filter
+            where.append("g.starred = 1" if q.starred else "+g.starred = 0")
         if q.board_id:
             where.append("f.id IN (SELECT file_id FROM board_items WHERE board_id = ?)")
             args.append(q.board_id)
@@ -359,7 +369,8 @@ class GalleryIndex:
 
         self.sync()
         sort = q.sort if q.sort in SORTS else "newest"
-        # created and name are NOT NULL: bare, so files_kind_created serves the order (COALESCE would sort every output)
+        # created and name are NOT NULL: bare, so files_kind_created_id and files_kind_name serve the order; the
+        # size's expression is files_kind_area's (another spelling would sort every output)
         key, direction = {"newest": ("f.created", "DESC"), "oldest": ("f.created", "ASC"), "name": ("f.name", "ASC"), "largest": ("COALESCE(f.width * f.height, 0)", "DESC")}[sort]
         where, args = self._filters(q)
         op = "<" if direction == "DESC" else ">"
@@ -432,26 +443,34 @@ class GalleryIndex:
         return GalleryItem(FileRecord(*row[:12]), row[12], row[13], bool(row[14]))
 
     def facets(self) -> dict[str, Any]:
-        """Filter values with counts: models, categories, date bounds, stars."""
+        """Filter values with counts: models, categories, date bounds, stars. Three passes
+        over every output, so the answer is kept until the outputs change (another
+        connection's commit: ``data_version``; this one's writes: ``total_changes``) or
+        the missing folders do."""
 
         self.sync()
         available, args = self._available()
         where = " AND ".join(["f.kind = 'output'", *available])
         with self._lock:
+            key = (self._db.execute("PRAGMA data_version").fetchone()[0], self._db.total_changes, tuple(args))
+            if self._facets is not None and self._facets[0] == key:
+                return copy.deepcopy(self._facets[1])
             models = self._db.execute(
                 f"SELECT g.model, COUNT(*) FROM files f JOIN gallery_meta g ON g.file_id = f.id WHERE {where} AND g.model IS NOT NULL GROUP BY g.model ORDER BY COUNT(*) DESC, g.model LIMIT 500",
                 args,
             ).fetchall()
             categories = dict(self._db.execute(f"SELECT g.category, COUNT(*) FROM files f JOIN gallery_meta g ON g.file_id = f.id WHERE {where} GROUP BY g.category", args).fetchall())
             oldest, newest, total, starred = self._db.execute(f"SELECT MIN(f.created), MAX(f.created), COUNT(*), COALESCE(SUM(g.starred), 0) FROM files f JOIN gallery_meta g ON g.file_id = f.id WHERE {where}", args).fetchone()
-        return {
-            "models": [{"name": name, "count": count} for name, count in models],
-            "categories": [{"name": name, "count": categories.get(name, 0)} for name in CATEGORIES],
-            "oldest": oldest,
-            "newest": newest,
-            "total": total,
-            "starred": starred,
-        }
+            result = {
+                "models": [{"name": name, "count": count} for name, count in models],
+                "categories": [{"name": name, "count": categories.get(name, 0)} for name in CATEGORIES],
+                "oldest": oldest,
+                "newest": newest,
+                "total": total,
+                "starred": starred,
+            }
+            self._facets = (key, result)
+        return copy.deepcopy(result)
 
     # endregion
 

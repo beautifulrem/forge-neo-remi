@@ -413,3 +413,102 @@ def test_totals_leave_out_a_whole_missing_output_folder(server, webui, tmp_path)
 def ids_of(page):
     return [item["id"] for item in page["items"]]
 
+
+
+def _plans(index, query):
+    """``(page plan, count plan)`` of ``index.list(query)``: the statements it runs, explained."""
+
+    statements: list[str] = []
+    index._db.set_trace_callback(statements.append)
+    try:
+        index.list(query)
+    finally:
+        index._db.set_trace_callback(None)
+
+    def explain(sql):
+        return " | ".join(row[3] for row in index._db.execute("EXPLAIN QUERY PLAN " + sql))
+
+    page = next(sql for sql in statements if sql.startswith("SELECT") and " ORDER BY " in sql)
+    count = next(sql for sql in statements if sql.startswith("SELECT COUNT(*)"))
+    return explain(page), explain(count)
+
+
+def test_the_gallery_sorts_and_the_star_filter_are_served_by_indexes(tmp_path):
+    """With 100k outputs, sorting by name or size and showing the starred ones read and
+    sorted every output (65-138 ms a page): only the newest-first order had an index."""
+    from remi.files import FileStore
+    from remi.library import GalleryQuery
+
+    files = FileStore(tmp_path / "files")
+    index = GalleryIndex(files, folders=list)
+    try:
+        for width in (8, 12, 10):
+            files.save_output_image(Image.new("RGB", (width, 8)), f"a {width}")
+        page, count = _plans(index, GalleryQuery(sort="name"))
+        assert "files_kind_name" in page and "TEMP B-TREE FOR ORDER BY" not in page
+        assert "COVERING INDEX files_kind_created_id" in count  # the total reads no table rows of files
+        page, _count = _plans(index, GalleryQuery(sort="largest"))
+        assert "files_kind_area" in page and "TEMP B-TREE FOR ORDER BY" not in page
+        page, count = _plans(index, GalleryQuery(starred=True))
+        assert "gallery_meta_starred" in page and "gallery_meta_starred" in count
+        page, count = _plans(index, GalleryQuery(starred=False))  # most outputs: read in the page's order
+        assert "gallery_meta_starred" not in page and "files_kind_created_id" in page
+    finally:
+        index.close()
+        files.close()
+
+
+def test_an_existing_gallery_database_gets_the_indexes(tmp_path):
+    import sqlite3
+    from contextlib import closing
+
+    from remi.files import FileStore
+
+    files = FileStore(tmp_path / "files")
+    GalleryIndex(files, folders=list).close()
+    files.close()
+    with closing(sqlite3.connect(tmp_path / "files" / "files.db")) as db, db:  # as an older version left it
+        for name in ("files_kind_created_id", "files_kind_name", "files_kind_area", "gallery_meta_starred"):
+            db.execute(f"DROP INDEX {name}")
+        db.execute("CREATE INDEX files_kind_created ON files(kind, created DESC)")
+    files = FileStore(tmp_path / "files")
+    index = GalleryIndex(files, folders=list)
+    try:
+        names = {name for (name,) in index._db.execute("SELECT name FROM sqlite_master WHERE type = 'index'")}
+        assert {"files_kind_created_id", "files_kind_name", "files_kind_area", "gallery_meta_starred"} <= names
+        assert "files_kind_created" not in names  # replaced by the covering one
+    finally:
+        index.close()
+        files.close()
+
+
+def test_the_facets_are_kept_until_the_outputs_change(tmp_path):
+    """The facets are three passes over every output (228 ms with 100k): the gallery asks
+    for them on every visit. They are counted again only once the outputs changed (a new
+    output, a star, a removal) or a folder went missing."""
+    from remi.files import FileStore
+
+    files = FileStore(tmp_path / "files")
+    index = GalleryIndex(files, folders=list)
+    try:
+        first = files.save_output_image(Image.new("RGB", (8, 8)), "a\nSteps: 20, Model: anima")
+        facets = index.facets()
+        assert facets["total"] == 1 and facets["models"] == [{"name": "anima", "count": 1}]
+        statements: list[str] = []
+        index._db.set_trace_callback(statements.append)
+        try:
+            again = index.facets()
+        finally:
+            index._db.set_trace_callback(None)
+        assert again == facets and not [sql for sql in statements if "GROUP BY" in sql or "MIN(" in sql]
+        again["models"].clear()  # a caller's copy
+        assert index.facets()["models"] == [{"name": "anima", "count": 1}]
+        index.set_starred([first.id], True)  # this connection's write
+        assert index.facets()["starred"] == 1
+        files.save_output_image(Image.new("RGB", (8, 8)), "b\nSteps: 20, Model: flux")  # the file store's connection
+        assert index.facets()["total"] == 2
+        index.delete([first.id], delete_files=True)
+        assert index.facets()["total"] == 1 and index.facets()["starred"] == 0
+    finally:
+        index.close()
+        files.close()

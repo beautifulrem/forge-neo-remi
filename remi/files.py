@@ -189,7 +189,8 @@ CREATE TABLE IF NOT EXISTS files (
     tab TEXT,
     infotext TEXT
 );
-CREATE INDEX IF NOT EXISTS files_kind_created ON files(kind, created DESC);
+DROP INDEX IF EXISTS files_kind_created;
+CREATE INDEX IF NOT EXISTS files_kind_created_id ON files(kind, created, id);
 CREATE UNIQUE INDEX IF NOT EXISTS files_kind_path ON files(kind, path);
 CREATE INDEX IF NOT EXISTS files_sha ON files(sha256);
 CREATE INDEX IF NOT EXISTS files_job ON files(job_id, kind, created);
