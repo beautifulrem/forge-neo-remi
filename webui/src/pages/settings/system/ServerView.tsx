@@ -258,13 +258,18 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
         title="Model memory"
         description="Unload the model to free RAM and VRAM; load the selected model now instead of at the next generation, or load it again from disk."
         aside={
-          modelLoading || known ? (
-            <Badge variant={loaded ? "secondary" : "outline"} className="max-w-56 truncate" title={loaded ?? undefined}>
-              {modelLoading ? t("Loading…") : loaded ? loaded.replace(/\s*\[[0-9a-f]{6,}\]$/i, "") : t("No model loaded")}
-            </Badge>
-          ) : status.isPending ? (
-            <Skeleton className="h-5 w-28" />
-          ) : null
+          // the model's room is the same before and after the status arrives: the description
+          // beside it wraps once, not again when a long name replaces the skeleton
+          <div className="flex w-[min(14rem,40%)] shrink-0 justify-end">
+            {modelLoading || known ? (
+              <Badge variant={loaded ? "secondary" : "outline"} className="max-w-full" title={loaded ?? undefined}>
+                {/* the badge is a centring flex box: only a text box of its own ends a long name in an ellipsis */}
+                <span className="min-w-0 truncate">{modelLoading ? t("Loading…") : loaded ? loaded.replace(/\s*\[[0-9a-f]{6,}\]$/i, "") : t("No model loaded")}</span>
+              </Badge>
+            ) : status.isPending ? (
+              <Skeleton className="h-5 w-28 max-w-full" />
+            ) : null}
+          </div>
         }
         footer={
           <>

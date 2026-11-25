@@ -5,7 +5,7 @@
  * shortcut hints and generation warnings.
  */
 import { expect, type Locator, type Page, test } from "@playwright/test"
-import { mod, openGenerate, openRoute, presetStorage, setPrompt } from "./helpers"
+import { injectFaults, mod, openGenerate, openRoute, presetStorage, setPrompt } from "./helpers"
 
 /** Pairs of header controls whose boxes overlap, and kbd hints cut by their button. */
 async function headerProblems(page: Page): Promise<string[]> {
@@ -1095,4 +1095,23 @@ test.describe("the comparison fits its frame to its row", () => {
       for (const height of heights) expect(height).toBeGreaterThanOrEqual(100)
     })
   }
+})
+
+// Settings > Server: while the status loaded, the model's place beside "Model memory" held a short
+// skeleton; the model's name then took more room, the description beside it wrapped once more and
+// every panel below jumped (CLS 0.243 on each load in Chinese at 1440×900).
+test.describe("the server view while its status loads", () => {
+  test("keeps the panels below the model in place", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await presetStorage(page, { locale: "zh-CN" })
+    await injectFaults(page, [{ path: "^/server/status$", delay: 1500 }])
+    await page.goto("/#/settings?view=server")
+    const unload = page.getByRole("button", { name: "卸载模型" })
+    await expect(unload).toBeVisible()
+    const before = (await unload.boundingBox())!.y
+    // the loaded model's name (the mock's checkpoint), its hash in full in the title
+    await expect(page.getByRole("main").locator("[data-slot=badge][title]")).toBeVisible()
+    const after = (await unload.boundingBox())!.y
+    expect(Math.abs(after - before), "the panel's buttons moved").toBeLessThanOrEqual(0.5)
+  })
 })
