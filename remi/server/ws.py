@@ -42,8 +42,12 @@ Snapshot = Callable[[], list[dict[str, Any]]]
 
 
 class Client:
-    def __init__(self, websocket: WebSocket, max_events: int = MAX_EVENTS, snapshot: Snapshot | None = None) -> None:
+    def __init__(self, websocket: WebSocket, max_events: int = MAX_EVENTS, snapshot: Snapshot | None = None, session: str | None = None) -> None:
         self.websocket = websocket
+        self.session = session
+        """the session cookie of the handshake: logging that session out closes the socket"""
+        self.close_code: int | None = None
+        """set to close the socket from its own send loop (see :meth:`Hub.disconnect`)"""
         self.events: deque[dict[str, Any]] = deque(maxlen=max_events)
         self.preview: PreviewFrame | None = None
         self.features: set[str] | None = None
@@ -77,6 +81,9 @@ class Client:
             while True:
                 await self.wake.wait()
                 self.wake.clear()
+                if self.close_code is not None:
+                    await self.websocket.close(code=self.close_code)
+                    return
                 if self.dropped:
                     await self._resync()
                 while self.events:
@@ -145,6 +152,18 @@ class Hub:
     def send_frame(self, frame: PreviewFrame) -> None:
         self._call(self._fan_frame, frame)
 
+    def disconnect(self, session: str) -> None:
+        """Close the sockets opened with the session cookie ``session`` (it
+        was logged out: they would stream on). Close code 1008."""
+
+        self._call(self._disconnect, session)
+
+    def _disconnect(self, session: str) -> None:
+        for client in self.clients:
+            if client.session == session:
+                client.close_code = 1008
+                client.wake.set()
+
     def _fan_event(self, event: dict[str, Any]) -> None:
         for client in self.clients:
             client.push_event(event)
@@ -160,7 +179,9 @@ class Hub:
         await websocket.accept()
         if self.loop is None:
             self.loop = asyncio.get_running_loop()
-        client = Client(websocket, snapshot=self.snapshot)
+        from remi.server.auth import COOKIE_NAME
+
+        client = Client(websocket, snapshot=self.snapshot, session=websocket.cookies.get(COOKIE_NAME))
         client.push_event({"type": "hello", "features": list(SERVER_FEATURES), "version": self.version})
         try:
             for event in self.snapshot() if self.snapshot else []:

@@ -58,7 +58,11 @@ def logout(request: Request) -> Response:
     from remi.server.auth import COOKIE_NAME
 
     auth = request.app.state.auth
-    auth.revoke(request.cookies.get(COOKIE_NAME))
+    session = request.cookies.get(COOKIE_NAME)
+    auth.revoke(session)
+    hub = getattr(request.app.state, "hub", None)
+    if session and hub is not None:
+        hub.disconnect(session)  # its open sockets would stream on
     response = Response(status_code=204)
     auth.clear_cookie(response)
     return response

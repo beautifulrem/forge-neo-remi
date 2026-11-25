@@ -411,6 +411,34 @@ def test_websocket_with_a_session_cookie(locked):
         assert socket.receive_json()["type"] == "hello"
 
 
+def test_logging_out_closes_the_sessions_websockets(locked):
+    import threading
+
+    from fastapi.testclient import TestClient
+
+    other = TestClient(locked.app, base_url=str(locked.client.base_url))
+    other.post("/api/v2/auth/login", json={"username": "bob", "password": "pw:with:colons"})
+    locked.client.post("/api/v2/auth/login", json={"username": "ann", "password": "s3cret"})
+    with locked.client.websocket_connect(WS_URL) as socket, other.websocket_connect(WS_URL) as kept:
+        socket.receive_json(), socket.receive_json()  # hello, queue
+        kept.receive_json(), kept.receive_json()
+        closed = []
+
+        def until_closed():
+            while (message := socket.receive())["type"] != "websocket.close":
+                pass
+            closed.append(message)
+
+        reader = threading.Thread(target=until_closed, daemon=True)
+        reader.start()
+        assert locked.client.post("/api/v2/auth/logout").status_code == 204
+        reader.join(timeout=5)
+        assert closed and closed[0]["code"] == 1008  # the revoked session streamed on before
+        # another session's socket stays open
+        kept.send_json({"type": "ping"})
+        assert kept.receive_json() == {"type": "pong"}
+
+
 # endregion
 
 

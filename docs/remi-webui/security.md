@@ -60,7 +60,8 @@ attackers who already have a login (they are administrators by design).
   per-installation secret (`secret.key`, mode 0600) and the user's password;
   30 days; `HttpOnly`, `SameSite=Lax`, `Secure` with `--tls-*` or an HTTPS
   request; scoped to `--subpath`. Logout revokes it server-side (denylist
-  until expiry); a password change invalidates all sessions.
+  until expiry) and closes the WebSockets opened with it (close 1008); a
+  password change invalidates all sessions.
 - Brute force: ten failed logins per client per minute — through the login
   form **or HTTP Basic** — and the client gets 429 for a minute, even with the
   right password. Password comparisons are constant-time; unknown users cost
@@ -365,6 +366,10 @@ To let other machines in:
   are not caught for `/sdapi` image URLs (turn `api_enable_requests` off on
   servers that must not reach their network), nor for a client-named
   extension index URL (only reachable where extension access is allowed).
+- **Slow clients:** uvicorn has no timeout for a request's headers (only
+  for an idle kept-alive connection), so a client can hold connections open
+  by sending them slowly. On a server others can reach, put a reverse proxy
+  with header and body timeouts in front.
 - **Request bodies** are buffered up to their cap (twice
   `remi_upload_max_mb`): each concurrent request of a client allowed to call
   the API can hold that much memory while it is parsed.
