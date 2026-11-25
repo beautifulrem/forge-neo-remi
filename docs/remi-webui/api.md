@@ -58,9 +58,10 @@ Contents: [Conventions](#conventions) · [Authentication](#authentication) ·
   Other errors are
   `{"detail": "..."}` with the usual status codes (404 unknown id, 409 wrong
   state, 413 too large, 415 unsupported type, 403 refused, 401 not logged in).
-  Extension-management errors and a refused queue, pipeline or recipe
-  operation (`JobError`, `RecipeError`) add `template` and `params` in the
-  same way; for these a sentence without values has them too (its template
+  Extension-management errors and a refused operation (a queue, pipeline or
+  recipe one: `JobError`, `RecipeError`; any other: `Refused`, such as a
+  network with no model file or frozen settings) add `template` and `params`
+  in the same way; for these a sentence without values has them too (its template
   is the `detail` itself, `params` is `{}`), so a client knows the detail is
   a catalog sentence.
 - **Paging.** Lists return `{"items": [...], "next_cursor": "...", "total": n}`;

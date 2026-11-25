@@ -1031,10 +1031,29 @@ def test_frozen_settings_keep_the_translation_key(server, webui, monkeypatch, fl
     monkeypatch.setitem(webui.opts.data, "prompt_tools_translation_provider", "deepl")
     assert server.client.put(f"{api}/translation-key", json={"key": "kept"}).json() == {"configured": True}
     monkeypatch.setattr(shared.cmd_opts, flag, value, raising=False)
+    # the reason the settings give for a frozen setting (frozen_reason), as a sentence the UI translates:
+    # the status alone read "It changed meanwhile"
     for key in ("other", ""):
         response = server.client.put(f"{api}/translation-key", json={"key": key})
-        assert response.status_code == 409 and response.json()["detail"] == detail
+        assert response.status_code == 409 and response.json() == {"detail": detail, "template": detail, "params": {}}
     assert pt.tools_for(server.services).translation_config().key == "kept"
+
+
+def test_a_refused_collection_name_names_its_field_and_reason(server):
+    """A collection name that is too long, or blank, answered FastAPI's or the store's English
+    detail, which the UI could only say as "The server rejected the request.": it is a refused
+    value on `name`, with a sentence the UI translates."""
+
+    api = "/api/v2/prompt-tools"
+    too_long = {"owner": None, "param": "name", "message": "a collection name must be at most 200 characters", "template": "a collection name must be at most {{maximum}} characters", "params": {"maximum": "200"}}
+    blank = {"owner": None, "param": "name", "message": "a collection needs a name"}
+    for name, error in (("x" * 201, too_long), ("  ", blank), ("", blank)):
+        response = server.client.post(f"{api}/collections", json={"name": name})
+        assert response.status_code == 422 and response.json() == {"errors": [error]}, name
+    collection = server.client.post(f"{api}/collections", json={"name": "y" * 200}).json()
+    for name, error in (("x" * 201, too_long), (" ", blank)):
+        response = server.client.patch(f"{api}/collections/{collection['id']}", json={"name": name})
+        assert response.status_code == 422 and response.json() == {"errors": [error]}, name
 
 
 def test_the_translation_key_is_only_sent_where_it_was_entered_for(server, webui, monkeypatch):

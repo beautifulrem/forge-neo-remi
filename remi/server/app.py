@@ -34,6 +34,7 @@ from remi.server.spa import DIST, Spa
 from remi.server.ws import Hub
 from remi.setting_values import encodable
 from remi.ui import ParamError, ValidationError
+from remi.ui.errors import Refused
 from remi.ui.sentence import error_fields
 
 log = logging.getLogger(__name__)
@@ -160,9 +161,10 @@ def _validation_error(request: Request, error: ValidationError) -> JSONResponse:
     return ErrorResponse(status_code=422, content=error.to_json())
 
 
-def _refused(request: Request, error: JobError | RecipeError) -> JSONResponse:
-    """A queue, pipeline or recipe operation that cannot be done: its sentence
-    in English (``detail``) and its template and values, which the UI translates."""
+def _refused(request: Request, error: JobError | RecipeError | Refused) -> JSONResponse:
+    """A queue, pipeline, recipe or other operation the server refuses: its
+    sentence in English (``detail``) and its template and values, which the UI
+    translates."""
 
     return ErrorResponse(status_code=error.status, content={"detail": str(error), **error_fields(error.message)})
 
@@ -310,7 +312,7 @@ def create_app(
         docs_url=None,
         redoc_url=None,
         default_response_class=TextSafeResponse,
-        exception_handlers={Exception: handle_exception, RequestValidationError: _request_validation_error, ValidationError: _validation_error, JobError: _refused, RecipeError: _refused, FileError: _file_error},
+        exception_handlers={Exception: handle_exception, RequestValidationError: _request_validation_error, ValidationError: _validation_error, JobError: _refused, RecipeError: _refused, Refused: _refused, FileError: _file_error},
         # every route's JSON body, /sdapi's (added below) included
         dependencies=[Depends(refuse_broken_text)],
     )

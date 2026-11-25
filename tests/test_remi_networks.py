@@ -366,7 +366,23 @@ def test_sidecars_other_tools_wrote_are_read_and_stay_editable(lora, lora_root):
     assert client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"notes": "small"}}).status_code == 200
     assert json.loads(sidecar.read_text(encoding="utf-8")) == {**large, "notes": "small"}
     # what a client sends is still capped
-    assert client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"mine": ["y" * 1000] * 70}}).status_code == 422
+    response = client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"mine": ["y" * 1000] * 70}})
+    assert response.status_code == 422 and response.json()["errors"] == [{"owner": None, "param": "user_metadata", "message": "user metadata is too large"}]
+
+
+def test_a_refused_metadata_edit_names_its_field_and_reason(lora):
+    """A value the metadata editor sends that the server refuses ("preferred weight" out of
+    range, a note too long) answered free English text, which the UI could only say as "The
+    server rejected the request.": it is a refused value on `user_metadata` with its sentence."""
+
+    response = lora.client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"preferred weight": 1e6}})
+    assert response.status_code == 422
+    [error] = response.json()["errors"]
+    assert error["param"] == "user_metadata" and error["template"] == "{{key}} must be a number between {{minimum}} and {{maximum}}"
+    assert error["params"] == {"key": "'preferred weight'", "minimum": str(-nm.PREFERRED_WEIGHT_LIMIT), "maximum": str(nm.PREFERRED_WEIGHT_LIMIT)}
+    assert error["message"] == f"'preferred weight' must be a number between -{nm.PREFERRED_WEIGHT_LIMIT} and {nm.PREFERRED_WEIGHT_LIMIT}"
+    response = lora.client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"notes": "x" * (nm.USER_TEXT_LIMIT + 1)}})
+    assert response.status_code == 422 and response.json()["errors"][0]["template"] == "{{key}} is too long"
 
 
 UNREADABLE_SIDECAR = "the metadata file {{file}} cannot be read; saving would replace it, so fix or remove it first"
@@ -412,7 +428,7 @@ def test_an_empty_sidecar_is_edited_like_a_missing_one(lora, lora_root):
 
 def test_bad_user_metadata_is_rejected(lora):
     response = lora.client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"preferred weight": "heavy"}})
-    assert response.status_code == 422 and "preferred weight" in response.json()["detail"]
+    assert response.status_code == 422 and "preferred weight" in response.json()["errors"][0]["message"]
     assert lora.client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"sd version": "sd9"}}).status_code == 422
 
 
@@ -767,9 +783,12 @@ def test_items_without_a_file_are_read_only(server, tmp_path, monkeypatch):
     [item] = server.client.get("/api/v2/networks/wildcards").json()["items"]
     assert item["editable"] is False and item["path"] == "colors" and item["prompt"] == "__colors__"
     response = server.client.patch("/api/v2/networks/wildcards/colors/meta", json={"user_metadata": {"notes": "x"}})
-    assert response.status_code == 409
+    # said with its sentence, which the UI translates (the status alone read "it changed meanwhile")
+    read_only = {"detail": "'colors' has no model file to keep metadata or a preview next to", "template": "{{name}} has no model file to keep metadata or a preview next to", "params": {"name": "'colors'"}}
+    assert response.status_code == 409 and response.json() == read_only
     record = server.services.files.save_output_image(Image.new("RGB", (8, 8)), "x")
-    assert server.client.put("/api/v2/networks/wildcards/colors/preview", json={"file_id": record.id}).status_code == 409
+    response = server.client.put("/api/v2/networks/wildcards/colors/preview", json={"file_id": record.id})
+    assert response.status_code == 409 and response.json() == read_only
     assert server.client.post("/api/v2/networks/wildcards/colors/open-folder").status_code in (403, 409)
     # nothing written to (or read from) the working directory
     assert not list(tmp_path.glob("colors*"))
@@ -783,6 +802,7 @@ def test_set_preview_rejects_missing_and_unreadable_files(lora, lora_root):
     broken = lora.services.files.add_upload_bytes(png_bytes()[:60], "broken.png")
     response = client.put("/api/v2/networks/lora/plain/preview", json={"file_id": broken.id})
     assert response.status_code == 422, response.text
+    assert response.json() == {"detail": "cannot read the image", "template": "cannot read the image", "params": {}}
     assert not (lora_root / "plain.preview.png").exists()
 
 

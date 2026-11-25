@@ -7695,13 +7695,13 @@ export interface operations {
                     "application/json": components["schemas"]["Detail"];
                 };
             };
-            /** @description a value is wrong (`detail`), or the sidecar is there but cannot be read and `replace` is not set (`errors`) */
+            /** @description a value is wrong, or the sidecar is there but cannot be read and `replace` is not set */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"] | components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
         };
@@ -9558,7 +9558,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
         };
@@ -9707,7 +9707,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
         };
@@ -11811,7 +11811,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
         };
@@ -11913,7 +11913,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
         };

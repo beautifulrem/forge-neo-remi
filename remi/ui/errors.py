@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from remi.ui.sentence import sentence_fields
+from remi.ui.sentence import Sentence, sentence_fields
 
 
 class SchemaError(ValueError):
@@ -45,3 +45,20 @@ class ValidationError(ValueError):
         for error in errors:
             flat.extend(error.errors if isinstance(error, ValidationError) else [error])
         return cls(flat)
+
+
+class Refused(Exception):
+    """A request the server refuses for a reason the UI says in its language
+    (``status``: 409 when it cannot be done now or to that item, 422 when what
+    was sent cannot be used). ``message`` is a :class:`Sentence`: the error
+    body carries its template and values next to the English ``detail``. A
+    value of a request the server rejects is a :class:`ParamError` instead,
+    which names its field."""
+
+    status = 409
+
+    def __init__(self, message: Sentence, status: int | None = None) -> None:
+        super().__init__(message)
+        self.message = message
+        if status is not None:
+            self.status = status

@@ -23,6 +23,8 @@ from typing import Any
 from backend.nn.anima_layout import declared_depth as anima_declared_depth
 from remi.image_meta import utf8_text
 from remi.setting_values import MAX_NESTING, nested_deeper
+from remi.ui.errors import ParamError
+from remi.ui.sentence import Sentence
 
 _ANIMA_DEPTH_LABELS: dict[int, str] = {
     28: "2B (28 blocks)",
@@ -318,7 +320,8 @@ def normalize_user_metadata(values: Mapping[str, Any]) -> dict[str, Any]:
     """Checks the known keys of a user-metadata edit (``None`` removes a
     key) and returns them normalised; unknown keys pass unchanged.
 
-    Raises ValueError naming the first bad key."""
+    Raises a ``ParamError`` (a ValueError) on ``user_metadata`` naming the
+    first bad key, with a sentence the UI translates."""
 
     out: dict[str, Any] = {}
     for key, value in values.items():
@@ -327,28 +330,28 @@ def normalize_user_metadata(values: Mapping[str, Any]) -> dict[str, Any]:
             out[key] = None
         elif key in TEXT_FIELDS:
             if not isinstance(value, str):
-                raise ValueError(f"{key!r} must be text")
+                raise ParamError(Sentence("{{key}} must be text", key=repr(key)), param="user_metadata")
             if len(value) > USER_TEXT_LIMIT:
-                raise ValueError(f"{key!r} is too long")
+                raise ParamError(Sentence("{{key}} is too long", key=repr(key)), param="user_metadata")
             out[key] = value
         elif key == "preferred weight":
             number = value if isinstance(value, (int, float)) and not isinstance(value, bool) else _number(value) if isinstance(value, str) and value.strip() else None
             if number is None or not math.isfinite(number) or not -PREFERRED_WEIGHT_LIMIT <= number <= PREFERRED_WEIGHT_LIMIT:
-                raise ValueError(f"'preferred weight' must be a number between -{PREFERRED_WEIGHT_LIMIT} and {PREFERRED_WEIGHT_LIMIT}")
+                raise ParamError(Sentence("{{key}} must be a number between {{minimum}} and {{maximum}}", key=repr(key), minimum=-PREFERRED_WEIGHT_LIMIT, maximum=PREFERRED_WEIGHT_LIMIT), param="user_metadata")
             out[key] = float(number)
         elif key == "sd version":
             if value not in SD_VERSIONS:
-                raise ValueError(f"'sd version' must be one of {', '.join(SD_VERSIONS)}")
+                raise ParamError(Sentence("{{key}} must be one of {{choices}}", key=repr(key), choices=", ".join(SD_VERSIONS)), param="user_metadata")
             out[key] = value
         elif key == "tags":
             if not isinstance(value, (str, list, tuple)):
-                raise ValueError("'tags' must be a list of text")
+                raise ParamError(Sentence("{{key}} must be a list of text", key=repr(key)), param="user_metadata")
             out[key] = parse_tags(value)
         elif key == PREFERRED_MODULES_KEY:
             if not isinstance(value, (list, tuple)) or not all(isinstance(name, str) for name in value):
-                raise ValueError(f"{key!r} must be a list of file names")
+                raise ParamError(Sentence("{{key}} must be a list of file names", key=repr(key)), param="user_metadata")
             if len(value) > PREFERRED_MODULES_LIMIT:
-                raise ValueError(f"{key!r} holds at most {PREFERRED_MODULES_LIMIT} names")
+                raise ParamError(Sentence("{{key}} holds at most {{maximum}} names", key=repr(key), maximum=PREFERRED_MODULES_LIMIT), param="user_metadata")
             names = preferred_modules({key: value})
             out[key] = names or None
         else:

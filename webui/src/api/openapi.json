@@ -2486,19 +2486,11 @@
             }
           },
           "422": {
-            "description": "a value is wrong (`detail`), or the sidecar is there but cannot be read and `replace` is not set (`errors`)",
+            "description": "a value is wrong, or the sidecar is there but cannot be read and `replace` is not set",
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/Detail"
-                    },
-                    {
-                      "$ref": "#/components/schemas/ValidationErrorBody"
-                    }
-                  ],
-                  "title": "Response 422 Edit Meta Api V2 Networks  Kind   Name  Meta Patch"
+                  "$ref": "#/components/schemas/ValidationErrorBody"
                 }
               }
             }
@@ -4792,7 +4784,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Detail"
+                  "$ref": "#/components/schemas/ValidationErrorBody"
                 }
               }
             }
@@ -4917,7 +4909,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Detail"
+                  "$ref": "#/components/schemas/ValidationErrorBody"
                 }
               }
             },
@@ -7719,7 +7711,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Detail"
+                  "$ref": "#/components/schemas/ValidationErrorBody"
                 }
               }
             }
@@ -7787,7 +7779,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Detail"
+                  "$ref": "#/components/schemas/ValidationErrorBody"
                 }
               }
             },
@@ -8592,8 +8584,6 @@
         "properties": {
           "name": {
             "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
             "title": "Name"
           },
           "description": {
@@ -8738,9 +8728,7 @@
           "name": {
             "anyOf": [
               {
-                "type": "string",
-                "maxLength": 120,
-                "minLength": 1
+                "type": "string"
               },
               {
                 "type": "null"
@@ -14374,8 +14362,6 @@
         "properties": {
           "name": {
             "type": "string",
-            "maxLength": 200,
-            "minLength": 1,
             "title": "Name"
           }
         },

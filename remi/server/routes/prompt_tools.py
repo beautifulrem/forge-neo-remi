@@ -12,13 +12,16 @@ from pydantic import Field
 from remi import prompt_tools as pt
 from remi.server import models as m
 from remi.server.deps import ServicesDep, behind_generation
-from remi.ui import ParamError, ValidationError
+from remi.ui import ParamError, Sentence, ValidationError
+from remi.ui.errors import Refused
 
 router = APIRouter(prefix="/prompt-tools")
 
 ERRORS = {404: {"model": m.Detail}, 409: {"model": m.Detail}, 422: {"model": m.Detail}}
 # a prompt tool that refuses a value lists it, as a form does (owner null: a field of the request)
 TOOL_ERRORS = {**ERRORS, 413: {"model": m.Detail}, 422: {"model": m.ValidationErrorBody}, 502: {"model": m.Detail}}
+# a collection name that is blank or too long is a refused value on `name`
+NAME_ERRORS = {**ERRORS, 422: {"model": m.ValidationErrorBody}}
 
 CompletionMode = Literal["tag", "lora", "embedding", "chant", "network", "wildcard", "wildcard-value"]
 CompletionType = Literal["tag", "extra", "lora", "embedding", "chant", "wildcard", "wildcard-value"]
@@ -268,7 +271,8 @@ class PromptCollection(m.Model):
 
 
 class PromptCollectionCreate(m.Model):
-    name: str = Field(min_length=1, max_length=200)
+    # its length is checked by the store, which names the field (a refused value)
+    name: str
 
 
 class PromptFavorite(m.Model):
@@ -434,10 +438,11 @@ def set_translation_key(body: PromptTranslationKey, tools: ToolsDep) -> dict[str
     # config.json, keeps it, so PATCH /options does not see it)
     cmd_opts = shared.cmd_opts
     sections = getattr(cmd_opts, "freeze_settings_in_sections", None) or ""
+    # the reasons frozen_reason gives for a frozen setting (remi.setting_values)
     if getattr(cmd_opts, "freeze_settings", False):
-        raise HTTPException(status_code=409, detail="changing settings is disabled (--freeze-settings)")
+        raise Refused(Sentence("changing settings is disabled (--freeze-settings)"))
     if pt.opt.TOOLS_SECTION[0] in [item.strip() for item in sections.split(",")]:
-        raise HTTPException(status_code=409, detail="the settings in this section are frozen")
+        raise Refused(Sentence("the settings in this section are frozen"))
     return {"configured": _store_call(lambda: tools.set_translation_key(body.key))}
 
 
@@ -504,12 +509,12 @@ def collections(tools: ToolsDep) -> list[dict[str, Any]]:
     return tools.store.collections()
 
 
-@router.post("/collections", response_model=PromptCollection, status_code=201, responses=ERRORS, summary="Create a collection")
+@router.post("/collections", response_model=PromptCollection, status_code=201, responses=NAME_ERRORS, summary="Create a collection")
 def create_collection(body: PromptCollectionCreate, tools: ToolsDep) -> dict[str, Any]:
     return _store_call(lambda: tools.store.create_collection(body.name))
 
 
-@router.patch("/collections/{collection_id}", response_model=m.Ok, responses=ERRORS, summary="Rename a collection")
+@router.patch("/collections/{collection_id}", response_model=m.Ok, responses=NAME_ERRORS, summary="Rename a collection")
 def rename_collection(collection_id: str, body: PromptCollectionCreate, tools: ToolsDep) -> dict[str, Any]:
     _store_call(lambda: tools.store.rename_collection(collection_id, body.name))
     return {"ok": True}

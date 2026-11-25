@@ -1651,7 +1651,7 @@ older server) nothing is shown.
   `detail` (an `ApiError`'s message) is never the whole message:
   `features/errors/error-text.ts` `errorText` says the sentence a refused
   request's body carries (`template` and `params`: a queue, pipeline,
-  recipe or admin operation; it says more than any reading of the status)
+  recipe, admin or other refused operation; it says more than any reading of the status)
   or else a sentence chosen by status (callers pass their own for a status
   that means something specific to them, such as a name already taken; a
   422 lists the refused values' messages, which are catalog keys). A

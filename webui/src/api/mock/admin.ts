@@ -221,7 +221,7 @@ export const adminRoutes: [method: string, pattern: RegExp, handler: Handler][] 
     "POST",
     /^\/models\/hashes$/,
     () => {
-      if (hashes.running) throw new MockHttpError(409, { detail: "the checkpoints are being hashed already" })
+      if (hashes.running) throw new MockHttpError(409, { detail: "the checkpoints are being hashed already", template: "the checkpoints are being hashed already", params: {} })
       const total = 6
       hashes = { running: true, done: 0, total, failed: [], current: [], finished_at: null }
       const tick = setInterval(() => {

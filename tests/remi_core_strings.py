@@ -317,8 +317,9 @@ def param_error_strings() -> set[str]:
 
 
 # The errors of a request Remi refuses (an HTTP status with a sentence the UI shows): the queue's
-# and the pipelines' (``JobError`` and its subclasses) and the recipes' (``RecipeError``)
-REQUEST_ERRORS = ("JobError", "RecipeError")
+# and the pipelines' (``JobError`` and its subclasses), the recipes' (``RecipeError``) and any
+# other operation's (``Refused`` and its subclasses, such as a read-only network's)
+REQUEST_ERRORS = ("JobError", "RecipeError", "Refused")
 
 
 def request_error_classes(folder: str = "remi") -> set[str]:

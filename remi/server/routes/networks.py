@@ -10,10 +10,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 
-from remi.networks import NetworkError, NetworkReadOnly, SidecarUnreadable
+from remi.networks import NetworkError, SidecarUnreadable
 from remi.server import models as m
 from remi.server import network_models as nm
 from remi.server.deps import ServicesDep, not_found, require_local_folders
+from remi.ui.errors import ParamError, Refused
+from remi.ui.sentence import Sentence
 
 log = logging.getLogger(__name__)
 
@@ -28,12 +30,13 @@ Compatible = Annotated[bool, Query(description="only items for the current UI pr
 
 
 def _guard(call: Any) -> Any:
+    """``call()``, a missing kind or item as 404. An item without a model file
+    (``NetworkReadOnly``, 409) is answered with its sentence by the app."""
+
     try:
         return call()
     except NetworkError as error:
         raise not_found(str(error)) from error
-    except NetworkReadOnly as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
 
 
 def _archs(values: list[str] | None) -> list[str]:
@@ -98,11 +101,11 @@ def meta(kind: str, name: str, services: ServicesDep) -> dict[str, Any]:
 @router.patch(
     "/networks/{kind}/{name:path}/meta",
     response_model=nm.NetworkMeta,
-    responses={**WRITE_ERRORS, 422: {"model": m.Detail | m.ValidationErrorBody, "description": "a value is wrong (`detail`), or the sidecar is there but cannot be read and `replace` is not set (`errors`)"}},
+    responses={**WRITE_ERRORS, 422: {"model": m.ValidationErrorBody, "description": "a value is wrong, or the sidecar is there but cannot be read and `replace` is not set"}},
     summary="Edit the user metadata (the `<model>.json` sidecar)",
 )
 def edit_meta(kind: str, name: str, body: nm.UserMetadataPatch, services: ServicesDep) -> dict[str, Any]:
-    from remi.ui import ParamError, Sentence, ValidationError
+    from remi.ui import ValidationError
 
     try:
         result = _guard(lambda: services.networks.update_user_metadata(kind, name, body.user_metadata, replace=body.replace))
@@ -110,8 +113,8 @@ def edit_meta(kind: str, name: str, body: nm.UserMetadataPatch, services: Servic
         log.warning("not editing the metadata of %s/%s: %s", kind, name, error)
         file = os.path.basename(error.path)
         raise ValidationError([ParamError(Sentence("the metadata file {{file}} cannot be read; saving would replace it, so fix or remove it first", file=file), param="user_metadata")]) from error
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
+    except ParamError as error:  # a value of the edit (`normalize_user_metadata`, the size cap)
+        raise ValidationError([error]) from error
     services.bus.publish("networks.changed", kind=kind)
     return result
 
@@ -133,10 +136,10 @@ def set_preview(kind: str, name: str, body: nm.PreviewRequest, services: Service
     except FileNotFoundError as error:
         raise not_found("no such image") from error
     except (UnidentifiedImageError, Image.DecompressionBombError) as error:
-        raise HTTPException(status_code=422, detail="the file is not an image the WebUI can read") from error
+        raise Refused(Sentence("the file is not an image the WebUI can read"), 422) from error
     except OSError as error:  # truncated or otherwise broken image data
         log.debug("cannot read the preview image: %s", error)  # (the message may name the file)
-        raise HTTPException(status_code=422, detail="cannot read the image") from error
+        raise Refused(Sentence("cannot read the image"), 422) from error
     with image:
         result = _guard(lambda: services.networks.set_preview(kind, name, image))
     services.bus.publish("networks.changed", kind=kind)

@@ -344,7 +344,9 @@ All bodies and responses are Pydantic models (`remi/server/models.py`), so
 `webui/src/api/openapi.json` for the generated TS client (`--check` fails when
 it is stale; a test runs it). Rejected values answer 422 with the
 schema-format.md §3 body; other errors `{"detail": str}`, with `template` and
-`params` when the operation refused is a queue, pipeline, recipe or extension one.
+`params` when the server refuses the operation for a reason the UI says: a
+queue, pipeline, recipe or extension one, or any other raising `remi.ui.errors.Refused`
+(a network with no model file, frozen settings, checkpoints already being hashed).
 
 | Method | Path | Purpose |
 |---|---|---|

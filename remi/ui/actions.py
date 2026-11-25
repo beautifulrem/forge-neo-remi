@@ -25,7 +25,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from remi.ui.errors import ParamError, SchemaError, ValidationError
+from remi.ui.errors import ParamError, Refused, SchemaError, ValidationError
 from remi.ui.sentence import Sentence
 from remi.ui.types import Patch, PatchEntry
 
@@ -123,7 +123,8 @@ def call_action(owner: Any, name: str, ctx: ActionContext, values: Mapping[str, 
 def _answered(error: BaseException) -> bool:
     """An error Remi answers as the request's fault (a 4xx), not as the
     extension's: an ``HTTPException``, a rejected upload (``FileError``), a
-    queue operation that cannot be done (``JobError``). A status on any other
+    queue operation that cannot be done (``JobError``), another refused
+    operation (``Refused``). A status on any other
     error is someone else's: an action whose call to a remote service got a 401
     or a 429 back (``urllib``'s ``HTTPError.status``, an SDK's
     ``status_code``) has failed."""
@@ -135,7 +136,7 @@ def _answered(error: BaseException) -> bool:
 
     if isinstance(error, HTTPException):
         status = error.status_code
-    elif isinstance(error, (FileError, JobError)):
+    elif isinstance(error, (FileError, JobError, Refused)):
         status = error.status
     else:
         return False

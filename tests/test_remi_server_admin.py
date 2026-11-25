@@ -766,7 +766,9 @@ def test_hashing_every_checkpoint_runs_in_the_background(env):
 
     started = routes.hasher.start(2, [Checkpoint("a"), Checkpoint("b"), Checkpoint("broken")])
     assert started["running"] is True and started["total"] == 3
-    assert env.client.post("/api/v2/models/hashes", json={"threads": 2}).status_code == 409
+    again = env.client.post("/api/v2/models/hashes", json={"threads": 2})
+    assert again.status_code == 409
+    assert again.json() == {"detail": "the checkpoints are being hashed already", "template": "the checkpoints are being hashed already", "params": {}}
     gate.set()
     for _ in range(100):
         status = env.client.get("/api/v2/models/hashes").json()

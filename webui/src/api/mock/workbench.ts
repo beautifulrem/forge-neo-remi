@@ -948,7 +948,7 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
     (_m, body) => {
       const b = (body ?? {}) as { name?: string; description?: string; color?: string | null }
       const name = String(b.name ?? "").trim()
-      if (!name) throw new MockHttpError(422, { detail: "board name must not be empty" })
+      if (!name) throw new MockHttpError(422, { errors: [{ owner: null, param: "name", message: "board name is required" }] })
       if (boards.some((item) => item.name.toLowerCase() === name.toLowerCase())) {
         throw new MockHttpError(409, { detail: `board ${name} already exists` })
       }
@@ -987,7 +987,7 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
       const b = (body ?? {}) as { name?: string; description?: string; color?: string | null }
       if (b.name !== undefined) {
         const name = String(b.name).trim()
-        if (!name) throw new MockHttpError(422, { detail: "board name must not be empty" })
+        if (!name) throw new MockHttpError(422, { errors: [{ owner: null, param: "name", message: "board name is required" }] })
         if (boards.some((item) => item.id !== id && item.name.toLowerCase() === name.toLowerCase())) {
           throw new MockHttpError(409, { detail: `board ${name} already exists` })
         }

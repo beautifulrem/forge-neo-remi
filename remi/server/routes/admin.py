@@ -21,6 +21,8 @@ from remi.server import models as m
 from remi.server.auth import LICENSE_TEXT_ORIGIN
 from remi.server.deps import ServicesDep, gpu_slot, opts
 from remi.setting_values import setting
+from remi.ui.errors import Refused
+from remi.ui.sentence import Sentence
 
 log = logging.getLogger(__name__)
 
@@ -131,7 +133,7 @@ class CheckpointHasher:
             checkpoints = list(sd_models.checkpoints_list.values())
         with self._lock:
             if self._state["running"]:
-                raise HTTPException(status_code=409, detail="the checkpoints are being hashed already")
+                raise Refused(Sentence("the checkpoints are being hashed already"))
             self._state = {"running": True, "done": 0, "total": len(checkpoints), "failed": [], "current": [], "finished_at": None}
         threading.Thread(target=self._run, args=(checkpoints, threads), name="remi-checkpoint-hashes", daemon=True).start()
         return self.status()

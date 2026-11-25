@@ -45,6 +45,8 @@ from remi import network_metadata as nm
 from remi.files import FileStore, decode_offset, encode_cursor
 from remi.image_meta import utf8_text
 from remi.setting_values import MAX_NESTING, nested_deeper, setting
+from remi.ui.errors import ParamError, Refused
+from remi.ui.sentence import Sentence
 
 log = logging.getLogger(__name__)
 
@@ -335,7 +337,7 @@ def editable(entry: NetworkEntry) -> bool:
 
 def require_file(entry: NetworkEntry) -> None:
     if not editable(entry):
-        raise NetworkReadOnly(f"{entry.name!r} has no model file to keep metadata or a preview next to")
+        raise NetworkReadOnly(Sentence("{{name}} has no model file to keep metadata or a preview next to", name=repr(entry.name)))
 
 
 def find_preview(entry: NetworkEntry) -> str | None:
@@ -763,8 +765,9 @@ class NetworkError(LookupError):
     pass
 
 
-class NetworkReadOnly(Exception):
-    """The entry has no model file to keep a sidecar or preview next to."""
+class NetworkReadOnly(Refused):
+    """The entry has no model file to keep a sidecar or preview next to (409,
+    said with its sentence)."""
 
 
 @dataclass
@@ -1356,7 +1359,7 @@ class NetworkIndex:
         changes = nm.normalize_user_metadata(values)
         # The limit is on what the client sends: a larger sidecar another tool wrote stays editable
         if len(json.dumps(changes, indent=4, ensure_ascii=False).encode()) > USER_METADATA_LIMIT:
-            raise ValueError("user metadata is too large")
+            raise ParamError("user metadata is too large", param="user_metadata")
         # An unreadable sidecar is refused (SidecarUnreadable), not read as empty and overwritten; replace drops it on purpose
         data = {} if replace else read_sidecar(entry)
         for key, value in changes.items():

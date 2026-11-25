@@ -15,6 +15,8 @@ from remi.server.deps import ServicesDep, iso
 router = APIRouter()
 
 ERRORS = {404: {"model": m.Detail}, 409: {"model": m.Detail}, 422: {"model": m.Detail}}
+# a board name that is blank or too long is a refused value on `name`
+NAME_ERRORS = {**ERRORS, 422: {"model": m.ValidationErrorBody}}
 
 
 # region Models
@@ -36,13 +38,14 @@ class BoardList(m.Model):
 
 
 class BoardCreate(m.Model):
-    name: str = Field(min_length=1, max_length=120)
+    # its length is checked by the gallery, which names the field (a refused value)
+    name: str
     description: str = Field("", max_length=1000)
     color: str | None = Field(None, max_length=32)
 
 
 class BoardUpdate(m.Model):
-    name: str | None = Field(None, min_length=1, max_length=120)
+    name: str | None = None
     description: str | None = Field(None, max_length=1000)
     color: str | None = Field(None, max_length=32)
 
@@ -158,7 +161,7 @@ def list_boards(services: ServicesDep) -> dict[str, Any]:
     return {"items": [board_json(b, iso) for b in boards]}
 
 
-@router.post("/boards", response_model=BoardItem, status_code=201, responses=ERRORS, summary="Create a gallery board")
+@router.post("/boards", response_model=BoardItem, status_code=201, responses=NAME_ERRORS, summary="Create a gallery board")
 def create_board(body: BoardCreate, services: ServicesDep) -> dict[str, Any]:
     index = gallery_for(services.files)
     board = _call(lambda: index.create_board(body.name, description=body.description, color=body.color))
@@ -173,7 +176,7 @@ def get_board(board_id: str, services: ServicesDep) -> dict[str, Any]:
     return board_json(board, iso)
 
 
-@router.patch("/boards/{board_id}", response_model=BoardItem, responses=ERRORS, summary="Rename or update a board")
+@router.patch("/boards/{board_id}", response_model=BoardItem, responses=NAME_ERRORS, summary="Rename or update a board")
 def update_board(board_id: str, body: BoardUpdate, services: ServicesDep) -> dict[str, Any]:
     index = gallery_for(services.files)
     kwargs: dict[str, Any] = {}

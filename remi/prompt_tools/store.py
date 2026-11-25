@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Any
 
 from remi.files import decode_offset, encode_cursor, readonly_uri, transaction
+from remi.ui.errors import ParamError, ValidationError
+from remi.ui.sentence import Sentence
 
 SCHEMA_VERSION = 1
 FAVORITE_KINDS = ("prompt", "negative", "tags")
@@ -103,6 +105,17 @@ def _clean_name(name: str | None) -> str:
     name = (name or "").strip()
     if len(name) > MAX_NAME:
         raise StoreError("name is too long")
+    return name
+
+
+def _collection_name(name: str | None) -> str:
+    """A collection's name, stripped; a blank or too long one is a refused value on ``name``."""
+
+    name = (name or "").strip()
+    if not name:
+        raise ValidationError([ParamError("a collection needs a name", param="name")])
+    if len(name) > MAX_NAME:
+        raise ValidationError([ParamError(Sentence("a collection name must be at most {{maximum}} characters", maximum=MAX_NAME), param="name")])
     return name
 
 
@@ -329,9 +342,7 @@ class PromptToolsStore:
         return [{"id": None, "name": "", "created": 0.0, "count": int(unsorted)}, *({"id": row["id"], "name": row["name"], "created": row["created"], "count": row["count"]} for row in rows)]
 
     def create_collection(self, name: str) -> dict[str, Any]:
-        name = _clean_name(name)
-        if not name:
-            raise StoreError("a collection needs a name")
+        name = _collection_name(name)
         collection_id = _new_id()
         try:
             with self._tx() as db:
@@ -341,9 +352,7 @@ class PromptToolsStore:
         return {"id": collection_id, "name": name, "created": time.time(), "count": 0}
 
     def rename_collection(self, collection_id: str, name: str) -> None:
-        name = _clean_name(name)
-        if not name:
-            raise StoreError("a collection needs a name")
+        name = _collection_name(name)
         try:
             with self._tx() as db:
                 if db.execute("UPDATE collections SET name = ? WHERE id = ?", (name, collection_id)).rowcount == 0:

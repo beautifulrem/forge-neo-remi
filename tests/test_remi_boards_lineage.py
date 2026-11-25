@@ -411,3 +411,21 @@ def test_a_lineage_walk_reads_each_level_at_once(tmp_path):
         index.close()
         job_store.close()
         files.close()
+
+
+def test_a_refused_board_name_names_its_field_and_reason(tmp_path):
+    """A board name that is too long, or blank, answered FastAPI's or the library's English
+    detail, which the UI could only say as "The server rejected the request.": it is a refused
+    value on `name`, with a sentence the UI translates."""
+
+    with webui_state(), server_app(tmp_path) as server:
+        too_long = {"owner": None, "param": "name", "message": "board name must be at most 120 characters", "template": "board name must be at most {{maximum}} characters", "params": {"maximum": "120"}}
+        blank = {"owner": None, "param": "name", "message": "board name is required"}
+        for name, error in (("x" * 121, too_long), ("   ", blank), ("", blank)):
+            response = server.client.post("/api/v2/boards", json={"name": name})
+            assert response.status_code == 422 and response.json() == {"errors": [error]}, name
+        board = server.client.post("/api/v2/boards", json={"name": "y" * 120}).json()
+        for name, error in (("x" * 121, too_long), (" ", blank)):
+            response = server.client.patch(f"/api/v2/boards/{board['id']}", json={"name": name})
+            assert response.status_code == 422 and response.json() == {"errors": [error]}, name
+        assert server.client.get(f"/api/v2/boards/{board['id']}").json()["name"] == "y" * 120

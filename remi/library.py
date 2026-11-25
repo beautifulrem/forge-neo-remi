@@ -32,6 +32,8 @@ from typing import Any, Literal
 
 from remi.files import ID_RE, FileRecord, FileStore, connect, path_inside
 from remi.image_meta import clip_infotext
+from remi.ui.errors import ParamError, ValidationError
+from remi.ui.sentence import Sentence
 
 Sort = Literal["newest", "oldest", "name", "largest"]
 SORTS: tuple[Sort, ...] = ("newest", "oldest", "name", "largest")
@@ -107,6 +109,20 @@ MAX_LINEAGE_DEPTH = 8
 MAX_LINEAGE_NODES = 128
 _IN_CHUNK = 500
 """ids per ``IN (…)`` list (well under SQLite's variable limit)"""
+
+
+MAX_BOARD_NAME = 120
+
+
+def _board_name(name: str | None) -> str:
+    """A board's name, stripped; a blank or too long one is a refused value on ``name``."""
+
+    cleaned = (name or "").strip()
+    if not cleaned:
+        raise ValidationError([ParamError("board name is required", param="name")])
+    if len(cleaned) > MAX_BOARD_NAME:
+        raise ValidationError([ParamError(Sentence("board name must be at most {{maximum}} characters", maximum=MAX_BOARD_NAME), param="name")])
+    return cleaned
 
 
 class BoardError(ValueError):
@@ -601,11 +617,7 @@ class GalleryIndex:
         return self._board_dict(row) if row is not None else None
 
     def create_board(self, name: str, *, description: str = "", color: str | None = None) -> dict[str, Any]:
-        cleaned = (name or "").strip()
-        if not cleaned:
-            raise BoardError("board name is required", status=422)
-        if len(cleaned) > 120:
-            raise BoardError("board name must be at most 120 characters", status=422)
+        cleaned = _board_name(name)
         board_id = secrets.token_hex(8)
         now = time.time()
         desc = (description or "").strip()[:1000]
@@ -628,11 +640,7 @@ class GalleryIndex:
             raise BoardError(f"no board {board_id!r}", status=404)
         new_name = existing["name"]
         if name is not None:
-            new_name = name.strip()
-            if not new_name:
-                raise BoardError("board name is required", status=422)
-            if len(new_name) > 120:
-                raise BoardError("board name must be at most 120 characters", status=422)
+            new_name = _board_name(name)
         new_desc = existing["description"] if description is None else description.strip()[:1000]
         if color is ...:
             new_color = existing["color"]
