@@ -728,6 +728,45 @@ def test_a_setting_nested_too_deep_is_refused_on_both_routes(webui_tmp, monkeypa
         services.close()
 
 
+def test_sdapi_options_checks_the_model_selection_as_the_settings_page_does(webui_tmp, monkeypatch):
+    """The route takes the model selection out before the value check and applied it as
+    sent: a dtype of another kind (``["x"]``: ``forge_unet_storage_dtype_options.get`` raised
+    TypeError at the next model load) or modules that are not a list of known names were
+    stored. They are checked as ``PATCH /api/v2/options`` checks them (422, nothing set)."""
+    from fastapi.testclient import TestClient
+
+    from modules import shared
+    from remi import model_selection
+    from remi.jobs import run_inline
+    from remi.server import Services, create_app
+    from remi.server.auth import Auth
+
+    config = webui_tmp / "config.json"
+    monkeypatch.setattr(shared, "config_filename", str(config))
+    shared.opts.save(str(config))
+    picks = []
+    monkeypatch.setattr(model_selection, "select", lambda key, value: picks.append((key, value)))
+    services = Services.create(webui_tmp, dispatch=run_inline, realtime=False, housekeeping=False)
+    try:
+        app = create_app(services=services, auth=Auth(), sdapi=True, start_services=False)
+        with TestClient(app, base_url="http://127.0.0.1:7860", raise_server_exceptions=False) as client:
+            refused = [
+                {"forge_unet_storage_dtype": ["x"]},
+                {"forge_unet_storage_dtype": 5},
+                {"forge_unet_storage_dtype": "no such dtype"},
+                {"forge_additional_modules": "ae.safetensors"},
+                {"forge_additional_modules": ["no-such-module.safetensors"]},
+            ]
+            for body in refused:
+                response = client.post("/sdapi/v1/options", json={**body, "jpeg_quality": 66})
+                assert response.status_code == 422 and next(iter(body)) in response.json()["detail"], (body, response.text)
+                assert picks == [] and shared.opts.data.get("jpeg_quality") != 66
+            assert client.post("/sdapi/v1/options", json={"forge_unet_storage_dtype": "Automatic", "forge_additional_modules": []}).status_code == 200
+            assert sorted(picks) == [("forge_additional_modules", []), ("forge_unet_storage_dtype", "Automatic")]
+    finally:
+        services.close()
+
+
 def test_sdapi_override_settings_nested_too_deep_are_refused():
     """A generation's ``override_settings`` go into ``opts.data`` (``processing.py``), kept
     there with ``override_settings_restore_afterwards: false`` or while another route saves:

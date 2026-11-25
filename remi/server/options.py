@@ -104,28 +104,10 @@ def coerce_values(opts: Any, values: Any, cmd_opts: Any) -> dict[str, Any]:
 
 
 def _model_value(key: str, value: Any) -> Any:
-    if key == "sd_model_checkpoint":
-        from modules import sd_models
-
-        if not isinstance(value, str) or sd_models.get_closet_checkpoint_match(value) is None:
-            raise ParamError(Sentence("unknown checkpoint {{value}}", value=repr(value)))
-        return value
-    if key == "forge_additional_modules":
-        from remi.networks import module_files
-
-        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-            raise ParamError("expected a list of module names")
-        known = {name for kind in ("vae", "text_encoders") for name, _path, _root in module_files(kind)}
-        names = [item.replace("\\", "/").rsplit("/", 1)[-1] for item in value]
-        unknown = [name for name in names if name not in known]
-        if unknown:
-            raise ParamError(Sentence("unknown module(s): {{names}}", names=", ".join(unknown)))
-        return names
+    from remi import model_selection
     from remi.server.runtime import unet_dtypes
 
-    if value not in unet_dtypes():
-        raise ParamError(Sentence("unknown dtype {{value}}", value=repr(value)))
-    return value
+    return model_selection.check_value(key, value, dtypes=unet_dtypes)
 
 
 def apply_values(opts: Any, values: Mapping[str, Any], config_filename: str | None) -> tuple[list[str], list[ParamError]]:

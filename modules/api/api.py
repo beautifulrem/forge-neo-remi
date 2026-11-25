@@ -215,7 +215,8 @@ def refuse_deep_settings(values, what: str):
     if isinstance(values, dict):
         deep = sorted(str(key) for key, value in values.items() if nested_deeper(value))
         if deep:
-            raise HTTPException(status_code=422, detail=f"{what} nested deeper than {MAX_NESTING} levels: {', '.join(deep)}"[:1000])
+            problems = "; ".join(f"{what}.{key}: nested deeper than {MAX_NESTING} levels" for key in deep)
+            raise HTTPException(status_code=422, detail=f"invalid {what}: {problems}"[:1000])
 
 
 class Api:
@@ -686,8 +687,16 @@ class Api:
 
         req = dict(req)
         picks = {key: req.pop(key) for key in model_selection.MODEL_OPTIONS if key in req}
-        if (name := picks.get("sd_model_checkpoint")) is not None and name not in sd_models.checkpoint_aliases:
+        if (name := picks.get("sd_model_checkpoint")) is not None and (not isinstance(name, str) or name not in sd_models.checkpoint_aliases):
             raise HTTPException(status_code=422, detail=f"unknown checkpoint: {name}"[:1000])
+        from remi.ui import ParamError
+
+        for key in ("forge_additional_modules", "forge_unet_storage_dtype"):  # checked as PATCH /api/v2/options checks them
+            if picks.get(key) is not None:
+                try:
+                    model_selection.check_value(key, picks[key])
+                except ParamError as error:
+                    raise HTTPException(status_code=422, detail=f"invalid settings: {key}: {error}"[:1000]) from None
         # Remi: a changed value is checked as the settings page checks it (kind, range, choices); one
         # of the wrong kind reached upstream readers and broke them until the next start
         from remi.ui import ValidationError

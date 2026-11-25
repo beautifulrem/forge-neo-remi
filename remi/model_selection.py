@@ -26,6 +26,56 @@ from typing import Any, cast
 
 log = logging.getLogger(__name__)
 
+
+def unet_dtypes() -> list[str]:
+    """The low-bits dtypes ``main_entry`` offers (the stored one, or
+    "Automatic", before it is imported)."""
+
+    import sys
+
+    from remi.setting_values import setting
+
+    main_entry = sys.modules.get("modules_forge.main_entry")
+    if main_entry is not None:
+        return list(main_entry.forge_unet_storage_dtype_options)
+    dtype = setting("forge_unet_storage_dtype", "")
+    return [dtype] if dtype else ["Automatic"]
+
+
+def check_value(key: str, value: Any, dtypes: Callable[[], list[str]] | None = None) -> Any:
+    """A model pick (one of :data:`MODEL_OPTIONS`) as the settings store it,
+    or :class:`remi.ui.ParamError`: a checkpoint the WebUI knows, a list of
+    known VAE / text encoder names (their file names), an offered dtype.
+    Both ``PATCH /api/v2/options`` and ``/sdapi/v1/options`` check with it.
+    ``dtypes``: the offered dtypes (:func:`unet_dtypes`)."""
+
+    from remi.ui import ParamError, Sentence
+
+    if key == "sd_model_checkpoint":
+        from modules import sd_models
+
+        if not isinstance(value, str) or sd_models.get_closet_checkpoint_match(value) is None:
+            raise ParamError(Sentence("unknown checkpoint {{value}}", value=repr(value)))
+        return value
+    if key == "forge_additional_modules":
+        from remi.networks import module_files
+
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise ParamError("expected a list of module names")
+        known = {name for kind in ("vae", "text_encoders") for name, _path, _root in module_files(kind)}
+        names = [item.replace("\\", "/").rsplit("/", 1)[-1] for item in value]
+        unknown = [name for name in names if name not in known]
+        if unknown:
+            raise ParamError(Sentence("unknown module(s): {{names}}", names=", ".join(unknown)))
+        return names
+    if key == "forge_unet_storage_dtype":
+        offered = (dtypes or unet_dtypes)()
+        if not isinstance(value, str) or value not in offered:
+            raise ParamError(Sentence("unknown dtype {{value}}", value=repr(value)))
+        return value
+    raise KeyError(key)
+
+
 MODEL_OPTIONS = ("sd_model_checkpoint", "forge_additional_modules", "forge_unet_storage_dtype")
 """The options that select what ``forge_model_reload()`` loads."""
 

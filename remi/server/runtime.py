@@ -172,14 +172,9 @@ def load_selected_model(*, force: bool = False) -> None:
 
 
 def unet_dtypes() -> list[str]:
-    import sys
+    from remi.model_selection import unet_dtypes as dtypes
 
-    main_entry = sys.modules.get("modules_forge.main_entry")
-    if main_entry is not None:
-        return list(main_entry.forge_unet_storage_dtype_options)
-
-    dtype = setting("forge_unet_storage_dtype", "")
-    return [dtype] if dtype else ["Automatic"]
+    return dtypes()
 
 
 def select_checkpoint(name: str) -> bool:
