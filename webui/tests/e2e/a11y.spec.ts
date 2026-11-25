@@ -404,6 +404,30 @@ test.describe("focus is not hidden under a pinned bar", () => {
     await expect.poll(() => page.evaluate(focusUnderSelectionBar)).toBeNull()
   })
 
+  // Only the focused tile is lifted clear when the bar comes up: a check mark clicked in a scrolled
+  // grid (a mouse press focuses it) leaves the grid where it is, not at the roving tab stop.
+  test("#/gallery selection bar rising after a check mark is clicked", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await openRoute(page, "gallery")
+    await page.waitForLoadState("networkidle")
+    const scroller = page.getByTestId("gallery-scroller")
+    await scroller.evaluate((element) => element.scrollTo({ top: 900 }))
+    await page.waitForTimeout(200)
+    await scroller.evaluate((element) => {
+      const view = element.getBoundingClientRect()
+      const tile = [...element.querySelectorAll<HTMLElement>("[data-gallery-tile]")].find((candidate) => candidate.getBoundingClientRect().top > view.top + 40)
+      tile!.dataset.probe = ""
+    })
+    const tile = scroller.locator("[data-gallery-tile][data-probe]")
+    const before = await scroller.evaluate((element) => element.scrollTop)
+    await tile.hover()
+    await tile.getByRole("checkbox").click()
+    await expect(page.getByRole("toolbar", { name: "Selected images" })).toBeVisible()
+    await page.waitForTimeout(300)
+    expect(await scroller.evaluate((element) => element.scrollTop)).toBe(before)
+    await expect(tile).toBeInViewport()
+  })
+
   // A new query remounts the grid; with the results cached the bar stays up over the new scroller.
   test("#/gallery selection bar over a grid rebuilt from cached results", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 })
@@ -419,8 +443,8 @@ test.describe("focus is not hidden under a pinned bar", () => {
       await sort.click()
       await page.getByRole("option", { name: option }).click()
       await page.waitForLoadState("networkidle")
+      await expect(bar).toBeVisible() // the case holds only while the selection lives through each view
     }
-    await expect(bar).toBeVisible()
     const room = () => page.getByTestId("gallery-scroller").evaluate((element) => parseFloat(getComputedStyle(element).scrollPaddingBottom) || 0)
     await expect.poll(room).toBeGreaterThan(0)
   })

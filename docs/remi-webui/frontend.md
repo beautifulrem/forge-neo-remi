@@ -119,7 +119,9 @@ imperatively).
   no scroll padding: the gallery grid takes the scroller's bottom scroll
   padding as the virtualizer's `scrollPaddingEnd`, leaves that much room after
   the list (so the last row and the load-more status scroll clear), and
-  scrolls the focused tile clear when the bar comes up. The bar takes the
+  lifts the focused tile when the bar comes up over it (only the tile button
+  with the focus, only a tile on screen: a clicked check mark moves
+  nothing). The bar takes the
   grid's key, so a rebuilt grid gets the padding too. The e2e check is "focus
   is not hidden under a pinned bar" in `a11y.spec.ts`.
 - **Page column**: Extensions and every extension page lay their content out

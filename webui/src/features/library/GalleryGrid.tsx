@@ -299,13 +299,20 @@ export function GalleryGrid(props: GalleryGridProps) {
       }
     } else buttons.current.delete(id)
   }, [])
-  // A bar that rises over the grid (a selection made with Space) leaves the focused tile above it.
+  // A bar that rises over the focused tile (a selection made with Space) lifts the tile above it: only
+  // the tile button itself (a clicked check mark has the focus and is not the tab stop), and only a
+  // tile on screen whose end the bar now covers (a small lift, never a jump to a tile out of view).
   const room = useRef(barRoom)
   useEffect(() => {
     const grew = barRoom > room.current
     room.current = barRoom
-    if (grew && focusInside && items.length > 0) virtualizer.scrollToIndex(layout === "justified" ? Math.max(0, rowOf(rows, current)) : current, { align: "auto" })
-  }, [barRoom, focusInside, items.length, layout, rows, current, virtualizer])
+    const item = items[current]
+    const element = item ? buttons.current.get(item.id) : undefined
+    if (!grew || !scroller || !element || document.activeElement !== element) return
+    const tile = element.getBoundingClientRect()
+    const view = scroller.getBoundingClientRect()
+    if (tile.top < view.bottom && tile.bottom > view.bottom - barRoom) virtualizer.scrollToIndex(layout === "justified" ? Math.max(0, rowOf(rows, current)) : current, { align: "auto" })
+  }, [barRoom, scroller, items, layout, rows, current, virtualizer])
   const focusIndex = (index: number) => {
     const target = Math.max(0, Math.min(index, items.length - 1))
     const item = items[target]
