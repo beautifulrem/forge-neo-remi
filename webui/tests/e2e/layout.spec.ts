@@ -593,8 +593,9 @@ test.describe("the canvas staging bar", () => {
 })
 
 // With a keyboard (no touch screen) the image toolbar holds a shortcuts button too: in an editor
-// narrower than about 385 px its buttons spilled past its panel, over the history and zoom toolbar.
-// It scrolls instead; every button can be scrolled to and takes its own taps.
+// narrower than about 385 px its last buttons spilled out of its panel to the right, where the
+// editor's edge cut them off. It scrolls instead; every button can be scrolled to and takes its
+// own taps.
 test.describe("the editor's bottom toolbars in a narrow editor with a keyboard", () => {
   for (const width of [390, 360]) {
     test(`at ${width} px stay apart, the image toolbar scrolling`, async ({ page }) => {

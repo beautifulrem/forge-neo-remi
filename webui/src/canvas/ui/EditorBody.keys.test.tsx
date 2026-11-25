@@ -243,9 +243,10 @@ describe("keys in a popup the editor opened", () => {
 
 
 // With a keyboard the image toolbar holds one more button (the shortcuts): in an editor narrower
-// than about 385 px the two bottom toolbars no longer fit side by side and the image toolbar's
-// buttons spilled past its panel and over the history and zoom one. It scrolls instead, like the
-// tool options, its cut edge fading; the history and zoom toolbar keeps its size.
+// than about 385 px the two bottom toolbars no longer fit side by side: the image toolbar shrank
+// and its last buttons spilled out of its panel to the right, where the editor's edge cut them
+// off. It scrolls instead, like the tool options, its cut edge fading; the history and zoom
+// toolbar keeps its size.
 describe("the bottom toolbars in a narrow editor", () => {
   it("scroll the image toolbar instead of spilling it, and keep the history and zoom one whole", () => {
     render(<Page editorFirst />)
