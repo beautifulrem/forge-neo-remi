@@ -228,13 +228,15 @@ export default function QueuePage({ route }: { route?: Route } = {}) {
 
   const header = (
     <HeaderSlot>
+      {/* on a phone a 28 px icon square, its label read out: the page title keeps its room */}
       <Button
         variant="outline"
         size="sm"
         onClick={() => void act(() => (paused ? api.queue.resume() : api.queue.pause()), paused ? t("Could not resume the queue") : t("Could not pause the queue"))}
+        className="max-sm:size-7 max-sm:px-0"
       >
         {paused ? <Play aria-hidden /> : <Pause aria-hidden />}
-        {paused ? t("Resume") : t("Pause")}
+        <span className="max-sm:sr-only">{paused ? t("Resume") : t("Pause")}</span>
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t("Queue settings")} />}>

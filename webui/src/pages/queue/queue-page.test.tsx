@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { queryClient } from "@/api/queries"
 import type { Job } from "@/api/types"
+import { useHeaderSlotTarget } from "@/app/header-slot-store"
 import { navigate, useRoute } from "@/app/router"
 import { jobOf } from "@/test/api-fixtures"
 import QueuePage from "./index"
@@ -185,5 +186,30 @@ describe("queue page on a phone", () => {
     expect(panel.querySelector("[data-slot=skeleton]")).not.toBeNull()
     await act(async () => server.release())
     expect(await within(panel).findByText("a failed fox")).toBeInTheDocument()
+  })
+})
+
+// At 320 px in English with a quick setting pinned the "Pause" button (77 px) left the page title
+// "Qu…": on a phone it is a 28 px square, its label read out, and the title shows whole.
+describe("queue page header", () => {
+  let header: HTMLElement
+  beforeEach(() => {
+    header = document.createElement("div")
+    document.body.append(header)
+    act(() => useHeaderSlotTarget.getState().setElement(header))
+  })
+  afterEach(() => {
+    act(() => useHeaderSlotTarget.getState().setElement(null))
+    header.remove()
+    vi.restoreAllMocks()
+    queryClient.clear()
+  })
+
+  it("shows Pause as a 28 px icon square on a phone, its label read out", async () => {
+    mockServer()
+    renderPage()
+    const pause = await within(header).findByRole("button", { name: "Pause" })
+    expect(pause).toHaveClass("max-sm:size-7", "max-sm:px-0")
+    expect(within(pause).getByText("Pause")).toHaveClass("max-sm:sr-only")
   })
 })
