@@ -92,7 +92,7 @@ function PanelTool({ label, icon, disabled, wide, children }: { label: string; i
       <PopoverContent
         align="start"
         aria-label={label}
-        className={cn("max-h-[min(36rem,70dvh)] w-[min(28rem,calc(100vw-1rem))] gap-0 overflow-hidden p-0", wide && "w-[min(36rem,calc(100vw-1rem))]")}
+        className={cn("max-h-[min(36rem,70dvh,var(--available-height))] w-[min(28rem,calc(100vw-1rem))] gap-0 overflow-hidden p-0", wide && "w-[min(36rem,calc(100vw-1rem))]")}
       >
         {tip.popupOpen ? (
           <Suspense

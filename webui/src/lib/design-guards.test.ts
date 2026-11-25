@@ -86,3 +86,16 @@ describe("letter spacing", () => {
     expect(wide).toEqual([])
   })
 })
+
+describe("floating lists", () => {
+  const CONTENT = /<(?:PopoverContent|DropdownMenuContent|DropdownMenuSubContent|SelectContent|ComboboxContent|ContextMenuContent|HoverCardContent)\b(?:[^>"'{}]|"[^"]*"|'[^']*'|\{(?:[^{}]|\{[^{}]*\})*\})*>/g
+
+  it("cap their own height inside the room beside the trigger", () => {
+    // A max-h of their own replaces the base --available-height (cn keeps the caller's): it must
+    // still take that room into account, or the popup runs off a short window instead of scrolling.
+    const tags = occurrences(CONTENT)
+    expect(tags.length).toBeGreaterThan(50)
+    const capped = tags.filter(({ match }) => /\bmax-h-[[(]/.test(match))
+    expect(capped.filter(({ match }) => !match.includes("--available-height"))).toEqual([])
+  })
+})

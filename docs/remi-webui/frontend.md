@@ -343,7 +343,8 @@ imperatively).
   down only; the full-screen editor opts out with `max-h-none`), and the command dialog no taller than the
   room below its top, its list shrinking; a popover, like the menus and
   selects, takes the room beside its trigger (`--available-height`) and
-  scrolls inside (up and down only); a menu or popover gives the focus
+  scrolls inside (up and down only), and one that caps its own height keeps
+  that room in the cap (`max-h-[min(60dvh,var(--available-height))]`); a menu or popover gives the focus
   back to its trigger only while nothing else has taken it (a dialog one of
   its items opened keeps it, `final-focus.ts`); a field focused as its popup
   opens takes the focus through the popup's `initialFocus`, never `autoFocus`

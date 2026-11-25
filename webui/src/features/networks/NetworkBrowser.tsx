@@ -497,7 +497,7 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
               <PopoverTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t("Folders")} title={t("Folders")} className={cn(folder && "text-primary")} />}>
                 <FolderTreeIcon />
               </PopoverTrigger>
-              <PopoverContent aria-label={t("Folders")} align="end" className="max-h-[60dvh] w-72 overflow-y-auto p-1">
+              <PopoverContent aria-label={t("Folders")} align="end" className="max-h-[min(60dvh,var(--available-height))] w-72 overflow-y-auto p-1">
                 {folderTree}
               </PopoverContent>
             </Popover>

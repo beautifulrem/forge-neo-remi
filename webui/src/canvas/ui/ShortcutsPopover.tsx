@@ -40,7 +40,7 @@ export function ShortcutsPopover({ open, onOpenChange }: { open: boolean; onOpen
           <Keyboard />
         </PopoverTrigger>
       </Hint>
-      <PopoverContent aria-label={t("Keyboard shortcuts")} side="top" align="end" className="max-h-[min(32rem,70vh)] w-[min(34rem,calc(100vw-2rem))] overflow-y-auto">
+      <PopoverContent aria-label={t("Keyboard shortcuts")} side="top" align="end" className="max-h-[min(32rem,70vh,var(--available-height))] w-[min(34rem,calc(100vw-2rem))] overflow-y-auto">
         <h3 className="text-sm font-medium">{t("Keyboard shortcuts")}</h3>
         {/* columns, as the app's shortcuts dialog: an odd number of groups leaves no empty cell */}
         <div className="gap-x-6 sm:columns-2">
