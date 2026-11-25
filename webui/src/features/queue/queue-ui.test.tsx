@@ -206,6 +206,32 @@ describe("history list", () => {
     }
   })
 
+  it("shows why a job failed and what it noted in the UI language", async () => {
+    // a value refused when the job ran (a style deleted while it waited): its template, not the English
+    mockFetch({})
+    const { i18n } = await import("@/i18n")
+    const choice = "{{value}} is not one of the choices ({{choices}})"
+    const edit = "Anima Edit model/LoRA detected with an input or reference image while '[Anima] Enable Reference' (anima_do_reference) is off: enable it so Anima stacks the reference frame instead of running plain img2img."
+    i18n.addResourceBundle("zh-CN", "server", { [choice]: "{{value}} 不在可选项（{{choices}}）中", [edit]: "检测到 Anima Edit 模型，但参考模式未开启。" }, true, true)
+    const failed: Job = {
+      ...jobOf("refused", "failed"),
+      seq: 9,
+      error: "core.styles: 'Watercolor' is not one of the choices ('Cinematic')",
+      errors: [{ owner: "core", param: "styles", message: "'Watercolor' is not one of the choices ('Cinematic')", template: choice, params: { value: "'Watercolor'", choices: "'Cinematic'" } }],
+      warnings: [{ message: "{{note}}", values: { note: edit } }],
+    }
+    renderWithClient(<HistoryList jobs={[failed]} total={1} hasMore={false} loadingMore={false} onLoadMore={() => {}} onView={() => {}} />)
+    try {
+      await act(() => i18n.changeLanguage("zh-CN"))
+      const row = screen.getAllByRole("listitem")[0]! // (its warnings are a list of their own)
+      expect(row).toHaveTextContent("'Watercolor' 不在可选项（'Cinematic'）中")
+      expect(row).not.toHaveTextContent("is not one of the choices")
+      expect(row).toHaveTextContent("检测到 Anima Edit 模型，但参考模式未开启。")
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
+  })
+
   it("shows a placeholder for an output deleted since, not a broken image", () => {
     mockFetch({})
     const done: Job = { ...jobOf("done", "completed", [{ id: "gone1", kind: "image" }]), seq: 4 }

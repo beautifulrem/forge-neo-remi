@@ -161,4 +161,30 @@ describe("ws-bridge", () => {
       await i18n.changeLanguage("en")
     }
   })
+
+  it("says what a job noted and which values it refused in the UI language", async () => {
+    // the server sends both with their templates: the English text alone left the toasts in English
+    vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue()
+    const warning = vi.spyOn(toast, "warning").mockReturnValue(1)
+    const error = vi.spyOn(toast, "error").mockReturnValue(0)
+    const { i18n } = await import("@/i18n")
+    const turbo = "Anima-Turbo checkpoint with CFG {{cfg}} / {{steps}} steps: it is distilled for CFG 1 and 8-12 steps (see the Official Turbo preset); higher values over-cook it."
+    const choice = "{{value}} is not one of the choices ({{choices}})"
+    i18n.addResource("zh-CN", "server", turbo, "Anima-Turbo 模型配 CFG {{cfg}} / {{steps}} 步")
+    i18n.addResource("zh-CN", "server", choice, "{{value}} 不在可选项（{{choices}}）中")
+    await i18n.changeLanguage("zh-CN")
+    try {
+      const { hook, send } = await connected()
+      useProgress.getState().track("w1", "txt2img")
+      useProgress.getState().track("f3", "txt2img")
+      send({ type: "job.completed", job_id: "w1", seq: 1, status: "completed", outputs: [], warnings: [{ message: turbo, values: { cfg: "4.5", steps: "36" } }] })
+      expect(warning.mock.calls[0]![1]).toEqual({ description: "Anima-Turbo 模型配 CFG 4.5 / 36 步" })
+      const refused = { owner: "core", param: "styles", message: "'Watercolor' is not one of the choices ('Cinematic')", template: choice, params: { value: "'Watercolor'", choices: "'Cinematic'" } }
+      send({ type: "job.failed", job_id: "f3", status: "failed", error: "core.styles: 'Watercolor' is not one of the choices ('Cinematic')", errors: [refused] })
+      expect(error.mock.calls[0]![1]).toEqual({ description: "'Watercolor' 不在可选项（'Cinematic'）中" })
+      hook.unmount()
+    } finally {
+      await i18n.changeLanguage("en")
+    }
+  })
 })

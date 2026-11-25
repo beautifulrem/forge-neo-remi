@@ -77,4 +77,24 @@ describe("extras page", () => {
     expect(screen.getByRole("img", { name: "Processed image" })).toHaveAttribute("src", expect.stringContaining("/files/out1"))
     expect(screen.getByText("Postprocess upscale by: 4")).toBeInTheDocument()
   })
+
+  it("says which values a run refused in the UI language", async () => {
+    mockFetch()
+    const { i18n } = await import("@/i18n")
+    const choice = "{{value}} is not one of the choices ({{choices}})"
+    i18n.addResource("zh-CN", "server", choice, "{{value}} 不在可选项（{{choices}}）中")
+    const refused = { owner: "core", param: "upscaler_1", message: "'Gone' is not one of the choices ('None')", template: choice, params: { value: "'Gone'", choices: "'None'" } }
+    useExtrasRuns.setState({ results: [{ jobId: "bad", outputs: [], source: null, info: null, error: "core.upscaler_1: 'Gone' is not one of the choices ('None')", errors: [refused], at: 1 }] })
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ExtrasPage />
+        </QueryClientProvider>,
+      )
+      expect(await screen.findByText("'Gone' 不在可选项（'None'）中")).toBeInTheDocument()
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
+  })
 })

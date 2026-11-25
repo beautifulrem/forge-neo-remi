@@ -4,7 +4,7 @@
  * Callers use the functions in `endpoints.ts`, never URLs.
  */
 import createClient from "openapi-fetch"
-import type { SentenceParams, ValidationError } from "@/ui/schema"
+import type { FieldMessage, SentenceParams, ValidationError } from "@/ui/schema"
 import type { paths } from "./gen/schema"
 import { sessionRefused } from "./session"
 
@@ -134,6 +134,22 @@ export function sentenceParams(value: unknown): SentenceParams | undefined {
   const entries = Object.entries(value)
   const valid = entries.every(([, item]) => typeof item === "string" || (Array.isArray(item) && item.every((name) => typeof name === "string")))
   return valid ? (Object.fromEntries(entries) as SentenceParams) : undefined
+}
+
+/**
+ * The messages of a job's refused values as the server stores and sends them (`errors` of a job
+ * or of `job.failed`; an entry may name no field), with a template only with its values. Entries
+ * of another shape (stored by hand) are left out.
+ */
+export function fieldMessages(value: unknown): FieldMessage[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry: unknown): FieldMessage[] => {
+    if (!entry || typeof entry !== "object") return []
+    const { message, template, params } = entry as Record<string, unknown>
+    if (typeof message !== "string") return []
+    const values = sentenceParams(params)
+    return [typeof template === "string" && values ? { message, template, params: values } : { message }]
+  })
 }
 
 /** A rejected value with only the fields the client reads (a template only with its values). */

@@ -6,7 +6,9 @@
  * model-loading state.
  */
 import { create } from "zustand"
+import type { FieldMessage } from "@/ui/schema"
 import type { WsEventMap } from "./events"
+import { fieldMessages } from "./http"
 import type { FormTab, JobOutput } from "./types"
 
 export type RunningJob = {
@@ -25,6 +27,8 @@ export type FinishedJob = {
   outputs: JobOutput[]
   infotext?: string | null
   error?: string
+  /** The values a failed job refused when it ran (`jobErrorText` shows them translated). */
+  errors?: FieldMessage[]
 }
 
 /** How many owned / finished jobs are remembered. */
@@ -94,7 +98,10 @@ export const useProgress = create<ProgressState>()((set) => {
         },
       }),
     completed: (e) => finish({ jobId: e.job_id, outputs: e.outputs ?? [], infotext: e.infotext }),
-    failed: (e) => finish({ jobId: e.job_id, outputs: [], error: e.error }),
+    failed: (e) => {
+      const errors = fieldMessages(e.errors)
+      finish({ jobId: e.job_id, outputs: [], error: e.error, ...(errors.length > 0 ? { errors } : {}) })
+    },
     setModelLoading: (modelLoading) => set({ modelLoading }),
     syncRunning: (jobId) => set((s) => (s.running && s.running.jobId !== jobId ? { running: null } : s)),
   }

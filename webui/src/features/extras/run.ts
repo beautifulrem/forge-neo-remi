@@ -8,7 +8,7 @@ import { toast } from "sonner"
 import { create } from "zustand"
 import { createJSONStorage, persist } from "zustand/middleware"
 import { api } from "@/api/endpoints"
-import { ApiError, validationErrors } from "@/api/http"
+import { ApiError, fieldMessages, validationErrors } from "@/api/http"
 import { useProgress } from "@/api/progress"
 import { keys, queryClient } from "@/api/queries"
 import type { Job, JobOutput, TabSchema } from "@/api/types"
@@ -16,6 +16,7 @@ import { onWsEvent } from "@/api/ws"
 import { errorText, toastInvalid } from "@/features/errors/error-text"
 import { t } from "@/i18n"
 import { getFormStore } from "@/ui/form-store"
+import type { FieldMessage } from "@/ui/schema"
 import { jobRequest, missingInputs } from "@/ui/tab"
 import { isRecord, isText, keepEntries, mergeTyped } from "@/lib/persist"
 
@@ -26,6 +27,8 @@ export type ExtrasResult = {
   source: string | null
   info: string | null
   error?: string
+  /** The values a failed run refused when it ran (shown translated). */
+  errors?: FieldMessage[]
   at: number
 }
 
@@ -54,7 +57,7 @@ export const useExtrasRuns = create<ExtrasRunState>()(
         ...merged,
         jobs: merged.jobs.filter((job) => typeof job === "string"),
         sources: keepEntries(merged.sources, (source): source is string | null => source === null || typeof source === "string"),
-        results: merged.results.filter(isResult),
+        results: merged.results.filter(isResult).map(({ errors, ...result }) => (errors === undefined ? result : { ...result, errors: fieldMessages(errors) })),
       }
     },
   }),
@@ -69,6 +72,7 @@ function isResult(value: unknown): value is ExtrasResult {
     isText(value.source) &&
     isText(value.info) &&
     isText(value.error) &&
+    (value.errors === undefined || Array.isArray(value.errors)) &&
     Array.isArray(value.outputs) &&
     value.outputs.every(isOutput)
   )
@@ -140,7 +144,7 @@ export function interruptExtras() {
 }
 
 /** Records a finished job of this page (from the progress store). */
-export function finishExtras(result: { jobId: string; outputs: JobOutput[]; infotext?: string | null; error?: string }) {
+export function finishExtras(result: { jobId: string; outputs: JobOutput[]; infotext?: string | null; error?: string; errors?: FieldMessage[] }) {
   useExtrasRuns.setState((s) => {
     if (!s.jobs.includes(result.jobId) && !(result.jobId in s.sources)) return s
     const finished: ExtrasResult = {
@@ -149,6 +153,7 @@ export function finishExtras(result: { jobId: string; outputs: JobOutput[]; info
       source: s.sources[result.jobId] ?? null,
       info: result.infotext ?? null,
       error: result.error,
+      ...(result.errors?.length ? { errors: result.errors } : {}),
       at: Date.now(),
     }
     const sources = { ...s.sources }

@@ -21,7 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useIsDesktop } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { CompareSlider } from "@/features/compare/CompareSlider"
-import { serverText } from "@/features/errors/error-text"
+import { jobErrorText } from "@/features/errors/error-text"
 import { type ExtrasResult, interruptExtras, runExtras, useExtrasRuns, wireExtrasRuns } from "@/features/extras/run"
 import type { ResultItem } from "@/features/gallery/session-store"
 import { formatEta } from "@/features/progress/effects"
@@ -132,7 +132,7 @@ function asItems(result: ExtrasResult): ResultItem[] {
 }
 
 function ResultStage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const results = useExtrasRuns((s) => s.results)
   const selected = useExtrasRuns((s) => s.selected)
   const result = (selected ? results.find((item) => item.jobId === selected) : undefined) ?? results[0] ?? null
@@ -149,7 +149,7 @@ function ResultStage() {
   if (job && preview && !item) {
     view = <img src={preview} alt={t("Live preview")} className="max-h-full max-w-full rounded-lg object-contain" />
   } else if (result?.error) {
-    view = <p className="max-w-md rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">{serverText(result.error)}</p>
+    view = <p className="max-w-md rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">{jobErrorText(result.error, result.errors, i18n.language)}</p>
   } else if (!item) {
     view = (
       <div className="flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">

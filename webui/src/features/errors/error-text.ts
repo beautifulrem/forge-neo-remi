@@ -7,7 +7,7 @@
  * messages are catalog keys (`validationText`).
  */
 import { toast } from "sonner"
-import { ApiError, RequestError, validationErrors } from "@/api/http"
+import { ApiError, fieldMessages, RequestError, validationErrors } from "@/api/http"
 import { i18n, t } from "@/i18n"
 import { sentenceText } from "@/ui/messages"
 import type { FieldMessage } from "@/ui/schema"
@@ -104,6 +104,17 @@ export function toastInvalid(errors: readonly FieldMessage[]): void {
  * `remi/jobs/texts.py`) in the UI language, found by its exact key in the catalogs; any other text
  * (a job's own exception, a diagnostic) as it is, never read as a template.
  */
-export function serverText(text: string): string {
-  return i18n.exists(text) ? t(text) : text
+export function serverText(text: string, language = i18n.language): string {
+  return i18n.exists(text, { lng: language }) ? t(text, { lng: language }) : text
+}
+
+/**
+ * Why a job failed, in `language`: the values it refused when it ran (`errors`, as the server
+ * stores and sends them: their templates translate) where it has them, else its error text
+ * (`serverText`). A value can be refused only then: a style deleted, an image removed or a model
+ * gone while the job waited.
+ */
+export function jobErrorText(error: string, errors: unknown, language = i18n.language): string {
+  const messages = fieldMessages(errors)
+  return messages.length > 0 ? validationText(messages, language) : serverText(error, language)
 }

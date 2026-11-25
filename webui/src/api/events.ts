@@ -17,7 +17,8 @@ export type WsEventMap = {
   /** `status`: "completed", or "interrupted" / "cancelled" (an interrupted job keeps its results). */
   /** `warnings`: script steps that failed (the job went on without them). */
   "job.completed": JobRef & { outputs: JobOutput[]; infotext?: string | null; status?: string; warnings?: JobNote[] }
-  "job.failed": JobRef & { error: string; status?: string }
+  /** `errors`: the values the job refused when it ran (`remi.ui.ParamError`, with their templates). */
+  "job.failed": JobRef & { error: string; status?: string; errors?: unknown[] | null }
   /** `running`: the job the worker runs now (also sent right after `hello`). */
   "queue.changed": { size?: number; paused?: boolean; running?: string | null }
   "options.changed": { keys?: string[] }
@@ -59,7 +60,7 @@ const SHAPES: { [K in WsEventType]: Record<string, (v: unknown) => boolean> } = 
   "job.started": { ...JOB, steps: optional(isNumber) },
   "job.progress": { ...JOB, step: isNumber, steps: isNumber },
   "job.completed": { ...JOB, outputs: optional(isOutputs) },
-  "job.failed": { ...JOB, error: optional(isString) },
+  "job.failed": { ...JOB, error: optional(isString), errors: optional(Array.isArray) },
   "queue.changed": {},
   "options.changed": { keys: optional(isStringArray) },
   "networks.changed": { kind: optional(isString) },

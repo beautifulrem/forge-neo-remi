@@ -82,6 +82,21 @@ describe("extras runs", () => {
     expect(useExtrasRuns.getState().results[0]).toMatchObject({ jobId: "j1", source: "up1", info: "x" })
   })
 
+  it("keeps the values a failed run refused, with their templates", async () => {
+    // the page shows them in the UI language; the error text alone is English
+    wireExtrasRuns()
+    useExtrasRuns.setState({ jobs: ["x2"], sources: { x2: null } })
+    useProgress.getState().track("x2", "extras")
+    const refused = { owner: "core", param: "upscaler_1", message: "'Gone' is not one of the choices ('None')", template: "{{value}} is not one of the choices ({{choices}})", params: { value: "'Gone'", choices: "'None'" } }
+    useProgress.getState().failed({ job_id: "x2", error: "core.upscaler_1: 'Gone' is not one of the choices ('None')", errors: [refused, { message: { a: 1 } }] })
+    expect(useExtrasRuns.getState().results[0]).toMatchObject({ jobId: "x2", errors: [{ message: refused.message, template: refused.template, params: refused.params }] })
+    // stored by hand: entries the page cannot read are dropped, the run is kept
+    sessionStorage.setItem("remi-extras-runs", JSON.stringify({ state: { results: [{ jobId: "s", outputs: [], source: null, info: null, error: "x", errors: [{ message: 5 }, { message: "ok" }], at: 1 }], jobs: [], sources: {} }, version: 1 }))
+    await useExtrasRuns.persist.rehydrate()
+    expect(useExtrasRuns.getState().results.map((result) => result.errors)).toEqual([[{ message: "ok" }]])
+    sessionStorage.clear()
+  })
+
   it("reports a job the server no longer knows as gone", async () => {
     useExtrasRuns.setState({ jobs: ["j2"], sources: { j2: null } })
     mockFetch(() => [404, { detail: "no such job" }])
