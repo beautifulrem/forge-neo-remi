@@ -219,7 +219,7 @@ def layout_hash(tab: str) -> str:
         from modules import scripts
         from remi.core.extras import assign_args
 
-        parts += [(layout.owner, layout.names) for _script, layout in assign_args(scripts.scripts_postproc)]
+        parts += [(layout.owner, layout.names) for _script, layout in assign_args(scripts.scripts_postproc, assign=False)]
     return hashlib.sha1(json.dumps(parts, default=str).encode()).hexdigest()[:16]
 
 
@@ -231,7 +231,7 @@ def validate_values(files: FileStore) -> Validator:
         from remi.core.tabs import carried_values, processing_args
         from remi.ui import Context
 
-        processing_args(tab, core, scripts, Context(resolve_upload=files.check_upload))
+        processing_args(tab, core, scripts, Context(resolve_upload=files.check_upload), assign_slots=False)
         return carried_values(tab, core, scripts)
 
     return validate

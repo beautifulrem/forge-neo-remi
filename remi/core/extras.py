@@ -38,10 +38,12 @@ def _layout(script: Any, owner: str) -> ScriptLayout:
     return cached
 
 
-def assign_args(runner: Any) -> list[tuple[Any, ScriptLayout]]:
+def assign_args(runner: Any, *, assign: bool = True) -> list[tuple[Any, ScriptLayout]]:
     """``(operation, layout)`` in run order; assigns each operation's
     argument slots and the name list ``ScriptPostprocessingRunner.run``
-    zips its values with."""
+    zips its values with. ``assign=False`` only reads the layouts: callers
+    on request threads (the schema, a submission's check) must not move the
+    slots of a job about to run (they follow the operation-order setting)."""
 
     from modules.scripts import script_slug, unique_id
 
@@ -60,6 +62,8 @@ def assign_args(runner: Any) -> list[tuple[Any, ScriptLayout]]:
         taken.add(owner)
         result.append((script, layout))
 
+    if not assign:
+        return result
     position = 0
     for script, layout in result:
         script.arg_names = list(layout.names)
@@ -68,24 +72,28 @@ def assign_args(runner: Any) -> list[tuple[Any, ScriptLayout]]:
     return result
 
 
-def postprocessing_args(runner: Any, values: Any, ctx: Context | None = None) -> list:
+def postprocessing_args(runner: Any, values: Any, ctx: Context | None = None, *, assign: bool = True) -> list:
     """The positional ``*args`` of ``run_postprocessing`` for named values
-    ``{operation id: {param: value}}``; missing params take their defaults."""
+    ``{operation id: {param: value}}``; missing params take their defaults.
+    ``assign``: also set the operations' slots to match (the run's call;
+    see :func:`assign_args`)."""
 
     ctx = ctx or Context()
     if values is None:
         values = {}
     elif not isinstance(values, Mapping):
         raise ValidationError([ParamError(Sentence("scripts: expected an object of values by operation id, got {{type}}", type=type(values).__name__))])
-    assigned = assign_args(runner)
+    assigned = assign_args(runner, assign=assign)
     known = {layout.owner for _script, layout in assigned}
     problems: list = [ParamError("unknown postprocessing operation", owner=owner) for owner in values if owner not in known]
-    args: list = [None] * (max((script.args_to for script, _layout in assigned), default=0))
-    for script, layout in assigned:
+    args: list = [None] * sum(len(layout) for _script, layout in assigned)
+    position = 0  # the slots assign_args gives, without reading them back from the shared operations
+    for _script, layout in assigned:
         try:
-            args[script.args_from : script.args_to] = layout.values_to_args(values.get(layout.owner), ctx)
+            args[position : position + len(layout)] = layout.values_to_args(values.get(layout.owner), ctx)
         except ValidationError as error:
             problems.append(error)
+        position += len(layout)
     if problems:
         raise ValidationError.merge(problems)
     return args
@@ -94,7 +102,7 @@ def postprocessing_args(runner: Any, values: Any, ctx: Context | None = None) ->
 def scripts_schema(runner: Any, ctx: Context | None = None) -> list[ScriptEntry]:
     ctx = ctx or Context()
     result: list[ScriptEntry] = []
-    for order, (script, layout) in enumerate(assign_args(runner)):
+    for order, (script, layout) in enumerate(assign_args(runner, assign=False)):
         result.append(
             {
                 "id": layout.owner,

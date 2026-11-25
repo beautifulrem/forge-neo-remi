@@ -104,7 +104,7 @@ def carried_values(tab: str, core: Any, scripts_values: Any) -> tuple[dict[str, 
     if runner is not None:
         owners += [(script.script_id, runner.layout_for(script)) for script in runner.scripts]
     else:
-        owners += [(layout.owner, layout) for _script, layout in extras.assign_args(scripts.scripts_postproc)]
+        owners += [(layout.owner, layout) for _script, layout in extras.assign_args(scripts.scripts_postproc, assign=False)]
     held = {owner: {node.name for node in (*layout.inputs, *layout.tools) if not node.submit} for owner, layout in owners}
 
     def carried(owner: str, values: Any) -> Any:
@@ -115,14 +115,15 @@ def carried_values(tab: str, core: Any, scripts_values: Any) -> tuple[dict[str, 
     return carried("core", dict(core or {})), {owner: carried(owner, values) for owner, values in (scripts_values or {}).items()}
 
 
-def processing_args(tab: str, core: Any, scripts_values: Any, ctx: Context | None = None) -> tuple[dict[str, Any], list]:
+def processing_args(tab: str, core: Any, scripts_values: Any, ctx: Context | None = None, *, assign_slots: bool = True) -> tuple[dict[str, Any], list]:
     """Validate a request: ``(core processing args by name, script args)``.
 
     Core values are coerced and converted (choice indices, uploads); script
     values become the full positional ``p.script_args`` (extras: the
     operations' positional args). Raises :class:`ValidationError` listing
     every rejected value (a body that is not an object of named values
-    included)."""
+    included). ``assign_slots=False``: a check only, which leaves the Extras
+    operations' argument slots alone (:func:`remi.core.extras.assign_args`)."""
 
     from modules import scripts
     from remi.core import extras
@@ -145,7 +146,7 @@ def processing_args(tab: str, core: Any, scripts_values: Any, ctx: Context | Non
             problems.append(error)
     try:
         if runner is None:
-            script_args = extras.postprocessing_args(scripts.scripts_postproc, scripts_values, ctx)
+            script_args = extras.postprocessing_args(scripts.scripts_postproc, scripts_values, ctx, assign=assign_slots)
         else:
             script_args = runner.script_args_from_values(values.get("script"), scripts_values, ctx)
     except ValidationError as error:

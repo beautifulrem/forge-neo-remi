@@ -1088,4 +1088,38 @@ def test_extras_with_operations(job_runtime, monkeypatch):
         assert {(error["owner"], error["param"]) for error in caught.value.to_json()["errors"]} == {("core", "image"), ("scale", "method"), ("ghost", None)}
 
 
+def test_reading_the_extras_layout_leaves_the_slots_of_a_run_alone(job_runtime):
+    """The schema, the layout fingerprint, the action owner lookup and a submission's
+    check run on request threads while an Extras job may be between building its
+    arguments and running: they must not move the operations' argument slots (which
+    follow the operation-order setting)."""
+
+    import contextlib
+
+    from remi.core.tabs import processing_args, tab_schema
+    from remi.jobs.queue import layout_hash, validate_values
+    from remi.server.routes.core import _action_target
+
+    with webui_state(postprocessing=_extras_operations()) as state:
+        from modules import shared
+
+        with contextlib.suppress(ui.ValidationError):
+            processing_args("extras", {"mode": "Single Image"}, {})  # the run's: assigns the slots
+        scale, tint = state.postproc.scripts
+        slots = [(scale.args_from, scale.args_to), (tint.args_from, tint.args_to)]
+        assert slots == [(0, 2), (2, 4)]
+
+        shared.opts.data["postprocessing_operation_order"] = ["Tint", "Scale"]
+        assert [entry["id"] for entry in tab_schema("extras")["scripts"]] == ["tint", "scale"]
+        layout_hash("extras")
+        assert _action_target("tint", "extras") is tint
+        with contextlib.suppress(ui.ValidationError):
+            validate_values(SimpleNamespace(check_upload=lambda *_args: None))("extras", {"mode": "Single Image"}, {"tint": {"enable": True}})
+        assert [(scale.args_from, scale.args_to), (tint.args_from, tint.args_to)] == slots
+
+        with contextlib.suppress(ui.ValidationError):
+            processing_args("extras", {"mode": "Single Image"}, {})
+        assert (tint.args_from, scale.args_from) == (0, 2)  # the next run follows the new order
+
+
 # endregion

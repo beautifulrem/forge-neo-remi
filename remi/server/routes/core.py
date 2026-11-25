@@ -224,7 +224,7 @@ def _action_target(owner: str, tab: str | None) -> Any:
         from modules import scripts
         from remi.core.extras import assign_args
 
-        for operation, layout in assign_args(scripts.scripts_postproc):
+        for operation, layout in assign_args(scripts.scripts_postproc, assign=False):
             if layout.owner == owner:
                 return operation
     elif owner in runner.by_id:
