@@ -1082,12 +1082,13 @@ class ChainRunner:
         return updated
 
     def delete_chain(self, chain_id: str) -> bool:
-        chain = self.store.get_chain(chain_id)
-        if chain is None:
-            return False
-        if chain.status == "running" or any(st.status == "running" for st in chain.stages):
-            raise ChainError("cannot delete a running chain; cancel it first", status=409)
-        return self.store.delete_chain(chain_id)
+        with self._lock:  # not between a resume or re-run and the stage job it queues
+            chain = self.store.get_chain(chain_id)
+            if chain is None:
+                return False
+            if chain.status == "running" or any(st.status == "running" for st in chain.stages):
+                raise ChainError("cannot delete a running chain; cancel it first", status=409)
+            return self.store.delete_chain(chain_id)
 
     def reconcile(self) -> int:
         """Settle chains a previous process left mid-run (call once the queue

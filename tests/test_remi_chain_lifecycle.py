@@ -545,3 +545,18 @@ def test_a_stale_upsampling_thread_does_not_write_into_a_rerun(tmp_path):
         assert done.status == "completed"
         assert done.stages[0].output_prompt == "new!"
         assert [e["core"]["prompt"] for e in r.executed] == ["new!"]
+
+
+def test_deleting_a_chain_waits_for_the_runner(tmp_path):
+    """A delete between a resume's status change and its next stage job would
+    leave that job without its chain: delete takes the runner's lock too."""
+
+    with rig(tmp_path, start=False) as r:
+        chain = r.runner.create_chain(seeded(5), run_now=False)
+        deleted = threading.Event()
+        thread = threading.Thread(target=lambda: r.runner.delete_chain(chain.id) and deleted.set())
+        with r.runner._lock:
+            thread.start()
+            assert not deleted.wait(0.3)
+        thread.join(5)
+        assert deleted.is_set() and r.runner.store.get_chain(chain.id) is None
