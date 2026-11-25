@@ -1673,5 +1673,6 @@
   "{{shown}} of {{count}} extensions": "{{shown}} / {{count}} 个扩展",
   "Move {{stage}} earlier": "将{{stage}}前移",
   "Move {{stage}} later": "将{{stage}}后移",
-  "Stage {{n}}: {{name}}": "阶段 {{n}}：{{name}}"
+  "Stage {{n}}: {{name}}": "阶段 {{n}}：{{name}}",
+  "Cycle RGBA backdrop": "切换 RGBA 底板"
 }
