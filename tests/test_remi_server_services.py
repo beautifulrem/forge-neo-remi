@@ -301,11 +301,14 @@ def test_a_pipelines_upsample_stage_keeps_local_model_paths_off_under_hide_ui_di
 
     from modules import shared
     from remi.jobs.chains import StageRun
+    from remi.prompt_tools.translate import TranslationError
 
     fake = types.ModuleType("remi.prompt_tools.pup")
     fake.upsample_prompt = lambda prompt, **kwargs: pytest.fail("a local model path must not be loaded")
     monkeypatch.setitem(sys.modules, "remi.prompt_tools.pup", fake)
     monkeypatch.setattr(shared, "cmd_opts", SimpleNamespace(hide_ui_dir_config=True), raising=False)
     stage = StageRun(chain_id="c", index=0, kind="prompt_upsample", name="PUP", enabled=True, tab="txt2img", core={"prompt": "a fox"}, config={"local_model_path": "/etc"})
-    with pytest.raises(PermissionError, match="hide-ui-dir-config"):
+    # refused as the upsample route refuses it: a 403 with the sentence the UI translates
+    with pytest.raises(TranslationError, match="hide-ui-dir-config") as refused:
         services.chains.upsampler(stage, None, [])
+    assert refused.value.status == 403 and refused.value.message.template == "local_model_path is disabled under --hide-ui-dir-config"
