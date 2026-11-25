@@ -372,6 +372,28 @@ def test_broken_text_is_refused_in_a_body_sent_as_utf16_or_utf32(server):
     assert server.client.post("/api/v2/recipes", content='{"name": "猫 😀"}'.encode("utf-16"), headers=headers).status_code in (200, 201)
 
 
+# The guard parsed a body FastAPI had parsed already; escaped emoji pairs (which Python clients send by
+# default) take that path, so a large body was parsed twice
+def test_the_broken_text_guard_reuses_the_routes_parse(server, monkeypatch):
+    import json
+
+    loads, parsed = json.loads, []
+    body = '{"name": "cat \\ud83d\\ude00", "core_patch": {"prompt": "' + "x" * 1000 + '"}}'
+
+    def counting(text, *args, **kwargs):
+        if text in (body, body.encode()):
+            parsed.append(1)
+        return loads(text, *args, **kwargs)
+
+    monkeypatch.setattr(json, "loads", counting)
+    assert server.client.post("/api/v2/recipes", content=body, headers={"Content-Type": "application/json"}).status_code == 201
+    assert len(parsed) == 1
+    # a route without a body: the guard's own parse, once
+    parsed.clear()
+    assert server.client.request("GET", "/api/v2/queue", content=body, headers={"Content-Type": "application/json"}).status_code == 200
+    assert len(parsed) == 1
+
+
 # A body nested deeper than the JSON parser goes answered 500 with a traceback, before any login check
 def test_a_deeply_nested_body_is_not_a_server_error(server):
     deep = b"[" * 100_000 + b'"\\udc80"' + b"]" * 100_000

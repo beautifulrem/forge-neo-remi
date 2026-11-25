@@ -216,7 +216,7 @@ async def refuse_broken_text(connection: HTTPConnection) -> None:
     if json.detect_encoding(body) in ("utf-8", "utf-8-sig") and not _MAYBE_BROKEN.search(body):
         return
     try:
-        data = json.loads(body)
+        data = await connection.json()  # the route's own parse (Starlette keeps it): the body is read once
     except (ValueError, RecursionError):
         return  # the route's own validation answers (a body nested too deep: 400)
     path = _broken_text_at(data)
