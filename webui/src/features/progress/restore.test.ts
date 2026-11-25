@@ -9,7 +9,7 @@ import { tabSchema } from "@/api/mock/fixtures"
 import { useSession } from "@/features/gallery/session-store"
 import { FakeSocket } from "@/test/fake-socket"
 import { resetRestore, restoreRuns, wireRunSync } from "./restore"
-import { dispatchRun, persistedJobs, persistedRun, persistKey, resetRunControllers, useRuns, wireRunControllers } from "./run-controller"
+import { dispatchRun, MAX_RUNS, persistedJobs, persistedRun, persistKey, resetRunControllers, useRuns, wireRunControllers } from "./run-controller"
 import { phaseOf } from "./run-machine"
 import { created, jobDetail } from "@/test/api-fixtures"
 
@@ -246,5 +246,15 @@ describe("resync after missed events", () => {
     dispatchRun("img2img", { type: "submitted", jobIds: ["q1"] })
     send(ws, { type: "queue.changed", size: 0, running: "q1" })
     expect(phaseOf(useRuns.getState().runs.img2img)).toBe("running")
+  })
+})
+
+// A stored repeat count is one the Repeat field can give (it takes at most 999 runs): a hand-edited
+// 1e9 kept generating for good after a reload.
+describe("a stored repeat count", () => {
+  it("is within what the Repeat field gives", () => {
+    sessionStorage.setItem(persistKey("txt2img"), JSON.stringify({ jobs: ["j"], forever: false, repeatLeft: 1e9 }))
+    expect(persistedRun("txt2img").repeatLeft).toBe(MAX_RUNS - 1)
+    sessionStorage.removeItem(persistKey("txt2img"))
   })
 })

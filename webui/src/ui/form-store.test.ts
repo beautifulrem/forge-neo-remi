@@ -103,6 +103,14 @@ describe("form store", () => {
     expect(store.getState().tabs).toEqual(expect.any(Object))
   })
 
+  // A selected tab stored as a number (0, not "0") selected no tab: the strip showed no panel.
+  it("keeps only a draft's tab choices and open states of their own kind", () => {
+    localStorage.setItem(draftKey("t-kinds"), JSON.stringify({ state: { values: {}, open: { a: true, b: "yes", c: 1 }, tabs: { x: "1", y: 0, z: null, w: "01", v: "-1" } }, version: 1 }))
+    const store = createFormStore("t-kinds")
+    expect(store.getState().open).toEqual({ a: true })
+    expect(store.getState().tabs).toEqual({ x: "1" })
+  })
+
   it("persists drafts (debounced) without upload ids", async () => {
     const store = createFormStore("t4")
     store.getState().load(owners)

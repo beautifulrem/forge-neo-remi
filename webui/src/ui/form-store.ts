@@ -13,6 +13,7 @@
 import { createStore, type StoreApi } from "zustand/vanilla"
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware"
 import type { ParamPatch } from "@/api/types"
+import { keepEntries } from "@/lib/persist"
 import { jsonEqual } from "./conditions"
 import { buildIndex, defaultOf, type FormIndex, type OwnerSpec } from "./form-index"
 import { collectLocks, lockedNames, type ParamLock } from "./locks"
@@ -94,6 +95,9 @@ export type FormStore = StoreApi<FormState & FormActions>
 type Persisted = Pick<FormState, "values" | "open" | "tabs">
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value)
+
+/** A selected tab as the strips store it: its index, "0", "1", … */
+const isTabIndex = (value: unknown): value is string => typeof value === "string" && /^(0|[1-9]\d*)$/.test(value)
 
 const emptyIndex = (): FormIndex => ({ inputs: new Map(), slots: new Set(), reveal: new Map() })
 
@@ -330,8 +334,9 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
             return {
               ...current,
               values: isRecord(saved.values) ? (saved.values as Persisted["values"]) : current.values,
-              open: isRecord(saved.open) ? (saved.open as Persisted["open"]) : current.open,
-              tabs: isRecord(saved.tabs) ? (saved.tabs as Persisted["tabs"]) : current.tabs,
+              // the open states and selected tabs keep their kinds: a tab stored as 0 (not "0") selected none
+              open: isRecord(saved.open) ? keepEntries(saved.open, (value) => typeof value === "boolean") : current.open,
+              tabs: isRecord(saved.tabs) ? keepEntries(saved.tabs, isTabIndex) : current.tabs,
             }
           },
         }),

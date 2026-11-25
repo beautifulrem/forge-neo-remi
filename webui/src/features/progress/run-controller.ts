@@ -33,6 +33,9 @@ export const useRuns = create<RunStore>()(() => ({ runs: { txt2img: IDLE, img2im
 
 export const persistKey = (tab: GenerateTab) => `remi-run:${tab}`
 
+/** The most runs "Generate several times" takes. */
+export const MAX_RUNS = 999
+
 /**
  * What a page load leaves for the next one in the same tab: the jobs in flight and the loops they
  * belong to. Kept in session storage, which a reload keeps and other tabs do not share: a tab
@@ -58,7 +61,8 @@ export function persistedRun(tab: GenerateTab): PersistedRun {
     const raw = JSON.parse(sessionStorage.getItem(persistKey(tab)) ?? "[]") as unknown
     if (Array.isArray(raw)) return { jobs: ids(raw), forever: false, repeatLeft: 0 }
     const saved = (raw ?? {}) as Partial<Record<keyof PersistedRun, unknown>>
-    const repeatLeft = typeof saved.repeatLeft === "number" && Number.isFinite(saved.repeatLeft) ? Math.max(0, Math.floor(saved.repeatLeft)) : 0
+    // at most what the Repeat field gives (a hand-edited 1e9 generated for good)
+    const repeatLeft = typeof saved.repeatLeft === "number" && Number.isFinite(saved.repeatLeft) ? Math.min(MAX_RUNS - 1, Math.max(0, Math.floor(saved.repeatLeft))) : 0
     return { jobs: ids(saved.jobs), forever: saved.forever === true, repeatLeft }
   } catch {
     return { jobs: [], forever: false, repeatLeft: 0 }

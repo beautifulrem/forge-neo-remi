@@ -28,7 +28,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils"
 import { ExposureSheet } from "@/features/progress/ExposureSheet"
 import { formatEta, stepText, notificationsAvailable } from "@/features/progress/effects"
-import { dispatchRun, type GenerateTab, useRuns } from "@/features/progress/run-controller"
+import { dispatchRun, type GenerateTab, MAX_RUNS, useRuns } from "@/features/progress/run-controller"
 import { phaseOf } from "@/features/progress/run-machine"
 import { EnqueueButton, QueueEditBanner } from "@/features/queue/FormQueueControls"
 import { requestReset } from "./reset-request"
@@ -69,9 +69,9 @@ function RepeatPopover({ tab, disabled }: { tab: GenerateTab; disabled?: boolean
               id={`${tab}-repeat`}
               type="number"
               min={2}
-              max={999}
+              max={MAX_RUNS}
               value={runs}
-              onChange={(event) => setRuns(Math.max(1, Math.min(999, Math.round(Number(event.target.value) || 1))))}
+              onChange={(event) => setRuns(Math.max(1, Math.min(MAX_RUNS, Math.round(Number(event.target.value) || 1))))}
               className="h-8 tabular-nums"
             />
             <Button type="submit" size="sm">
