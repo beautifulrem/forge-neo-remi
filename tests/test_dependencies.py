@@ -92,3 +92,41 @@ def test_module_level_imports_are_declared_dependencies():
                 if not owners & allowed:
                     undeclared.setdefault(module, []).append(relative)
     assert undeclared == {}, undeclared
+
+
+# Remi's own code may lean on these without declaring them, each with the reason
+NOT_DIRECT = {
+    "starlette": "FastAPI's own framework: fastapi pins the Starlette it supports",
+    "llama_cpp": "remi/prompt_tools/pup.py imports it only for a local GGUF model and says how to install it",
+}
+
+
+def _all_imports(path: Path) -> set[str]:
+    found: set[str] = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8", errors="replace"))):
+        if isinstance(node, ast.Import):
+            found.update(alias.name.partition(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            found.add(node.module.partition(".")[0])
+    return found
+
+
+def test_remi_declares_every_library_it_uses():
+    """A library Remi's own code calls (inside functions too) is in requirements.txt itself, not
+    only pulled in by another package that could drop it (requests for the translation provider)."""
+
+    requirements = {_name(line) for line in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")}
+    distributions = metadata.packages_distributions()
+    local = _local_names()
+    undeclared: dict[str, list[str]] = {}
+    for path in sorted((ROOT / "remi").rglob("*.py")):
+        relative = path.relative_to(ROOT).as_posix()
+        if "/tests/" in f"/{relative}":
+            continue
+        for module in _all_imports(path):
+            if module in sys.stdlib_module_names or module in local or module in NOT_DIRECT or module == "__future__":
+                continue
+            owners = {_name(owner) for owner in distributions.get(module, ())}
+            if not owners & requirements:
+                undeclared.setdefault(module, []).append(relative)
+    assert undeclared == {}, undeclared
