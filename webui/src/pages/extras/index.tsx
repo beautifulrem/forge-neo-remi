@@ -179,6 +179,12 @@ function ResultStage() {
   return (
     // the actions fold by the column's width (`ResultActions` collapsible), as on the generation stage
     <div className="@container/actions flex h-full min-h-0 flex-col gap-2">
+      {/* Planned rows, never a wrap (sizes up to five digits a side): one row where the view
+          switch, the size and the folded actions fit (27rem; the size and the actions alone,
+          17rem); narrower, the actions take a row of their own, and below 16rem the size gives
+          way to the view switch. The actions unfold at 34rem (`ResultActions`) and need more
+          room than the switch and the size leave them until 36rem: there the size gives way too.
+          The viewer shows the size. */}
       <div className="flex min-h-9 flex-wrap items-center gap-2">
         {comparable ? (
           <Segmented
@@ -192,8 +198,12 @@ function ResultStage() {
             ]}
           />
         ) : null}
-        {item?.width && item.height ? <span className="text-xs text-muted-foreground tabular-nums">{item.width}×{item.height}</span> : null}
-        <div className="ml-auto flex min-w-0 items-center gap-0.5">
+        {item?.width && item.height ? (
+          <span className={cn("text-xs text-muted-foreground tabular-nums", comparable && "hidden @[16rem]/actions:inline @[34rem]/actions:hidden @[36rem]/actions:inline")}>
+            {item.width}×{item.height}
+          </span>
+        ) : null}
+        <div className={cn("ml-auto flex min-w-0 basis-full items-center justify-end gap-0.5", comparable ? "@[27rem]/actions:basis-auto" : "@[17rem]/actions:basis-auto")}>
           {item ? (
             <Button variant="ghost" size="icon-sm" aria-label={t("Open in the viewer")} onClick={() => setViewer(true)}>
               <Maximize2 />
@@ -243,7 +253,8 @@ function RecentRuns() {
   return (
     <div className="flex flex-col gap-1">
       <h2 className="text-[0.8rem] font-medium text-muted-foreground">{t("This session")}</h2>
-      <div role="listbox" aria-label={t("Recent runs")} className="flex gap-1.5 overflow-x-auto pb-1">
+      {/* 4 px of room around the thumbnails: the scroll box would cut their rings */}
+      <div role="listbox" aria-label={t("Recent runs")} className="-mx-1 flex gap-1.5 overflow-x-auto p-1">
         {results.map((result) => {
           const first = result.outputs.find((output) => (output.kind ?? "image") === "image")
           return (

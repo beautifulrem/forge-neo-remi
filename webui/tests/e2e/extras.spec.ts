@@ -209,6 +209,51 @@ test.describe("hires fix and refiner", () => {
   })
 })
 
+// The strip of this session's runs scrolls sideways, and a scroll box cuts what is drawn outside
+// it: the selected run's ring and the focus ring lost their top and left sides.
+for (const { name, size } of [
+  { name: "a laptop", size: { width: 1280, height: 720 } },
+  { name: "a phone", size: { width: 390, height: 844 } },
+]) {
+  test(`keeps room for the rings around this session's runs on ${name}`, async ({ page }) => {
+    await page.setViewportSize(size)
+    await openRoute(page, "extras")
+    const form = page.getByRole("form", { name: "Parameters" })
+    const chooser = page.waitForEvent("filechooser")
+    await form.getByRole("button", { name: "Source" }).click()
+    await (await chooser).setFiles({ name: "photo.png", mimeType: "image/png", buffer: await makePng(page, 300, 200) })
+    await expect(form.getByRole("button", { name: "Remove Source" })).toBeVisible()
+    const runs = page.getByRole("listbox", { name: "Recent runs" })
+    for (const run of [1, 2]) {
+      await page.getByRole("button", { name: /^Process/ }).click()
+      await expect(page.getByRole("button", { name: "Interrupt" })).toBeVisible()
+      await expect(page.getByRole("button", { name: "Interrupt" })).toBeHidden({ timeout: 15_000 })
+      if (run === 2) await expect(runs.getByRole("option")).toHaveCount(2)
+    }
+    const cut = await runs.evaluate((strip) => {
+      const box = strip.getBoundingClientRect()
+      const inner = { left: box.left + strip.clientLeft, top: box.top + strip.clientTop }
+      const bottom = inner.top + strip.clientHeight
+      const ring = 3 // the focus ring, the widest of the two
+      return [...strip.querySelectorAll("[role=option]")].flatMap((option, index) => {
+        const r = option.getBoundingClientRect()
+        const sides = [r.left - ring < inner.left - 0.5 && "left", r.top - ring < inner.top - 0.5 && "top", r.bottom + ring > bottom + 0.5 && "bottom"]
+        return sides.filter(Boolean).map((side) => `run ${index + 1}: ${side}`)
+      })
+    })
+    expect(cut).toEqual([])
+    // the room is taken from the strip's own margins: nothing scrolls sideways for it
+    const sideways = await page.evaluate(() =>
+      [document.scrollingElement!, ...document.querySelectorAll("main, main *")].flatMap((element) => {
+        const style = getComputedStyle(element)
+        const scrolls = element === document.scrollingElement || /auto|scroll/.test(style.overflowX)
+        return scrolls && element.getAttribute("role") !== "listbox" && element.scrollWidth > element.clientWidth + 1 ? [element.tagName + "." + String(element.className).slice(0, 40)] : []
+      }),
+    )
+    expect(sideways).toEqual([])
+  })
+}
+
 // The result's toolbar never folded: at 768 px, and on a phone held sideways, "Send to" sat past the
 // edge of the screen (or of its safe area) where no tap reached it. The route sweeps ran Extras
 // without a result, so nothing showed it.
@@ -246,6 +291,47 @@ test.describe("the result toolbar", () => {
       expect(unreachable).toEqual([])
       await sendTo.click()
       await expect(page.getByRole("menuitem", { name: "img2img" })).toBeVisible()
+    })
+  }
+
+  // It wrapped wherever it ran out of room: the 208 px column of a 768 px tablet put the view
+  // switch, the size and the actions on three ragged rows. A narrow column gives the actions a row
+  // of their own and lets the size go; a wide one keeps all of it on one row.
+  for (const { name, size, rows } of [
+    { name: "a tablet", size: { width: 768, height: 1024 }, rows: [["view"], ["actions"]] },
+    { name: "a phone", size: { width: 375, height: 812 }, rows: [["view", "size"], ["actions"]] },
+    // the actions unfold from a 544 px column and need about 550 px beside the switch and the size
+    { name: "a window where the actions unfold", size: { width: 1106, height: 720 }, rows: [["view", "actions"]] },
+    { name: "a laptop", size: { width: 1280, height: 720 }, rows: [["view", "size", "actions"]] },
+  ]) {
+    test(`keeps to planned rows on ${name}`, async ({ page }) => {
+      await page.setViewportSize(size)
+      await openRoute(page, "extras")
+      const form = page.getByRole("form", { name: "Parameters" })
+      const chooser = page.waitForEvent("filechooser")
+      await form.getByRole("button", { name: "Source" }).click()
+      await (await chooser).setFiles({ name: "photo.png", mimeType: "image/png", buffer: await makePng(page, 300, 200) })
+      await expect(form.getByRole("button", { name: "Remove Source" })).toBeVisible()
+      await page.keyboard.press(`${mod}+Enter`)
+      const result = page.getByRole("region", { name: "Result" })
+      await expect(result.getByRole("slider", { name: "Comparison divider" })).toBeVisible({ timeout: 15_000 })
+      const bar = result.getByRole("radiogroup", { name: "View" }).locator("xpath=..")
+      const shown = await bar.evaluate((row) => {
+        const named = [...row.children].flatMap((child) => {
+          const box = child.getBoundingClientRect()
+          if (box.width === 0) return []
+          const part = child.getAttribute("role") === "radiogroup" ? "view" : child.tagName === "SPAN" ? "size" : "actions"
+          return [{ part, middle: box.top + box.height / 2 }]
+        })
+        const lines: { middle: number; parts: string[] }[] = []
+        for (const { part, middle } of named) {
+          const line = lines.find((entry) => Math.abs(entry.middle - middle) < 8)
+          if (line) line.parts.push(part)
+          else lines.push({ middle, parts: [part] })
+        }
+        return lines.sort((a, b) => a.middle - b.middle).map((line) => line.parts)
+      })
+      expect(shown).toEqual(rows)
     })
   }
 })
