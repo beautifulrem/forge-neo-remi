@@ -3,6 +3,7 @@ every core UI string: the generation forms and built-in processing scripts,
 every setting (categories, sections, labels, infos, notes, links, choices) and
 the server's translatable messages (tests/remi_core_strings.py)."""
 
+import ast
 import json
 import re
 from pathlib import Path
@@ -91,11 +92,17 @@ def test_the_callbacks_section_keeps_the_vae_explanation():
     """The Callbacks section's help once reused the key ``sd_vae_explanation``
     and replaced the VAE section's explanation."""
 
-    from modules import shared_items, shared_options
+    with webui_state():  # imported first, shared_items would import itself half-way through
+        from modules import shared_items, shared_options
 
-    with webui_state():
-        callbacks = shared_items.callbacks_order_settings()
-    assert not set(callbacks) & set(shared_options.options_templates)
+        callbacks = set(shared_items.callbacks_order_settings())
+    # The server adds this section to the same templates once it starts (another test may
+    # have), so compare with the other sections' keys and with the keys shared_options.py defines.
+    source = ast.parse(Path(shared_options.__file__).read_text(encoding="utf-8"))
+    defined = {key.value for node in ast.walk(source) if isinstance(node, ast.Dict) for key in node.keys if isinstance(key, ast.Constant) and isinstance(key.value, str)}
+    others = {key for key, info in shared_options.options_templates.items() if (getattr(info, "section", None) or (None,))[0] != "callbacks"}
+    assert "sd_vae_explanation" in defined
+    assert not callbacks & (defined | others)
 
 
 def test_every_core_string_is_translated(strings, catalog):
