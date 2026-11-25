@@ -353,6 +353,31 @@ class FakeSocket:
         self.closed = code
 
 
+def test_a_message_nested_past_the_parser_is_ignored_like_any_bad_message():
+    """Only ``ValueError`` was ignored: ``RecursionError`` ended the receiver, and with it the
+    connection."""
+
+    from starlette.websockets import WebSocketDisconnect
+
+    from remi.server.ws import Hub
+
+    async def scenario():
+        frames = iter(["[" * 100_000 + "]" * 100_000, "not json", '{"type": "ping"}'])
+        socket = FakeSocket()
+
+        async def receive():
+            text = next(frames, None)
+            return {"type": "websocket.receive", "text": text} if text is not None else {"type": "websocket.disconnect", "code": 1000}
+
+        socket.receive = receive
+        client = Client(socket)
+        with pytest.raises(WebSocketDisconnect):  # the client left: the messages before it were all read
+            await asyncio.wait_for(Hub()._receive(client), 5)
+        return list(client.events)
+
+    assert asyncio.run(scenario()) == [{"type": "pong"}]
+
+
 def test_a_client_that_fell_behind_gets_a_resync_and_a_fresh_snapshot():
     import json
 

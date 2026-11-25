@@ -186,7 +186,7 @@ class Hub:
                 continue
             try:
                 data = json.loads(text)
-            except ValueError:
+            except (ValueError, RecursionError):  # not JSON, or nested past the parser: ignored, as any bad message
                 continue
             if not isinstance(data, dict):
                 continue
