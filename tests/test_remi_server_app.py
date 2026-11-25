@@ -518,6 +518,39 @@ def test_models(server, monkeypatch):
     assert data["samplers"] and data["schedulers"] and "sd" in data["presets"]
 
 
+def test_models_size_a_module_folder_by_its_files(server, monkeypatch, tmp_path):
+    """A sharded module folder (a diffusers VAE, a HuggingFace text encoder) had the size of the
+    folder entry itself, a few hundred bytes, not of the shards in it."""
+    from remi import networks
+    from remi.server import runtime
+
+    monkeypatch.setattr(runtime, "unet_dtypes", lambda: ["Automatic"])
+    vae_root = tmp_path / "VAE"
+    sharded = vae_root / "Wan2.1-VAE"
+    (sharded / "sub").mkdir(parents=True)
+    index = sharded / "diffusion_pytorch_model.safetensors.index.json"
+    index.write_text(json.dumps({"weight_map": {}}), encoding="utf-8")
+    (sharded / "diffusion_pytorch_model-00001-of-00002.safetensors").write_bytes(b"x" * 3000)
+    (sharded / "sub" / "diffusion_pytorch_model-00002-of-00002.safetensors").write_bytes(b"x" * 5000)
+    (vae_root / "single.safetensors").write_bytes(b"x" * 1234)
+    expected = index.stat().st_size + 3000 + 5000
+    if sys.platform != "win32":
+        blob = tmp_path / "blob"
+        blob.write_bytes(b"x" * 700)
+        os.symlink(blob, sharded / "config.json")  # a HuggingFace cache snapshot links its files to blobs
+        os.symlink(tmp_path, sharded / "elsewhere")  # a linked folder is not walked
+        expected += 700
+    monkeypatch.setattr(networks, "module_roots", lambda: {"vae": [str(vae_root)], "text_encoders": []})
+
+    def sizes() -> dict[str, int | None]:
+        return {ref["name"]: ref["size"] for ref in server.client.get("/api/v2/models").json()["vae"]}
+
+    assert sizes() == {"Wan2.1-VAE": expected, "single.safetensors": 1234}
+    # a folder of more entries than the walk reads has no size, rather than a part of one
+    monkeypatch.setattr(networks, "FOLDER_SIZE_LIMIT", 3)
+    assert sizes() == {"Wan2.1-VAE": None, "single.safetensors": 1234}
+
+
 @pytest.mark.parametrize("route", ["/api/v2/models/refresh", "/api/v2/networks/refresh", "extras-refresh"])
 def test_refresh_picks_up_an_upscaler_added_while_running(server, webui, monkeypatch, tmp_path, route):
     """A model dropped in the ESRGAN folder is a Hires. fix and Extras choice

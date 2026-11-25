@@ -914,6 +914,24 @@ def test_module_files_discovers_sharded_hf_text_encoder_folder_as_single_entry(t
     assert found["Qwen3.5-4B"] == str(sharded)
 
 
+def test_a_module_folder_lists_with_the_size_of_its_files(server, tmp_path, monkeypatch):
+    """The VAE and text encoder pages gave a sharded module the size of its folder entry."""
+
+    vae_root = tmp_path / "VAE"
+    sharded = vae_root / "Wan2.1-VAE"
+    sharded.mkdir(parents=True)
+    index = sharded / "diffusion_pytorch_model.safetensors.index.json"
+    index.write_text(json.dumps({"weight_map": {}}), encoding="utf-8")
+    (sharded / "diffusion_pytorch_model-00001-of-00002.safetensors").write_bytes(b"x" * 3000)
+    (sharded / "diffusion_pytorch_model-00002-of-00002.safetensors").write_bytes(b"x" * 5000)
+    (vae_root / "single.safetensors").write_bytes(b"x" * 1234)
+    monkeypatch.setattr(module, "module_roots", lambda: {"vae": [str(vae_root)], "text_encoders": []})
+    server.services.networks = NetworkIndex(server.services.files, lambda: {"vae": module.ModuleProvider("vae")}, current_arch=lambda: "xl")
+    items = {item["name"]: item for item in server.client.get("/api/v2/networks/vae").json()["items"]}
+    assert items["Wan2.1-VAE"]["size"] == index.stat().st_size + 8000 and items["single.safetensors"]["size"] == 1234
+    assert names(server.client.get("/api/v2/networks/vae", params={"sort": "size", "order": "desc"})) == ["Wan2.1-VAE", "single.safetensors"]
+
+
 def test_a_sharded_diffusers_vae_folder_is_a_module_the_settings_accept(tmp_path, monkeypatch):
     """Forge lists such a folder in the VAE folders too (``find_files_with_extensions``) and loads it
     (``load_torch_file`` reads the shard index; ``replace_state_dict`` converts diffusers VAEs)."""

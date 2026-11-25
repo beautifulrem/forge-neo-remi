@@ -391,8 +391,8 @@ def placeholder_data_uri(path: str) -> str | None:
 
 def _stat(entry: NetworkEntry) -> tuple[int | None, float | None, float | None, bool]:
     """``(size, modified, created, is a file)`` of the model file (one
-    ``stat``); created is the birth time where the system keeps one, else
-    ctime."""
+    ``stat``; a model folder, a sharded module, is the size of its files);
+    created is the birth time where the system keeps one, else ctime."""
 
     if not entry.on_disk:
         return None, None, None, False
@@ -400,7 +400,8 @@ def _stat(entry: NetworkEntry) -> tuple[int | None, float | None, float | None, 
         result = os.stat(entry.filename)
     except OSError:
         return None, None, None, False
-    return result.st_size, result.st_mtime, getattr(result, "st_birthtime", None) or result.st_ctime, stat.S_ISREG(result.st_mode)
+    size = model_size(entry.filename) if stat.S_ISDIR(result.st_mode) else result.st_size
+    return size, result.st_mtime, getattr(result, "st_birthtime", None) or result.st_ctime, stat.S_ISREG(result.st_mode)
 
 
 def is_hidden(relpath: str) -> bool:
@@ -577,6 +578,40 @@ def module_files(kind: str) -> list[tuple[str, str, str]]:
                 if name.endswith(MODEL_EXTENSIONS):
                     found[name] = (name, os.path.join(current, name), root)
     return sorted(found.values())
+
+
+FOLDER_SIZE_LIMIT = 4096
+"""Entries :func:`model_size` reads in a model folder before it gives up."""
+
+
+def model_size(path: str) -> int | None:
+    """Bytes of a model file, or of the files in a model folder (a sharded
+    module: its shards, index and config). A file link counts as its target
+    (a HuggingFace cache snapshot links its files to blobs); a linked folder
+    is not walked. None when it cannot be read, or the folder holds more than
+    ``FOLDER_SIZE_LIMIT`` entries (a partial sum would be a wrong size)."""
+
+    try:
+        result = os.stat(path)
+    except OSError:
+        return None
+    if not stat.S_ISDIR(result.st_mode):
+        return result.st_size
+    total, seen, pending = 0, 0, [path]
+    while pending:
+        try:
+            with os.scandir(pending.pop()) as entries:
+                for item in entries:
+                    seen += 1
+                    if seen > FOLDER_SIZE_LIMIT:
+                        return None
+                    if item.is_dir(follow_symlinks=False):
+                        pending.append(item.path)
+                    elif item.is_file():
+                        total += item.stat().st_size
+        except OSError:
+            return None
+    return total
 
 
 class ModuleProvider:

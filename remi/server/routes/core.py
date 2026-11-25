@@ -390,15 +390,15 @@ def locale_catalog(locale: str, response: Response, if_none_match: str | None = 
 def list_models() -> dict[str, Any]:
     from modules import sd_models, sd_samplers, sd_schedulers, shared
     from remi.core.presets import ui_preset_choices
-    from remi.networks import module_files
+    from remi.networks import model_size, module_files
     from remi.server.runtime import unet_dtypes
 
     def module_refs(kind: str) -> list[dict[str, Any]]:
-        return [{"name": name, "title": os.path.relpath(path, root).replace("\\", "/"), "size": _size(path)} for name, path, root in module_files(kind)]
+        return [{"name": name, "title": os.path.relpath(path, root).replace("\\", "/"), "size": model_size(path)} for name, path, root in module_files(kind)]
 
     vae, text_encoders = module_refs("vae"), module_refs("text_encoders")
     return {
-        "checkpoints": [{"name": info.title, "title": info.title, "hash": info.shorthash, "size": _size(info.filename)} for info in list(sd_models.checkpoints_list.values())],
+        "checkpoints": [{"name": info.title, "title": info.title, "hash": info.shorthash, "size": model_size(info.filename)} for info in list(sd_models.checkpoints_list.values())],
         "vae": vae,
         "text_encoders": text_encoders,
         "modules": sorted(vae + text_encoders, key=lambda ref: ref["name"].lower()),
@@ -409,13 +409,6 @@ def list_models() -> dict[str, Any]:
         "unet_dtypes": unet_dtypes(),
         "presets": ui_preset_choices(),
     }
-
-
-def _size(path: str) -> int | None:
-    try:
-        return os.path.getsize(path)
-    except OSError:
-        return None
 
 
 @router.post("/models/refresh", response_model=m.Ok, summary="Re-scan checkpoints, VAE, text encoders and upscalers")
