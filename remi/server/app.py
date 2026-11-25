@@ -13,10 +13,11 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.requests import HTTPConnection
 
 from remi.files import FileError
 from remi.jobs import JobError
@@ -26,7 +27,8 @@ from remi.server.limits import BodyLimitMiddleware, body_limit
 from remi.server.services import Services, default_services
 from remi.server.spa import DIST, Spa
 from remi.server.ws import Hub
-from remi.ui import ValidationError
+from remi.setting_values import encodable
+from remi.ui import ParamError, ValidationError
 
 log = logging.getLogger(__name__)
 
@@ -157,6 +159,50 @@ def _file_error(request: Request, error: FileError) -> JSONResponse:
     return ErrorResponse(status_code=error.status, content={"detail": str(error)})
 
 
+BROKEN_TEXT = "the text has a broken character (an unpaired surrogate)"
+# routes that check their values themselves and report each setting (remi/server/options.py)
+CHECKED_PER_SETTING = (f"{API_PREFIX}/options", f"{API_PREFIX}/options/validate")
+
+
+def _broken_text_at(value: Any, path: tuple[str, ...] = ()) -> tuple[str, ...] | None:
+    """Where in ``value`` the first text UTF-8 cannot write is, or None."""
+
+    if isinstance(value, str):
+        return None if encodable(value) else path
+    items = value.items() if isinstance(value, dict) else enumerate(value) if isinstance(value, list) else ()
+    for key, item in items:
+        if not encodable(key):
+            return (*path, str(key).encode("utf-8", "backslashreplace").decode("ascii"))
+        found = _broken_text_at(item, (*path, str(key)))
+        if found is not None:
+            return found
+    return None
+
+
+async def refuse_broken_text(connection: HTTPConnection) -> None:
+    """Every ``/api/v2`` JSON body: text UTF-8 cannot write is refused (422)
+    before a route keeps it. JSON can escape an unpaired surrogate
+    ("\\udc80", half of an emoji); UTF-8 cannot hold one, so a value of any
+    kind (a setting, a recipe's patch, a pipeline, a model's metadata) failed
+    in the middle of its write to a file or to SQLite. Typed text fields
+    refused it already (pydantic); this covers values of any kind."""
+
+    if not isinstance(connection, Request) or "json" not in connection.headers.get("content-type", ""):
+        return
+    if connection.scope["path"].endswith(CHECKED_PER_SETTING):
+        return  # these name each refused setting for the settings page
+    body = await connection.body()
+    if b"\\u" not in body:  # JSON writes such a character only as an escape
+        return
+    try:
+        data = json.loads(body)
+    except ValueError:
+        return  # the route's own validation answers
+    path = _broken_text_at(data)
+    if path is not None:
+        raise ValidationError([ParamError(BROKEN_TEXT, owner="body", param=".".join(path) or "body")])
+
+
 def snapshot_events(services: Services) -> list[dict[str, Any]]:
     """What a client connecting mid-job needs: the queue and the running job."""
 
@@ -225,7 +271,7 @@ def create_app(
 
     from remi.server.routes import admin, boards, chains, core, extensions, files, jobs, library, networks, prompt_tools, queue_tools, recipes, system, workers
 
-    api = APIRouter(prefix=API_PREFIX)
+    api = APIRouter(prefix=API_PREFIX, dependencies=[Depends(refuse_broken_text)])
     for module in (core, jobs, files, networks, extensions, system, admin, queue_tools, library, boards, recipes, chains, workers, prompt_tools):
         api.include_router(module.router)
     app.include_router(api)

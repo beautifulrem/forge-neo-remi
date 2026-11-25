@@ -159,6 +159,24 @@ def test_text_utf8_cannot_write_is_refused_and_the_settings_file_stays_whole(ser
     assert "broken" not in shared.prompt_styles.styles
 
 
+def test_every_json_body_refuses_text_utf8_cannot_write(server):
+    # Typed text fields refused it already (pydantic); values of any kind did not: a recipe's patch,
+    # a pipeline's stages, a model's metadata went on to SQLite or to a file written as UTF-8 and
+    # raised in the middle of the write (a 500 and a traceback)
+    headers = {"Content-Type": "application/json"}
+    for path, body, param in (
+        ("/api/v2/recipes", '{"name": "r", "core_patch": {"prompt": "x\\udc80"}}', "core_patch.prompt"),
+        ("/api/v2/recipes", '{"name": "r", "tags": ["a", "\\ud83d"]}', "tags.1"),
+        ("/api/v2/boards", '{"name": "x\\udc80"}', "name"),
+    ):
+        response = server.client.post(path, content=body, headers=headers)
+        assert response.status_code == 422, (path, response.text)
+        assert [(error["param"], error["message"]) for error in response.json()["errors"]] == [(param, "the text has a broken character (an unpaired surrogate)")]
+    # a pair of surrogates is one character (an emoji), and an escaped backslash before "udc80" is text
+    for name in ("cat \\ud83d\\ude00", "C:\\\\udc80"):
+        assert server.client.post("/api/v2/recipes", content='{"name": "' + name + '"}', headers=headers).status_code in (200, 201), name
+
+
 def test_frozen_settings_are_refused_and_locked_in_the_schema(server, webui, monkeypatch):
     from modules import shared
 
