@@ -4,7 +4,7 @@ import { toast } from "sonner"
 import { api } from "@/api/endpoints"
 import { sentenceParams } from "@/api/http"
 import type { FormTab, InfotextParsed } from "@/api/types"
-import { applyPaste, pastePlan } from "@/features/infotext/paste"
+import { applyPaste, lockedLabels, pastePlan } from "@/features/infotext/paste"
 import { useForm } from "@/ui/hooks"
 import { failureText, validationMessage } from "@/features/errors/error-text"
 
@@ -20,9 +20,11 @@ export function usePasteParameters() {
   const tab = formId as FormTab
 
   const apply = (parsed: InfotextParsed, id: string | number) => {
-    const count = applyPaste({ store, tab }, pastePlan(store.getState().index, parsed).entries)
-    if (count === 0) toast.info(t("No parameters to apply"), { id })
-    else toast.success(t("Parameters applied: {{count}}", { count }), { id })
+    const { count, locked } = applyPaste({ store, tab }, pastePlan(store.getState().index, parsed).entries)
+    // values a toggle's lock kept as they were
+    const kept = locked.length > 0 ? { description: t("Overridden by a lock: {{names}}", { names: lockedLabels(store.getState().index, locked) }) } : {}
+    if (count === 0) toast.info(t("No parameters to apply"), { id, ...kept })
+    else toast.success(t("Parameters applied: {{count}}", { count }), { id, ...kept })
     const problems = parsed.problems ?? []
     if (problems.length > 0) {
       // each value's message in the UI language, by its template where it names the value

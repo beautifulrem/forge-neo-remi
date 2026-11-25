@@ -5,7 +5,7 @@ import { buildIndex } from "@/ui/form-index"
 import { createFormStore } from "@/ui/form-store"
 import { tabOwners } from "@/ui/tab"
 import { splitInfotext } from "./display"
-import { applyPaste, pastePlan, planEntries } from "./paste"
+import { applyPaste, lockedLabels, pastePlan, planEntries } from "./paste"
 
 function loadedStore() {
   const schema = tabSchema("txt2img")
@@ -52,11 +52,12 @@ describe("applyPaste", () => {
     const run = vi.spyOn(actions, "runAction").mockResolvedValue(null)
     const store = loadedStore()
     const ctx = { store, tab: "txt2img" }
-    const count = applyPaste(ctx, [
+    const { count, locked } = applyPaste(ctx, [
       { owner: "core", values: { width: 640, height: 640, enable_hr: true } },
       { owner: "sampler", values: { sampler_name: "LCM" } },
     ])
     expect(count).toBe(4)
+    expect(locked).toEqual([])
     expect(store.getState().values.core).toMatchObject({ width: 640, height: 640, enable_hr: true })
     expect(store.getState().values.sampler?.sampler_name).toBe("LCM")
     // width, height and enable_hr share `hr_resolution`: one call. Conflicts: one bulk call, no `selected`.
@@ -64,6 +65,29 @@ describe("applyPaste", () => {
       ["core", "hr_resolution", undefined],
       ["core", "__conflicts__", undefined],
     ])
+  })
+
+  it("names the values a lock kept and leaves them out of the count and the actions", () => {
+    const run = vi.spyOn(actions, "runAction").mockResolvedValue(null)
+    const store = loadedStore()
+    // a toggle (`locks: "core.width"`) that is on
+    store.setState((s) => ({ locks: [{ owner: "keep", name: "size", target: ["core", "width"] }], values: { ...s.values, keep: { size: true } } }))
+    const before = store.getState().values.core?.width
+    const result = applyPaste({ store, tab: "txt2img" }, [
+      { owner: "core", values: { width: 640, prompt: "a cat" } },
+      { owner: "sampler", values: { steps: 12 } },
+    ])
+    expect(result).toEqual({ count: 2, locked: ["core.width"] })
+    expect(store.getState().values.core).toMatchObject({ width: before, prompt: "a cat" })
+    // width's on_change (hr_resolution) does not run for a value that did not change
+    expect(run.mock.calls.map(([, owner, action]) => [owner, action])).not.toContainEqual(["core", "hr_resolution"])
+  })
+})
+
+describe("lockedLabels", () => {
+  it("names locked params by their labels, joined the language's way", () => {
+    const index = buildIndex(tabOwners(tabSchema("txt2img")))
+    expect(lockedLabels(index, ["core.cfg_scale", "sampler.steps", "gone.x"], "en")).toBe("CFG Scale, Sampling steps, and gone.x")
   })
 })
 

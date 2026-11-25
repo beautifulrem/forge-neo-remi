@@ -650,7 +650,7 @@ the renderer's tests only. `jobRequest(store, schema)` (`ui/tab.ts`) builds the
 | `Field.tsx` | label row, modified dot (click = reset to default, tooltip shows the default), info text, server validation message (`FieldError`); `HintedLabel`: the param's `hint` as the label's tooltip (dotted underline) and as the control's accessible description (`hintRef`) — the former `hints.js` map and `tooltip=` |
 | `a11y.ts` | ids of label / info / error texts and `describedBy(id, info, error)` for controls |
 | `conditions.ts` | condition evaluator (`param` / `eq` / `ne` / `in` / `gt…lte` / `all` / `any` / `not`, `"owner.param"`) |
-| `form-store.ts` | per-form Zustand store (`getFormStore(formId)`); `setValues`/`applyPatches` skip params locked by a toggle's `locks` (`locks.ts`), `persist: false` inputs are never drafted |
+| `form-store.ts` | per-form Zustand store (`getFormStore(formId)`); `setValues`/`applyPatches` skip params locked by a toggle's `locks` (`locks.ts`; `setValues` returns the names it skipped, and pasted parameters and an applied recipe say "Overridden by a lock: …" for them and leave them out of their count, a recipe also for its values the conflict locks change), `persist: false` inputs are never drafted |
 | `messages.ts` | translation of server texts (toasts, text outputs, `{text, params}` messages) |
 | `actions.ts` | `runAction` + patch application, `runChangeEffects` (on_change + conflict locks after an edit), `resetParams` |
 | `uploads.ts` | upload + local previews (object URLs revoked when unreferenced, at most 24 kept) |

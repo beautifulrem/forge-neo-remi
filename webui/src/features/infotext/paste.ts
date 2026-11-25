@@ -5,8 +5,10 @@
  * edited params' `on_change` actions and conflict locks run once afterwards.
  */
 import type { InfotextParsed, ParamValues } from "@/api/types"
+import { i18n } from "@/i18n"
 import { type ActionContext, CONFLICTS_ACTION, runAction } from "@/ui/actions"
 import type { FormIndex } from "@/ui/form-index"
+import { messageText } from "@/ui/messages"
 
 export type PasteEntry = { owner: string; values: ParamValues }
 
@@ -62,16 +64,31 @@ export function pastePlan(index: FormIndex, parsed: Pick<InfotextParsed, "core" 
   return planEntries(index, parsedEntries(parsed), filter)
 }
 
-/** Writes the plan into the form, then runs each distinct `on_change` once and one conflicts pass. */
-export function applyPaste(ctx: ActionContext, entries: readonly PasteEntry[]): number {
+export type PasteResult = {
+  /** The values written. */
+  count: number
+  /** `"owner.param"` refs a lock kept as they were (a toggle's `locks`), left out of `count`. */
+  locked: string[]
+}
+
+/**
+ * Writes the plan into the form, then runs each distinct `on_change` once and one conflicts pass.
+ * Values a lock keeps are not written: they are named in `locked` and not counted.
+ */
+export function applyPaste(ctx: ActionContext, entries: readonly PasteEntry[]): PasteResult {
   const state = ctx.store.getState()
   let count = 0
   let conflicts = false
+  const locked: string[] = []
   const actions: [owner: string, action: string][] = []
   for (const { owner, values } of entries) {
-    state.setValues(owner, values)
+    const skipped = new Set(state.setValues(owner, values))
     const nodes = state.index.inputs.get(owner)
     for (const name of Object.keys(values)) {
+      if (skipped.has(name)) {
+        locked.push(`${owner}.${name}`)
+        continue
+      }
       count++
       const action = nodes?.get(name)?.on_change
       if (action && !actions.some(([o, a]) => o === owner && a === action)) actions.push([owner, action])
@@ -81,5 +98,15 @@ export function applyPaste(ctx: ActionContext, entries: readonly PasteEntry[]): 
   for (const [owner, action] of actions) void runAction(ctx, owner, action)
   // A bulk change: no single "selected" param.
   if (conflicts) void runAction(ctx, "core", CONFLICTS_ACTION)
-  return count
+  return { count, locked }
+}
+
+/** `"owner.param"` refs as the form labels them, in `language`, joined its way (a ref without a label as it is). */
+export function lockedLabels(index: FormIndex, refs: readonly string[], language = i18n.language): string {
+  const labels = refs.map((ref) => {
+    const dot = ref.indexOf(".")
+    const label = index.inputs.get(ref.slice(0, dot))?.get(ref.slice(dot + 1))?.label
+    return label ? messageText(i18n, label, language) : ref
+  })
+  return new Intl.ListFormat(language, { type: "conjunction" }).format(labels)
 }

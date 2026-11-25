@@ -27,12 +27,13 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { errorText } from "@/features/errors/error-text"
+import { lockedLabels } from "@/features/infotext/paste"
 import { cn } from "@/lib/utils"
 import { getFormStore } from "@/ui/form-store"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import { applyRecipeApi, createRecipeApi, deleteRecipeApi, exportRecipesApi, importRecipesApi, recipesQuery, refreshRecipes } from "./api"
 import { CATEGORY_LABELS } from "@/features/library/labels"
-import { appliedRecipeValues, applyRecipeEntries, type CapturedOverrides, captureTabOverrides, countRecipeParams, recipeHighlights } from "./capture"
+import { appliedRecipeValues, applyRecipeEntries, type CapturedOverrides, captureTabOverrides, conflictOverrides, countRecipeParams, recipeHighlights } from "./capture"
 import type { Recipe } from "./types"
 import { LoadFailed } from "@/components/LoadFailed"
 import { recipeFileName } from "./file-name"
@@ -138,12 +139,18 @@ export function RecipeManager() {
       const { core, scripts } = appliedRecipeValues(res, recipe)
       const tab = res.tab ?? recipe.tab
       const warnings = res.warnings ?? []
-      const count = await applyRecipeEntries(tab, core, scripts)
-      return { recipe, count, warnings }
+      const applied = await applyRecipeEntries(tab, core, scripts)
+      // values a toggle lock kept, then the ones the conflict locks change once the form resolves them again
+      const { index } = getFormStore(tab).getState()
+      const inForm = (ref: string) => index.inputs.get(ref.slice(0, ref.indexOf(".")))?.has(ref.slice(ref.indexOf(".") + 1)) ?? false
+      const resolved = conflictOverrides(res).filter((ref) => inForm(ref) && !applied.locked.includes(ref))
+      const overridden = [...applied.locked, ...resolved]
+      return { recipe, count: Math.max(0, applied.count - resolved.length), warnings, overridden: overridden.length > 0 ? lockedLabels(index, overridden) : null }
     },
-    onSuccess: ({ recipe, count, warnings }) => {
+    onSuccess: ({ recipe, count, warnings, overridden }) => {
+      const notes = [warnings.join("; "), overridden ? t("Overridden by a lock: {{names}}", { names: overridden }) : ""].filter(Boolean)
       toast.success(t("Recipe “{{name}}” applied ({{count}} params)", { name: recipe.name, count }), {
-        description: warnings.length > 0 ? warnings.join("; ") : undefined,
+        description: notes.length > 0 ? notes.join("\n") : undefined,
       })
     },
     onError: (error) => toast.error(t("Could not apply recipe"), { description: errorText(error) }),

@@ -6,8 +6,8 @@
 import { queryClient, schemaQuery } from "@/api/queries"
 import type { FormTab, ParamValues } from "@/api/types"
 import { i18n, t } from "@/i18n"
-import type { PasteEntry } from "@/features/infotext/paste"
-import { deliver } from "@/features/send-to/send-to"
+import type { PasteEntry, PasteResult } from "@/features/infotext/paste"
+import { deliverPaste } from "@/features/send-to/send-to"
 import { ensureSchemaLoaded } from "@/pages/generate/use-form-loader"
 import { jsonEqual } from "@/ui/conditions"
 import { getFormStore } from "@/ui/form-store"
@@ -105,17 +105,36 @@ export function appliedRecipeValues(
   return { core, scripts }
 }
 
-/** Applies a recipe's `core_patch` and `scripts_patch` into its target form via `deliver()`. */
+/**
+ * The recipe's targets ("owner.param", as in `patch`) whose value the conflict locks change: the
+ * form resolves its conflicts again once the values are written, and the lock wins. `conflicts` is
+ * the rules' patch (core params bare, the others "owner.param").
+ */
+export function conflictOverrides(response: Partial<Pick<RecipeApplyResponse, "patch" | "conflicts">>): string[] {
+  const conflicts = response.conflicts
+  if (!conflicts || typeof conflicts !== "object" || Array.isArray(conflicts)) return []
+  const overridden: string[] = []
+  for (const [target, entry] of Object.entries(response.patch ?? {})) {
+    const dot = target.indexOf(".")
+    if (target.startsWith("__") || dot <= 0 || !entry || typeof entry !== "object" || !("value" in entry)) continue
+    const resolved = conflicts[target.slice(0, dot) === "core" ? target.slice(dot + 1) : target]
+    if (!resolved || typeof resolved !== "object" || !("value" in resolved)) continue
+    if (!jsonEqual((resolved as { value: unknown }).value, (entry as { value: unknown }).value)) overridden.push(target)
+  }
+  return overridden
+}
+
+/** Applies a recipe's `core_patch` and `scripts_patch` into its target form via `deliverPaste()`. */
 export function applyRecipeEntries(
   tab: FormTab,
   core: ParamValues,
   scripts: Record<string, ParamValues>,
-): Promise<number> {
+): Promise<PasteResult> {
   const entries: PasteEntry[] = []
   if (core && Object.keys(core).length > 0) entries.push({ owner: "core", values: core })
   for (const [owner, values] of Object.entries(scripts ?? {})) {
     if (values && Object.keys(values).length > 0) entries.push({ owner, values })
   }
-  if (entries.length === 0) return Promise.resolve(0)
-  return deliver(tab, entries, {})
+  if (entries.length === 0) return Promise.resolve({ count: 0, locked: [] })
+  return deliverPaste(tab, entries, {})
 }

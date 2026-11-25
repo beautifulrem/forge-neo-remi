@@ -158,6 +158,39 @@ describe("Recipes capture and manager UI", () => {
     expect(after.core?.prompt).toEqual(before.core?.prompt)
   })
 
+  it("says which of the recipe's values a lock overrides, and leaves them out of the count", async () => {
+    const { toast } = await import("sonner")
+    const success = vi.spyOn(toast, "success")
+    const store = getFormStore("txt2img")
+    // a toggle that locks the width (`locks: "core.width"`) is on
+    store.setState((s) => ({ locks: [{ owner: "keep", name: "size", target: ["core", "width"] }], values: { ...s.values, keep: { size: true } } }))
+    const width = store.getState().values.core?.width
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (url.includes("/recipes/r1/apply")) {
+        const patch = { "core.cfg_scale": { value: 1 }, "core.width": { value: 1024 }, "core.height": { value: 1024 }, "sampler.steps": { value: 8 }, "sampler.sampler_name": { value: "Euler" } }
+        // the conflict locks hold the steps at 20 (keys: core params bare, the others "owner.param")
+        const conflicts = { cfg_scale: { value: 1, enabled: true }, "sampler.steps": { value: 20, enabled: false }, "sampler.sampler_name": { value: "Euler" }, __toast__: { level: "warning", message: "Compatibility: …" }, __advice__: [] }
+        const warnings = ["Active model lacks required capabilities: distilled_cfg1"]
+        return new Response(JSON.stringify({ recipe: SAMPLE_RECIPE, tab: "txt2img", patch, core: {}, scripts: {}, conflicts, warnings }), { status: 200, headers: { "Content-Type": "application/json" } })
+      }
+      return new Response(JSON.stringify({ items: [SAMPLE_RECIPE], total: 1 }), { status: 200, headers: { "Content-Type": "application/json" } })
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText("Qwen Turbo 8-step")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Apply recipe" }))
+    await waitFor(() =>
+      expect(success).toHaveBeenCalledWith("Recipe “Qwen Turbo 8-step” applied (3 params)", {
+        description: "Active model lacks required capabilities: distilled_cfg1\nOverridden by a lock: Width and Sampling steps",
+      }),
+    )
+    expect(store.getState().values.core?.width).toBe(width)
+  })
+
   it("names forms and parameters in the current language", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ items: [{ ...SAMPLE_RECIPE, core_patch: { ...SAMPLE_RECIPE.core_patch, denoising_strength: 0.35 } }], total: 1 }), { status: 200, headers: { "Content-Type": "application/json" } }))
     i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)

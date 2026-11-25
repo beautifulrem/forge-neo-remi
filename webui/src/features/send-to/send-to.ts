@@ -9,7 +9,7 @@ import { clientOption } from "@/api/app-options"
 import { api } from "@/api/endpoints"
 import type { FormTab, ParamValues } from "@/api/types"
 import { currentRoute, navigate, type Route, routeKey } from "@/app/router"
-import { applyPaste, type PasteEntry, type PasteFilter, parsedEntries, planEntries } from "@/features/infotext/paste"
+import { applyPaste, type PasteEntry, type PasteFilter, type PasteResult, parsedEntries, planEntries } from "@/features/infotext/paste"
 import { runChangeEffects } from "@/ui/actions"
 import type { FormIndex } from "@/ui/form-index"
 import { getFormStore } from "@/ui/form-store"
@@ -53,10 +53,10 @@ export function withLayersCleared(index: FormIndex, entries: readonly PasteEntry
   })
 }
 
-type Delivery = { entries: PasteEntry[]; filter: PasteFilter; unsubscribe: () => void; resolve: (count: number) => void }
+type Delivery = { entries: PasteEntry[]; filter: PasteFilter; unsubscribe: () => void; resolve: (result: PasteResult) => void }
 const pending = new Map<FormTab, Delivery>()
 
-function apply(tab: FormTab, entries: readonly PasteEntry[], filter: PasteFilter): number {
+function apply(tab: FormTab, entries: readonly PasteEntry[], filter: PasteFilter): PasteResult {
   const store = getFormStore(tab)
   const { index } = store.getState()
   const plan = planEntries(index, withLayersCleared(index, entries), filter)
@@ -76,20 +76,25 @@ const KEEPS_VALUES: ReadonlySet<FormTab> = new Set(["txt2img", "img2img", "extra
  * otherwise after its next schema load. Resolves with the number of params set.
  */
 export function deliver(tab: FormTab, entries: readonly PasteEntry[], filter: PasteFilter = {}): Promise<number> {
+  return deliverPaste(tab, entries, filter).then((result) => result.count)
+}
+
+/** `deliver`, resolving with the params set and the ones a lock kept (`applyPaste`). */
+export function deliverPaste(tab: FormTab, entries: readonly PasteEntry[], filter: PasteFilter = {}): Promise<PasteResult> {
   const store = getFormStore(tab)
   const onScreen = routeKey(currentRoute()) === routeKey(routeOf(tab))
   if (store.getState().revision > 0 && (onScreen || KEEPS_VALUES.has(tab))) {
     pending.get(tab)?.unsubscribe()
     pending.delete(tab)
-    const count = apply(tab, entries, filter)
+    const result = apply(tab, entries, filter)
     if (!onScreen) navigate(routeOf(tab))
-    return Promise.resolve(count)
+    return Promise.resolve(result)
   }
 
   const previous = pending.get(tab)
   previous?.unsubscribe()
-  previous?.resolve(0)
-  return new Promise<number>((resolve) => {
+  previous?.resolve({ count: 0, locked: [] })
+  return new Promise<PasteResult>((resolve) => {
     const unsubscribe = store.subscribe((s, prev) => {
       if (s.revision === prev.revision) return
       unsubscribe()

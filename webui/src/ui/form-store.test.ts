@@ -32,6 +32,18 @@ const owners: OwnerSpec[] = [
 ]
 
 describe("form store", () => {
+  it("names the values a lock kept out of a programmatic write", () => {
+    const store = createFormStore("t-locks", { persistDrafts: false })
+    store.getState().load([
+      ...owners,
+      { owner: "pin", layout: { type: "toggle", name: "steps", label: "Pin steps", locks: "core.steps" }, defaults: { steps: false } },
+    ])
+    expect(store.getState().setValues("core", { steps: 30, prompt: "a cat" })).toEqual([])
+    store.getState().setValue("pin", "steps", true)
+    expect(store.getState().setValues("core", { steps: 40, prompt: "a dog" })).toEqual(["steps"])
+    expect(store.getState().values.core).toMatchObject({ steps: 30, prompt: "a dog" })
+  })
+
   it("loads defaults per owner, including section enable toggles", () => {
     const store = createFormStore("t1", { persistDrafts: false })
     store.getState().load(owners)

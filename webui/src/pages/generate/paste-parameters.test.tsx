@@ -11,11 +11,12 @@ const mocks = vi.hoisted(() => ({
   readImageParameters: vi.fn(),
   applyPaste: vi.fn(),
   pastePlan: vi.fn(() => ({ entries: ["planned"] })),
+  lockedLabels: vi.fn((_index: unknown, refs: string[]) => refs.join(" + ")),
   toast: { loading: vi.fn(() => "toast-1"), info: vi.fn(), success: vi.fn(), warning: vi.fn(), error: vi.fn() },
 }))
 vi.mock("@/api/endpoints", () => ({ api: mocks.api }))
 vi.mock("@/features/infotext/read-image-info", () => ({ readImageParameters: mocks.readImageParameters }))
-vi.mock("@/features/infotext/paste", () => ({ applyPaste: mocks.applyPaste, pastePlan: mocks.pastePlan }))
+vi.mock("@/features/infotext/paste", () => ({ applyPaste: mocks.applyPaste, pastePlan: mocks.pastePlan, lockedLabels: mocks.lockedLabels }))
 vi.mock("sonner", () => ({ toast: mocks.toast }))
 
 const { usePasteParameters } = await import("./paste-parameters")
@@ -37,7 +38,7 @@ function hook() {
 describe("usePasteParameters", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.applyPaste.mockReturnValue(3)
+    mocks.applyPaste.mockReturnValue({ count: 3, locked: [] })
   })
 
   it("parses text on the server for this form and reports how many values it applied", async () => {
@@ -48,6 +49,13 @@ describe("usePasteParameters", () => {
     expect(mocks.toast.loading).toHaveBeenCalledWith("Reading parameters…")
     expect(mocks.toast.success).toHaveBeenCalledWith("Parameters applied: 3", { id: "toast-1" })
     expect(mocks.toast.warning).not.toHaveBeenCalled()
+  })
+
+  it("names the values a lock kept", async () => {
+    mocks.applyPaste.mockReturnValue({ count: 1, locked: ["core.width", "sampler.steps"] })
+    mocks.api.parseInfotext.mockResolvedValue(parsed())
+    await hook().fromText("a fox\nSteps: 20, Size: 64x64")
+    expect(mocks.toast.success).toHaveBeenCalledWith("Parameters applied: 1", { id: "toast-1", description: "Overridden by a lock: core.width + sampler.steps" })
   })
 
   it("lists a skipped value's message in the UI language, by its template where it names the value", async () => {
@@ -69,7 +77,7 @@ describe("usePasteParameters", () => {
   })
 
   it("says so when nothing applied, and lists up to four skipped values", async () => {
-    mocks.applyPaste.mockReturnValue(0)
+    mocks.applyPaste.mockReturnValue({ count: 0, locked: [] })
     const problems = [1, 2, 3, 4, 5].map((n) => ({ param: n % 2 ? `param${n}` : undefined, owner: n % 2 ? undefined : `script${n}`, message: `bad ${n}` }))
     mocks.api.parseInfotext.mockResolvedValue(parsed(problems as InfotextParsed["problems"]))
     await hook().fromText("")

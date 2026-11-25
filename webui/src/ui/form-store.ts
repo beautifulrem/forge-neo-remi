@@ -76,8 +76,8 @@ export type FormActions = {
     },
   ) => void
   setValue: (owner: string, name: string, value: unknown) => void
-  /** A programmatic write (paste, send-to, widgets): locked params are skipped. */
-  setValues: (owner: string, values: OwnerValues) => void
+  /** A programmatic write (paste, send-to, widgets): locked params are skipped. Returns their names. */
+  setValues: (owner: string, values: OwnerValues) => string[]
   /** Resets the given names (all of the owner's when omitted) to their defaults. */
   reset: (owner: string, names?: readonly string[]) => void
   /** Applies param patches `[owner, name, patch]` from an action (locked params keep their value). */
@@ -229,14 +229,17 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
     },
 
     setValues(owner, partial) {
+      let skipped: string[] = []
       set((s) => {
         const locked = lockedNames(s.locks, s.values, owner)
-        const kept = locked.size === 0 ? partial : Object.fromEntries(Object.entries(partial).filter(([name]) => !locked.has(name)))
+        skipped = Object.keys(partial).filter((name) => locked.has(name))
+        const kept = skipped.length === 0 ? partial : Object.fromEntries(Object.entries(partial).filter(([name]) => !locked.has(name)))
         return {
           values: { ...s.values, [owner]: { ...s.values[owner], ...kept } },
           errors: withoutErrors(s.errors, owner, Object.keys(kept)),
         }
       })
+      return skipped
     },
 
     reset(owner, names) {
