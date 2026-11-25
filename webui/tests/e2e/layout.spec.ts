@@ -812,7 +812,7 @@ test("the weights in memory refresh is a 40 px target", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto("/#/settings?view=server")
   await page.getByRole("button", { name: "Show the weights in memory" }).click()
-  const refresh = page.getByRole("button", { name: "Refresh", exact: true })
+  const refresh = page.getByRole("main").locator("[aria-live=polite]").filter({ hasText: "Weights in memory" }).getByRole("button", { name: "Refresh", exact: true })
   await expect(refresh).toBeVisible()
   const box = await refresh.evaluate((button) => {
     const rect = button.getBoundingClientRect()
@@ -851,9 +851,11 @@ test("the licences page's small links are 40 px tall targets on a phone", async 
           return r.width > 0 && r.left < box.right - 0.5 && r.right > box.left + 0.5 && r.top < box.bottom - 0.5 && r.bottom > box.top + 0.5
         })
         .map((other) => other.getAttribute("aria-label") ?? other.textContent?.slice(0, 30))
-      return { name: element.textContent, height: Math.round(box.bottom - box.top), reached }
+      return { name: element.textContent, width: Math.round(box.right - box.left), ownWidth: Math.round(rect.width), height: Math.round(box.bottom - box.top), reached }
     })
     expect(box.height, `${box.name}: its target`).toBeGreaterThanOrEqual(40)
+    // an after: box given only its top and bottom is as wide as its (empty) content: none
+    expect(box.width, `${box.name}: its target's width`).toBeGreaterThanOrEqual(box.ownWidth)
     expect(box.reached, `${box.name}: controls under its target`).toEqual([])
   }
 })

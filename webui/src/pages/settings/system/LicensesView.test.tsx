@@ -29,7 +29,7 @@ describe("LicensesView", () => {
         <LicensesView />
       </QueryClientProvider>,
     )
-    expect(screen.getByRole("link", { name: /Web interface libraries/ })).toHaveClass("relative", "after:absolute", "after:-inset-y-2.5")
+    expect(screen.getByRole("link", { name: /Web interface libraries/ })).toHaveClass("relative", "after:absolute", "after:inset-x-0", "after:-inset-y-2.5")
   })
 
   it("says the list did not load in the UI language, with a Retry", async () => {

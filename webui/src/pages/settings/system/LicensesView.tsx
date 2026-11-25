@@ -85,7 +85,7 @@ export function LicensesView() {
         <p className="text-sm text-muted-foreground">{t("Code from these projects is used or adapted in this WebUI.")}</p>
         {/* written by the build (webui/tools/notices.mjs): every package bundled into the web interface */}
         <p className="mt-1 text-sm">
-          <a href={`${ROOT}/THIRD-PARTY-NOTICES.txt`} target="_blank" rel="noreferrer noopener" className="relative inline-flex items-center gap-1 underline-offset-2 after:absolute after:-inset-y-2.5 hover:underline">
+          <a href={`${ROOT}/THIRD-PARTY-NOTICES.txt`} target="_blank" rel="noreferrer noopener" className="relative inline-flex items-center gap-1 underline-offset-2 after:absolute after:inset-x-0 after:-inset-y-2.5 hover:underline">
             {t("Web interface libraries and their licenses")}
             <ExternalLink className="size-3 text-muted-foreground" aria-hidden />
           </a>
