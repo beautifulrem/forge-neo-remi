@@ -1,5 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query"
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { queryClient } from "@/api/queries"
 import type { NetworkItem } from "@/api/types"
@@ -93,5 +94,17 @@ describe("preview dialog", { timeout: 30_000 }, () => {
     const result = await screen.findByRole("radio", { name: "Result 1" })
     expect(result).toHaveAttribute("aria-checked", "false")
     expect(screen.getByRole("button", { name: "Use as preview" })).toBeDisabled()
+  })
+
+  // three fixed tabs whose labels grow once translated: on a phone they cut or overflowed
+  it("turns its source tabs into a select when they do not fit", async () => {
+    mockServer()
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(1000) // the tabs do not fit
+    const user = userEvent.setup()
+    render(<Harness item={item("ink")} open />)
+    await user.click(await screen.findByRole("combobox", { name: "Preview source" }))
+    expect(screen.getByRole("option", { name: "This session" })).toBeInTheDocument()
+    await user.click(screen.getByRole("option", { name: "Upload" }))
+    expect(await screen.findByTestId("preview-upload")).toBeInTheDocument()
   })
 })

@@ -16,7 +16,8 @@ import type { NetworkItem } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { FitTabsList } from "@/components/FitTabsList"
+import { Tabs, TabsContent, TabsTrigger } from "@/components/ui/tabs"
 import { useSession } from "@/features/gallery/session-store"
 import { cn } from "@/lib/utils"
 import { failureText } from "@/features/errors/error-text"
@@ -128,11 +129,22 @@ export function PreviewDialog({ item, open, onOpenChange }: { item: NetworkItem 
           <DialogDescription>{t("Pick a result or upload an image. It is saved next to the model file.")}</DialogDescription>
         </DialogHeader>
         <Tabs value={tab} onValueChange={(value) => setTab(String(value))} className="flex min-h-0 flex-col">
-          <TabsList>
+          {/* three tabs whose labels grow once translated: on a phone they become a select */}
+          <FitTabsList
+            aria-label={t("Preview source")}
+            options={[
+              { value: "session", label: t("This session") },
+              { value: "gallery", label: t("Gallery") },
+              { value: "upload", label: t("Upload") },
+            ]}
+            value={tab}
+            onValueChange={setTab}
+            className="w-fit max-w-full"
+          >
             <TabsTrigger value="session">{t("This session")}</TabsTrigger>
             <TabsTrigger value="gallery">{t("Gallery")}</TabsTrigger>
             <TabsTrigger value="upload">{t("Upload")}</TabsTrigger>
-          </TabsList>
+          </FitTabsList>
           <TabsContent value="session" className="max-h-[50dvh] overflow-y-auto">
             {session.length ? (
               <Thumbs ids={session.map((result) => result.fileId)} selected={selected} onSelect={setSelected} label={t("Result")} />

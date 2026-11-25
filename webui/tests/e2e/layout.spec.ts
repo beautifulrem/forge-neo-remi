@@ -884,6 +884,28 @@ test.describe("no sideways scrolling", () => {
     expect(await sidewaysScrolls(page)).toEqual([])
   })
 
+  // The preview dialog's three source tabs were a plain strip, whose labels grow once translated.
+  test("the preview dialog's source tabs at 320 px in Chinese", async ({ page }) => {
+    await presetStorage(page, { locale: "zh-CN" })
+    await page.setViewportSize({ width: 320, height: 720 })
+    await openRoute(page, "networks")
+    await page.getByRole("main").getByRole("option").first().click({ button: "right" })
+    await page.getByRole("menuitem", { name: "设置预览图" }).click()
+    const dialog = page.getByRole("dialog")
+    // the strip, or the select it turns into, names the sources
+    await expect(dialog.getByRole("tablist", { name: "预览图来源" }).or(dialog.getByRole("combobox", { name: "预览图来源" }))).toBeVisible()
+    await expect
+      .poll(() =>
+        dialog.evaluate((root) =>
+          [...root.querySelectorAll<HTMLElement>("[role=tablist], [role=tab]")]
+            .filter((element) => element.getBoundingClientRect().width > 0 && getComputedStyle(element).visibility !== "hidden")
+            .filter((element) => element.scrollWidth > element.clientWidth + 1)
+            .map((element) => element.getAttribute("aria-label") ?? element.textContent),
+        ),
+      )
+      .toEqual([])
+  })
+
   // The model metadata form was one column as wide as its longest module name.
   test("the model metadata editor on a phone", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
