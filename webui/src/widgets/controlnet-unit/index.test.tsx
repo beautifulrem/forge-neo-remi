@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { toast } from "sonner"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ImageEditorProps } from "@/canvas"
 import { tabsKey } from "@/ui/form-index"
@@ -151,6 +152,18 @@ describe("controlnet-unit widget", { timeout: 30_000 }, () => {
 
     fireEvent.click(within(unit).getByRole("radio", { name: "My prompt is more important" }))
     expect(unitOf(store).control_mode).toBe("My prompt is more important")
+  })
+
+  it("leaves a locked generation size as it is, and names it", async () => {
+    const info = vi.spyOn(toast, "info").mockImplementation((() => "") as never)
+    const store = renderForm()
+    const unit = await panel()
+    fireEvent.click(within(unit).getByRole("button", { name: "upload input" }))
+    // a toggle that locks the width (`locks: "core.width"`) is on
+    act(() => store.setState((s) => ({ locks: [{ owner: "keep", name: "width", target: ["core", "width"] }], values: { ...s.values, keep: { width: true } } })))
+    fireEvent.click(within(unit).getByRole("button", { name: "use image size" }))
+    expect(store.getState().values.core).toMatchObject({ width: 512, height: 296 })
+    await waitFor(() => expect(info).toHaveBeenCalledWith("Overridden by a lock: Width", expect.objectContaining({ id: expect.stringMatching(/^locks:controlnet-/) })))
   })
 
   it("edits the control image, its layers and the generation size", async () => {

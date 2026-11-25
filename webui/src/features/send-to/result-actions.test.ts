@@ -36,7 +36,7 @@ describe("finding inputs by infotext key", () => {
 
   it("does not reuse a seed when the form has no seed input", () => {
     getFormStore("txt2img").getState().load([])
-    expect(reuseSeed("txt2img", "x\nSteps: 20, Seed: 7")).toBe(false)
+    expect(reuseSeed("txt2img", "x\nSteps: 20, Seed: 7")).toBe("missing")
   })
 })
 

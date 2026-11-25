@@ -100,8 +100,9 @@ export function ResultActions({ item, tab, tone, removable = true, upscalable = 
       icon: <Recycle />,
       disabled: !infotext,
       run: () => {
-        if (reuseSeed(tab, infotext)) toast.success(t("Seed reused"))
-        else toast.error(t("This image has no seed to reuse"))
+        const reused = reuseSeed(tab, infotext)
+        if (reused === "reused") toast.success(t("Seed reused"))
+        else if (reused === "missing") toast.error(t("This image has no seed to reuse"))
       },
     },
     { label: t("Use these parameters"), icon: <ClipboardPaste />, disabled: !infotext || tab === "extras", run: () => infotext && tab !== "extras" && applyParameters(tab, infotext) },

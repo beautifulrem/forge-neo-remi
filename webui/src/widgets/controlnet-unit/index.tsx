@@ -183,10 +183,10 @@ export default function ControlNetUnitWidget({ value, onChange, props, disabled,
     if (out) commit({ image: out.image, sketch: null, image_fg: null })
   }
   const useImageSize = (size: { width: number; height: number }) => {
-    const state = store.getState()
-    state.setValue("core", "width", closestEight(size.width))
-    state.setValue("core", "height", closestEight(size.height))
-    runChangeEffects({ store, tab: formId }, "core", ["width", "height"])
+    // a programmatic write: a lock keeps its size (and the write names it)
+    const kept = store.getState().setValues("core", { width: closestEight(size.width), height: closestEight(size.height) })
+    const written = ["width", "height"].filter((name) => !kept.includes(name))
+    if (written.length > 0) runChangeEffects({ store, tab: formId }, "core", written)
   }
 
   const preprocessor = preprocessorOf(catalog, unit.module)

@@ -21,16 +21,19 @@ export function findByInfotext(index: FormIndex, key: string): [owner: string, n
   return null
 }
 
-/** Sets the form's seed to the one recorded in `infotext`; false when either is missing. */
-export function reuseSeed(tab: FormTab, infotext: string | null | undefined): boolean {
+/**
+ * Sets the form's seed to the one recorded in `infotext`: "missing" when either is missing,
+ * "kept" when a lock kept the seed (the write names it).
+ */
+export function reuseSeed(tab: FormTab, infotext: string | null | undefined): "reused" | "missing" | "kept" {
   const seed = infotextValue(infotext, "Seed")
   const store = getFormStore(tab)
   const target = findByInfotext(store.getState().index, "Seed")
-  if (seed === null || !target) return false
+  if (seed === null || !target) return "missing"
   const [owner, name] = target
-  store.getState().setValue(owner, name, seed)
+  if (store.getState().setValues(owner, { [name]: seed }).length > 0) return "kept"
   runChangeEffects({ store, tab }, owner, [name])
-  return true
+  return "reused"
 }
 
 const TARGET_LABEL: Record<SendTarget, string> = {

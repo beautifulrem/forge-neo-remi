@@ -114,8 +114,18 @@ describe("sendTo", () => {
 
 describe("reuseSeed", () => {
   it("sets the form's seed param from the infotext", () => {
-    expect(reuseSeed("txt2img", "x\nSteps: 20, Seed: 1234567, Size: 512x512")).toBe(true)
+    expect(reuseSeed("txt2img", "x\nSteps: 20, Seed: 1234567, Size: 512x512")).toBe("reused")
     expect(getFormStore("txt2img").getState().values.seed?.seed).toBe(1234567)
-    expect(reuseSeed("txt2img", "no parameters")).toBe(false)
+    expect(reuseSeed("txt2img", "no parameters")).toBe("missing")
+  })
+
+  it("leaves a locked seed as it is (the write names the lock)", () => {
+    const store = getFormStore("txt2img")
+    store.getState().setValue("seed", "seed", 42)
+    // a toggle that locks the seed (`locks: "seed.seed"`) is on
+    store.setState((s) => ({ locks: [{ owner: "keep", name: "seed", target: ["seed", "seed"] }], values: { ...s.values, keep: { seed: true } } }))
+    expect(reuseSeed("txt2img", "x\nSteps: 20, Seed: 1234567, Size: 512x512")).toBe("kept")
+    expect(store.getState().values.seed?.seed).toBe(42)
+    store.setState({ locks: [] })
   })
 })
