@@ -192,11 +192,16 @@ describe("Recipes capture and manager UI", () => {
     expect(screen.getByText("Qwen Turbo 8-step")).toBeInTheDocument()
     expect(document.querySelector("[aria-busy=true]")).toBeNull()
     act(() => release!())
-    expect(await screen.findByText("No recipes match")).toBeInTheDocument()
+    const noMatch = await screen.findByText("No recipes match")
     expect(screen.queryByText("No recipes yet")).toBeNull()
+    // the placeholder pattern: a dimmed glyph over one muted line, and the way out
+    expect(noMatch).toHaveClass("text-muted-foreground")
+    expect(noMatch.parentElement?.querySelector("svg")).not.toBeNull()
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }))
     expect(await screen.findByText("Qwen Turbo 8-step")).toBeInTheDocument()
     expect(screen.getByRole("searchbox", { name: "Search recipes…" })).toHaveValue("")
+    // the button went away with the state: the focus goes to the search, not to the page
+    expect(screen.getByRole("searchbox", { name: "Search recipes…" })).toHaveFocus()
   })
 
   it("names the export when it fails", async () => {

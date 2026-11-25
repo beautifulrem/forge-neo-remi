@@ -68,6 +68,7 @@ export function RecipeManager() {
   const [tagsText, setTagsText] = useState("")
   const [deleting, setDeleting] = useState<Recipe | null>(null)
   const importInputRef = useRef<HTMLInputElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   const q = useDeferredValue(search.trim())
   const filtered = q !== "" || family !== ""
@@ -191,6 +192,7 @@ export function RecipeManager() {
         <div className="relative min-w-44 flex-1 sm:max-w-xs">
           <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
+            ref={searchRef}
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -272,14 +274,18 @@ export function RecipeManager() {
         ) : list.isError && !list.data ? (
           <LoadFailed error={list.error} onRetry={() => void list.refetch()} />
         ) : recipes.length === 0 && filtered ? (
+          // a placeholder: a dimmed glyph over one muted line, and the way out
           <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <p className="text-sm font-medium">{t("No recipes match")}</p>
+            <BookOpen className="size-7 text-muted-foreground/45" aria-hidden />
+            <p className="text-sm text-muted-foreground">{t("No recipes match")}</p>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => {
                 setSearch("")
                 setParams({ recipes: "", family: "" })
+                // this button leaves with the state: the focus goes to the search, not to the page
+                searchRef.current?.focus()
               }}
             >
               {t("Clear filters")}
