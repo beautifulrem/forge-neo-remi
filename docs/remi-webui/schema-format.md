@@ -231,7 +231,9 @@ A script's values may also be a JSON array: its params in argument order
   "core": {"owner": "core", "layout": Node, "defaults": {name: value},
            "required": [{"param": "init_img", "message": "an image is required", "when": Condition}, ...]},  // §3
   "scripts": [Script, ...],                // in render order
-  "conflict_params": ["sampler.sampler_name", "core.enable_hr", ...]  // txt2img/img2img only
+  "conflict_params": ["sampler.sampler_name", "core.enable_hr", ...],  // txt2img/img2img only
+  "capabilities": {...},                   // the loaded model's capabilities (architecture.md "Full-stack ModelCapability")
+  "advice": [AdviceItem, ...]              // advice for the form as it is, before a run
 }
 Script = {
   "id": "seed",                            // owner id: unique per tab, stable (slug of the title); never "core" or "settings"
@@ -242,7 +244,19 @@ Script = {
   "visible_if": Condition?,                // selectable scripts: {"param": "core.script", "eq": title}
   "layout": Node | null,                   // null: the script has no params
   "defaults": {name: value},
-  "args": [name, ...]                      // positional order of the processing arguments
+  "args": [name, ...],                     // positional order of the processing arguments
+  "requires_capabilities": [name, ...]?,   // model capabilities the script needs
+  "applicable": false?,                    // the loaded model lacks one: the panel is folded
+  "inapplicable_reason": "..."?,           // why, in English; it names the model, so it comes with
+  "inapplicable_template": "..."?,         // its catalog key ({{name}} placeholders)
+  "inapplicable_params": {name: value}?    // and the values (a list holds catalog names)
+}
+AdviceItem = {
+  "code": "...", "severity": "info" | "warning" | "error",
+  "message": "...",                        // English; a sentence with values comes with
+  "template": "..."?, "params": {...}?,    // its catalog key and the values
+  "patch": Patch | null,                   // what the action applies (§5)
+  "action_label": "..."?
 }
 ```
 

@@ -45,16 +45,20 @@ Contents: [Conventions](#conventions) · [Authentication](#authentication) ·
   at once:
 
   ```json
-  {"errors": [{"owner": "core", "param": "width", "message": "expected a number, got 'abc'"}]}
+  {"errors": [{"owner": "core", "param": "width", "message": "expected a number, got 'abc'",
+               "template": "expected a number, got {{value}}", "params": {"value": "'abc'"}}]}
   ```
 
   `owner` is `core`, a script id, `settings`, a page owner `page:<id>`,
   `body` for text UTF-8 cannot hold, or `null` when the body itself has the
-  wrong shape. Other errors are
+  wrong shape. `message` is English: one that names the value comes with
+  `template`, its catalog key with `{{name}}` placeholders, and the `params`
+  that fill it; any other is a catalog key itself
+  ([schema-format.md §3](schema-format.md#3-values-validation-and-errors)).
+  Other errors are
   `{"detail": "..."}` with the usual status codes (404 unknown id, 409 wrong
   state, 413 too large, 415 unsupported type, 403 refused, 401 not logged in).
-  Extension-management errors add `template` and `params` (a translatable
-  message with `{{name}}` placeholders).
+  Extension-management errors add `template` and `params` in the same way.
 - **Paging.** Lists return `{"items": [...], "next_cursor": "...", "total": n}`;
   pass `cursor=<next_cursor>` for the next page. Cursors are opaque.
 - **Ids.** Jobs, uploads and output files have opaque string ids. Files are
@@ -263,10 +267,12 @@ settings (`prompt_tools_translation_*`); `/generate` needs the
 OpenAI-compatible provider with its URL and model and sends the description
 to its `/chat/completions` (system message: `prompt_tools_generate_instructions`
 or the built-in one). Both answer 409 when the prompt tools or the provider
-are not set up, 413 when the input is too long (`/translate`: over 200
-texts or 20,000 characters; `/generate`: description and prompt over 4,000
-characters) and 502 when the provider fails or answers something unusable;
-`/generate` answers 422 for an empty description.
+are not set up, 413 when the input is too long in all (`/translate`: over
+20,000 characters; `/generate`: description and prompt together over 4,000
+characters) and 502 when the provider fails or answers something unusable.
+A field over its own limit is a 422 in FastAPI's `{"detail": [...]}` shape
+(`/translate`: over 200 texts; `/generate`: a description or prompt over
+4,000 characters); `/generate` also answers 422 for an empty description.
 
 `/internal/ping` answers `{"instance"}` (an id that changes with every
 reload or restart), `/internal/progress` and `/internal/pending-tasks` keep
@@ -457,7 +463,8 @@ job = session.post(f"{BASE}/jobs", json={
     "scripts": {"sampler": {"steps": 8, "sampler_name": "Euler", "scheduler": "Simple"}, "seed": {"seed": 12345}},
 })
 if job.status_code == 422:
-    raise SystemExit(job.json()["errors"])  # every rejected value, with owner and param
+    body = job.json()  # every rejected value with owner and param, or FastAPI's detail for a body of the wrong shape
+    raise SystemExit(body.get("errors") or body.get("detail"))
 job.raise_for_status()
 job_id = job.json()["job_id"]
 
