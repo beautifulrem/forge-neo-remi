@@ -85,7 +85,7 @@ export function DropZone(props: DropZoneProps) {
         "relative cursor-pointer rounded-lg border border-dashed border-input outline-none transition-colors",
         "hover:border-ring/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-focus-ring",
         "data-dragging:border-primary data-dragging:bg-primary/5",
-        "aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20",
+        "aria-invalid:border-destructive aria-invalid:not-focus-visible:ring-3 aria-invalid:not-focus-visible:ring-destructive/20",
         disabled && "pointer-events-none opacity-60",
         props.className,
       )}

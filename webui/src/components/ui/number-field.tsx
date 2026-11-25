@@ -31,7 +31,7 @@ function NumberField({
       <NumberFieldPrimitive.Group
         data-size={size}
         data-invalid={ariaInvalid || undefined}
-        className="flex w-full items-stretch overflow-hidden rounded-sm border border-transparent bg-field transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-focus-ring data-disabled:cursor-not-allowed data-disabled:opacity-50 data-invalid:border-destructive data-invalid:ring-3 data-invalid:ring-destructive/20 data-[size=default]:h-8 data-[size=sm]:h-7"
+        className="flex w-full items-stretch overflow-hidden rounded-sm border border-transparent bg-field transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-focus-ring data-disabled:cursor-not-allowed data-disabled:opacity-50 data-invalid:border-destructive data-invalid:not-focus-within:ring-3 data-invalid:not-focus-within:ring-destructive/20 data-[size=default]:h-8 data-[size=sm]:h-7"
       >
         <NumberFieldPrimitive.Input
           aria-label={ariaLabel}

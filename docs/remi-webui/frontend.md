@@ -425,7 +425,10 @@ imperatively).
   registry ships); app code imports it from `@/lib/utils`. Local fixes to
   vendored components: their focus rings take `ring-focus-ring` and
   `outline-focus-ring` instead of the registry's `ring-ring/50` (the
-  destructive button and badge keep it: no `ring-destructive/20`); scalar
+  destructive button and badge keep it: no `ring-destructive/20`), and an
+  invalid field's halo applies only while it has no focus (see
+  [Visual rules](#visual-rules); the toggle and the badge, which drew no
+  halo, lost the 20 % red their focus ring took when invalid); scalar
   sliders render one thumb and forward `getAriaLabel`; a select's value
   ellipsizes (line-clamp does nothing on the flex value); a dialog or
   alert dialog is no taller and no wider than
@@ -513,7 +516,26 @@ generated interfaces (sources: Linear's
   a shadow together, and no one-sided edge: a field (input, select, number,
   the prompt editor, `FIELD_BUTTON_CLASS`) is a flat fill (`--field`) with
   no underline or bottom shadow, and focus rings it evenly (`border-ring`
-  plus a 3 px `ring-focus-ring`). Image tiles (network cards) keep a hairline
+  plus a 3 px `ring-focus-ring`). An invalid field (`aria-invalid`, or
+  `data-invalid` on the group that draws it) has a red edge
+  (`border-destructive`, 50 % in the dark theme; an inset 1 px ring in full
+  `--destructive` on the prompt editor, which has no border) and, while it
+  has no focus, a 3 px halo of 20 % `--destructive` (40 % in the kit's dark
+  theme). Focus wins: focused, it draws the
+  focus ring like any field, and its red edge tells it from a valid field
+  with the focus. The halo is written for the unfocused state, `not-` the
+  variant the field's focus ring is drawn under
+  (`aria-invalid:not-focus-visible:ring-3`, `not-focus-within` on a number
+  field or combobox, `not-has-[…:focus-visible]` on an input group): a plain
+  `aria-invalid:ring-destructive/20` comes after `focus-visible:ring-focus-ring`
+  in Tailwind's CSS and took its place, so a focused invalid field looked
+  unfocused (`lib/design-guards.test.ts`, "focus rings";
+  `tests/e2e/a11y.spec.ts`, "invalid fields"). The prompt editor draws both in
+  its CodeMirror theme, from `--prompt-edge` and `--prompt-halo` that its host
+  sets while invalid. Under the coral accent `--ring` and `--destructive` are
+  nearly the same red (and the rose accent close to it): there the message
+  under a focused invalid field, not its edge, tells it from a valid one.
+  Image tiles (network cards) keep a hairline
   ring and no shadow. A focus ring over an image is drawn where the image
   cannot cover it: an inset ring is a box shadow and the tile's own outline
   is painted before its content, so an image that fills the tile hides

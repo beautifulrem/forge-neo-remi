@@ -49,17 +49,21 @@ export type PromptEditorProps = {
 const externalSync = Annotation.define<boolean>()
 
 const theme = EditorView.theme({
-  // An entry sheet: the fields' fill, no edge; ringed in blue pencil while being written on.
+  // An entry sheet: the fields' fill, no edge; ringed in blue pencil while being written on. A refused
+  // prompt (`data-invalid` on the host sets --prompt-edge and --prompt-halo) has a red edge, and a red
+  // halo that gives way to the focus ring while it is written on. Drawn here, not with classes: this
+  // theme is unlayered CSS, which wins over every utility, and `.cm-focused` over the bare rule.
   "&": {
     fontSize: "0.9375rem",
     borderRadius: "var(--radius-sm)",
     border: "none",
     backgroundColor: "var(--field)",
+    boxShadow: "inset 0 0 0 1px var(--prompt-edge, transparent), 0 0 0 3px var(--prompt-halo, transparent)",
     transition: "box-shadow 140ms",
   },
   "&.cm-focused": {
     outline: "none",
-    boxShadow: "inset 0 0 0 1px var(--ring), 0 0 0 3px var(--focus-ring)",
+    boxShadow: "inset 0 0 0 1px var(--prompt-edge, var(--ring)), 0 0 0 3px var(--focus-ring)",
   },
   ".cm-scroller": {
     fontFamily: "var(--font-sans)",
@@ -237,7 +241,7 @@ export default function PromptEditor(props: PromptEditorProps) {
       data-invalid={props.ariaInvalid || undefined}
       className={cn(
         "min-w-0 [&_.cm-editor]:min-h-(--prompt-min) [&_.cm-scroller]:max-h-(--prompt-max)",
-        "data-invalid:[&_.cm-editor]:border-destructive data-invalid:[&_.cm-editor]:ring-3 data-invalid:[&_.cm-editor]:ring-destructive/20",
+        "data-invalid:[--prompt-edge:var(--destructive)] data-invalid:[--prompt-halo:color-mix(in_oklab,var(--destructive)_20%,transparent)]",
         props.disabled && "opacity-60",
         props.className,
       )}

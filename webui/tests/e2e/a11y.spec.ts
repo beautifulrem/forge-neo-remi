@@ -4,7 +4,7 @@
  */
 import AxeBuilder from "@axe-core/playwright"
 import { expect, type Locator, type Page, test } from "@playwright/test"
-import { injectFaults, openGenerate, openRoute, presetStorage, type Theme } from "./helpers"
+import { injectFaults, mod, openGenerate, openRoute, presetStorage, setPrompt, type Theme } from "./helpers"
 
 /** A 96×64 solid PNG. */
 const SOURCE_PNG = Buffer.from(
@@ -344,6 +344,103 @@ test("a gallery tile shows its focus ring under the pointer", async ({ page }) =
   const focused = await edge()
   await tile.evaluate((element: HTMLElement) => element.blur())
   expect(focused.equals(await edge())).toBe(false)
+})
+
+/**
+ * How a field draws its state: its outer ring (the focus ring or an invalid field's halo) and its edge (its border, or
+ * the inset 1 px ring of a field without one: the prompt editor), each named after the token it is drawn in
+ * (`focus-ring`, `destructive`, `ring`) as the field resolves it.
+ */
+async function fieldMarks(field: Locator): Promise<{ ring: string; edge: string }> {
+  return field.evaluate((element) => {
+    const canvas = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!
+    /** The colour as 8-bit sRGB channels and alpha, whatever notation the computed style uses. */
+    const rgba = (color: string) => {
+      canvas.clearRect(0, 0, 1, 1)
+      canvas.fillStyle = "#000"
+      canvas.fillStyle = color
+      canvas.fillRect(0, 0, 1, 1)
+      return [...canvas.getImageData(0, 0, 1, 1).data]
+    }
+    const token = (name: string) => {
+      const probe = document.createElement("i")
+      probe.style.color = `var(${name})`
+      ;(element.parentElement ?? document.body).append(probe)
+      const color = rgba(getComputedStyle(probe).color)
+      probe.remove()
+      return color
+    }
+    const near = (a: number[], b: number[], channels: number, by: number) => a.slice(0, channels).every((x, i) => Math.abs(x - b[i]!) <= by)
+    // the focus ring is --ring at 80 % (60 % dark): its alpha tells it from an edge in --ring; the halo and an edge
+    // in --destructive are a share of it (20 % to 50 %): their channels tell them
+    const tokens = { "focus-ring": token("--focus-ring"), ring: token("--ring"), destructive: token("--destructive") }
+    const name = (color: number[]) =>
+      near(color, tokens["focus-ring"], 4, 4) ? "focus-ring" : near(color, tokens.destructive, 3, 6) ? "destructive" : near(color, tokens.ring, 4, 4) ? "ring" : `rgba(${color.join(", ")})`
+    const style = getComputedStyle(element)
+    const layers = (style.boxShadow === "none" ? [] : style.boxShadow.split(/,(?![^(]*\))/))
+      .map((layer) => {
+        const [x = 0, y = 0, blur = 0, spread = 0] = [...layer.matchAll(/(-?[\d.]+)px/g)].map((m) => Number(m[1]))
+        const color = rgba(/^\s*([a-z-]+\([^)]*\)|#\w+|[a-z]+)/i.exec(layer)?.[1] ?? "transparent")
+        return { inset: /\binset\b/.test(layer), color, spread, drawn: x === 0 && y === 0 && blur === 0 && spread > 0 && color[3]! > 0 }
+      })
+      .filter((layer) => layer.drawn)
+    const ring = layers.filter((layer) => !layer.inset).sort((a, b) => b.spread - a.spread)[0]
+    const inset = layers.find((layer) => layer.inset)
+    const border = parseFloat(style.borderTopWidth) > 0 && style.borderTopStyle !== "none" ? rgba(style.borderTopColor) : undefined
+    const edge = border ?? inset?.color
+    return { ring: ring ? `${ring.spread} px ${name(ring.color)}` : "none", edge: edge && edge[3]! > 0 ? name(edge) : "none" }
+  })
+}
+
+// An invalid field drew its halo (3 px of 20 % --destructive) where the focus ring goes: `aria-invalid:ring-destructive/20`
+// comes after `focus-visible:ring-focus-ring` in Tailwind's CSS, so a focused invalid field looked like an unfocused one.
+// Focus wins: focused, it draws the focus ring, and its red edge tells it from a valid field with the focus. The prompt
+// editor showed nothing invalid at all once focused (its own focus ring wins over the classes), and no edge.
+test.describe("invalid fields", () => {
+  for (const theme of ["light", "dark"] satisfies Theme[]) {
+    test(`${theme}: draw the focus ring once focused, and keep their red edge`, async ({ page }) => {
+      await presetStorage(page, { theme })
+      await openGenerate(page)
+      await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" })
+      // the size field of the aspect ratio popover is invalid while its text is not a size
+      await page.getByRole("button", { name: /^Aspect ratio/ }).first().click()
+      const size = page.getByRole("textbox", { name: "Size as width x height" })
+      await size.focus()
+      await page.keyboard.type("12x")
+      await expect(size).toHaveAttribute("aria-invalid", "true")
+      const sizeFocused = await fieldMarks(size)
+      await page.keyboard.press(`${mod}+A`)
+      await page.keyboard.type("1216x832")
+      await expect(size).not.toHaveAttribute("aria-invalid")
+      const sizeValid = await fieldMarks(size)
+      await page.keyboard.press(`${mod}+A`)
+      await page.keyboard.type("12x")
+      await size.evaluate((element: HTMLElement) => element.blur())
+      await expect(size).toHaveAttribute("aria-invalid", "true")
+      const sizeBlurred = await fieldMarks(size)
+      await page.keyboard.press("Escape")
+      // the prompt editor, refused by the server (the mock refuses "#invalid")
+      const prompt = await setPrompt(page, "a cat #invalid")
+      await page.getByRole("button", { name: /^Generate/ }).first().click()
+      await expect(prompt).toHaveAttribute("aria-invalid", "true")
+      const editor = page.locator(".cm-editor").filter({ has: prompt })
+      const promptBlurred = await fieldMarks(editor)
+      await prompt.focus()
+      await expect(editor).toHaveClass(/\bcm-focused\b/)
+      const promptFocused = await fieldMarks(editor)
+      await page.keyboard.type(" ") // editing a field clears its error
+      await expect(prompt).not.toHaveAttribute("aria-invalid")
+      const promptValid = await fieldMarks(editor)
+      expect({ sizeFocused, sizeValid, sizeBlurred, promptBlurred, promptFocused, promptValid }).toEqual({
+        sizeFocused: { ring: "3 px focus-ring", edge: "destructive" },
+        sizeValid: { ring: "3 px focus-ring", edge: "ring" },
+        sizeBlurred: { ring: "3 px destructive", edge: "destructive" },
+        promptBlurred: { ring: "3 px destructive", edge: "destructive" },
+        promptFocused: { ring: "3 px focus-ring", edge: "destructive" },
+        promptValid: { ring: "3 px focus-ring", edge: "ring" },
+      })
+    })
+  }
 })
 
 /**

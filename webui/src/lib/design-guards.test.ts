@@ -209,6 +209,25 @@ describe("focus rings", () => {
   // A variant of a focus state: focus, focus-visible, focus-within, group- or peer-focus…,
   // has-[…:focus…], or a focus a widget marks itself (data-focused, data-[focus-visible]).
   const FOCUS_VARIANT = /(?:^|[:-])(?:focus|focus-visible|focus-within)(?:\/[\w-]+)?:|:focus(?:-visible|-within)?\]|(?:^|[:-])data-\[?focus[\w-]*(?:=[^\]]*)?\]?(?:\/[\w-]+)?:/
+  /** The variants of a class, outermost first: its parts before the colons outside brackets. */
+  function variants(cls: string): string[] {
+    const parts: string[] = []
+    let depth = 0
+    let start = 0
+    for (let i = 0; i < cls.length; i++) {
+      if (cls[i] === "[" || cls[i] === "(") depth++
+      else if (cls[i] === "]" || cls[i] === ")") depth--
+      else if (cls[i] === ":" && depth === 0) {
+        parts.push(cls.slice(start, i))
+        start = i + 1
+      }
+    }
+    return parts
+  }
+  /** Whether a variant is a focus state (`not-focus-visible` is its absence, not one). */
+  const isFocus = (variant: string) => !variant.startsWith("not-") && FOCUS_VARIANT.test(`${variant}:`)
+  /** Whether a class applies under a focus state. */
+  const underFocus = (cls: string) => variants(cls).some(isFocus)
   /** The variants, kind and width of a ring or outline width class, or undefined for any other utility. */
   function width(cls: string): { prefix: string; kind: string; width: string } | undefined {
     const m = /^(.*?)(ring|outline)-(\d+|\[[^\]]+\])$/.exec(cls)
@@ -222,7 +241,7 @@ describe("focus rings", () => {
     // every class in the sources (a run outside quotes, braces and spaces), brackets included
     const rings = files.flatMap(({ file, source }) =>
       (source.match(/[^\s"'`{}]+/g) ?? [])
-        .filter((cls) => FOCUS_VARIANT.test(cls))
+        .filter(underFocus)
         .flatMap((cls) => {
           const drawn = width(cls)
           return drawn ? [{ file, cls, ...drawn }] : []
@@ -235,7 +254,7 @@ describe("focus rings", () => {
         const classes = literal.slice(1, -1).split(/\s+/)
         return classes.flatMap((cls) => {
           const colour = /^(.*?)(ring|outline)-focus-ring$/.exec(cls)
-          if (!colour || FOCUS_VARIANT.test(cls)) return []
+          if (!colour || underFocus(cls)) return []
           return classes.flatMap((other) => {
             const drawn = width(other)
             return drawn && drawn.prefix === colour[1] && drawn.kind === colour[2] ? [{ file, cls: other, ...drawn }] : []
@@ -269,7 +288,7 @@ describe("focus rings", () => {
     // ring (a field) is not the ring.
     const colours = files.flatMap(({ file, source }) =>
       (source.match(/[^\s"'`{}]+/g) ?? [])
-        .filter((cls) => FOCUS_VARIANT.test(cls))
+        .filter(underFocus)
         .flatMap((cls) => {
           const m = /^(?:inset-)?(ring|outline)-(.+)$/.exec(utility(cls))
           if (!m) return []
@@ -323,6 +342,46 @@ describe("focus rings", () => {
     })
     expect(drawn).toBeGreaterThan(60)
     expect(both).toEqual([])
+  })
+
+  /**
+   * The class lists of a source, each with the classes that share its element: a JSX tag, or the
+   * class call (cn, cva, clsx) a class string outside a tag is in, or that string alone.
+   */
+  function classScopes(raw: string): string[] {
+    const { source, tags } = openingTags(raw)
+    const calls = [...source.matchAll(/\b(?:cn|cva|clsx)\(/g)].map((m) => ({ start: m.index, end: callEnd(source, m.index + m[0].length - 1) }))
+    const outside = [...source.matchAll(/"[^"\n]*"|'[^'\n]*'|`[^`]*`/g)].filter((m) => !tags.some(({ index, tag }) => m.index >= index && m.index < index + tag.length))
+    const scopes = outside.map((m) => {
+      const call = calls.filter(({ start, end }) => start < m.index && end > m.index).at(-1)
+      return call ? source.slice(call.start, call.end + 1) : m[0]
+    })
+    return [...new Set([...tags.map(({ tag }) => tag), ...scopes])]
+  }
+
+  it("give way to the focus ring on an invalid field", () => {
+    // frontend.md: on an invalid field the focus wins. Its halo (`aria-invalid:ring-3
+    // aria-invalid:ring-destructive/20`) came after `focus-visible:ring-focus-ring` in Tailwind's CSS,
+    // with the same specificity, and took the focus ring's colour: a focused invalid field looked
+    // unfocused. A halo applies only without the focus, `not-` the variant the element's focus ring is
+    // drawn under (not-focus-visible, not-focus-within, not-has-[…:focus-visible]), so no order of the
+    // CSS can bring it back. `ring-0` (a control inside a group that draws the halo) is no ring, and
+    // an inset ring is an edge, like the red border that stays.
+    const halos = files.flatMap(({ file, source }) =>
+      classScopes(source).flatMap((scope) => {
+        const classes = scope.match(/[^\s"'`{}]+/g) ?? []
+        const focus = new Set(classes.filter((cls) => /^(?:ring|outline)-focus-ring$/.test(utility(cls))).flatMap((cls) => variants(cls).filter(isFocus)))
+        return classes.flatMap((cls) => {
+          const chain = variants(cls)
+          if (!chain.some((variant) => !variant.startsWith("not-") && /invalid/.test(variant)) || !/^ring-(?!0$|inset$|offset-)/.test(utility(cls))) return []
+          const negated = chain.filter((variant) => variant.startsWith("not-")).map((variant) => variant.slice("not-".length))
+          const scoped = focus.size > 0 ? [...focus].every((variant) => negated.includes(variant)) : negated.some(isFocus)
+          return [{ where: `${file}: ${cls}`, scoped }]
+        })
+      }),
+    )
+    expect(halos.length).toBeGreaterThan(25)
+    expect([...new Set(halos.filter(({ scoped }) => !scoped).map(({ where }) => where))]).toEqual([])
   })
 })
 
