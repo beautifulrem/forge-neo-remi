@@ -288,3 +288,30 @@ def test_viewing_lineage_keeps_edge_times_and_deleting_drops_edges(tmp_path):
         index.close()
         job_store.close()
         files.close()
+
+
+def test_viewing_an_indexed_lineage_writes_nothing(tmp_path):
+    files = FileStore(tmp_path / "files")
+    job_store = JobStore(tmp_path / "jobs.db")
+    index = GalleryIndex(files, folders=list)
+    try:
+        j1 = job_store.add("txt2img", {"prompt": "base"}, {})
+        base = _save_img(files, (1, 2, 3), "base\nSteps: 20, Seed: 1", job_id=j1.id)
+        j1 = job_store.finish(j1.id, "completed", outputs=[{"id": base.id, "kind": "image"}])
+        j2 = job_store.add("img2img", {"prompt": "refined", "init_img": base.id}, {})
+        refined = _save_img(files, (4, 5, 6), "refined\nSteps: 20, Seed: 2", job_id=j2.id, tab="img2img")
+        j2 = job_store.finish(j2.id, "completed", outputs=[{"id": refined.id, "kind": "image"}])
+        # a job finished before lineage was indexed is indexed by its first view
+        assert [node["file_id"] for node in index.lineage_for(refined.id, job_store=job_store)["ancestors"]] == [base.id]
+
+        statements: list[str] = []
+        index._db.set_trace_callback(statements.append)
+        lineage = index.lineage_for(refined.id, job_store=job_store)
+        index.lineage_for(base.id, job_store=job_store)
+        index._db.set_trace_callback(None)
+        assert [node["file_id"] for node in lineage["ancestors"]] == [base.id]
+        assert not [sql for sql in statements if "INSERT" in sql.upper() or "UPDATE" in sql.upper()]
+    finally:
+        index.close()
+        job_store.close()
+        files.close()

@@ -733,9 +733,10 @@ class GalleryIndex:
             return
         with self._lock:
             self._db.execute(
-                # an edge indexed again (viewing its lineage re-indexes the job) keeps its first time: the lists sort by it
+                # an edge indexed again keeps its first time (the lists sort by it); an unchanged one is not written
                 "INSERT INTO asset_lineage (child_id, parent_id, relation, job_id, chain_id, stage_index, created) VALUES (?, ?, ?, ?, ?, ?, ?)"
-                " ON CONFLICT (child_id, parent_id, relation) DO UPDATE SET job_id = excluded.job_id, chain_id = excluded.chain_id, stage_index = excluded.stage_index",
+                " ON CONFLICT (child_id, parent_id, relation) DO UPDATE SET job_id = excluded.job_id, chain_id = excluded.chain_id, stage_index = excluded.stage_index"
+                " WHERE job_id IS NOT excluded.job_id OR chain_id IS NOT excluded.chain_id OR stage_index IS NOT excluded.stage_index",
                 (child_id, parent_id, relation, job_id, chain_id, stage_index, time.time()),
             )
 
@@ -807,9 +808,15 @@ class GalleryIndex:
         }
 
     def _ensure_job_indexed(self, file_id: str, job_store: Any) -> None:
+        """Index the lineage of the job that made ``file_id`` unless its edges
+        are indexed already (a job that finished before lineage was indexed
+        is indexed on its first view; viewing never writes again)."""
+
         if job_store is None:
             return
         with self._lock:
+            if self._db.execute("SELECT 1 FROM asset_lineage WHERE child_id = ? LIMIT 1", (file_id,)).fetchone() is not None:
+                return
             row = self._db.execute("SELECT job_id FROM files WHERE id = ?", (file_id,)).fetchone()
         job_id = row[0] if row else None
         if not job_id:
