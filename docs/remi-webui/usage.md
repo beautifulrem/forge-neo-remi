@@ -336,7 +336,7 @@ By default the server listens on `127.0.0.1` only.
 
 **403 "Unknown host refused".** You opened a loopback-only server through another host name (a LAN name, a reverse proxy, a tunnel). Use `--listen` / `--server-name`, or allow the name with `--cors-allow-origins=https://your.host`, or make the proxy send `Host: localhost`.
 
-**403 "Cross-site request refused".** A page on another origin (a separate front-end, a userscript site) sent a write request. Allow that origin with `--cors-allow-origins`. Behind a reverse proxy, forward the public host and port (`X-Forwarded-Host`, `X-Forwarded-Port`, `X-Forwarded-Proto`).
+**403 "Cross-site request refused".** A page on another origin (a separate front-end, a userscript site) sent a write request. Allow that origin with `--cors-allow-origins`. Behind a reverse proxy, pass on the public host as the browser sent it, in `Host`, `X-Forwarded-Host` or `Forwarded: host=`, with its port unless that is the default port of `http` or `https` (or give the port in `X-Forwarded-Port`); `X-Forwarded-Proto` plays no part in this check ([Reverse proxies](api.md#reverse-proxies)).
 
 **No live preview or progress; the connection dot in the header is red.** The WebSocket (`/api/v2/ws`) is blocked. A reverse proxy must forward WebSocket upgrades (nginx: `proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";`). Also check that live previews are enabled in Settings.
 

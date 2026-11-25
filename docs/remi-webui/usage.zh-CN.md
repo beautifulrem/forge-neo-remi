@@ -336,7 +336,7 @@ Agent Scheduler、Prompt Queue 和 Repeat Generate 已成为核心的队列功�
 
 **403 “Unknown host refused”。** 你通过其他主机名（局域网名称、反向代理、隧道）访问了仅监听本机的服务器。请使用 `--listen` / `--server-name`，或用 `--cors-allow-origins=https://your.host` 放行该名称，或让代理发送 `Host: localhost`。
 
-**403 “Cross-site request refused”。** 其他来源的页面（独立前端、用户脚本站点）发送了写请求。用 `--cors-allow-origins` 放行该来源。在反向代理之后，请转发公开的主机和端口（`X-Forwarded-Host`、`X-Forwarded-Port`、`X-Forwarded-Proto`）。
+**403 “Cross-site request refused”。** 其他来源的页面（独立前端、用户脚本站点）发送了写请求。用 `--cors-allow-origins` 放行该来源。在反向代理之后，请按浏览器发送的样子转发公开的主机名，放在 `Host`、`X-Forwarded-Host` 或 `Forwarded: host=` 中；端口不是 `http` 或 `https` 的默认端口时要带上端口（也可以用 `X-Forwarded-Port` 给出端口）。`X-Forwarded-Proto` 与这项检查无关（[反向代理](api.md#reverse-proxies)）。
 
 **没有实时预览或进度，顶栏的连接指示为红色。** WebSocket（`/api/v2/ws`）被拦截。反向代理必须转发 WebSocket 升级（nginx：`proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";`）。同时检查设置中是否启用了实时预览。
 
