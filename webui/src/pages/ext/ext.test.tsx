@@ -152,3 +152,37 @@ describe("send targets", () => {
     await waitFor(() => expect(pageStore("joycaption").getState().values["page:joycaption"]?.image).toBe("out-9"))
   })
 })
+
+// A failed bootstrap (a restart, a short 5xx) said "Page not found", dropped a pending send to the
+// page, and nothing but a reload asked again
+describe("extension page while the app cannot load", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    queryClient.setQueryDefaults(keys.app, {})
+    queryClient.removeQueries({ queryKey: keys.app })
+  })
+
+  it("says so, keeps a send waiting and asks again", async () => {
+    let up = false
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      up ? Response.json({ ...bootstrapWith({}), pages: [{ id: "after-restart", title: "After restart", widget: "not-in-this-build" }] }) : Response.json({ detail: "boom" }, { status: 503 }),
+    )
+    queryClient.removeQueries({ queryKey: keys.app })
+    queryClient.setQueryDefaults(keys.app, { retry: false })
+    history.replaceState(null, "", "#/png-info")
+    let settled: number | null = null
+    void sendToPage("after-restart", { caption: "a cat" }).then((applied) => (settled = applied))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ExtensionPage route={{ name: "page", id: "after-restart" }} />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText("Page unavailable")).toBeInTheDocument()
+    expect(screen.getByText("The server is busy; try again shortly.")).toBeInTheDocument()
+    expect(screen.queryByText("Page not found")).toBeNull()
+    expect(settled).toBeNull()
+    up = true
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }))
+    expect(await screen.findByText("After restart")).toBeInTheDocument()
+  })
+})
