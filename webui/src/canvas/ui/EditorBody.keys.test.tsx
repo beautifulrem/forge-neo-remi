@@ -240,6 +240,18 @@ describe("keys in a popup the editor opened", () => {
     fireEvent.keyDown(document.body, { key: "ArrowRight", code: "ArrowRight" })
     expect(index()).toBe(1)
   })
+
+  // Escape closes a popup, which keeps the focus while it fades out (Base UI's data-closed): a key
+  // pressed meanwhile (F for full screen right after closing the shortcuts list) was the popup's,
+  // and nothing happened.
+  it("reach the editor from a popup that is closing", async () => {
+    const popup = await openLayers()
+    popup.setAttribute("data-closed", "")
+    const eye = within(popup).getByRole("button", { name: "Show Mask" })
+    eye.focus()
+    fireEvent.keyDown(eye, { key: "ArrowRight", code: "ArrowRight" })
+    expect(index()).toBe(1)
+  })
 })
 
 

@@ -532,10 +532,11 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
     }
     // A key pressed in a popup outside the editor (its Layers popover, portaled to the body) is the
     // popup's: an arrow on its buttons, Escape that closes it, Space that presses a button. The
-    // dialog of the maximised editor holds the editor: its keys stay the editor's.
+    // dialog of the maximised editor holds the editor: its keys stay the editor's. A popup closing
+    // (Base UI's data-closed while it fades out) still holds the focus but no longer its keys.
     const inPopupOutside = (target: EventTarget | null) => {
       const popup = target instanceof Element ? target.closest(POPUPS) : null
-      return popup !== null && !popup.contains(rootRef.current)
+      return popup !== null && !popup.contains(rootRef.current) && !popup.hasAttribute("data-closed")
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || !isActive() || isTyping(event.target) || inPopupOutside(event.target)) return
