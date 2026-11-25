@@ -13,9 +13,11 @@ export type PanelProps = {
   close: () => void
 }
 
-/** "3 minutes ago" in the UI language. */
-export function timeAgo(seconds: number, locale: string): string {
-  const now = Date.now()
+/**
+ * "3 minutes ago" in the UI language, counted from `now` (ms): a render passes the time it read
+ * (`useNow`), so the text moves on while the page stays open.
+ */
+export function timeAgo(seconds: number, locale: string, now = Date.now()): string {
   const diff = seconds - now / 1000
   const format = new Intl.RelativeTimeFormat(locale, { numeric: "auto" })
   // half away from zero (Math.round(-59.5) is -59: "59 minutes ago" for 59.5 minutes)

@@ -1391,7 +1391,11 @@ older server) nothing is shown.
   instructions; the answer is editable, then replaces or extends the
   prompt). `prompt_tools_toolbar` limits the bar to the main
   prompts (`PromptDecoratorProps.main`, set by `PromptField`). The view per
-  prompt is persisted (`remi-prompt-tools`).
+  prompt is persisted (`remi-prompt-tools`). The history's times ("3
+  minutes ago") move on while the panel is open: a relative time is counted
+  from `useNow()` (`lib/use-now.ts`, one shared 30 s timer while something
+  reads it), passed to `timeAgo`, never from a `Date.now()` the render does
+  not read (the React Compiler would keep the first text).
 - **Tag chips** (`chips/`): `parse.ts` turns a prompt into chips and
   separators so `serialize(parse(text)) === text`; weights are effective
   (`((x))` 1.21, `[x]` 0.91, `(x:1.3)`, a network's first number); an edit

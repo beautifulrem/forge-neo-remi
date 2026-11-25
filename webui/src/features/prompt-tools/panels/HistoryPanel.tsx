@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import { useDebouncedValue } from "@/features/prompt-editor/use-debounced-value"
 import { useLocale } from "@/i18n"
+import { useNow } from "@/lib/use-now"
 import { type HistoryItem, promptToolsApi } from "../api"
 import { toolKeys } from "../queries"
 import { appendText, type PanelProps, timeAgo } from "./helpers"
@@ -38,6 +39,8 @@ function failed(title: string, error: unknown) {
 export default function HistoryPanel({ value, setValue, kind, disabled, close }: PanelProps) {
   const { t } = useTranslation()
   const locale = useLocale((state) => state.locale)
+  // the entries' times ("3 minutes ago") move on while the panel stays open
+  const now = useNow()
   const client = useQueryClient()
   const field = kind === "negative" ? "negative" : "prompt"
   const [query, setQuery] = useState("")
@@ -184,7 +187,7 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
                       {item.name ? <span title={item.name} className="block truncate text-xs font-semibold">{item.name}</span> : null}
                       <span title={textOf(item)} className="line-clamp-3 text-xs break-words whitespace-pre-wrap">{textOf(item)}</span>
                       <span className="mt-0.5 block text-[0.625rem] text-muted-foreground">
-                        {timeAgo(item.last_used, locale)}
+                        {timeAgo(item.last_used, locale, now)}
                         {item.uses > 1 ? ` · ${t("{{count}} generations", { count: item.uses })}` : ""}
                         {item.tab ? ` · ${t(item.tab)}` : ""}
                       </span>

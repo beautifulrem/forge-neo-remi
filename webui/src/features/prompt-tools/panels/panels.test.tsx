@@ -4,11 +4,12 @@ import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { ApiError } from "@/api/http"
 import { queryClient } from "@/api/queries"
-import { type Favorite, type FavoritesPage, promptToolsApi } from "../api"
+import { type Favorite, type FavoritesPage, type HistoryItem, promptToolsApi } from "../api"
 import { TEST_CONFIG } from "../testing"
 import FavoritesPanel from "./FavoritesPanel"
 import GeneratePanel from "./GeneratePanel"
 import GroupsPanel from "./GroupsPanel"
+import HistoryPanel from "./HistoryPanel"
 import { groupTagText } from "./helpers"
 
 const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -179,4 +180,23 @@ describe("writing a prompt", () => {
     fireEvent.click(screen.getByRole("button", { name: "Write" }))
     expect(await screen.findByRole("alert")).toHaveTextContent("Set up the service in Settings first.")
   })
+})
+
+describe("prompt history", () => {
+  afterEach(() => vi.useRealTimers())
+
+  it("moves its times on while it stays open", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date("2026-03-11T13:00:00"))
+    const now = Date.now() / 1000
+    const item: HistoryItem = { id: "h1", tab: "txt2img", prompt: "a cat", negative_prompt: "", name: "", created: now - 30, last_used: now - 30, uses: 1 }
+    const list = vi.spyOn(promptToolsApi.history, "list").mockResolvedValue({ items: [item], next_cursor: null })
+    render(<HistoryPanel {...panelProps("")} />, { wrapper })
+    expect(await screen.findByText(/^30 seconds ago/, {}, { timeout: 15_000 })).toBeInTheDocument()
+    // past the panel's own first renders (the search's debounce, the query settling)
+    await act(() => vi.advanceTimersByTimeAsync(1000))
+    act(() => vi.advanceTimersByTime(3 * 60_000))
+    expect(screen.getByText(/^4 minutes ago/)).toBeInTheDocument()
+    expect(list).toHaveBeenCalledTimes(1) // no new data: the time alone moved it on
+  }, 20_000)
 })
