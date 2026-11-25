@@ -295,25 +295,28 @@ function FileSection() {
         <Braces aria-hidden />
         {t("Load prompt…")}
       </Button>
-      <div className="flex gap-2">
-        <Button variant="outline" className="flex-1" onClick={() => loadFrom("txt2img")}>
-          <FileInput aria-hidden />
-          {t("Load from txt2img")}
-        </Button>
-        <Button variant="outline" className="flex-1" onClick={() => loadFrom("img2img")}>
-          <FileInput aria-hidden />
-          {t("Load from img2img")}
-        </Button>
-      </div>
-      <div className="flex gap-2">
-        <Button variant="outline" className="flex-1" onClick={save}>
-          <FileDown aria-hidden />
-          {t("Save JSON")}
-        </Button>
-        <Button variant="outline" className="flex-1" onClick={() => fileInput.current?.click()}>
-          <FileUp aria-hidden />
-          {t("Load JSON")}
-        </Button>
+      {/* pairs side by side only where both labels fit (the half-width column of a phone held sideways is too narrow in English): never a pair pushed out of the column */}
+      <div className="@container/files flex flex-col gap-2.5">
+        <div className="grid gap-2 @[22rem]/files:grid-cols-2">
+          <Button variant="outline" className="min-w-0" onClick={() => loadFrom("txt2img")}>
+            <FileInput aria-hidden />
+            {t("Load from txt2img")}
+          </Button>
+          <Button variant="outline" className="min-w-0" onClick={() => loadFrom("img2img")}>
+            <FileInput aria-hidden />
+            {t("Load from img2img")}
+          </Button>
+        </div>
+        <div className="grid gap-2 @[22rem]/files:grid-cols-2">
+          <Button variant="outline" className="min-w-0" onClick={save}>
+            <FileDown aria-hidden />
+            {t("Save JSON")}
+          </Button>
+          <Button variant="outline" className="min-w-0" onClick={() => fileInput.current?.click()}>
+            <FileUp aria-hidden />
+            {t("Load JSON")}
+          </Button>
+        </div>
       </div>
       <input
         ref={fileInput}
