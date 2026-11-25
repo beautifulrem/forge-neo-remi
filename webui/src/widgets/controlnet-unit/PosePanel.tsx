@@ -12,7 +12,7 @@ import { errorTextId } from "@/ui/a11y"
 import { FieldError } from "@/ui/Field"
 import { NS } from "./i18n"
 import { MAX_CANVAS, parsePose, type PoseProblem, poseText } from "./pose"
-import { panelClass } from "@/ui/layout/panel"
+import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import { cn } from "@/lib/utils"
 
 type PosePanelProps = {
@@ -78,7 +78,7 @@ export function PosePanel({ pose, busy, disabled, onApply }: PosePanelProps) {
   return (
     <div role="group" aria-labelledby={`${id}-title`} className={cn("flex flex-col gap-2", panelClass(1))}>
       <div className="flex flex-wrap items-center gap-1.5">
-        <span id={`${id}-title`} className="mr-auto text-[0.8rem] font-medium">
+        <span id={`${id}-title`} className={cn("mr-auto", panelTitleClass(1))}>
           {tw("Pose (OpenPose JSON)")}
         </span>
         <Button size="xs" variant="ghost" onClick={() => file.current?.click()} disabled={disabled || busy}>

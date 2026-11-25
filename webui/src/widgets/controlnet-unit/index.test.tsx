@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ImageEditorProps } from "@/canvas"
 import { tabsKey } from "@/ui/form-index"
+import { panelTitleClass } from "@/ui/layout/panel"
 import { createFormStore, type FormStore } from "@/ui/form-store"
 import { TabForm } from "@/ui/SchemaForm"
 import type { Json, TabSchema, TabsNode } from "@/ui/schema"
@@ -222,6 +223,19 @@ describe("controlnet-unit widget", { timeout: 30_000 }, () => {
     fireEvent.change(editor, { target: { value: JSON.stringify(pose) } })
     fireEvent.click(within(unit).getByRole("button", { name: "Apply pose" }))
     await waitFor(() => expect(unitOf(store)).toMatchObject({ generated_image: "pose-1", use_preview_as_input: true, pose }))
+  })
+
+  // The pose editor is a panel inside the unit: its title was a hand-written 12.8 px medium label,
+  // not the nested panel's 14 px semibold title.
+  it("titles the pose editor as a nested panel", async () => {
+    mockActions(() => ({}))
+    const store = renderForm()
+    const unit = await panel()
+    setUnit(store, { type_filter: "OpenPose" })
+    const group = within(unit).getByRole("group", { name: "Pose (OpenPose JSON)" })
+    const title = document.getElementById(group.getAttribute("aria-labelledby")!)!
+    expect(title.className.split(/\s+/)).toEqual(expect.arrayContaining(panelTitleClass(1).split(" ")))
+    expect(title.className).not.toMatch(/text-\[0\.8rem\]|font-medium/)
   })
 
   it("says why a pose is refused in the UI language", async () => {
