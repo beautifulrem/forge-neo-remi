@@ -304,7 +304,8 @@ imperatively).
   phone's bottom bar already keeps that room under the page). What positions itself
   in script reads the insets as numbers (`lib/safe-area.ts`): every Base UI
   positioner (menus, selects, popovers, comboboxes, tooltips, hover cards)
-  takes `collisionPadding={useCollisionPadding()}`, its own 5px from the
+  takes the padding of `useCollisionPadding()` (called at the top of the
+  component: `collisionPadding={collisionPadding}`), its own 5px from the
   edges of the safe area, and the toaster's offsets start at it
   (`toast-offset.ts`). A new positioned popup takes the same padding
   (`lib/safe-area.test.ts` checks every `Positioner` tag).
@@ -509,8 +510,9 @@ generated interfaces (sources: Linear's
   styles: core forms and the model lists follow the options),
   `networks.changed` (networks, models) and everything after a reconnect or a
   `resync` (`pong` is accepted and ignored). Model loading
-  ends on `model.loaded`, a `model.loading` stage `done|loaded|error|failed`,
-  a reconnect, or after 180 s without news.
+  ends on `model.loaded`, a reconnect, or after 180 s without news (the
+  server's only `model.loading` stage is "loading"; the bridge also ends it on
+  a stage `done|loaded|error|failed`, for an older server).
 
 Build: chunks and their preloads resolve relative to the importing module
 (`experimental.renderBuiltUrl`), so the app works under `--subpath`; the
@@ -535,7 +537,8 @@ The generation pages and Extras load a tab with `useFormLoader`
 on a reload it keeps uploaded images, moves untouched params to their new
 defaults and re-derives patch locks;
 `ensureSchemaLoaded` does the same for code that reads a form away from its
-page) and render it with `CoreForm` and `ScriptsPanel` from `RenderNode` /
+page). The generation pages render it with `CoreForm` and `ScriptsPanel`,
+Extras with `RenderLayout` directly; both build on `RenderNode` /
 `RenderLayout`. `ui/SchemaForm.tsx` (`TabForm`, `PageForm`) is a harness for
 the renderer's tests only. `jobRequest(store, schema)` (`ui/tab.ts`) builds the
 `POST /jobs` body.
@@ -1403,8 +1406,9 @@ older server) nothing is shown.
   what to fix; 409 and 413 have their own sentences), and
   `renderFailureText` is for an error boundary (a request by its status, a
   render bug by its own message). A request that got no answer (`fetch`
-  failed, a body that is not JSON, a lazy chunk that could not be fetched)
-  is marked where it happens as a `RequestError` (`api/http.ts` `request` /
+  failed, a body that is not JSON, a lazy chunk whose import failed: it could
+  not be fetched, and a chunk that throws as it runs reads the same) is
+  marked where it happens as a `RequestError` (`api/http.ts` `request` /
   `unwrap`, `lib/retryable-lazy.ts`), so a boundary can tell it from a bug;
   the caller's own abort is left as it is. Admin errors (extensions,
   Settings > Server) are said by their `template` and `params`, anything
@@ -1492,7 +1496,7 @@ source image marks the field and shows the toast without a request);
 works; interrupted jobs end as `job.completed` with status `interrupted`.
 `/prompt/tokens`, `/styles` (+ `/styles/apply`), `/infotext/parse`,
 `/infotext/image` and the `__forge_preset__` action answer too; model
-changes emit `model.loading` stages. There is a
+changes emit `model.loading` (stage "loading") and then `model.loaded`. There is a
 schema-rendered extension page (`Toolbox`) and a zh_CN server catalog
 sample. `api/mock/library.ts` serves the Gallery (260 outputs of varied
 sizes, forms, models and dates; stars, removal, zip, reveal), PNG Info and
@@ -1648,8 +1652,7 @@ generated `src/api/gen/schema.d.ts` types every route):
   updates its cache ([schema-format.md §5](schema-format.md#5-actions)).
 - WS job events carry `job_id` and `seq` (= binary `job_seq`); `job_no` is
   0-based; `tab` is optional; binary preview headers are little-endian. A
-  model load ends with `model.loaded {model?, error?}` (or a
-  `model.loading` stage `done`). See [api.md "WebSocket"](api.md#websocket-apiv2ws)
+  model load ends with `model.loaded {model?, error?}`. See [api.md "WebSocket"](api.md#websocket-apiv2ws)
   and architecture.md "WebSocket `/api/v2/ws`".
 - `GET /jobs?cursor=&limit=` returns `{items, next_cursor, total}` newest
   first ([api.md "Conventions"](api.md#conventions), architecture.md route
