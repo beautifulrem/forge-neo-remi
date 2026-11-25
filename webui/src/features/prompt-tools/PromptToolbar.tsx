@@ -6,7 +6,7 @@
  */
 import { formatShortcut } from "@/app/commands"
 import { BrushCleaning, History, KeyRound, Languages, LayoutGrid, Sparkles, Star, Tags, TextCursorInput } from "@/components/icons"
-import { type ReactNode, Suspense, useState } from "react"
+import { type ReactNode, Suspense, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { serviceFailureText } from "@/features/errors/error-text"
@@ -120,6 +120,10 @@ function TranslateTool({ value, setValue, disabled, config, viewKey }: PromptToo
   const provider = config.tools.translation_provider
   const usable = Boolean(config.tools.translation)
   const network = NETWORK_PROVIDERS.has(provider)
+  const latest = useRef(value)
+  useEffect(() => {
+    latest.current = value
+  })
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true)
@@ -135,6 +139,11 @@ function TranslateTool({ value, setValue, disabled, config, viewKey }: PromptToo
   const toEnglish = () =>
     run(async () => {
       const result = await translatePromptToEnglish(value)
+      // the prompt typed while the service answered wins over a translation of the old text
+      if (latest.current !== value) {
+        toast.info(t("Translation not applied: the prompt changed meanwhile."))
+        return
+      }
       if (result.translated === 0) {
         toast.info(t("Nothing to translate: every tag is already in English, or no translation was found."))
         return

@@ -81,6 +81,20 @@ describe("prompt tools around a prompt editor", () => {
     expect(translate).toHaveBeenCalledWith(["长发"], "en")
   }, 20_000)
 
+  it("keeps what was typed while the translation was on its way", async () => {
+    let answer: (value: { provider: string; translations: string[] }) => void = () => {}
+    vi.spyOn(promptToolsApi, "translate").mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    const told = vi.spyOn(toast, "info")
+    const onChange = setup("1girl, 长发", { ...CONFIG, tools: { ...CONFIG.tools, translation: "dictionary" } })
+    fireEvent.click(await screen.findByRole("button", { name: "Translate" }, SLOW))
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Write the prompt in English" }, SLOW))
+    await waitFor(() => expect(promptToolsApi.translate).toHaveBeenCalled(), SLOW)
+    fireEvent.change(screen.getByRole("textbox", { name: "Prompt editor", hidden: true }), { target: { value: "1girl, 长发, smile" } })
+    await act(async () => answer({ provider: "dictionary", translations: ["long hair"] }))
+    await waitFor(() => expect(told).toHaveBeenCalledWith("Translation not applied: the prompt changed meanwhile."), SLOW)
+    expect(onChange).toHaveBeenLastCalledWith("1girl, 长发, smile")
+  }, 20_000)
+
   it("says why the translation failed in the UI language, keeping the service's answer", async () => {
     vi.spyOn(promptToolsApi, "translate").mockRejectedValue(new ApiError(502, "translation service answered 403: quota exceeded"))
     const failed = vi.spyOn(toast, "error")

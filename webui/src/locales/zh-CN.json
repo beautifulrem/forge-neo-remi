@@ -1699,5 +1699,6 @@
   "Restarting": "重启中",
   "Unavailable": "不可用",
   "Ready": "就绪",
-  "Crashed": "已崩溃"
+  "Crashed": "已崩溃",
+  "Translation not applied: the prompt changed meanwhile.": "未应用翻译：提示词在翻译期间已被修改。"
 }
