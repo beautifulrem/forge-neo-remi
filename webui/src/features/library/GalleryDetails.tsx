@@ -58,7 +58,7 @@ export function GalleryDetails({ item, onDelete, onClose, onSelectImage }: Galle
           </Button>
         ) : null}
         <AssignBoardPopover fileIds={[item.id]} tone="light" />
-        <Button variant="ghost" size="icon-sm" className={cn(tone, "ml-auto hover:text-red-300")} aria-label={t("Delete")} title={t("Delete")} onClick={() => onDelete(item)}>
+        <Button variant="ghost" size="icon-sm" className={cn(tone, "ml-auto hover:text-red-300")} aria-label={t("Remove…")} title={t("Remove…")} onClick={() => onDelete(item)}>
           <Trash2 />
         </Button>
       </div>

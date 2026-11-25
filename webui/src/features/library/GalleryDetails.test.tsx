@@ -83,13 +83,17 @@ describe("GalleryDetails", () => {
     expect(actions.starOutputs).toHaveBeenCalledWith(["file-1"], false)
   })
 
-  it("opens PNG Info after closing the viewer, and asks the page to delete", () => {
+  // The trash button opens the same dialog as the gallery's "Remove…" (which removes, and deletes the
+  // files only when asked): it was called "Delete" here.
+  it("opens PNG Info after closing the viewer, and asks the page to remove the image", () => {
     const { onClose, onDelete } = renderDetails(ITEM)
     fireEvent.click(screen.getByRole("button", { name: "PNG Info" }))
     expect(onClose).toHaveBeenCalledOnce()
     expect(actions.openInPngInfo).toHaveBeenCalledWith("file-1")
     expect(onClose.mock.invocationCallOrder[0]).toBeLessThan(actions.openInPngInfo.mock.invocationCallOrder[0]!)
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }))
+    const remove = screen.getByRole("button", { name: "Remove…" })
+    expect(remove).toHaveAttribute("title", "Remove…")
+    fireEvent.click(remove)
     expect(onDelete).toHaveBeenCalledWith(ITEM)
   })
 
