@@ -98,7 +98,7 @@ JSON Builder 在画布上用方框排布 **MOSS-Image Layout**、**FLUX.3 Image 
 - [Git](https://git-scm.com/downloads)
 - [Python 3.13](https://www.python.org/downloads/) 或 [uv](https://docs.astral.sh/uv/)
 - 受支持的 PyTorch 设备；NVIDIA GPU 是测试最充分的选择（Apple Silicon 可通过 MPS 运行）
-- 网页界面需要：[Node.js](https://nodejs.org/) 20.19+ 或 22.12+（每次更新后构建一次，见[网页界面的构建](#网页界面的构建)）。已安装 pnpm 时使用 pnpm；否则启动器通过 Node.js 24 及更早版本自带的 Corepack 或 `npx` 运行它。
+- 网页界面需要：[Node.js](https://nodejs.org/) 22.18+ 或 24.11+（每次更新后构建一次，见[网页界面的构建](#网页界面的构建)）。已安装 pnpm 时使用 pnpm；否则启动器通过 Node.js 24 及更早版本自带的 Corepack 或 `npx` 运行它。
 - 可选：用于视频导出的 [FFmpeg](https://ffmpeg.org/)
 
 ### 安装与运行
@@ -328,7 +328,7 @@ Agent Scheduler、Prompt Queue 和 Repeat Generate 已成为核心的队列功�
 
 ## 故障排查
 
-**浏览器显示“The web interface is not built”。** 启动器运行时未找到 Node.js、构建失败，或构建被跳过（`--skip-install`、`--skip-prepare-environment`、`REMI_SKIP_WEBUI_BUILD`），控制台会说明是哪一种。Node.js 版本过旧时会提示“Node.js vX is too old to build the web interface”，构建通常会失败。安装 Node.js 20.19+ / 22.12+ 后重启，或在其他机器上构建 `webui/dist` 再复制过来（[网页界面的构建](#网页界面的构建)）。
+**浏览器显示“The web interface is not built”。** 启动器运行时未找到 Node.js、构建失败，或构建被跳过（`--skip-install`、`--skip-prepare-environment`、`REMI_SKIP_WEBUI_BUILD`），控制台会说明是哪一种。Node.js 版本不受构建工具支持时会提示“Node.js vX cannot build the web interface”，构建通常会失败。安装 Node.js 22.18+ 或 24.11+ 后重启，或在其他机器上构建 `webui/dist` 再复制过来（[网页界面的构建](#网页界面的构建)）。
 
 **构建失败**（`pnpm install` 或 `pnpm build` 报错退出）。在 `webui/` 中运行 `pnpm install --frozen-lockfile && pnpm build` 查看完整信息。使用代理时，请为 npm/pnpm 配置代理（`HTTPS_PROXY`）。服务器仍会启动，期间 API 可用。
 

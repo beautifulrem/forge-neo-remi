@@ -80,7 +80,8 @@ def test_pytorch_and_pnpm_follow_the_launcher():
     packages = arg_default("TORCH_PACKAGES")
     assert f"pip install {packages} --extra-index-url {arg_default('TORCH_INDEX_URL')}" == command
     assert f"pnpm@{arg_default('PNPM_VERSION')}" == launch_utils.PNPM_FALLBACK
-    assert launch_utils.node_version_problem(f"v{arg_default('NODE_VERSION')}.0.0") is None
+    # a floating major tag: the newest release of that major
+    assert launch_utils.node_version_problem(f"v{arg_default('NODE_VERSION')}.99.0") is None
     # the image ships the build: the launcher must not try to rebuild it without Node.js
     assert "REMI_SKIP_WEBUI_BUILD=1" in DOCKERFILE
     assert "pnpm install --frozen-lockfile" in DOCKERFILE and "pnpm run build" in DOCKERFILE

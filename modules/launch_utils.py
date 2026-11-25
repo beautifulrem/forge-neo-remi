@@ -452,8 +452,10 @@ imports tools/notices.mjs, which reads the licence text beside it."""
 WEBUI_STAMP = ".remi-build-stamp"
 PNPM_FALLBACK = "pnpm@12"
 """pnpm run through npx when neither pnpm nor corepack is installed"""
-NODE_REQUIREMENT = "Node.js 20.19+ or 22.12+"
-"""What the SPA build (Vite) supports: ``^20.19.0 || >=22.12.0``"""
+NODE_REQUIREMENT = "Node.js 22.18+ or 24.11+"
+"""What every tool of the SPA build supports: ``^22.18.0 || >=24.11.0`` (@babel/core 8, which the
+React Compiler preset runs; Vite and rolldown take ``^20.19.0 || >=22.12.0``). The test derives it
+from the ``engines`` in webui/pnpm-lock.yaml."""
 NODE_HELP = f"Install {NODE_REQUIREMENT} (pnpm is optional: without it the launcher runs pnpm through Corepack (bundled with Node.js 24 and earlier) or npx)"
 
 
@@ -464,13 +466,13 @@ def node_version_problem(version: str) -> str | None:
     if match is None:
         return None
     major, minor = int(match[1]), int(match[2])
-    if (major == 20 and minor >= 19) or (major == 22 and minor >= 12) or major >= 23:
+    if (major == 22 and minor >= 18) or (major == 24 and minor >= 11) or major >= 25:
         return None
-    return f"Node.js {version.strip()} is too old to build the web interface: it needs {NODE_REQUIREMENT}"
+    return f"Node.js {version.strip()} cannot build the web interface: it needs {NODE_REQUIREMENT}"
 
 
 def node_version(node: str) -> str | None:
-    """``node --version`` (``v22.12.0``), or None when it cannot be read: the
+    """``node --version`` (``v24.11.0``), or None when it cannot be read: the
     probe only adds a warning and never stops the build."""
 
     try:

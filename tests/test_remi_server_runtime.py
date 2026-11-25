@@ -3,6 +3,7 @@ step, model selection through PATCH /options and /sdapi on the same app."""
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -485,7 +486,7 @@ def test_remi_skip_webui_build_reads_as_a_flag(tmp_path, monkeypatch, value, ski
     monkeypatch.setenv("REMI_SKIP_WEBUI_BUILD", value)
     ran = []
     monkeypatch.setattr(launch_utils, "webui_build_commands", lambda: [["build"]])
-    monkeypatch.setattr(launch_utils, "node_version", lambda node: "v22.12.0")
+    monkeypatch.setattr(launch_utils, "node_version", lambda node: "v24.11.0")
     monkeypatch.setattr(shutil, "which", lambda name: "/n/" + name)
 
     def fake_run(command, cwd, shell):
@@ -514,20 +515,118 @@ def test_the_node_help_says_which_node_versions_ship_corepack():
     assert "Node.js 24 及更早版本自带的 Corepack" in usage_zh[0] and "Node.js 自带的 Corepack" not in usage_zh[0]
 
 
-def test_webui_build_states_the_node_requirement_of_the_readme(tmp_path, capsys, monkeypatch):
-    """The launcher names the same Node.js versions as the README (Vite's engines) and warns on older ones."""
+_ENGINE_COMPARATOR = re.compile(r"(\^|~|>=|<=|>|<|=)?v?(\d+)(?:\.(\d+))?(?:\.(\d+))?")
+
+
+def node_range_allows(spec: str, version: tuple[int, int, int]) -> bool:
+    """Whether npm's semver range ``spec`` (as ``engines.node`` writes it: ``^20.19.0 || >=22.12.0``,
+    ``>= 20``, ``^6 || ^7``) allows ``version``; any other syntax fails the test."""
+
+    def bounds(op: str, major: int, minor: str, patch: str) -> tuple[tuple[int, ...], tuple[int, ...] | None]:
+        low = (major, int(minor or 0), int(patch or 0))
+        if op == "^":
+            return low, (major + 1, 0, 0) if major or not minor else (0, int(minor) + 1, 0)
+        if op == "~" or op in ("", "="):
+            if not minor:
+                return low, (major + 1, 0, 0)
+            if op == "~" or not patch:
+                return low, (major, int(minor) + 1, 0)
+            return low, (major, int(minor), int(patch) + 1)
+        raise AssertionError(op)
+
+    for alternative in spec.split("||"):
+        tokens = re.sub(r"([<>=^~]+)\s+", r"\1", alternative.strip()).split()
+        assert tokens, spec
+        allowed = True
+        for token in tokens:
+            match = _ENGINE_COMPARATOR.fullmatch(token)
+            assert match, f"engines range {spec!r}: unknown comparator {token!r}"
+            op, major, minor, patch = match[1] or "", int(match[2]), match[3], match[4]
+            point = (major, int(minor or 0), int(patch or 0))
+            if op == ">=":
+                allowed &= version >= point
+            elif op == "<":
+                allowed &= version < point
+            elif op == ">":
+                allowed &= version >= (major + 1, 0, 0) if not minor else version >= (major, int(minor) + 1, 0) if not patch else version > point
+            elif op == "<=":
+                allowed &= version < (major + 1, 0, 0) if not minor else version < (major, int(minor) + 1, 0) if not patch else version <= point
+            else:
+                low, high = bounds(op, major, minor, patch)
+                allowed &= low <= version < high
+        if allowed:
+            return True
+    return False
+
+
+def test_the_node_range_reader_reads_engines_ranges():
+    allows = node_range_allows
+    assert allows("^20.19.0 || >=22.12.0", (20, 19, 0)) and not allows("^20.19.0 || >=22.12.0", (21, 0, 0)) and allows("^20.19.0 || >=22.12.0", (26, 1, 0))
+    assert allows("^22.18.0 || >=24.11.0", (22, 18, 0)) and not allows("^22.18.0 || >=24.11.0", (23, 11, 0)) and not allows("^22.18.0 || >=24.11.0", (24, 10, 0))
+    assert allows(">= 20", (20, 0, 0)) and not allows(">= 20", (19, 9, 0)) and allows("^6 || ^12", (12, 9, 1)) and not allows("^6 || ^12", (13, 0, 0))
+    assert allows("~1.2.3", (1, 2, 9)) and not allows("~1.2.3", (1, 3, 0)) and allows(">=0.10.0", (0, 10, 4))
+    with pytest.raises(AssertionError, match="unknown comparator"):
+        allows("1.2.3 - 2.3.4", (2, 0, 0))
+
+
+def build_tool_engines() -> dict[str, str]:
+    """``engines.node`` of every package the SPA build (``tsc -b && vite build``) runs: the
+    packages vite.config.ts imports and TypeScript, with everything they depend on (peers
+    included), as webui/pnpm-lock.yaml pins them. Read from the lockfile, which is in the
+    repository: webui/node_modules may not be installed when pytest runs."""
+
+    import yaml
 
     from modules import launch_utils
 
-    readme = (Path(launch_utils.script_path) / "README.md").read_text(encoding="utf-8")
-    assert launch_utils.NODE_REQUIREMENT == "Node.js 20.19+ or 22.12+" and "20.19+ or 22.12+" in readme
-    vite = json.loads((Path(launch_utils.script_path) / "webui" / "package.json").read_text(encoding="utf-8"))["devDependencies"]["vite"]
-    assert vite.startswith("^8."), "Vite changed: check its engines.node against NODE_REQUIREMENT and the README"
-    for ok in ("v20.19.0", "v20.20.1", "v22.12.0", "v24.1.0", "v26.0.0"):
-        assert launch_utils.node_version_problem(ok) is None, ok
-    for old in ("v18.20.4", "v20.18.3", "v21.7.3", "v22.11.0"):
-        assert "too old" in launch_utils.node_version_problem(old), old
+    webui = launch_utils.WEBUI_DIR
+    lock = yaml.safe_load((webui / "pnpm-lock.yaml").read_text(encoding="utf-8"))
+    assert json.loads((webui / "package.json").read_text(encoding="utf-8"))["scripts"]["build"] == "tsc -b && vite build"
+    config = (webui / "vite.config.ts").read_text(encoding="utf-8")
+    roots = {name for name in re.findall(r'from "([^"]+)"', config) if not name.startswith(("node:", "."))} | {"typescript"}
+    importer = lock["importers"]["."]
+    pinned = {**importer.get("dependencies", {}), **importer["devDependencies"]}
+    queue = [f"{name}@{pinned[name]['version']}" for name in sorted(roots)]
+    seen: set[str] = set()
+    engines: dict[str, str] = {}
+    while queue:
+        key = queue.pop()
+        if key in seen:
+            continue
+        seen.add(key)
+        package = key.split("(", 1)[0]
+        node = (lock["packages"][package].get("engines") or {}).get("node")
+        if node:
+            engines[package] = str(node)
+        snapshot = lock["snapshots"][key] or {}
+        for name, version in {**snapshot.get("dependencies", {}), **snapshot.get("optionalDependencies", {})}.items():
+            queue.append(f"{name}@{version}")
+    assert any(package.startswith("vite@") for package in engines) and any(package.startswith("@babel/core@") for package in engines)
+    return engines
+
+
+def test_webui_build_states_the_node_requirement_of_its_build_tools(tmp_path, capsys, monkeypatch):
+    """The launcher accepts exactly the Node.js versions every build tool's ``engines`` allows
+    (Vite alone said 20.19+ or 22.12+, but the build also runs @babel/core 8, through the React
+    Compiler preset: ``^22.18.0 || >=24.11.0``), and the READMEs and the usage guide name them."""
+
+    from modules import launch_utils
+
+    engines = build_tool_engines()
+    for major in range(16, 31):
+        for minor in range(31):
+            supported = all(node_range_allows(spec, (major, minor, 0)) for spec in engines.values())
+            problem = launch_utils.node_version_problem(f"v{major}.{minor}.0")
+            assert (problem is None) == supported, (f"v{major}.{minor}.0", problem, {package: spec for package, spec in engines.items() if not node_range_allows(spec, (major, minor, 0))})
     assert launch_utils.node_version_problem("garbage") is None
+    assert launch_utils.NODE_REQUIREMENT == "Node.js 22.18+ or 24.11+"
+    root = Path(launch_utils.script_path)
+    for name in ("README.md", "docs/remi-webui/usage.md"):
+        text = (root / name).read_text(encoding="utf-8")
+        assert "22.18+ or 24.11+" in text and "20.19" not in text, name
+    for name in ("README.zh-CN.md", "docs/remi-webui/usage.zh-CN.md"):
+        text = (root / name).read_text(encoding="utf-8")
+        assert "22.18+ 或 24.11+" in text and "20.19" not in text, name
 
     webui = tmp_path / "webui"
     webui.mkdir()
@@ -537,7 +636,7 @@ def test_webui_build_states_the_node_requirement_of_the_readme(tmp_path, capsys,
     monkeypatch.setattr(shutil, "which", lambda name: None)
     assert launch_utils.build_webui(webui) is False
     out = capsys.readouterr().out
-    assert "Node.js was not found" in out and "Node.js 20.19+ or 22.12+" in out and "pnpm is optional" in out
+    assert "Node.js was not found" in out and "Node.js 22.18+ or 24.11+" in out and "pnpm is optional" in out
     monkeypatch.setattr(shutil, "which", lambda name: "/n/node" if name == "node" else None)
     assert launch_utils.build_webui(webui) is False
     assert "none of pnpm, corepack or npx" in capsys.readouterr().out
@@ -554,7 +653,7 @@ def test_webui_build_states_the_node_requirement_of_the_readme(tmp_path, capsys,
 
     monkeypatch.setattr(launch_utils.subprocess, "run", fake_run)
     assert launch_utils.build_webui(webui) is True and ran == [["build"]]
-    assert "Node.js v20.11.1 is too old to build the web interface: it needs Node.js 20.19+ or 22.12+" in capsys.readouterr().out
+    assert "Node.js v20.11.1 cannot build the web interface: it needs Node.js 22.18+ or 24.11+" in capsys.readouterr().out
 
 
 # endregion
