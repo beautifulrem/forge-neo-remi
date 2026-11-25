@@ -467,3 +467,18 @@ def test_the_extension_an_owner_comes_from(tmp_path, monkeypatch):
     (tmp_path / "extensions").mkdir()
     (tmp_path / "extensions" / "ext-d").symlink_to(checkout, target_is_directory=True)
     assert ui.extension_of_owner(types.SimpleNamespace(filename=str(tmp_path / "extensions" / "ext-d" / "scripts" / "d.py"))) == "ext-d"
+
+
+def test_an_extension_path_spelled_in_another_case_is_found(tmp_path, monkeypatch):
+    """A volume that ignores case (macOS, Windows) keeps the spelling it is given: a script
+    loaded as ``Extensions/...`` is still inside ``extensions/``."""
+    from modules import paths_internal
+    from remi.ui.manifest import extension_of
+
+    (tmp_path / "extensions" / "ext-d" / "scripts").mkdir(parents=True)
+    if not (tmp_path / "EXTENSIONS").exists():
+        pytest.skip("this volume tells letter case apart")
+    monkeypatch.setattr(paths_internal, "extensions_builtin_dir", str(tmp_path / "extensions-builtin"))
+    monkeypatch.setattr(paths_internal, "extensions_dir", str(tmp_path / "extensions"))
+    assert extension_of(str(tmp_path / "EXTENSIONS" / "ext-d" / "scripts" / "d.py")) == "ext-d"
+    assert extension_of(str(tmp_path / "Extensions-builtin2" / "x.py")) is None

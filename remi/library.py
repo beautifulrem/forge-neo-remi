@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from remi.files import ID_RE, FileRecord, FileStore, connect
+from remi.files import ID_RE, FileRecord, FileStore, connect, path_inside
 from remi.image_meta import clip_infotext
 
 Sort = Literal["newest", "oldest", "name", "largest"]
@@ -154,26 +154,10 @@ def output_folders() -> list[tuple[str, str]]:
     return found
 
 
-def _inside(path: str, folder: str) -> bool:
-    """``path`` is ``folder`` or below it, also under another spelling of the
-    folder on a volume that ignores case (macOS keeps the spelling it is given)."""
-
-    prefix = folder.rstrip(os.sep)
-    if path == folder or path.startswith(prefix + os.sep):
-        return True
-    lowered = path.lower()
-    if len(lowered) != len(path) or not (lowered == prefix.lower() or lowered.startswith(prefix.lower() + os.sep)):
-        return False
-    try:
-        return os.path.samefile(path[: len(prefix)], prefix)
-    except OSError:
-        return False
-
-
 def category_of(record_path: str, tab: str | None, folders: Iterable[tuple[str, str]]) -> str:
     path = os.path.realpath(record_path)
     for category, folder in folders:
-        if _inside(path, folder):
+        if path_inside(path, folder) is not None:
             if category in ("grids", "saved") or tab is None:
                 return category
             break

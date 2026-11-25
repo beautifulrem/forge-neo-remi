@@ -628,6 +628,18 @@ def test_the_category_follows_its_folder_under_another_spelling(tmp_path):
     assert category_of(str(tmp_path / "Outputs" / "other.png"), "txt2img", folders) == "txt2img"
 
 
+def test_a_path_inside_a_folder_under_another_spelling(tmp_path):
+    from remi.files import path_inside
+
+    folder = tmp_path / "Models" / "VAE"
+    folder.mkdir(parents=True)
+    assert path_inside(str(folder / "a" / "b.pt"), str(folder)) == os.path.join("a", "b.pt")
+    assert path_inside(str(folder), str(folder) + os.sep) == ""
+    assert path_inside(str(tmp_path / "Models" / "VAE2" / "b.pt"), str(folder)) is None
+    other = str(tmp_path / "models" / "vae" / "b.pt")
+    assert path_inside(other, str(folder)) == ("b.pt" if _ignores_case(tmp_path) else None)
+
+
 def test_media_files_are_not_gzipped(server):
     file_id = upload(server.client, png(size=(512, 512))).json()["id"]
     served = server.client.get(f"/api/v2/files/{file_id}", headers={"Accept-Encoding": "gzip"})

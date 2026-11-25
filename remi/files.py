@@ -811,6 +811,26 @@ def _same_file(a: str, b: str) -> bool:
         return False
 
 
+def path_inside(path: str, folder: str) -> str | None:
+    """The part of ``path`` below ``folder`` (``""``: the folder itself), also
+    when ``path`` spells the folder another way on a volume that ignores
+    case (macOS and Windows keep the spelling they are given); None when it
+    is not inside. Both are compared as given: resolve them first if links
+    matter."""
+
+    prefix = folder.rstrip(os.sep)
+    if path in (folder, prefix):
+        return ""
+    if path.startswith(prefix + os.sep):
+        return path[len(prefix) + 1 :]
+    lowered = path.lower()
+    if len(lowered) != len(path) or not (lowered == prefix.lower() or lowered.startswith(prefix.lower() + os.sep)):
+        return None
+    if not _same_file(path[: len(prefix)], prefix):
+        return None
+    return path[len(prefix) + 1 :]
+
+
 def _walk_images(directories: Iterable[str | os.PathLike]) -> Iterator[str]:
     """The image files below ``directories``, each folder walked once: two
     settings can name one folder in different case (macOS keeps the case it

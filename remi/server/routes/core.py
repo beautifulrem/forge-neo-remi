@@ -128,8 +128,10 @@ def models_summary() -> dict[str, Any]:
     roots = module_roots()
 
     def under(path: str, kind: str) -> bool:
+        from remi.files import path_inside
+
         real = os.path.abspath(path)
-        return any(real.startswith(os.path.abspath(root).rstrip(os.sep) + os.sep) for root in roots[kind] if root)
+        return any(path_inside(real, os.path.abspath(root)) for root in roots[kind] if root)  # "" is the folder itself
 
     vae = [os.path.basename(path) for path in modules if under(path, "vae")]
     return {

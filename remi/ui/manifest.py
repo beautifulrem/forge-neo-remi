@@ -318,14 +318,14 @@ def extension_of(path: str | None) -> str | None:
     if not path:
         return None
     from modules.paths_internal import extensions_builtin_dir, extensions_dir
+    from remi.files import path_inside
 
     # as written first: an extension folder may be a link to a checkout elsewhere
     for resolve in (os.path.abspath, os.path.realpath):
         where = resolve(path)
         for root in (extensions_dir, extensions_builtin_dir):
-            root = resolve(root)
-            if where.startswith(root + os.sep):
-                return os.path.relpath(where, root).split(os.sep)[0]
+            if below := path_inside(where, resolve(root)):
+                return below.split(os.sep)[0]
     return None
 
 
