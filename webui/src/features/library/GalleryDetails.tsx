@@ -38,7 +38,7 @@ export function GalleryDetails({ item, onDelete, onClose, onSelectImage }: Galle
       <div className="flex items-center gap-1">
         <Button variant="ghost" size="sm" className={tone} aria-pressed={item.starred} onClick={() => void starOutputs([item.id], !item.starred)}>
           <Star className={cn(item.starred && "fill-star text-star")} aria-hidden />
-          {item.starred ? t("Starred") : t("Star")}
+          {t("Star")}
         </Button>
         <Button
           variant="ghost"

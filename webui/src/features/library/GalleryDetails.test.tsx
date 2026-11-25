@@ -76,7 +76,8 @@ describe("GalleryDetails", () => {
 
   it("shows a starred image as starred and unstars it", () => {
     renderDetails({ ...ITEM, starred: true })
-    const starred = screen.getByRole("button", { name: "Starred" })
+    // the state is the pressed state; the name stays the action's (a toggle's name does not change)
+    const starred = screen.getByRole("button", { name: "Star" })
     expect(starred).toHaveAttribute("aria-pressed", "true")
     fireEvent.click(starred)
     expect(actions.starOutputs).toHaveBeenCalledWith(["file-1"], false)
