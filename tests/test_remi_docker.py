@@ -169,6 +169,31 @@ def test_uv_comes_from_a_pinned_digest():
             assert re.fullmatch(r"--from=ghcr\.io/astral-sh/uv:[\w.]+@sha256:[0-9a-f]{64}", source), source
 
 
+def docker_runs(text: str) -> list[str]:
+    """The ``docker run`` commands in ``text``, continuation lines joined."""
+
+    return [line.strip() for line in re.sub(r"\\\n", " ", text).splitlines() if line.lstrip().startswith("docker run")]
+
+
+def wide_publishes(text: str) -> list[str]:
+    """The ports the ``docker run`` commands in ``text`` publish beyond this machine:
+    ``-p``/``--publish`` in every spelling (``-p7860:7860``, ``--publish=…``) without
+    ``127.0.0.1:``, and ``-P``/``--publish-all`` (every exposed port, on every interface)."""
+
+    found = []
+    for run in docker_runs(text):
+        found += [publish for publish in re.findall(r"(?:^|\s)(?:-p\s*|--publish(?:=|\s+))(\S+)", run) if not publish.startswith("127.0.0.1:")]
+        found += re.findall(r"(?:^|\s)(-P|--publish-all)(?=\s|$)", run)
+    return found
+
+
+def test_the_publish_check_reads_every_spelling():
+    for run in ("docker run -p 7860:7860 x", "docker run -p7860:7860 x", "docker run --publish 7860:7860 x", "docker run --publish=7860:7860 x", "docker run --gpus all \\\n    -p 7860:7860 x"):
+        assert wide_publishes(run) == ["7860:7860"], run
+    assert wide_publishes("docker run -P x") == ["-P"] and wide_publishes("docker run --publish-all x") == ["--publish-all"]
+    assert wide_publishes("docker run -p 127.0.0.1:7860:7860 --publish=127.0.0.1:7861:7861 x") == []
+
+
 def test_every_documented_run_publishes_on_this_machine_only():
     """The server inside listens on every interface without a login: the documented
     commands publish the port on 127.0.0.1, and only the remote-access section widens it."""
@@ -176,11 +201,8 @@ def test_every_documented_run_publishes_on_this_machine_only():
     usage = (ROOT / "docs" / "remi-webui" / "usage.md").read_text(encoding="utf-8")
     usage_zh = (ROOT / "docs" / "remi-webui" / "usage.zh-CN.md").read_text(encoding="utf-8")
     for text in (README, usage, usage_zh):
-        runs = [line for line in text.splitlines() if line.lstrip().startswith(("docker run", "-p "))]
-        assert runs
-        for line in runs:
-            for publish in re.findall(r"-p\s+(\S+)", line):
-                assert publish.startswith("127.0.0.1:"), line
+        assert docker_runs(text)
+        assert wide_publishes(text) == []
 
 
 def test_the_build_stage_node_meets_the_build_tools():
