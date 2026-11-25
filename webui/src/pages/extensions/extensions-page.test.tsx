@@ -238,6 +238,31 @@ describe("backups", { timeout: 20_000 }, () => {
     await waitFor(() => expect(table.parentElement!.style.maskImage).toContain("linear-gradient(to right"))
   })
 
+  // Every backup was a tab stop of its own, and the arrow keys did nothing in the list.
+  it("moves through the backups with the arrow keys, one tab stop for the list", async () => {
+    vi.spyOn(api.extensions.states, "list").mockResolvedValue([
+      { id: "a.json", name: "Before update", created_at: "2026-09-30T12:00:00Z", webui_commit: "a1b2c3d4", extensions: 1 },
+      { id: "b.json", name: "Monday", created_at: "2026-09-28T12:00:00Z", webui_commit: "a1b2c3d4", extensions: 1 },
+      { id: "c.json", name: "Last week", created_at: "2026-09-21T12:00:00Z", webui_commit: "a1b2c3d4", extensions: 1 },
+    ])
+    renderPage("tab=backup")
+    const list = await screen.findByRole("listbox", { name: "Backups" }, { timeout: 8000 })
+    const options = () => within(list).getAllByRole("option")
+    expect(options().map((option) => option.tabIndex)).toEqual([0, -1, -1])
+    fireEvent.keyDown(options()[0]!, { key: "ArrowDown" })
+    expect(options()[1]).toHaveAttribute("aria-selected", "true")
+    expect(options()[1]).toHaveFocus()
+    expect(options().map((option) => option.tabIndex)).toEqual([-1, 0, -1])
+    fireEvent.keyDown(options()[1]!, { key: "End" })
+    expect(options()[2]).toHaveFocus()
+    fireEvent.keyDown(options()[2]!, { key: "ArrowDown" })
+    expect(options()[2]).toHaveAttribute("aria-selected", "true")
+    fireEvent.keyDown(options()[2]!, { key: "Home" })
+    expect(options()[0]).toHaveAttribute("aria-selected", "true")
+    fireEvent.keyDown(options()[0]!, { key: "ArrowUp" })
+    expect(options()[0]).toHaveFocus()
+  })
+
   it("asks before deleting a backup", async () => {
     const remove = vi.spyOn(api.extensions.states, "remove").mockResolvedValue(undefined as never)
     renderPage("tab=backup")

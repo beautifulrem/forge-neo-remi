@@ -120,7 +120,8 @@ export function Img2imgStage({ result, actions, leading, trailing, className }: 
               size="sm"
               pressed={stayOnCanvas}
               onPressedChange={setStayOnCanvas}
-              aria-label={t("Stage results in canvas")}
+              // the name is the visible label (it may be hidden at narrow widths); the title says more
+              aria-label={t("Stage in canvas")}
               title={t("Stage results in canvas")}
               className="h-7 gap-1 px-2 text-xs"
             >

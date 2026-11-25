@@ -2,7 +2,8 @@ import { renderHook } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { bootstrap } from "@/api/mock/fixtures"
 import { keys, queryClient } from "@/api/queries"
-import { notifyResults, resultCount, useProgressTitle } from "./effects"
+import { activateLocale } from "@/i18n"
+import { formatEta, notifyResults, resultCount, useProgressTitle } from "./effects"
 
 function setApp(options: Record<string, unknown>, userAssets: string[] = []) {
   queryClient.setQueryData(keys.app, { ...structuredClone(bootstrap), options: { ...bootstrap.options, ...options }, user_assets: userAssets })
@@ -60,5 +61,22 @@ describe("the progress title", () => {
     document.title = "图生图 · Remi" // and again, then the job ends
     unmount()
     expect(document.title).toBe("图生图 · Remi")
+  })
+})
+
+// The seconds of a short ETA were an English "s" in every language.
+describe("formatEta", () => {
+  afterEach(async () => {
+    vi.restoreAllMocks()
+    await activateLocale("en")
+  })
+
+  it("says the seconds in the UI language", async () => {
+    expect(formatEta(12)).toBe("12 s")
+    expect(formatEta(125)).toBe("2:05")
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { headers: { "Content-Type": "application/json" } }))
+    await activateLocale("zh_CN")
+    expect(formatEta(12)).toBe("12 秒")
+    expect(formatEta(12, "en")).toBe("12 s")
   })
 })

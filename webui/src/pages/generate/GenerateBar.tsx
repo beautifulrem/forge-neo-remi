@@ -80,14 +80,14 @@ function RepeatPopover({ tab, disabled }: { tab: GenerateTab; disabled?: boolean
 }
 
 function StatusLine({ tab }: { tab: GenerateTab }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const run = useRuns((s) => s.runs[tab])
   const phase = phaseOf(run)
   const job = useProgress((s) => (s.running && run.jobs.includes(s.running.jobId) ? s.running : null))
   const firstQueued = phase === "queued" ? (run.jobs[0] ?? null) : null
   const ahead = useQueuePosition(firstQueued)
   const fraction = progressFraction(job)
-  const eta = formatEta(job?.eta)
+  const eta = formatEta(job?.eta, i18n.language)
   // The stage shows the step, the sheet and the ETA over the image: not a second time here.
   const onStage = useStageOverlay((s) => (s[tab] ?? 0) > 0)
 

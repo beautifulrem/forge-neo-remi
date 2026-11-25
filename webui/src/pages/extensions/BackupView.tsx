@@ -180,19 +180,28 @@ export function BackupView({ access }: { access: boolean }) {
         ) : states.data.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("No backups yet. One is made before every update.")}</p>
         ) : (
+          // one tab stop: the selected backup; the arrow keys, Home and End move the selection (a listbox's keys)
           <ul role="listbox" aria-label={t("Backups")} className="flex max-h-[60dvh] flex-col gap-0.5 overflow-y-auto rounded-md bg-card p-1">
-            {states.data.map((state) => (
+            {states.data.map((state, index) => (
               <li
                 key={state.id}
                 role="option"
                 aria-selected={state.id === current}
-                tabIndex={0}
+                tabIndex={state.id === current ? 0 : -1}
                 onClick={() => setSelected(state.id)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault()
                     setSelected(state.id)
+                    return
                   }
+                  const last = states.data.length - 1
+                  const target = { ArrowDown: Math.min(last, index + 1), ArrowUp: Math.max(0, index - 1), Home: 0, End: last }[event.key]
+                  if (target === undefined) return
+                  event.preventDefault()
+                  setSelected(states.data[target]!.id)
+                  const options = event.currentTarget.parentElement?.querySelectorAll<HTMLElement>("[role=option]")
+                  options?.[target]?.focus()
                 }}
                 className={cn(
                   "cursor-default rounded-lg px-3 py-2 outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-focus-ring",

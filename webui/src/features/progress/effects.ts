@@ -10,7 +10,7 @@ import { keys, queryClient } from "@/api/queries"
 import type { Bootstrap } from "@/api/types"
 import type { RunningJob } from "@/api/progress"
 import { progressFraction } from "@/api/progress"
-import { t } from "@/i18n"
+import { i18n, t } from "@/i18n"
 
 type WakeLockSentinelLike = { release: () => Promise<void>; released?: boolean }
 type WakeLockLike = { request: (type: "screen") => Promise<WakeLockSentinelLike> }
@@ -42,11 +42,15 @@ export function useWakeLock(active: boolean) {
   }, [active])
 }
 
-export function formatEta(seconds: number | null | undefined): string | null {
+/**
+ * The time a job has left: "12 s" (in `language`, the render's: see `formatDuration`), "2:05",
+ * "1:02:05".
+ */
+export function formatEta(seconds: number | null | undefined, language = i18n.language): string | null {
   if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return null
   const s = Math.max(0, Math.round(seconds))
   if (s >= 3600) return `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`
-  return s >= 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : `${s}s`
+  return s >= 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : t("{{seconds}} s", { seconds: s, lng: language })
 }
 
 /** The status of a running job: the server's text, else the step (before the first step, while the model loads: "Starting…"). */
@@ -55,7 +59,7 @@ export function stepText(job: Pick<RunningJob, "text" | "step" | "steps">): stri
   return job.steps ? t("Step {{step}} of {{steps}}", { step: job.step, steps: job.steps }) : t("Starting…")
 }
 
-/** "[42%] ETA 12s" while `job` runs; the title the app set is restored afterwards. */
+/** "[42%] ETA 12 s" while `job` runs; the title the app set is restored afterwards. */
 export function useProgressTitle(job: RunningJob | null, enabled: boolean) {
   const fraction = progressFraction(job)
   const percent = fraction === null ? null : Math.round(fraction * 100)

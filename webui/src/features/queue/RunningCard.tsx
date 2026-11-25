@@ -58,7 +58,7 @@ export function RunningCard({ paused, queued, loading = false }: { paused: boole
   }
 
   const fraction = progressFraction(running) ?? 0
-  const eta = formatEta(running.eta)
+  const eta = formatEta(running.eta, i18n.language)
   const job = detail.data
   return (
     <section aria-label={t("Now running")} className="overflow-hidden rounded-md bg-card">

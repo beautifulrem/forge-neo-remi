@@ -89,12 +89,12 @@ function FormSkeleton() {
 }
 
 function RunBar() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const submitting = useExtrasRuns((s) => s.submitting)
   const waiting = useExtrasRuns((s) => s.jobs.length)
   const job = useProgress((s) => runningFor(s, "extras"))
   const fraction = progressFraction(job)
-  const eta = formatEta(job?.eta)
+  const eta = formatEta(job?.eta, i18n.language)
   const busy = waiting > 0
   return (
     <div className="flex flex-col gap-2">

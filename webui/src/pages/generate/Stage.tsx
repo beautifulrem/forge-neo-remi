@@ -33,13 +33,13 @@ import { viewfinderMetrics } from "./viewfinder"
 const SHORT_WINDOW = "(max-height: 32rem)"
 
 function ProgressOverlay({ job, tab }: { job: RunningJob; tab: GenerateTab }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   useShowsStageProgress(tab)
   // A short stage's picture is not much taller than the progress block over its lower part, which
   // then covered its middle: there the progress is one line along the stage's bottom edge.
   const edge = useMediaQuery(SHORT_WINDOW)
   const fraction = progressFraction(job) ?? 0
-  const eta = formatEta(job.eta)
+  const eta = formatEta(job.eta, i18n.language)
   const facts = (
     <>
       <span className="min-w-0 truncate">{stepText(job)}</span>

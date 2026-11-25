@@ -99,6 +99,13 @@ describe("Img2imgStage", () => {
     expect(screen.getByRole("tab", { name: "Result" })).toHaveAttribute("aria-selected", "true")
   })
 
+  // The toggle's name ("Stage results in canvas") did not contain its visible label ("Stage in
+  // canvas"): speech input users say what they see.
+  it("names the staging toggle by its visible label", () => {
+    renderStage()
+    expect(screen.getByRole("button", { name: "Stage in canvas" })).toHaveAttribute("aria-pressed")
+  })
+
   it("writes the editor's changes to the img2img form", () => {
     renderStage()
     const props = state.editorProps.at(-1)!
