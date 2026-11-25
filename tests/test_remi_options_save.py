@@ -132,3 +132,22 @@ def test_a_temporary_file_a_crash_left_is_removed_at_the_next_save(tmp_path, opt
     os.utime(other, (hour_ago, hour_ago))
     opts.save(str(config))
     assert sorted(path.name for path in tmp_path.iterdir()) == sorted(["config.json", under_way.name, other.name])
+
+
+def test_a_value_held_for_the_run_is_saved_as_it_was_stored(tmp_path, monkeypatch, opts):
+    """A value the WebUI had to fill in for this run (a frozen setting) is not saved while it
+    is still the live value; once something else is set, that is saved."""
+
+    config = tmp_path / "config.json"
+    monkeypatch.setitem(opts.data, "sd_model_checkpoint", "")
+    opts.hold_for_run("sd_model_checkpoint", "anima.safetensors")
+    assert opts.sd_model_checkpoint == "anima.safetensors"
+    opts.save(str(config))
+    assert json.loads(config.read_text(encoding="utf8"))["sd_model_checkpoint"] == ""
+    opts.data["sd_model_checkpoint"] = "other.safetensors"
+    opts.save(str(config))
+    assert json.loads(config.read_text(encoding="utf8"))["sd_model_checkpoint"] == "other.safetensors"
+    opts.data.pop("remi_test_held", None)
+    opts.hold_for_run("remi_test_held", 1)  # a key the file did not have stays out of it
+    opts.save(str(config))
+    assert "remi_test_held" not in json.loads(config.read_text(encoding="utf8"))

@@ -113,8 +113,8 @@ def initialize_model_selection() -> None:
                 shared.opts.set("sd_model_checkpoint", first)
             except AssertionError:
                 # frozen settings (--freeze-settings and its narrower forms) refuse the setter:
-                # this run still starts on the first checkpoint
-                shared.opts.data["sd_model_checkpoint"] = first
+                # this run still starts on the first checkpoint, which saves leave out
+                shared.opts.hold_for_run("sd_model_checkpoint", first)
     main_entry = _main_entry()
     main_entry.refresh_models()
     main_entry.refresh_model_loading_parameters()

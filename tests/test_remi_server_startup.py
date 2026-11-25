@@ -151,6 +151,31 @@ def test_frozen_settings_still_start_with_a_checkpoint(webui, main_entry, monkey
     assert main_entry.calls == [("refresh_models",), ("refresh_model_loading_parameters",)]
 
 
+def test_a_narrowly_frozen_checkpoint_picked_at_startup_is_not_saved(webui, main_entry, monkeypatch, tmp_path):
+    """With only the checkpoint frozen, other settings still save config.json: the
+    checkpoint picked for this run went into it with them, unfreezing a value the
+    freeze was meant to keep."""
+
+    import json
+
+    from modules import sd_models, shared
+    from remi.server.options import apply_values
+
+    monkeypatch.setattr(sd_models, "checkpoints_list", {"first": SimpleNamespace(name="anima.safetensors")})
+    monkeypatch.setattr(shared.cmd_opts, "freeze_specific_settings", "sd_model_checkpoint")
+    monkeypatch.setitem(shared.opts.data, "sd_model_checkpoint", "")
+    runtime.initialize_model_selection()
+    assert shared.opts.data["sd_model_checkpoint"] == "anima.safetensors"  # this run's model
+    config = tmp_path / "config.json"
+    changed, failed = apply_values(shared.opts, {"jpeg_quality": 70}, str(config))
+    assert changed == ["jpeg_quality"] and not failed
+    saved = json.loads(config.read_text(encoding="utf8"))
+    assert saved["jpeg_quality"] == 70 and saved["sd_model_checkpoint"] == ""
+    shared.opts.save(str(config))  # every other save (the model manager's, the extension manager's...)
+    assert json.loads(config.read_text(encoding="utf8"))["sd_model_checkpoint"] == ""
+    assert shared.opts.data["sd_model_checkpoint"] == "anima.safetensors"
+
+
 def test_no_checkpoint_at_all_leaves_the_selection_empty(webui, main_entry, monkeypatch):
     from modules import sd_models, shared
 

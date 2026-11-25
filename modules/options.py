@@ -129,6 +129,7 @@ def options_section(section_identifier, options_dict):
 
 
 options_builtin_fields = {"data_labels", "data", "restricted_opts", "typemap"}
+_NOT_STORED = object()
 
 
 def write_whole(filename, data: bytes):
@@ -211,6 +212,7 @@ class Options:
         self.data_labels = data_labels
         self.data = {k: v.default for k, v in self.data_labels.items() if not v.do_not_save}
         self.restricted_opts = restricted_opts
+        self._held_for_run = {}  # Remi: see hold_for_run
 
     def __setattr__(self, key, value):
         if key in options_builtin_fields:
@@ -304,19 +306,34 @@ class Options:
 
         return data_label.default
 
+    def hold_for_run(self, key, value):
+        """Remi: sets ``key`` to ``value`` for this run only, past the frozen-settings checks (a
+        frozen setting the WebUI has to fill in to start). Saves keep the stored value while
+        ``value`` is still the live one."""
+        self._held_for_run[key] = (value, self.data.get(key, _NOT_STORED))
+        self.data[key] = value
+
     def save(self, filename):
         assert not cmd_opts.freeze_settings, "saving settings is disabled"
+
+        data = dict(self.data)
+        for key, (value, stored) in self._held_for_run.items():  # Remi: see hold_for_run
+            if key in data and data[key] == value:
+                if stored is _NOT_STORED:
+                    del data[key]
+                else:
+                    data[key] = stored
 
         # Remi: encoded first, then swapped in whole. Dumped straight into the open file, a value json
         # cannot write (nested past the recursion limit, an unpaired surrogate) stopped it half way and
         # left config.json cut short: every setting lost at the next start. Such a value (an extension's,
         # past the API's checks) is left out with an error, or every later save would fail with it
         try:
-            data = _encoded(self.data)
+            data = _encoded(data)
         except _UNWRITABLE:
-            unwritable = {key for key, value in self.data.items() if not _writable(key, value)}
+            unwritable = {key for key, value in data.items() if not _writable(key, value)}
             errors.report(f"Settings not saved, as JSON cannot write their values: {', '.join(sorted(map(str, unwritable)))}")
-            data = _encoded({key: value for key, value in self.data.items() if key not in unwritable})
+            data = _encoded({key: value for key, value in data.items() if key not in unwritable})
         write_whole(filename, data)
 
     def same_type(self, x, y):
