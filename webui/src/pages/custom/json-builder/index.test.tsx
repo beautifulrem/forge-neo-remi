@@ -75,6 +75,8 @@ describe("JSON Builder page", () => {
     const page = canvas.closest<HTMLElement>("[data-scroll-root]")!
     expect(page.className.split(" ")).toContain("max-lg:[container-type:size]")
     expect(canvas.className.split(" ")).toContain("max-h-[min(75vh,calc(100cqh-var(--pinned-bottom,0px)-var(--spacing)*4))]")
+    // its 16rem floor gives way down to 10rem: a phone held sideways with the browser's bars has less room
+    expect(canvas.className.split(" ")).toContain("min-h-[min(16rem,max(10rem,calc(100cqh-var(--pinned-bottom,0px)-var(--spacing)*4)))]")
   })
 
   it("marks the empty fields instead of sending", () => {

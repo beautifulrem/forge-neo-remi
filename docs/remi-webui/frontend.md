@@ -116,8 +116,9 @@ imperatively).
   instead of under it (WCAG 2.4.11), and the same depth as `--pinned-top` /
   `--pinned-bottom` for what the page lays out at that edge: below lg the
   JSON Builder page is a size container and its stacked canvas is at most
-  `100cqh` less the send bar's depth, so on a phone held sideways its zoom
-  bar is not under the send bar. A bar laid over a scroller it is not
+  `100cqh` less the send bar's depth (its 16 rem floor gives way to that
+  down to 10 rem), so on a phone held sideways its zoom bar is not under the
+  send bar. A bar laid over a scroller it is not
   inside passes a function that finds it (the settings list, the gallery's
   selection bar). A virtualized list scrolls a row into view itself and reads
   no scroll padding: the gallery grid takes the scroller's bottom scroll

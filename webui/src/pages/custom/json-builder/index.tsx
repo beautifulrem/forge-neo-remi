@@ -667,11 +667,12 @@ export default function JsonBuilderPage(_props: CustomPageProps) {
 
   return (
     // below lg the page is a size container: the stacked canvas ends clear of the send bar pinned to
-    // its foot (`--pinned-bottom`, from usePinnedBar), where a phone held sideways had its zoom bar
+    // its foot (`--pinned-bottom`, from usePinnedBar), where a phone held sideways had its zoom bar;
+    // its 16rem floor gives way to that down to 10rem
     <div className="h-full overflow-y-auto max-lg:[container-type:size] lg:overflow-hidden" data-scroll-root>
       <div className="flex min-h-full flex-col gap-3 p-3 sm:p-4 lg:h-full lg:flex-row">
         <LayoutCanvas
-          className="h-[60vh] max-h-[min(75vh,calc(100cqh-var(--pinned-bottom,0px)-var(--spacing)*4))] min-h-64 shrink-0 lg:h-auto lg:max-h-none lg:min-h-0 lg:flex-1 lg:shrink"
+          className="h-[60vh] max-h-[min(75vh,calc(100cqh-var(--pinned-bottom,0px)-var(--spacing)*4))] min-h-[min(16rem,max(10rem,calc(100cqh-var(--pinned-bottom,0px)-var(--spacing)*4)))] shrink-0 lg:h-auto lg:max-h-none lg:min-h-0 lg:flex-1 lg:shrink"
           activeId={activeId}
           onActivate={setActiveId}
           onEditField={setEditField}
