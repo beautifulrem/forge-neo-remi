@@ -29,3 +29,14 @@ def test_the_guide_lists_every_websocket_event():
     sent = sent_events()
     assert {"hello", "queue.changed", "job.progress", "resync"} <= sent  # the scan finds the known ones
     assert sorted(sent - documented_events()) == []
+
+
+def test_the_guide_names_the_headers_that_mark_a_proxied_request():
+    """Only these headers take the local-client exemption away (X-Forwarded-Proto and -Port do
+    not): the guide names them one by one instead of a wildcard."""
+    from remi.server.deps import PROXY_HEADERS
+
+    text = GUIDE.read_text(encoding="utf-8")
+    assert "X-Forwarded-*" not in text
+    for name in PROXY_HEADERS:
+        assert f"`{name}`" in text.lower(), name

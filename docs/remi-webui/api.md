@@ -94,9 +94,10 @@ without `--gradio-auth`). With logins configured:
   it, the `--auth` login (session cookie or HTTP Basic) on any bind, since a
   reverse proxy or tunnel on the same machine also connects from loopback.
   `--api-no-auth-on-localhost` restores the A1111 behaviour for local tools:
-  requests from a loopback peer that came through no proxy (no
-  `X-Forwarded-*` / `Forwarded` / `X-Real-IP` header) need no login. It has no
-  effect with `--api-auth`, which always applies.
+  requests from a loopback peer that carry none of `X-Forwarded-For`,
+  `X-Forwarded-Host`, `X-Real-IP` and `Forwarded` need no login
+  ([Reverse proxies](#reverse-proxies)). It has no effect with `--api-auth`,
+  which always applies.
 - Extension API routes (`/controlnet/*`, `/adetailer/*`, ...) follow the same
   rule: with `--auth` they need the WebUI login or `--api-auth` credentials,
   local clients exempt only with `--api-no-auth-on-localhost`.
@@ -124,6 +125,35 @@ Independently of logins, these checks protect against browsers being abused
 
 These checks cover `/api/v2`, `/internal`, the API docs and `/sdapi`, and the
 routes extensions add (`modules/extension_route_guard.py`).
+
+### Reverse proxies
+
+The server reads forwarding headers in four places. Only the client address
+and scheme come from the proxies you name; the other three read the headers
+from any peer:
+
+- **Client address and scheme.** `X-Forwarded-For` and `X-Forwarded-Proto`
+  replace the connecting address and the scheme only on requests from a
+  peer listed in `--forwarded-allow-ips` (the address is the rightmost
+  `X-Forwarded-For` entry that is not a listed proxy, the leftmost with
+  `*`). Without the flag they are ignored, and `X-Real-IP` and
+  `Forwarded: for=` never count. Failed logins are counted per this
+  address, so without the flag every client behind a proxy shares the
+  proxy's count ([security.md](security.md)).
+- **`Secure` cookie.** `X-Forwarded-Proto: https` or `Forwarded: proto=https`
+  (their first entry) marks the session cookie `Secure`; a client that sends
+  it without HTTPS only gets a cookie its browser will not send back.
+- **Same-origin check.** A request's `Origin` is this server when its host
+  and port match `Host`, the first `X-Forwarded-Host` entry or a
+  `Forwarded: host=`; a host given without a port matches the scheme's
+  default port or `X-Forwarded-Port`. A proxy that rewrites `Host` must
+  forward one of them, or the browser's writes get 403.
+- **Local clients.** A loopback peer counts as this machine (the
+  `--api-no-auth-on-localhost` exemption, the "open folder" actions) only
+  when the request carries none of `X-Forwarded-For`, `X-Forwarded-Host`,
+  `X-Real-IP` and `Forwarded`, whatever their values. `X-Forwarded-Proto`
+  or `X-Forwarded-Port` alone does not mark a request as proxied, and a
+  tunnel that adds none of these headers (`ssh -L`) passes as local.
 
 ## Generating images
 
