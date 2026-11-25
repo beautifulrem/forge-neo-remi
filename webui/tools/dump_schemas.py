@@ -5,7 +5,7 @@ files, so a backend schema change that the renderer does not understand fails
 ``pnpm test``. Re-run after changing ``remi/ui`` or ``remi/core``:
 
     $PYTHON webui/tools/dump_schemas.py          # writes webui/src/api/mock/contract/{tab}.json
-    $PYTHON webui/tools/dump_schemas.py --check  # exit 1 when a fixture is out of date
+    $PYTHON webui/tools/dump_schemas.py --check  # exit 1 when a fixture is out of date or no tab's any more
 
 ``$PYTHON``: an interpreter with requirements.txt (no Gradio), as ``tools/check.sh``
 picks; its ``contract:schemas`` step runs the check.
@@ -21,6 +21,8 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = os.path.join(ROOT, "webui", "src", "api", "mock", "contract")
 TABS = ("txt2img", "img2img", "extras")
+OTHER_FIXTURES = ("settings.json",)
+"""fixtures in the same folder another tool writes (tools/dump_settings.py)"""
 
 
 def render(schema: dict) -> str:
@@ -60,7 +62,13 @@ def main() -> int:
                 stale.append(os.path.relpath(path, ROOT))
         for path in stale:
             print(f"{path} is out of date; run webui/tools/dump_schemas.py")
-        return 1 if stale else 0
+        # a fixture of a tab that is gone: the SPA's contract tests would still render it
+        out = os.path.abspath(options.out)
+        written = {os.path.basename(path) for path in files}
+        orphans = sorted(name for name in (os.listdir(out) if os.path.isdir(out) else []) if name.endswith(".json") and name not in written and name not in OTHER_FIXTURES)
+        for name in orphans:
+            print(f"{os.path.relpath(os.path.join(out, name), ROOT)} is no tab's schema any more; delete it")
+        return 1 if stale or orphans else 0
     os.makedirs(options.out, exist_ok=True)
     for path, text in files.items():
         with open(path, "w", encoding="utf-8") as file:
