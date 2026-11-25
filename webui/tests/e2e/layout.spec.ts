@@ -1031,7 +1031,8 @@ for (const [width, height] of [
     await page.setViewportSize({ width, height })
     await openGenerate(page)
     await page.keyboard.press(`${mod}+Enter`)
-    const progress = page.getByRole("progressbar", { name: "Generation progress" })
+    // the stage's own (the header has a progress line of the same name)
+    const progress = page.locator("[data-slot=stage-progress]").getByRole("progressbar", { name: "Generation progress" })
     await expect(progress).toBeVisible()
     const covers = await progress.evaluate((bar) => {
       const overlay = bar.closest("[data-slot=stage-progress]")!

@@ -294,6 +294,8 @@ test.describe("generate", () => {
       await page.getByRole("button", { name: "Upsample prompt (PUP)" }).click()
       const dialog = page.getByRole("dialog", { name: "Upsample prompt (PUP)" })
       await expect(dialog).toBeVisible()
+      // measured once it has zoomed in: its scale would shrink each box by a different moment's amount
+      await expect.poll(() => dialog.evaluate((element) => element.getAnimations({ subtree: true }).filter((animation) => animation.playState === "running").length)).toBe(0)
       return dialog
     }
     /** The footer's buttons, top to bottom: one column of equal widths across the footer. */

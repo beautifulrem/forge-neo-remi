@@ -271,7 +271,8 @@ test.describe("appearance and language", () => {
     const toast = page.locator("[data-sonner-toast]").filter({ hasText: "部分参数无效" })
     await expect(toast).toContainText("需要一张图像")
     await expect(toast).not.toContainText("an image is required")
-    await expect(page.getByRole("region", { name: "通知（Alt+T）" })).toBeAttached()
+    // its shortcut as this platform writes it (⌥T on a Mac)
+    await expect(page.getByRole("region", { name: /^通知（(Alt\+T|⌥T)）$/ })).toBeAttached()
     await expect(toast.getByRole("button", { name: "关闭通知" })).toBeAttached()
     // settings: a help block (Markdown) is translated by its source text
     await go(page, "#/settings")
