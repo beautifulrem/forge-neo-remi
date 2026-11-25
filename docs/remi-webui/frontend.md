@@ -1046,7 +1046,8 @@ chunk, `preloadImageEditor()` fetches it early), the img2img integration
   a finished run leave the focus where it is. While candidates wait, ← →
   pick one, Enter accepts it and Esc discards it, except that Enter on a
   focused control in the editor (Discard, Remove image…) presses that
-  control (`takesEnter`).
+  control (`takesEnter`), and Enter does nothing while the editor is busy
+  (loading, uploading: Accept is disabled then too).
 - **Keys** (pointer over the editor - entered, moved or pressed inside, or
   `:hover`, so an editor that appears under a resting pointer takes them -
   or focus inside it, never while typing):
