@@ -44,7 +44,7 @@ from typing import IO, Any, Protocol
 from remi import network_metadata as nm
 from remi.files import FileStore, decode_offset, encode_cursor
 from remi.image_meta import utf8_text
-from remi.setting_values import setting
+from remi.setting_values import MAX_NESTING, nested_deeper, setting
 
 log = logging.getLogger(__name__)
 
@@ -273,6 +273,9 @@ def read_sidecar(entry: NetworkEntry) -> dict[str, Any]:
         raise SidecarUnreadable(path, "nested too deeply to read") from error
     if not isinstance(data, dict):
         raise SidecarUnreadable(path, "not a JSON object")
+    # Read, but no answer could hold it (the serializer gives up past a few hundred levels) nor could it be walked
+    if nested_deeper(data, MAX_NESTING):
+        raise SidecarUnreadable(path, f"nested deeper than {MAX_NESTING} levels")
     return utf8_text(data)
 
 

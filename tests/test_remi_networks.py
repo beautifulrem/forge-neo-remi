@@ -340,8 +340,15 @@ UNREADABLE_SIDECAR = "the metadata file {{file}} cannot be read; saving would re
 
 @pytest.mark.parametrize(
     "content",
-    [b"{'activation text': 'single quotes'}", b"[" * 100_000 + b"]" * 100_000, b'["a list"]', '{"notes": "utf-16"}'.encode("utf-16")],
-    ids=["not-json", "nested-too-deep", "not-an-object", "not-utf8"],
+    [
+        b"{'activation text': 'single quotes'}",
+        b"[" * 100_000 + b"]" * 100_000,
+        b'{"deep": ' + b"[" * 300 + b"]" * 300 + b"}",
+        b'{"deep": ' + b"[" * 5000 + b"]" * 5000 + b"}",
+        b'["a list"]',
+        '{"notes": "utf-16"}'.encode("utf-16"),
+    ],
+    ids=["not-json", "nested-past-the-parser", "nested-past-the-answer", "nested-past-a-walk", "not-an-object", "not-utf8"],
 )
 def test_an_edit_does_not_overwrite_a_sidecar_it_cannot_read(lora, lora_root, content):
     """An unreadable sidecar read as empty, so the next edit replaced it with the new keys alone
@@ -355,8 +362,9 @@ def test_an_edit_does_not_overwrite_a_sidecar_it_cannot_read(lora, lora_root, co
     [error] = response.json()["errors"]
     assert error["param"] == "user_metadata" and error["template"] == UNREADABLE_SIDECAR and error["params"] == {"file": "watercolor.json"}
     assert sidecar.read_bytes() == content
-    # still listed (its user metadata empty), and replacing every key is the client's choice
+    # still listed and shown (its user metadata empty), and replacing every key is the client's choice
     assert "watercolor" in names(client.get("/api/v2/networks/lora"))
+    assert client.get("/api/v2/networks/lora/watercolor/meta").json()["user_metadata"] == {}
     assert client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"notes": "new"}, "replace": True}).status_code == 200
     assert json.loads(sidecar.read_text(encoding="utf-8")) == {"notes": "new"}
 
