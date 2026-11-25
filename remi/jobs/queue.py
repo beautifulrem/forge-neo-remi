@@ -568,7 +568,10 @@ class JobQueue:
         raise JobError("the job changed while it was being removed; try again")
 
     def update(self, job_id: str, *, priority: int | None = None, forever: bool | None = None) -> Job:
-        self.get(job_id)
+        job = self.get(job_id)
+        if forever and job.meta.get("chain_id"):
+            # its copies would carry no chain and requeue each other on their own
+            raise JobError("a pipeline stage cannot generate forever")
         job = self.store.update(job_id, priority=priority, forever=forever)
         self._changed()
         return job

@@ -505,7 +505,8 @@ client has a bounded event queue and one preview slot.
 - Pipelines (`remi/jobs/chains.py`): each generation stage is a queued job
   (`meta.chain_id`, `meta.stage_index`); the queue's completion hook moves
   the chain on. Every way a stage job ends reaches it: a queued job that is
-  deleted reports as cancelled, a stage job cannot be edited (`409`), and a
+  deleted reports as cancelled, a stage job cannot be edited or set to
+  generate forever (`409`), and a
   failed one is not requeued by `queue_automatic_requeue_failed_task`. At
   start `ChainRunner.reconcile()` settles what the last process left
   running. `prompt_upsample` stages run on a background thread; one with a

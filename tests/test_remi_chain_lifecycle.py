@@ -186,6 +186,18 @@ def test_editing_a_queued_stage_job_is_refused(tmp_path):
             r.queue.update_params(job_id, {"prompt": "other"}, {})
 
 
+def test_a_stage_job_cannot_generate_forever(tmp_path):
+    """Its copies would carry no chain and requeue each other on their own."""
+
+    with rig(tmp_path, start=False) as r:
+        chain = r.runner.create_chain(seeded(5)[:1])
+        job_id = r.runner.store.get_chain(chain.id).stages[0].job_id
+        with pytest.raises(JobError, match="pipeline stage") as refused:
+            r.queue.update(job_id, forever=True)
+        assert refused.value.status == 409 and not r.jobs.get(job_id).forever
+        assert r.queue.update(job_id, forever=False, priority=3).priority == 3  # the rest still applies
+
+
 # endregion
 
 # region Chain state machine
