@@ -1,7 +1,9 @@
 /** The img2img stage's own logic (view switch, keyboard, batch modes), its editor and bindings stubbed out. */
 import { fireEvent, render, screen } from "@testing-library/react"
 import { useState } from "react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { useSession } from "@/features/gallery/session-store"
+import { useCanvasStaging } from "../state/staging"
 import type { ImageEditorProps } from "../types"
 
 type Binding = { background: string; layers: { param: string }[] } | null
@@ -108,6 +110,31 @@ describe("Img2imgStage", () => {
     expect(img2img.setCoreValues).toHaveBeenCalledWith({ mask: "upload-3" })
     props.onUseImageSize?.({ width: 512, height: 768 })
     expect(img2img.setSizeFromImage).toHaveBeenCalledWith({ width: 512, height: 768 })
+  })
+
+  describe("with a result of this tab", () => {
+    beforeEach(() => {
+      const result = (index: number) => ({ key: `job-1:${index}`, fileId: `out-${index}`, jobId: "job-1", tab: "img2img" as const, index, infotext: null, width: 512, height: 768, createdAt: 1 })
+      useSession.setState({ items: [result(0), result(1)] })
+      useCanvasStaging.setState({ sessions: {} })
+    })
+    afterEach(() => {
+      useSession.setState({ items: [] })
+      useCanvasStaging.setState({ sessions: {} })
+      vi.restoreAllMocks()
+    })
+
+    // Both staging buttons wore the Layers glyph: on a phone, where their labels are hidden, the bar
+    // showed two identical icons.
+    it("gives Stage latest result a glyph of its own in the bar", () => {
+      renderStage()
+      fireEvent.click(screen.getByRole("tab", { name: "Result" }))
+      const stage = screen.getByRole("button", { name: "Stage latest result" })
+      const glyph = stage.querySelector("svg")!.innerHTML
+      const others = [...document.querySelectorAll("svg")].filter((svg) => !stage.contains(svg)).map((svg) => svg.innerHTML)
+      expect(others.length).toBeGreaterThan(0)
+      expect(others).not.toContain(glyph)
+    })
   })
 
   it("shows only the results in a batch mode (no canvas)", () => {

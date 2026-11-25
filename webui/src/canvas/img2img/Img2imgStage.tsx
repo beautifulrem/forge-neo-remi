@@ -3,7 +3,7 @@
  * to the img2img form, or the results. Batch modes have no canvas: the
  * stage shows the results only.
  */
-import { Images, Layers, PencilRuler } from "@/components/icons"
+import { ImageDown, Images, Layers, PencilRuler } from "@/components/icons"
 import { type ReactNode, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
@@ -130,7 +130,8 @@ export function Img2imgStage({ result, actions, leading, trailing, className }: 
             </Toggle>
             {shown === "result" && img2imgItems.length > 0 ? (
               <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" aria-label={t("Stage latest result")} title={t("Stage latest result")} onClick={stageLatest}>
-                <Layers className="size-3.5" aria-hidden />
+                {/* not the toggle's Layers: on a phone, where the labels are hidden, the two read as one */}
+                <ImageDown className="size-3.5" aria-hidden />
                 <span className={STAGE_LABEL}>{t("Stage latest result")}</span>
               </Button>
             ) : null}
