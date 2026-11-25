@@ -1,5 +1,5 @@
 /** Focusable drop target: drag & drop, click/Enter to browse, paste while focused or hovered. */
-import { type ReactNode, useEffect, useRef, useState } from "react"
+import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 
 type DropZoneProps = {
@@ -23,20 +23,22 @@ export function DropZone(props: DropZoneProps) {
   const hovered = useRef(false)
   const { onFiles, disabled } = props
 
-  // Paste goes to the zone under the pointer too, not only the focused one.
+  // Paste goes to the zone under the pointer too, not only the focused one. One listener for the
+  // zone's life: it reads the latest props (a caller's inline onFiles is new on every render).
+  const onPaste = useEffectEvent((event: ClipboardEvent) => {
+    if (disabled || !zone.current) return
+    const focused = zone.current.contains(document.activeElement)
+    if (!focused && !hovered.current) return
+    const files = Array.from(event.clipboardData?.files ?? [])
+    if (files.length === 0) return
+    event.preventDefault()
+    onFiles(props.multiple ? files : files.slice(0, 1))
+  })
   useEffect(() => {
-    const onPaste = (event: ClipboardEvent) => {
-      if (disabled || !zone.current) return
-      const focused = zone.current.contains(document.activeElement)
-      if (!focused && !hovered.current) return
-      const files = Array.from(event.clipboardData?.files ?? [])
-      if (files.length === 0) return
-      event.preventDefault()
-      onFiles(props.multiple ? files : files.slice(0, 1))
-    }
-    window.addEventListener("paste", onPaste)
-    return () => window.removeEventListener("paste", onPaste)
-  }, [disabled, onFiles, props.multiple])
+    const listener = (event: ClipboardEvent) => onPaste(event)
+    window.addEventListener("paste", listener)
+    return () => window.removeEventListener("paste", listener)
+  }, [])
 
   const browse = () => {
     if (!disabled) input.current?.click()

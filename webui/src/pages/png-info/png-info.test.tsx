@@ -188,8 +188,8 @@ describe("PNG Info page", () => {
     const calls = mockServer()
     const listen = vi.spyOn(window, "addEventListener")
     const { rerender } = renderPage()
-    // the page's own listener; the drop zone's follows its props and is not counted
-    const pastes = () => listen.mock.calls.filter(([type, listener]) => type === "paste" && !String(listener).includes("hovered")).length
+    // the page's own listener and the drop zone's: neither is added again
+    const pastes = () => listen.mock.calls.filter(([type]) => type === "paste").length
     const before = pastes()
     for (let i = 0; i < 3; i++) {
       rerender(
