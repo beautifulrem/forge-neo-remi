@@ -18,6 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { serverText } from "@/features/errors/error-text"
 import { FIELD_BUTTON_CLASS } from "@/components/ui/select-styles"
 import { cn } from "@/lib/utils"
 import { currentRoute } from "@/app/router"
@@ -260,9 +261,14 @@ function DtypeSelect({ className }: { className?: string }) {
   )
 }
 
+/** The stages the server sends (`model.loading`), as chrome keys; any other stage is server text. */
+const MODEL_STAGES: Record<string, string> = { loading: "Loading" }
+
 function loadingText(t: (key: string) => string, loading: NonNullable<ReturnType<typeof useModelBusy>>): string {
   const percent = typeof loading.progress === "number" ? Math.round(loading.progress * 100) : null
-  return percent !== null ? `${t(loading.stage)} ${percent}%` : t(loading.stage)
+  const key = MODEL_STAGES[loading.stage.toLowerCase()]
+  const stage = key ? t(key) : serverText(loading.stage)
+  return percent !== null ? `${stage} ${percent}%` : stage
 }
 
 /** The model loading stage as a live region (visible in the stacked bar, announced only in the header). */

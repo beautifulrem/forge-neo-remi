@@ -141,4 +141,24 @@ describe("ws-bridge", () => {
     expect(error).toHaveBeenCalledTimes(1)
     hook.unmount()
   })
+
+  it("says how a job or a model load ended in the UI language", async () => {
+    vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue()
+    const error = vi.spyOn(toast, "error").mockReturnValue(0)
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", "Out of memory: the model was unloaded", "内存不足：模型已卸载")
+    i18n.addResource("zh-CN", "server", "the model was not loaded", "模型未能加载")
+    await i18n.changeLanguage("zh-CN")
+    try {
+      const { hook, send } = await connected()
+      useProgress.getState().track("f2", "txt2img")
+      send({ type: "job.failed", job_id: "f2", status: "failed", error: "Out of memory: the model was unloaded" })
+      expect(error.mock.calls[0]![1]).toMatchObject({ description: "内存不足：模型已卸载" })
+      send({ type: "model.loaded", model: "x", error: "the model was not loaded" })
+      expect(error.mock.calls[1]![1]).toMatchObject({ description: "模型未能加载" })
+      hook.unmount()
+    } finally {
+      await i18n.changeLanguage("en")
+    }
+  })
 })

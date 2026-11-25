@@ -6,6 +6,7 @@ import { createProgressGate } from "@/api/progress-gate"
 import { useProgress } from "@/api/progress"
 import { keys, queryClient } from "@/api/queries"
 import { onPreviewFrame, onWsEvent, useWs } from "@/api/ws"
+import { serverText } from "@/features/errors/error-text"
 import { onNewOutputs, onOutputsChanged } from "@/features/library/cache"
 import { networksFollowOptions } from "@/features/networks/queries"
 import { reloadServerCatalog, t } from "@/i18n"
@@ -71,7 +72,7 @@ export function useWsBridge() {
         void queryClient.invalidateQueries({ queryKey: keys.jobs })
         // Cancelled / interrupted jobs (e.g. the queue was cleared) are not failures.
         const stopped = e.status === "cancelled" || e.status === "interrupted"
-        if (mine && !stopped) toast.error(t("Generation failed"), { description: e.error })
+        if (mine && !stopped) toast.error(t("Generation failed"), { description: e.error ? serverText(e.error) : undefined })
       }),
       onWsEvent("queue.changed", (e) => {
         // Also sent right after a (re)connect: drops the progress of a job that ended while the socket was down.
@@ -101,7 +102,7 @@ export function useWsBridge() {
       }),
       onWsEvent("model.loaded", (e) => {
         modelIdle()
-        if (e.error) toast.error(t("Could not load the model"), { description: e.error })
+        if (e.error) toast.error(t("Could not load the model"), { description: serverText(e.error) })
       }),
       onWsEvent("networks.changed", () => {
         void queryClient.invalidateQueries({ queryKey: ["networks"] })

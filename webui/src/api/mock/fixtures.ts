@@ -869,4 +869,11 @@ export const serverCatalogZh: Record<string, string> = {
   "Infotext is what the webui calls the text that contains generation parameters, and can be used to generate the same image again.":
     "生成信息（Infotext）是 WebUI 对包含生成参数的文本的称呼，可用于再次生成相同的图像。",
   "an image is required": "需要一张图像",
+  // how a job or a model load ends (remi/jobs/texts.py), as in localizations/zh_CN.json
+  "the server stopped while the job ran": "任务运行时服务器停止了",
+  "Out of memory: the model was unloaded": "内存不足：模型已卸载",
+  "the job's end could not be saved": "未能保存任务的结束状态",
+  "deleted from the queue": "已从队列中删除",
+  "not replayable: its arguments do not map to the current parameters": "无法重放：其参数与当前参数对应不上",
+  "the model was not loaded": "模型未能加载",
 }

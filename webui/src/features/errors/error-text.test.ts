@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { ApiError, RequestError } from "@/api/http"
-import { errorText, failureText, renderFailureText, serviceFailureText, validationText } from "./error-text"
+import { errorText, failureText, renderFailureText, serverText, serviceFailureText, validationText } from "./error-text"
 
 const failed = (status: number) => new ApiError(status, `HTTP ${status}`, { detail: "English detail for the logs" })
 
@@ -112,5 +112,22 @@ describe("renderFailureText", () => {
     expect(renderFailureText(failed(500))).toBe("The server ran into an error (500).")
     expect(renderFailureText(new RequestError(new TypeError("Failed to fetch")))).toBe("The server cannot be reached.")
     expect(renderFailureText(new TypeError("Cannot read properties of undefined (reading 'x')"))).toBe("Cannot read properties of undefined (reading 'x')")
+  })
+})
+
+// The history and the failure toasts showed how a job ended ("the server stopped while the job ran",
+// "Out of memory: the model was unloaded") in English in every language.
+describe("serverText", () => {
+  it("says a fixed sentence the server stored in the UI language, and any other text as it is", async () => {
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", "the server stopped while the job ran", "任务运行时服务器停止了")
+    await i18n.changeLanguage("zh-CN")
+    try {
+      expect(serverText("the server stopped while the job ran")).toBe("任务运行时服务器停止了")
+      // a job's own exception is a diagnostic: shown as it is, never read as a template
+      expect(serverText("KeyError: '{{width}}' $t(Prompt)")).toBe("KeyError: '{{width}}' $t(Prompt)")
+    } finally {
+      await i18n.changeLanguage("en")
+    }
   })
 })

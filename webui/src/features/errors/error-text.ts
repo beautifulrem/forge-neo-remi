@@ -8,7 +8,7 @@
  */
 import { toast } from "sonner"
 import { ApiError, RequestError, validationErrors } from "@/api/http"
-import { t } from "@/i18n"
+import { i18n, t } from "@/i18n"
 import type { ValidationError } from "@/ui/schema"
 
 export type StatusTexts = Partial<Record<number, string>>
@@ -83,4 +83,13 @@ export function validationText(errors: readonly ValidationError[]): string {
 /** The "Some parameters are invalid" toast for rejected or missing values (the fields show them inline). */
 export function toastInvalid(errors: readonly ValidationError[]): void {
   toast.error(t("Some parameters are invalid"), { description: validationText(errors) })
+}
+
+/**
+ * A text the server stored or sent as it is: a fixed sentence (how a job or a model load ended,
+ * `remi/jobs/texts.py`) in the UI language, found by its exact key in the catalogs; any other text
+ * (a job's own exception, a diagnostic) as it is, never read as a template.
+ */
+export function serverText(text: string): string {
+  return i18n.exists(text) ? t(text) : text
 }

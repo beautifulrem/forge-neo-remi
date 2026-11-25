@@ -171,6 +171,24 @@ describe("history list", () => {
     await waitFor(() => expect(calls.find((call) => call.path === "/jobs/star")?.body).toEqual({ ids: ["done"], starred: true }))
   })
 
+  it("says how a job ended in the UI language", async () => {
+    mockFetch({})
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", "the server stopped while the job ran", "任务运行时服务器停止了")
+    await i18n.changeLanguage("zh-CN")
+    try {
+      const stopped: Job = { ...jobOf("stop", "interrupted"), seq: 6, error: "the server stopped while the job ran" }
+      const crashed: Job = { ...jobOf("crash", "failed"), seq: 7, error: "RuntimeError: shape mismatch" }
+      renderWithClient(<HistoryList jobs={[stopped, crashed]} total={2} hasMore={false} loadingMore={false} onLoadMore={() => {}} onView={() => {}} />)
+      const rows = screen.getAllByRole("listitem")
+      expect(rows[0]).toHaveTextContent("任务运行时服务器停止了")
+      expect(rows[0]).not.toHaveTextContent("the server stopped")
+      expect(rows[1]).toHaveTextContent("RuntimeError: shape mismatch") // the job's own exception, as it is
+    } finally {
+      await i18n.changeLanguage("en")
+    }
+  })
+
   it("shows a placeholder for an output deleted since, not a broken image", () => {
     mockFetch({})
     const done: Job = { ...jobOf("done", "completed", [{ id: "gone1", kind: "image" }]), seq: 4 }

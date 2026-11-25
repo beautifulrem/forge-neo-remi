@@ -77,13 +77,13 @@ const FORGE_PRESETS: Record<string, [number, number, string, number]> = {
   flux3: [1024, 1, "Euler", 8],
 }
 
-/** Emits the `model.loading` stages a real model switch produces. */
+/** Emits what a real model switch produces: `model.loading` (the server's only stage is "loading"), then `model.loaded`. */
 function simulateModelLoad(model: string) {
-  const stages = ["Unloading previous model", "Loading state dict", "Moving model to device"]
-  stages.forEach((stage, index) => {
-    setTimeout(() => broadcast({ type: "model.loading", stage, model, progress: (index + 1) / (stages.length + 1) }), 150 + index * 450)
-  })
-  setTimeout(() => broadcast({ type: "model.loaded", model }), 150 + stages.length * 450)
+  const steps = 3
+  for (let index = 0; index < steps; index++) {
+    setTimeout(() => broadcast({ type: "model.loading", stage: "loading", model, progress: (index + 1) / (steps + 1) }), 150 + index * 450)
+  }
+  setTimeout(() => broadcast({ type: "model.loaded", model }), 150 + steps * 450)
 }
 
 /** The Hires. fix target size (`calculate_target_resolution`): the resize sizes win over the factor; one left at 0 keeps the aspect ratio. */

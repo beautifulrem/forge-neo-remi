@@ -13,6 +13,7 @@ import { LoadMoreStatus } from "@/components/LoadMoreStatus"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { serverText } from "@/features/errors/error-text"
 import { cn } from "@/lib/utils"
 import { openJob } from "./edit-session"
 import { noteText } from "./notes"
@@ -112,7 +113,11 @@ function HistoryRow({ job, onView }: { job: Job; onView: (job: Job, index: numbe
             </Badge>
           ) : null}
         </p>
-        {job.error ? <p title={job.error} className="line-clamp-2 text-xs break-words text-destructive">{job.error}</p> : null}
+        {job.error ? (
+          <p title={serverText(job.error)} className="line-clamp-2 text-xs break-words text-destructive">
+            {serverText(job.error)}
+          </p>
+        ) : null}
         {job.warnings.length > 0 ? (
           <ul className="flex flex-col gap-0.5 text-xs break-words text-warning" aria-label={t("Warnings")}>
             {job.warnings.map((warning, index) => (

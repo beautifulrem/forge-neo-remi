@@ -1393,7 +1393,13 @@ older server) nothing is shown.
   Settings > Server) are said by their `template` and `params`, anything
   else by status (`adminErrorMessage`). `features/errors/failure-text.test.ts`
   fails on any read of an error's message, detail or text outside
-  `error-text.ts` and `api/` that is not listed there with its reason.
+  `error-text.ts` and `api/` that is not listed there with its reason. A text
+  the server stored as it is (how a job or a model load ended: `job.error`,
+  the `job.failed` and `model.loaded` toasts) goes through `serverText`: a
+  fixed sentence (`remi/jobs/texts.py`, a key of the server catalogs) is
+  translated by its exact key; a job's own exception stays as it is. The
+  model bar names the server's stage (`model.loading`, only ever "loading")
+  with its own key.
 - `src/locales/zh-CN.json` must contain every chrome key:
   `locales/locales.test.ts` scans the sources and fails on a missing key or a
   mismatched `{{placeholder}}`.

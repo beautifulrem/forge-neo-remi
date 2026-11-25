@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
 import { bootstrap, models } from "@/api/mock/fixtures"
+import { useProgress } from "@/api/progress"
 import { keys, queryClient } from "@/api/queries"
 import ModelBar, { MODULES_HELP_URL } from "./ModelBar"
 import { WorkerHealthPill } from "./WorkerHealthPill"
@@ -149,5 +150,24 @@ describe("worker health pill single-status-dot rule", () => {
     )
     expect(screen.getByRole("button", { name: "Worker status" })).toHaveTextContent("1/2 GPU")
     expect(container.querySelector('[data-slot="worker-alert-dot"]')).not.toBeNull()
+  })
+})
+
+// The server's only stage is "loading": the zh UI showed lowercase English "loading" in the pill
+// and in both live regions on every model switch.
+describe("model bar loading stage", () => {
+  afterEach(() => {
+    useProgress.setState({ modelLoading: null })
+    queryClient.clear()
+  })
+
+  it("names the stage in the UI language", async () => {
+    queryClient.setQueryData(keys.app, structuredClone(bootstrap))
+    queryClient.setQueryData(keys.models, models)
+    useProgress.setState({ modelLoading: { stage: "loading", model: "x" } })
+    renderBar()
+    const statuses = await screen.findAllByRole("status")
+    expect(statuses.some((status) => status.textContent === "Loading")).toBe(true)
+    expect(statuses.some((status) => status.textContent === "loading")).toBe(false)
   })
 })
