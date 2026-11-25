@@ -14,6 +14,7 @@ from starlette.requests import ClientDisconnect
 from starlette.responses import FileResponse
 
 from remi.files import FileError, FileRecord
+from remi.library import gallery_for
 from remi.server import models as m
 from remi.server.deps import ServicesDep, iso, not_found, require_local_folders
 
@@ -158,7 +159,7 @@ def delete_output(file_id: str, services: ServicesDep, delete_file: bool = False
     record = _record(services, file_id)
     if record.kind != "output":
         raise not_found("no such output")
-    services.files.delete(file_id, delete_file=delete_file)
+    gallery_for(services.files).delete([file_id], delete_files=delete_file)  # its star, board entries and lineage too
     return Response(status_code=204)
 
 

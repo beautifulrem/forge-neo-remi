@@ -277,6 +277,24 @@ def test_outputs_are_paged_and_searchable(server, tmp_path):
     assert server.client.get("/api/v2/outputs").json()["total"] == 2
 
 
+def test_removing_an_output_drops_its_star_board_entry_and_lineage(server):
+    """DELETE /outputs/{id} forgot the file but left its gallery rows: the board kept a
+    member that no longer exists."""
+
+    from remi.library import gallery_for
+
+    files = server.services.files
+    parent, child = (files.save_output_image(Image.new("RGB", (8, 8)), None) for _ in range(2))
+    index = gallery_for(files)
+    index.set_starred([child.id], True)
+    board = index.create_board("keep")
+    index.add_to_board(board["id"], [child.id])
+    index.record_lineage(child.id, parent.id, "img2img")
+    assert server.client.delete(f"/api/v2/outputs/{child.id}").status_code == 204
+    for table, column in (("gallery_meta", "file_id"), ("board_items", "file_id"), ("asset_lineage", "child_id")):
+        assert index._db.execute(f"SELECT count(*) FROM {table} WHERE {column} = ?", (child.id,)).fetchone() == (0,), table
+
+
 def test_unsaved_outputs_are_temporary(tmp_path):
     import time
 
