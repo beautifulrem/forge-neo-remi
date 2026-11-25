@@ -2004,6 +2004,16 @@ drop and paste, image size and removal, touch scrolling on phones), and the libr
 details, two-image compare, PNG Info → txt2img, and the queue (pause, "Add
 to queue" twice, keyboard reorder, resume, history). TypeScript runs with `noUncheckedIndexedAccess`.
 
+An e2e test that measures where a scroller stands presses a control it can
+see with `click({ scroll: "none" })`. A plain `click()` first scrolls its
+target into view if needed, and that scroll keeps clear of a pinned bar's
+scroll padding: held sideways, img2img's empty editor runs under the run bar
+(the Source view keeps its floor), and pressing its "Add a source image"
+moved the phone column by 57 px (667×375) and 72 px (740×360) before the
+press, a move the page never makes for a tap. The scroll event comes a frame
+later, after the press, so it reads as the page's own: `scrollTop` read in a
+`pointerdown` listener tells them apart.
+
 ## Performance
 
 Budget (scorecard dimension 5, `webui/tools/perf/budget.json`, checked by

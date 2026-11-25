@@ -1074,7 +1074,9 @@ async function addSourceImage(page: Page) {
     return canvas.toDataURL("image/png").split(",")[1]!
   })
   const chooser = page.waitForEvent("filechooser")
-  await page.getByRole("button", { name: "Add a source image" }).click()
+  // pressed where it is shown: held sideways its foot is under the run bar, and the default click
+  // would first scroll the column to bring it clear (by 57 px at 667×375), moving what is measured
+  await page.getByRole("button", { name: "Add a source image" }).click({ scroll: "none" })
   await (await chooser).setFiles({ name: "source.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") })
   await expect(page.getByRole("img", { name: /^Image editor/ })).toBeVisible()
 }
@@ -1155,6 +1157,39 @@ for (const [width, height] of [
       await page.getByRole("button", { name: "Interrupt" }).click()
     })
   }
+}
+
+// Adding a source image on a phone leaves the page's column where it was: the press, the file, the
+// upload and the editor taking the picture scroll nothing. Held sideways the empty editor's button
+// runs under the run bar (the Source view keeps its floor), and a press that let Playwright scroll
+// its target clear of the bar first moved the column by 57 px (667×375) and 72 px (740×360).
+for (const [width, height] of [
+  [667, 375],
+  [740, 360],
+  [390, 844],
+] as const) {
+  test(`adding a source image leaves the column where it was at ${width}×${height} @phone`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await openGenerate(page, "img2img")
+    // the scroller the stage is in (the phone layout's one column), and every position it takes
+    const before = await page.locator("#img2img-stage-source").evaluate((element) => {
+      let scroller = element.parentElement!
+      while (!["auto", "scroll"].includes(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement!
+      scroller.dataset.measured = ""
+      const moves: number[] = []
+      ;(window as unknown as { columnMoves: number[] }).columnMoves = moves
+      scroller.addEventListener("scroll", () => moves.push(scroller.scrollTop))
+      return scroller.scrollTop
+    })
+    await addSourceImage(page)
+    // the upload is done and the Source card has read the picture's size
+    await expect(page.locator("[data-slot=img2img-source]").getByText("640×480", { exact: true })).toBeVisible()
+    // a scroll event is fired at the next frame
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    const after = await page.locator("[data-measured]").evaluate((element) => element.scrollTop)
+    expect(await page.evaluate(() => (window as unknown as { columnMoves: number[] }).columnMoves), "the column's scroll positions").toEqual([])
+    expect(after).toBe(before)
+  })
 }
 
 // The reset dot (a changed value's way back to its default) was a 24 × 20 px target between a
