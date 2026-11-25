@@ -775,6 +775,10 @@ def test_assets_are_served_precompressed_when_the_client_accepts_it(webui, tmp_p
         plain = get("/assets/app-1a2b.js", headers={"Accept-Encoding": "identity"})
         assert "content-encoding" not in plain.headers and plain.text == source
         assert "content-encoding" not in get("/favicon.svg", headers={"Accept-Encoding": "gzip, br"}).headers
+        # the copies only go out as an encoding of their file: as files of their own they
+        # would be sent without Content-Encoding (and cached for a year)
+        for packed_name in ("/assets/app-1a2b.js.br", "/assets/app-1a2b.js.gz"):
+            assert get(packed_name, headers={"Accept-Encoding": "gzip, br"}).status_code == 404, packed_name
     assert accepted_codings("gzip;q=0.5, br;q=0, deflate") == {"gzip", "deflate"}
     assert accepted_codings("") == set() and accepted_codings("gzip;q=x") == set()
 

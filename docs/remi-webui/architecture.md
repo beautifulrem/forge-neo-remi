@@ -555,7 +555,8 @@ client has a bounded event queue and one preview slot.
   `--cors-allow-origins(-regex)`.
 - SPA: `webui/dist` is the router fallback (extension routes win): hashed
   `/assets` cached for a year and sent from the build's precompressed `.br` /
-  `.gz` copies when the client accepts them, `index.html` no-cache and served for client
+  `.gz` copies when the client accepts them (never as files of their own),
+  `index.html` no-cache and served for client
   routes, with `window.__REMI_ROOT__` and prefixed asset URLs under
   `--subpath`. `launch.py` builds it when missing or when its sources or
   lockfile changed since the build (a stamp in `dist/`), with pnpm and the

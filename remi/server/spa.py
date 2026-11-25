@@ -3,7 +3,7 @@ matched (it is the router's fallback, so routes extensions add later win).
 
 Hashed files under ``/assets`` are cached for a year and served from their
 precompressed ``.br`` / ``.gz`` copies (written by the build) when the client
-accepts them; ``index.html`` (also served for client routes) is never cached.
+accepts them (the copies are never served as files of their own); ``index.html`` (also served for client routes) is never cached.
 Behind ``--subpath`` the shell's absolute asset URLs get the prefix and
 ``window.__REMI_ROOT__`` tells the app where its API lives;
 ``window.__REMI_THEME__`` carries ``--theme`` (the theme of browsers that
@@ -48,6 +48,7 @@ THEMES = ("light", "dark", "system")
 IMMUTABLE = "public, max-age=31536000, immutable"
 PRECOMPRESSED = (("br", ".br"), ("gzip", ".gz"))
 """content codings of the build's precompressed copies, preferred first"""
+PACKED_SUFFIXES = tuple(suffix for _coding, suffix in PRECOMPRESSED)
 
 NOT_BUILT = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Remi WebUI</title>
 <style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem;line-height:1.5}code{background:#8882;padding:.1em .3em;border-radius:.25em}</style></head>
@@ -131,6 +132,10 @@ class Spa:
         # whatever name reaches it: "/index.html/", "/Index.html" on a volume that ignores case, a
         # short or link name. No other HTML file is served as is either.
         if candidate.suffix.lower() == ".html" or _same_file(candidate, self.dist / "index.html"):
+            return None
+        # A precompressed copy only goes out as an encoding of its file (`response`): on its
+        # own it would be sent without Content-Encoding.
+        if candidate.suffix.lower() in PACKED_SUFFIXES and candidate.with_suffix("").is_file():
             return None
         return candidate
 
