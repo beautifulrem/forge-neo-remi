@@ -535,7 +535,7 @@ class LocalQwen35PUPRunner:
             from llama_cpp import Llama
         except ImportError as err:
             raise TranslationError(
-                "local GGUF PUP requires 'llama-cpp-python' (or serve the GGUF via llama.cpp server and configure the OpenAI-compatible provider)",
+                Sentence("local GGUF PUP requires 'llama-cpp-python' (or serve the GGUF via llama.cpp server and configure the OpenAI-compatible provider)"),
                 502,
             ) from err
 
@@ -572,7 +572,7 @@ class LocalQwen35PUPRunner:
         except TranslationError:
             raise
         except Exception as err:
-            raise TranslationError(f"local GGUF PUP execution failed: {err}", 502) from err
+            raise TranslationError(Sentence("local GGUF PUP execution failed: {{error}}", error=err), 502) from err
         finally:
             if llm is not None:
                 close_fn = getattr(llm, "close", None)
@@ -643,7 +643,7 @@ class LocalQwen35PUPRunner:
         except TranslationError:
             raise
         except Exception as err:
-            raise TranslationError(f"local Qwen3.5 PUP execution failed: {err}", 502) from err
+            raise TranslationError(Sentence("local Qwen3.5 PUP execution failed: {{error}}", error=err), 502) from err
         finally:
             if model is not None:
                 try:
@@ -776,7 +776,7 @@ def upsample_prompt(
                 raw_output = runner.generate(system, user_message, image_uris=image_uris, pil_images=pil_images)
             upsampled = _clean_prompt(str(raw_output or ""), preserve_newlines=preserve_newlines)
             if not upsampled:
-                raise TranslationError("local Qwen3.5 PUP answered with an empty prompt", 502)
+                raise TranslationError(Sentence("local Qwen3.5 PUP answered with an empty prompt"), 502)
         else:
             backend = "openai_vlm"
             if config is None or config.provider != "openai" or not config.enabled:

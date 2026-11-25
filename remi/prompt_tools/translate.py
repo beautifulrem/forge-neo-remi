@@ -43,8 +43,9 @@ class TranslationError(RuntimeError):
     its request field (``param``), and its ``message`` is a catalog key or a :class:`Sentence`: the
     route lists it as a rejected value, which the UI translates. A tool that cannot run (409) or was
     given too much (413) says why with a :class:`Sentence`, which the route answers as a refused
-    request. A failed service (502) says what the service answered, in English: the route passes it
-    on as it is."""
+    request. So does a failed service (502), with what Remi saw of it ("unreachable", "an empty
+    prompt"): the service's own words (its answer, the connection error) are a value of the
+    sentence, never its template."""
 
     def __init__(self, message: str, status: int = 502, *, param: str | None = None) -> None:
         super().__init__(message)
@@ -121,16 +122,16 @@ def _http_post(url: str, headers: Mapping[str, str], body: Any) -> Any:
         with requests.post(url, headers=dict(headers), json=body, timeout=TIMEOUT, stream=True) as response:
             if response.status_code >= 400:
                 head, _more = _read_up_to(response, 1024)
-                raise TranslationError(f"translation service answered {response.status_code}: {head.decode('utf-8', 'replace')[:200]}")
+                raise TranslationError(Sentence("translation service answered {{status}}: {{answer}}", status=response.status_code, answer=head.decode("utf-8", "replace")[:200]))
             content, too_large = _read_up_to(response, MAX_RESPONSE_BYTES)
     except requests.RequestException as error:
-        raise TranslationError(f"translation service unreachable: {error}") from error
+        raise TranslationError(Sentence("translation service unreachable: {{error}}", error=error)) from error
     if too_large:
-        raise TranslationError(f"the translation service's answer is larger than {MAX_RESPONSE_BYTES // (1024 * 1024)} MB")
+        raise TranslationError(Sentence("the translation service's answer is larger than {{size}} MB", size=MAX_RESPONSE_BYTES // (1024 * 1024)))
     try:
         return json.loads(content)
     except ValueError as error:
-        raise TranslationError("translation service sent no JSON") from error
+        raise TranslationError(Sentence("translation service sent no JSON")) from error
 
 
 def _libretranslate(config: ProviderConfig, texts: Sequence[str], target: str, post: Post) -> list[str]:
@@ -142,7 +143,7 @@ def _libretranslate(config: ProviderConfig, texts: Sequence[str], target: str, p
     if isinstance(translated, str):
         translated = [translated]
     if not isinstance(translated, list) or len(translated) != len(texts):
-        raise TranslationError("unexpected LibreTranslate answer")
+        raise TranslationError(Sentence("unexpected LibreTranslate answer"))
     return [str(item) for item in translated]
 
 
@@ -162,7 +163,7 @@ def _openai(config: ProviderConfig, texts: Sequence[str], target: str, post: Pos
     try:
         content = data["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as error:
-        raise TranslationError("unexpected chat completion answer") from error
+        raise TranslationError(Sentence("unexpected chat completion answer")) from error
     # the first "[" through the last "]" (what re.search(r"\[.*\]", DOTALL) found, in linear time)
     text = str(content)
     start, end = text.find("["), text.rfind("]")
@@ -171,7 +172,7 @@ def _openai(config: ProviderConfig, texts: Sequence[str], target: str, post: Pos
     except ValueError:
         translated = None
     if not isinstance(translated, list) or len(translated) != len(texts):
-        raise TranslationError("the model did not answer with a list of the same length")
+        raise TranslationError(Sentence("the model did not answer with a list of the same length"))
     return [str(item).strip() for item in translated]
 
 
@@ -182,7 +183,7 @@ def _deepl(config: ProviderConfig, texts: Sequence[str], target: str, post: Post
     data = post(f"{base}/v2/translate", {"Authorization": f"DeepL-Auth-Key {key}", "Content-Type": "application/json"}, {"text": list(texts), "target_lang": target_lang})
     translations = data.get("translations") if isinstance(data, dict) else None
     if not isinstance(translations, list) or len(translations) != len(texts):
-        raise TranslationError("unexpected DeepL answer")
+        raise TranslationError(Sentence("unexpected DeepL answer"))
     return [str(item.get("text", "")) for item in translations]
 
 
@@ -278,12 +279,12 @@ def generate_prompt(
     try:
         content = data["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as error:
-        raise TranslationError("unexpected chat completion answer") from error
+        raise TranslationError(Sentence("unexpected chat completion answer")) from error
     if isinstance(content, list):
         content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
     prompt = _clean_prompt(str(content or ""), preserve_newlines=preserve_newlines)
     if not prompt:
-        raise TranslationError("the model answered with an empty prompt")
+        raise TranslationError(Sentence("the model answered with an empty prompt"))
     return prompt
 
 

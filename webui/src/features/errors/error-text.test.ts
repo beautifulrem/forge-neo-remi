@@ -223,6 +223,30 @@ describe("serviceFailureText", () => {
     expect(serviceFailureText(new ApiError(502, "translation service answered 401: invalid key"))).toBe("The service failed: translation service answered 401: invalid key")
   })
 
+  // What Remi saw of a failed service ("unreachable", "an empty prompt") came after the translated
+  // sentence in English: the body carries it as a sentence, whose values are the service's own words.
+  it("says what it saw of a failed service in the UI language", async () => {
+    const template = "translation service unreachable: {{error}}"
+    const unreachable = new ApiError(502, "translation service unreachable: connection refused", { detail: "translation service unreachable: connection refused", template, params: { error: "connection refused" } })
+    expect(serviceFailureText(unreachable)).toBe("The service failed: translation service unreachable: connection refused")
+    // the shipped catalogs have both (localizations/zh_CN.json, the SPA's src/locales/zh-CN.json)
+    const catalog = JSON.parse(readFileSync(join(process.cwd(), "..", "localizations", "zh_CN.json"), "utf8")) as Record<string, string>
+    const chrome = JSON.parse(readFileSync(join(process.cwd(), "src", "locales", "zh-CN.json"), "utf8")) as Record<string, string>
+    const failure = "The service failed: {{detail}}"
+    expect(catalog[template]).toBeTruthy()
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", template, catalog[template]!)
+    i18n.addResource("zh-CN", "chrome", failure, chrome[failure]!)
+    await i18n.changeLanguage("zh-CN")
+    try {
+      expect(serviceFailureText(unreachable)).toBe(chrome[failure]!.replace("{{detail}}", catalog[template]!.replace("{{error}}", "connection refused")))
+      // a detail without a template is the service's answer as it is
+      expect(serviceFailureText(new ApiError(502, "translation service answered 401: invalid key"))).toBe(chrome[failure]!.replace("{{detail}}", "translation service answered 401: invalid key"))
+    } finally {
+      await i18n.changeLanguage("en")
+    }
+  })
+
   it("explains the other failures by their status", () => {
     expect(serviceFailureText(new ApiError(409, "no translation provider is configured"))).toBe("Set up the service in Settings first.")
     expect(serviceFailureText(new ApiError(413, "too much text to translate at once"))).toBe("The text is too long.")

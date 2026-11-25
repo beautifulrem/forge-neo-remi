@@ -340,7 +340,8 @@ def request_error_classes(folder: str = "remi") -> set[str]:
 # refused value (422: listed under its request field, a catalog key, tests/test_remi_pup.py) and a
 # failed service (502: the service's own answer, passed on as it is)
 STATUS_ERRORS = {"TranslationError": 502}
-PASSED_ON_STATUSES = (422, 502)
+PASSED_ON_STATUSES = (422,)
+"""A prompt tool's 422 is a refused value (``ParamError``), checked in ``tests/test_remi_pup.py``."""
 
 
 def _status(node: ast.Call, default: int) -> int | None:

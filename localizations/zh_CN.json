@@ -1164,5 +1164,18 @@
   "no such favorite": "该收藏已不存在",
   "no such favorite to move before": "要移到其前面的收藏已不存在",
   "not a favorites export": "不是收藏导出文件",
-  "at most {{maximum}} favorites can be imported at once": "一次最多只能导入 {{maximum}} 条收藏"
+  "at most {{maximum}} favorites can be imported at once": "一次最多只能导入 {{maximum}} 条收藏",
+  "translation service answered {{status}}: {{answer}}": "翻译服务返回 {{status}}：{{answer}}",
+  "translation service unreachable: {{error}}": "无法连接翻译服务：{{error}}",
+  "the translation service's answer is larger than {{size}} MB": "翻译服务的回答超过 {{size}} MB",
+  "translation service sent no JSON": "翻译服务返回的不是 JSON",
+  "unexpected LibreTranslate answer": "LibreTranslate 返回了无法识别的回答",
+  "unexpected chat completion answer": "聊天补全接口返回了无法识别的回答",
+  "the model did not answer with a list of the same length": "模型返回的列表与原文条数不一致",
+  "unexpected DeepL answer": "DeepL 返回了无法识别的回答",
+  "the model answered with an empty prompt": "模型返回了空的提示词",
+  "local GGUF PUP requires 'llama-cpp-python' (or serve the GGUF via llama.cpp server and configure the OpenAI-compatible provider)": "本地 GGUF PUP 需要安装 llama-cpp-python（或用 llama.cpp server 提供该 GGUF 模型，并在设置中将翻译服务设为 OpenAI 兼容接口）",
+  "local GGUF PUP execution failed: {{error}}": "本地 GGUF PUP 运行失败：{{error}}",
+  "local Qwen3.5 PUP execution failed: {{error}}": "本地 Qwen3.5 PUP 运行失败：{{error}}",
+  "local Qwen3.5 PUP answered with an empty prompt": "本地 Qwen3.5 PUP 返回了空的提示词"
 }

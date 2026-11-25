@@ -663,12 +663,16 @@ def test_translate_http_post_and_provider_error_paths(monkeypatch):
         raise requests.RequestException("offline")
 
     monkeypatch.setattr(requests, "post", raise_req)
-    with pytest.raises(TranslationError, match="unreachable"):
+    with pytest.raises(TranslationError, match="unreachable") as unreachable:
         _http_post("http://x", {}, {})
+    # Remi's sentence, translated in the UI; the service's own words are a value
+    assert unreachable.value.status == 502
+    assert (unreachable.value.message.template, unreachable.value.message.params) == ("translation service unreachable: {{error}}", {"error": "offline"})
 
     monkeypatch.setattr(requests, "post", lambda *_a, **_kw: answer(500, b"server error"))
-    with pytest.raises(TranslationError, match="answered 500: server error"):
+    with pytest.raises(TranslationError, match="answered 500: server error") as answered:
         _http_post("http://x", {}, {})
+    assert (answered.value.message.template, answered.value.message.params) == ("translation service answered {{status}}: {{answer}}", {"status": "500", "answer": "server error"})
 
     monkeypatch.setattr(requests, "post", lambda *_a, **_kw: answer(200, b"<html>"))
     with pytest.raises(TranslationError, match="sent no JSON"):

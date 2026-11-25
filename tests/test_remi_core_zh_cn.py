@@ -438,9 +438,9 @@ def test_every_rejected_value_has_a_catalog_key(catalog):
 def test_every_refused_request_is_a_catalog_sentence(catalog):
     """An operation the server refuses says why in the UI language: its error
     (``JobError``, ``RecipeError``, ``Refused`` and their subclasses, and a
-    prompt tool's ``TranslationError`` that is neither a refused value nor a
-    failed service) is a ``Sentence``, whose template the HTTP error body
-    carries and the catalog translates."""
+    prompt tool's ``TranslationError`` that is not a refused value) is a
+    ``Sentence``, whose template the HTTP error body carries and the catalog
+    translates. A failed service's own words are one of its values."""
 
     assert {"ChainError", "NetworkReadOnly", "StoreError"} <= strings_module.request_error_classes()
     templates, unchecked = strings_module.request_error_messages()
@@ -457,6 +457,14 @@ def test_every_refused_request_is_a_catalog_sentence(catalog):
         "no translation provider is configured",
         "too much text to translate at once",
         "reference_images[{{index}}] is too large ({{width}}×{{height}})",
+        # a service that failed (502): what Remi saw, the service's own words as a value
+        "translation service unreachable: {{error}}",
+        "translation service answered {{status}}: {{answer}}",
+        "unexpected chat completion answer",
+        "the model answered with an empty prompt",
+        "local GGUF PUP requires 'llama-cpp-python' (or serve the GGUF via llama.cpp server and configure the OpenAI-compatible provider)",
+        "local Qwen3.5 PUP execution failed: {{error}}",
+        "local Qwen3.5 PUP answered with an empty prompt",
         # the prompt tools store's: an item gone (404), a name taken (409), too many at once (413)
         "no such favorite",
         "a collection named {{name}} already exists",

@@ -82,14 +82,15 @@ export function failureText(error: unknown, texts: StatusTexts = {}, language = 
 
 /**
  * A failed prompt tool (translating, writing or upsampling a prompt). A service that failed (502:
- * the translation service, the chat model, a local model) is explained only by its own answer, so
- * that answer follows a sentence in the UI language. A tool that cannot run (409) or was given too
- * much (413) says why with the sentence its body carries; without one, a 413 here is text that is
- * too long, a 409 a service that is not set up.
+ * the translation service, the chat model, a local model) is explained by what the server saw of
+ * it, after a sentence in the UI language: the sentence its body carries, in the UI language, whose
+ * values are the service's own words ("unreachable: connection refused"); a detail without one as
+ * it is. A tool that cannot run (409) or was given too much (413) says why with the sentence its
+ * body carries; without one, a 413 here is text that is too long, a 409 a service that is not set up.
  */
 export function serviceFailureText(error: unknown, texts: StatusTexts = {}, language = i18n.language): string {
   const lng = language
-  if (error instanceof ApiError && error.status === 502) return t("The service failed: {{detail}}", { detail: error.message, lng })
+  if (error instanceof ApiError && error.status === 502) return t("The service failed: {{detail}}", { detail: bodySentence(error, language) ?? error.message, lng })
   return failureText(error, { 409: t("Set up the service in Settings first.", { lng }), 413: t("The text is too long.", { lng }), ...texts }, language)
 }
 

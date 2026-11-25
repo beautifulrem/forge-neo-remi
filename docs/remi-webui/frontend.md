@@ -1665,9 +1665,10 @@ older server) nothing is shown.
   ("The recipe was deleted meanwhile."), so a call that can meet a 404 of
   its own passes one;
   `failureText` also keeps the app's own errors (already translated
-  sentences), `serviceFailureText` is for the prompt tools (a 502 keeps the
-  service's own answer after a translated sentence: it is the only clue to
-  what to fix; a 409 or 413 says its body's sentence, else its own), and
+  sentences), `serviceFailureText` is for the prompt tools (a 502 says its
+  body's sentence, the service's own words in it, after a translated one: it
+  is the only clue to what to fix; a 409 or 413 says its body's sentence, else
+  its own), and
   `renderFailureText` is for an error boundary (a request by its status, a
   render bug by its own message). A request that got no answer (`fetch`
   failed, a body that is not JSON, a lazy chunk whose import failed: it could

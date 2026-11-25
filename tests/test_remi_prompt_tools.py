@@ -981,7 +981,8 @@ def test_a_prompt_tool_says_why_it_cannot_run_in_a_sentence_the_ui_translates(se
     """A prompt tool that cannot run (no provider, the tools off) or was given too much answered
     its English detail alone, which the UI could only say by the status ("The text is too long."
     for an image that was too large): it is a refused request with the sentence's template and
-    values. A service that failed (502) keeps its own answer as the detail."""
+    values. So is a service that failed (502), what Remi saw ("unreachable", "an empty prompt"),
+    whose own words are one of the values: the UI showed that sentence in English."""
 
     import base64
     import io
@@ -1016,11 +1017,20 @@ def test_a_prompt_tool_says_why_it_cannot_run_in_a_sentence_the_ui_translates(se
         uri = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
     refused(server.client.post(f"{api}/upsample", json={"prompt": "a cat", "reference_images": [uri]}), 413, "reference_images[{{index}}] is too large ({{width}}×{{height}})", index="0", width="40", height="40")
 
-    # the service's own answer: nothing in it to translate
+    # a service that failed: the sentence is Remi's, the service's own words a value
+    import requests
+
     def unreachable(*_args, **_kwargs):
+        raise requests.ConnectionError("connection refused")
+
+    monkeypatch.setattr(requests, "post", unreachable)
+    refused(server.client.post(f"{api}/generate", json={"description": "a cat"}), 502, "translation service unreachable: {{error}}", error="connection refused")
+
+    # a text with no template, passed on from elsewhere, is the detail alone
+    def passed_on(*_args, **_kwargs):
         raise TranslationError("translation service unreachable: connection refused")
 
-    monkeypatch.setattr(pt, "generate_prompt", unreachable)
+    monkeypatch.setattr(pt, "generate_prompt", passed_on)
     failed = server.client.post(f"{api}/generate", json={"description": "a cat"})
     assert failed.status_code == 502 and failed.json() == {"detail": "translation service unreachable: connection refused"}
 
