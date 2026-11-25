@@ -463,7 +463,7 @@ working). `tests/test_dependencies.py` keeps both pins at or above the fixes.
 
 | advisory (Starlette 0.50.0) | fixed in | in Remi |
 |---|---|---|
-| GHSA-82w8-qh3p-5jfq (CVE-2026-54283, high): `request.form()` ignores its field and size limits for `application/x-www-form-urlencoded` (memory and CPU denial of service) | 1.3.1 | no route reads `request.form()` (uploads parse multipart themselves, with caps) and request bodies are capped (`remi/server/limits.py`); an extension's form route would have been exposed |
+| GHSA-82w8-qh3p-5jfq (CVE-2026-54283, high): `request.form()` ignores its field and size limits for `application/x-www-form-urlencoded` (memory and CPU denial of service) | 1.3.1 | no route reads `request.form()`, by itself or through a `Form` or `File` parameter (uploads parse multipart themselves, with caps) and request bodies are capped (`remi/server/limits.py`); an extension's form route would have been exposed |
 | GHSA-wqp7-x3pw-xc5r (CVE-2026-48818, high): `StaticFiles` on Windows follows UNC paths (SSRF, NTLM credential leak) | 1.1.0 | no `StaticFiles` mount: the SPA's files are resolved inside `webui/dist` |
 | GHSA-86qp-5c8j-p5mr (CVE-2026-48710, moderate): a crafted `Host` header poisons `request.url.path` | 1.0.1 | the login, cross-site and route checks read the ASGI scope's path (`route_path`); `request.url` only appears in log lines |
 | GHSA-x746-7m8f-x49c (CVE-2026-48817, moderate): `HTTPEndpoint` dispatches any HTTP method name to an attribute | 1.1.0 | no `HTTPEndpoint` |
@@ -480,12 +480,14 @@ by its `Origin` and `Sec-Fetch-Site`, as before
 
 Every fix is in a new line (transformers 5.x, diffusers 0.38; 4.57.6 and
 0.37.1 are the last of theirs), whose model-loading changes need the GPU
-regression runs, and no client of the server can reach these paths.
+regression runs. One path is open to a client, but only through a crafted
+model folder already on the server's disk, which no route lets a client
+write (GHSA-fgcw-684q-jj6r below).
 
 | advisory | fixed in | why it does not apply |
 |---|---|---|
 | transformers GHSA-29pf-2h5f-8g72 (CVE-2026-4372, high): a `config.json` that names a Hub kernel as `_attn_implementation_internal` makes `from_pretrained` download and run it | 5.3.0 | the setting is read (a model folder's config reaches it), but a Hub kernel loads only through the `kernels` package, which is no requirement and not installed: the load stops with an `ImportError` before anything is downloaded. Revisit if `kernels` is ever installed |
-| transformers GHSA-fgcw-684q-jj6r (CVE-2026-5241, high): a LightGlue `config.json` turns `trust_remote_code` on for the config it nests | 5.5.0 | reachable only through a model folder the operator names: the Prompt Upsampler's `local_model_path` (`remi/prompt_tools/pup.py`) loads any folder, and a crafted LightGlue config there runs code from another folder on the disk (checked offline with `AutoTokenizer.from_pretrained(..., local_files_only=True)`). Refused under `--hide-ui-dir-config`; the checkpoint loader reads configs only from the repository's `backend/huggingface/`, and JoyCaption downloads one fixed repository. Use model folders from sources you trust |
+| transformers GHSA-fgcw-684q-jj6r (CVE-2026-5241, high): a LightGlue `config.json` turns `trust_remote_code` on for the config it nests | 5.5.0 | a client names the folder: the Prompt Upsampler's `local_model_path` is a field of `POST /api/v2/prompt-tools/upsample` and of a pipeline's upsample stage, and `remi/prompt_tools/pup.py` loads any folder the server can read. A crafted LightGlue `config.json` there runs code from another folder on the disk (checked offline with `AutoTokenizer.from_pretrained(..., local_files_only=True)`), or from a Hub repository it names, since the nested load does not pass `local_files_only` (read in `configuration_lightglue.py`, not run). No route lets a client write such a file: uploads are stored as their SHA-256 with the extension their content shows, a save copies only outputs under the names the server gave them, settings take only known keys, and installing an extension (which writes anything, and is code execution already) is refused off loopback without `--enable-insecure-extension-access`. Refused under `--hide-ui-dir-config`; the checkpoint loader reads configs only from the repository's `backend/huggingface/`, and JoyCaption downloads one fixed repository. Use model folders from sources you trust |
 | transformers GHSA-x9r9-c232-4q39 (CVE-2026-80047, high): `load_custom_generate` caches a repository's `custom_generate/generate.py` before the trust check | none yet | Remi never passes `custom_generate` or `trust_remote_code`; a generation mode that moved to a Hub repository raises before anything is fetched |
 | transformers GHSA-xrqw-3rrv-vx5w (CVE-2026-9856, high): a tokenizer's or processor's `save_pretrained` writes outside its folder through chat template names | 5.10.0 | Remi never saves a tokenizer or a processor |
 | transformers GHSA-69w3-r845-3855 (CVE-2026-1839): `Trainer` loads its RNG state with `torch.load` | 5.0.0 | no training; the bundled PyTorch loads with `weights_only=True` |

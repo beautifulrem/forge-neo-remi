@@ -397,8 +397,9 @@ def test_a_json_body_without_a_content_type_is_read_as_json(webui, tmp_path):
     """A1111 API clients that post JSON without a Content-Type (``requests.post(url,
     data=json.dumps(payload))``) keep working, as on Forge Neo: FastAPI 0.132 stopped reading
     such a body (``strict_content_type``), which the app turns off. A page on another site can
-    send one too (a ``Blob`` body); the cross-site check refuses it by its Origin and
-    Sec-Fetch-Site, whatever its content type."""
+    send one too (a ``Blob`` body); the cross-site check refuses it by its Origin (a foreign
+    one, or ``null`` from a sandboxed frame), or by Sec-Fetch-Site when no Origin came,
+    whatever its content type."""
 
     image = io.BytesIO()
     Image.new("RGB", (4, 4)).save(image, "PNG")
@@ -409,9 +410,16 @@ def test_a_json_body_without_a_content_type_is_read_as_json(webui, tmp_path):
         assert sdapi.status_code == 200 and sdapi.json()["info"] == "", sdapi.text
         parsed = client.post("/api/v2/infotext/parse", content=b'{"text": "a cat\\nSteps: 7", "tab": "txt2img"}')
         assert parsed.status_code == 200, parsed.text
+        cross_site = (
+            {"Origin": "https://elsewhere.example", "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors"},
+            {"Origin": "https://elsewhere.example"},  # a browser without fetch metadata
+            {"Origin": "null"},
+            {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors"},
+        )
         for path, data in (("/sdapi/v1/png-info", body), ("/api/v2/infotext/parse", b'{"text": "a cat"}')):
-            refused = client.post(path, content=data, headers={"Origin": "https://elsewhere.example", "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors"})
-            assert refused.status_code == 403, (path, refused.text)
+            for headers in cross_site:
+                refused = client.post(path, content=data, headers=headers)
+                assert refused.status_code == 403, (path, headers, refused.text)
 
 
 def test_request_bodies_are_capped_while_they_stream(webui, tmp_path, monkeypatch):
