@@ -73,6 +73,8 @@ def test_core_actions(server):
     assert bad.status_code == 422 and bad.json()["errors"]
     assert server.client.post("/api/v2/actions/core/nope", json={"values": {}}).status_code == 404
     assert server.client.post("/api/v2/actions/nobody/x", json={"tab": "txt2img", "values": {}}).status_code == 404
+    unknown = server.client.post("/api/v2/actions/nobody/x", json={"tab": "bogus", "values": {}})
+    assert unknown.status_code == 422 and unknown.json()["detail"].startswith("unknown tab 'bogus'")
 
 
 def test_an_extension_action_that_fails_counts_against_its_extension(server, webui, tmp_path, monkeypatch):

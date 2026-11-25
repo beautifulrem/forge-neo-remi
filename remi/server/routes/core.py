@@ -219,7 +219,7 @@ def _action_target(owner: str, tab: str | None) -> Any:
     try:
         runner = runner_for(tab)
     except KeyError as error:
-        raise HTTPException(status_code=422, detail=str(error)) from error
+        raise HTTPException(status_code=422, detail=error.args[0] if error.args else "unknown tab") from error  # str() would quote it
     if runner is None:
         from modules import scripts
         from remi.core.extras import assign_args
