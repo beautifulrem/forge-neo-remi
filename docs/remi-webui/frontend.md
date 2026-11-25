@@ -447,7 +447,12 @@ generated interfaces (sources: Linear's
   the state (the layer eye). A button named for what its next click does
   (the queue's Pause / Resume, the settings' Review / Show all, the panes'
   Hide / Show, a secret's Show / Hide) is an action without `aria-pressed`
-  (`design-guards.test.ts`, "toggle names"). A light theme's hover keeps the 15 % wash: a deeper one
+  (`design-guards.test.ts`, "toggle names"). A toggle that draws its
+  pressed state its own way is listed in that check with the reason: a tag
+  chip is a solid `--primary` fill once pressed, as unpressed chips already
+  wear a primary wash (up to 32 %) for how often the tag occurs and a 15 %
+  tint would read as a frequent tag; the chosen swatch of a swatch picker
+  (the RGBA backdrops) is ringed, as a wash would tint the swatch. A light theme's hover keeps the 15 % wash: a deeper one
   takes some accents' labels under 4.5:1.
   Truncated names and URLs carry their full text in a `title`. A form column (the generate parameters, an
   extension page, the JSON Builder's side column, the Extensions list) is an inspector, not a

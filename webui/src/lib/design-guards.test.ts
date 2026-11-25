@@ -13,6 +13,35 @@ function occurrences(re: RegExp): { file: string; match: string }[] {
   return files.flatMap(({ file, source }) => [...source.matchAll(re)].map((m) => ({ file, match: m[0] })))
 }
 
+/**
+ * The opening JSX tags of a source, scanned to the `>` outside braces and strings, and the source
+ * they were read from: comments are removed first (an apostrophe in one reads as a string).
+ */
+function openingTags(raw: string): { source: string; tags: { name: string; tag: string; index: number }[] } {
+  const source = raw.replace(/^\s*\/\/.*$/gm, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+  const tags: { name: string; tag: string; index: number }[] = []
+  for (const m of source.matchAll(/<([A-Za-z][\w.]*)\b/g)) {
+    let depth = 0
+    let quote = ""
+    let end = -1
+    for (let i = m.index + m[0].length; i < Math.min(source.length, m.index + 8000); i++) {
+      const c = source[i]
+      if (quote) {
+        if (c === "\\") i++
+        else if (c === quote) quote = ""
+      } else if (c === '"' || c === "'" || c === "`") quote = c
+      else if (c === "{") depth++
+      else if (c === "}") depth--
+      else if (c === ">" && depth === 0) {
+        end = i
+        break
+      }
+    }
+    if (end > 0) tags.push({ name: m[1] ?? "", tag: source.slice(m.index, end + 1), index: m.index })
+  }
+  return { source, tags }
+}
+
 describe("type scale", () => {
   // 0.625 rem, 0.6875 rem, text-xs, 0.8 rem, text-sm, 0.9375 rem; text-xl is a theme name.
   const SCALE = new Set(["0.625rem", "0.6875rem", "0.75rem", "0.8rem", "0.875rem", "0.9375rem"])
@@ -38,16 +67,33 @@ describe("type scale", () => {
 describe("pressed toggles", () => {
   const TINT = "PRESSED_TINT_CLASS"
   const toggles = files.filter(({ file, source }) => file !== "components/ui/toggle.tsx" && /\baria-pressed=/.test(source))
-  // Pressed state drawn another way, with the reason.
-  const OWN_LOOK = new Set([
+  // A toggle drawing its pressed state another way, with the reason (frontend.md): exempt only
+  // while its tag draws exactly this look.
+  const OWN_LOOK = [
     // White on the viewer's black backdrop, over the picture: the tint would not read there.
-    "features/lightbox/Lightbox.tsx",
-  ])
+    { file: "features/lightbox/Lightbox.tsx", look: "aria-pressed:bg-white/15" },
+    // Unpressed tag chips already wear a primary wash (up to 32 %) for how often the tag occurs:
+    // a pressed one is a solid fill, above that scale, or it would read as a frequent tag.
+    { file: "features/networks/TagChips.tsx", look: '"border-primary bg-primary text-primary-foreground"' },
+    // A swatch picker (the RGBA backdrops): the chosen swatch is ringed; a wash would tint the swatch.
+    { file: "features/compare/BackdropPicker.tsx", look: '"bg-white/22 ring-1 ring-white/80"' },
+  ]
+  const pressedTags = toggles.flatMap(({ file, source }) =>
+    openingTags(source)
+      .tags.filter(({ tag }) => /\s(?:aria-)?pressed=\{/.test(tag))
+      .map(({ tag }) => ({ file, tag })),
+  )
 
   it("wear the selection tint instead of a hand-written one", () => {
-    // A tint written by hand (an aria-pressed: class, a primary wash) instead of the shared one.
-    const handWritten = toggles.filter(({ file, source }) => !OWN_LOOK.has(file) && /\baria-pressed:|\bbg-primary\/\d/.test(source) && !source.includes(TINT))
-    expect(handWritten.map(({ file }) => file)).toEqual([])
+    expect(pressedTags.length).toBeGreaterThan(20)
+    // A pressed look written by hand: aria-pressed: classes without the shared tint, or a fill
+    // (primary, white, foreground) picked by a condition.
+    const handWritten = pressedTags.filter(
+      ({ file, tag }) =>
+        ((/\baria-pressed:/.test(tag) && !tag.includes(TINT)) || /\?\s*"[^"]*\bbg-(?:primary|white|foreground)\b/.test(tag)) &&
+        !OWN_LOOK.some((own) => own.file === file && tag.includes(own.look)),
+    )
+    expect(handWritten.map(({ file, tag }) => `${file}: ${tag.slice(0, 60)}`)).toEqual([])
     // Toggles that drew their pressed state with a fill, a variant or a colour of their own.
     for (const file of [
       "features/networks/NetworkBrowser.tsx",
@@ -118,9 +164,6 @@ describe("tab strips", () => {
 })
 
 describe("toggle names", () => {
-  // An opening JSX tag, its attribute values balanced to three levels of braces.
-  const TAG = /<([A-Za-z][\w.]*)\b(?:[^>"'{}]|"[^"]*"|'[^']*'|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})*>/g
-
   /** The expression of `attr={…}` in a tag, or undefined. */
   function attribute(tag: string, attr: string): string | undefined {
     const start = new RegExp(`\\s${attr}=\\{`).exec(tag)
@@ -146,17 +189,15 @@ describe("toggle names", () => {
     // frontend.md: a toggle (aria-pressed) keeps one name and its pressed state says on or off; a
     // button whose name says what the next click does ("Show all", "Unpin") is an action, not a toggle.
     const offenders = files.flatMap(({ file, source: raw }) => {
-      // comments out of the way: an apostrophe in one reads as the start of a string
-      const source = raw.replace(/^\s*\/\/.*$/gm, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
-      return [...source.matchAll(TAG)].flatMap((m) => {
-        const tag = m[0]
+      const { source, tags } = openingTags(raw)
+      return tags.flatMap(({ name, tag, index }) => {
         if (attribute(tag, "aria-pressed") === undefined && attribute(tag, "pressed") === undefined) return []
         // the name (a title with text beside it only describes)
         const names = ["aria-label", "label"].map((attr) => attribute(tag, attr)).filter((value) => value !== undefined)
         // a visible name between the tag and its closing tag: text picked by a condition
-        const body = tag.endsWith("/>") ? "" : source.slice(m.index + tag.length, source.indexOf(`</${m[1]}>`, m.index))
+        const body = tag.endsWith("/>") ? "" : source.slice(index + tag.length, source.indexOf(`</${name}>`, index))
         const switched = names.some((name) => switches(name, source)) || /\{[^{}]*\?\s*t\(/.test(body)
-        return switched ? [`${file}: <${m[1]}>`] : []
+        return switched ? [`${file}: <${name}>`] : []
       })
     })
     expect(offenders).toEqual([])
