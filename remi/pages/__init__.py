@@ -361,6 +361,10 @@ class Page:
             except Exception as error:
                 log.exception("page %s: task %s failed", self.id, name)
                 task._finish("failed", error=str(error) or type(error).__name__)
+            except BaseException as error:  # SystemExit, KeyboardInterrupt: the task still ends (it would block its own restart)
+                log.warning("page %s: task %s ended by %s", self.id, name, type(error).__name__)
+                task._finish("failed", error=type(error).__name__)
+                raise
             else:
                 task._finish("completed", result=result)
             finally:

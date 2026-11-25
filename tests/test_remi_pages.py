@@ -376,6 +376,30 @@ def test_fifo_lock_timeout():
     lock.release()
 
 
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")  # re-raised on its thread
+def test_a_task_ended_by_a_base_exception_fails_and_can_start_again(server):
+    """Only ``Exception`` was caught: a task ended by ``SystemExit`` (an extension calling
+    ``sys.exit``) stayed "running", and starting it again only answered "already running"."""
+
+    class Exiting(Echo):
+        @ui.action("run")
+        def run(self, ctx, values):
+            def work(task):
+                if values.get("exit"):
+                    raise SystemExit(2)
+                return {"__outputs__": {"result": "ran"}}
+
+            return self.start_task(ctx, "run", work)
+
+    pages.register(Exiting("echo", "Echo"))
+    status = server.client.post("/api/v2/actions/page:echo/run", json={"values": {"exit": True}}).json()["__outputs__"]["task:run"]
+    done = _poll(server, {"values": {}, "task": "run", "id": status["id"]}, lambda s: s["done"])
+    assert done["__outputs__"]["task:run"]["state"] == "failed" and done["__outputs__"]["task:run"]["error"] == "SystemExit"
+    again = server.client.post("/api/v2/actions/page:echo/run", json={"values": {}}).json()
+    assert "__toast__" not in again and again["__outputs__"]["task:run"]["id"] != status["id"]
+    assert _poll(server, {"values": {}, "task": "run", "id": again["__outputs__"]["task:run"]["id"]}, lambda s: s["done"])["__outputs__"]["result"] == "ran"
+
+
 def test_failed_tasks_toast_their_error(server):
     class Broken(Echo):
         @ui.action("run")
