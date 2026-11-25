@@ -57,26 +57,26 @@ describe("readPngText", () => {
   })
 })
 
-/** A little-endian TIFF block with IFD0 → Exif IFD → UserComment. */
-function tiffWithComment(comment: Uint8Array): Uint8Array {
+/** A TIFF block (little-endian "II" unless said) with IFD0 → Exif IFD → UserComment. */
+function tiffWithComment(comment: Uint8Array, little = true): Uint8Array {
   const header = 8
   const ifd0 = header // 2 + 12 + 4 = 18 bytes
   const exifIfd = ifd0 + 18 // 18 bytes
   const value = exifIfd + 18
   const out = new Uint8Array(value + comment.length)
   const v = new DataView(out.buffer)
-  out.set(latin1("II*\0"), 0)
-  v.setUint32(4, ifd0, true)
-  v.setUint16(ifd0, 1, true)
-  v.setUint16(ifd0 + 2, 0x8769, true)
-  v.setUint16(ifd0 + 4, 4, true)
-  v.setUint32(ifd0 + 6, 1, true)
-  v.setUint32(ifd0 + 10, exifIfd, true)
-  v.setUint16(exifIfd, 1, true)
-  v.setUint16(exifIfd + 2, 0x9286, true)
-  v.setUint16(exifIfd + 4, 7, true)
-  v.setUint32(exifIfd + 6, comment.length, true)
-  v.setUint32(exifIfd + 10, value, true)
+  out.set(latin1(little ? "II*\0" : "MM\0*"), 0)
+  v.setUint32(4, ifd0, little)
+  v.setUint16(ifd0, 1, little)
+  v.setUint16(ifd0 + 2, 0x8769, little)
+  v.setUint16(ifd0 + 4, 4, little)
+  v.setUint32(ifd0 + 6, 1, little)
+  v.setUint32(ifd0 + 10, exifIfd, little)
+  v.setUint16(exifIfd, 1, little)
+  v.setUint16(exifIfd + 2, 0x9286, little)
+  v.setUint16(exifIfd + 4, 7, little)
+  v.setUint32(exifIfd + 6, comment.length, little)
+  v.setUint32(exifIfd + 10, value, little)
   out.set(comment, value)
   return out
 }
@@ -90,9 +90,48 @@ function utf16be(text: string): Uint8Array {
   return out
 }
 
+function utf16le(text: string): Uint8Array {
+  const out = new Uint8Array(text.length * 2)
+  for (let i = 0; i < text.length; i++) {
+    out[i * 2] = text.charCodeAt(i) & 0xff
+    out[i * 2 + 1] = text.charCodeAt(i) >> 8
+  }
+  return out
+}
+
+const hex = (text: string) => Uint8Array.from(text.match(/../g)!, (byte) => parseInt(byte, 16))
+/** The bytes piexif.dump writes (modules/images.py, JPEG and WebP) for the comment "猫耳少女，微笑". */
+const PIEXIF_CJK = hex(
+  "4578696600004d4d002a00000008000187690004000000010000001a000000000001928600070000001600000028554e49434f444500732b80335c115973ff0c5fae7b11",
+)
+
 describe("EXIF UserComment", () => {
   it("decodes piexif's UNICODE (UTF-16BE) comments", () => {
     expect(readExifUserComment(tiffWithComment(concat(latin1("UNICODE\0"), utf16be(PARAMS))))).toBe(PARAMS)
+  })
+
+  // The byte order is not in the format: piexif writes big-endian, other tools little-endian.
+  it("reads either byte order, whatever the first character", () => {
+    const cjk = "猫耳少女，微笑\nSteps: 20, Sampler: Euler a"
+    const quoted = "“quoted” start\nSteps: 20"
+    for (const text of [PARAMS, cjk, quoted]) {
+      for (const little of [true, false]) {
+        expect(readExifUserComment(tiffWithComment(concat(latin1("UNICODE\0"), utf16be(text)), little))).toBe(text)
+        expect(readExifUserComment(tiffWithComment(concat(latin1("UNICODE\0"), utf16le(text)), little))).toBe(text)
+      }
+    }
+    // No Latin text to tell by: the TIFF block's own order
+    expect(readExifUserComment(tiffWithComment(concat(latin1("UNICODE\0"), utf16be("猫耳少女")), false))).toBe("猫耳少女")
+    expect(readExifUserComment(tiffWithComment(concat(latin1("UNICODE\0"), utf16le("猫耳少女")), true))).toBe("猫耳少女")
+    // A byte-order mark decides
+    expect(readExifUserComment(tiffWithComment(concat(latin1("UNICODE\0"), Uint8Array.of(0xff, 0xfe), utf16le("猫耳")), false))).toBe("猫耳")
+    expect(readExifUserComment(tiffWithComment(concat(latin1("UNICODE\0"), Uint8Array.of(0xfe, 0xff), utf16be("猫耳")), true))).toBe("猫耳")
+  })
+
+  it("reads a comment piexif wrote", async () => {
+    const app1 = concat(Uint8Array.of(0xff, 0xe1, (PIEXIF_CJK.length + 2) >> 8, (PIEXIF_CJK.length + 2) & 0xff), PIEXIF_CJK)
+    const jpeg = concat(Uint8Array.of(0xff, 0xd8), app1, Uint8Array.of(0xff, 0xda, 0, 2, 0xff, 0xd9))
+    expect(await readImageParameters(new Blob([jpeg]))).toBe("猫耳少女，微笑")
   })
 
   it("decodes ASCII comments", () => {

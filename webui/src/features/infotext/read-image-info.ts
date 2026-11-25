@@ -79,6 +79,27 @@ export async function readPngText(bytes: Uint8Array, keys?: readonly string[]): 
   return out
 }
 
+/**
+ * The text of an EXIF "UNICODE" comment. Its byte order is not part of the
+ * format: piexif (Forge's JPEG and WebP writer) writes big-endian, other tools
+ * little-endian. A byte-order mark decides; else the side the zero bytes of
+ * Latin characters fall on (an infotext's "Steps: …" line); else the TIFF
+ * block's own order (piexif writes "MM"). Guessing from the first character
+ * read a prompt that starts with a CJK character or a curly quote backwards.
+ */
+function decodeUtf16(body: Uint8Array, littleTiff: boolean): string {
+  if (body[0] === 0xfe && body[1] === 0xff) return new TextDecoder("utf-16be").decode(body.subarray(2))
+  if (body[0] === 0xff && body[1] === 0xfe) return new TextDecoder("utf-16le").decode(body.subarray(2))
+  let high = 0 // code units whose first byte alone is zero: big-endian Latin
+  let low = 0
+  for (let i = 0; i + 1 < body.length; i += 2) {
+    if (body[i] === 0 && body[i + 1] !== 0) high++
+    else if (body[i + 1] === 0 && body[i] !== 0) low++
+  }
+  const bigEndian = high !== low ? high > low : !littleTiff
+  return new TextDecoder(bigEndian ? "utf-16be" : "utf-16le").decode(body)
+}
+
 /** EXIF UserComment (tag 0x9286) from a TIFF block ("II*\0" / "MM\0*"). */
 export function readExifUserComment(tiff: Uint8Array): string | null {
   if (tiff.length < 8) return null
@@ -111,9 +132,7 @@ export function readExifUserComment(tiff: Uint8Array): string | null {
   const body = raw.subarray(8)
   let text: string
   if (prefix.startsWith("UNICODE")) {
-    // piexif writes UTF-16BE; other tools use LE. Guess from the first code unit.
-    const bigEndian = body.length >= 2 && body[0] === 0 && body[1] !== 0
-    text = new TextDecoder(bigEndian ? "utf-16be" : "utf-16le").decode(body)
+    text = decodeUtf16(body, little)
   } else if (prefix.startsWith("ASCII")) {
     text = latin1.decode(body)
   } else {
