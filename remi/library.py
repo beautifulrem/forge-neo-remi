@@ -315,9 +315,10 @@ class GalleryIndex:
     def _forget(self, ids: list[str]) -> None:
         """Drop the index rows (and thumbnails) of deleted files; unlike
         :meth:`FileStore.delete`, the paths are not marked removed, so the
-        folder scan finds them again should they come back."""
+        folder scan finds them again should they come back. The rows go in
+        one transaction: none is left pointing at a file row that is gone."""
 
-        with self._lock:
+        with self._transaction():
             self._db.executemany("DELETE FROM files WHERE id = ? AND kind = 'output'", [(file_id,) for file_id in ids])
             self._db.executemany("DELETE FROM gallery_meta WHERE file_id = ?", [(file_id,) for file_id in ids])
             self._db.executemany("DELETE FROM board_items WHERE file_id = ?", [(file_id,) for file_id in ids])

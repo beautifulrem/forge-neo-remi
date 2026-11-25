@@ -82,6 +82,40 @@ def test_deleting_a_board_is_one_transaction(tmp_path):
         files.close()
 
 
+def test_forgetting_a_vanished_output_is_one_transaction(tmp_path):
+    """An output deleted outside Remi lost its index rows one table at a time, each committed on
+    its own: a failure between them (a locked or full database) left its gallery row and board
+    entry behind with no file row."""
+    import os
+    import sqlite3
+
+    import pytest
+
+    files = FileStore(tmp_path / "files")
+    index = GalleryIndex(files, folders=list)
+
+    def rows():
+        with index._lock:
+            return [index._db.execute(f"SELECT COUNT(*) FROM {table} WHERE {column} = ?", (out.id,)).fetchone()[0] for table, column in (("files", "id"), ("gallery_meta", "file_id"), ("board_items", "file_id"))]
+
+    try:
+        out = _save_img(files, (255, 0, 0), "red rose\nSteps: 20")
+        board = index.create_board("Kept")
+        assert index.add_to_board(board["id"], [out.id]) == 1
+        assert [item.record.id for item in index.list(GalleryQuery())[0]] == [out.id]
+        os.remove(out.path)
+        index._db.execute("CREATE TEMP TRIGGER refuse BEFORE DELETE ON board_items BEGIN SELECT RAISE(ABORT, 'refused'); END")
+        with pytest.raises(sqlite3.IntegrityError):
+            index.list(GalleryQuery())
+        assert rows() == [1, 1, 1]
+        index._db.execute("DROP TRIGGER refuse")
+        assert index.list(GalleryQuery())[0] == []
+        assert rows() == [0, 0, 0]
+    finally:
+        index.close()
+        files.close()
+
+
 def test_asset_lineage_ancestors_siblings_descendants_and_cycles(tmp_path):
     files = FileStore(tmp_path / "files")
     job_store = JobStore(tmp_path / "jobs.db")
