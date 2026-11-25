@@ -286,7 +286,16 @@ imperatively).
   opens takes the focus through the popup's `initialFocus`, never `autoFocus`
   (the popup would give the focus back to that field on close; a field that
   appears later in an open popup, an inline rename, may use `autoFocus`);
-  `number-field.tsx` is ours.
+  a full-screen viewer opens with the focus on its content (the image
+  viewer: on the image, whose keys it handles), not on its first toolbar
+  button; `number-field.tsx` is ours.
+- **Safe area**: the app shell pads for a notch and the home indicator
+  (`env(safe-area-inset-*)` in `App.tsx`), but overlays are portalled
+  outside it. An overlay that reaches a screen edge pads for the insets of
+  that edge itself (the image viewer on every side, its black backdrop
+  still to the edge; the networks sheet at the bottom and its open sides),
+  and a centred dialog sized from the viewport (`96vw`, `94dvh`) subtracts
+  them from that size.
 
 ### Visual rules
 

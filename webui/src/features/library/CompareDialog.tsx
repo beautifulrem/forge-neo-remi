@@ -36,7 +36,7 @@ export function CompareDialog({ images, onOpenChange }: CompareDialogProps) {
   const surface = backdropSurface(backdrop)
   return (
     <Dialog open={images !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[94dvh] w-[min(96vw,1400px)] max-w-none flex-col gap-3 sm:max-w-none">
+      <DialogContent className="flex max-h-[calc(94dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-[min(calc(96vw-env(safe-area-inset-left)-env(safe-area-inset-right)),1400px)] max-w-none flex-col gap-3 sm:max-w-none">
         <DialogHeader className="flex-row flex-wrap items-center justify-between gap-2 pr-8">
           <div className="min-w-0">
             <DialogTitle>{t("Compare images")}</DialogTitle>

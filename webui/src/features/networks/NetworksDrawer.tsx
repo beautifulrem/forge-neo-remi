@@ -96,7 +96,11 @@ export default function NetworksDrawer({ tab, autoFocus, onClose, returnFocus }:
       className={cn(
         "fixed z-40 flex flex-col bg-background shadow-2xl",
         "animate-in duration-200 fade-in-0",
-        desktop ? "top-12 right-0 bottom-0 pr-[env(safe-area-inset-right)] slide-in-from-right-8" : "inset-x-0 bottom-0 h-[82dvh] rounded-t-xl slide-in-from-bottom-8",
+        // its last row stays above the home indicator, its edge clear of a notch
+        "pb-[env(safe-area-inset-bottom)]",
+        desktop
+          ? "top-12 right-0 bottom-0 pr-[env(safe-area-inset-right)] slide-in-from-right-8"
+          : "inset-x-0 bottom-0 h-[82dvh] rounded-t-xl pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] slide-in-from-bottom-8",
       )}
       style={desktop ? { width: `min(${width}px, calc(100vw - 4rem))` } : undefined}
     >

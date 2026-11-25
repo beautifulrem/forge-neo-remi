@@ -4,7 +4,7 @@
  * toggles (real pane sizes), tab strips on a phone, boxes that scroll sideways, platform
  * shortcut hints and generation warnings.
  */
-import { expect, type Page, test } from "@playwright/test"
+import { expect, type Locator, type Page, test } from "@playwright/test"
 import { mod, openGenerate, openRoute, presetStorage, setPrompt } from "./helpers"
 
 /** Pairs of header controls whose boxes overlap, and kbd hints cut by their button. */
@@ -870,5 +870,68 @@ test.describe("no sideways scrolling", () => {
     expect(await sidewaysScrolls(page)).toEqual([])
     await modules.locator("label").first().evaluate((label) => (label.textContent = "umt5_xxl_fp8_e4m3fn_scaled_with_a_much_longer_suffix.safetensors"))
     expect(await sidewaysScrolls(page), "a long module name").toEqual([])
+  })
+})
+
+// The viewer, the comparison and the networks sheet are portalled outside the app's shell, which pads
+// for a notch and the home indicator: on a phone held sideways their arrows, counter and Close button
+// sat under the notch.
+test.describe("overlays on a phone held sideways", () => {
+  const size = { width: 852, height: 393 }
+  const insets = { top: 0, left: 59, bottom: 21, right: 59 }
+
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize(size)
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send("Emulation.setSafeAreaInsetsOverride" as never, { insets } as never)
+  })
+
+  /** The buttons of `overlay` shown on screen (not scrolled out of their list) that reach into the insets. */
+  const unsafe = (overlay: Locator) =>
+    overlay.getByRole("button").evaluateAll(
+      (buttons, { size, insets }) =>
+        buttons.flatMap((button) => {
+          const box = button.getBoundingClientRect()
+          if (box.width === 0 || !button.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2))) return []
+          const inside = box.left >= insets.left - 0.5 && box.right <= size.width - insets.right + 0.5 && box.bottom <= size.height - insets.bottom + 0.5
+          return inside ? [] : [`${button.getAttribute("aria-label") ?? button.textContent?.trim()} at ${Math.round(box.left)},${Math.round(box.top)}`]
+        }),
+      { size, insets },
+    )
+
+  test("the image viewer", async ({ page }) => {
+    await page.goto("/#/gallery")
+    const tile = page.getByRole("list", { name: "Images" }).getByRole("listitem").first()
+    await tile.getByRole("button").first().press("Enter")
+    const viewer = page.getByRole("dialog", { name: "Image viewer" })
+    await expect(viewer.getByRole("button", { name: "Next image" })).toBeVisible()
+    expect(await unsafe(viewer)).toEqual([])
+  })
+
+  test("the comparison", async ({ page }) => {
+    await page.goto("/#/gallery")
+    const tiles = page.getByRole("list", { name: "Images" }).getByRole("listitem")
+    const bulk = page.getByRole("toolbar", { name: "Selected images" })
+    for (const index of [0, 1]) {
+      await tiles.nth(index).hover()
+      await tiles.nth(index).getByRole("checkbox").click()
+      await expect(bulk).toContainText(`${index + 1} selected`)
+    }
+    await bulk.getByRole("button", { name: "Compare" }).click()
+    const dialog = page.getByRole("dialog", { name: "Compare images" })
+    await expect(dialog.getByRole("slider", { name: "Comparison divider" })).toBeVisible()
+    expect(await unsafe(dialog)).toEqual([])
+  })
+
+  test("the networks sheet", async ({ page }) => {
+    await openGenerate(page)
+    await page.locator("body").press("Alt+N")
+    const drawer = page.getByRole("dialog", { name: "Networks" })
+    await expect(drawer.getByRole("option").first()).toBeVisible()
+    // its last row: the list scrolled to its end
+    await drawer.locator(".overflow-y-auto").last().evaluate((list) => (list.scrollTop = list.scrollHeight))
+    const bottom = await drawer.evaluate((element) => element.getBoundingClientRect().bottom - parseFloat(getComputedStyle(element).paddingBottom))
+    expect(bottom).toBeLessThanOrEqual(size.height - insets.bottom + 0.5)
+    expect(await unsafe(drawer)).toEqual([])
   })
 })

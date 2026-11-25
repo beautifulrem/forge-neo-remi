@@ -6,7 +6,7 @@
  */
 import { Dialog } from "@base-ui/react/dialog"
 import { ChevronLeft, ChevronRight, Grid2x2, Maximize, Minimize, X } from "@/components/icons"
-import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react"
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useClientOption } from "@/api/app-options"
 import { api } from "@/api/endpoints"
@@ -62,6 +62,12 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
   const iconOpacity = useClientOption("sd_webui_modal_lightbox_icon_opacity")
   const dim = (opacity: number) => ({ "--lightbox-dim": String(Math.min(1, Math.max(0, opacity))) }) as CSSProperties
   const [viewport, setViewport] = useState<HTMLDivElement | null>(null)
+  // the viewer opens with the focus on the image (its keys: arrows, zoom, S, Escape), not on Download
+  const stage = useRef<HTMLDivElement | null>(null)
+  const stageRef = useCallback((node: HTMLDivElement | null) => {
+    stage.current = node
+    setViewport(node)
+  }, [])
   const viewportSize = useViewportSize(viewport)
   const [natural, setNatural] = useState<Size | null>(null)
   const [view, setView] = useState<ViewState>({ scale: 1, x: 0, y: 0 })
@@ -147,10 +153,12 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
       <Dialog.Portal>
         {/* opaque: the page (its header, the checkpoint name) must not show through the viewer's chrome */}
         <Dialog.Backdrop data-slot="viewer-backdrop" className="fixed inset-0 z-50 bg-[oklch(0.1_0_0)] duration-150 data-closed:animate-out data-closed:fade-out-0 data-open:animate-in data-open:fade-in-0" />
+        {/* the backdrop fills the screen; the controls stay inside its safe area (a notch, the home indicator) */}
         <Dialog.Popup
           aria-label={t("Image viewer")}
           onKeyDown={onKeyDown}
-          className="fixed inset-0 z-50 flex flex-col text-white outline-none duration-150 data-closed:animate-out data-closed:fade-out-0 data-open:animate-in data-open:fade-in-0"
+          initialFocus={stage}
+          className="fixed inset-0 z-50 flex flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] text-white outline-none duration-150 data-closed:animate-out data-closed:fade-out-0 data-open:animate-in data-open:fade-in-0"
         >
           <Dialog.Title className="sr-only">{t("Image viewer")}</Dialog.Title>
           <div
@@ -201,7 +209,7 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
 
           <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
           <div
-            ref={setViewport}
+            ref={stageRef}
             tabIndex={-1}
             className={cn("relative min-h-0 flex-1 touch-none overflow-hidden outline-none select-none", dragging ? "cursor-grabbing" : "cursor-grab")}
             onWheel={(event) => {

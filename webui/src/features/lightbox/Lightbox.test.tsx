@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { queryClient } from "@/api/queries"
 import type { ResultItem } from "@/features/gallery/session-store"
@@ -49,6 +49,15 @@ describe("lightbox", () => {
 
     fireEvent.keyDown(dialog, { key: "Escape" })
     expect(onOpenChange).toHaveBeenCalledWith(false, expect.anything())
+  })
+
+  // Opened from the keyboard, the focus went to the first toolbar button (Download) with its tooltip:
+  // Escape closed the tooltip first, and Enter downloaded the image
+  it("takes the focus on the image, not on a toolbar button", async () => {
+    const { dialog, image } = renderViewer()
+    await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement | null))
+    expect(document.activeElement).not.toBe(dialog)
+    expect(document.activeElement).toContainElement(image)
   })
 
   // The arrows in the Save menu turned the viewer to the next image.
