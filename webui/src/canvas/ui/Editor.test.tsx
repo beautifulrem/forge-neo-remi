@@ -8,7 +8,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { ComponentProps } from "react"
+import { toast } from "sonner"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { activateLocale } from "@/i18n"
 import { getDocument } from "../engine/registry"
 import type { ImageEditorProps } from "../types"
 import type { EditorBody } from "./EditorBody"
@@ -62,6 +64,8 @@ vi.mock("../engine/registry", async (importOriginal) => {
     loadImage: async (url: string) => {
       loads.calls.push(url)
       if (url.includes("broken")) throw new Error("decode failed")
+      // what image.decode() rejects with for a file that is not a picture the browser can read
+      if (url.includes("undecodable")) throw new DOMException("The source image cannot be decoded.", "EncodingError")
       if (url.includes("mask-upload")) return testImage(W, H, [255, 255, 255, 255])
       return testImage(W, H, [40, 80, 120, 255])
     },
@@ -155,5 +159,19 @@ describe("Editor binding", () => {
     update({ image: "bg-a", layers: { mask: { kind: "mask", value: null } }, activeLayer: "mask" })
     await waitFor(() => expect(doc.isEmpty("mask")).toBe(true))
     expect(doc.layer("mask")?.sync.value).toBeNull()
+  })
+
+  // A picture the browser could not decode toasted its English DOMException message ("The source
+  // image cannot be decoded.") in every language.
+  it("says an image that cannot be decoded in the UI language", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { headers: { "Content-Type": "application/json" } }))
+    const failed = vi.spyOn(toast, "error")
+    await act(() => activateLocale("zh_CN"))
+    try {
+      setup({ image: "undecodable-1", layers: { mask: { kind: "mask", value: null } }, activeLayer: "mask" })
+      await waitFor(() => expect(failed).toHaveBeenCalledWith("无法加载图像", { description: "无法读取该图像。" }))
+    } finally {
+      await act(() => activateLocale("en"))
+    }
   })
 })

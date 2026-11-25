@@ -12,6 +12,7 @@ import { api } from "@/api/endpoints"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { failureText } from "@/features/errors/error-text"
+import { i18n } from "@/i18n"
 import { showToast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import { describeFile, imageFiles, previewUrlOf, uploadFile, useUploadInfo } from "@/ui/uploads"
@@ -22,7 +23,15 @@ import type { ImageEditorProps } from "../types"
 import { EditorBody } from "./EditorBody"
 import { useDocValue } from "./use-doc"
 
-const errorText = (error: unknown) => failureText(error)
+/**
+ * Why an image or upload failed. A picture the browser could not decode (`image.decode()` rejects
+ * with an `EncodingError`: not an image it can read, or the file did not arrive whole) has its own
+ * sentence: its message is the browser's English, and it is no failure to reach the server.
+ */
+function errorText(error: unknown): string {
+  if (error instanceof DOMException && error.name === "EncodingError") return i18n.t("The image could not be read.")
+  return failureText(error)
+}
 
 export default function Editor(props: ImageEditorProps) {
   const { t } = useTranslation()

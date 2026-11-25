@@ -1702,5 +1702,6 @@
   "Write a prompt, then tap Generate": "写好提示词，轻点“生成”",
   "extensions that are already installed": "已安装的扩展",
   "This control failed to render: {{reason}}": "此控件渲染失败：{{reason}}",
-  "The dialog could not be shown": "无法显示该对话框"
+  "The dialog could not be shown": "无法显示该对话框",
+  "The image could not be read.": "无法读取该图像。"
 }
