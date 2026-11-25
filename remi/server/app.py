@@ -316,6 +316,10 @@ def create_app(
         exception_handlers={Exception: handle_exception, RequestValidationError: _request_validation_error, ValidationError: _validation_error, JobError: _refused, RecipeError: _refused, Refused: _refused, FileError: _file_error},
         # every route's JSON body, /sdapi's (added below) included
         dependencies=[Depends(refuse_broken_text)],
+        # A body without a Content-Type is read as JSON, as Forge Neo's FastAPI reads it: A1111 API
+        # clients post JSON without one (FastAPI 0.132+ answers them 422 otherwise). Cross-site
+        # requests are refused by their Origin / Sec-Fetch-Site (SecurityMiddleware), not by it.
+        strict_content_type=False,
     )
     app.state.services = services
     app.state.auth = auth

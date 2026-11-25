@@ -452,6 +452,30 @@ of the same line fixes it. Look again at each upstream sync
 ([upstream-absorption.md](upstream-absorption.md)), or sooner when Remi starts
 using a path named below.
 
+### 2026-11-26: Starlette 1.3.1 and FastAPI 0.136.3
+
+Every request goes through Starlette, so its advisories are fixed whether or
+not Remi's routes reach them: `starlette==1.3.1` is pinned in
+`requirements.txt` itself (FastAPI only sets a floor an older Starlette still
+meets) with `fastapi==0.136.3`, the last release before FastAPI 0.137 stopped
+listing included routes in `app.routes` (extensions that walk the routes keep
+working). `tests/test_dependencies.py` keeps both pins at or above the fixes.
+
+| advisory (Starlette 0.50.0) | fixed in | in Remi |
+|---|---|---|
+| GHSA-82w8-qh3p-5jfq (CVE-2026-54283, high): `request.form()` ignores its field and size limits for `application/x-www-form-urlencoded` (memory and CPU denial of service) | 1.3.1 | no route reads `request.form()` (uploads parse multipart themselves, with caps) and request bodies are capped (`remi/server/limits.py`); an extension's form route would have been exposed |
+| GHSA-wqp7-x3pw-xc5r (CVE-2026-48818, high): `StaticFiles` on Windows follows UNC paths (SSRF, NTLM credential leak) | 1.1.0 | no `StaticFiles` mount: the SPA's files are resolved inside `webui/dist` |
+| GHSA-86qp-5c8j-p5mr (CVE-2026-48710, moderate): a crafted `Host` header poisons `request.url.path` | 1.0.1 | the login, cross-site and route checks read the ASGI scope's path (`route_path`); `request.url` only appears in log lines |
+| GHSA-x746-7m8f-x49c (CVE-2026-48817, moderate): `HTTPEndpoint` dispatches any HTTP method name to an attribute | 1.1.0 | no `HTTPEndpoint` |
+| GHSA-jp82-jpqv-5vv3 (CVE-2026-54282, low): the request path poisons `request.url.hostname` | 1.3.0 | the `Host` check reads the header (`modules/extension_route_guard.py`) |
+
+FastAPI 0.132 stopped reading a body without a `Content-Type` as JSON. The app
+turns that off (`strict_content_type=False` in `remi/server/app.py`): A1111
+API clients post JSON without one, as Forge Neo still accepts. A cross-site
+page can send such a body too (a `Blob`), and the cross-site check refuses it
+by its `Origin` and `Sec-Fetch-Site`, as before
+(`tests/test_remi_security.py`).
+
 ### 2026-11-26: transformers 4.57.6 and diffusers 0.37.1 kept
 
 Every fix is in a new line (transformers 5.x, diffusers 0.38; 4.57.6 and

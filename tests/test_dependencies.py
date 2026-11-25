@@ -96,7 +96,6 @@ def test_module_level_imports_are_declared_dependencies():
 
 # Remi's own code may lean on these without declaring them, each with the reason
 NOT_DIRECT = {
-    "starlette": "FastAPI's own framework: fastapi pins the Starlette it supports",
     "llama_cpp": "remi/prompt_tools/pup.py imports it only for a local GGUF model and says how to install it",
 }
 
@@ -130,3 +129,23 @@ def test_remi_declares_every_library_it_uses():
             if not owners & requirements:
                 undeclared.setdefault(module, []).append(relative)
     assert undeclared == {}, undeclared
+
+
+# Releases of the web server every request goes through that fix its advisories (docs/remi-webui/security.md,
+# "Dependency advisories"): starlette 1.3.1 (GHSA-82w8-qh3p-5jfq, the last of five fixed in 1.0.1-1.3.1);
+# fastapi 0.133.0 is the first that admits a Starlette 1.x
+WEB_SERVER_FLOORS = {"starlette": "1.3.1", "fastapi": "0.133.0"}
+
+
+def test_the_web_server_is_pinned_past_its_advisories():
+    """Starlette is pinned itself: fastapi only names a floor that an installed older
+    Starlette still meets, and the launcher reinstalls requirements.txt by its == pins."""
+
+    from packaging.version import Version
+
+    pins = {}
+    for line in (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines():
+        name, sep, version = line.partition("==")
+        if sep:
+            pins[_name(name)] = version.split(";")[0].strip()
+    assert {name: Version(pins.get(name, "0")) >= Version(floor) for name, floor in WEB_SERVER_FLOORS.items()} == dict.fromkeys(WEB_SERVER_FLOORS, True), pins

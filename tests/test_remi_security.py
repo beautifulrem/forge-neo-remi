@@ -393,6 +393,27 @@ def test_sdapi_options_refuse_unknown_settings_without_setting_any(webui, tmp_pa
 # region Request bodies
 
 
+def test_a_json_body_without_a_content_type_is_read_as_json(webui, tmp_path):
+    """A1111 API clients that post JSON without a Content-Type (``requests.post(url,
+    data=json.dumps(payload))``) keep working, as on Forge Neo: FastAPI 0.132 stopped reading
+    such a body (``strict_content_type``), which the app turns off. A page on another site can
+    send one too (a ``Blob`` body); the cross-site check refuses it by its Origin and
+    Sec-Fetch-Site, whatever its content type."""
+
+    image = io.BytesIO()
+    Image.new("RGB", (4, 4)).save(image, "PNG")
+    body = ('{"image": "' + base64.b64encode(image.getvalue()).decode() + '"}').encode()
+    with sdapi_server(tmp_path) as app, TestClient(app, raise_server_exceptions=False, base_url="http://127.0.0.1:7860") as client:
+        sdapi = client.post("/sdapi/v1/png-info", content=body)
+        assert "content-type" not in sdapi.request.headers
+        assert sdapi.status_code == 200 and sdapi.json()["info"] == "", sdapi.text
+        parsed = client.post("/api/v2/infotext/parse", content=b'{"text": "a cat\\nSteps: 7", "tab": "txt2img"}')
+        assert parsed.status_code == 200, parsed.text
+        for path, data in (("/sdapi/v1/png-info", body), ("/api/v2/infotext/parse", b'{"text": "a cat"}')):
+            refused = client.post(path, content=data, headers={"Origin": "https://elsewhere.example", "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors"})
+            assert refused.status_code == 403, (path, refused.text)
+
+
 def test_request_bodies_are_capped_while_they_stream(webui, tmp_path, monkeypatch):
     from remi.server import limits
 
