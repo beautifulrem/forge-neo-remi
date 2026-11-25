@@ -6,7 +6,7 @@
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Check, Folder, FolderPlus, Images, MoreHorizontal, Pencil, Plus, Trash2, X } from "@/components/icons"
-import { type ReactNode, useRef, useState } from "react"
+import { type ReactNode, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { FadeStrip } from "@/components/FadeStrip"
@@ -65,6 +65,13 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
   const [deleting, setDeleting] = useState<Board | null>(null)
 
   const activeBoard = boardId ? boards.find((board) => board.id === boardId) ?? null : null
+  // A remembered board that is gone (deleted in another tab or on another device) selects All
+  // boards, not nothing. Only a settled list decides: while it refetches (a board just created)
+  // it may not have the new board yet.
+  const boardGone = Boolean(boardId) && boardsList.isSuccess && !boardsList.isFetching && activeBoard === null
+  useEffect(() => {
+    if (boardGone) setView({ boardId: null })
+  }, [boardGone, setView])
   const filtered = activeFilters(view)
   const showCount = count !== undefined && !failed
 

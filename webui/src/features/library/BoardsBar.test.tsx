@@ -1,8 +1,9 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { queryClient } from "@/api/queries"
-import { AssignBoardPopover } from "./BoardsBar"
+import { AssignBoardPopover, BoardsBar } from "./BoardsBar"
+import { useGalleryView } from "./filters"
 
 function renderPopover() {
   render(
@@ -52,5 +53,65 @@ describe("Add to board", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add to board" }))
     expect(await screen.findByRole("button", { name: "Remove from “Portraits”" })).toBeInTheDocument()
     expect(screen.queryByText("Removed from “Portraits”")).not.toBeInTheDocument()
+  })
+})
+
+describe("Boards bar", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    queryClient.clear()
+    useGalleryView.setState({ boardId: null })
+  })
+
+  it("goes back to All boards when the remembered board no longer exists", async () => {
+    const board = { id: "b1", name: "Portraits", description: "", item_count: 1, cover_file_id: null, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" }
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify([board]), { status: 200 }))
+    // deleted in another tab, or on another device
+    useGalleryView.setState({ boardId: "gone" })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <BoardsBar activeItems={[]} />
+      </QueryClientProvider>,
+    )
+    await screen.findByRole("tab", { name: /Portraits/ })
+    await waitFor(() => expect(useGalleryView.getState().boardId).toBeNull())
+    expect(screen.getByRole("tab", { name: "All boards" })).toHaveAttribute("aria-selected", "true")
+  })
+
+  it("selects a board it has just created", async () => {
+    const board = (id: string, name: string) => ({ id, name, description: "", item_count: 0, cover_file_id: null, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" })
+    const boards = [board("b1", "Portraits")]
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      if (init?.method === "POST") {
+        const created = board("b2", "Night")
+        boards.push(created)
+        return new Response(JSON.stringify(created), { status: 200 })
+      }
+      return new Response(JSON.stringify(boards), { status: 200 })
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <BoardsBar activeItems={[]} />
+      </QueryClientProvider>,
+    )
+    await screen.findByRole("tab", { name: /Portraits/ })
+    fireEvent.click(screen.getByRole("button", { name: "New board" }))
+    fireEvent.change(await screen.findByPlaceholderText("Board name"), { target: { value: "Night" } })
+    fireEvent.click(screen.getByRole("button", { name: "Create board" }))
+    expect(await screen.findByRole("tab", { name: /Night/ })).toHaveAttribute("aria-selected", "true")
+    expect(useGalleryView.getState().boardId).toBe("b2")
+  })
+
+  it("keeps a board that exists", async () => {
+    const board = { id: "b1", name: "Portraits", description: "", item_count: 1, cover_file_id: null, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" }
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify([board]), { status: 200 }))
+    useGalleryView.setState({ boardId: "b1" })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <BoardsBar activeItems={[]} />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByRole("tab", { name: /Portraits/ })).toHaveAttribute("aria-selected", "true")
+    expect(useGalleryView.getState().boardId).toBe("b1")
   })
 })
