@@ -350,7 +350,7 @@ FREE_TEXT_REJECTIONS = {
     ("remi/server/options.py", "message"): "the parameter of `_error`, the helper its callers use",
     ("remi/server/options.py", "reason"): "frozen_reason()'s sentences, in the SPA catalog (a locked setting's reason)",
     ("remi/server/options.py", 'f"{type(error).__name__}: {error}"'): "a setting's own code raised: its exception, as it is",
-    ("remi/ui/nodes.py", "str(error)"): "a param's own `validate` raised: the extension's text",
+    ("remi/ui/nodes.py", "reason"): "a param's own `validate` raised: the extension's text, or its Sentence",
     ("extensions-builtin/sd_forge_controlnet/lib_controlnet/unit_actions.py", "message"): "the parameter of `bad_input`, the helper its callers use",
     ("extensions-builtin/sd_forge_controlnet/lib_controlnet/unit_param.py", "str(error)"): "the infotext parser's own error",
     ("extensions-builtin/sd_forge_controlnet/lib_controlnet/unit_param.py", 'f"{key}: {error}"'): "a unit field's name before that field's own message",
