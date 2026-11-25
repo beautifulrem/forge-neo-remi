@@ -49,6 +49,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from remi.files import readonly_uri
 from remi.jobs.store import CANCELLED, COMPLETED, FAILED, INTERRUPTED, QUEUED, Job
 
 log = logging.getLogger(__name__)
@@ -674,8 +675,7 @@ def _connect_readonly(path: str) -> Iterator[sqlite3.Connection]:
     """A read-only connection, closed on exit (sqlite3's own context manager
     only ends the transaction and leaves the connection open)."""
 
-    uri = "file:" + path.replace("?", "%3F").replace("#", "%23") + "?mode=ro"
-    db = sqlite3.connect(uri, uri=True, timeout=10)
+    db = sqlite3.connect(readonly_uri(path), uri=True, timeout=10)
     try:
         db.row_factory = sqlite3.Row
         yield db

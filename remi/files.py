@@ -214,6 +214,14 @@ def connect(path: Path) -> sqlite3.Connection:
     return db
 
 
+def readonly_uri(path: str | os.PathLike) -> str:
+    """The ``file:`` URI that opens the SQLite database at ``path`` read-only
+    (``sqlite3.connect(uri, uri=True)``): ``%``, ``?`` and ``#`` in the path
+    are escaped, and a Windows drive path becomes ``file:///C:/…``."""
+
+    return Path(path).resolve().as_uri() + "?mode=ro"
+
+
 @contextlib.contextmanager
 def transaction(db: Any, begin: str = "BEGIN IMMEDIATE") -> Iterator[None]:
     """``begin`` … ``COMMIT`` around the block (the caller holds the

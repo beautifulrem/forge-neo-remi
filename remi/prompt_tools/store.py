@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from remi.files import decode_offset, encode_cursor, transaction
+from remi.files import decode_offset, encode_cursor, readonly_uri, transaction
 
 SCHEMA_VERSION = 1
 FAVORITE_KINDS = ("prompt", "negative", "tags")
@@ -598,7 +598,7 @@ class PromptToolsStore:
         if self.meta("imported:tag_frequency") or not os.path.isfile(path):
             return 0
         try:
-            source = sqlite3.connect(f"file:{Path(path).as_posix()}?mode=ro", uri=True)
+            source = sqlite3.connect(readonly_uri(path), uri=True)
             try:
                 rows = source.execute("SELECT name, type, count_pos, count_neg, last_used FROM tag_frequency").fetchall()
             finally:

@@ -485,6 +485,19 @@ def test_source_paths_and_counts(webui, tmp_path, monkeypatch):
     assert importers.count_prompt_queue(str(tmp_path / "missing.json")) == 0
 
 
+def test_a_database_in_a_folder_with_uri_characters_is_counted(tmp_path):
+    """The database opens read-only through a file: URI; %, ? and # in its path are escaped."""
+
+    folder = tmp_path / "a%25b?#c"
+    folder.mkdir()
+    db = sqlite3.connect(folder / "tasks.sqlite3")
+    db.execute("CREATE TABLE task (id TEXT)")
+    db.executemany("INSERT INTO task VALUES (?)", [("1",), ("2",), ("3",)])
+    db.commit()
+    db.close()
+    assert importers.count_agent_scheduler(str(folder / "tasks.sqlite3")) == 3
+
+
 @pytest.mark.parametrize(
     ("value", "expected"),
     [(None, None), (1700000000, 1700000000.0), (1.5, 1.5), ("2026-01-02T03:04:05Z", 1767323045.0), ("2026-01-02 03:04:05", 1767323045.0), ("2026-01-02T05:04:05+02:00", 1767323045.0), ("yesterday", None)],

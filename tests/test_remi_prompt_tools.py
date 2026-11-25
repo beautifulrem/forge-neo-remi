@@ -502,6 +502,18 @@ def test_legacy_imports(store, tmp_path):
     assert [(f["kind"], f["text"], f["name"]) for f in store.favorites(all_collections=True)] == [("negative", "blurry", "neg"), ("negative", "lowres", "")]
 
 
+def test_a_legacy_database_in_a_folder_with_uri_characters_is_read(store, tmp_path):
+    """The database opens read-only through a file: URI; %, ? and # in its path are escaped."""
+
+    folder = tmp_path / "a%25b?#c"
+    folder.mkdir()
+    legacy = folder / "tag_frequency.db"
+    with closing(sqlite3.connect(legacy)) as db, db:
+        db.execute("CREATE TABLE tag_frequency (name TEXT, type INT, count_pos INT, count_neg INT, last_used TIMESTAMP)")
+        db.executemany("INSERT INTO tag_frequency VALUES (?, 1, 1, 0, NULL)", [(f"tag{i}",) for i in range(5)])
+    assert store.import_tag_frequency(legacy) == 5
+
+
 def test_legacy_import_is_all_or_nothing(store, tmp_path, monkeypatch):
     storage = tmp_path / "storage"
     storage.mkdir()
