@@ -1,4 +1,4 @@
-import { onlineManager, QueryClientProvider } from "@tanstack/react-query"
+import { onlineManager, QueryClientProvider, useQuery } from "@tanstack/react-query"
 import { act, renderHook, waitFor } from "@testing-library/react"
 import type { ReactNode } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -33,5 +33,18 @@ describe("the app's query client while the browser reports offline", () => {
     act(() => result.current.mutate("new.safetensors"))
     await waitFor(() => expect(patch).toHaveBeenCalledWith({ sd_model_checkpoint: "new.safetensors" }))
     expect(result.current.isPaused).toBe(false)
+  })
+
+  // networkMode "always" turns TanStack's refetchOnReconnect off by default: after a short loss of
+  // the network that the socket rode out, stale lists stayed as they were until something else
+  // asked for them.
+  it("asks again for stale data when the browser is back online", async () => {
+    const load = vi.spyOn(api, "models").mockResolvedValue(models)
+    const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    renderHook(() => useQuery({ ...modelsQuery, staleTime: 0 }), { wrapper })
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(1))
+    act(() => onlineManager.setOnline(false))
+    act(() => onlineManager.setOnline(true))
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(2))
   })
 })
