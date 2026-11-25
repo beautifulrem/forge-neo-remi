@@ -1546,7 +1546,11 @@ bound tabs node, an Anima-like section (enable toggle, preset action,
 exclusive locks, custom widget) and a ControlNet-like section (uploads,
 `on_change`, sanitised HTML). The mock `__conflicts__` reads the `scripts`
 context (Anima locks one-of-two, Hires. fix vs refiner, LCM pins its
-schedule). `POST /jobs` validates like §3 and answers 422 `{"errors": …}`
+schedule). `POST /jobs` validates like §3 and answers 422 `{"errors": …}`,
+each refused value in the server's words (`remi/ui/nodes.py`: the sentence,
+its template and values), and the sample extensions' toasts name their
+values as `{text, params}`, so the zh preview translates both through the
+catalog sample (`serverCatalogZh`; `api/mock/server.test.ts`)
 (try `#invalid` in the prompt; the schema's `core.required` rules are
 checked by the client before it sends anything, so img2img without a
 source image marks the field and shows the toast without a request);

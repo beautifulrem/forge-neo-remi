@@ -133,7 +133,7 @@ export function conflictPatch(core: Values, scripts: Record<string, Values>, sel
   return patch
 }
 
-function actionPatch(owner: string, action: string, body: ActionRequest & { selected?: string }) {
+export function actionPatch(owner: string, action: string, body: ActionRequest & { selected?: string }) {
   const values = body.values ?? {}
   const scripts = body.scripts ?? {}
   switch (`${owner}/${action}`) {
@@ -195,7 +195,7 @@ function actionPatch(owner: string, action: string, body: ActionRequest & { sele
         "sampler.sampler_name": { value: sampler },
         "sampler.steps": { value: steps },
         "core.cfg_scale": { value: cfg },
-        __toast__: { level: "success", message: `Preset “${String(values.preset)}” applied` },
+        __toast__: { level: "success", message: { text: "Preset “{{preset}}” applied", params: { preset: String(values.preset) } } },
         __outputs__: { status: `Sampler ${sampler}, ${steps} steps, CFG ${cfg}` },
       }
     }
@@ -231,7 +231,7 @@ function actionPatch(owner: string, action: string, body: ActionRequest & { sele
         __outputs__: { kit_status: "⚪ Fields cleared" },
       }
     default:
-      return { __toast__: { level: "warning", message: `Mock: no handler for ${owner}/${action}` } }
+      return { __toast__: { level: "warning", message: { text: "Mock: no handler for {{action}}", params: { action: `${owner}/${action}` } } } }
   }
 }
 
@@ -239,8 +239,11 @@ function actionPatch(owner: string, action: string, body: ActionRequest & { sele
 
 /**
  * A small version of the server's request validation (schema-format.md §3):
- * numbers must be finite and in range, choices must be listed, plus two
+ * numbers must be finite and in range, seeds whole, choices listed, plus
  * the schema's required inputs, and a demo rule ("#invalid" in the prompt).
+ * A refused value says what the server says (`remi/ui/nodes.py`): its English
+ * sentence with the template and values of the `remi.ui.Sentence`, so the zh
+ * preview translates it through the catalog sample (`serverCatalogZh`).
  */
 export function validateJob(request: JobRequest): ValidationError[] {
   const schema = request.tab === "extras" ? extrasSchema : tabSchema(request.tab)
@@ -250,8 +253,8 @@ export function validateJob(request: JobRequest): ValidationError[] {
   for (const [owner, values] of owners) {
     for (const [name, value] of Object.entries(values ?? {})) {
       const node = index.inputs.get(owner)?.get(name)
-      const message = node ? invalid(node, value) : null
-      if (message) errors.push({ owner, param: name, message })
+      const refusal = node ? invalid(node, value) : null
+      if (refusal) errors.push({ owner, param: name, ...refusal })
     }
   }
   errors.push(...missingInputs(schema, request))
@@ -261,19 +264,73 @@ export function validateJob(request: JobRequest): ValidationError[] {
   return errors
 }
 
-function invalid(node: InputNode, value: unknown): string | null {
+/** Why a value is refused: a catalog key, or a sentence with its template and values. */
+type Refusal = { message: string; template?: string; params?: Record<string, string> }
+
+/** A `remi.ui.Sentence` as the server sends it: the English sentence, its template and its values (text). */
+function sentence(template: string, params: Record<string, string>): Refusal {
+  return { message: template.replace(/\{\{(\w+)\}\}/g, (_, name: string) => params[name] ?? ""), template, params }
+}
+
+/** Python's `repr` of a JSON value, as the server writes a refused value into its sentence. */
+function pyRepr(value: unknown): string {
+  if (typeof value === "string") return `'${value.replaceAll("\\", "\\\\").replaceAll("'", "\\'")}'`
+  if (typeof value === "boolean") return value ? "True" : "False"
+  if (value === null || value === undefined) return "None"
+  return typeof value === "number" ? String(value) : JSON.stringify(value)
+}
+
+/** Python's type name of a JSON value. */
+function pyType(value: unknown): string {
+  if (value === null || value === undefined) return "NoneType"
+  if (Array.isArray(value)) return "list"
+  return { string: "str", number: "float", boolean: "bool" }[typeof value as string] ?? "dict"
+}
+
+/** A number from a JSON number or a numeric string (`to_number`), or why not. */
+function toNumber(value: unknown): number | Refusal {
+  if (typeof value === "boolean") return sentence("expected a number, got {{value}}", { value: pyRepr(value) })
+  if (typeof value === "string") {
+    const number = value.trim() === "" ? Number.NaN : Number(value.trim())
+    return Number.isFinite(number) ? number : sentence("expected a number, got {{value}}", { value: pyRepr(value) })
+  }
+  if (typeof value !== "number") return sentence("expected a number, got {{type}}", { type: pyType(value) })
+  return Number.isFinite(value) ? value : sentence("expected a finite number, got {{value}}", { value: pyRepr(value) })
+}
+
+const SEED_MAX = 2n ** 63n - 1n
+
+/** A value that matches none of the choices (`match_choice`). */
+function notAChoice(value: unknown, choices: readonly unknown[]): Refusal {
+  if (choices.length === 0) return sentence("{{value}}: there are no choices", { value: pyRepr(value) })
+  const shown = choices.slice(0, 8).map(pyRepr).join(", ") + (choices.length > 8 ? ", ..." : "")
+  return sentence("{{value}} is not one of the choices ({{choices}})", { value: pyRepr(value), choices: shown })
+}
+
+function invalid(node: InputNode, value: unknown): Refusal | null {
   switch (node.type) {
     case "slider":
     case "number": {
-      if (typeof value !== "number" || !Number.isFinite(value)) return `expected a number, got ${JSON.stringify(value)}`
-      if (node.type === "number" && node.minimum != null && value < node.minimum) return `must be at least ${node.minimum}`
-      if (node.type === "number" && node.maximum != null && value > node.maximum) return `must be at most ${node.maximum}`
+      const number = toNumber(value)
+      if (typeof number !== "number") return number
+      // a slider clamps; a number field refuses what is out of range
+      if (node.type === "number" && node.minimum != null && number < node.minimum) return sentence("must be at least {{minimum}}, got {{value}}", { minimum: String(node.minimum), value: String(number) })
+      if (node.type === "number" && node.maximum != null && number > node.maximum) return sentence("must be at most {{maximum}}, got {{value}}", { maximum: String(node.maximum), value: String(number) })
       return null
     }
-    case "seed":
-      return Number.isInteger(value) ? null : `expected an integer, got ${JSON.stringify(value)}`
-    case "choice":
-      return node.allow_custom || node.choices.some((c) => c.value === value) ? null : `${JSON.stringify(value)} is not one of the choices`
+    case "seed": {
+      if (value === null || value === undefined) return { message: "a seed is required" }
+      const number = toNumber(value)
+      if (typeof number !== "number") return number
+      if (!Number.isInteger(number)) return sentence("a seed is a whole number, got {{value}}", { value: pyRepr(value) })
+      if (number < -1 || BigInt(number) > SEED_MAX) return sentence("a seed is -1 (random) or between 0 and {{maximum}}, got {{value}}", { maximum: String(SEED_MAX), value: String(number) })
+      return null
+    }
+    case "choice": {
+      if (value === null || value === undefined) return node.choices.length > 0 ? { message: "a choice is required" } : null
+      if ((node.allow_custom && typeof value === "string") || node.choices.some((c) => c.value === value)) return null
+      return notAChoice(value, node.choices.map((c) => c.value))
+    }
     default:
       return null
   }
@@ -504,7 +561,7 @@ function parseInfotextMock(text: string, tab: FormTab | null | undefined): Infot
   if (num("Steps") !== undefined) sampler.steps = num("Steps")
   if (params.Sampler) {
     if (models.samplers.some((s) => s.name === params.Sampler)) sampler.sampler_name = params.Sampler
-    else problems.push({ owner: "sampler", param: "sampler_name", message: `unknown sampler ${params.Sampler}` })
+    else problems.push({ owner: "sampler", param: "sampler_name", ...notAChoice(params.Sampler, models.samplers.map((s) => s.name)) })
   }
   if (params["Schedule type"]) sampler.scheduler = params["Schedule type"]
   if (Object.keys(sampler).length > 0) scripts.sampler = sampler

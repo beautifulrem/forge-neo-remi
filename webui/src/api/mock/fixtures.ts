@@ -884,5 +884,23 @@ export const serverCatalogZh: Record<string, string> = {
   "Qwen-Image-2.1 Turbo detected with steps={{steps}}, cfg={{cfg}}: the 8-step distilled Turbo checkpoint/LoRA works best at ~8 steps with CFG 1.0.":
     "检测到 Qwen-Image-2.1 Turbo，steps={{steps}}，cfg={{cfg}}：8 步蒸馏的 Turbo 模型或 LoRA 在约 8 步、CFG 1.0 时效果最好。",
   "Set Turbo (8 steps · CFG 1.0)": "设为 Turbo（8 步 · CFG 1.0）",
+  // the refused values the mock's validation names (validateJob), as in localizations/zh_CN.json
   "must be at most {{maximum}}, got {{value}}": "不能大于 {{maximum}}，当前为 {{value}}",
+  "must be at least {{minimum}}, got {{value}}": "不能小于 {{minimum}}，当前为 {{value}}",
+  "expected a number, got {{value}}": "应为数值，当前为 {{value}}",
+  "expected a number, got {{type}}": "应为数值，当前为 {{type}}",
+  "expected a finite number, got {{value}}": "应为有限数值，当前为 {{value}}",
+  "a seed is required": "需要填写种子",
+  "a seed is a whole number, got {{value}}": "种子须为整数，当前为 {{value}}",
+  "a seed is -1 (random) or between 0 and {{maximum}}, got {{value}}": "种子须为 -1（随机）或 0 到 {{maximum}} 之间，当前为 {{value}}",
+  "a choice is required": "需要选择一项",
+  "{{value}} is not one of the choices ({{choices}})": "{{value}} 不在可选项中（{{choices}}）",
+  "{{value}}: there are no choices": "{{value}}：没有可选项",
+  "a mask image is required": "需要一张蒙版图像",
+  // the mock's own words (its demo rule and its sample extensions' toasts): not in the server's catalog
+  "the prompt contains #invalid (mock validation demo)": "提示词含有 #invalid（mock 校验演示）",
+  "Preset “{{preset}}” applied": "已应用预设“{{preset}}”",
+  "Recommended values restored": "已恢复推荐值",
+  "Compatibility: LCM uses the SGM Uniform schedule": "兼容性：LCM 使用 SGM Uniform 调度",
+  "Mock: no handler for {{action}}": "Mock：没有 {{action}} 的处理器",
 }
