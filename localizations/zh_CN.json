@@ -982,6 +982,7 @@
   "Qwen-Image-2.1: reference images are attached while [Qwen 2.1] Enable Reference is off; they are ignored (plain img2img).": "Qwen-Image-2.1：已附加参考图，但“[Qwen 2.1] 启用参考图”未开启；参考图会被忽略（按普通图生图运行）。",
   "Requires {{capabilities}}": "需要 {{capabilities}}",
   "Requires {{capabilities}} (active model: {{model}})": "需要 {{capabilities}}（当前模型：{{model}}）",
+  "Active model lacks required capabilities: {{capabilities}}": "当前模型缺少所需能力：{{capabilities}}",
   "Z-Image Base detected with steps={{steps}}, cfg={{cfg}}: undistilled Z-Image Base typically needs ~25-40 steps and CFG 3.5-5.0 (or use Z-Image-Turbo for 8-step CFG 1.0).": "检测到 Z-Image Base，steps={{steps}}，cfg={{cfg}}：未蒸馏的 Z-Image Base 通常需要约 25–40 步、CFG 3.5–5.0（或用 Z-Image-Turbo 以 8 步、CFG 1.0 生成）。",
   "Z-Image-Turbo detected with steps={{steps}}, cfg={{cfg}}: the 8-step distilled Turbo variant works best at ~8 steps with CFG 1.0.": "检测到 Z-Image-Turbo，steps={{steps}}，cfg={{cfg}}：8 步蒸馏的 Turbo 变体在约 8 步、CFG 1.0 时效果最好。",
   "Z-Image: reference images are attached while Z-Image Omni/Edit reference mode is disabled.": "Z-Image：已附加参考图，但 Z-Image Omni/Edit 参考模式未开启。",

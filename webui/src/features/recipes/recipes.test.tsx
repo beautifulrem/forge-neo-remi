@@ -210,6 +210,38 @@ describe("Recipes capture and manager UI", () => {
     expect(store.getState().values.core?.width).toBe(width)
   })
 
+
+  // The server formatted the warning in English ("Active model lacks required capabilities: …");
+  // it now sends the template and the capability names too, which the toast translates.
+  it("says a capability warning in the current language", async () => {
+    const { toast } = await import("sonner")
+    const success = vi.spyOn(toast, "success")
+    const template = "Active model lacks required capabilities: {{capabilities}}"
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (url.includes("/recipes/r1/apply")) {
+        const warning_notes = [{ message: template, values: { capabilities: ["Distilled CFG 1", "Spectrum forecasting"] } }]
+        const body = { recipe: SAMPLE_RECIPE, tab: "txt2img", patch: { "core.cfg_scale": { value: 1 } }, core: {}, scripts: {}, conflicts: {}, warnings: ["English"], warning_notes }
+        return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } })
+      }
+      return new Response(JSON.stringify({ items: [SAMPLE_RECIPE], total: 1 }), { status: 200, headers: { "Content-Type": "application/json" } })
+    })
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    i18n.addResourceBundle("zh-CN", "server", { [template]: "当前模型缺少所需能力：{{capabilities}}", "Distilled CFG 1": "CFG 1 蒸馏模式", "Spectrum forecasting": "Spectrum 特征预测" }, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <RecipeManager />
+        </QueryClientProvider>,
+      )
+      fireEvent.click(await screen.findByRole("button", { name: "应用配方" }))
+      await waitFor(() => expect(success).toHaveBeenCalledWith(expect.any(String), { description: "当前模型缺少所需能力：CFG 1 蒸馏模式和Spectrum 特征预测" }))
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
+  })
+
   it("names forms and parameters in the current language", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ items: [{ ...SAMPLE_RECIPE, core_patch: { ...SAMPLE_RECIPE.core_patch, denoising_strength: 0.35 } }], total: 1 }), { status: 200, headers: { "Content-Type": "application/json" } }))
     i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)

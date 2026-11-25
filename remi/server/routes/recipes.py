@@ -90,6 +90,7 @@ class RecipeApplyResult(m.Model):
     scripts: dict[str, dict[str, Any]]
     conflicts: dict[str, Any]
     warnings: list[str]
+    warning_notes: list[m.Note] = Field([], description="the warnings as notes: each English message's template and the values that fill it, for the UI to translate")
 
 
 def _call(fn: Any) -> Any:

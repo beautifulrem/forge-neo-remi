@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from remi.files import FileStore, connect, transaction
+from remi.ui.sentence import Sentence
 
 RECIPE_EXPORT_VERSION = 1
 VALID_TABS = ("txt2img", "img2img", "extras")
@@ -467,12 +468,15 @@ def apply_recipe(
         for key, value in spatch.items():
             patch[f"{sid}.{key}"] = {"value": value}
 
-    warnings: list[str] = []
+    warnings: list[Sentence] = []
     caps = set(active_capabilities) if active_capabilities is not None else _active_model_capabilities()
     if caps is not None and recipe.capabilities:
         missing = [cap for cap in recipe.capabilities if cap not in caps]
         if missing:
-            warnings.append(f"Active model lacks required capabilities: {', '.join(missing)}")
+            from backend.nn.model_capabilities import CAPABILITY_LABELS
+
+            labels = [CAPABILITY_LABELS.get(cap, cap) for cap in missing]  # catalog names: the UI translates each
+            warnings.append(Sentence("Active model lacks required capabilities: {{capabilities}}", capabilities=labels))
 
     conflicts: dict[str, Any] = {}
     if check_conflicts and effective_tab in ("txt2img", "img2img"):
@@ -509,7 +513,9 @@ def apply_recipe(
         "core": merged_core,
         "scripts": merged_scripts,
         "conflicts": conflicts,
-        "warnings": warnings,
+        "warnings": [str(warning) for warning in warnings],
+        # the same warnings as notes (template and values), which the UI translates
+        "warning_notes": [{"message": warning.template, "values": warning.params} for warning in warnings],
     }
 
 

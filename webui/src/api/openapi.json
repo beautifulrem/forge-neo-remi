@@ -15770,6 +15770,15 @@
             },
             "type": "array",
             "title": "Warnings"
+          },
+          "warning_notes": {
+            "items": {
+              "$ref": "#/components/schemas/Note"
+            },
+            "type": "array",
+            "title": "Warning Notes",
+            "description": "the warnings as notes: each English message's template and the values that fill it, for the UI to translate",
+            "default": []
           }
         },
         "type": "object",

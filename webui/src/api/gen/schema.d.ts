@@ -5196,6 +5196,12 @@ export interface components {
             conflicts: Record<string, unknown>;
             /** Warnings */
             warnings: string[];
+            /**
+             * Warning Notes
+             * @description the warnings as notes: each English message's template and the values that fill it, for the UI to translate
+             * @default []
+             */
+            warning_notes: components["schemas"]["Note"][];
         };
         /** RecipeCreate */
         RecipeCreate: {

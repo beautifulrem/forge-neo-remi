@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { errorText } from "@/features/errors/error-text"
+import { noteText } from "@/features/queue/notes"
 import { noteLines } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import { getFormStore } from "@/ui/form-store"
@@ -139,7 +140,7 @@ export function RecipeManager() {
       })
       const { core, scripts } = appliedRecipeValues(res, recipe)
       const tab = res.tab ?? recipe.tab
-      const warnings = res.warnings ?? []
+      const warnings = res.warning_notes ?? res.warnings ?? []
       const applied = await applyRecipeEntries(tab, core, scripts)
       // values a toggle lock kept, then the ones the conflict locks change once the form resolves them again
       const { index } = getFormStore(tab).getState()
@@ -150,7 +151,7 @@ export function RecipeManager() {
     },
     onSuccess: ({ recipe, count, warnings, overridden }) => {
       toast.success(t("Recipe “{{name}}” applied ({{count}} params)", { name: recipe.name, count }), {
-        description: noteLines(...warnings, overridden),
+        description: noteLines(...warnings.map((warning) => noteText(warning)), overridden),
       })
     },
     onError: (error) => toast.error(t("Could not apply recipe"), { description: errorText(error) }),

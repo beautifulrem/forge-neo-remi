@@ -1,5 +1,5 @@
 /** Cross-model parameter Recipes types (matching backend contract #12). */
-import type { FormTab, ParamValues } from "@/api/types"
+import type { FormTab, JobNote, ParamValues } from "@/api/types"
 
 export type Recipe = {
   id: string
@@ -50,5 +50,8 @@ export type RecipeApplyResponse = {
   core: ParamValues
   scripts: Record<string, ParamValues>
   conflicts: Record<string, unknown>
+  /** English, for logs and older clients. */
   warnings: string[]
+  /** The same warnings as notes (template and values), which the UI translates. */
+  warning_notes?: JobNote[]
 }

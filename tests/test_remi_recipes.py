@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from remi import recipes as recipes_module
 from remi.recipes import RECIPE_EXPORT_VERSION, RecipeError, RecipeStore, apply_recipe
 from remi.server.testing import server_app
 from remi.testing import webui_state
@@ -109,7 +110,21 @@ def test_recipe_export_import_and_apply(tmp_path):
         assert applied["scripts"]["sampler"]["sampler_name"] == "Euler"
         assert applied["patch"]["core.cfg_scale"] == {"value": 1.0}
         assert applied["patch"]["sampler.steps"] == {"value": 8}
-        assert applied["warnings"] and "multi_reference" in applied["warnings"][0]
+        # the English text names the capability; the note keeps the template and the names for the UI to translate
+        assert applied["warnings"] == ["Active model lacks required capabilities: Multi-reference conditioning"]
+        assert applied["warning_notes"] == [{"message": "Active model lacks required capabilities: {{capabilities}}", "values": {"capabilities": ["Multi-reference conditioning"]}}]
+
+
+def test_the_capability_warning_is_in_the_core_catalog():
+    """The apply toast shows the warning: a sentence formatted on the server could never be translated."""
+
+    import json
+    import re
+    from pathlib import Path
+
+    catalog = json.loads((Path(__file__).resolve().parents[1] / "localizations" / "zh_CN.json").read_text(encoding="utf-8"))
+    template = "Active model lacks required capabilities: {{capabilities}}"
+    assert re.findall(r"\{\{(\w+)\}\}", catalog.get(template, "")) == ["capabilities"]
 
 
 def test_an_import_that_fails_part_way_adds_nothing(tmp_path):
@@ -133,7 +148,7 @@ def test_an_import_that_fails_part_way_adds_nothing(tmp_path):
         assert store.import_recipes({"recipes": [{"name": "a", "tab": "txt2img"}]})["added"] == 1
 
 
-def test_recipes_http_routes(tmp_path):
+def test_recipes_http_routes(tmp_path, monkeypatch):
     with webui_state(), server_app(tmp_path) as server:
         created = server.client.post(
             "/api/v2/recipes",
@@ -171,6 +186,12 @@ def test_recipes_http_routes(tmp_path):
         assert body["core"]["cfg_scale"] == 3.5
         assert body["scripts"]["sampler"]["steps"] == 24
         assert body["patch"]["core.cfg_scale"]["value"] == 3.5
+
+        # a capability the active model lacks reaches the client as a note too
+        monkeypatch.setattr(recipes_module, "_active_model_capabilities", lambda: set())
+        warned = server.client.post(f"/api/v2/recipes/{rid}/apply", json={"tab": "txt2img"}).json()
+        assert warned["warnings"] == ["Active model lacks required capabilities: Spectrum forecasting"]
+        assert warned["warning_notes"] == [{"message": "Active model lacks required capabilities: {{capabilities}}", "values": {"capabilities": ["Spectrum forecasting"]}}]
 
         exported = server.client.get("/api/v2/recipes/export")
         assert exported.status_code == 200 and len(exported.json()["recipes"]) == 1
