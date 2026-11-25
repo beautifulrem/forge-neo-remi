@@ -152,16 +152,17 @@ print("ok")
     assert "Error loading script" not in result.stdout + result.stderr
 
 
-def test_the_server_path_starts_alone():
+def test_the_server_path_starts_alone(tmp_path):
     # The API app itself (queue, files, networks) starts without the WebUI runtime
-    code = """
-import sys, tempfile
+    # (its data in the test's own folder: a mkdtemp() folder was left in the system temp folder)
+    code = f"""
+import sys
 sys.argv = sys.argv[:1]
 from remi.jobs import run_inline
 from remi.server import Services, create_app
 from remi.server.auth import Auth
 import remi.networks, remi.realtime, remi.files, remi.server.launch, remi.server.runtime
-services = Services.create(tempfile.mkdtemp(), dispatch=run_inline)
+services = Services.create({str(tmp_path)!r}, dispatch=run_inline)
 app = create_app(services=services, auth=Auth(), sdapi=False, start_services=False)
 from fastapi.testclient import TestClient
 with TestClient(app, base_url="http://127.0.0.1:7860") as client:
