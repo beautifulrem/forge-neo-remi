@@ -839,6 +839,12 @@ def _default_upsampler(stage: StageRun, upstream_prompt: str | None, upstream_ou
         # the same guard as the upsample route: a client-given path is a server folder
         if getattr(getattr(shared, "cmd_opts", None), "hide_ui_dir_config", False):
             raise PermissionError("local_model_path is disabled under --hide-ui-dir-config")
+    else:
+        from remi.prompt_tools import TranslationError, registry
+
+        # the endpoint is the prompt tools' provider: off with them, as the upsample route is
+        if not registry.tools_enabled:
+            raise TranslationError("the prompt tools are disabled", 409)
     from remi.prompt_tools.pup import upsample_prompt
 
     res = upsample_prompt(

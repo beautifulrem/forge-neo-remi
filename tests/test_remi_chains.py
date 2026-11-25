@@ -251,6 +251,9 @@ def test_chains_edge_cases_errors_disabled_stages_and_routes(tmp_path, monkeypat
     fake_pup = types.ModuleType("remi.prompt_tools.pup")
     fake_pup.upsample_prompt = lambda prompt, **kw: SimpleNamespace(prompt=f"{prompt} [pup]")
     monkeypatch.setitem(sys.modules, "remi.prompt_tools.pup", fake_pup)
+    from remi import prompt_tools
+
+    monkeypatch.setattr(prompt_tools.registry, "group_dirs", ["group_tags"])  # the prompt tools are on
     assert chains_mod._default_upsampler(StageRun(chain_id="c", index=0, kind="prompt_upsample", name="PUP", enabled=True, tab="txt2img", core={"prompt": "sky"}), None, []) == "sky [pup]"
     fake_pup.upsample_prompt = lambda prompt, **kw: (_ for _ in ()).throw(RuntimeError("pup offline"))
     with pytest.raises(RuntimeError, match="pup offline"):  # fails the stage, never passes the prompt on as upsampled

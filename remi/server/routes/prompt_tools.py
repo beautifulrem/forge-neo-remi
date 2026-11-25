@@ -374,6 +374,9 @@ def upsample(body: PromptUpsampleRequest, tools: ToolsDep, services: ServicesDep
 
         if getattr(shared.cmd_opts, "hide_ui_dir_config", False):
             raise HTTPException(status_code=403, detail="local_model_path is disabled under --hide-ui-dir-config")
+    elif not pt.registry.tools_enabled:
+        # the endpoint is the prompt tools' provider: off with them, as translating and writing are
+        raise HTTPException(status_code=409, detail="the prompt tools are disabled")
 
     def run() -> Any:
         return upsample_prompt(

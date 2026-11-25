@@ -273,6 +273,7 @@ def test_a_pipelines_upsample_stage_uses_the_configured_endpoint(services, monke
 
     configured = pt.ProviderConfig("openai", "http://127.0.0.1:9/v1", "", "vlm")
     monkeypatch.setattr(pt, "tools_for", lambda services: SimpleNamespace(translation_config=lambda: configured))
+    monkeypatch.setattr(pt.registry, "group_dirs", ["group_tags"])  # the prompt tools are on
     seen: dict = {}
 
     def upsample_prompt(prompt, **kwargs):

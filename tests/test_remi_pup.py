@@ -704,3 +704,36 @@ def test_a_reference_image_over_the_pixel_limit_is_refused_before_decoding(monke
         with pytest.raises(TranslationError) as err:
             pup.prepare_reference_images([item])
         assert err.value.status == 413
+
+
+def test_upsampling_through_the_endpoint_follows_the_prompt_tools_switch(tmp_path, monkeypatch):
+    """Translating and writing prompts refuse while the prompt tools are off;
+    upsampling through the same provider does too (a local model does not use it)."""
+
+    from remi import prompt_tools as pt
+    from remi.jobs.chains import StageRun, _default_upsampler
+    from remi.server.testing import server_app
+    from remi.testing import webui_state
+
+    calls: list = []
+
+    def fake_upsample(prompt, **kwargs):
+        calls.append(kwargs.get("local_model_path"))
+        return pup.UpsampleResult(prompt=f"{prompt}+", original_prompt=prompt, model_family="generic", mode="t2i", backend="local_qwen35")
+
+    monkeypatch.setattr(pup, "upsample_prompt", fake_upsample)
+    monkeypatch.setattr(pt.registry, "group_dirs", [])
+    with webui_state(), server_app(tmp_path) as server:
+        try:
+            off = server.client.post("/api/v2/prompt-tools/upsample", json={"prompt": "a fox"})
+            assert off.status_code == 409 and "disabled" in off.json()["detail"] and calls == []
+            local = server.client.post("/api/v2/prompt-tools/upsample", json={"prompt": "a fox", "local_model_path": str(tmp_path)})
+            assert local.status_code == 200 and calls == [str(tmp_path)]
+            stage = StageRun(chain_id="c", index=0, kind="prompt_upsample", name="PUP", enabled=True, tab="txt2img", core={"prompt": "a fox"})
+            with pytest.raises(TranslationError) as refused:
+                _default_upsampler(stage, None, [])
+            assert refused.value.status == 409 and len(calls) == 1
+            stage.config = {"local_model_path": str(tmp_path)}
+            assert _default_upsampler(stage, None, []) == "a fox+"
+        finally:
+            pt.forget(server.services)

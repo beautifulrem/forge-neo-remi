@@ -223,6 +223,9 @@ def test_prompt_tools_upsample_route_wiring(tmp_path, monkeypatch):
     fake_mod = types.ModuleType("remi.prompt_tools.pup")
     fake_mod.upsample_prompt = fake_upsample_prompt  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "remi.prompt_tools.pup", fake_mod)
+    from remi import prompt_tools as pt
+
+    monkeypatch.setattr(pt.registry, "group_dirs", ["group_tags"])  # the prompt tools are on
 
     with webui_state(), server_app(tmp_path) as server:
         from remi import prompt_tools
