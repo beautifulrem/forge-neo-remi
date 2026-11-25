@@ -238,6 +238,13 @@ non-finite numbers as text, and `/api/v2` models refuse them as values.
 `POST /sdapi/v1/options` with a setting that does not exist is a 422 that
 sets nothing (it was a `KeyError`, a 500).
 
+Text UTF-8 cannot hold (an unpaired surrogate, which JSON can escape) is
+refused with a 422 in any `/api/v2` JSON body (`refuse_broken_text`) and per
+setting in `/options`, before it reaches a file or SQLite: written, it failed
+half-way through the write (a truncated `config.json` the server could not
+start from). Responses write such text with JSON escapes rather than fail.
+`/sdapi/v1/options` is upstream's and does not check it.
+
 ### Secrets in logs
 
 `modules/redact.py`: the launch line, `sysinfo` (command line,
@@ -351,3 +358,13 @@ by id, upload streaming limits and content sniffing, SPA static path
 resolution, network write paths, config-state ids, the booru grabber's URL
 checks, the translation key handling, and the absence of `innerHTML` in the
 SPA.
+
+## Audit record (2026-11)
+
+| # | finding | severity | fix |
+|---|---|---|---|
+| 1 | The SPA shell under another name for the same file (`/index.html/`, `/Index.html` on a case-insensitive volume, a hard link) was served as a plain file, without its CSP and `frame-ancestors`: any site could frame it (clickjacking the extension installer, deletes, settings) | high | the shell is recognised by file identity and never served as a plain file |
+| 2 | Text with an unpaired surrogate in a setting, a style, a recipe or a pipeline failed half-way through its write: `config.json` was left truncated and the next start failed | high | refused with a 422 before any write (see Error responses) |
+| 3 | Infotext parsing (`parse_infotext_fields`, LoRA tags) backtracked quadratically: a crafted 40,000-character infotext held the process for seconds per request (the compare request had no size cap; scans stored any length) | medium | linear expressions, parsing cut at `MAX_INFOTEXT_CHARS`, stored infotext truncated, `max_length` on the compare request; the SPA's parsers likewise |
+| 4 | An unreadable `Origin` (`http://[`) or `--cors-allow-origins` entry answered 500 with a logged traceback before the login check | low | read as a foreign origin |
+| 5 | A session cookie whose signature held non-ASCII characters answered 500 with a logged traceback before the login check, on every route | low | refused like a wrong signature |

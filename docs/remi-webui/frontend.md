@@ -295,8 +295,8 @@ imperatively).
   shell. An overlay that reaches a screen edge pads for the inset of that
   edge itself (the image viewer on every side, its black backdrop still to
   the edge; the full-screen editor at its sides and bottom; the networks
-  sheet, the settings sections and the More sheet at the bottom and their
-  open sides), and a centred dialog subtracts the insets from any size it
+  sheet and the settings sections at the bottom and their open sides; the
+  More sheet, shown on a phone only, at the bottom), and a centred dialog subtracts the insets from any size it
   takes from the viewport (the base dialog and alert dialog, `96vw`,
   `90dvh`).
 
@@ -1364,6 +1364,18 @@ older server) nothing is shown.
   markup), then rendered like the original (Markdown as React elements, HTML
   sanitized). `tests/remi_core_strings.py` collects them, so an untranslated
   settings help block fails `tests/test_remi_core_zh_cn.py`.
+- **Failure text**: a failure is shown in the UI language. The server's
+  error details are English (for logs and API clients), so the server's
+  `detail` (an `ApiError`'s message) is never the whole message:
+  `features/errors/error-text.ts` `errorText` says a sentence chosen by
+  status (callers pass their own for a status that means something specific
+  to them; a 422 lists the refused values' messages, which are catalog keys),
+  `failureText` also keeps the app's own errors (already translated
+  sentences), `serviceFailureText` is for the prompt tools (a 502 keeps the
+  service's own answer after a translated sentence: it is the only clue to
+  what to fix; 409 and 413 have their own sentences), and
+  `renderFailureText` is for an error boundary (a request by its status, a
+  render bug by its own message).
 - `src/locales/zh-CN.json` must contain every chrome key:
   `locales/locales.test.ts` scans the sources and fails on a missing key or a
   mismatched `{{placeholder}}`.
@@ -1540,6 +1552,9 @@ Keeping a first view small:
   that failed once (offline, a build replaced under the page) stayed failed
   until a reload. A failed load reaches the error boundary as usual; its
   "Try again", and the browser coming back online, load the chunk again.
+  Each boundary also resets the suspense queries that failed under it
+  (`QueryErrorResetBoundary`), so "Try again", and coming back to the page,
+  ask for them again.
   `retryable-lazy.test.tsx` fails on a plain `lazy(` in `src`.
 
 Fonts load per unicode range (Geist latin ≈ 28 KB woff2; a Chinese page loads a dozen Noto Sans SC slices of 20 to 70 KB, cached after the first visit).

@@ -201,8 +201,9 @@ A rejected request answers with
 ```
 
 listing every rejected value (also the selected script's when core values are
-rejected). `owner` is `"core"`, a script id, `"settings"`, or `null` when the
-body itself has the wrong shape (e.g. `"scripts"` is not an object); `param`
+rejected). `owner` is `"core"`, a script id, `"settings"`, `"body"` for text
+UTF-8 cannot hold anywhere in the body (`param` is its path), or `null` when
+the body itself has the wrong shape (e.g. `"scripts"` is not an object); `param`
 is `null` for errors about a whole owner (an unknown script id, an owner's
 values that are not an object).
 

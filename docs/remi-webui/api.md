@@ -32,9 +32,14 @@ Contents: [Conventions](#conventions) · [Authentication](#authentication) ·
   `--server-name`). With `--subpath /sd` every path below is prefixed:
   `/sd/api/v2/app`. With `--nowebui` the default port is 7861.
 - **JSON** everywhere except uploads (multipart) and files. No `NaN` or
-  `Infinity` is accepted or produced. A body may be at most twice the
-  upload limit `remi_upload_max_mb` (at least 16 MB; 413 above it, also on
-  `/sdapi`).
+  `Infinity` is accepted or produced, and no text UTF-8 cannot hold (an
+  unpaired surrogate such as `"\udc80"`, half of an emoji): an `/api/v2`
+  JSON body carrying one anywhere is refused with a 422 whose owner is
+  `body` and whose `param` is the value's path (`patch.core.prompt`), before
+  anything is stored; `PATCH /options` and `POST /options/validate` name
+  each refused setting instead. A body may be at most twice the upload
+  limit `remi_upload_max_mb` (1 to 2048 MB; at least 16 MB; 413 above it,
+  also on `/sdapi`).
 - **Errors.** A rejected parameter value answers **422** with every problem
   at once:
 
@@ -42,8 +47,9 @@ Contents: [Conventions](#conventions) · [Authentication](#authentication) ·
   {"errors": [{"owner": "core", "param": "width", "message": "expected a number, got 'abc'"}]}
   ```
 
-  `owner` is `core`, a script id, `settings`, a page owner `page:<id>`, or
-  `null` when the body itself has the wrong shape. Other errors are
+  `owner` is `core`, a script id, `settings`, a page owner `page:<id>`,
+  `body` for text UTF-8 cannot hold, or `null` when the body itself has the
+  wrong shape. Other errors are
   `{"detail": "..."}` with the usual status codes (404 unknown id, 409 wrong
   state, 413 too large, 415 unsupported type, 403 refused, 401 not logged in).
   Extension-management errors add `template` and `params` (a translatable
