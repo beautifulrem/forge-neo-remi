@@ -30,6 +30,7 @@ import { createStore, useStore } from "zustand"
 import { api } from "@/api/endpoints"
 import { Button } from "@/components/ui/button"
 import { useAppearance } from "@/lib/theme"
+import { useKeyboardHints } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { usePasteTarget } from "@/ui/paste-targets"
 import { fitView, isEmptyRect, nextZoomStep, type Rect, type View, zoomAt } from "../core/geometry"
@@ -166,6 +167,7 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
   const scale = useStore(viewStore, (s) => s.scale)
   const [dragging, setDragging] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const keyboardHints = useKeyboardHints()
   const [area, setArea] = useState<Rect | null>(null)
 
   const tools = useTools()
@@ -841,9 +843,8 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
                 </IconButton>
               ) : null}
               <LayersPopover layer={kind && layerLabel ? { kind, label: layerLabel } : null} inpaint={Boolean(inpaint)} onlyMasked={Boolean(inpaint?.onlyMasked)} />
-              <span className="hidden @md:contents">
-                <ShortcutsPopover open={helpOpen} onOpenChange={setHelpOpen} />
-              </span>
+              {/* by the device, not the width: a narrow editor with a keyboard has keys to list */}
+              {keyboardHints ? <ShortcutsPopover open={helpOpen} onOpenChange={setHelpOpen} /> : null}
               {editor.noUpload ? null : (
                 <>
                   <Divider />

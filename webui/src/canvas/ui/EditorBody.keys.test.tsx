@@ -8,6 +8,7 @@ import { useState } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { dispatchRun, useRuns } from "@/features/progress/run-controller"
 import { IDLE } from "@/features/progress/run-machine"
+import { TOUCH_ONLY_QUERY } from "@/lib/use-media-query"
 import { useGenerateShortcuts } from "@/pages/generate/shortcuts"
 import { EditorDocument } from "../engine/document"
 import { createMemoryRaster, testImage } from "../engine/memory-raster"
@@ -160,5 +161,32 @@ describe("Escape with a staged candidate while a job of the form runs", () => {
     fireEvent.keyDown(document.body, { key: "Escape", code: "Escape" })
     await settle()
     expect(dispatchRun).toHaveBeenCalledWith("img2img", { type: "interrupt" })
+  })
+})
+
+describe("the shortcuts button", () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  /** Every ancestor of `element` up to the body, the element too. */
+  const chain = (element: HTMLElement) => {
+    const out: HTMLElement[] = []
+    for (let node: HTMLElement | null = element; node && node !== document.body; node = node.parentElement) out.push(node)
+    return out
+  }
+
+  // It was hidden in an editor narrower than @md, by width: a narrow editor on a desktop (a pane of
+  // the generate view) lost the list of its keys, while "?" still opened it, from a hidden button.
+  it("shows wherever there is a keyboard, at any width", () => {
+    render(<Page editorFirst />)
+    const button = screen.getByRole("button", { name: "Keyboard shortcuts" })
+    expect(chain(button).filter((node) => node.classList.contains("hidden"))).toEqual([])
+  })
+
+  // A touch screen without a keyboard has no keys to list.
+  it("is left out on a touch screen without a keyboard", () => {
+    const matchMedia = window.matchMedia
+    vi.spyOn(window, "matchMedia").mockImplementation((query: string) => ({ ...matchMedia(query), matches: query === TOUCH_ONLY_QUERY }))
+    render(<Page editorFirst />)
+    expect(screen.queryByRole("button", { name: "Keyboard shortcuts" })).toBeNull()
   })
 })
