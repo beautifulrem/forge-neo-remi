@@ -98,7 +98,7 @@ export function ChipEditor({ doc, index, info, translation, config, setValue, cl
       {category || info?.count || translation ? (
         <p className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
           {category ? <span>{category}</span> : null}
-          {info?.count ? <span>{t("{{count}} posts", { count: compactCount(info.count) })}</span> : null}
+          {info?.count ? <span>{t("{{count}} posts", { count: compactCount(info.count, i18n.language) })}</span> : null}
           {translation ? <span className="text-foreground">{translation}</span> : null}
         </p>
       ) : null}

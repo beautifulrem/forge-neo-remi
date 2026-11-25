@@ -91,9 +91,14 @@ export function categoryName(source: string, category: number | null | undefined
   return name ? (LABELS[name]?.(language) ?? name) : null
 }
 
-/** Post counts as "6.0M", "12k", "950". */
-export function compactCount(count: number): string {
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(count >= 10_000_000 ? 0 : 1)}M`
-  if (count >= 1_000) return `${(count / 1_000).toFixed(count >= 10_000 ? 0 : 1)}k`
-  return String(count)
+const compactFormats = new Map<string, Intl.NumberFormat>()
+
+/**
+ * A post count shortened the way of `language` ("6M", "12K", "950"; "600万", "1.2万"). `language`:
+ * the render's, when a render shows it.
+ */
+export function compactCount(count: number, language = i18n.language): string {
+  let format = compactFormats.get(language)
+  if (!format) compactFormats.set(language, (format = new Intl.NumberFormat(language, { notation: "compact" })))
+  return format.format(count)
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { CompletionItem } from "../api"
+import { compactCount } from "./colors"
 import { completionTarget, tokenEnd } from "./context"
 import { commonPrefix, type InsertSettings, insertion, nextWildcardLevel, separatorAfter, tagText } from "./insert"
 
@@ -161,5 +162,17 @@ describe("prompt comments as Forge strips them", () => {
     expect(target("a \\# not escaped ta|")).toBeNull()
     expect(target("/* closed */ ta|")).toMatchObject({ mode: "tag", query: "ta" })
     expect(target("# note\nlong ha|")).toMatchObject({ mode: "tag", query: "long ha" })
+  })
+})
+
+describe("post counts", () => {
+  it("are shortened the UI language's way", () => {
+    expect(compactCount(950, "en")).toBe("950")
+    expect(compactCount(1_234, "en")).toBe("1.2K")
+    expect(compactCount(6_000_000, "en")).toBe("6M")
+    expect(compactCount(950, "zh-CN")).toBe("950")
+    expect(compactCount(12_345, "zh-CN")).toBe("1.2万")
+    expect(compactCount(6_000_000, "zh-CN")).toBe("600万")
+    expect(compactCount(123_456_789, "zh-CN")).toBe("1.2亿")
   })
 })

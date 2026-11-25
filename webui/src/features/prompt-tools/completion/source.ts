@@ -115,7 +115,8 @@ function decoration(item: CompletionItem): Node {
   if (item.uses) box.append(element("span", "size-1.5 shrink-0 rounded-full bg-primary/70"))
   const kind = TYPE_LABELS[item.type]?.()
   if (kind) box.append(element("span", "rounded bg-muted px-1 py-px text-[0.625rem] leading-tight font-medium", kind))
-  if (item.count) box.append(element("span", "tabular w-10 text-right", compactCount(item.count)))
+  // at least the column's width, wider for a long count ("1235万")
+  if (item.count) box.append(element("span", "tabular min-w-10 text-right", compactCount(item.count)))
   return box
 }
 

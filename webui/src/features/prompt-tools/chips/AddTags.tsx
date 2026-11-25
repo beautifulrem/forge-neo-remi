@@ -36,7 +36,7 @@ function withLastTag(text: string, tag: string): string {
 }
 
 export function AddTags({ doc, setValue, disabled, empty, config, kind }: AddTagsProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [text, setText] = useState("")
   const [open, setOpen] = useState(false)
   const highlighted = useRef<CompletionItem | undefined>(undefined)
@@ -119,7 +119,7 @@ export function AddTags({ doc, setValue, disabled, empty, config, kind }: AddTag
                   {tagText({ ...item, category: null }, { ...config.tags, escape_parentheses: false })}
                 </span>
                 {item.translation ? <span title={item.translation} className="max-w-28 shrink truncate text-muted-foreground">{item.translation}</span> : null}
-                {item.count ? <span className="tabular w-9 shrink-0 text-right text-muted-foreground">{compactCount(item.count)}</span> : null}
+                {item.count ? <span className="tabular min-w-9 shrink-0 text-right text-muted-foreground">{compactCount(item.count, i18n.language)}</span> : null}
               </ComboboxItem>
             )
           }}
