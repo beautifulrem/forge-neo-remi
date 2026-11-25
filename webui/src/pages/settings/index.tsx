@@ -75,16 +75,17 @@ const NONE: ReadonlySet<string> = new Set()
 /** Settings pages mounted (StrictMode mounts twice): the "not applied yet" toast waits for the last to go. */
 let mountedPages = 0
 
-/** Ctrl/Cmd+S applies; "/" focuses the search (outside text fields). */
+/** Ctrl/Cmd+S applies (not from a dialog over the page); "/" focuses the search (outside text fields). */
 function useShortcuts(onApply: () => void, search: React.RefObject<HTMLInputElement | null>) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "s") {
         event.preventDefault()
-        onApply()
+        // a dialog over the page (an import being reviewed) is not the page's edits being confirmed
+        if (!target?.closest?.("[role=dialog], [role=alertdialog]")) onApply()
         return
       }
-      const target = event.target as HTMLElement | null
       const typing = target?.closest("input, textarea, select, [contenteditable=true], .cm-editor")
       if (event.key === "/" && !typing && !event.metaKey && !event.ctrlKey && !event.altKey) {
         event.preventDefault()

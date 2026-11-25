@@ -99,6 +99,25 @@ describe("settings page", { timeout: 20_000 }, () => {
     await waitFor(() => expect(screen.queryByText("Unsaved changes: 1")).not.toBeInTheDocument())
   })
 
+  it("leaves Ctrl+S to an open dialog", async () => {
+    renderPage()
+    const search = await screen.findByRole("searchbox", { name: "Search settings" }, { timeout: 8000 })
+    fireEvent.change(search, { target: { value: "samples_save" } })
+    fireEvent.click(await screen.findByRole("switch", { name: "Automatically save every generated image" }, { timeout: 8000 }))
+    expect(await screen.findByText("Unsaved changes: 1")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }))
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Import settings…" }))
+    const dialog = await screen.findByRole("dialog", { name: "Import settings" })
+    let saveDefault = true
+    await act(async () => {
+      saveDefault = fireEvent.keyDown(dialog, { key: "s", ctrlKey: true })
+    })
+    // not applied behind the dialog, and the browser's own Save page stays away too
+    expect(saveDefault).toBe(false)
+    expect(patch).not.toHaveBeenCalled()
+    expect(screen.getByText("Unsaved changes: 1")).toBeInTheDocument()
+  })
+
   it("shows nothing-found with a way out, and filters to unsaved edits", async () => {
     renderPage()
     const search = await screen.findByRole("searchbox", { name: "Search settings" }, { timeout: 8000 })
