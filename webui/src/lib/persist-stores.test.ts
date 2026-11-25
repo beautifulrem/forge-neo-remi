@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { useSession } from "@/features/gallery/session-store"
 import { useExtrasRuns } from "@/features/extras/run"
+import { useQueueEdit } from "@/features/queue/edit-session"
 import { useGalleryView } from "@/features/library/filters"
 import { DRAWER_WIDTH, TREE_WIDTH, useNetworksUi } from "@/features/networks/store"
 import { usePromptViews } from "@/features/prompt-tools/view-store"
@@ -21,6 +22,7 @@ const stores: [string, Hydratable, Storage, string][] = [
   ["gallery view", useGalleryView, localStorage, "features/library/filters.ts"],
   ["session results", useSession, sessionStorage, "features/gallery/session-store.ts"],
   ["extras runs", useExtrasRuns, sessionStorage, "features/extras/run.ts"],
+  ["queue edits", useQueueEdit, sessionStorage, "features/queue/edit-session.ts"],
   ["prompt views", usePromptViews, localStorage, "features/prompt-tools/view-store.ts"],
   ["networks", useNetworksUi, localStorage, "features/networks/store.ts"],
   ["appearance", useAppearance, localStorage, "lib/theme.ts"],

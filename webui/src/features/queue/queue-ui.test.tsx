@@ -387,6 +387,31 @@ describe("editing a queued job in its form", () => {
     expect(store.getState().values.core?.prompt).toBe("my prompt")
   })
 
+  // A reload during an edit kept the form's draft (the job's values) but dropped the edit: the
+  // banner was gone, and Generate queued the job a second time instead of updating it.
+  it("keeps editing the queued job across a reload", async () => {
+    const calls = mockFetch({ "GET /jobs/j1": [200, detail], "PUT /jobs/j1/params": [200, detail] })
+    await openJob("j1")
+    const stored = sessionStorage.getItem("remi-queue-edit")
+    expect(stored).not.toBeNull()
+    // the page loads again: nothing in memory, the tab's session storage kept
+    useQueueEdit.setState({ sessions: {} })
+    sessionStorage.setItem("remi-queue-edit", stored!)
+    await useQueueEdit.persist.rehydrate()
+    expect(useQueueEdit.getState().sessions.txt2img).toMatchObject({ jobId: "j1", seq: 12, tab: "txt2img" })
+    expect(await saveEdit("txt2img")).toBe(true)
+    expect(calls.find((call) => call.method === "PUT")).toMatchObject({ path: "/jobs/j1/params" })
+    expect(JSON.parse(sessionStorage.getItem("remi-queue-edit")!).state.sessions).toEqual({})
+  })
+
+  it("restores only edits of the stored shape", async () => {
+    const session = { jobId: "j1", seq: 12, tab: "txt2img", title: "a cat" }
+    const sessions = { txt2img: session, img2img: { jobId: 5, seq: 1, tab: "img2img", title: "" }, extras: { ...session, tab: "img2img" }, bogus: session }
+    sessionStorage.setItem("remi-queue-edit", JSON.stringify({ state: { sessions }, version: 1 }))
+    await useQueueEdit.persist.rehydrate()
+    expect(useQueueEdit.getState().sessions).toEqual({ txt2img: session })
+  })
+
   it("opens a finished job without starting an edit", async () => {
     mockFetch({ "GET /jobs/j2": [200, { ...detail, id: "j2", status: "completed" }] })
     await openJob("j2")

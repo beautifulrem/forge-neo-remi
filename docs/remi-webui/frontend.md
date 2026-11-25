@@ -1390,7 +1390,9 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
   and, for a queued job, opens an edit session: a banner over the run
   controls offers "Update job" (`PUT /jobs/{id}/params`, validation errors
   land on the fields) or stop editing; a job that started meanwhile leaves
-  the values in the form. History: paged (50) and virtualized, search
+  the values in the form. The session is kept in `sessionStorage`
+  (`remi-queue-edit`), as the form's draft is: a reload keeps the banner, so
+  Generate does not queue the edited job a second time. History: paged (50) and virtualized, search
   (debounced), status (all / completed / failed / stopped), form and starred
   filters; each row shows status, duration, up to four output thumbnails
   (open the viewer), star, queue again (`retry`), open in its form, remove;

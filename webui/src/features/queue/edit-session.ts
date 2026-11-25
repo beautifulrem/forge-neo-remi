@@ -7,6 +7,7 @@
  */
 import { toast } from "sonner"
 import { create } from "zustand"
+import { createJSONStorage, persist } from "zustand/middleware"
 import { api } from "@/api/endpoints"
 import { ApiError, validationErrors } from "@/api/http"
 import { keys, queryClient } from "@/api/queries"
@@ -17,6 +18,7 @@ import { deliver } from "@/features/send-to/send-to"
 import { errorText, toastInvalid } from "@/features/errors/error-text"
 import { DOUBLE_PRESS_MS } from "@/features/progress/run-machine"
 import { t } from "@/i18n"
+import { isRecord } from "@/lib/persist"
 import { getFormStore } from "@/ui/form-store"
 import { lockNote } from "@/ui/locks"
 import { flushPendingWrites } from "@/ui/pending-writes"
@@ -29,7 +31,38 @@ type EditState = {
   saving: Partial<Record<FormTab, boolean>>
 }
 
-export const useQueueEdit = create<EditState>()(() => ({ sessions: {}, saving: {} }))
+const FORM_TABS: readonly FormTab[] = ["txt2img", "img2img", "extras"]
+
+/** A stored edit of the shape written, under its own form (session storage edited by hand or by another app). */
+function isSession(tab: string, value: unknown): value is EditSession {
+  return (
+    isRecord(value) &&
+    value.tab === tab &&
+    FORM_TABS.includes(tab as FormTab) &&
+    typeof value.jobId === "string" &&
+    typeof value.seq === "number" &&
+    Number.isFinite(value.seq) &&
+    typeof value.title === "string"
+  )
+}
+
+/**
+ * The edits in progress, kept in session storage: a reload keeps the form's draft (the job's
+ * values), so it keeps the edit too, or Generate would queue the job a second time instead of
+ * updating it. A job that started meanwhile ends the edit when it is saved (409).
+ */
+export const useQueueEdit = create<EditState>()(
+  persist(() => ({ sessions: {}, saving: {} }) as EditState, {
+    name: "remi-queue-edit",
+    version: 1,
+    storage: createJSONStorage(() => sessionStorage),
+    partialize: ({ sessions }) => ({ sessions }),
+    merge: (persisted, current) => {
+      const sessions = isRecord(persisted) && isRecord(persisted.sessions) ? persisted.sessions : {}
+      return { ...current, sessions: Object.fromEntries(Object.entries(sessions).filter(([tab, session]) => isSession(tab, session))) }
+    },
+  }),
+)
 
 /** One paste entry per owner: the job's core values, then each script's. */
 export function jobEntries(job: Pick<JobDetail, "core" | "scripts">): PasteEntry[] {
