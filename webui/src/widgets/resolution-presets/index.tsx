@@ -1,7 +1,8 @@
 /**
  * `resolution-presets`: Anima resolution presets for the generation form's
  * size. Picking one writes the two params `props.width` / `props.height`
- * (`"core.width"`, …) at once and runs their change effects (the Hires.
+ * (`"core.width"`, …) at once, as a programmatic write (a lock keeps its
+ * param and the write names it), and runs their change effects (the Hires.
  * fix size line follows). Each list shows the preset matching the current
  * size, if any. The widget's own value is unused (null).
  *
@@ -41,15 +42,19 @@ export default function ResolutionPresets({ props, disabled, id }: WidgetProps<n
     const [w, h] = value.split("x").map(Number)
     if (!w || !h) return
     const state = store.getState()
-    if (widthOwner === heightOwner) state.setValues(widthOwner, { [widthName]: w, [heightName]: h })
-    else {
-      state.setValue(widthOwner, widthName, w)
-      state.setValue(heightOwner, heightName, h)
-    }
-    runBulkChangeEffects({ store, tab: formId }, [
-      { owner: widthOwner, names: [widthName] },
-      { owner: heightOwner, names: [heightName] },
-    ])
+    // one write per owner (their lock notes share a toast); change effects for what was written
+    const writes: [owner: string, values: Record<string, number>][] =
+      widthOwner === heightOwner
+        ? [[widthOwner, { [widthName]: w, [heightName]: h }]]
+        : [
+            [widthOwner, { [widthName]: w }],
+            [heightOwner, { [heightName]: h }],
+          ]
+    const changes = writes.map(([owner, values]) => {
+      const kept = state.setValues(owner, values)
+      return { owner, names: Object.keys(values).filter((name) => !kept.includes(name)) }
+    })
+    runBulkChangeEffects({ store, tab: formId }, changes)
   }
 
   return (

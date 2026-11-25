@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { toast } from "sonner"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { FormProvider, OwnerProvider } from "@/ui/context"
@@ -57,6 +58,34 @@ describe("resolution-presets", { timeout: 20_000 }, () => {
     expect(store.getState().values.core).toMatchObject({ width: 1216, height: 832 })
     await waitFor(() => expect(action).toHaveBeenCalledTimes(1))
     expect(action.mock.calls[0]!.slice(0, 2)).toEqual(["core", "hr_resolution"])
+  })
+
+  // a width and a height of two owners (the hires size, a script's own) are written like one
+  it("keeps a locked size on two owners too, and names it", async () => {
+    const user = userEvent.setup()
+    vi.spyOn(api, "action").mockResolvedValue({})
+    const info = vi.spyOn(toast, "info").mockImplementation((() => "") as never)
+    const props = { ...PROPS, height: "sizes.height" }
+    const node = { ...NODE, props }
+    const store = createFormStore(`presets-two-${Math.random()}`, { persistDrafts: false })
+    store.getState().load([
+      { owner: "core", layout: { type: "slider", name: "width", label: "Width", minimum: 64, maximum: 2048, step: 64, integer: true }, defaults: { width: 1024 } },
+      { owner: "sizes", layout: { type: "slider", name: "height", label: "Height", minimum: 64, maximum: 2048, step: 64, integer: true }, defaults: { height: 1024 } },
+      { owner: "keep", layout: { type: "toggle", name: "width", label: "Keep width", locks: "core.width" }, defaults: { width: true } },
+      { owner: OWNER, layout: { type: "group", children: [node] }, defaults: { presets: null } },
+    ])
+    render(
+      <FormProvider formId="txt2img" store={store}>
+        <OwnerProvider owner={OWNER}>
+          <ResolutionPresets value={null} onChange={() => {}} props={props} node={node} disabled={false} id="presets" label="" />
+        </OwnerProvider>
+      </FormProvider>,
+    )
+    await user.click(screen.getByRole("combobox", { name: "Preset" }))
+    await user.click(await screen.findByRole("option", { name: /1216 × 832/ }))
+    expect(store.getState().values.core?.width).toBe(1024)
+    expect(store.getState().values.sizes?.height).toBe(832)
+    await waitFor(() => expect(info).toHaveBeenCalledWith("Overridden by a lock: Width", expect.objectContaining({ id: expect.stringMatching(/^locks:presets-two-/) })))
   })
 
   it("shows the preset matching the current size, in its list only", () => {
