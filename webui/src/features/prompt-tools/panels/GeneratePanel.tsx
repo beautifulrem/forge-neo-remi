@@ -5,7 +5,7 @@
  * replaces the prompt or is added to it (Prompt All-in-One's "ChatGPT prompt").
  */
 import { Loader2, Sparkles } from "@/components/icons"
-import { useId, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -27,16 +27,27 @@ export default function GeneratePanel({ value, setValue, kind, disabled, close }
   const [failed, setFailed] = useState<{ error: unknown } | null>(null)
   const negative = kind === "negative"
 
+  // closing the panel unmounts it: a request still running is dropped, its answer has nowhere to go
+  const request = useRef<AbortController | null>(null)
+  useEffect(() => () => request.current?.abort(), [])
+
   const run = async () => {
     if (!description.trim() || busy) return
     setBusy(true)
     setFailed(null)
+    request.current?.abort()
+    const controller = new AbortController()
+    request.current = controller
     try {
-      setResult(await promptToolsApi.generate({ description: description.trim(), prompt: buildOn ? value : "", negative }))
+      const written = await promptToolsApi.generate({ description: description.trim(), prompt: buildOn ? value : "", negative }, controller.signal)
+      if (controller.signal.aborted) return
+      setResult(written)
     } catch (failure) {
+      if (controller.signal.aborted) return
       setFailed({ error: failure })
     } finally {
-      setBusy(false)
+      if (request.current === controller) request.current = null
+      if (!controller.signal.aborted) setBusy(false)
     }
   }
 

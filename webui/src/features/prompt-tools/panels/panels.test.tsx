@@ -164,7 +164,7 @@ describe("writing a prompt", () => {
     fireEvent.click(screen.getByRole("checkbox"))
     fireEvent.click(screen.getByRole("button", { name: "Write" }))
     const written = await screen.findByLabelText("Written prompt")
-    expect(generate).toHaveBeenCalledWith({ description: "a girl reading under a cherry tree", prompt: "masterpiece", negative: false })
+    expect(generate).toHaveBeenCalledWith({ description: "a girl reading under a cherry tree", prompt: "masterpiece", negative: false }, expect.any(AbortSignal))
     fireEvent.change(written, { target: { value: "1girl, reading" } })
     fireEvent.click(screen.getByRole("button", { name: "Add to the prompt" }))
     expect(setValue).toHaveBeenLastCalledWith("masterpiece, 1girl, reading")
@@ -176,8 +176,23 @@ describe("writing a prompt", () => {
     fireEvent.change(screen.getByLabelText("Describe the image"), { target: { value: "blur" } })
     fireEvent.click(screen.getByRole("button", { name: "Write" }))
     fireEvent.click(await screen.findByRole("button", { name: "Replace the prompt" }))
-    expect(generate).toHaveBeenLastCalledWith({ description: "blur", prompt: "", negative: true })
+    expect(generate).toHaveBeenLastCalledWith({ description: "blur", prompt: "", negative: true }, expect.any(AbortSignal))
     expect(setValue).toHaveBeenLastCalledWith("1girl, reading, cherry blossoms")
+  })
+
+  // Closing the panel (it unmounts) left the request running and its answer could still land.
+  it("drops its request when the panel closes", async () => {
+    let answer!: (prompt: string) => void
+    const generate = vi.spyOn(promptToolsApi, "generate").mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    const { unmount } = render(<GeneratePanel {...panelProps("")} />, { wrapper })
+    fireEvent.change(screen.getByLabelText("Describe the image"), { target: { value: "a cat" } })
+    fireEvent.click(screen.getByRole("button", { name: "Write" }))
+    const signal = generate.mock.calls[0]?.[1]
+    expect(signal).toBeInstanceOf(AbortSignal)
+    expect(signal!.aborted).toBe(false)
+    unmount()
+    expect(signal!.aborted).toBe(true)
+    await act(async () => answer("a cat, sitting"))
   })
 
   it("shows the service's error, after a sentence in the UI language", async () => {

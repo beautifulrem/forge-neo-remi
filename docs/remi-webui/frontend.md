@@ -1571,7 +1571,10 @@ older server) nothing is shown.
   description in any language, optionally changing the current prompt, →
   `POST /generate` with `prompt_tools_generate_instructions` or the built-in
   instructions; the answer is editable, then replaces or extends the
-  prompt). `prompt_tools_toolbar` limits the bar to the main
+  prompt; closing the panel unmounts it and aborts a request still running,
+  as closing the upsampler does, so a late answer lands nowhere: the
+  server's call to the provider is not cancelled, it ends at its own
+  timeouts). `prompt_tools_toolbar` limits the bar to the main
   prompts (`PromptDecoratorProps.main`, set by `PromptField`). The view per
   prompt is persisted (`remi-prompt-tools`). The history's times ("3
   minutes ago") move on while the panel is open: a relative time is counted

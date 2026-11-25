@@ -58,6 +58,16 @@ describe("prompt-tools api", () => {
     expect(fetch.last().query.toString()).toBe("kind=tags&kind=prompt&q=x&limit=20")
   })
 
+  it("gives the prompt writer's request the caller's signal", async () => {
+    const fetch = recordFetch(() => ({ body: { prompt: "a cat, sitting" } }))
+    const controller = new AbortController()
+    controller.abort()
+    await promptToolsApi.generate({ description: "a cat" }, controller.signal).catch(() => {})
+    const request = fetch.spy.mock.calls[0]?.[0]
+    expect(request).toBeInstanceOf(Request)
+    expect((request as Request).signal.aborted).toBe(true)
+  })
+
   it("sends every other request as the server declares it, with the client's defaults", async () => {
     const fetch = recordFetch(({ path }) => {
       if (path.endsWith("/generate")) return { body: { prompt: "a cat, sitting" } }
