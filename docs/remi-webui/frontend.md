@@ -248,7 +248,10 @@ imperatively).
   labels use `text-wrap: pretty`, headings and text in a `.text-center` block
   `balance` (no single character left on an empty state's last line).
   A flex container does not ellipsize its text: put the text in its own
-  `truncate` box.
+  `truncate` box. A button label that may not fit beside its icon (the
+  running Generate button's "Queue another") is measured, not guessed with a
+  breakpoint: `lib/use-label-fits.ts` shows it whenever it fits and otherwise
+  leaves the icon alone, the label read out (`sr-only`) and kept as `title`.
 - Motion: `tw-animate-css` + base-nova animations; a global
   `prefers-reduced-motion` rule neutralises animations and transitions.
   Nothing that stays on screen while a job runs animates endlessly (no
