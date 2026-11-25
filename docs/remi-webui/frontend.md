@@ -452,7 +452,10 @@ generated interfaces (sources: Linear's
   chip is a solid `--primary` fill once pressed, as unpressed chips already
   wear a primary wash (up to 32 %) for how often the tag occurs and a 15 %
   tint would read as a frequent tag; the chosen swatch of a swatch picker
-  (the RGBA backdrops) is ringed, as a wash would tint the swatch. A light theme's hover keeps the 15 % wash: a deeper one
+  (the RGBA backdrops) is ringed, as a wash would tint the swatch; the
+  viewer's toggles, white on its always-black backdrop where the accent tint
+  does not read with a dark accent, are a 25 % white wash with a full-white
+  glyph, well above their 12 % hover. A light theme's hover keeps the 15 % wash: a deeper one
   takes some accents' labels under 4.5:1.
   Truncated names and URLs carry their full text in a `title`. A form column (the generate parameters, an
   extension page, the JSON Builder's side column, the Extensions list) is an inspector, not a

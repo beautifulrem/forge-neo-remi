@@ -70,8 +70,9 @@ describe("pressed toggles", () => {
   // A toggle drawing its pressed state another way, with the reason (frontend.md): exempt only
   // while its tag draws exactly this look.
   const OWN_LOOK = [
-    // White on the viewer's black backdrop, over the picture: the tint would not read there.
-    { file: "features/lightbox/Lightbox.tsx", look: "aria-pressed:bg-white/15" },
+    // White on the viewer's always-black backdrop, over the picture: the accent tint does not read
+    // on black with a dark accent. Its pressed wash sits well above its 12 % hover.
+    { file: "features/lightbox/Lightbox.tsx", look: "aria-pressed:bg-white/25" },
     // Unpressed tag chips already wear a primary wash (up to 32 %) for how often the tag occurs:
     // a pressed one is a solid fill, above that scale, or it would read as a frequent tag.
     { file: "features/networks/TagChips.tsx", look: '"border-primary bg-primary text-primary-foreground"' },

@@ -183,7 +183,8 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
                 aria-pressed={tiled}
                 aria-label={t("Tile preview")}
                 aria-keyshortcuts="T"
-                className="text-white/85 hover:bg-white/12 hover:text-white aria-pressed:bg-white/15"
+                // the viewer's own pressed look (frontend.md): white on its black backdrop, well above the hover
+                className="text-white/85 hover:bg-white/12 hover:text-white aria-pressed:bg-white/25 aria-pressed:text-white"
                 onClick={() => setTiled((v) => !v)}
               >
                 <Grid2x2 />
