@@ -25,11 +25,13 @@ from __future__ import annotations
 
 import argparse
 import ast
+import importlib.util
 import json
 import subprocess
 import sys
 import warnings
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 LEGACY_REV = "d23761c08"
@@ -49,7 +51,28 @@ def owner(path: str) -> str:
     return "/".join(parts[:2]) if parts[0] == "extensions-builtin" else path
 
 
+def _git_history() -> Any:
+    """``tools/git_history.py``, loaded by path (``tools/`` is not a package), one copy per process."""
+
+    name = "remi_tools_git_history"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name("git_history.py"))
+        assert spec is not None and spec.loader is not None
+        sys.modules[name] = module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    return sys.modules[name]
+
+
+def unavailable(revision: str) -> str | None:
+    """Why ``revision`` cannot be read here, once a shallow clone has tried to fetch it (an
+    abbreviated hash such as ``LEGACY_REV`` fetches the whole history); None when it can."""
+
+    return _git_history().ensure_commits(revision, repo=ROOT)
+
+
 def python_sources(revision: str) -> dict[str, str]:
+    if (reason := unavailable(revision)) is not None:
+        raise SystemExit(f"cannot read the legacy revision {revision}: {reason}")
     files = [path for path in git("ls-tree", "-r", "--name-only", revision, *SOURCES).splitlines() if path.endswith(".py") and "/tests/" not in path]
     # One `git cat-file --batch` for all the files: "<sha> blob <size>\n<content>\n" each
     request = "".join(f"{revision}:{path}\n" for path in files).encode("utf-8")

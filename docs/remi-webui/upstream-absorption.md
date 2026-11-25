@@ -432,9 +432,12 @@ required, a type that accepts upstream's) must be in Remi's; differences Remi
 keeps on purpose are listed with their reason in its `ALLOWED`. Without
 `--rev` it compares with the last absorbed commit (the merge base with
 `upstream/neo`, or `LAST_ABSORBED` in a clone without that remote), as
-`tests/test_remi_sdapi_contract.py` does in `tools/check.sh`; set
-`LAST_ABSORBED` to the new upstream commit when committing the merge (the
-test checks it against the merge base).
+`tests/test_remi_sdapi_contract.py` and the `contract:sdapi` step do in
+`tools/check.sh`. A shallow clone (CI checks out one commit) fetches that
+commit from its remote first (`tools/git_history.py`); only when it cannot
+does the check skip, naming the reason (a `skip` row in the summary of
+`tools/check.sh`). Set `LAST_ABSORBED` to the new upstream commit when
+committing the merge (the test checks it against the merge base).
 
 **Line endings.** Forge Neo commits about a hundred files with CRLF line
 endings (most of `modules/`, `launch.py`, …) and the rest with LF. Remi

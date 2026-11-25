@@ -57,9 +57,11 @@ def requirements(text: str) -> dict[str, str]:
 
 
 def _show(rev: str, path: str) -> str:
+    # a shallow clone (CI) fetches the revision first (tests/test_remi_git_history.py)
+    if (reason := recorder.unavailable(rev)) is not None:
+        pytest.skip(reason)
     shown = subprocess.run(["git", "show", f"{rev}:{path}"], cwd=REPO, capture_output=True, text=True, encoding="utf8")
-    if shown.returncode != 0:
-        pytest.skip(f"{rev[:10]} is not in this clone")
+    assert shown.returncode == 0, shown.stderr
     return shown.stdout
 
 

@@ -20,15 +20,19 @@ interpreter (no model is loaded)::
     $PYTHON tools/sdapi_contract.py --rev upstream/neo  # during a sync, once every conflict is resolved
 
 The default revision is ``git merge-base HEAD upstream/neo``, or
-``LAST_ABSORBED`` in a clone without the ``upstream`` remote.
-``tests/test_remi_sdapi_contract.py`` runs the default check (``tools/check.sh``
-"pytest:tests").
+``LAST_ABSORBED`` in a clone without the ``upstream`` remote. A shallow clone
+(CI checks out one commit) lacks that revision: it is fetched from the clone's
+remote first (``tools/git_history.py``). Only when that fails is the check not
+run: the tool exits with ``UNAVAILABLE`` and the reason, which ``tools/check.sh``
+("contract:sdapi") lists as a skip. ``tests/test_remi_sdapi_contract.py`` runs
+the default check too ("pytest:tests"; it skips with the same reason).
 """
 
 from __future__ import annotations
 
 import argparse
 import ast
+import importlib.util
 import os
 import subprocess
 import sys
@@ -51,6 +55,27 @@ ALLOWED: dict[str, str] = {
 required fields are still compared), with the reason."""
 
 IGNORED_KEYS = ("title", "description")
+UNAVAILABLE = 77
+"""Exit status when the revision cannot be read here (not fetched): ``tools/check.sh`` reports a skip."""
+
+
+def _git_history() -> types.ModuleType:
+    """``tools/git_history.py``, loaded by path (``tools/`` is not a package), one copy per process."""
+
+    name = "remi_tools_git_history"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, os.path.join(ROOT, "tools", "git_history.py"))
+        assert spec is not None and spec.loader is not None
+        sys.modules[name] = module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    return sys.modules[name]
+
+
+git_history = _git_history()
+
+
+class RevisionUnavailable(Exception):
+    """The revision to compare with is not in this clone and could not be fetched (the message says why)."""
 
 
 def git(*args: str) -> str:
@@ -62,7 +87,16 @@ def default_rev() -> str:
     return found.stdout.strip() if found.returncode == 0 and found.stdout.strip() else LAST_ABSORBED
 
 
+def unavailable(rev: str) -> str | None:
+    """Why ``rev`` cannot be read in this clone, once a shallow clone has
+    tried to fetch it; None when it can."""
+
+    return git_history.ensure_commits(rev, repo=ROOT)
+
+
 def show(rev: str, path: str) -> str:
+    if (reason := unavailable(rev)) is not None:
+        raise RevisionUnavailable(reason)
     return git("show", f"{rev}:{path}")
 
 
@@ -219,6 +253,9 @@ def main(argv: list[str] | None = None) -> int:
         print("resolve every conflict first (docs/remi-webui/upstream-absorption.md, section 3), then run this check again", file=sys.stderr)
         return 2
     rev = options.rev or default_rev()
+    if (reason := unavailable(rev)) is not None:
+        print(f"cannot compare /sdapi/v1 with upstream {rev[:10]}: {reason}", file=sys.stderr)
+        return UNAVAILABLE
     label = f"{rev} ({git('rev-parse', '--short=10', rev).strip()})" if options.rev else rev[:10]
     problems = check(rev)
     for problem in problems:

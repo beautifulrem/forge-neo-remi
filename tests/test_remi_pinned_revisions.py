@@ -10,6 +10,7 @@ skip from then on. Every quoted hash in those files must be an ancestor of
 HEAD.
 """
 
+import importlib.util
 import json
 import re
 import subprocess
@@ -18,6 +19,9 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
+_spec = importlib.util.spec_from_file_location("tool_git_history_pinned", REPO / "tools" / "git_history.py")
+history = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(history)
 PINNED_IN = ("tools/record_legacy_ui.py", "tools/legacy_ui_recordings.py", "tools/record_legacy_settings.py", "tests/test_remi_legacy_ui_env.py")
 QUOTED_HASH = re.compile(r"""["']([0-9a-f]{7,40})["']""")
 
@@ -39,7 +43,8 @@ def test_the_pinned_revisions_are_found():
 
 
 def test_the_pinned_revisions_are_commits_of_this_history():
-    if _git("rev-parse", "--is-shallow-repository").stdout.strip() != "false":
-        pytest.skip("a shallow clone (or no git) has no history to check")
+    # a shallow clone (CI) fetches the whole history first (tests/test_remi_git_history.py)
+    if (reason := history.ensure_history(REPO)) is not None:
+        pytest.skip(reason)
     gone = sorted(name for name, rev in pinned().items() if _git("merge-base", "--is-ancestor", rev, "HEAD").returncode != 0)
     assert gone == []

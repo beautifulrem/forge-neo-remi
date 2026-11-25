@@ -21,14 +21,11 @@ contract = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(contract)
 
 
-def has_revision(rev: str) -> bool:
-    return subprocess.run(["git", "cat-file", "-e", f"{rev}^{{commit}}"], cwd=REPO, capture_output=True, check=False).returncode == 0
-
-
 def test_sdapi_matches_the_last_absorbed_upstream():
     rev = contract.default_rev()
-    if not has_revision(rev):
-        pytest.skip(f"{rev[:10]} is not in this clone (shallow?)")
+    # a shallow clone (CI) fetches the revision first (tests/test_remi_git_history.py)
+    if (reason := contract.unavailable(rev)) is not None:
+        pytest.skip(reason)
     assert contract.check(rev) == []
 
 

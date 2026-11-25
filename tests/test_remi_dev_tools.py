@@ -138,9 +138,10 @@ def test_recorder_self_test_checks_a_known_recording():
     assert options.rev == recorder.LEGACY_REV
     folder = recorder.output_folder(options)
     assert (folder / "legacy_ui_txt2img.json").is_file() and (folder / "legacy_ui_img2img.json").is_file()
+    if (reason := recorder.unavailable(recorder.SELF_TEST[1])) is not None:  # fetched into a shallow clone first
+        pytest.skip(reason)
     shown = subprocess.run(["git", "show", f"{recorder.SELF_TEST[1]}:{recorder.SELF_TEST[0]}"], cwd=REPO, capture_output=True, text=True)
-    if shown.returncode != 0:
-        pytest.skip("the self-test revision is not in this clone")
+    assert shown.returncode == 0, shown.stderr
     assert "def ui(self" in shown.stdout  # the revision still has the Gradio ui() to record
 
 

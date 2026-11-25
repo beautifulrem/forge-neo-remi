@@ -65,8 +65,9 @@ def test_recordings_are_well_formed():
 def test_each_recording_names_a_gradio_ui_at_its_revision(recording):
     """The script still had its Gradio ui() (or on_ui_tabs page) where it is recorded from."""
 
-    if subprocess.run(["git", "cat-file", "-e", f"{recording.rev}^{{commit}}"], cwd=REPO, capture_output=True).returncode != 0:
-        pytest.skip(f"{recording.rev[:10]} is not in this clone")
+    # a shallow clone (CI) fetches the revision first (tests/test_remi_git_history.py)
+    if (reason := recorder.unavailable(recording.rev)) is not None:
+        pytest.skip(reason)
     if recording.format == "processing_scripts":
         listed = subprocess.run(["git", "ls-tree", "--name-only", recording.rev, f"{recording.script}/"], cwd=REPO, capture_output=True, text=True, check=True).stdout.split()
         sources = {Path(path).stem: _git_show(recording.rev, path) for path in listed if path.endswith(".py")}

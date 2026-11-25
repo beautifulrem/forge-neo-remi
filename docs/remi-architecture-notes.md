@@ -54,8 +54,9 @@ on purpose. Read this before "fixing" one of them.
   restore` puts them back after `git merge` and their upstream fixes are
   ported by hand ([upstream-absorption.md §1.1](remi-webui/upstream-absorption.md#11-built-ins-whose-processing-remi-forked)).
   `/sdapi/v1` stays compatible with Forge Neo's: `tools/sdapi_contract.py`
-  (run by `tests/test_remi_sdapi_contract.py`) compares the routes and models
-  with upstream's.
+  (run by `tests/test_remi_sdapi_contract.py` and the `contract:sdapi` step of
+  `tools/check.sh`; a shallow clone fetches the upstream commit first) compares
+  the routes and models with upstream's.
 - **Three LoRA extensions wrap `ModelPatcher.add_patches`** (layer weight,
   stage scheduler, FreeFuse metadata) through `backend/patcher/function_chain.py`
   instead of a patch-hook registry in `sd_forge_lora`. A registry would be

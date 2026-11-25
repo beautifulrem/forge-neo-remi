@@ -81,8 +81,9 @@ def not_carried_over(readme: Path) -> dict[str, str]:
 
 def test_the_fixture_is_the_record_of_the_legacy_revision():
     revision = legacy()["revision"]
-    if subprocess.run(["git", "cat-file", "-e", f"{revision}^{{commit}}"], cwd=ROOT, capture_output=True).returncode != 0:
-        pytest.skip(f"the legacy revision {revision} is not in this checkout")
+    # a shallow clone (CI) fetches the revision (its abbreviated hash: the whole history) first
+    if (reason := recorder().unavailable(revision)) is not None:
+        pytest.skip(reason)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", SyntaxWarning)
         assert recorder().record(revision) == legacy()

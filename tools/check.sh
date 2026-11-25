@@ -12,7 +12,8 @@
 # Gradio imports) - pytest for
 # tests/ (with a coverage floor for remi/) and for every extensions-builtin/*/tests directory
 # separately, then a coverage floor for each Remi file outside remi/ over all of them - OpenAPI,
-# settings and tab schema contracts, upstream line endings - the legacy ui() recorder's self-test
+# /sdapi/v1 (against Forge Neo's; skipped, with the reason, when a shallow clone cannot fetch the
+# upstream commit), settings and tab schema contracts, upstream line endings - the legacy ui() recorder's self-test
 # (skipped, with the reason, without its Gradio interpreter) - i18n coverage (server zh_CN catalog, SPA
 # chrome catalog) - pnpm install (frozen lockfile), build (tsc + vite), the JS bundle budget,
 # oxlint, vitest (with coverage floors), Playwright end-to-end tests and axe scans against the
@@ -141,6 +142,11 @@ wanted() {
   return 0
 }
 
+# A step's command exits with this status when it cannot run here (tools/sdapi_contract.py: the
+# upstream revision is not in a shallow clone and could not be fetched): the step is reported as
+# "skip" with the last line of its output as the reason (--strict counts it as failed).
+SKIP_STATUS=77
+
 # step <name> <command...>: runs the command with its output in $LOGS/<name>.log
 step() {
   local name="$1"
@@ -163,6 +169,12 @@ step() {
   if [ $status -eq 0 ]; then
     RESULTS+=("pass")
     echo "pass ($((end - start))s)"
+  elif [ $status -eq $SKIP_STATUS ]; then
+    local reason
+    reason="$(tail -n 1 "$log")"
+    RESULTS+=("skip")
+    SKIPPED+=("$name: ${reason:-exit $SKIP_STATUS}")
+    echo "skip (${reason:-exit $SKIP_STATUS})"
   else
     RESULTS+=("FAIL")
     echo "FAIL ($((end - start))s, exit $status)"
@@ -255,6 +267,9 @@ strict_coverage() {
 step pytest:coverage strict_coverage
 
 step contract:openapi py tools/export_openapi.py --check
+# /sdapi/v1 against Forge Neo's at the last absorbed commit; a shallow clone (CI) fetches that
+# commit first, and only when it cannot is the step a "skip" with the reason (also in pytest:tests).
+step contract:sdapi py tools/sdapi_contract.py
 step contract:settings py tools/dump_settings.py --check
 # The real tab schemas the SPA contract tests (webui/src/ui/contract.test.tsx) render.
 step contract:schemas py webui/tools/dump_schemas.py --check

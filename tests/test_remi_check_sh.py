@@ -46,9 +46,9 @@ def fake_python(path: Path, record: Path, status: int = 0) -> Path:
     return path
 
 
-def run(checkout: Path, *args: str, legacy: str | None = None) -> subprocess.CompletedProcess[str]:
+def run(checkout: Path, *args: str, legacy: str | None = None, python: str = sys.executable) -> subprocess.CompletedProcess[str]:
     env = {key: value for key, value in os.environ.items() if key not in {"REMI_LEGACY_PYTHON", "REMI_CHECK_LOGS"}}
-    env["PYTHON"] = sys.executable
+    env["PYTHON"] = python
     env["REMI_CHECK_LOGS"] = str(checkout.parent / "logs")
     if legacy is not None:
         env["REMI_LEGACY_PYTHON"] = legacy
@@ -124,6 +124,27 @@ def test_failing_self_test_fails_the_run(checkout: Path, tmp_path: Path):
     assert summary_row(result.stdout, "legacy-ui")[1] == "FAIL"
     assert summary_row(result.stdout, "legacy-ui:fixtures")[1] == "FAIL"
     assert "2 of 2 steps failed (0 passed, 0 skipped)." in result.stdout
+
+
+def test_a_step_that_cannot_run_here_is_a_skip_with_its_reason(checkout: Path, tmp_path: Path):
+    """tools/sdapi_contract.py exits 77 when a shallow clone (CI) lacks the upstream commit and
+    cannot fetch it: the summary lists the step as skipped, with the tool's last line as the reason."""
+
+    python = tmp_path / "bin" / "python"
+    python.parent.mkdir()
+    python.write_text('#!/bin/sh\necho "$@" >> "' + str(tmp_path / "args.txt") + '"\necho "cannot compare /sdapi/v1 with upstream 5998fb39ea: fetching it from origin failed" >&2\nexit 77\n', encoding="utf-8")
+    python.chmod(python.stat().st_mode | stat.S_IXUSR)
+    result = run(checkout, "--only", "contract:sdapi", python=str(python))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert summary_row(result.stdout, "contract:sdapi")[:2] == ["contract:sdapi", "skip"]
+    assert "contract:sdapi: cannot compare /sdapi/v1 with upstream 5998fb39ea: fetching it from origin failed" in result.stdout
+    assert "0 of 1 steps passed, 1 skipped." in result.stdout
+    assert (tmp_path / "args.txt").read_text(encoding="utf-8").splitlines()[-1] == "tools/sdapi_contract.py"  # after the ruff probe
+    assert run(checkout, "--strict", "--only", "contract:sdapi", python=str(python)).returncode == 1
+    # any other failure is still a failure
+    python.write_text("#!/bin/sh\necho 'route GET /sdapi/v1/options: missing in Remi' >&2\nexit 1\n", encoding="utf-8")
+    failed = run(checkout, "--only", "contract:sdapi", python=str(python))
+    assert failed.returncode == 1 and summary_row(failed.stdout, "contract:sdapi")[1] == "FAIL"
 
 
 @pytest.mark.parametrize(("ci", "reporter"), [(None, ["--reporter=line"]), ("1", []), ("true", [])])

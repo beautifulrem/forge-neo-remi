@@ -183,20 +183,48 @@ def output_folder(options: argparse.Namespace) -> Path:
     return REPO / extension_folder(options.script) / "tests" / "fixtures"
 
 
+def _git_history() -> Any:
+    """``tools/git_history.py``, loaded by path (``tools/`` is not a package), one copy per process."""
+
+    name = "remi_tools_git_history"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name("git_history.py"))
+        assert spec is not None and spec.loader is not None
+        sys.modules[name] = module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    return sys.modules[name]
+
+
+def unavailable(rev: str) -> str | None:
+    """Why ``rev`` cannot be read here, once a shallow clone has tried to fetch it; None when it can."""
+
+    return _git_history().ensure_commits(rev, repo=REPO)
+
+
+def require_revision(rev: str, what: str) -> None:
+    """SystemExit naming why ``rev`` cannot be read (:func:`unavailable`)."""
+
+    if (reason := unavailable(rev)) is not None:
+        raise SystemExit(f"cannot read {what} at {rev[:10]}: {reason}")
+
+
 def export(rev: str, target: Path, *paths: str) -> None:
     """``git archive`` of ``rev`` (or of ``paths`` in it) extracted into ``target``."""
 
+    require_revision(rev, " ".join(paths) or "the tree")
     archive = subprocess.run(["git", "archive", "--format=tar", rev, *paths], cwd=REPO, check=True, capture_output=True).stdout
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
         tar.extractall(target, filter="data")
 
 
 def git_show(rev: str, path: str) -> str:
-    """``path`` at ``rev`` (``git show``), or SystemExit when the clone does not have it."""
+    """``path`` at ``rev`` (``git show``; a shallow clone fetches ``rev`` first), or
+    SystemExit when it cannot be read."""
 
+    require_revision(rev, path)
     shown = subprocess.run(["git", "show", f"{rev}:{path}"], cwd=REPO, capture_output=True, text=True, encoding="utf8")
     if shown.returncode != 0:
-        raise SystemExit(f"cannot read {path} at {rev[:10]} (a shallow clone? fetch the full history): {shown.stderr.strip()}")
+        raise SystemExit(f"cannot read {path} at {rev[:10]}: {shown.stderr.strip()}")
     return shown.stdout
 
 
