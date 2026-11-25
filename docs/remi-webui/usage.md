@@ -263,7 +263,7 @@ The command palette (Ctrl+K, ⌘K on a Mac) lists every command with its shortcu
 | Where | Keys |
 | --- | --- |
 | Everywhere | Ctrl+K / ⌘K command palette · ? keyboard shortcuts · Alt+N networks drawer |
-| Generate | Ctrl/⌘+Enter generate (while running: interrupt and generate again, or only interrupt with the setting "Revert [Ctrl + Enter] to only interrupt the generation") · Ctrl/⌘+Shift+Enter add to queue · Alt+Enter skip · Esc interrupt (outside text fields and dialogs) · results: ← / → select, Enter open, Delete remove |
+| Generate | Ctrl/⌘+Enter generate (while running: interrupt and generate again, or only interrupt with the setting "Revert [Ctrl + Enter] to only interrupt the generation") · Ctrl/⌘+Shift+Enter add to queue · Alt+Enter skip · Esc interrupt (also from the prompt editor; not from other text fields or dialogs) · results: ← / → select, Enter open, Delete remove |
 | Prompt editor | Ctrl/⌘+↑ / ↓ change the weight of the selection · Alt+← / → move the tag · Tab or Enter accept a completion · Ctrl/⌘+Z undo · Ctrl+Y / ⌘⇧Z redo |
 | Image editor | B brush · E eraser · G fill · M rectangle · L lasso · I eyedropper · H hand · [ / ] brush size · W / A / S + wheel brush size / opacity / softness · Shift (hold) erase · Ctrl/⌘+Z / Y undo / redo · Ctrl/⌘+X or Delete clear layer · Ctrl/⌘+I invert mask · R or 0 fit · 1 actual size · + / − zoom · F maximize · Space+drag or right drag pan · staged candidates: ← / → pick, Enter accept, Esc discard · ? help |
 | Lightbox | ← / → previous / next · Home / End · + / − / 0 / 1 zoom · S download · T tile preview · B cycle the RGBA backdrop · Esc close |
