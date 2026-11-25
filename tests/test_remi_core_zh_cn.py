@@ -398,6 +398,7 @@ FREE_TEXT_REJECTIONS = {
     ("remi/core/forms.py", "message"): "a form's `required` message (REQUIRED_INPUTS, collected with the form)",
     ("remi/server/options.py", "message"): "the parameter of `_error`, the helper its callers use",
     ("remi/server/options.py", "reason"): "frozen_reason()'s sentences, in the SPA catalog (a locked setting's reason)",
+    ("remi/core/presets.py", "reason"): "frozen_reason()'s sentences, in the SPA catalog (a UI preset switch a freeze refuses)",
     ("remi/server/options.py", 'f"{type(error).__name__}: {error}"'): "a setting's own code raised: its exception, as it is",
     ("remi/ui/nodes.py", "reason"): "a param's own `validate` raised: the extension's text, or its Sentence",
     ("extensions-builtin/sd_forge_controlnet/lib_controlnet/unit_actions.py", "message"): "the parameter of `bad_input`, the helper its callers use",
