@@ -30,11 +30,13 @@ and the values.
 from __future__ import annotations
 
 import base64
+import functools
 import hashlib
 import hmac
 import io
 import json
 import logging
+import math
 import operator
 import os
 import pickle
@@ -197,8 +199,86 @@ def checked_image_size(size: Any) -> tuple[int, int]:
     return width, height
 
 
+def _multiarray() -> Any:
+    try:
+        from numpy._core import multiarray  # numpy 2
+    except ImportError:  # numpy 1
+        from numpy.core import multiarray
+    return multiarray
+
+
+def _plain_dtype(dtype: Any) -> Any:
+    """``dtype`` made again from its description. A dtype's pickled state
+    sets its flags as it likes: it can claim to hold objects, and numpy then
+    took raw bytes for object pointers. Object dtypes are refused: their
+    array state is a list, which numpy trusted to fit the shape (a shorter
+    one crashed the process)."""
+
+    import numpy as np
+
+    if not isinstance(dtype, np.dtype):
+        raise pickle.UnpicklingError("not a numpy dtype")
+    try:
+        plain = np.dtype(dtype.descr) if dtype.fields else np.dtype(dtype.str)
+    except (TypeError, ValueError) as error:
+        raise pickle.UnpicklingError(f"not a plain numpy dtype ({error})"[:200]) from None
+    if plain.hasobject:
+        raise pickle.UnpicklingError("refused: a numpy array of objects")
+    return plain
+
+
+@functools.cache
+def _array_class() -> type:
+    """``numpy.ndarray`` for the unpickler: never constructed (``ndarray(shape)``
+    allocates the shape it is given), only rebuilt the way numpy pickles an
+    array (:func:`_reconstruct_array`), its state checked before numpy reads
+    it. Loaded arrays are instances of this subclass."""
+
+    import numpy as np
+
+    class ndarray(np.ndarray):  # the name numpy shows in reprs
+        def __new__(cls, *args: Any, **kwargs: Any) -> Any:
+            raise pickle.UnpicklingError("refused: constructing a numpy array")
+
+        def __setstate__(self, state: Any) -> None:
+            try:
+                version, shape, dtype, fortran, data = state
+                shape = tuple(operator.index(size) for size in shape)
+            except (TypeError, ValueError):
+                raise pickle.UnpicklingError("not a numpy array state") from None
+            dtype = _plain_dtype(dtype)
+            if version != 1 or not isinstance(data, bytes) or any(size < 0 for size in shape) or math.prod(shape) * dtype.itemsize != len(data):
+                raise pickle.UnpicklingError(f"the numpy array data does not fit its shape {shape}"[:200])
+            np.ndarray.__setstate__(self, (version, shape, dtype, bool(fortran), data))
+
+    return ndarray
+
+
+def _reconstruct_array(subtype: Any, shape: Any, typecode: Any) -> Any:
+    """numpy pickles an array as ``_reconstruct(ndarray, (0,), b"b")`` and
+    its state: only that form is taken (any other shape was allocated as
+    declared before the state could be checked)."""
+
+    array_class = _array_class()
+    if subtype is not array_class or shape != (0,):
+        raise pickle.UnpicklingError("refused: a numpy array not in the form numpy pickles")
+    return _multiarray()._reconstruct(array_class, (0,), b"b")
+
+
+def _numpy_scalar(dtype: Any, *args: Any) -> Any:
+    """``scalar(dtype, data)`` as numpy pickles one: the data must be the
+    dtype's size (without data numpy allocated and zeroed whatever size the
+    dtype declared)."""
+
+    dtype = _plain_dtype(dtype)
+    if len(args) != 1 or not isinstance(args[0], bytes) or len(args[0]) != dtype.itemsize:
+        raise pickle.UnpicklingError("not a numpy scalar")
+    return _multiarray().scalar(dtype, args[0])
+
+
 class SafeUnpickler(pickle.Unpickler):
-    """Only plain data, numpy arrays and PIL images (of at most
+    """Only plain data, numpy arrays and scalars (rebuilt as numpy pickles
+    them, data that fits the shape, no objects) and PIL images (of at most
     :data:`remi.files.MAX_UPLOAD_PIXELS`, never constructed): any other
     global (a function, a class with side effects) refuses the whole
     pickle.
@@ -218,15 +298,18 @@ class SafeUnpickler(pickle.Unpickler):
     ALLOWED = {
         ("builtins", "set"), ("builtins", "frozenset"), ("builtins", "complex"), ("builtins", "bytearray"),
         ("builtins", "slice"), ("builtins", "range"), ("collections", "OrderedDict"), ("collections", "defaultdict"),
-        ("copyreg", "_reconstructor"), ("builtins", "object"),
-        ("numpy", "ndarray"), ("numpy", "dtype"), ("numpy.core.multiarray", "_reconstruct"), ("numpy._core.multiarray", "_reconstruct"),
-        ("numpy.core.multiarray", "scalar"), ("numpy._core.multiarray", "scalar"),
+        ("copyreg", "_reconstructor"), ("builtins", "object"), ("numpy", "dtype"),
     }
+    NUMPY_MODULES = ("numpy.core.multiarray", "numpy._core.multiarray")
     PIL_MODULES = ("PIL.Image", "PIL.PngImagePlugin", "PIL.JpegImagePlugin", "PIL.WebPImagePlugin", "PIL.GifImagePlugin", "PIL.BmpImagePlugin", "PIL.TiffImagePlugin")
 
     def find_class(self, module: str, name: str) -> Any:
         if (module, name) in self.ALLOWED:
             return super().find_class(module, name)
+        if (module, name) == ("numpy", "ndarray"):
+            return _array_class()
+        if module in self.NUMPY_MODULES and name in ("_reconstruct", "scalar"):
+            return _reconstruct_array if name == "_reconstruct" else _numpy_scalar
         if module in self.PIL_MODULES and name.endswith(("Image", "ImageFile")) and not name.startswith("_"):
             cls = super().find_class(module, name)
             from PIL import Image

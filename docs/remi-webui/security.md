@@ -145,7 +145,11 @@ attackers who already have a login (they are administrators by design).
   (`remi/jobs/importers.py`): its restricted unpickler checks a pickled
   image's declared size before Pillow allocates it and never calls an image
   class (`PngImageFile(path)` would open a file on the server); image dicts
-  and data URLs are checked before `frombytes` / `load`.
+  and data URLs are checked before `frombytes` / `load`. Numpy arrays and
+  scalars are taken only in the form numpy pickles them, with data that
+  fits the declared shape, never `ndarray(shape)` or an array of objects,
+  and their dtype is made again from its description (a pickled dtype can
+  claim to hold objects, and numpy would take raw bytes for pointers).
 - Upload errors are fixed messages ("not a readable image"): Pillow's own
   message names the incoming file in the data folder, so it is only logged.
 - Every other request body (JSON jobs, `/sdapi` base64 images, extension

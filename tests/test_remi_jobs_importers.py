@@ -183,6 +183,105 @@ def test_the_unpickler_never_constructs_an_image(tmp_path):
             importers.safe_loads(pickle.dumps(value))
 
 
+class _Call:
+    """Pickles as ``function(*args)`` and, with ``state``, a BUILD of it."""
+
+    def __init__(self, function, *args, state=None):
+        self.function, self.args, self.state = function, args, state
+
+    def __reduce__(self):
+        return (self.function, self.args) if self.state is None else (self.function, self.args, self.state)
+
+
+def test_the_unpickler_keeps_numpy_arrays_and_scalars_of_every_plain_kind():
+    import datetime
+
+    values = [
+        np.asfortranarray(np.arange(12, dtype="<f8").reshape(3, 4)),
+        np.array([True, False]),
+        np.array(["ab", "c"], dtype="<U3"),
+        np.array([datetime.datetime(2026, 1, 2)], dtype="datetime64[s]"),
+        np.zeros(2, dtype=[("x", "<i4"), ("y", "u1", (2,))]),
+        np.zeros((0, 3), dtype=">i2"),
+    ]
+    for value in values:
+        data = pickle.dumps(value, protocol=4)
+        loaded, plain = importers.safe_loads(data), pickle.loads(data)  # as numpy itself loads it
+        assert isinstance(loaded, np.ndarray) and loaded.dtype == plain.dtype and loaded.shape == plain.shape and loaded.tobytes() == plain.tobytes()
+        assert loaded.flags.f_contiguous == plain.flags.f_contiguous
+    assert importers.safe_loads(pickle.dumps(np.int64(-3), protocol=4)) == -3
+
+
+def test_pickled_arrays_are_never_allocated_by_a_declared_shape():
+    """numpy pickles an array as an empty ``_reconstruct(ndarray, (0,), b"b")`` filled from its
+    state, whose data must fit the shape. But a pickle could call ``_reconstruct`` with any
+    shape, the ndarray class itself, or ``scalar`` with a huge void type and no data: each
+    allocated what it declared (10 GB for 100000x100000 uint8)."""
+
+    import tracemalloc
+
+    reconstruct, scalar = np._core.multiarray._reconstruct, np._core.multiarray.scalar
+    huge = (100_000, 100_000)
+    values = [
+        _Call(reconstruct, np.ndarray, huge, b"b"),
+        _Call(np.ndarray, huge, np.dtype("u1")),
+        _Call(reconstruct, np.ndarray, (0,), b"b", state=(1, huge, np.dtype("u1"), False, b"")),
+        _Call(scalar, np.dtype(("V", 200_000_000))),
+        _Call(scalar, np.dtype(("V", 200_000_000)), b""),
+    ]
+    tracemalloc.start()
+    try:
+        for value in values:
+            with pytest.raises(pickle.UnpicklingError):
+                importers.safe_loads(pickle.dumps(value, protocol=4))
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert peak < 16 * 1024 * 1024
+
+
+def test_pickled_object_arrays_and_forged_dtypes_are_refused_without_crashing():
+    """An object array's state is a list: one shorter than its shape made numpy read past the
+    list (the process crashed), and a dtype's state can claim the type holds objects, so raw
+    bytes became object pointers. Run in a child process, so a crash is a failure here."""
+
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    code = """
+import pickle
+import numpy as np
+from numpy._core.multiarray import _reconstruct
+from remi.jobs import importers
+
+class Call:
+    def __init__(self, function, *args, state=None):
+        self.function, self.args, self.state = function, args, state
+
+    def __reduce__(self):
+        return self.function, self.args, self.state
+
+state = list(np.dtype("V8").__reduce__()[2])
+state[-1] |= 0x01 | 0x08 | 0x10  # NPY_ITEM_HASOBJECT and the reference-counting flags
+forged = Call(np.dtype, "V8", False, True, state=tuple(state))
+for value in (
+    Call(_reconstruct, np.ndarray, (0,), b"b", state=(1, (3,), np.dtype("O"), False, [1])),
+    Call(_reconstruct, np.ndarray, (0,), b"b", state=(1, (1,), forged, False, b"A" * 8)),
+    Call(np._core.multiarray.scalar, forged, b"A" * 8),
+):
+    try:
+        loaded = importers.safe_loads(pickle.dumps(value, protocol=4))
+    except pickle.UnpicklingError:
+        print("refused")
+    else:
+        print("object" if loaded.dtype.hasobject else "plain")
+"""
+    result = subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=300)
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert result.stdout.split() == ["refused", "plain", "plain"]
+
+
 def test_script_arguments_that_are_empty_or_not_a_list():
     assert importers.read_script_params(None, None) == ([], [])
     assert importers.read_script_params(b"", b"k" * 32) == ([], [])
