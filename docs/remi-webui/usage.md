@@ -163,7 +163,7 @@ docker build -f docker/Dockerfile.rocm -t remi-webui-rocm .
 docker run --device /dev/kfd --device /dev/dri --group-add video -p 127.0.0.1:7860:7860 -v remi-data:/home/remi/data remi-webui-rocm
 ```
 
-The container listens on every interface and has no login by default, so these commands publish the port on this machine only. To reach it from other machines, set a login with `--auth-file` (see [docker/README.md](../../docker/README.md#run)) and read [Security and Remote Access](#security-and-remote-access).
+The container listens on every interface and has no login by default, so these commands publish the port on this machine only. To reach it from other machines, set a login with `--auth-file` (see [docker/README.md](../../docker/README.md#run)) and read [Security and Remote Access](#security-and-remote-access). Because it listens on every interface, the Extensions page cannot install or update extensions in the container: put an extension into the volume's `extensions/` folder and restart the container, or add `--enable-insecure-extension-access` together with a login.
 
 ### Recommended first Anima run
 

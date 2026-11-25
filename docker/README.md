@@ -57,6 +57,13 @@ the file must be readable by the container's user, uid 99):
 a password in `--auth` or `COMMANDLINE_ARGS` shows in `docker inspect` and the
 process list.
 
+Because of `--listen`, the Extensions page refuses to install, update or remove
+extensions (the server is reachable from other machines). Put an extension into
+the volume's `extensions/` folder instead (clone its repository there from the
+host or through `docker exec`) and restart the container, or add
+`--enable-insecure-extension-access` together with a login: it lets everyone
+who can sign in run code in the container.
+
 The image's health check asks `http://localhost:7860/internal/ping`. With another
 `--port`, with `--nowebui` (the API alone listens on 7861), with `--server-name`
 (the server listens on that one address, not on `localhost`) or with

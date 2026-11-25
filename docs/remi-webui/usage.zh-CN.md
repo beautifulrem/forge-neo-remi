@@ -163,7 +163,7 @@ docker build -f docker/Dockerfile.rocm -t remi-webui-rocm .
 docker run --device /dev/kfd --device /dev/dri --group-add video -p 127.0.0.1:7860:7860 -v remi-data:/home/remi/data remi-webui-rocm
 ```
 
-容器内的服务监听所有网卡，默认没有登录，所以上面的命令只把端口发布到本机。要让其他机器访问，先用 `--auth-file` 设置登录（见 [docker/README.md](../../docker/README.md#run)），并阅读[安全与远程访问](#安全与远程访问)。
+容器内的服务监听所有网卡，默认没有登录，所以上面的命令只把端口发布到本机。要让其他机器访问，先用 `--auth-file` 设置登录（见 [docker/README.md](../../docker/README.md#run)），并阅读[安全与远程访问](#安全与远程访问)。由于服务监听所有网卡，扩展页面无法在容器里安装或更新扩展：把扩展放进卷中的 `extensions/` 目录后重启容器，或在设置登录的同时加上 `--enable-insecure-extension-access`。
 
 ### 首次 Anima 生成建议
 

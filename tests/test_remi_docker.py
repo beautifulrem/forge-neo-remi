@@ -157,6 +157,27 @@ def test_the_readme_names_every_option_the_health_check_does_not_follow():
         assert f"`{option}" in paragraph, option
 
 
+def section(text: str, heading: str) -> str:
+    """The section of a Markdown ``text`` under the heading line ``heading``, up to the next heading of its level."""
+
+    level = heading.split(" ", 1)[0]
+    start = text.index(f"\n{heading}\n")
+    end = text.find(f"\n{level} ", start + 1)
+    return text[start : end if end >= 0 else len(text)]
+
+
+def test_the_docs_say_the_container_refuses_extension_installs():
+    """The entrypoint always adds --listen, and a server reachable from other machines refuses to
+    install or update extensions (security.md, "Extensions"): the Docker docs say so and name the
+    two ways around it."""
+
+    assert "--listen" in ENTRYPOINT
+    usage = (ROOT / "docs" / "remi-webui" / "usage.md").read_text(encoding="utf-8")
+    usage_zh = (ROOT / "docs" / "remi-webui" / "usage.zh-CN.md").read_text(encoding="utf-8")
+    for text in (section(README, "## Run"), section(usage, "### Docker (NVIDIA or AMD GPU)"), section(usage_zh, "### Docker（NVIDIA 或 AMD GPU）")):
+        assert "--enable-insecure-extension-access" in text and "extensions/" in text, text[:80]
+
+
 def test_the_rocm_recipe_is_the_same_image_with_rocm_pytorch():
     """docker/Dockerfile.rocm (upstream 2900d594, translated): the same
     stages, data folder, launcher run and entrypoint; only the base image and
