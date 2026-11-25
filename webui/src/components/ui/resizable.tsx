@@ -444,9 +444,10 @@ function ResizablePanel({ id, defaultSize, minSize, maxSize, collapsible = false
     const panel = element.current
     if (!hidden || !panel?.contains(document.activeElement)) return
     // the focus was inside (a control in the pane collapsed it): to the pane's separator, not the page
-    const separator = panel.parentElement?.querySelector<HTMLElement>(`[role=separator][aria-controls="${CSS.escape(id)}"]`)
-    separator?.focus()
-  }, [hidden, id])
+    // (the one after it controls it; the last pane has only the one before it)
+    const separator = [panel.nextElementSibling, panel.previousElementSibling].find((element) => element instanceof HTMLElement && element.getAttribute("role") === "separator")
+    if (separator instanceof HTMLElement) separator.focus()
+  }, [hidden])
   return (
     <div
       ref={element}

@@ -286,9 +286,9 @@ imperatively).
   opens takes the focus through the popup's `initialFocus`, never `autoFocus`
   (the popup would give the focus back to that field on close; a field that
   appears later in an open popup, an inline rename, may use `autoFocus`);
-  a full-screen viewer opens with the focus on its content (the image
-  viewer: on the image, whose keys it handles), not on its first toolbar
-  button; `number-field.tsx` is ours.
+  a panel collapsed to nothing is `inert` (its controls leave the Tab order
+  and the accessibility tree; a focus inside it moves to the separator
+  beside it); `number-field.tsx` is ours.
 - **Safe area**: the app shell pads its sides for a notch
   (`env(safe-area-inset-left/right)` in `App.tsx`) and the phone's bottom
   bar pads for the home indicator, but overlays are portalled outside the
@@ -818,7 +818,9 @@ mode's schema is prefetched).
   `js_modal_lightbox_gamepad_repeat`), Home/End,
   S downloads, +/−/0/1, T tile preview, middle click opens in a new tab,
   Esc closes; initial zoom per `js_modal_lightbox_initially_zoomed`; follows
-  the live preview with `js_live_preview_in_modal_lightbox`. A job's video
+  the live preview with `js_live_preview_in_modal_lightbox`. It opens with
+  the focus on the image, whose keys it handles (the popup's
+  `initialFocus`), not on its first toolbar button. A job's video
   (output `kind: "video"`, e.g. Wan) belongs to its first frame: the stage
   plays it (controls; `video_player_auto` starts it, `video_player_loop`
   loops it), the history and the lightbox keep the frames.

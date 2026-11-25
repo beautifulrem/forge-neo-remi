@@ -131,6 +131,25 @@ describe("resizable panels", () => {
     expect(panel).not.toHaveAttribute("inert")
   })
 
+  // The separator before a panel controls the panel before it: the last panel (History) has none of
+  // its own, and the focus inside it fell to the page when it collapsed.
+  it("gives the focus inside a collapsed last panel to the separator beside it", () => {
+    const { result } = renderHook(() => usePanelRef())
+    render(
+      <ResizablePanelGroup orientation="horizontal">
+        <ResizablePanel id="a">A</ResizablePanel>
+        <ResizableHandle aria-label="Resize B" />
+        <ResizablePanel id="b" panelRef={result.current} defaultSize="30" minSize={200} collapsible collapsedSize={0}>
+          <button type="button">Inside</button>
+        </ResizablePanel>
+      </ResizablePanelGroup>,
+    )
+    screen.getByRole("button", { name: "Inside" }).focus()
+    act(() => result.current.current!.collapse())
+    expect(document.getElementById("b")).toHaveAttribute("inert")
+    expect(screen.getByRole("separator", { name: "Resize B" })).toHaveFocus()
+  })
+
   it("starts from a kept layout when it names the same panels", () => {
     render(
       <ResizablePanelGroup defaultLayout={{ a: 40, b: 60 }}>
