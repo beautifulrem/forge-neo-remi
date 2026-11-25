@@ -899,6 +899,7 @@ export const serverCatalogZh: Record<string, string> = {
   "a mask image is required": "需要一张蒙版图像",
   // the mock's own words (its demo rule and its sample extensions' toasts): not in the server's catalog
   "the prompt contains #invalid (mock validation demo)": "提示词含有 #invalid（mock 校验演示）",
+  "{{value}} contains #invalid (mock validation demo)": "{{value}} 含有 #invalid（mock 校验演示）",
   "Preset “{{preset}}” applied": "已应用预设“{{preset}}”",
   "Recommended values restored": "已恢复推荐值",
   "Compatibility: LCM uses the SGM Uniform schedule": "兼容性：LCM 使用 SGM Uniform 调度",

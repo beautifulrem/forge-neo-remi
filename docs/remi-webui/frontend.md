@@ -1632,7 +1632,8 @@ each refused value in the server's words (`remi/ui/nodes.py`: the sentence,
 its template and values), and the sample extensions' toasts name their
 values as `{text, params}`, so the zh preview translates both through the
 catalog sample (`serverCatalogZh`; `api/mock/server.test.ts`)
-(try `#invalid` in the prompt; the schema's `core.required` rules are
+(try `#invalid` in the prompt, or in a text setting, which `PATCH /options`
+refuses the same way; the schema's `core.required` rules are
 checked by the client before it sends anything, so img2img without a
 source image marks the field and shows the toast without a request);
 `GET /jobs` is paged (`cursor`, `limit`), `repeat` queues copies and retry

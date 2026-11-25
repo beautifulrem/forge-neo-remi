@@ -9,7 +9,7 @@ import type { SettingsSchema } from "@/ui/schema"
 import settingsContract from "./contract/settings.json"
 import { bootstrap } from "./fixtures"
 import { loadedModel, reloadModel, unloadModel } from "./model"
-import { MockHttpError } from "./server"
+import { MockHttpError, pyRepr, sentence } from "./server"
 import { broadcast } from "./socket"
 
 type Handler = (match: RegExpExecArray, body: unknown, url: URL) => unknown | Promise<unknown>
@@ -29,10 +29,13 @@ function schema(): SettingsSchema {
 
 function patchOptions(body: unknown) {
   const changes = (body ?? {}) as Record<string, unknown>
-  // Try "#invalid" in a text setting to see a rejected value.
+  // Try "#invalid" in a text setting to see a rejected value. Both say it as the server does: its
+  // own reason (a catalog key), and a sentence with its template and values (`remi.ui.Sentence`).
   const errors = Object.entries(changes).flatMap(([key, value]) => {
     if (!(key in values)) return [{ owner: "settings", param: key, message: "unknown setting" }]
-    if (typeof value === "string" && value.includes("#invalid")) return [{ owner: "settings", param: key, message: "Mock: rejected value" }]
+    if (typeof value === "string" && value.includes("#invalid")) {
+      return [{ owner: "settings", param: key, ...sentence("{{value}} contains #invalid (mock validation demo)", { value: pyRepr(value) }) }]
+    }
     return []
   })
   if (errors.length > 0) throw new MockHttpError(422, { errors })

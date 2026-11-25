@@ -7,6 +7,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { sentenceParams } from "@/api/http"
 import { validationMessage } from "@/features/errors/error-text"
 import { i18n } from "@/i18n"
+import zhCN from "@/locales/zh-CN.json"
+import type { ValidationError } from "@/ui/schema"
 import { bootstrap, serverCatalogZh } from "./fixtures"
 import { actionPatch, handleMockRequest, validateJob } from "./server"
 import { MockSocket } from "./socket"
@@ -64,6 +66,35 @@ describe("the mock's action toasts", () => {
     const patch = actionPatch("anima", "apply_preset", { values: { preset: "detail" } } as never) as { __toast__?: { message: unknown } }
     expect(patch.__toast__?.message).toEqual({ text: "Preset “{{preset}}” applied", params: { preset: "detail" } })
     expect(serverCatalogZh["Preset “{{preset}}” applied"]).toMatch(HAN)
+  })
+})
+
+describe("the mock's refused settings", () => {
+  async function patch(values: Record<string, unknown>) {
+    const response = await handleMockRequest(
+      new Request("http://localhost/api/v2/options/validate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(values) }),
+    )
+    return { status: response.status, errors: ((await response.json()) as { errors: ValidationError[] }).errors }
+  }
+
+  it("say why in the server's words, translatable in the zh preview", async () => {
+    const { status, errors } = await patch({ samples_filename_pattern: "[seed] #invalid", no_such_setting: 1 })
+    expect(status).toBe(422)
+    const [rejected, unknown] = errors
+    // the demo rule names the value as the server's sentences do: a template and its values
+    expect(rejected).toEqual({
+      owner: "settings",
+      param: "samples_filename_pattern",
+      message: "'[seed] #invalid' contains #invalid (mock validation demo)",
+      template: "{{value}} contains #invalid (mock validation demo)",
+      params: { value: "'[seed] #invalid'" },
+    })
+    // the server's own reason (remi/server/options.py, frozen_reason): a catalog key
+    expect(unknown).toEqual({ owner: "settings", param: "no_such_setting", message: "unknown setting" })
+    expect(validationMessage(rejected!, "zh-CN")).toBe("'[seed] #invalid' 含有 #invalid（mock 校验演示）")
+    // a reason of the server's own is in the SPA's catalog, as in the product
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    expect(validationMessage(unknown!, "zh-CN")).toBe("未知设置")
   })
 })
 

@@ -260,12 +260,12 @@ export function validateJob(request: JobRequest): ValidationError[] {
 type Refusal = { message: string; template?: string; params?: Record<string, string> }
 
 /** A `remi.ui.Sentence` as the server sends it: the English sentence, its template and its values (text). */
-function sentence(template: string, params: Record<string, string>): Refusal {
+export function sentence(template: string, params: Record<string, string>): Refusal {
   return { message: template.replace(/\{\{(\w+)\}\}/g, (_, name: string) => params[name] ?? ""), template, params }
 }
 
 /** Python's `repr` of a JSON value, as the server writes a refused value into its sentence. */
-function pyRepr(value: unknown): string {
+export function pyRepr(value: unknown): string {
   if (typeof value === "string") return `'${value.replaceAll("\\", "\\\\").replaceAll("'", "\\'")}'`
   if (typeof value === "boolean") return value ? "True" : "False"
   if (value === null || value === undefined) return "None"
