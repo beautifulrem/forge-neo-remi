@@ -60,3 +60,19 @@
 /webui/coverage
 /webui/test-results
 /webui/playwright-report
+# local tool folders of webui/ (kept out of Git by .git/info/exclude, not .gitignore)
+/webui/.impeccable
+
+# tokenizers the launcher writes at start from the .xz archives next to them
+# (backend/huggingface: Token, process()); the tracked Chroma tokenizer stays
+/backend/huggingface/Wan-AI/Wan2.1-T2V-14B/tokenizer/tokenizer.json
+/backend/huggingface/Wan-AI/Wan2.1-I2V-14B/tokenizer/tokenizer.json
+/backend/huggingface/neta-art/Neta-Lumina/tokenizer/tokenizer.json
+/backend/huggingface/nvidia/PiD/tokenizer/tokenizer.json
+/backend/huggingface/Tongyi-MAI/Z-Image-Turbo/tokenizer/tokenizer.json
+/backend/huggingface/black-forest-labs/FLUX.2-klein-4B/tokenizer/tokenizer.json
+/backend/huggingface/black-forest-labs/FLUX.2-klein-9B/tokenizer/tokenizer.json
+/backend/huggingface/circlestone-labs/Anima/tokenizer/tokenizer.json
+/backend/huggingface/baidu/ERNIE-Image/tokenizer/tokenizer.json
+/backend/huggingface/OpenMOSS-Team/MOSS-Image-SFT/tokenizer/tokenizer.json
+/backend/huggingface/Qwen/Qwen3.5-4B/tokenizer/tokenizer.json

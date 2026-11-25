@@ -184,6 +184,27 @@ def docker_builds(text: str) -> list[str]:
     return [line.split(" #", 1)[0].strip() for line in re.sub(r"\\\n", " ", text).splitlines() if line.lstrip().startswith("docker build")]
 
 
+def test_the_build_context_leaves_out_generated_tokenizers_and_local_tool_folders():
+    """The launcher writes each tokenizer.json of ``backend.huggingface.Token`` from the .xz archive
+    next to it at start (``process()``): ~150 MB a checkout that has run once would send with the
+    build context for nothing. The archives and the tracked Chroma tokenizer stay in. So does no
+    local tool folder of webui/ (``webui/.impeccable``, ignored by .git/info/exclude, not .gitignore)."""
+
+    from backend.huggingface import Token
+
+    generated = {name: path for name, path in vars(Token).items() if not name.startswith("_") and not name.endswith("_compress")}
+    assert generated
+    for name, path in generated.items():
+        assert "/" + Path(path).relative_to(ROOT).as_posix() in IGNORE, name
+    for name in vars(Token):
+        if name.endswith("_compress"):
+            assert "/" + Path(getattr(Token, name)).relative_to(ROOT).as_posix() not in IGNORE, name
+    assert not any("tokenizer" in pattern and "*" in pattern for pattern in IGNORE)
+    chroma = "backend/huggingface/Chroma/tokenizer/tokenizer.json"
+    assert (ROOT / chroma).is_file() and "/" + chroma not in IGNORE
+    assert "/webui/.impeccable" in IGNORE
+
+
 def test_the_readme_describes_this_image():
     assert "Forge - Neo" not in README and "git clone" not in README
     assert any(build.endswith("-f docker/Dockerfile -t remi-webui .") for build in docker_builds(README))
