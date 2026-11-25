@@ -98,7 +98,7 @@ JSON Builder 在画布上用方框排布 **MOSS-Image Layout**、**FLUX.3 Image 
 - [Git](https://git-scm.com/downloads)
 - [Python 3.13](https://www.python.org/downloads/) 或 [uv](https://docs.astral.sh/uv/)
 - 受支持的 PyTorch 设备；NVIDIA GPU 是测试最充分的选择（Apple Silicon 可通过 MPS 运行）
-- 网页界面需要：[Node.js](https://nodejs.org/) 20.19+ 或 22.12+（每次更新后构建一次，见[网页界面的构建](#网页界面的构建)）。已安装 pnpm 时使用 pnpm；否则启动器通过 Node.js 自带的 Corepack 或 `npx` 运行它。
+- 网页界面需要：[Node.js](https://nodejs.org/) 20.19+ 或 22.12+（每次更新后构建一次，见[网页界面的构建](#网页界面的构建)）。已安装 pnpm 时使用 pnpm；否则启动器通过 Node.js 24 及更早版本自带的 Corepack 或 `npx` 运行它。
 - 可选：用于视频导出的 [FFmpeg](https://ffmpeg.org/)
 
 ### 安装与运行

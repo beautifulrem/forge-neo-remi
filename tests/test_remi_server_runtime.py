@@ -499,6 +499,21 @@ def test_remi_skip_webui_build_reads_as_a_flag(tmp_path, monkeypatch, value, ski
     assert ran == ([] if skips else [["build"]])
 
 
+def test_the_node_help_says_which_node_versions_ship_corepack():
+    """Node.js 25 and later no longer ship Corepack: the launcher's help and the usage guide said
+    the launcher runs pnpm through Corepack or npx, "which come with Node.js"."""
+
+    from modules import launch_utils
+
+    docs = Path(launch_utils.script_path) / "docs" / "remi-webui"
+    usage = [line for line in (docs / "usage.md").read_text(encoding="utf-8").splitlines() if line.startswith("- For the web interface:")]
+    usage_zh = [line for line in (docs / "usage.zh-CN.md").read_text(encoding="utf-8").splitlines() if line.startswith("- 网页界面需要")]
+    assert len(usage) == 1 and len(usage_zh) == 1
+    for text in (launch_utils.NODE_HELP, usage[0]):
+        assert "Corepack (bundled with Node.js 24 and earlier)" in text and "which come with Node.js" not in text, text
+    assert "Node.js 24 及更早版本自带的 Corepack" in usage_zh[0] and "Node.js 自带的 Corepack" not in usage_zh[0]
+
+
 def test_webui_build_states_the_node_requirement_of_the_readme(tmp_path, capsys, monkeypatch):
     """The launcher names the same Node.js versions as the README (Vite's engines) and warns on older ones."""
 

@@ -98,7 +98,7 @@ Beyond Anima, Remi's declarative `ModelCapability` layer integrates:
 - [Git](https://git-scm.com/downloads)
 - [Python 3.13](https://www.python.org/downloads/) or [uv](https://docs.astral.sh/uv/)
 - A supported PyTorch device; an NVIDIA GPU is the most widely tested option (Apple Silicon works through MPS)
-- For the web interface: [Node.js](https://nodejs.org/) 20.19+ or 22.12+ (needed once per update to build it; see [The web interface build](#the-web-interface-build)). pnpm is used if installed; otherwise the launcher runs it through Corepack or `npx`, which come with Node.js.
+- For the web interface: [Node.js](https://nodejs.org/) 20.19+ or 22.12+ (needed once per update to build it; see [The web interface build](#the-web-interface-build)). pnpm is used if installed; otherwise the launcher runs it through Corepack (bundled with Node.js 24 and earlier) or `npx`.
 - Optional: [FFmpeg](https://ffmpeg.org/) for video export
 
 ### Install and run

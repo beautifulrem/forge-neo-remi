@@ -454,7 +454,7 @@ PNPM_FALLBACK = "pnpm@12"
 """pnpm run through npx when neither pnpm nor corepack is installed"""
 NODE_REQUIREMENT = "Node.js 20.19+ or 22.12+"
 """What the SPA build (Vite) supports: ``^20.19.0 || >=22.12.0``"""
-NODE_HELP = f"Install {NODE_REQUIREMENT} (pnpm is optional: without it the launcher runs pnpm through Corepack or npx, which come with Node.js)"
+NODE_HELP = f"Install {NODE_REQUIREMENT} (pnpm is optional: without it the launcher runs pnpm through Corepack (bundled with Node.js 24 and earlier) or npx)"
 
 
 def node_version_problem(version: str) -> str | None:
