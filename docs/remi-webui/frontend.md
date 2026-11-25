@@ -515,8 +515,9 @@ generated interfaces (sources: Linear's
   list), a page that could not load is `PagePlaceholder` with a Retry, and an
   action's error is a plain destructive line by the action (`role="alert"`,
   `text-sm text-destructive`, no tinted box; the settings import's skipped
-  values too, and a failed Extras run in its result area, not announced
-  again: its toast says it). A control that failed to render (`ErrorBoundary`
+  values too, read with the rest of its check in that check's polite live
+  region, and a failed Extras run in its result area, not announced again:
+  its toast says it). A control that failed to render (`ErrorBoundary`
   inline) says so in the same plain line at its field message's `text-xs`.
   A destructive fill is left to one tone among others (a text output's
   status, workflow advice) and to round tinted icons. The network browser's

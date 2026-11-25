@@ -58,6 +58,11 @@ describe("settings import", () => {
     expect(validate).toHaveBeenCalledWith({ samples_save: false, samples_format: "bmp" })
     expect(screen.getByText("1 already match, 2 unknown here (ignored)")).toBeInTheDocument()
     expect(screen.getByText(/unknown format/)).toBeInTheDocument()
+    // the check's result is one polite live region: the skipped values are read with it, not
+    // interrupting it as an alert of their own
+    const heading = screen.getByText(/not valid here and (is|are) skipped/)
+    expect(heading.closest("[aria-live=polite]")).not.toBeNull()
+    expect(screen.queryByRole("alert")).toBeNull()
     fireEvent.click(screen.getByRole("button", { name: "Stage changes" }))
     expect(onStaged).toHaveBeenCalledWith(1)
     expect(editorValues().samples_save).toBe(false)

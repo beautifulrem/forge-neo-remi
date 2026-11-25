@@ -105,7 +105,8 @@ export function ImportDialog({ open, onOpenChange, onStaged }: { open: boolean; 
             </p>
             {rejected.length > 0 ? (
               <div>
-                <p role="alert" className="font-medium text-destructive">
+                {/* read with the rest of the check (the polite live region around it), not as an alert of its own */}
+                <p className="font-medium text-destructive">
                   {t("{{count}} values are not valid here and are skipped:", { count: rejected.length })}
                 </p>
                 <ul className="mt-1 max-h-32 overflow-y-auto text-xs">
