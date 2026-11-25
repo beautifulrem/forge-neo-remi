@@ -4,7 +4,9 @@
  * pages show a sentence chosen by status code instead; callers pass their
  * own (already translated) sentence for the statuses that mean something
  * specific to them. A 422 that lists the refused values says why: those
- * messages are catalog keys (`validationText`).
+ * messages are catalog keys (`validationText`). A text shown by a render
+ * takes the render's language (`useTranslation().i18n.language`): the React
+ * Compiler keeps a render's text until the values it read change.
  */
 import { toast } from "sonner"
 import { ApiError, fieldMessages, RequestError, validationErrors } from "@/api/http"
@@ -15,31 +17,32 @@ import type { FieldMessage, ValidationError } from "@/ui/schema"
 
 export type StatusTexts = Partial<Record<number, string>>
 
-export function errorText(error: unknown, texts: StatusTexts = {}): string {
-  if (!(error instanceof ApiError)) return t("The server cannot be reached.")
+export function errorText(error: unknown, texts: StatusTexts = {}, language = i18n.language): string {
+  const lng = language
+  if (!(error instanceof ApiError)) return t("The server cannot be reached.", { lng })
   const own = texts[error.status]
   if (own) return own
   switch (error.status) {
     case 401:
-      return t("Sign in again to continue.")
+      return t("Sign in again to continue.", { lng })
     case 403:
-      return t("The server does not allow this.")
+      return t("The server does not allow this.", { lng })
     case 404:
-      return t("It is no longer there.")
+      return t("It is no longer there.", { lng })
     case 409:
-      return t("It changed meanwhile; refresh and try again.")
+      return t("It changed meanwhile; refresh and try again.", { lng })
     case 413:
-      return t("The file is too large.")
+      return t("The file is too large.", { lng })
     case 415:
-      return t("This file cannot be read as an image.")
+      return t("This file cannot be read as an image.", { lng })
     case 422: {
       const errors = validationErrors(error)
-      return errors ? validationText(errors) : t("The server rejected the request.")
+      return errors ? validationText(errors, language) : t("The server rejected the request.", { lng })
     }
     case 503:
-      return t("The server is busy; try again shortly.")
+      return t("The server is busy; try again shortly.", { lng })
     default:
-      return error.status >= 500 ? t("The server ran into an error ({{status}}).", { status: error.status }) : t("The request failed ({{status}}).", { status: error.status })
+      return error.status >= 500 ? t("The server ran into an error ({{status}}).", { status: error.status, lng }) : t("The request failed ({{status}}).", { status: error.status, lng })
   }
 }
 
@@ -49,8 +52,8 @@ export function errorText(error: unknown, texts: StatusTexts = {}): string {
  * `RequestError` (marked where it is made, `api/http.ts`); any other `TypeError` is a bug and keeps
  * its message, as a bug does in an error boundary.
  */
-export function failureText(error: unknown, texts: StatusTexts = {}): string {
-  return error instanceof Error && !(error instanceof ApiError) && !(error instanceof RequestError) ? error.message : errorText(error, texts)
+export function failureText(error: unknown, texts: StatusTexts = {}, language = i18n.language): string {
+  return error instanceof Error && !(error instanceof ApiError) && !(error instanceof RequestError) ? error.message : errorText(error, texts, language)
 }
 
 /**
@@ -59,9 +62,10 @@ export function failureText(error: unknown, texts: StatusTexts = {}): string {
  * that answer follows a sentence in the UI language. A 413 here is text that is too long, a 409 a
  * service that is not set up.
  */
-export function serviceFailureText(error: unknown, texts: StatusTexts = {}): string {
-  if (error instanceof ApiError && error.status === 502) return t("The service failed: {{detail}}", { detail: error.message })
-  return failureText(error, { 409: t("Set up the service in Settings first."), 413: t("The text is too long."), ...texts })
+export function serviceFailureText(error: unknown, texts: StatusTexts = {}, language = i18n.language): string {
+  const lng = language
+  if (error instanceof ApiError && error.status === 502) return t("The service failed: {{detail}}", { detail: error.message, lng })
+  return failureText(error, { 409: t("Set up the service in Settings first.", { lng }), 413: t("The text is too long.", { lng }), ...texts }, language)
 }
 
 /**
@@ -70,8 +74,8 @@ export function serviceFailureText(error: unknown, texts: StatusTexts = {}): str
  * (`RequestError`: the server down, a chunk that could not be fetched). Anything else is a bug and
  * keeps its own message.
  */
-export function renderFailureText(error: Error): string {
-  return error instanceof ApiError || error instanceof RequestError ? errorText(error) : error.message
+export function renderFailureText(error: Error, language = i18n.language): string {
+  return error instanceof ApiError || error instanceof RequestError ? errorText(error, {}, language) : error.message
 }
 
 /**

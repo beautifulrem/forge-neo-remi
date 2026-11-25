@@ -1585,10 +1585,12 @@ older server) nothing is shown.
   in the old language after a switch. A store selector returns what the
   server sent (a param's error entries) and the render translates it, never
   the selector (a selector re-runs only when the store changes). A text the
-  server stored (`serverText`) and why a job failed (`jobErrorText`) take the
-  language too. The texts for a failed request (`errorText`, `failureText`,
-  `serviceFailureText`, `renderFailureText`) take none yet: a render that shows one keeps the language it was made in
-  until its own values change.
+  server stored (`serverText`), why a job failed (`jobErrorText`) and the
+  texts for a failed request (`errorText`, `failureText`,
+  `serviceFailureText`, `renderFailureText`) take the language too; the
+  error boundary's wrapper passes it to the class that renders the fallback.
+  A text a component keeps in its state when the failure happens (a dialog's
+  error line) stays in the language it was made in.
 - `src/locales/zh-CN.json` must contain every chrome key:
   `locales/locales.test.ts` scans the sources and fails on a missing key or a
   mismatched `{{placeholder}}`.

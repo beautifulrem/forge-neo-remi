@@ -46,7 +46,7 @@ type BoardsBarProps = {
 }
 
 export function BoardsBar({ activeItems, count, total, failed = false }: BoardsBarProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const view = useGalleryView()
   const boardId = view.boardId
   const setView = view.set
@@ -168,7 +168,7 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
         {boardsList.isError && !boardsList.data ? (
           <button
             type="button"
-            title={errorText(boardsList.error)}
+            title={errorText(boardsList.error, {}, i18n.language)}
             onClick={() => void boardsList.refetch()}
             className="inline-flex h-8 items-center gap-1 px-2 text-xs text-destructive outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring"
           >

@@ -194,4 +194,27 @@ describe("error boundary", () => {
       await act(() => activateLocale("en"))
     }
   })
+
+  // The fallback kept the language it was made in after a switch (a class component reading the
+  // global i18n, under a parent the React Compiler memoizes).
+  it("says the failure in the language switched to", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { headers: { "Content-Type": "application/json" } }))
+    function Page(): never {
+      throw new RequestError(new TypeError("Failed to fetch"))
+    }
+    render(
+      <ErrorBoundary resetKey="txt2img">
+        <Page />
+      </ErrorBoundary>,
+    )
+    expect(screen.getByRole("alert")).toHaveTextContent("The server cannot be reached.")
+    try {
+      await act(() => activateLocale("zh_CN"))
+      expect(screen.getByRole("alert")).toHaveTextContent("出错了")
+      expect(screen.getByRole("alert")).toHaveTextContent("无法连接到服务器。")
+    } finally {
+      await act(() => activateLocale("en"))
+    }
+  })
 })

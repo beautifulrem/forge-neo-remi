@@ -8,10 +8,10 @@ import { cn } from "@/lib/utils"
  * replaces the error's own text (e.g. an explanation of admin access).
  */
 export function LoadFailed({ error, message, onRetry, className }: { error: unknown; message?: string; onRetry: () => void; className?: string }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   return (
     <div role="alert" className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 py-3 text-sm", className)}>
-      <span className="text-destructive">{message ?? errorText(error)}</span>
+      <span className="text-destructive">{message ?? errorText(error, {}, i18n.language)}</span>
       <Button variant="outline" size="sm" onClick={onRetry}>
         {t("Retry")}
       </Button>

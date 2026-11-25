@@ -113,7 +113,7 @@ function Actions({ fileId, infotext }: { fileId: string; infotext: string | null
 }
 
 function Details({ fileId }: { fileId: string }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const info = useQuery({ queryKey: ["pnginfo", fileId], queryFn: ({ signal }) => api.pngInfo(fileId, signal), staleTime: Infinity })
   const [section, setSection] = useState("params")
   if (info.isPending) return <Skeleton className="h-64 w-full" />
@@ -122,7 +122,7 @@ function Details({ fileId }: { fileId: string }) {
     return (
       <LoadFailed
         error={info.error}
-        message={errorText(info.error, { 404: t("The image is no longer there."), 415: t("This file cannot be read as an image (or it is too large to read).") })}
+        message={errorText(info.error, { 404: t("The image is no longer there."), 415: t("This file cannot be read as an image (or it is too large to read).") }, i18n.language)}
         onRetry={() => void info.refetch()}
       />
     )

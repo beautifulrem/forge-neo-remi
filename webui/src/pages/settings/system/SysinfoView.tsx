@@ -50,7 +50,7 @@ function Section({ name, value }: { name: string; value: unknown }) {
 }
 
 function CheckFile() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const id = useId()
   const check = useMutation({ mutationFn: async (file: File) => api.system.checkSysinfo(await file.text()) })
   return (
@@ -84,7 +84,7 @@ function CheckFile() {
             </Badge>
           )
         ) : check.error ? (
-          <span className="text-sm text-destructive">{errorText(check.error)}</span>
+          <span className="text-sm text-destructive">{errorText(check.error, {}, i18n.language)}</span>
         ) : null}
       </span>
     </div>

@@ -82,7 +82,7 @@ function BulkBar(props: {
 }
 
 export default function GalleryPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const view = useGalleryView()
   const bulkBarRef = usePinnedBar("bottom", gridScroller)
   const query = galleryQuery(view)
@@ -172,7 +172,7 @@ export default function GalleryPage() {
   } else if (list.isError && !list.data) {
     // only when nothing loaded: a failed next page or refetch keeps the images shown
     body = (
-      <PagePlaceholder icon={GalleryVerticalEnd} title="Gallery unavailable" description={errorText(list.error)}>
+      <PagePlaceholder icon={GalleryVerticalEnd} title="Gallery unavailable" description={errorText(list.error, {}, i18n.language)}>
         <Button variant="outline" size="sm" onClick={() => void list.refetch()}>
           {t("Retry")}
         </Button>

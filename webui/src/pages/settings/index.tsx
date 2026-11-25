@@ -247,7 +247,7 @@ export default function SettingsPage({ route }: { route: Route }) {
 
   if (options.isError && !schema) {
     return (
-      <PagePlaceholder icon={SettingsIcon} title="Settings unavailable" description={errorText(options.error)}>
+      <PagePlaceholder icon={SettingsIcon} title="Settings unavailable" description={errorText(options.error, {}, language)}>
         <Button variant="outline" size="sm" onClick={() => void options.refetch()}>
           {t("Retry")}
         </Button>

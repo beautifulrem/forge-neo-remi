@@ -41,7 +41,7 @@ function SchemaPage({ page }: { page: PageInfo }) {
 }
 
 export default function ExtensionPage({ route }: { route: Extract<Route, { name: "page" }> }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const bootstrap = useQuery(bootstrapQuery)
   const page = bootstrap.data?.pages.find((p) => p.id === route.id)
   // known only once the app's page list arrived: a failed request is no answer
@@ -53,7 +53,7 @@ export default function ExtensionPage({ route }: { route: Extract<Route, { name:
   if (bootstrap.isPending) return <PageSkeleton />
   if (!bootstrap.data) {
     return (
-      <PagePlaceholder icon={Puzzle} title="Page unavailable" description={errorText(bootstrap.error)}>
+      <PagePlaceholder icon={Puzzle} title="Page unavailable" description={errorText(bootstrap.error, {}, i18n.language)}>
         <Button variant="outline" size="sm" onClick={() => void bootstrap.refetch()}>
           {t("Retry")}
         </Button>

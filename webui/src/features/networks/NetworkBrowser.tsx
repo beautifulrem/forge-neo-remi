@@ -226,7 +226,7 @@ function EmptyState({ filtered, kindTitle, onClear }: { filtered: boolean; kindT
 }
 
 function ErrorState({ title, error, onRetry }: { title: string; error: Error | null; onRetry: () => void }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   return (
     <div className="flex h-full items-center justify-center p-6" role="alert">
       <Empty className="max-w-sm border-0">
@@ -236,8 +236,8 @@ function ErrorState({ title, error, onRetry }: { title: string; error: Error | n
           </EmptyMedia>
           <EmptyTitle>{title}</EmptyTitle>
           {error ? (
-            <EmptyDescription className="line-clamp-3 [overflow-wrap:anywhere]" title={errorText(error)}>
-              {errorText(error)}
+            <EmptyDescription className="line-clamp-3 [overflow-wrap:anywhere]" title={errorText(error, {}, i18n.language)}>
+              {errorText(error, {}, i18n.language)}
             </EmptyDescription>
           ) : null}
         </EmptyHeader>

@@ -60,7 +60,7 @@ function PresetSelect({ className }: { className?: string }) {
 }
 
 function CheckpointPicker({ className }: { className?: string }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const models = useQuery(modelsQuery)
   const current = useClientOption("sd_model_checkpoint")
   const write = useOptionWrite<string>(MODEL_OPTION_KEYS.checkpoint)
@@ -119,7 +119,7 @@ function CheckpointPicker({ className }: { className?: string }) {
     <SearchSelect
       id={pickerId}
       // the loading stage sits inside the pill, so a crowded header never cuts it off
-      suffix={loading ? loadingText(t, loading) : null}
+      suffix={loading ? loadingText(t, loading, i18n.language) : null}
       aria-label={t("Checkpoint")}
       size="sm"
       className={className}
@@ -301,18 +301,18 @@ function DtypeSelect({ className }: { className?: string }) {
 /** The stages the server sends (`model.loading`), as chrome keys; any other stage is server text. */
 const MODEL_STAGES: Record<string, string> = { loading: "Loading" }
 
-function loadingText(t: (key: string) => string, loading: NonNullable<ReturnType<typeof useModelBusy>>): string {
+function loadingText(t: (key: string) => string, loading: NonNullable<ReturnType<typeof useModelBusy>>, language: string): string {
   const key = MODEL_STAGES[loading.stage.toLowerCase()]
-  return key ? t(key) : serverText(loading.stage)
+  return key ? t(key) : serverText(loading.stage, language)
 }
 
 /** The model loading stage as a live region (visible in the stacked bar, announced only in the header). */
 function LoadingStatus({ className }: { className?: string }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const loading = useModelBusy()
   return (
     <span role="status" className={cn("text-xs text-muted-foreground empty:hidden", className)}>
-      {loading ? loadingText(t, loading) : null}
+      {loading ? loadingText(t, loading, i18n.language) : null}
     </span>
   )
 }

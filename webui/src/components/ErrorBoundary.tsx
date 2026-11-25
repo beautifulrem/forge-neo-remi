@@ -1,6 +1,7 @@
 import { QueryErrorResetBoundary } from "@tanstack/react-query"
 import { TriangleAlert } from "@/components/icons"
 import { Component, type ErrorInfo, type ReactNode } from "react"
+import { useTranslation } from "react-i18next"
 import { ApiError, RequestError } from "@/api/http"
 import { Button } from "@/components/ui/button"
 import { renderFailureText } from "@/features/errors/error-text"
@@ -37,10 +38,13 @@ function isRequest(error: Error | null): boolean {
  * back to the page or the boundary mounting with it).
  */
 export function ErrorBoundary(props: Props) {
-  return <QueryErrorResetBoundary>{({ reset }) => <Boundary {...props} onRetry={reset} />}</QueryErrorResetBoundary>
+  // the fallback's text follows a language switch: the class below reads no i18n state of its own
+  const { i18n } = useTranslation()
+  const language = i18n.language
+  return <QueryErrorResetBoundary>{({ reset }) => <Boundary {...props} onRetry={reset} language={language} />}</QueryErrorResetBoundary>
 }
 
-class Boundary extends Component<Props & { onRetry: () => void }, State> {
+class Boundary extends Component<Props & { onRetry: () => void; language: string }, State> {
   state: State = { error: null, resetKey: this.props.resetKey }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
@@ -83,13 +87,15 @@ class Boundary extends Component<Props & { onRetry: () => void }, State> {
     const { error } = this.state
     if (!error) return this.props.children
     if (this.props.fallback !== undefined) return this.props.fallback
+    const lng = this.props.language
+    const reason = renderFailureText(error, lng)
     if (this.props.inline) {
       return (
         // in the field's place, like the field's own message: a plain line, no box
         <div role="alert" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-snug text-destructive">
-          <span className="min-w-0 break-words">{t("This control failed to render: {{reason}}", { reason: renderFailureText(error) })}</span>
+          <span className="min-w-0 break-words">{t("This control failed to render: {{reason}}", { reason, lng })}</span>
           <Button variant="outline" size="xs" onClick={this.retry}>
-            {t("Try again")}
+            {t("Try again", { lng })}
           </Button>
         </div>
       )
@@ -98,11 +104,11 @@ class Boundary extends Component<Props & { onRetry: () => void }, State> {
       <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
         <TriangleAlert className="size-8 text-destructive" aria-hidden />
         <div className="space-y-1">
-          <p className="font-medium">{t("Something went wrong")}</p>
-          <p className="max-w-md text-sm break-words text-muted-foreground">{renderFailureText(error)}</p>
+          <p className="font-medium">{t("Something went wrong", { lng })}</p>
+          <p className="max-w-md text-sm break-words text-muted-foreground">{reason}</p>
         </div>
         <Button variant="outline" size="sm" onClick={this.retry}>
-          {t("Try again")}
+          {t("Try again", { lng })}
         </Button>
       </div>
     )
