@@ -218,3 +218,35 @@ def test_recipes_http_routes(tmp_path):
             store.import_recipes({"recipes": ["not-a-dict"]})
         imp = store.import_recipes({"recipes": [{"name": "Gamma", "core_patch": {"cfg_scale": 5}}]})
         assert imp["added"] == 1 and imp["skipped"] == 0
+
+
+def test_concurrent_partial_updates_keep_each_others_fields(tmp_path, monkeypatch):
+    """Two PATCHes of different fields: the later write must not put back the
+    value the earlier one replaced."""
+
+    import threading
+
+    from remi import recipes as recipes_module
+
+    with RecipeStore(tmp_path / "recipes.db") as store:
+        recipe = store.create("r", core_patch={"steps": 4}, tags=["old"])
+        inside, release = threading.Event(), threading.Event()
+        clean = recipes_module._clean_core_patch
+
+        def slow_clean(patch):
+            inside.set()
+            assert release.wait(5)
+            return clean(patch)
+
+        monkeypatch.setattr(recipes_module, "_clean_core_patch", slow_clean)
+        first = threading.Thread(target=store.update, args=(recipe.id, {"core_patch": {"steps": 8}}))
+        first.start()
+        assert inside.wait(5)
+        second = threading.Thread(target=store.update, args=(recipe.id, {"tags": ["new"]}))
+        second.start()
+        second.join(0.3)
+        release.set()
+        first.join(5)
+        second.join(5)
+        final = store.get(recipe.id)
+        assert final.core_patch == {"steps": 8} and final.tags == ["new"]

@@ -297,6 +297,11 @@ class RecipeStore:
         return created
 
     def update(self, recipe_id: str, changes: Mapping[str, Any]) -> Recipe:
+        # read, merge and write under the lock: a concurrent update of another field is kept
+        with self._lock:
+            return self._update(recipe_id, changes)
+
+    def _update(self, recipe_id: str, changes: Mapping[str, Any]) -> Recipe:
         existing = self.get(recipe_id)
         if existing is None:
             raise RecipeError(f"no recipe {recipe_id!r}", status=404)
