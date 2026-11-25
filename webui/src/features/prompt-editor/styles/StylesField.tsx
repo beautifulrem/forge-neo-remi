@@ -1,7 +1,8 @@
 /**
  * The form's `styles` multiselect plus "apply styles to the prompts"
  * (materialize: writes the selected styles into the prompts and clears the
- * selection) and the style editor.
+ * selection, all or nothing: with a prompt locked, the styles stay selected
+ * and still apply when the job runs) and the style editor.
  */
 import { Pencil, Stamp } from "@/components/icons"
 import { Suspense, useState } from "react"
@@ -58,7 +59,7 @@ export function StylesField({ node, prompt = "prompt", negative = "negative_prom
     try {
       // The server applies styles exactly as generation does.
       const next = await api.styles.apply({ prompt: current.prompt, negative_prompt: current.negative, styles: names })
-      store.getState().setValues("core", { [prompt]: next.prompt, [negative]: next.negative_prompt, [node.name]: [] })
+      store.getState().setValues("core", { [prompt]: next.prompt, [negative]: next.negative_prompt, [node.name]: [] }, { whole: true })
     } catch (error) {
       toast.error(t("Could not apply the styles"), { description: failureText(error) })
     }

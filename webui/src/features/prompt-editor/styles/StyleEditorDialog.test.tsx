@@ -1,5 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query"
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { toast } from "sonner"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { keys, queryClient } from "@/api/queries"
@@ -164,6 +165,38 @@ describe("style editor of the form's styles field", () => {
   afterEach(() => {
     vi.restoreAllMocks()
     queryClient.clear()
+  })
+
+  it("keeps the styles selected when a lock keeps a prompt they would change", async () => {
+    vi.spyOn(api.styles, "list").mockResolvedValue([CINEMATIC])
+    const apply = vi.spyOn(api.styles, "apply").mockResolvedValue({ prompt: "cinematic still, a cat", negative_prompt: "cartoon" })
+    const info = vi.spyOn(toast, "info").mockImplementation((() => "") as never)
+    const node: MultiChoiceNode = { type: "multichoice", name: "styles", label: "Styles", choices: [{ value: "Cinematic", label: "Cinematic" }] }
+    const store = createFormStore("styles-locked", { persistDrafts: false })
+    store.getState().load([
+      {
+        owner: "core",
+        layout: { type: "group", children: [{ type: "text", name: "prompt", label: "Prompt" }, { type: "text", name: "negative_prompt", label: "Negative prompt" }, node] },
+        defaults: { prompt: "", negative_prompt: "", styles: [] },
+      },
+      { owner: "keep", layout: { type: "toggle", name: "prompt", label: "Keep the prompt", locks: "core.prompt" }, defaults: { prompt: true } },
+    ])
+    store.getState().setValue("core", "prompt", "a cat")
+    store.getState().setValue("core", "styles", ["Cinematic"])
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FormProvider formId="txt2img" store={store}>
+          <OwnerProvider owner="core">
+            <StylesField node={node} />
+          </OwnerProvider>
+        </FormProvider>
+      </QueryClientProvider>,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Apply the selected styles to the prompts" }))
+    await waitFor(() => expect(info).toHaveBeenCalledWith("Overridden by a lock: Prompt", { id: "locks:styles-locked" }))
+    expect(apply).toHaveBeenCalledOnce()
+    // still selected, so they still apply when the job runs; the negative prompt is not styled alone
+    expect(store.getState().values.core).toEqual({ prompt: "a cat", negative_prompt: "", styles: ["Cinematic"] })
   })
 
   it("keeps an unsaved edit when the editor is closed with Esc", async () => {
