@@ -173,8 +173,8 @@ When upstreaming any candidate from §1.2 or §1.3:
 
 5. **Consolidate duplicated `webui/src/` primitives & decompose >600L React files**
    - **Duplicated components/helpers (quick, zero-risk cleanup):**
-     - `SearchBox` (**3×**): `webui/src/features/library/GalleryToolbar.tsx:L49`, `webui/src/features/networks/NetworkBrowser.tsx:L156`, `webui/src/features/prompt-tools/panels/panel.tsx:L17` → unify into a single `webui/src/components/SearchBox.tsx` (matching the 28px toolbar design system in [frontend.md](frontend.md)).
-     - `Thumb` (**3×**): `webui/src/canvas/img2img/SourcePanel.tsx:L115`, `webui/src/ui/inputs/Image.tsx:L16`, `webui/src/widgets/image-list/index.tsx:L38` → extract shared `webui/src/components/FileThumb.tsx` with optional `onSize` callback.
+     - `SearchBox` (**3×**): `webui/src/features/library/GalleryToolbar.tsx:L43`, `webui/src/features/networks/NetworkBrowser.tsx:L164`, `webui/src/features/prompt-tools/panels/panel.tsx:L17` → unify into a single `webui/src/components/SearchBox.tsx` (matching the 28px toolbar design system in [frontend.md](frontend.md)).
+     - `Thumb` (**3×**): `webui/src/canvas/img2img/SourcePanel.tsx`, `webui/src/ui/inputs/Image.tsx`, `webui/src/widgets/image-list/index.tsx` (each a local `function Thumb`) → extract shared `webui/src/components/FileThumb.tsx` with optional `onSize` callback.
      - `clamp` (**3×**): `webui/src/features/networks/grid-layout.ts:L37`, `webui/src/ui/values.ts:L6`, `webui/src/widgets/region-boxes/geometry.ts:L19` → import one `clamp` from `webui/src/lib/math.ts` (or `@/ui/values`).
      - Parallel image lists: `webui/src/ui/inputs/Image.tsx` (`ImageListInput`, **202L**) vs `webui/src/widgets/image-list/index.tsx` (`ImageListWidget`, **268L**) → share upload/paste/drop & thumbnail grid primitives.
    - **Oversized TypeScript production files (>500L):**
