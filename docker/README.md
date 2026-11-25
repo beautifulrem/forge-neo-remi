@@ -58,7 +58,8 @@ Open `http://localhost:7860/`. Extra launch options go after the image name or
 in `COMMANDLINE_ARGS` (split like shell words: quote a value with spaces); the
 container always adds `--listen` and `--data-dir "$REMI_DATA_DIR"` ([Data](#data)).
 `-p 127.0.0.1:7860:7860` publishes the port on this machine only, because the
-server inside listens on every interface and has no login until you add one. Before publishing it further (`-p 7860:7860`), read
+server inside listens on every interface and has no login until you add one.
+Before publishing it further (`-p 7860:7860`), read
 [Security and Remote Access](../docs/remi-webui/usage.md#security-and-remote-access)
 and set a login with `--auth-file` from a mounted file (for example
 `-v ./logins.txt:/run/remi/logins.txt:ro remi-webui --auth-file /run/remi/logins.txt`;
@@ -84,10 +85,12 @@ terminate TLS at a reverse proxy, or run the container with `--no-healthcheck`.
 
 Everything the WebUI keeps is in the data folder: `REMI_DATA_DIR`, by default
 `/home/remi/data` (the image's volume), which the container passes as `--data-dir`.
-To keep it at another path in the container, set the variable
-(`-e REMI_DATA_DIR=/data -v remi-data:/data`) rather than adding `--data-dir`
-to the launch options; one there still wins (the last `--data-dir` does), and the
-container prepares the folders below in whichever folder the WebUI uses.
+To keep it at another path in the container, set the variable to a mounted folder
+the container's user can write (see below), for example
+`-e REMI_DATA_DIR=/mnt/remi -v /srv/remi:/mnt/remi`, rather than adding
+`--data-dir` to the launch options; one there still wins (the last `--data-dir`
+does), and the container prepares the folders below in whichever folder the
+WebUI uses.
 
 | Path in the volume | Purpose |
 | --- | --- |
