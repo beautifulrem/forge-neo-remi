@@ -1,6 +1,6 @@
 import os.path
 import threading
-from json import dump, load
+from json import dumps, load
 from typing import Final
 
 from lib_spectrum import logger
@@ -132,7 +132,10 @@ class PresetManager:
 
     @classmethod
     def _write(cls) -> None:
-        path = preset_file()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as json_file:
-            dump(cls.presets, json_file)
+        """Replace the file in one step: a failed save (a value JSON cannot
+        write, a full disk, Ctrl+C) leaves the presets saved before."""
+
+        from modules.anima_user_data import atomic_replace
+
+        data = dumps(cls.presets).encode("utf-8")
+        atomic_replace(preset_file(), lambda handle: handle.write(data))

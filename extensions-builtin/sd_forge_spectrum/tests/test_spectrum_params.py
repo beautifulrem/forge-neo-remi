@@ -120,6 +120,22 @@ def test_concurrent_saves_keep_every_preset(presets, tmp_path):
     assert sorted(json.loads((tmp_path / "presets.json").read_text(encoding="utf-8"))) == sorted(names)
 
 
+def test_a_failed_save_leaves_the_saved_presets_whole(presets, tmp_path):
+    import os
+
+    stored = tmp_path / "presets.json"
+    PresetManager.save_preset("kept", *SETTINGS)
+    stored.chmod(0o640)
+    before = stored.read_bytes()
+    with pytest.raises(TypeError):
+        PresetManager.save_preset("broken", {"a set json cannot write"})
+    assert stored.read_bytes() == before and sorted(os.listdir(tmp_path)) == ["presets.json"]
+    del presets["broken"]
+    PresetManager.save_preset("next", *SETTINGS)
+    assert sorted(json.loads(stored.read_text(encoding="utf-8"))) == ["kept", "next"]
+    assert stored.stat().st_mode & 0o777 == 0o640  # a replaced file keeps its permissions
+
+
 def test_delete_removes_the_preset_and_clears_the_name(presets):
     presets.update(a=SETTINGS, b=SETTINGS)
     patch = _call("delete_preset", {"preset_name": "a"})
