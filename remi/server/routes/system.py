@@ -28,7 +28,12 @@ internal = APIRouter()
 
 @router.get("/auth/status", response_model=m.AuthStatus, summary="Whether a login is required, and who is logged in")
 def auth_status(request: Request, user: UserDep) -> dict[str, Any]:
-    return {"required": request.app.state.auth.required, "user": user}
+    auth = request.app.state.auth
+    if user is None and auth.required:
+        # HTTP Basic, checked like a login: failures count towards the
+        # client's throttle, and a throttled client is not told
+        user = auth.basic_user(request.headers, client_key(request))
+    return {"required": auth.required, "user": user}
 
 
 @router.post("/auth/login", status_code=204, responses={401: {"model": m.Detail}, 429: {"model": m.Detail}}, summary="Log in (sets the session cookie)")

@@ -74,7 +74,9 @@ without `--gradio-auth`). With logins configured:
   ten failures from one client within a minute (login form or Basic) → 429
   for a minute. `POST
   /api/v2/auth/logout` revokes the cookie server-side. `GET
-  /api/v2/auth/status` → `{"required": bool, "user": str | null}`.
+  /api/v2/auth/status` → `{"required": bool, "user": str | null}`. Basic
+  credentials sent there are checked like a login: failures count towards
+  the same throttle, and a throttled client gets `"user": null`.
 - Scripts and tools may skip the cookie and send `Authorization: Basic …`
   on every request (also on the WebSocket handshake).
 - The server renders no login page: a browser page load without a login

@@ -298,15 +298,18 @@ class Auth:
             self.throttle.record_failure(client)
         return None
 
-    def user_for(self, conn: Any, *, count_failures: bool = True) -> str | None:
+    def user_for(self, conn: Any, *, count_failures: bool = True, basic: bool = True) -> str | None:
         """The logged-in user of a request (session cookie or Basic), None
         when it has no valid login. ``count_failures``: wrong Basic
         credentials count towards the client's throttle (only where a login
         is required: credentials meant for ``--api-auth`` must not lock the
-        WebUI login)."""
+        WebUI login). ``basic=False``: the session cookie only."""
 
         cookies = getattr(conn, "cookies", None) or {}
-        return self.verify(cookies.get(COOKIE_NAME)) or self.basic_user(conn.headers, client_key(conn) if count_failures else None)
+        user = self.verify(cookies.get(COOKIE_NAME))
+        if user is None and basic:
+            user = self.basic_user(conn.headers, client_key(conn) if count_failures else None)
+        return user
 
     def throttled(self, client: str) -> bool:
         return self.throttle.throttled(client)
@@ -338,10 +341,14 @@ def refusal(auth: Auth, scope: Scope, *, cross_site_check: bool = True, require_
 
     conn = HTTPConnection(scope)
     path = route_path(scope)
-    login = require_login and auth.required and not path.startswith(PUBLIC_PATHS)
+    public = path.startswith(PUBLIC_PATHS)
+    login = require_login and auth.required and not public
     # (before user_for, which counts this request's failure)
     throttled = login and basic_credentials(conn.headers) is not None and auth.throttle.throttled(client_key(conn))
-    user = auth.user_for(conn, count_failures=login) if auth.required else None
+    # public paths read the session cookie only: Basic credentials checked
+    # there without the throttle would let /auth/status answer unlimited
+    # guesses (it checks Basic itself, throttled)
+    user = auth.user_for(conn, count_failures=login, basic=not public) if auth.required else None
     scope.setdefault("state", {})["remi_user"] = user
     if guard.is_rebound_host(conn):
         return 403, "Unknown host refused"

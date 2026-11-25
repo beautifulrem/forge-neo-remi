@@ -184,6 +184,29 @@ def test_repeated_failed_logins_are_throttled(locked, monkeypatch):
     assert locked.client.post("/api/v2/auth/login", json={"username": "ann", "password": "s3cret"}).status_code == 429
 
 
+def test_auth_status_checks_basic_credentials_under_the_login_throttle(locked):
+    """/auth/status says who an HTTP Basic header logs in as, so guesses there
+    count like failed logins and a throttled client is not told."""
+
+    def status(password):
+        return locked.client.get("/api/v2/auth/status", headers=basic("ann", password)).json()["user"]
+
+    assert status("s3cret") == "ann"
+    for index in range(10):
+        assert status(f"guess{index}") is None
+    assert status("s3cret") is None
+    assert locked.client.post("/api/v2/auth/login", json={"username": "ann", "password": "s3cret"}).status_code == 429
+
+
+def test_basic_credentials_on_other_public_paths_do_not_lock_the_login(locked):
+    """Public paths need no login: a client that sends other credentials
+    (``--api-auth``) on every request does not count as guessing there."""
+
+    for _ in range(20):
+        assert locked.client.get("/internal/ping", headers=basic("api", "other")).status_code == 200
+    assert locked.client.get("/api/v2/auth/status", headers=basic("ann", "s3cret")).json()["user"] == "ann"
+
+
 def test_session_cookies_are_secure_behind_a_tls_proxy(webui, tmp_path):
     with server_app(tmp_path, auth=Auth({"ann": "1"}, b"k" * 32)) as server:
 
