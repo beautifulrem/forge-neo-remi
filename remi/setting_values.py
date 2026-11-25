@@ -60,11 +60,13 @@ def encodable(value: Any) -> bool:
 
 
 MAX_NESTING = 64
-"""How deep a setting's lists and objects may nest. ``Options.save`` writes
+"""How deep a setting's lists and objects may nest. ``Options.save`` wrote
 ``config.json`` with the recursive ``json.dump`` straight into the file: a
 value nested about a thousand levels deep stopped it half way, leaving a file
-the WebUI could not start from, and any limit set by the stack's depth moves
-with the caller's."""
+the WebUI could not start from. It now writes the file whole or not at all
+(``modules/options.write_whole``); the limit keeps such values out of the
+settings, which upstream readers walk recursively, and does not move with the
+caller's stack depth."""
 
 
 def nested_deeper(value: Any, limit: int = MAX_NESTING) -> bool:

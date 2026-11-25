@@ -1,5 +1,8 @@
+import contextlib
 import json
+import os
 import sys
+import uuid
 from dataclasses import dataclass
 
 from modules import errors
@@ -126,6 +129,32 @@ def options_section(section_identifier, options_dict):
 options_builtin_fields = {"data_labels", "data", "restricted_opts", "typemap"}
 
 
+def write_whole(filename, data: bytes):
+    """Remi: ``data`` written to ``filename`` whole: into a new file next to it (next to the link's
+    target for a symlink, with the file's mode), then swapped in, so a failed write or a crash leaves
+    the old file. Where the swap is refused (a file bind-mounted on its own, one another process
+    holds open on Windows) the bytes, already encoded, are written in place."""
+    target = os.path.realpath(filename)
+    try:
+        mode = os.stat(target).st_mode & 0o777
+    except OSError:
+        mode = None
+    temporary = f"{target}.{uuid.uuid4().hex}.tmp"
+    try:
+        with open(temporary, "xb") as file:
+            file.write(data)
+            file.flush()
+            os.fsync(file.fileno())
+        if mode is not None:
+            os.chmod(temporary, mode)
+        os.replace(temporary, target)
+    except OSError:
+        with contextlib.suppress(OSError):
+            os.remove(temporary)
+        with open(target, "wb") as file:
+            file.write(data)
+
+
 class Options:
     typemap = {int: float}
 
@@ -229,8 +258,12 @@ class Options:
     def save(self, filename):
         assert not cmd_opts.freeze_settings, "saving settings is disabled"
 
-        with open(filename, "w", encoding="utf8") as file:
-            json.dump(self.data, file, indent=4, ensure_ascii=False)
+        # Remi: encoded first, then swapped in whole. Dumped straight into the open file, a value json
+        # cannot write (nested past the recursion limit, an unpaired surrogate) stopped it half way and
+        # left config.json cut short: every setting lost at the next start
+        data = json.dumps(self.data, indent=4, ensure_ascii=False).encode("utf8")
+        json.loads(data)  # written only when the next start can read it back
+        write_whole(filename, data)
 
     def same_type(self, x, y):
         if x is None or y is None:
