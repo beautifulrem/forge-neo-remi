@@ -1725,5 +1725,6 @@
   "VGL short_description must be nonempty text": "VGL 的 short_description 必须是非空文本",
   "VGL objects array must contain at least one item": "VGL 的 objects 数组至少要包含一项",
   "Object {{n}} needs a description": "第 {{n}} 个对象需要描述",
-  "The text is not valid JSON.": "该文本不是有效的 JSON。"
+  "The text is not valid JSON.": "该文本不是有效的 JSON。",
+  "{{label}}: ": "{{label}}："
 }

@@ -833,6 +833,7 @@ export const serverCatalogZh: Record<string, string> = {
   Prompt: "提示词",
   "Prompt\n({{generate}} to Generate ; {{skip}} to Skip ; {{interrupt}} to Interrupt)": "提示词\n（{{generate}} 生成；{{skip}} 跳过；{{interrupt}} 中断）",
   "Negative prompt": "反向提示词",
+  "requires Remi {{required}} or newer; this is Remi {{running}}": "需要 Remi {{required}} 或更新版本；当前为 Remi {{running}}",
   "Sampling method": "采样方法",
   // as localizations/zh_CN.json has them
   "Sampler": "采样器",

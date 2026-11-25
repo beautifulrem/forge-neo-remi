@@ -62,7 +62,7 @@ function StateDetail({ detail }: { detail: ConfigStateDetail }) {
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
         <span>
-          {t("WebUI")}: <Commit repo={detail.webui.saved} />
+          {t("{{label}}: ", { label: t("WebUI") })}<Commit repo={detail.webui.saved} />
           {webuiDiffers ? (
             <>
               {" → "}

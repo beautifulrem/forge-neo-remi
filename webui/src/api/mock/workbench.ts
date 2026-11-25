@@ -396,6 +396,40 @@ const MOCK_DIAGNOSTICS = {
       disabled_reason: null,
     },
     {
+      // needs a newer Remi (a prerelease build): incompatible, still loaded; its reason quotes the
+      // version, one long word that has to wrap on a phone
+      name: "sd_webui_nightly_tools",
+      enabled: true,
+      builtin: false,
+      health: "healthy",
+      load_time_ms: 6.3,
+      hook_warnings: 0,
+      hook_errors: 0,
+      action_errors: 0,
+      action_timeouts: 0,
+      last_error: null,
+      last_error_at: null,
+      manifest_status: "incompatible",
+      manifest: {
+        api_version: "1.0",
+        min_remi_version: "1.1.0-rc.20261126+build.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        requires_capabilities: [],
+        requires_widgets: [],
+        license: "MIT",
+      },
+      manifest_errors: ["requires Remi 1.1.0-rc.20261126+build.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef or newer; this is Remi 1.0.0"],
+      manifest_error_details: [
+        {
+          message: "requires Remi 1.1.0-rc.20261126+build.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef or newer; this is Remi 1.0.0",
+          template: "requires Remi {{required}} or newer; this is Remi {{running}}",
+          params: { required: "1.1.0-rc.20261126+build.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", running: "1.0.0" },
+        },
+      ],
+      manifest_warnings: [],
+      disabled_scripts: [],
+      disabled_reason: null,
+    },
+    {
       name: "legacy_gradio_plugin",
       enabled: false,
       builtin: false,

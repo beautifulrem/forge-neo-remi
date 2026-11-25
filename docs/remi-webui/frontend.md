@@ -1630,7 +1630,10 @@ older server) nothing is shown.
   `t("Reset to default")`, `t("Step {{step}} of {{steps}}", { step, steps })`.
   Keep constants that are translated later as `label:` / `group:` /
   `title=` / `description=` literals (routes, commands, placeholders). No
-  string concatenation. A sentence that names keys takes them from
+  string concatenation: a label and its value are joined by
+  `t("{{label}}: ", { label: t("Errors") })` (Chinese `{{label}}：`), never
+  `{t("Errors")}: ` with a colon of the source's own (`locales.test.ts`).
+  A sentence that names keys takes them from
   `formatShortcut` through a placeholder (`Undo with {{keys}} in the
   editor.`): `locales.test.ts` fails on a chrome string that spells a
   modifier (`Ctrl+`, `Cmd+`, `Alt+`, `⌘`, `⌥`). Prefer sentences that work

@@ -213,6 +213,20 @@ test.describe("studio workbench", () => {
     consoleWatch.assertClean()
   })
 
+  // A manifest's reason quotes its value (a version, a range), which can be one long word: on a
+  // phone it ran past the page's edge and made the page scroll sideways. Its label takes the
+  // catalog's colon ("清单：", not "清单:"), and the reason is said in the UI language.
+  test("extensions: a manifest's reason wraps on a phone and is said in the UI language", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 })
+    await presetStorage(page, { locale: "zh-CN" })
+    await openRoute(page, "extensions?tab=diagnostics")
+    const row = page.getByText(/^清单：需要 Remi 1\.1\.0-rc/)
+    await expect(row).toBeVisible()
+    expect(await row.evaluate((element) => element.getBoundingClientRect().right <= innerWidth + 0.5), "the reason runs past the window").toBe(true)
+    expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth + 1), "the reason is cut").toBe(true)
+    expect(await page.locator("main").first().evaluate((main) => [main, ...main.querySelectorAll<HTMLElement>("*")].filter((element) => /auto|scroll/.test(getComputedStyle(element).overflowX) && !element.matches("p")).every((element) => element.scrollWidth <= element.clientWidth + 1)), "the page scrolls sideways").toBe(true)
+  })
+
   test("json-builder: Bria Fibo 2.0 VGL schema mode & dark-theme a11y", async ({ page }) => {
     const consoleWatch = watchConsole(page)
     await presetStorage(page, { theme: "dark" })

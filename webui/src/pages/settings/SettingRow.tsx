@@ -67,7 +67,7 @@ function LockedNote({ reason }: { reason: string }) {
     <p className="flex items-center gap-1 text-foreground/80">
       <Lock className="size-3 shrink-0" aria-hidden />
       <span>
-        {t("Locked")}: {t(reason)}
+        {t("{{label}}: ", { label: t("Locked") })}{t(reason)}
       </span>
     </p>
   )
@@ -121,7 +121,7 @@ function SettingHelp({ node }: { node: SettingNode }) {
       ) : null}
       {defaultOrder.length > 0 ? (
         <div>
-          <p>{t("Default order")}:</p>
+          <p>{t("{{label}}: ", { label: t("Default order") })}</p>
           <ol className="list-decimal pl-5">
             {defaultOrder.map((name) => (
               <li key={name}>{name}</li>

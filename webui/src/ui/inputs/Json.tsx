@@ -57,7 +57,7 @@ export function JsonInput({ node }: { node: InputNode }) {
       />
       {error ? (
         <p id={`${id}-parse`} role="alert" className="text-xs text-destructive">
-          {t("Invalid JSON")}: {error}
+          {t("{{label}}: ", { label: t("Invalid JSON") })}{error}
         </p>
       ) : null}
     </Field>

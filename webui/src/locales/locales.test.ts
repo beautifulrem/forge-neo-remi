@@ -153,6 +153,17 @@ describe("JSON Builder messages", () => {
   })
 })
 
+describe("labels", () => {
+  // "Manifest: …" built as t("Manifest") + ": " showed a half-width colon after Chinese ("清单: …"):
+  // a label and its value are joined by the catalog's "{{label}}: " (Chinese "{{label}}：").
+  it("never join a translated label to its value with a colon of their own", () => {
+    const joined = Object.entries(sources).flatMap(([file, source]) =>
+      [...source.matchAll(/\{t\("[^"]+"\)\}:|\$\{t\("[^"]+"\)\}: /g)].map((match) => `${file.replace(/^\.\.\//, "")}: ${match[0]}`),
+    )
+    expect(joined).toEqual([])
+  })
+})
+
 describe("shortcut hints", () => {
   // "Undo with Ctrl+Z" was wrong on macOS, where the editors undo with ⌘Z: a sentence that names
   // keys takes them from formatShortcut through a placeholder.

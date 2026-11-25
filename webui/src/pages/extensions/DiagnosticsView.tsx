@@ -143,13 +143,13 @@ export function DiagnosticsView() {
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground tabular-nums">
           {diag.data ? (
             <span className="font-mono text-foreground">
-              {t("Remi API version")}: {diag.data.api_version}
+              {t("{{label}}: ", { label: t("Remi API version") })}{diag.data.api_version}
             </span>
           ) : null}
           {diag.data && workers.data ? sep : null}
           {workers.data ? (
             <span>
-              {t("Worker mode")}: <span className="font-medium text-foreground">{modeLabel(workers.data.mode, t)}</span>
+              {t("{{label}}: ", { label: t("Worker mode") })}<span className="font-medium text-foreground">{modeLabel(workers.data.mode, t)}</span>
             </span>
           ) : null}
           {diag.data?.summary ? (
@@ -246,18 +246,18 @@ export function DiagnosticsView() {
                         {worker.pid ? <span className="font-mono">PID {worker.pid}</span> : null}
                         {worker.loaded_model ? (
                           <span className="min-w-0 truncate" title={worker.loaded_model}>
-                            {t("Loaded model")}: <span className="font-mono text-foreground">{worker.loaded_model}</span>
+                            {t("{{label}}: ", { label: t("Loaded model") })}<span className="font-mono text-foreground">{worker.loaded_model}</span>
                           </span>
                         ) : null}
                         <span>
-                          {t("Jobs completed")}: <span className="font-mono text-foreground">{worker.jobs_completed}</span>
+                          {t("{{label}}: ", { label: t("Jobs completed") })}<span className="font-mono text-foreground">{worker.jobs_completed}</span>
                         </span>
                         <span>
-                          {t("Restarts")}: <span className="font-mono text-foreground">{worker.restarts}</span>
+                          {t("{{label}}: ", { label: t("Restarts") })}<span className="font-mono text-foreground">{worker.restarts}</span>
                         </span>
                         {usedMb != null && worker.vram_total_mb != null ? (
                           <span className="font-mono text-foreground sm:ml-auto">
-                            {t("VRAM")}: {formatMb(usedMb)} / {formatMb(worker.vram_total_mb)}
+                            {t("{{label}}: ", { label: t("VRAM") })}{formatMb(usedMb)} / {formatMb(worker.vram_total_mb)}
                           </span>
                         ) : null}
                       </div>
@@ -302,7 +302,7 @@ export function DiagnosticsView() {
                     <>
                       {sep}
                       <span className="font-mono text-muted-foreground tabular-nums">
-                        {t("Unified memory")}: {formatMb(workers.data.mlx.unified_memory_mb)}
+                        {t("{{label}}: ", { label: t("Unified memory") })}{formatMb(workers.data.mlx.unified_memory_mb)}
                       </span>
                     </>
                   ) : null}
@@ -414,7 +414,7 @@ export function DiagnosticsView() {
 
                     <span
                       className="truncate font-mono text-xs text-muted-foreground"
-                      title={caps.length > 0 ? `${t("Required capabilities")}: ${caps.join(", ")}` : undefined}
+                      title={caps.length > 0 ? `${t("{{label}}: ", { label: t("Required capabilities") })}${caps.join(", ")}` : undefined}
                     >
                       {caps.length > 0 ? caps.join(" · ") : "—"}
                     </span>
@@ -422,12 +422,12 @@ export function DiagnosticsView() {
                     <div className="flex items-center gap-2.5 font-mono text-xs text-muted-foreground tabular-nums md:justify-end">
                       {item.hook_warnings > 0 ? (
                         <span className="text-advice-warn">
-                          {t("Warnings")}: {item.hook_warnings}
+                          {t("{{label}}: ", { label: t("Warnings") })}{item.hook_warnings}
                         </span>
                       ) : null}
                       {totalErrors > 0 ? (
                         <span className="text-destructive">
-                          {t("Errors")}: {totalErrors}
+                          {t("{{label}}: ", { label: t("Errors") })}{totalErrors}
                         </span>
                       ) : null}
                       {item.load_time_ms != null ? (
@@ -440,13 +440,16 @@ export function DiagnosticsView() {
 
                   {disabledReason ? (
                     <p className="mt-1.5 border-l-2 border-border pl-2.5 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground/85">{t("Disabled reason")}:</span> {disabledReason}
+                      <span className="font-medium text-foreground/85">{t("{{label}}: ", { label: t("Disabled reason") })}</span>
+                      {disabledReason}
                     </p>
                   ) : null}
 
                   {reason ? (
-                    <p className="mt-1.5 border-l-2 border-destructive/70 pl-2.5 text-xs text-destructive">
-                      <span className="font-medium">{t("Manifest")}:</span> {reason}
+                    // a manifest value (a version, a range) quoted in the reason may be one long unbroken word
+                    <p className="mt-1.5 border-l-2 border-destructive/70 pl-2.5 text-xs [overflow-wrap:anywhere] text-destructive">
+                      <span className="font-medium">{t("{{label}}: ", { label: t("Manifest") })}</span>
+                      {reason}
                     </p>
                   ) : null}
 
