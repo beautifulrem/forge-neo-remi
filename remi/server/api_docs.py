@@ -38,12 +38,12 @@ _ASSET_RE = re.compile(r"assets/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\.(?:js|css)")
 SWAGGER_PARAMETERS = {"validatorUrl": None}
 """Swagger UI's default validator badge is an image from validator.swagger.io"""
 
-NOT_BUILT = """<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{title}</title>
+NOT_BUILT = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{title}</title>
 <style>body{{font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem;line-height:1.5}}code{{background:#8882;padding:.1em .3em;border-radius:.25em}}</style></head>
 <body><h1>The API documentation viewer is not built</h1>
 <p>It comes with the web interface build (Node.js 22.18+ or 24.11+ and pnpm):</p>
 <pre><code>cd webui
-pnpm install
+pnpm install --frozen-lockfile
 pnpm build</code></pre>
 <p>then reload this page. The API description itself is available meanwhile: <a href="{openapi}">openapi.json</a>.</p></body></html>"""
 

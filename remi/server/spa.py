@@ -49,12 +49,12 @@ IMMUTABLE = "public, max-age=31536000, immutable"
 PRECOMPRESSED = (("br", ".br"), ("gzip", ".gz"))
 """content codings of the build's precompressed copies, preferred first"""
 
-NOT_BUILT = """<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Remi WebUI</title>
+NOT_BUILT = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Remi WebUI</title>
 <style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem;line-height:1.5}code{background:#8882;padding:.1em .3em;border-radius:.25em}</style></head>
 <body><h1>The web interface is not built</h1>
 <p>Build it once with Node.js 22.18+ or 24.11+ and pnpm:</p>
 <pre><code>cd webui
-pnpm install
+pnpm install --frozen-lockfile
 pnpm build</code></pre>
 <p>then reload this page. The API is available meanwhile (its description: <code>/openapi.json</code>; the <code>/docs</code> viewer comes with the build).</p></body></html>"""
 

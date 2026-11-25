@@ -536,9 +536,9 @@ def build_webui(webui_dir: Path = WEBUI_DIR) -> bool:
     commands = webui_build_commands()
     if commands is None:
         if shutil.which("node") is None:
-            missing = f"Node.js was not found. {NODE_HELP}, then restart or run `pnpm install && pnpm build` in {webui_dir}."
+            missing = f"Node.js was not found. {NODE_HELP}, then restart or run `pnpm install --frozen-lockfile && pnpm build` in {webui_dir}."
         else:
-            missing = f"Node.js was found but none of pnpm, corepack or npx. Install pnpm (or a Node.js that ships Corepack and npx), then restart or run `pnpm install && pnpm build` in {webui_dir}."
+            missing = f"Node.js was found but none of pnpm, corepack or npx. Install pnpm (or a Node.js that ships Corepack and npx), then restart or run `pnpm install --frozen-lockfile && pnpm build` in {webui_dir}."
         if built:
             print(f"The web interface may be out of date: {missing}")
             return True

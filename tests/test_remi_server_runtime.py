@@ -637,9 +637,11 @@ def test_webui_build_states_the_node_requirement_of_its_build_tools(tmp_path, ca
     assert launch_utils.build_webui(webui) is False
     out = capsys.readouterr().out
     assert "Node.js was not found" in out and "Node.js 22.18+ or 24.11+" in out and "pnpm is optional" in out
+    assert "`pnpm install --frozen-lockfile && pnpm build`" in out
     monkeypatch.setattr(shutil, "which", lambda name: "/n/node" if name == "node" else None)
     assert launch_utils.build_webui(webui) is False
-    assert "none of pnpm, corepack or npx" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "none of pnpm, corepack or npx" in out and "`pnpm install --frozen-lockfile && pnpm build`" in out
 
     ran = []
     monkeypatch.setattr(launch_utils, "webui_build_commands", lambda: [["build"]])

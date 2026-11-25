@@ -168,3 +168,9 @@ def test_the_not_built_pages_ask_for_the_node_version_the_launcher_names():
     for page in (spa.NOT_BUILT, api_docs.NOT_BUILT):
         assert launch_utils.NODE_REQUIREMENT in page
         assert "npm" not in page.replace("pnpm", "")
+        # the launcher's own commands: the lockfile as committed, never a re-resolved one
+        assert "pnpm install --frozen-lockfile\n" in page and "pnpm install\n" not in page
+        # readable on a phone (a server reached over the network)
+        assert '<meta name="viewport" content="width=device-width, initial-scale=1">' in page
+    install, _build = launch_utils.webui_build_commands(which={"node": "/n/node", "pnpm": "/n/pnpm"}.get)
+    assert install == ["/n/pnpm", "install", "--frozen-lockfile"]
