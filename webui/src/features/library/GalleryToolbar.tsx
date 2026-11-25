@@ -100,7 +100,7 @@ function DateRange() {
             </label>
           </div>
           <div className="flex flex-wrap gap-1">
-            <Button variant="secondary" size="xs" onClick={() => set({ from: daysAgo(0), to: daysAgo(0) })}>
+            <Button variant="secondary" size="xs" onClick={() => set({ from: daysAgo(0), to: null })}>
               {t("Today")}
             </Button>
             <Button variant="secondary" size="xs" onClick={() => set({ from: daysAgo(6), to: null })}>

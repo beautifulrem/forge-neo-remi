@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { queryClient } from "@/api/queries"
 import type { GalleryItem } from "@/api/types"
 import { useGalleryView } from "@/features/library/filters"
+import { daysAgo } from "@/features/library/labels"
 import GalleryPage from "./index"
 
 type Call = { method: string; path: string; query: URLSearchParams; body: unknown }
@@ -190,6 +191,18 @@ describe("gallery page", { timeout: 20_000 }, () => {
     expect(query.get("sort")).toBe("oldest")
     expect(query.get("since")).toMatch(/^2026-09-30T|^2026-10-01T/)
     expect(screen.getByRole("button", { name: "Clear filters" })).toBeInTheDocument()
+  })
+
+  it("filters Today from today on, so images made after midnight still show", async () => {
+    const calls = mockServer([item(1)])
+    renderPage()
+    await screen.findAllByRole("listitem")
+    fireEvent.click(screen.getAllByRole("button", { name: "Date range" })[0]!)
+    fireEvent.click(await screen.findByRole("button", { name: "Today" }))
+    expect(useGalleryView.getState().from).toBe(daysAgo(0))
+    expect(useGalleryView.getState().to).toBeNull()
+    await waitFor(() => expect(calls.some((call) => call.path === "/gallery" && call.query.has("since"))).toBe(true))
+    expect(calls.filter((call) => call.path === "/gallery").every((call) => !call.query.has("until"))).toBe(true)
   })
 
   it("reads past pages left empty by missing files and counts only what it shows", async () => {
