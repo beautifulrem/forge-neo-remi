@@ -7,7 +7,7 @@
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Archive, Info, Loader2, RotateCcw, Save, Trash2 } from "@/components/icons"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
@@ -29,6 +29,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { runServerCommandAfterApply } from "@/features/server-control/server-control"
+import { useScrollFade } from "@/lib/use-scroll-fade"
 import { cn } from "@/lib/utils"
 import { adminErrorMessage, backupDiffers, type ConfigStateDetail, formatDate } from "./extensions-model"
 import { extensionKeys, stateQuery, statesQuery } from "./queries"
@@ -51,6 +52,9 @@ function Commit({ repo }: { repo: Repo }) {
 
 function StateDetail({ detail }: { detail: ConfigStateDetail }) {
   const { t } = useTranslation()
+  // narrower than the table (a phone), it scrolls sideways: its edges fade where there is more
+  const scroller = useRef<HTMLDivElement>(null)
+  const fade = useScrollFade(scroller, null, "x")
   const changed = detail.items.filter((row) => backupDiffers(row.saved, row.current)).length
   const webuiDiffers = (detail.webui.saved.commit_hash || null) !== (detail.webui.current.commit_hash || null)
   return (
@@ -67,7 +71,7 @@ function StateDetail({ detail }: { detail: ConfigStateDetail }) {
         </span>
         <span className="text-muted-foreground">{t("{{count}} extensions differ from now", { count: changed })}</span>
       </div>
-      <div className="overflow-x-auto">
+      <div ref={scroller} className="overflow-x-auto" style={fade}>
         <table className="w-full min-w-[32rem] text-left text-xs">
           <caption className="sr-only">{t("Extensions in the backup and now")}</caption>
           <thead className="bg-muted/50 text-muted-foreground">

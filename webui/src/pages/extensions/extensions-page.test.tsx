@@ -214,6 +214,15 @@ describe("backups", { timeout: 20_000 }, () => {
     expect(names.filter((name) => name === "border" || name.startsWith("rounded"))).toEqual([])
   })
 
+  // On a phone the table scrolls sideways (min 32rem) with nothing to say there is more of it.
+  it("fades the backup's table where it scrolls sideways", async () => {
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(512)
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(340)
+    renderPage("tab=backup")
+    const table = await screen.findByRole("table", { name: "Extensions in the backup and now" }, { timeout: 8000 })
+    await waitFor(() => expect(table.parentElement!.style.maskImage).toContain("linear-gradient(to right"))
+  })
+
   it("asks before deleting a backup", async () => {
     const remove = vi.spyOn(api.extensions.states, "remove").mockResolvedValue(undefined as never)
     renderPage("tab=backup")
