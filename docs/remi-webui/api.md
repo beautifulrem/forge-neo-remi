@@ -109,8 +109,10 @@ Independently of logins, these checks protect against browsers being abused
 - **Cross-site requests are refused (403).** A state-changing request
   (`POST`/`PUT`/`PATCH`/`DELETE`) or WebSocket handshake whose `Origin` is
   another site is refused unless that origin is allowed with
-  `--cors-allow-origins` / `--cors-allow-origins-regex`. Clients that send
-  no `Origin` (curl, Python, other servers) are not affected.
+  `--cors-allow-origins` / `--cors-allow-origins-regex`: listed exactly, or
+  matched by a narrow regex. A wildcard (`*`, `.*`) allows no writes, and
+  with it no answer carries credentials (cookies). Clients that send no
+  `Origin` (curl, Python, other servers) are not affected.
 - **DNS rebinding is refused (403 "Unknown host refused").** When the server
   only listens on loopback (no `--listen`, `--server-name`, `--share`,
   `--ngrok`), requests must use a loopback `Host` (`localhost`,

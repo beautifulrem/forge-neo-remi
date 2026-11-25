@@ -319,7 +319,7 @@ Agent Scheduler、Prompt Queue 和 Repeat Generate 已成为核心的队列功�
 
 - **登录。** `--auth` / `--auth-file` 保护所有内容：网页界面、`/api/v2`、文件、WebSocket、`/internal` 和 API 文档。浏览器会看到登录页；会话有效期 30 天，重启后仍然有效，退出登录会将其吊销。脚本可以改用 HTTP Basic 凭据。同一客户端一分钟内登录失败十次后会被锁定一分钟。`/sdapi/v1` 在设置了 `--api-auth` 时使用它；否则使用 `--auth` 登录（脚本可用 HTTP Basic），仅监听本机时也是如此，因为同一台机器上的反向代理或隧道同样从回环地址连接。无法发送凭据的本地工具可以用 `--api-no-auth-on-localhost` 放行（来自本机且未经过代理的请求）。
 - **对外开放服务器。** 请同时使用 `--listen`（或 `--server-name`）和 `--auth`，最好放在 TLS 反向代理之后，或使用 `--tls-keyfile` / `--tls-certfile`。不支持 `--share`。网络监听时，除非指定 `--enable-insecure-extension-access`，否则不能从界面安装和更新扩展；图库中的“在文件夹中显示”只对同一台机器上的浏览器有效，`--hide-ui-dir-config` 会移除所有在服务器上打开或定位文件夹的操作。
-- **拒绝跨站请求。** 来自其他网站页面的写操作请求和 WebSocket 连接会被拒绝，恶意网页无法操控你的 WebUI。脚本和 API 工具不发送 `Origin` 头，不受影响；其他来源的浏览器前端需要用 `--cors-allow-origins` 放行。
+- **拒绝跨站请求。** 来自其他网站页面的写操作请求和 WebSocket 连接会被拒绝，恶意网页无法操控你的 WebUI。脚本和 API 工具不发送 `Origin` 头，不受影响；其他来源的浏览器前端需要用 `--cors-allow-origins` 按确切来源放行：`*`（或匹配所有来源的正则）只让所有网站读取无需登录的内容，绝不携带你的登录，也不能做任何修改。
 - **拒绝 DNS 重绑定。** 仅监听本机的服务器只响应 `localhost` / 回环主机名（或 `--cors-allow-origins` 放行的主机）。本地反向代理必须以这些名称作为 `Host` 转发，或放行其公开来源。
 - **文件**只能通过不透明 id 访问，上传内容会检查类型和大小（`remi_upload_max_mb`），其他请求体的大小上限是它的两倍，扩展 HTML、infotext 和元数据都以纯文本显示或经过净化。
 - **扩展路由**（扩展添加到服务器的路由）同样经过跨站和主机检查；启用 `--auth` 时，它们还需要登录或 `--api-auth` 凭据（仅在使用 `--api-no-auth-on-localhost` 时本机 API 客户端免登录）。

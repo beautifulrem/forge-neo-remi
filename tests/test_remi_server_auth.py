@@ -324,6 +324,43 @@ def test_cors_allowed_origins_may_write(webui, tmp_path, monkeypatch):
     with server_app(tmp_path) as server:
         response = server.client.post("/api/v2/queue/resume", headers={"Origin": "https://tools.example"})
         assert response.status_code == 200 and response.headers["access-control-allow-origin"] == "https://tools.example"
+        assert response.headers["access-control-allow-credentials"] == "true"
+    # so may the origins a narrow regex admits
+    monkeypatch.setattr(shared.cmd_opts, "cors_allow_origins", None)
+    monkeypatch.setattr(shared.cmd_opts, "cors_allow_origins_regex", r"https://[a-z]+\.tools\.example")
+    with server_app(tmp_path / "regex") as server:
+        response = server.client.post("/api/v2/queue/resume", headers={"Origin": "https://ui.tools.example", "Cookie": "remi_session=x"})
+        assert response.status_code == 200 and response.headers["access-control-allow-credentials"] == "true"
+        assert server.client.post("/api/v2/queue/resume", headers={"Origin": "https://evil.example"}).status_code == 403
+
+
+@pytest.mark.parametrize(("origins", "regex"), [("*", None), (None, ".*"), (None, "https?://.+"), ("https://tools.example,*", None)])
+def test_a_wildcard_origin_carries_no_login_and_may_not_write(webui, tmp_path, monkeypatch, origins, regex):
+    """--cors-allow-origins=*, or a regex that admits every origin: every site may read the
+    answers that need no login, never with the user's cookie (Starlette echoed the origin
+    with Allow-Credentials to a request that had one), and no site may write, open the
+    WebSocket or reach a loopback-only server under its own name (DNS rebinding makes such a
+    page same-origin). Origins listed exactly keep their writes."""
+
+    from modules import shared
+
+    monkeypatch.setattr(shared.cmd_opts, "cors_allow_origins", origins)
+    monkeypatch.setattr(shared.cmd_opts, "cors_allow_origins_regex", regex)
+    evil = {"Origin": "https://evil.example", "Cookie": "remi_session=x"}
+    with server_app(tmp_path) as server:
+        read = server.client.get("/api/v2/queue", headers={**evil, "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "cors"})
+        assert read.status_code == 200 and read.headers["access-control-allow-origin"] in ("*", "https://evil.example")
+        assert "access-control-allow-credentials" not in read.headers
+        preflight = server.client.options("/api/v2/queue/resume", headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "POST"})
+        assert preflight.status_code == 200 and "access-control-allow-credentials" not in preflight.headers
+        assert server.client.post("/api/v2/queue/resume", headers=evil).status_code == 403
+        with pytest.raises(WebSocketDisconnect), server.client.websocket_connect(WS_URL, headers={"Origin": "https://evil.example"}) as socket:
+            socket.receive_json()
+        rebound = {"Host": "evil.example:7860", "Origin": "http://evil.example:7860"}
+        assert server.client.post("/api/v2/queue/resume", headers=rebound).status_code == 403
+        assert server.client.get("/api/v2/queue", headers={"Host": "evil.example:7860"}).status_code == 403
+        listed = server.client.post("/api/v2/queue/resume", headers={"Origin": "https://tools.example"})
+        assert listed.status_code == (200 if origins and "tools.example" in origins else 403)
 
 
 def test_extension_routes_keep_the_route_guard(webui, tmp_path):

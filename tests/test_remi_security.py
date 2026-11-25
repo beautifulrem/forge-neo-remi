@@ -659,7 +659,12 @@ def test_risky_launch_flags_are_warned_about(options):
     options(auth="a:b")
     assert any("unencrypted" in warning for warning in exposure_warnings(shared.cmd_opts))
     options(cors_allow_origins="*")
+    wildcard = [warning for warning in exposure_warnings(shared.cmd_opts) if "every web site" in warning]
+    assert len(wildcard) == 1 and "never with your login" in wildcard[0]
+    options(cors_allow_origins="https://tools.example", cors_allow_origins_regex=".*")  # a regex that admits every origin
     assert any("every web site" in warning for warning in exposure_warnings(shared.cmd_opts))
+    options(cors_allow_origins_regex=r"https://[a-z]+\.tools\.example")
+    assert not any("every web site" in warning for warning in exposure_warnings(shared.cmd_opts))
     options(api_no_auth_on_localhost=True)
     assert any("--api-no-auth-on-localhost" in warning for warning in exposure_warnings(shared.cmd_opts))
     options(api_auth="api:key")  # --api-auth always applies, so the opt-out does nothing

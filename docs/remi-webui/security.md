@@ -90,14 +90,25 @@ attackers who already have a login (they are administrators by design).
   port) or an allowed `--cors-allow-origins(-regex)` origin are refused (403 /
   close 1008); `Origin: null` always is; without an `Origin`,
   `Sec-Fetch-Site: cross-site` is refused. API clients (no `Origin`) pass.
+  A wildcard (`*`, or a regex that admits every origin, such as `.*`)
+  allows no write: only origins listed exactly, or matched by a narrower
+  regex, do.
+- **CORS credentials:** allowed origins get `Access-Control-Allow-Credentials`
+  and may read the answers with the user's cookie. A wildcard never does:
+  with one the server sends no `Allow-Credentials` at all (to the exact
+  origins next to it neither; `remi/server/app.py`), so every site reads only
+  what needs no login. Starlette, told to allow credentials, answered a
+  wildcard request that carried a cookie with the requesting origin and
+  `Allow-Credentials: true`.
 - **Cross-site reads:** a `GET`/`HEAD` that fetch metadata marks as a
   cross-site or same-site *subresource* request (`<img>`, `fetch`, frames) is
-  refused unless its origin is allowed; top-level navigations (links,
-  bookmarks) pass. This stops blind requests such as
+  refused unless its origin is allowed (a wildcard's included: its answers
+  carry no credentials); top-level navigations (links, bookmarks) pass. This stops blind requests such as
   `<img src="http://127.0.0.1:7860/api/v2/extensions/index?url=…">`.
 - **DNS rebinding:** a loopback-only server (default bind, loopback
   `--server-name`, no `--ngrok`) refuses a `Host` that is not a loopback name
-  or an allowed CORS host (403 "Unknown host refused").
+  or the host of an allowed CORS origin (403 "Unknown host refused"); a
+  wildcard names no host.
 - **Headers:** every response carries `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: same-origin` and `X-Robots-Tag: noindex, nofollow` (an
   exposed WebUI is a private tool, not a site to index). The SPA shell and the API docs pages carry a CSP:
@@ -287,9 +298,12 @@ To let other machines in:
 5. **Hide paths** with `--hide-ui-dir-config` when users should not change
    output folders or open folders on the server, and consider
    `--freeze-settings` / `--freeze-settings-in-sections`.
-6. **CORS:** list exact origins in `--cors-allow-origins` only for tools you
-   trust: allowed origins may send requests with the user's cookie and read
-   the answers. Never use `*` on an exposed server.
+6. **CORS:** list exact origins in `--cors-allow-origins` (or a narrow
+   `--cors-allow-origins-regex`) only for tools you trust: allowed origins
+   may send requests with the user's cookie and read the answers. `*`, or a
+   regex that admits every origin (`.*`), lets every site read what the
+   server answers without a login, never with one, and change nothing;
+   without `--auth` that is everything, so never use it on an exposed server.
 7. **Reverse proxies:** forward `Host` (or `X-Forwarded-Host`) and the
    WebSocket upgrade for `/api/v2/ws`; with a path prefix use `--subpath`.
    Login throttling counts per peer address: `X-Forwarded-For` and

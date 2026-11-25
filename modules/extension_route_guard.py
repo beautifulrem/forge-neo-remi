@@ -39,16 +39,46 @@ def _cors_origins(cmd_opts) -> list[str]:
     return [value.strip() for value in (getattr(cmd_opts, "cors_allow_origins", None) or "").split(",")]
 
 
-def _allowed_by_cors(origin: str) -> bool:
-    """Origins the admin allowed with --cors-allow-origins(-regex)."""
+_MADE_UP_ORIGINS = ("https://any-site.invalid", "http://any-site.invalid")
+"""Origins no one would allow (``.invalid`` is reserved): a regex that admits
+them admits every site."""
+
+
+def _regex_admits(pattern: str | None, origin: str) -> bool:
+    try:
+        return bool(pattern) and re.fullmatch(pattern, origin) is not None
+    except re.error:
+        return False
+
+
+def _regex_admits_every_site(pattern: str | None) -> bool:
+    return any(_regex_admits(pattern, origin) for origin in _MADE_UP_ORIGINS)
+
+
+def cors_allows_every_origin(cmd_opts) -> bool:
+    """``--cors-allow-origins=*``, or a ``--cors-allow-origins-regex`` that
+    admits made-up origins (``.*``): every web site. Such a wildcard lets
+    sites read the answers that need no login, never with the user's cookie
+    (the CORS middleware then sends no ``Allow-Credentials``,
+    ``remi.server.app``), and authorises no cross-site write and no ``Host``
+    name: only origins listed exactly (or matched by a narrower regex) do."""
+    if cmd_opts is None:
+        return False
+    return "*" in _cors_origins(cmd_opts) or _regex_admits_every_site(getattr(cmd_opts, "cors_allow_origins_regex", None))
+
+
+def _allowed_by_cors(origin: str, *, wildcard: bool = False) -> bool:
+    """Origins the admin allowed with --cors-allow-origins(-regex). A wildcard
+    (:func:`cors_allows_every_origin`) counts only with ``wildcard`` (reads)."""
     cmd_opts = _cmd_opts()
     if cmd_opts is None:
         return False
-    allowed = _cors_origins(cmd_opts)
-    if "*" in allowed or origin in allowed:
+    if wildcard and cors_allows_every_origin(cmd_opts):
+        return True
+    if origin != "*" and origin in _cors_origins(cmd_opts):
         return True
     pattern = getattr(cmd_opts, "cors_allow_origins_regex", None)
-    return bool(pattern) and re.fullmatch(pattern, origin) is not None
+    return not _regex_admits_every_site(pattern) and _regex_admits(pattern, origin)
 
 
 def _hostname(value: str) -> str | None:
@@ -96,7 +126,7 @@ def is_rebound_host(request) -> bool:
     same-origin to the browser. A server that only listens on loopback (by
     default, or with a loopback --server-name; no --share / --ngrok) is only
     reached as localhost, or under a name allowed with
-    --cors-allow-origins(-regex)."""
+    --cors-allow-origins(-regex) (listed: a wildcard names no host)."""
 
     cmd_opts = _cmd_opts()
     if cmd_opts is None or not _is_loopback_only(cmd_opts):
@@ -155,15 +185,16 @@ def _cross_site_read(request) -> bool:
     the browser send as a subresource (``<img>``, ``fetch``...): fetch
     metadata says so. Their responses are hidden by CORS, but the request
     itself still runs (blind SSRF/CSRF through GETs that fetch or compute).
-    Top-level navigations (links, bookmarks) and allowed CORS origins pass;
-    clients without fetch metadata (API clients, old browsers) too."""
+    Top-level navigations (links, bookmarks) and allowed CORS origins pass,
+    a wildcard's too (its answers carry no credentials); clients without
+    fetch metadata (API clients, old browsers) too."""
     headers = request.headers
     if headers.get("sec-fetch-site") not in ("cross-site", "same-site"):
         return False
     if headers.get("sec-fetch-mode") == "navigate" and headers.get("sec-fetch-dest") in (None, "document"):
         return False
     origin = headers.get("origin")
-    return not (origin and origin != "null" and (_allowed_by_cors(origin) or _same_origin(origin, request)))
+    return not (origin and origin != "null" and (_allowed_by_cors(origin, wildcard=True) or _same_origin(origin, request)))
 
 
 def is_cross_site(request) -> bool:

@@ -239,6 +239,29 @@ def snapshot_events(services: Services) -> list[dict[str, Any]]:
     return events
 
 
+def _no_credentials_for_every_origin(app: FastAPI) -> None:
+    """With a wildcard CORS origin (``--cors-allow-origins=*`` or a regex that
+    admits every origin) the CORS middleware sends no ``Allow-Credentials``:
+    with it, Starlette answers a request that carries a cookie with the
+    requesting origin and ``Allow-Credentials: true``, so every web site could
+    read the answers with the user's login. Only origins listed exactly get
+    credentials, and then only without a wildcard next to them. (The stack is
+    built at the first request, from ``user_middleware``.)"""
+
+    from starlette.middleware.cors import CORSMiddleware
+
+    from modules import extension_route_guard
+    from modules.shared_cmd_options import cmd_opts
+
+    if not extension_route_guard.cors_allows_every_origin(cmd_opts):
+        return
+    for middleware in app.user_middleware:
+        if middleware.cls is CORSMiddleware:
+            middleware.kwargs["allow_credentials"] = False
+    if app.middleware_stack is not None:
+        app.middleware_stack = app.build_middleware_stack()
+
+
 def create_app(
     *,
     services: Services | None = None,
@@ -322,6 +345,7 @@ def create_app(
     from modules import initialize_util
 
     initialize_util.setup_middleware(app)
+    _no_credentials_for_every_origin(app)
 
     if spa is not None:
         app.router.default = spa  # type: ignore[assignment]

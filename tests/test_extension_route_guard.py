@@ -222,6 +222,29 @@ def test_rebound_host_check_honours_the_cors_regex(monkeypatch):
     assert not is_rebound_host(_get("studio.lan:7860"))
 
 
+def test_a_wildcard_cors_origin_never_authorises_a_write(monkeypatch):
+    """``*``, or a regex that admits a made-up origin, is every site: it may read (CORS sends
+    those answers without credentials), never write, and names no host of a loopback-only
+    server. Origins listed exactly next to it keep their writes."""
+
+    from modules.extension_route_guard import cors_allows_every_origin, is_rebound_host
+
+    cross_site_read = {"origin": "https://evil.example", "sec-fetch-site": "cross-site", "sec-fetch-mode": "cors"}
+    for origins, regex in (("*", None), (None, ".*"), (None, "https?://.+"), ("http://localhost:3000,*", None)):
+        options = _guard_options(monkeypatch, cors_allow_origins=origins, cors_allow_origins_regex=regex)
+        assert cors_allows_every_origin(options)
+        client = _client()
+        assert client.post("/ext/write", headers={"origin": "https://evil.example"}).status_code == 403, (origins, regex)
+        assert client.get("/ext/read", headers=cross_site_read).json() == "ok"
+        assert is_rebound_host(_get("evil.example:7860"))
+        listed = client.post("/ext/write", headers={"origin": "http://localhost:3000"})
+        assert listed.status_code == (200 if origins and "localhost:3000" in origins else 403)
+    for regex in (r"https://[a-z]+\.ui\.example", r"http://localhost:\d+", "("):  # "(": not a regex
+        assert not cors_allows_every_origin(_guard_options(monkeypatch, cors_allow_origins_regex=regex))
+    assert not cors_allows_every_origin(_guard_options(monkeypatch, cors_allow_origins="https://ui.example"))
+    assert not cors_allows_every_origin(None)
+
+
 def _exposed_app(monkeypatch, **overrides):
     """An app whose extension route was added after the snapshot, as webui.py does."""
     from modules.extension_route_guard import guard_new_routes, snapshot_routes
