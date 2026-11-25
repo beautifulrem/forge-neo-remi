@@ -88,6 +88,33 @@ def _selected_script(layout: ScriptLayout, core: Any, ctx: Context) -> Any:
         return None
 
 
+def carried_values(tab: str, core: Any, scripts_values: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    """``core`` and ``scripts_values`` as a job keeps them: without the values
+    of ``submit=False`` params and tool inputs (``arg=False``), which are for
+    actions only. The SPA never sends them; an API client's are dropped
+    (processing uses the defaults either way). For values
+    :func:`processing_args` accepted; a script's values given as a list are
+    kept as they are."""
+
+    from modules import scripts
+    from remi.core import extras
+
+    runner = runner_for(tab)
+    owners: list[tuple[str, ScriptLayout]] = [("core", forms.core_layout(tab, runner))]
+    if runner is not None:
+        owners += [(script.script_id, runner.layout_for(script)) for script in runner.scripts]
+    else:
+        owners += [(layout.owner, layout) for _script, layout in extras.assign_args(scripts.scripts_postproc)]
+    held = {owner: {node.name for node in (*layout.inputs, *layout.tools) if not node.submit} for owner, layout in owners}
+
+    def carried(owner: str, values: Any) -> Any:
+        if not isinstance(values, Mapping) or not held.get(owner):
+            return values
+        return {name: value for name, value in values.items() if name not in held[owner]}
+
+    return carried("core", dict(core or {})), {owner: carried(owner, values) for owner, values in (scripts_values or {}).items()}
+
+
 def processing_args(tab: str, core: Any, scripts_values: Any, ctx: Context | None = None) -> tuple[dict[str, Any], list]:
     """Validate a request: ``(core processing args by name, script args)``.
 

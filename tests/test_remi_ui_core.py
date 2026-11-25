@@ -237,6 +237,38 @@ def test_selected_script_is_checked_when_core_values_fail(webui):
         assert {(error["owner"], error["param"]) for error in caught.value.to_json()["errors"]} == {("core", "width"), ("picky", "loops")}
 
 
+def test_a_job_keeps_only_the_values_it_carries(tmp_path):
+    """``submit=False`` params and tool inputs are for actions: the SPA never
+    sends them with a job, and the server drops them when an API client does
+    (after checking them), so a reused job does not bring them back."""
+
+    from modules import scripts
+    from remi.server.testing import server_app
+
+    class Noted(scripts.Script):
+        def title(self):
+            return "Noted"
+
+        def show(self, is_img2img):
+            return scripts.AlwaysVisible
+
+        def params(self, is_img2img):
+            return ui.Group(ui.Toggle("on", True), ui.Text("notes", "", submit=False), ui.Text("draft", "", arg=False))
+
+    with webui_state(script_classes=[Noted]), server_app(tmp_path) as server:
+        client = server.client
+        assert client.post("/api/v2/queue/pause").status_code == 200
+        sent = {"tab": "txt2img", "core": {"prompt": "fox"}, "scripts": {"noted": {"on": False, "notes": "x", "draft": "y"}}}
+        created = client.post("/api/v2/jobs", json=sent)
+        assert created.status_code == 201, created.text
+        job_id = created.json()["job_id"]
+        assert client.get(f"/api/v2/jobs/{job_id}").json()["scripts"] == {"noted": {"on": False}}
+        edited = client.put(f"/api/v2/jobs/{job_id}/params", json={"core": {"prompt": "fox"}, "scripts": {"noted": {"notes": "z"}}})
+        assert edited.status_code == 200 and edited.json()["scripts"] == {"noted": {}}
+        refused = client.post("/api/v2/jobs", json={**sent, "scripts": {"noted": {"notes": ["x"]}}})
+        assert refused.status_code == 422 and refused.json()["errors"][0]["param"] == "notes"
+
+
 @pytest.mark.parametrize("tab", ["txt2img", "img2img", "extras"])
 def test_badly_shaped_request_bodies_are_validation_errors(webui, tab):
     from remi.core.tabs import processing_args

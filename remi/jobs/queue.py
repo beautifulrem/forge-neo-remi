@@ -40,7 +40,9 @@ TABS = ("txt2img", "img2img", "extras")
 MAX_REPEAT = 100
 
 Dispatch = Callable[..., Any]
-Validator = Callable[[str, Any, Any], None]
+Validator = Callable[[str, Any, Any], tuple[dict[str, Any], dict[str, Any]] | None]
+"""Checks ``(tab, core, scripts)``, raising ``remi.ui.ValidationError``; returns
+the ``(core, scripts)`` a job keeps, or None to keep them as sent."""
 
 MAX_WARNINGS = 5
 
@@ -195,11 +197,12 @@ def validate_values(files: FileStore) -> Validator:
     """Checks a submission the way the entry point will (every bad value at
     once, as ``remi.ui.ValidationError``), uploads only by id."""
 
-    def validate(tab: str, core: Any, scripts: Any) -> None:
-        from remi.core.tabs import processing_args
+    def validate(tab: str, core: Any, scripts: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        from remi.core.tabs import carried_values, processing_args
         from remi.ui import Context
 
         processing_args(tab, core, scripts, Context(resolve_upload=files.check_upload))
+        return carried_values(tab, core, scripts)
 
     return validate
 
@@ -438,17 +441,23 @@ class JobQueue:
             raise ValidationError([ParamError(Sentence("tab is one of {{tabs}}", tabs=", ".join(TABS)))])
         if not 1 <= submission.repeat <= MAX_REPEAT:
             raise ValidationError([ParamError(Sentence("repeat is between 1 and {{maximum}}", maximum=MAX_REPEAT))])
-        self.validate(submission.tab, submission.core, submission.scripts)
+        core, scripts = self._checked(submission.tab, submission.core, submission.scripts)
         meta = dict(submission.meta) if submission.meta else None
         if submission.upscale_from is not None:
             self._check_upscale_source(submission.tab, submission.upscale_from)
             meta = {**(meta or {}), "upscale_from": submission.upscale_from}
         layout = self.hash_layout(submission.tab)
-        jobs = [self.store.add(submission.tab, submission.core or {}, submission.scripts or {}, priority=submission.priority, layout_hash=layout, schema_version=SCHEMA_VERSION, summary=_summary(submission.core or {}, submission.tab), forever=submission.forever, user=user, meta=meta) for _ in range(submission.repeat)]
+        jobs = [self.store.add(submission.tab, core, scripts, priority=submission.priority, layout_hash=layout, schema_version=SCHEMA_VERSION, summary=_summary(core, submission.tab), forever=submission.forever, user=user, meta=meta) for _ in range(submission.repeat)]
         for job in jobs:
             self._enqueued(job)
         self._changed()
         return jobs
+
+    def _checked(self, tab: str, core: Any, scripts: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Validated values as the job keeps them (:data:`Validator`)."""
+
+        kept = self.validate(tab, core, scripts)
+        return kept if kept is not None else (core or {}, scripts or {})
 
     def _check_upscale_source(self, tab: str, file_id: str) -> None:
         from remi.ui import ParamError, Sentence, ValidationError
@@ -492,8 +501,8 @@ class JobQueue:
         if job.meta.get("chain_id"):
             # its result is cached under the stage's parameters: edit the pipeline instead
             raise JobError("this job is a pipeline stage; edit the pipeline and re-run it")
-        self.validate(job.tab, core, scripts)
-        updated = self.store.update_params(job_id, core or {}, scripts or {}, layout_hash=self.hash_layout(job.tab), schema_version=SCHEMA_VERSION, summary=_summary(core or {}, job.tab))
+        core, scripts = self._checked(job.tab, core, scripts)
+        updated = self.store.update_params(job_id, core, scripts, layout_hash=self.hash_layout(job.tab), schema_version=SCHEMA_VERSION, summary=_summary(core, job.tab))
         if updated is None:
             raise JobError("the job started meanwhile")
         self._changed()
