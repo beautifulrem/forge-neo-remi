@@ -601,6 +601,36 @@ def test_task_by_task_outcomes(server, webui, tmp_path, monkeypatch):
     assert server.services.store.get(items["interrupted"].job_id).error == "Interrupted by the user"
 
 
+def test_imported_jobs_keep_only_the_values_a_job_carries(tmp_path):
+    """An old queue stored every argument, the ones its form held for its own
+    buttons too (``submit=False``): they are dropped, as for an API client's
+    job, from queued and finished tasks alike, and a bad one fails nothing."""
+
+    from modules import scripts
+    from remi import ui
+
+    class Noted(scripts.Script):
+        def title(self):
+            return "Noted"
+
+        def show(self, is_img2img):
+            return scripts.AlwaysVisible
+
+        def params(self, is_img2img):
+            return ui.Group(ui.Toggle("on", True), ui.Text("notes", "", submit=False))
+
+    with webui_state(script_classes=[Noted]), server_app(tmp_path) as server:
+        rows = [
+            api_task("queued", "pending", args={"prompt": "fox", "alwayson_scripts": {"Noted": {"args": {"on": False, "notes": "x"}}}}),
+            api_task("done", "done", args={"prompt": "owl", "alwayson_scripts": {"Noted": {"args": {"on": False, "notes": ["not text"]}}}}),
+        ]
+        report = importers.Importer(server.services.queue).agent_scheduler(agent_database(tmp_path / "tasks.sqlite3", rows))
+        items = {item.source_id: item for item in report.items}
+        assert items["queued"].outcome == "queued"
+        for source_id in ("queued", "done"):
+            assert server.services.store.get(items[source_id].job_id).scripts["noted"] == {"on": False}
+
+
 def test_outputs_that_cannot_be_registered_are_left_out(server, tmp_path, monkeypatch):
     outputs = tmp_path / "out"
     outputs.mkdir()

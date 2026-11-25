@@ -91,10 +91,9 @@ def _selected_script(layout: ScriptLayout, core: Any, ctx: Context) -> Any:
 def carried_values(tab: str, core: Any, scripts_values: Any) -> tuple[dict[str, Any], dict[str, Any]]:
     """``core`` and ``scripts_values`` as a job keeps them: without the values
     of ``submit=False`` params and tool inputs (``arg=False``), which are for
-    actions only. The SPA never sends them; an API client's are dropped
-    (processing uses the defaults either way). For values
-    :func:`processing_args` accepted; a script's values given as a list are
-    kept as they are."""
+    actions only. The SPA never sends them; an API client's (or an imported
+    task's) are dropped, checked or not: processing uses the defaults either
+    way. A script's values given as a list are kept as they are."""
 
     from modules import scripts
     from remi.core import extras

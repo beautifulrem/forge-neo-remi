@@ -871,6 +871,11 @@ class Importer:
             overrides.append(f"VAE: {vae}")
         if overrides and "override_settings" in mapper.layout.by_name:
             core["override_settings"] = overrides
+        # the task stored every argument, those its form held for actions too: a job keeps
+        # what an API-queued one does, whatever the task's status
+        from remi.core.tabs import carried_values
+
+        core, scripts = carried_values(tab, core, scripts)
 
         status = TASK_STATUS.get(str(row.get("status")), INTERRUPTED)
         replayable = not mapper.opaque
