@@ -1059,10 +1059,11 @@ def _extras_operations():
 
 
 def test_extras_with_operations(job_runtime, monkeypatch):
-    from modules import images, postprocessing
     from remi.core.tabs import tab_schema
 
     with webui_state({"use_original_name_batch": True}, postprocessing=_extras_operations()) as state:
+        from modules import images, postprocessing  # after the state: it imports the WebUI in its order
+
         schema = tab_schema("extras")
         entries = {entry["id"]: entry for entry in schema["scripts"]}
         # The operations that cannot be read are dropped, with the reason; the others keep working
