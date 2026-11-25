@@ -288,7 +288,7 @@ def test_img2img_masks_and_required_images(webui, anima_checkpoint):
     assert errors({"mode": "Batch"}) == {("batch_upload", "upload the images to process")}
 
 
-def test_inputs_that_read_server_paths_are_refused_with_hidden_dirs(webui, monkeypatch):
+def test_inputs_that_read_server_paths_are_refused_with_hidden_dirs(webui, monkeypatch, tmp_path):
     """--hide-ui-dir-config hides the directory and video inputs; a request that still names a
     path on the server (the API, a replayed job) is refused before it runs. The upstream runners
     assert this for directories, but Extras opened any video path."""
@@ -312,7 +312,44 @@ def test_inputs_that_read_server_paths_are_refused_with_hidden_dirs(webui, monke
         processing_args("extras", {"mode": "Single Video", "video_input": "/private/clip.mp4"}, {})
     assert {(error["param"], error["message"]) for error in caught.value.to_json()["errors"]} == {("video_input", refused)}
     monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", False)
-    assert errors("extras", {"mode": "Single Video", "video_input": "/private/clip.mp4"}) == set()
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"\0")
+    assert errors("extras", {"mode": "Single Video", "video_input": str(clip)}) == set()
+
+
+def test_the_extras_video_clip_must_be_a_file_on_the_server(webui, monkeypatch, tmp_path):
+    """The clip goes to ``av.open`` and ``ffmpeg -i``, which read a URL or a protocol prefix
+    (``http:``, ``concat:``, ``subfile,``...) as one: the server would fetch from its own
+    network. Only an existing regular file is taken (a Windows drive letter is a path)."""
+
+    import os
+
+    from modules import shared
+    from remi.core import forms
+    from remi.core.tabs import processing_args
+
+    def errors(value):
+        return [(problem.param, problem.message, getattr(problem.message, "template", None)) for problem in forms.check_core("extras", {"mode": "Single Video", "video_input": value})]
+
+    monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", False)
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"\0")
+    (tmp_path / "link.mp4").symlink_to(clip)
+    for value in (str(clip), str(tmp_path / "link.mp4"), str(tmp_path / "sub" / ".." / "clip.mp4")):
+        (tmp_path / "sub").mkdir(exist_ok=True)
+        assert errors(value) == [], value
+    not_a_path = forms.VIDEO_CLIP_NOT_A_PATH
+    urls = ("http://169.254.169.254/latest/meta-data", "https://example.com/a.mp4", "file:" + str(clip), "concat:" + str(clip) + "|" + str(clip), "subfile,,start,0,end,1,,:" + str(clip), "rtmp://cam", "clip12:30.mp4", ":clip.mp4", "data:video/mp4;base64,AAAA")
+    for value in urls:
+        assert errors(value) == [("video_input", not_a_path, None)], value
+    os.mkfifo(tmp_path / "pipe")
+    for value in (str(tmp_path / "missing.mp4"), str(tmp_path), "/dev/zero", str(tmp_path / "pipe"), "C:\\videos\\clip.mp4", "x\0y"):
+        assert errors(value) == [("video_input", f"{value} is not a file on the server", "{{path}} is not a file on the server")], value
+    assert errors("") == [("video_input", "a video file is required", None)]
+    assert errors(str(tmp_path / "a:b.mp4")) != [("video_input", not_a_path, None)]  # an absolute path is never a protocol
+    with pytest.raises(ui.ValidationError) as caught:
+        processing_args("extras", {"mode": "Single Video", "video_input": "http://127.0.0.1:8080/"}, {})
+    assert [(error["param"], error["message"]) for error in caught.value.to_json()["errors"]] == [("video_input", not_a_path)]
 
 
 def test_the_client_check_gives_the_reason_a_hidden_path_input_is_refused(webui, monkeypatch):

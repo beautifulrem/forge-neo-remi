@@ -297,7 +297,8 @@ core defaults, labels, bounds and visibility (`presets.apply_form_patch` of
 for the schema and validation alike. `remi/core/tabs.py` produces
 `GET /schema/{tab}` and validates a request into processing args (coercing
 once; `forms.check_core` adds the cross-param rules: the images each img2img
-mode needs, the Extras source). Entry points (named values; the caller runs
+mode needs, the Extras source, an Extras video clip that is a file on the
+server and never a URL or ffmpeg protocol). Entry points (named values; the caller runs
 them on the main thread, one job at a time):
 
 - `modules.txt2img.run_txt2img(core, scripts, job)` / `prepare_txt2img`,

@@ -11,6 +11,8 @@ are the processing parameter names (see ``modules/txt2img.py`` /
 from __future__ import annotations
 
 import math
+import os
+import re
 import sys
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
@@ -537,6 +539,11 @@ SERVER_PATH_INPUTS: dict[str, tuple[tuple[str, ui.conditions.Condition], ...]] =
     ),
 }
 SERVER_PATHS_REFUSED = "paths on the server are disabled (--hide-ui-dir-config)"
+VIDEO_CLIP_NOT_A_PATH = "the input clip must be a file path, not a URL or protocol"
+# What ffmpeg reads as a protocol (libavformat ``url_find_protocol``): scheme characters before
+# a ":" (``http:``, ``concat:``, ``file:``), or ``subfile,<options>:``. A drive letter is a path.
+_FFMPEG_PROTOCOL = re.compile(r"[A-Za-z0-9+.\-]*:|subfile,")
+_DRIVE_LETTER = re.compile(r"[A-Za-z]:[\\/]")
 
 
 def required_inputs(tab: str) -> list[dict[str, Any]]:
@@ -556,21 +563,48 @@ def _empty(value: Any) -> bool:
     return value is None or (isinstance(value, str) and not value.strip()) or (isinstance(value, list | tuple) and not value)
 
 
+def _regular_file(path: str) -> bool:
+    try:
+        return os.path.isfile(os.path.realpath(path))
+    except (OSError, ValueError):  # a NUL character
+        return False
+
+
+def _video_clip_errors(value: Any) -> list[ui.ParamError]:
+    """The Extras clip goes to ``av.open`` and ``ffmpeg -i``, which read a
+    URL or a protocol prefix as one (the server would fetch from its own
+    network): only an existing regular file is taken. An empty clip is
+    :data:`REQUIRED_INPUTS`' to report."""
+
+    if _empty(value):
+        return []
+    text = str(value)
+    if _FFMPEG_PROTOCOL.match(text) and not _DRIVE_LETTER.match(text):
+        return [ui.ParamError(VIDEO_CLIP_NOT_A_PATH, owner="core", param="video_input")]
+    if not _regular_file(text):
+        return [ui.ParamError(ui.Sentence("{{path}} is not a file on the server", path=text), owner="core", param="video_input")]
+    return []
+
+
 def check_core(tab: str, values: Mapping[str, Any]) -> list[ui.ParamError]:
     """Rules across params of a coerced core form: the images each img2img
-    mode needs, the source of an Extras run (:data:`REQUIRED_INPUTS`), and no
-    server path with ``--hide-ui-dir-config`` (:data:`SERVER_PATH_INPUTS`)."""
+    mode needs, the source of an Extras run (:data:`REQUIRED_INPUTS`), no
+    server path with ``--hide-ui-dir-config`` (:data:`SERVER_PATH_INPUTS`),
+    and an Extras video clip that is a file on the server, never a URL."""
 
     from modules import shared
 
     refused = set()
     if getattr(shared.cmd_opts, "hide_ui_dir_config", False):
         refused = {name for name, when in SERVER_PATH_INPUTS.get(tab, ()) if ui.evaluate(when, values)}
-    return [ui.ParamError(SERVER_PATHS_REFUSED, owner="core", param=name) for name in sorted(refused)] + [
+    errors = [ui.ParamError(SERVER_PATHS_REFUSED, owner="core", param=name) for name in sorted(refused)] + [
         ui.ParamError(message, owner="core", param=name)
         for name, message, when in REQUIRED_INPUTS.get(tab, ())
         if name not in refused and ui.evaluate(when, values) and _empty(values.get(name))
     ]
+    if tab == "extras" and "video_input" not in refused and ui.evaluate(ui.param("mode", eq="Single Video"), values):
+        errors += _video_clip_errors(values.get("video_input"))
+    return errors
 
 
 # endregion

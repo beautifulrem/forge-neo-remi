@@ -192,7 +192,10 @@ nothing; the server applies the same list. With `--hide-ui-dir-config` the
 inputs that name a path on the server (`input_dir`, `video_input`, and
 img2img's `batch_input_dir` when the batch reads a directory) are refused
 whatever their value: `core.required` gives that reason as the `message` of
-the two it lists, and the server answers it for all three.
+the two it lists, and the server answers it for all three. Without the flag
+the server also refuses a `video_input` that is not an existing regular file
+on the server, or that ffmpeg would read as a URL or protocol (`http:`,
+`concat:`).
 
 A rejected request answers with
 

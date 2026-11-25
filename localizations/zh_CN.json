@@ -890,6 +890,8 @@
   "a video file is required": "需要一个视频文件",
   "an input directory is required": "需要输入目录",
   "paths on the server are disabled (--hide-ui-dir-config)": "已禁用服务器上的路径（--hide-ui-dir-config）",
+  "the input clip must be a file path, not a URL or protocol": "输入片段必须是文件路径，不能是 URL 或协议",
+  "{{path}} is not a file on the server": "{{path}} 不是服务器上的文件",
   "Alpha Threshold": "Alpha 阈值",
   "alpha below this value is considered fully transparent": "低于此值的 alpha 视为完全透明",
   "[Moss-Image] Enable Skip Layer Guidance": "[Moss-Image] 启用跳层引导（SLG）",

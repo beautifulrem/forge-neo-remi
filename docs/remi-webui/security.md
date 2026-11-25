@@ -179,7 +179,11 @@ attackers who already have a login (they are administrators by design).
   So are job inputs that name a path on the server (img2img batch from a
   directory, Extras batch from a directory and its video clip): the form
   hides them and `check_core` (`remi/core/forms.py`) refuses a request that
-  still sends one, whichever way the job arrives.
+  still sends one, whichever way the job arrives. Without the flag, the
+  Extras video clip must still be an existing regular file: `av.open` and
+  `ffmpeg -i` read a URL or a protocol prefix (`http:`, `concat:`,
+  `subfile,`…) as one and would fetch it from the server's network, so such
+  a value is refused (a Windows drive letter is a path).
 - `--hide-ui-dir-config` also refuses the Prompt Upsampler's
   `local_model_path` (403 from `POST /api/v2/prompt-tools/upsample`; a
   pipeline's upsample stage fails), stops an empty infotext paste
