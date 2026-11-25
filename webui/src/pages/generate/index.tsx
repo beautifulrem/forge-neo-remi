@@ -254,6 +254,15 @@ function DesktopLayout({ tab, openViewer, wide }: { tab: GenerateTab; openViewer
 }
 
 /**
+ * The phone layout's stage: 70% of the window, at most 36rem, and never under the run bar pinned to
+ * the column's foot. Held sideways (667×375, 740×360) 70vh ran under the bar, which covered the
+ * progress strip along the stage's bottom edge and the picture's foot: the stage ends 4 px above the
+ * bar (`--pinned-bottom` is the bar's depth with 8 px of clearance; the stage's top padding is
+ * `p-3`), which upright phones, whose 70vh already ends clear of it, do not reach. 8rem at least.
+ */
+const PHONE_STAGE = "h-[min(70vh,36rem,max(8rem,calc(100cqh-var(--pinned-bottom,0px)-(--spacing(2)))))]"
+
+/**
  * Phones: one column, the run controls stuck to the bottom. The result area
  * leads once it has something to show (a running job of this client, or a
  * result); until then txt2img opens with the prompt rather than an empty
@@ -274,10 +283,11 @@ function PhoneLayout({ tab, openViewer }: { tab: GenerateTab; openViewer: (key?:
   }, [showStage])
 
   return (
-    <div className="relative h-full overflow-y-auto overscroll-contain">
+    // a size container: the stage ends clear of the run bar pinned to its foot (`PHONE_STAGE`)
+    <div className="relative h-full overflow-y-auto overscroll-contain [container-type:size]">
       {/* Hidden, not unmounted: its live region still announces the first run. */}
       <div ref={stage} className={cn("flex flex-col gap-3 p-3 pb-0", !showStage && "hidden")}>
-        <Stage tab={tab} onOpenViewer={() => openViewer()} className="h-[min(70vh,36rem)]" />
+        <Stage tab={tab} onOpenViewer={() => openViewer()} className={PHONE_STAGE} />
         <HistoryPane onOpen={openViewer} orientation="strip" />
       </div>
       <Suspense fallback={<ParamsFallback />}>

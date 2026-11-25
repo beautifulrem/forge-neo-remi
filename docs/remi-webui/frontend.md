@@ -166,7 +166,8 @@ imperatively).
   JSON Builder page is a size container and its stacked canvas is at most
   `100cqh` less the send bar's depth (its 16 rem floor gives way to that
   down to 10 rem), so on a phone held sideways its zoom bar is not under the
-  send bar. A bar laid over a scroller it is not
+  send bar; the generate page's phone column is one too, and its stage ends
+  clear of the run bar the same way. A bar laid over a scroller it is not
   inside passes a function that finds it (the settings list, the gallery's
   selection bar). A virtualized list scrolls a row into view itself and reads
   no scroll padding: the gallery grid takes the scroller's bottom scroll
@@ -337,9 +338,12 @@ imperatively).
   only while the stage does not show it (img2img's Source view, the progress
   bar turned off), so the form does not move for the length of a job. The
   header's hairline is the global indicator on every page. In a short
-  window the picture a job makes keeps at least half the window's height:
-  what is least needed meanwhile (the history strip) folds a scroll away,
-  its title left in sight, rather than every block shrinking together.
+  window wide enough for two panes the picture a job makes keeps at least
+  half the window's height: what is least needed meanwhile (the history
+  strip) folds a scroll away, its title left in sight, rather than every
+  block shrinking together. In the phone layout held sideways the picture
+  and the progress line end clear of the run bar instead (Generate,
+  Layout).
 - Typography: self-hosted OFL faces (`@fontsource-variable`, no CDN), each
   split by unicode range so only the slices a page renders download, declared
   in `styles/fonts.css`: **Remi Sans** is Geist (the UI's Latin letters and
@@ -991,7 +995,16 @@ mode's schema is prefetched).
   forever would flip the layout at every run. The img2img Source view keeps
   the editor's 16rem floor (`SOURCE_FLOOR` holds the stage open, and wins)
   and the history strip follows it, never under it; the result picture has
-  no floor of its own and scales down to the room there is.
+  no floor of its own and scales down to the room there is. Held sideways
+  narrower than 48 rem (667×375, 740×360) the page is the phone layout, its
+  run bar pinned to the column's foot: the column is a size container and
+  the stage, 70vh up to 36 rem, is never taller than the column less the
+  bar's depth (`--pinned-bottom`, `PHONE_STAGE`), so it ends 4 px above the
+  bar and the bar covers neither the progress line nor the picture's foot
+  (at 667×375 the whole picture in 147 px, where 151 px of a 227 px one
+  showed above the bar). Half the window is out of reach there: the header,
+  the bottom navigation and the run bar take 184 of 375 px. Upright, 70vh
+  already ends clear of the bar and the stage keeps it.
 - **Form loading** (`use-form-loader.ts`): the page loads its schema itself
   (not `TabForm`), once per schema object. On a reload (options changed, UI
   preset) image ids survive and params still at their old default follow

@@ -1110,6 +1110,45 @@ for (const [width, height] of [
   }
 }
 
+// Held sideways narrower than 768 px (667×375, 740×360) the page is the phone layout, whose stage
+// was 70vh tall and ran under the run bar pinned to the bottom: the bar covered the progress strip
+// along the stage's bottom edge and the picture's foot. The stage ends clear of the bar
+// (`--pinned-bottom`); upright, where 70vh already does, it keeps its height.
+for (const [width, height] of [
+  [667, 375],
+  [740, 360],
+  [390, 844],
+  [360, 640],
+] as const) {
+  for (const tab of ["txt2img", "img2img"] as const) {
+    test(`the picture being made and its progress are clear of the run bar at ${width}×${height} on ${tab}`, async ({ page }) => {
+      await page.setViewportSize({ width, height })
+      await openGenerate(page, tab)
+      if (tab === "img2img") await addSourceImage(page)
+      await page.keyboard.press(`${mod}+Enter`)
+      const progress = page.locator("[data-slot=stage-progress]")
+      await expect(progress).toBeVisible()
+      const runBar = page.locator("[data-toast-obstacle]").filter({ has: page.getByRole("button", { name: "Interrupt" }) })
+      const [area, bar, main] = await Promise.all([progress.locator("xpath=..").boundingBox(), runBar.boundingBox(), page.getByRole("main").boundingBox()])
+      expect(area!.y, "the picture's top, under the header").toBeGreaterThanOrEqual(main!.y - 0.5)
+      expect(area!.y + area!.height, "the picture's foot, above the run bar").toBeLessThanOrEqual(bar!.y + 0.5)
+      // the strip is the progress at both ends and in the middle, not the bar over it
+      const shown = await progress.evaluate((strip) => {
+        const box = strip.getBoundingClientRect()
+        const y = box.y + box.height / 2
+        return [box.x + 2, box.x + box.width / 2, box.right - 2].every((x) => strip.contains(document.elementFromPoint(x, y)))
+      })
+      expect(shown, "the progress is covered").toBe(true)
+      if (height > width) {
+        const stage = page.getByRole("region", { name: tab === "img2img" ? "Image area" : "Result", exact: true })
+        const stageHeight = (await stage.boundingBox())!.height
+        expect(Math.abs(stageHeight - Math.min(height * 0.7, 576)), "upright, the stage keeps 70vh").toBeLessThanOrEqual(1)
+      }
+      await page.getByRole("button", { name: "Interrupt" }).click()
+    })
+  }
+}
+
 // The reset dot (a changed value's way back to its default) was a 24 × 20 px target between a
 // label and the row's controls: it takes the room up to them, never reaching one.
 for (const [width, height] of [
