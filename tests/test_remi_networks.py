@@ -65,12 +65,13 @@ class FakeNetworks:
         self.root = root
         self.available_networks = {}
         self.listed = 0
+        self.read = module.read_safetensors_metadata  # sd_forge_lora reads with sd_models.read_metadata_from_safetensors
 
     def list_available_networks(self):
         self.listed += 1
         self.available_networks.clear()
         for path in sorted(self.root.rglob("*.safetensors")):
-            header = module.read_safetensors_metadata(str(path))
+            header = self.read(str(path))
             self.available_networks[path.stem] = FakeOnDisk(path.stem, path, header, header.get("ss_output_name"))
 
 
@@ -162,6 +163,39 @@ def test_metadata_with_non_finite_numbers_is_served(lora, lora_root):
     response = lora.client.get("/api/v2/networks/lora/odder/meta")
     assert response.status_code == 200, response.text
     assert response.json()["metadata"]["weird"] is None
+
+
+@pytest.mark.parametrize("depth", [300, 5000, 100_000])
+@pytest.mark.parametrize("reader", ["remi", "upstream"])
+def test_header_json_nested_too_deep_is_served_as_text(lora, lora_root, monkeypatch, reader, depth):
+    """A header's values are text, some of it JSON the server decodes (the meta answer shows
+    it decoded, the training facts and dataset tags read it); upstream's reader, which
+    sd_forge_lora and the checkpoint list use, decodes an object's text itself. A value nested
+    past ``MAX_NESTING`` levels stays the text it is, and one upstream's reader decoded is left
+    out: decoded, no answer could hold it (the serializer gives up past 254 levels) nor could
+    it be walked (a few thousand), and the meta answer was a 500 or the listing lost the
+    header's architecture and type."""
+    from modules import sd_models
+    from remi.setting_values import MAX_NESTING, nested_deeper
+
+    deep_list = "[" * depth + "]" * depth
+    deep_object = '{"10_x": ' + deep_list + "}"
+    safetensors(lora_root / "deep.safetensors", {"ss_network_module": "networks.lora", "ss_base_model_version": "sdxl_base_v1-0", "ss_tag_frequency": deep_object, "notes": deep_list, "shallow": '{"a": [1]}'})
+    if reader == "upstream":
+        monkeypatch.setattr(sys.modules["networks"], "read", sd_models.read_metadata_from_safetensors)
+    sys.modules["networks"].list_available_networks()
+    lora.client.post("/api/v2/networks/lora/refresh")
+    response = lora.client.get("/api/v2/networks/lora", params={"q": "deep"})
+    assert response.status_code == 200, response.text
+    [item] = [item for item in response.json()["items"] if item["name"] == "deep"]
+    assert (item["arch"], item["subtype"]) == ("xl", "LoRA")
+    response = lora.client.get("/api/v2/networks/lora/deep/meta")
+    assert response.status_code == 200, response.text
+    meta = response.json()
+    assert meta["metadata"]["notes"] == deep_list and meta["metadata"]["shallow"] == {"a": [1]}
+    assert meta["metadata"].get("ss_tag_frequency", deep_object) == deep_object
+    assert not nested_deeper(meta["metadata"], MAX_NESTING + 1) and meta["dataset_tags"] == []
+    assert meta["training"]["module"] == "networks.lora"
 
 
 @pytest.mark.parametrize(

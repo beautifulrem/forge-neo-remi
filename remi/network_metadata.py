@@ -22,6 +22,7 @@ from typing import Any
 
 from backend.nn.anima_layout import declared_depth as anima_declared_depth
 from remi.image_meta import utf8_text
+from remi.setting_values import MAX_NESTING, nested_deeper
 
 _ANIMA_DEPTH_LABELS: dict[int, str] = {
     28: "2B (28 blocks)",
@@ -76,13 +77,16 @@ def loads(text: str | bytes) -> Any:
 
 def parse_json(value: Any) -> Any:
     """``value`` decoded when it is a JSON object/array string (safetensors
-    headers keep nested values as strings)."""
+    headers keep nested values as strings); the string itself when it is not
+    JSON or nests deeper than ``MAX_NESTING`` levels."""
 
     if isinstance(value, str) and value[:1] in ("{", "["):
         try:
-            return utf8_text(loads(value))
+            decoded = loads(value)
         except (ValueError, RecursionError):
             return value
+        # read, but no answer could hold it (the serializer gives up past a few hundred levels) nor could it be walked
+        return value if nested_deeper(decoded, MAX_NESTING) else utf8_text(decoded)
     return value
 
 

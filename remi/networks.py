@@ -155,8 +155,11 @@ class NetworkEntry:
             source = source()
         if not source and self.on_disk and self.filename.lower().endswith(".safetensors"):
             source = read_safetensors_metadata(self.filename)
+        # a value nested deeper than MAX_NESTING (upstream's reader decodes an object's text, which sd_forge_lora and the
+        # checkpoint list use) is left out: no answer could hold it, nor could it be walked (utf8_text recurses)
+        values = {key: value for key, value in dict(source or {}).items() if not nested_deeper(value, MAX_NESTING)}
         # another tool's text can hold what UTF-8 cannot (an escaped surrogate): the details answered 500
-        return utf8_text(dict(source or {}))
+        return utf8_text(values)
 
 
 def _resolve(source: PromptSource, user: Mapping[str, Any]) -> str | None:
