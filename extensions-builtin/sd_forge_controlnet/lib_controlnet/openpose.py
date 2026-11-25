@@ -7,27 +7,30 @@ from typing import Any
 
 import numpy as np
 
+from remi.ui import Sentence
+
 MAX_CANVAS = 4096  # a side; the rendered RGB pose is at most 48 MB
 
 
 def check_pose(pose: Any) -> dict:
     """The pose dict of an OpenPose JSON value (a list holds one pose per
     image: the first is used, as the old editor did); ``ValueError`` when it
-    is not one."""
+    is not one, whose argument is the reason as a :class:`Sentence` (the
+    pose editor's toast shows it in the UI language)."""
 
     if isinstance(pose, list):
         if not pose:
-            raise ValueError("the pose list is empty")
+            raise ValueError(Sentence("The pose list is empty"))
         pose = pose[0]
     if not isinstance(pose, dict):
-        raise ValueError("a pose is a JSON object")
+        raise ValueError(Sentence("A pose is a JSON object"))
     for key in ("canvas_width", "canvas_height"):
         size = pose.get(key)
         if isinstance(size, bool) or not isinstance(size, (int, float)) or not math.isfinite(size) or not 1 <= size <= MAX_CANVAS:
-            raise ValueError(f"{key} must be a size between 1 and {MAX_CANVAS}")
+            raise ValueError(Sentence("The pose's {{key}} must be a size between 1 and {{max}}", key=key, max=MAX_CANVAS))
     for key in ("people", "animals"):
         if not isinstance(pose.get(key, []), list):
-            raise ValueError(f"{key} must be a list")
+            raise ValueError(Sentence("The pose's {{key}} must be a list", key=key))
     return pose
 
 
@@ -46,4 +49,5 @@ def render_pose(pose: Any) -> np.ndarray:
             return draw_poses(poses, height, width, draw_body=True, draw_hand=True, draw_face=True)
         return draw_animalposes(animals, height, width)
     except (AssertionError, KeyError, TypeError, IndexError) as error:
-        raise ValueError(f"not an OpenPose JSON pose: {error}") from None
+        # the decoder's own error: text no catalog has
+        raise ValueError(Sentence("Not an OpenPose pose: {{error}}", error=str(error))) from None

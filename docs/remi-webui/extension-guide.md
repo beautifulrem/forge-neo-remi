@@ -371,7 +371,8 @@ def refresh_models(self, ctx: ui.ActionContext, values: dict) -> dict:
 - Texts shown to the user are translated by the client: return English
   catalog keys, and `ui.message("Saved {{name}}", name=...)` for texts with
   variable parts (the template is the catalog key, placeholders are filled
-  after translation).
+  after translation). `ui.toast` also takes a `ui.Sentence` (a reason your
+  code raised with one, say) and sends its template and values.
 - Actions run on a worker thread outside the generation lock. `gpu=True`
   runs it behind the running generation, holding the lock (needed when it
   touches the model or the GPU, e.g. ControlNet's preprocessor preview).

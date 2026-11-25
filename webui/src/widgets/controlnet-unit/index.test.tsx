@@ -216,12 +216,29 @@ describe("controlnet-unit widget", { timeout: 30_000 }, () => {
     const editor = within(unit).getByRole("textbox", { name: "Pose (OpenPose JSON)" })
     fireEvent.change(editor, { target: { value: "{" } })
     fireEvent.click(within(unit).getByRole("button", { name: "Apply pose" }))
-    expect(within(unit).getByText(/Not a valid pose/)).toBeInTheDocument()
+    expect(within(unit).getByText("The pose is not valid JSON")).toBeInTheDocument()
     expect(bodies).toHaveLength(0)
 
     fireEvent.change(editor, { target: { value: JSON.stringify(pose) } })
     fireEvent.click(within(unit).getByRole("button", { name: "Apply pose" }))
     await waitFor(() => expect(unitOf(store)).toMatchObject({ generated_image: "pose-1", use_preview_as_input: true, pose }))
+  })
+
+  it("says why a pose is refused in the UI language", async () => {
+    // the reason was English text inside a translated sentence
+    mockActions(() => ({}))
+    const { i18n } = await import("@/i18n")
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      const store = renderForm()
+      const unit = await panel()
+      setUnit(store, { type_filter: "OpenPose" })
+      fireEvent.change(within(unit).getByRole("textbox", { name: "姿势（OpenPose JSON）" }), { target: { value: '{"canvas_width": 0, "canvas_height": 32}' } })
+      fireEvent.click(within(unit).getByRole("button", { name: "应用姿势" }))
+      expect(within(unit).getByText("姿势的 canvas_width 应为 1 到 4096 之间的尺寸")).toBeInTheDocument()
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
   })
 
   it("generates the Region canvas", async () => {

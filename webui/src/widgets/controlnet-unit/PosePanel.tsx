@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { errorTextId } from "@/ui/a11y"
 import { FieldError } from "@/ui/Field"
 import { NS } from "./i18n"
-import { parsePose, poseText } from "./pose"
+import { MAX_CANVAS, parsePose, type PoseProblem, poseText } from "./pose"
 import { panelClass } from "@/ui/layout/panel"
 import { cn } from "@/lib/utils"
 
@@ -30,10 +30,25 @@ export function PosePanel({ pose, busy, disabled, onApply }: PosePanelProps) {
   const [error, setError] = useState<string | null>(null)
   const file = useRef<HTMLInputElement>(null)
 
+  const problemText = (problem: PoseProblem): string => {
+    switch (problem.reason) {
+      case "json":
+        return tw("The pose is not valid JSON")
+      case "empty":
+        return tw("The pose list is empty")
+      case "object":
+        return tw("A pose is a JSON object")
+      case "size":
+        return tw("The pose's {{key}} must be a size between 1 and {{max}}", { replace: { key: problem.key, max: MAX_CANVAS } })
+      case "list":
+        return tw("The pose's {{key}} must be a list", { replace: { key: problem.key } })
+    }
+  }
+
   const apply = (source: string) => {
     const parsed = parsePose(source)
     if (!parsed.ok) {
-      setError(tw("Not a valid pose: {{error}}", { error: parsed.error }))
+      setError(problemText(parsed.problem))
       return
     }
     setError(null)

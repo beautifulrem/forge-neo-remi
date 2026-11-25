@@ -105,6 +105,10 @@ def test_toasts_take_translatable_messages():
     assert merged["__toast__"] == {"level": "success", "message": "Done.; Saved template: mine"}
     with pytest.raises(ui.SchemaError):
         ui.toast({"text": 3})
+    # a Sentence goes as its template and values; one without values is its text
+    reason = ui.Sentence("The pose's {{key}} must be a list", key="people")
+    assert ui.toast(reason, "error") == {"__toast__": {"level": "error", "message": {"text": "The pose's {{key}} must be a list", "params": {"key": "people"}}}}
+    assert ui.toast(ui.Sentence("The pose list is empty"), "error") == {"__toast__": {"level": "error", "message": "The pose list is empty"}}
 
 
 def test_jsonable():

@@ -138,8 +138,10 @@ def render_pose(ctx: ui.ActionContext, index: int) -> dict[str, Any]:
     try:
         check_finite_json(pose)
         image = openpose.render_pose(pose)
-    except (ValueError, ui.ParamError) as error:
-        return ui.toast(ui.message("Not an OpenPose pose: {{error}}", error=str(error)), "error")
+    except ui.ParamError as error:  # a number that is no JSON number
+        return ui.toast(error.message, "error")
+    except ValueError as error:  # the reason, a Sentence (openpose.check_pose)
+        return ui.toast(error.args[0] if error.args else str(error), "error")
     file_id = save_png(ctx, image, "controlnet-pose.png")
     return {"__outputs__": {"pose": {"unit": index, "image": file_id, "pose": pose}}}
 

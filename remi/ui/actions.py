@@ -225,10 +225,13 @@ def message(text: str, **params: Any) -> dict:
 def toast(message: str | Mapping[str, Any], level: str = "info") -> dict:
     """A toast; the client translates ``message`` when a catalog has it.
     ``message`` may be a :func:`message` (a catalog key with ``{{name}}``
-    placeholders and their ``params``) for texts with variable parts."""
+    placeholders and their ``params``) or a :class:`Sentence` (sent as its
+    template and values) for texts with variable parts."""
 
     if level not in TOAST_LEVELS:
         raise SchemaError(f"toast level is one of {TOAST_LEVELS}")
+    if isinstance(message, Sentence) and message.params:
+        return {"__toast__": {"level": level, "message": message_of({"text": message.template, "params": message.params})}}
     if isinstance(message, Mapping):
         return {"__toast__": {"level": level, "message": message_of(message)}}
     return {"__toast__": {"level": level, "message": str(message)}}

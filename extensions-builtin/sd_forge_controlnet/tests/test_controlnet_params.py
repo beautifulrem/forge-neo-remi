@@ -751,27 +751,52 @@ def test_pose_size_limit_and_animal_poses(cn, files):
         assert rendered.size == (64, 32) and np.asarray(rendered.convert("RGB")).any()
 
 
+# Why the pose editor refuses a pose (lib_controlnet/openpose.py): the toast shows the sentence
+POSE_REASONS = {
+    "The pose list is empty",
+    "A pose is a JSON object",
+    "The pose's {{key}} must be a size between 1 and {{max}}",
+    "The pose's {{key}} must be a list",
+    "Not an OpenPose pose: {{error}}",
+}
+
+
 def test_check_pose_reads_the_openpose_json_shapes(cn):
     from lib_controlnet import openpose
+
+    from remi import ui
 
     pose = {"canvas_width": 64, "canvas_height": 32, "people": []}
     assert openpose.check_pose(pose) is pose
     assert openpose.check_pose([pose, {"canvas_width": 1, "canvas_height": 1}]) is pose  # one pose per image: the first
     for bad, message in (
-        ([], "the pose list is empty"),
-        ("pose", "a pose is a JSON object"),
-        ({"canvas_width": 64}, "canvas_height must be a size"),
-        ({"canvas_width": True, "canvas_height": 32}, "canvas_width must be a size"),
-        ({"canvas_width": float("nan"), "canvas_height": 32}, "canvas_width must be a size"),
-        ({"canvas_width": openpose.MAX_CANVAS + 1, "canvas_height": 32}, "canvas_width must be a size"),
-        ({**pose, "people": {}}, "people must be a list"),
-        ({**pose, "animals": "cat"}, "animals must be a list"),
+        ([], "The pose list is empty"),
+        ("pose", "A pose is a JSON object"),
+        ({"canvas_width": 64}, "The pose's canvas_height must be a size"),
+        ({"canvas_width": True, "canvas_height": 32}, "The pose's canvas_width must be a size"),
+        ({"canvas_width": float("nan"), "canvas_height": 32}, "The pose's canvas_width must be a size"),
+        ({"canvas_width": openpose.MAX_CANVAS + 1, "canvas_height": 32}, "The pose's canvas_width must be a size"),
+        ({**pose, "people": {}}, "The pose's people must be a list"),
+        ({**pose, "animals": "cat"}, "The pose's animals must be a list"),
     ):
-        with pytest.raises(ValueError, match=message):
+        with pytest.raises(ValueError, match=message) as refused:
             openpose.check_pose(bad)
+        # the reason is a sentence the UI translates (its template is the catalog key)
+        assert isinstance(refused.value.args[0], ui.Sentence) and refused.value.args[0].template in POSE_REASONS
     # keypoints that are no (x, y, confidence) triples are no OpenPose pose
-    with pytest.raises(ValueError, match="not an OpenPose JSON pose"):
+    with pytest.raises(ValueError, match="Not an OpenPose pose") as refused:
         openpose.render_pose({**pose, "people": [{"pose_keypoints_2d": [1, 2]}]})
+    assert refused.value.args[0].template in POSE_REASONS
+
+
+def test_a_refused_pose_says_why_in_a_sentence_the_ui_translates(cn, files):
+    # the reason went into "Not an OpenPose pose: {{error}}" as English text
+    script = cn.ControlNetForForgeOfficial()
+    toast = call(script, "render_pose", {}, files, unit=0, pose={"canvas_width": 64, "people": []})["__toast__"]
+    assert toast == {"level": "error", "message": {"text": "The pose's {{key}} must be a size between 1 and {{max}}", "params": {"key": "canvas_height", "max": "4096"}}}
+    assert call(script, "render_pose", {}, files, unit=0, pose=[])["__toast__"]["message"] == "The pose list is empty"
+    finite = call(script, "render_pose", {}, files, unit=0, pose={"canvas_width": float("inf"), "canvas_height": 8})["__toast__"]["message"]
+    assert finite == {"text": "{{path}} must be a finite number, got {{value}}", "params": {"path": "value.canvas_width", "value": "inf"}}
 
 
 # endregion
@@ -790,7 +815,7 @@ def test_zh_cn_covers_the_panel(cn, registry):
         texts |= {control["label"], *control.get("choices", ()), *([control["info"]] if control.get("info") else [])}
     texts |= {entry["name"] for entry in props["catalog"]["types"]}
     texts |= {spec["label"] for p in props["catalog"]["preprocessors"] for spec in (p["resolution"], p["slider_1"], p["slider_2"]) if spec["visible"] and p["name"] != "reference_test"}
-    texts |= {"Upload a control image first", "Unknown preprocessor {{name}}", "The preprocessor failed: {{error}}", "The pose file is too large", "The pose is not valid JSON", "Not an OpenPose pose: {{error}}"}
+    texts |= {"Upload a control image first", "Unknown preprocessor {{name}}", "The preprocessor failed: {{error}}", "The pose file is too large", "The pose is not valid JSON", *POSE_REASONS}
     texts |= {info.label for key, info in shared.opts.data_labels.items() if key.startswith("control_net_")} | {"ControlNet", "e.g. training output directory"}
     harness.assert_localized(EXTENSION, schemas, extra=texts)
 

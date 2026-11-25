@@ -84,5 +84,9 @@
   "unknown preprocessor {{name}}": "未知的预处理器 {{name}}",
   "upload a control image": "请上传控制图像",
   "{{name}}: expected a number, got {{value}}": "{{name}}：应为数值，当前为 {{value}}",
-  "{{value}} is not one of the choices": "{{value}} 不在可选项中"
+  "{{value}} is not one of the choices": "{{value}} 不在可选项中",
+  "The pose list is empty": "姿势列表为空",
+  "A pose is a JSON object": "姿势应为 JSON 对象",
+  "The pose's {{key}} must be a size between 1 and {{max}}": "姿势的 {{key}} 应为 1 到 {{max}} 之间的尺寸",
+  "The pose's {{key}} must be a list": "姿势的 {{key}} 应为列表"
 }

@@ -94,8 +94,13 @@ describe("helpers", () => {
   it("read pose JSON", () => {
     expect(parsePose('{"canvas_width": 64, "canvas_height": 32, "people": []}')).toEqual({ ok: true, pose: { canvas_width: 64, canvas_height: 32, people: [] } })
     expect(parsePose('[{"canvas_width": 64, "canvas_height": 32}]').ok).toBe(true)
-    expect(parsePose("{").ok).toBe(false)
-    expect(parsePose('{"people": []}')).toEqual({ ok: false, error: "canvas_width is missing" })
+    // why, as the server says it (lib_controlnet/openpose.py check_pose): the panel translates it
+    expect(parsePose("{")).toEqual({ ok: false, problem: { reason: "json" } })
+    expect(parsePose("[]")).toEqual({ ok: false, problem: { reason: "empty" } })
+    expect(parsePose('"pose"')).toEqual({ ok: false, problem: { reason: "object" } })
+    expect(parsePose('{"people": []}')).toEqual({ ok: false, problem: { reason: "size", key: "canvas_width" } })
+    expect(parsePose('{"canvas_width": 64, "canvas_height": 4097}')).toEqual({ ok: false, problem: { reason: "size", key: "canvas_height" } })
+    expect(parsePose('{"canvas_width": 64, "canvas_height": 32, "animals": "cat"}')).toEqual({ ok: false, problem: { reason: "list", key: "animals" } })
     expect(poseText(null)).toBe("")
     expect(poseText({ a: 1 })).toBe('{\n  "a": 1\n}')
   })

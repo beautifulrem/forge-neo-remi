@@ -31,8 +31,6 @@ const ALLOWED: { file: string; read: string; reason: string }[] = [
   { file: "pages/custom/json-builder/index.tsx", read: "String(error)", reason: "as above: a non-Error thrown while parsing the user's own JSON" },
   { file: "ui/inputs/Json.tsx", read: "e.message", reason: "the browser's reason the user's own JSON does not parse, under the field (recorded P3)" },
   { file: "ui/inputs/Json.tsx", read: "String(e)", reason: "as above" },
-  { file: "widgets/controlnet-unit/pose.ts", read: "error.message", reason: "the browser's reason the user's pose file does not parse (recorded P3)" },
-  { file: "widgets/controlnet-unit/pose.ts", read: "String(error)", reason: "as above" },
   { file: "widgets/text-file/index.tsx", read: "error.message", reason: "the browser's reason a local file could not be read: no request is involved (recorded P3)" },
   { file: "widgets/text-file/index.tsx", read: "String(error)", reason: "as above" },
   { file: "pages/extensions/extensions-model.ts", read: "error.detail", reason: "reads the `template` and `params` of an admin error, which are translated" },
