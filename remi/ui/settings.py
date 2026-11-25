@@ -266,8 +266,8 @@ def check_api_values(opts, values: Mapping[str, Any]) -> dict[str, Any]:
     ``sd_vae``, whose offered choices are not what a client sends), an
     extension option the settings page cannot read either, and a
     ``restrict_api`` one (``Options.set`` ignores it for the API). The route
-    takes out the model selection and refuses unknown settings itself;
-    ``--freeze-settings`` stays ``Options.set``'s call. Here rather than in
+    takes out the model selection and refuses unknown settings and frozen
+    ones (``frozen_reason``) itself, before this check. Here rather than in
     ``remi.server.options``: ``modules/api`` does not import the server."""
 
     from remi.setting_values import MAX_NESTING, fit, nested_deeper

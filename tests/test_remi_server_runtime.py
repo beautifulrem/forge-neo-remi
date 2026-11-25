@@ -1031,6 +1031,83 @@ def test_sdapi_options_names_every_refused_value_in_the_order_sent(webui_tmp, mo
         services.close()
 
 
+@pytest.mark.parametrize(
+    ("flag", "value", "key", "reason"),
+    [
+        ("freeze_settings_in_sections", "saving-images", "jpeg_quality", "the settings in this section are frozen"),
+        ("freeze_specific_settings", "samples_format", "samples_format", "this setting is frozen"),
+        (None, None, "ext_hidden", "this setting is hidden"),
+        ("hide_ui_dir_config", True, "outdir_samples", "this setting is restricted (--hide-ui-dir-config)"),
+        ("freeze_settings", True, "jpeg_quality", "changing settings is disabled (--freeze-settings)"),
+    ],
+    ids=["section", "specific", "hidden", "restricted", "everything"],
+)
+def test_sdapi_options_refuses_a_frozen_setting_with_the_other_bad_values(webui_tmp, monkeypatch, flag, value, key, reason):
+    """A frozen setting (``--freeze-settings-in-sections``, ``--freeze-specific-settings``)
+    reached ``Options.set``, whose assertion made the request a 500 after the values before it
+    were set; a hidden or restricted one was dropped while the request answered 200. With
+    ``--freeze-settings`` every request was a 500, unchanged values posted back included
+    (``Options.save`` asserts). A changed frozen value is refused with the request's other
+    refused values, naming its reason (422, nothing set or saved); its stored value sent again
+    is no change, and so is the default GET answers for one never stored. A ``restrict_api``
+    setting stays ignored with a 200, as without a freeze."""
+    from fastapi.testclient import TestClient
+
+    from modules import sd_models, shared
+    from modules.options import OptionInfo
+    from remi import model_selection
+    from remi.jobs import run_inline
+    from remi.server import Services, create_app
+    from remi.server.auth import Auth
+
+    config = webui_tmp / "config.json"
+    monkeypatch.setattr(shared, "config_filename", str(config))
+    monkeypatch.setitem(shared.opts.data_labels, "ext_hidden", OptionInfo("a", "Hidden extension option", component_args={"visible": False}))
+    unsaved = OptionInfo("x", "An extension's option in a frozen section, never stored")
+    unsaved.section = ("saving-images", "Saving Images/Grids")
+    monkeypatch.setitem(shared.opts.data_labels, "ext_unsaved", unsaved)
+    monkeypatch.delitem(shared.opts.data, "ext_unsaved", raising=False)
+    for name in ("ext_hidden", "jpeg_quality", "samples_format", "outdir_samples", "multiple_tqdm", "api_forbid_local_requests"):
+        monkeypatch.setitem(shared.opts.data, name, shared.opts.data.get(name, shared.opts.data_labels[name].default))
+    monkeypatch.setitem(shared.opts.data, "sd_model_checkpoint", "model.safetensors")  # a checkpoint the server has
+    monkeypatch.setattr(sd_models, "checkpoint_aliases", {"model.safetensors": object()})
+    shared.opts.save(str(config))  # before the flag: --freeze-settings refuses a save
+    if flag is not None:
+        monkeypatch.setattr(shared.cmd_opts, flag, value)
+    picks = []
+    monkeypatch.setattr(model_selection, "select", lambda key, value: picks.append(key))
+    before, stored = config.read_bytes(), dict(shared.opts.data)
+    change = {"jpeg_quality": 50 if stored["jpeg_quality"] != 50 else 60, "samples_format": "webp" if stored["samples_format"] != "webp" else "png", "ext_hidden": "b", "outdir_samples": "/elsewhere"}
+    free = not stored["multiple_tqdm"]  # another section's setting, frozen only by --freeze-settings
+    services = Services.create(webui_tmp, dispatch=run_inline, realtime=False, housekeeping=False)
+    try:
+        app = create_app(services=services, auth=Auth(), sdapi=True, start_services=False)
+        with TestClient(app, base_url="http://127.0.0.1:7860", raise_server_exceptions=False) as client:
+            response = client.post("/sdapi/v1/options", json={"multiple_tqdm": free, key: change[key]})
+            assert response.status_code == 422, response.text
+            assert f"settings.{key}: {reason}" in response.json()["detail"], response.text
+            assert config.read_bytes() == before and shared.opts.data == stored  # nothing set, nothing saved
+            # what GET answered, posted back: no change, so nothing refused or failed (GET answers a
+            # setting never stored with its default; its model was built before this one was added)
+            response = client.post("/sdapi/v1/options", json={**client.get("/sdapi/v1/options").json(), "ext_unsaved": "x"})
+            assert response.status_code == 200, response.text
+            assert shared.opts.data[key] == stored[key]
+            if flag in ("freeze_settings_in_sections", "freeze_settings"):
+                assert "ext_unsaved" not in shared.opts.data
+            if flag == "freeze_settings":
+                assert config.read_bytes() == before and shared.opts.data == stored and picks == []  # nothing set, saved or selected
+                assert client.post("/sdapi/v1/options", json={}).status_code == 200
+                response = client.post("/sdapi/v1/options", json={"api_forbid_local_requests": not stored["api_forbid_local_requests"]})
+                assert response.status_code == 200, response.text
+                assert config.read_bytes() == before and shared.opts.data == stored
+            else:
+                response = client.post("/sdapi/v1/options", json={"multiple_tqdm": free, key: stored[key]})
+                assert response.status_code == 200, response.text
+                assert shared.opts.data["multiple_tqdm"] == free and shared.opts.data[key] == stored[key]
+    finally:
+        services.close()
+
+
 def test_sdapi_override_settings_nested_too_deep_are_refused():
     """A generation's ``override_settings`` go into ``opts.data`` (``processing.py``), kept
     there with ``override_settings_restore_afterwards: false`` or while another route saves:

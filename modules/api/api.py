@@ -685,6 +685,7 @@ class Api:
         # (set here it switched the running job's model between its batches)
         from remi import model_selection
 
+        from remi.setting_values import frozen_reason
         from remi.ui import ParamError, Sentence, ValidationError
         from remi.ui.settings import check_api_values
 
@@ -694,6 +695,16 @@ class Api:
         problems: list[ParamError] = []
         # a frozen one (--freeze-settings*): refused with the rest, not select's AssertionError (a 500 after the other settings were saved)
         frozen = {key: reason for key, value in picks.items() if value is not None and (reason := model_selection.frozen_pick(key, value)) is not None}
+        # so is a changed setting a freeze or a hidden component keeps (Options.set's assertion, a 500 after the values before it
+        # were set, or dropped with a 200); a help block and a restrict_api one stay ignored, as Options.set checks those first
+        for key, value in list(req.items()):
+            info = shared.opts.data_labels.get(key)
+            if info is None or info.do_not_save or info.restrict_api or (reason := frozen_reason(shared.opts, key, shared.cmd_opts)) is None:
+                continue
+            if value == shared.opts.data.get(key, info.default):  # no change (one never stored: its default, as GET answers it)
+                del req[key]
+            else:
+                frozen[key] = reason
         problems += [ParamError(reason, owner="settings", param=key) for key, reason in frozen.items()]
         if "sd_model_checkpoint" not in frozen and (name := picks.get("sd_model_checkpoint")) is not None and (not isinstance(name, str) or name not in sd_models.checkpoint_aliases):
             problems.append(ParamError(Sentence("unknown checkpoint {{value}}", value=repr(name)), owner="settings", param="sd_model_checkpoint"))  # A1111's exact names
@@ -711,12 +722,14 @@ class Api:
         # Remi: a changed value is checked as the settings page checks it (kind, range, choices); one
         # of the wrong kind reached upstream readers and broke them until the next start
         try:
-            req = check_api_values(shared.opts, req)
+            req = check_api_values(shared.opts, {key: value for key, value in req.items() if key not in frozen})
         except ValidationError as error:
             problems += error.errors
         if problems:  # every refused value, in the order sent
             problems.sort(key=lambda problem: order.index(problem.param) if problem.param in order else len(order))
             raise HTTPException(status_code=422, detail=f"invalid settings: {ValidationError(problems)}"[:1000])
+        if shared.cmd_opts.freeze_settings:  # nothing left to change, and Options.save (also a pick's) refuses to save
+            return
         before = {key: shared.opts.data.get(key) for key in req}
         set_config(req, is_api=True)  # restrict_api settings (URL fetching) stay out of the API's reach
         changed = [key for key in req if shared.opts.data.get(key) != before[key]]
