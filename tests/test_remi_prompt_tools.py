@@ -926,6 +926,26 @@ def test_translation_key_is_write_only(server, webui, monkeypatch):
     assert tools.translation_config().key == ""
 
 
+@pytest.mark.parametrize(
+    ("flag", "value", "detail"),
+    [
+        ("freeze_settings", True, "changing settings is disabled (--freeze-settings)"),
+        ("freeze_settings_in_sections", "saving-images, prompt_tools", "the settings in this section are frozen"),
+    ],
+)
+def test_frozen_settings_keep_the_translation_key(server, webui, monkeypatch, flag, value, detail):
+    from modules import shared
+
+    api = "/api/v2/prompt-tools"
+    monkeypatch.setitem(webui.opts.data, "prompt_tools_translation_provider", "deepl")
+    assert server.client.put(f"{api}/translation-key", json={"key": "kept"}).json() == {"configured": True}
+    monkeypatch.setattr(shared.cmd_opts, flag, value, raising=False)
+    for key in ("other", ""):
+        response = server.client.put(f"{api}/translation-key", json={"key": key})
+        assert response.status_code == 409 and response.json()["detail"] == detail
+    assert pt.tools_for(server.services).translation_config().key == "kept"
+
+
 def test_the_translation_key_is_only_sent_where_it_was_entered_for(server, webui, monkeypatch):
     monkeypatch.setitem(webui.opts.data, "prompt_tools_translation_provider", "deepl")
     monkeypatch.setitem(webui.opts.data, "prompt_tools_translation_url", "https://api.deepl.com")

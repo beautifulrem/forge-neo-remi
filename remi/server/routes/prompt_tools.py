@@ -408,6 +408,16 @@ def upsample(body: PromptUpsampleRequest, tools: ToolsDep, services: ServicesDep
 
 @router.put("/translation-key", response_model=PromptTranslationKeyState, responses=ERRORS, summary="Store (or, empty, forget) the translation API key; it is never sent back")
 def set_translation_key(body: PromptTranslationKey, tools: ToolsDep) -> dict[str, Any]:
+    from modules import shared
+
+    # the key belongs to the provider settings: frozen with them (the secret store, not
+    # config.json, keeps it, so PATCH /options does not see it)
+    cmd_opts = shared.cmd_opts
+    sections = getattr(cmd_opts, "freeze_settings_in_sections", None) or ""
+    if getattr(cmd_opts, "freeze_settings", False):
+        raise HTTPException(status_code=409, detail="changing settings is disabled (--freeze-settings)")
+    if pt.opt.TOOLS_SECTION[0] in [item.strip() for item in sections.split(",")]:
+        raise HTTPException(status_code=409, detail="the settings in this section are frozen")
     return {"configured": _store_call(lambda: tools.set_translation_key(body.key))}
 
 

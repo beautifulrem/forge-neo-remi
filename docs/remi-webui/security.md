@@ -179,7 +179,9 @@ attackers who already have a login (they are administrators by design).
   client that is not a loopback peer without proxy headers. On macOS a folder
   that is a bundle (`Some.app`) is revealed in Finder, never launched.
 - Path settings are refused with `--hide-ui-dir-config` (`restricted_opts`),
-  and `--freeze-settings*` freeze settings for `/api/v2` and `/sdapi` alike.
+  and `--freeze-settings*` freeze settings for `/api/v2` and `/sdapi` alike
+  (the prompt tools' translation key, kept outside `config.json`, freezes with
+  `--freeze-settings` or a frozen `prompt_tools` section).
   So are job inputs that name a path on the server (img2img batch from a
   directory, Extras batch from a directory and its video clip): the form
   hides them and `check_core` (`remi/core/forms.py`) refuses a request that
