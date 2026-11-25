@@ -12,7 +12,7 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
 import { navigate, type Route } from "@/app/router"
-import { HeaderSlot } from "@/app/header-slot"
+import { HeaderSlot, ICON_SQUARE_BELOW_SM } from "@/app/header-slot"
 import { FitTabsList } from "@/components/FitTabsList"
 import { LoadFailed } from "@/components/LoadFailed"
 import { useLoadFailure } from "@/api/load-failure"
@@ -235,7 +235,7 @@ export default function PngInfoPage({ route }: { route: Route }) {
     <div className="h-full overflow-y-auto">
       <HeaderSlot>
         {/* on a phone a 28 px icon square, its label read out (its only name) */}
-        <Button variant="ghost" size="sm" onClick={() => show(null)} className="max-sm:size-7 max-sm:px-0">
+        <Button variant="ghost" size="sm" onClick={() => show(null)} className={ICON_SQUARE_BELOW_SM}>
           <X aria-hidden />
           <span className="max-sm:sr-only">{t("Clear")}</span>
         </Button>

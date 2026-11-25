@@ -181,6 +181,37 @@ test.describe("the header on a phone with a quick setting pinned", () => {
   }
 })
 
+test.describe("the header's icon buttons on a phone", () => {
+  test("draw their icons at one size, whether the label is hidden or never there", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 800 })
+    await presetStorage(page, { locale: "en" })
+    await pinQuickSetting(page)
+    const sizes = new Map<string, string>()
+    for (const [route, own] of [
+      ["txt2img", /^Show networks/],
+      ["gallery", /^Rescan$/],
+      ["queue", /^(Pause|Resume)$/],
+    ] as const) {
+      await page.evaluate((hash) => (location.hash = hash), `#/${route}`)
+      // the page's own header button is there once its chunk is in
+      await expect(page.locator("header").first().getByRole("button", { name: own })).toBeVisible()
+      // a 28 px square header button: search, appearance, and the buttons whose labels hide here
+      const seen = await page.locator("header").first().evaluate((header) =>
+        [...header.querySelectorAll<HTMLElement>("button")]
+          .map((button) => ({ button, rect: button.getBoundingClientRect(), icon: button.querySelector("svg")?.getBoundingClientRect() }))
+          .filter(({ rect, icon }) => icon && Math.round(rect.width) === 28 && Math.round(rect.height) === 28)
+          // named as read out: aria-label, its rendered text (sr-only included), else the title (the networks button's label is display: none here)
+          .map(({ button, icon }) => [(button.getAttribute("aria-label") || button.innerText.trim() || button.title.replace(/ \(.*\)$/, "")).trim(), `${icon!.width}×${icon!.height}`] as const),
+      )
+      for (const [name, size] of seen) sizes.set(name, size)
+    }
+    for (const name of ["Search", "Appearance", "Show networks", "Quick settings", "Rescan", "Pause"]) {
+      expect(sizes.get(name), `"${name}" is not an icon square`).toBeDefined()
+    }
+    expect(Object.fromEntries(sizes)).toEqual(Object.fromEntries([...sizes.keys()].map((name) => [name, "16×16"])))
+  })
+})
+
 test.describe("generate panes", () => {
   test.use({ viewport: { width: 1440, height: 900 } })
 

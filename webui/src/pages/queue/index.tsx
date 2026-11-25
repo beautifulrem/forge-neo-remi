@@ -13,7 +13,7 @@ import { api } from "@/api/endpoints"
 import { useLoadFailure } from "@/api/load-failure"
 import { queueItemsQuery } from "@/api/queries"
 import type { FormTab, Job, QueueStatus } from "@/api/types"
-import { HeaderSlot } from "@/app/header-slot"
+import { HeaderSlot, ICON_SQUARE_BELOW_SM } from "@/app/header-slot"
 import { useRouteParams, useRouteSearch } from "@/app/route-params"
 import { currentRoute, navigate, type Route } from "@/app/router"
 import { FitTabsList } from "@/components/FitTabsList"
@@ -233,7 +233,7 @@ export default function QueuePage({ route }: { route?: Route } = {}) {
         variant="outline"
         size="sm"
         onClick={() => void act(() => (paused ? api.queue.resume() : api.queue.pause()), paused ? t("Could not resume the queue") : t("Could not pause the queue"))}
-        className="max-sm:size-7 max-sm:px-0"
+        className={ICON_SQUARE_BELOW_SM}
       >
         {paused ? <Play aria-hidden /> : <Pause aria-hidden />}
         <span className="max-sm:sr-only">{paused ? t("Resume") : t("Pause")}</span>

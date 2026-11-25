@@ -16,7 +16,7 @@ import { api } from "@/api/endpoints"
 import { queryClient } from "@/api/queries"
 import type { GalleryItem } from "@/api/types"
 import { useRegisterCommands } from "@/app/commands"
-import { HeaderSlot } from "@/app/header-slot"
+import { HeaderSlot, ICON_SQUARE_BELOW_SM } from "@/app/header-slot"
 import { useLoadFailure } from "@/api/load-failure"
 import { RetryButton } from "@/components/LoadFailed"
 import { PagePlaceholder } from "@/components/PagePlaceholder"
@@ -163,7 +163,7 @@ export default function GalleryPage() {
         onClick={() => void rescan()}
         disabled={refreshing}
         title={t("Scan output folders for new images")}
-        className="max-sm:size-7 max-sm:px-0"
+        className={ICON_SQUARE_BELOW_SM}
       >
         <RefreshCw className={refreshing ? "animate-spin" : undefined} aria-hidden />
         <span className="max-sm:sr-only">{t("Rescan")}</span>

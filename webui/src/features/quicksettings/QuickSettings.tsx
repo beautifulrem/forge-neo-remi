@@ -8,6 +8,7 @@ import { Loader2, Settings2, Zap } from "@/components/icons"
 import { Suspense } from "react"
 import { useTranslation } from "react-i18next"
 import { optionsQuery, queryClient } from "@/api/queries"
+import { ICON_SQUARE_BELOW_SM } from "@/app/header-slot"
 import { navigate } from "@/app/router"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -16,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useQuickKeys } from "./pinned"
 import { retryableLazy } from "@/lib/retryable-lazy"
+import { cn } from "@/lib/utils"
 
 const QuickSettingsPanel = retryableLazy(() => import("./QuickSettingsPanel"))
 const preloadPanel = () => {
@@ -40,7 +42,7 @@ export default function QuickSettings() {
                   variant="ghost"
                   size="sm"
                   // on a phone a 28 px square like the header's other icon buttons: the count waits for sm
-                  className="gap-1 px-2 max-sm:size-7 max-sm:px-0"
+                  className={cn("gap-1 px-2", ICON_SQUARE_BELOW_SM)}
                   aria-label={t("Quick settings")}
                   onPointerEnter={preloadPanel}
                   onFocus={preloadPanel}

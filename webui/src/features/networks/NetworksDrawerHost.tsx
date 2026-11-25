@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { renderFailureText } from "@/features/errors/error-text"
 import { type Command, formatShortcut, useRegisterCommands } from "@/app/commands"
-import { HeaderSlot } from "@/app/header-slot"
+import { HeaderSlot, ICON_SQUARE_BELOW_LG } from "@/app/header-slot"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
@@ -89,7 +89,7 @@ export function NetworksDrawerHost({ tab }: { tab: GenerateTab }) {
           title={`${label} (${formatShortcut(NETWORKS_SHORTCUT)})`}
           onClick={() => toggle(!open)}
           // below lg, its label hidden, a 28 px square like the header's other icon buttons
-          className={cn("gap-1.5 max-lg:size-7 max-lg:px-0", PRESSED_TINT_CLASS)}
+          className={cn("gap-1.5", ICON_SQUARE_BELOW_LG, PRESSED_TINT_CLASS)}
         >
           <Layers aria-hidden />
           <span className="hidden lg:inline">{t("Networks")}</span>
