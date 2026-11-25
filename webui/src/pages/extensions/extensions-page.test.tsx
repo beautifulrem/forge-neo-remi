@@ -204,6 +204,16 @@ describe("backups", { timeout: 20_000 }, () => {
     await waitFor(() => expect(restore).toHaveBeenCalledWith("a.json"))
   })
 
+  // The details table sat in a bordered, rounded box inside the page's panel: its rows' hairlines
+  // and its header's tone already structure it (one border tone, no box in a box).
+  it("lays the backup's table out with row hairlines, not a box", async () => {
+    renderPage("tab=backup")
+    const table = await screen.findByRole("table", { name: "Extensions in the backup and now" }, { timeout: 8000 })
+    const names = table.parentElement!.className.split(/\s+/)
+    expect(names).toContain("overflow-x-auto")
+    expect(names.filter((name) => name === "border" || name.startsWith("rounded"))).toEqual([])
+  })
+
   it("asks before deleting a backup", async () => {
     const remove = vi.spyOn(api.extensions.states, "remove").mockResolvedValue(undefined as never)
     renderPage("tab=backup")

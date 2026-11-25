@@ -67,7 +67,7 @@ function StateDetail({ detail }: { detail: ConfigStateDetail }) {
         </span>
         <span className="text-muted-foreground">{t("{{count}} extensions differ from now", { count: changed })}</span>
       </div>
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-x-auto">
         <table className="w-full min-w-[32rem] text-left text-xs">
           <caption className="sr-only">{t("Extensions in the backup and now")}</caption>
           <thead className="bg-muted/50 text-muted-foreground">
