@@ -86,6 +86,17 @@ def test_only_a_web_address_names_the_source(tmp_path, caplog):
         assert "--source-url" in caplog.text, value
 
 
+def test_a_source_address_with_credentials_is_not_published(tmp_path, caplog):
+    # the link is public (the sign-in screen): a user name or token in it would be handed to anyone
+    for value in ("https://me:t0ken@git.example.com/me/remi", "https://t0ken@git.example.com/me/remi"):
+        with caplog.at_level(logging.WARNING, logger="remi.server.source"):
+            caplog.clear()
+            assert resolve_source(value, root=tmp_path) == SourceOffer(public=BRANCH_LINK, running=BRANCH_LINK), value
+        assert "--source-url" in caplog.text, value
+        # nor written to the console log
+        assert "t0ken" not in caplog.text, value
+
+
 def test_the_flag_wins_over_the_environment_variable():
     from modules import cmd_args
 

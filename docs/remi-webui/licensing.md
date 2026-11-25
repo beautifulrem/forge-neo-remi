@@ -26,14 +26,15 @@ The link comes from the server: `source_url` of `GET /api/v2/auth/status`
 |---|---|
 | default, the running commit is published in the repository (a remote-tracking ref of a remote pointing at `github.com/beautifulrem/forge-neo-remi` contains it) | `https://github.com/beautifulrem/forge-neo-remi/tree/<commit>` |
 | default, the commit is unknown (no git checkout, such as a Docker image) or not published there (a local commit) | `https://github.com/beautifulrem/forge-neo-remi/tree/remi` |
-| `--source-url URL` (or `REMI_SOURCE_URL` when the flag is absent) | `URL`, as given; an address that is not `http(s)` is ignored with a warning in the console |
-| a client that has not signed in (with `--auth`) | the default's branch link, or `URL`: never the running commit, which would tell anyone who reaches the server which fixes it lacks |
+| `--source-url URL` (or `REMI_SOURCE_URL` when the flag is absent) | `URL`, as given; an address that is not `http(s)`, or that carries a user name or password (the link is public), is ignored with a warning in the console |
+| a client that has not signed in (with `--auth`) | the default's branch link, or `URL` as given: Remi never adds the commit it found, which would tell anyone who reaches the server which fixes it lacks (a `URL` naming a commit tells it as well) |
 
 **Running a modified copy:** publish the source of what you run (your
 changes included) and start the server with `--source-url` pointing at it,
 for example `--source-url https://git.example.com/me/remi/src/commit/<commit>`.
 Remi cannot tell where you publish which version, so it links that URL as
-it is.
+it is, on the sign-in screen too: with `--auth`, a branch URL keeps the
+running commit from people who cannot sign in.
 
 ## Built-in extensions
 

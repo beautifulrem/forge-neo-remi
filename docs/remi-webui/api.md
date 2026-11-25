@@ -96,7 +96,7 @@ without `--gradio-auth`). With logins configured:
   /api/v2/auth/logout` revokes the cookie server-side. `GET
   /api/v2/auth/status` → `{"required": bool, "user": str | null,
   "source_url": str}` (where the server's source code is, licensing.md:
-  the running commit's tree only for a signed-in client). Basic
+  Remi's default adds the running commit only for a signed-in client). Basic
   credentials sent there are checked like a login: failures count towards
   the same throttle, and a throttled client gets `"user": null`.
 - Scripts and tools may skip the cookie and send `Authorization: Basic …`

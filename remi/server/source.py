@@ -8,10 +8,12 @@ is Remi's public repository: the tree of the running commit when that commit
 is published there (a remote-tracking ref of a remote pointing at the
 repository contains it), else the ``remi`` branch. The operator of a modified
 copy names its source with ``--source-url`` or ``REMI_SOURCE_URL``; that URL
-is linked as given.
+is linked as given (it must not carry a user name or password: the link is
+public).
 
-Before a login only the repository link is offered, never the running commit:
-the commit tells anyone who reaches the server which fixes it lacks.
+Before a login Remi offers its default's branch, never the commit it found:
+the commit tells anyone who reaches the server which fixes it lacks. An
+operator's URL is offered as given, so one naming a commit tells it too.
 """
 
 from __future__ import annotations
@@ -53,11 +55,14 @@ def configured_source_url(cmd_opts: Any, environ: Mapping[str, str] = os.environ
 
 
 def web_address(value: str) -> bool:
+    """An http(s) address with a host and no user name or password (the
+    sign-in screen hands it to anyone who reaches the server)."""
+
     try:
         parts = urllib.parse.urlsplit(value)
     except ValueError:
         return False
-    return parts.scheme in ("http", "https") and bool(parts.hostname)
+    return parts.scheme in ("http", "https") and bool(parts.hostname) and parts.username is None and parts.password is None
 
 
 def _repository(remote: str) -> str:
@@ -117,7 +122,8 @@ def resolve_source(configured: str | None, *, root: Path) -> SourceOffer:
     if configured is not None:
         if web_address(configured):
             return SourceOffer(public=configured, running=configured)
-        log.warning("--source-url / %s must be an http(s) address, not %r: offering %s instead", SOURCE_URL_ENV, configured, DEFAULT_SOURCE_URL)
+        # the value is not echoed: it may hold a token
+        log.warning("--source-url / %s must be an http(s) address without a user name or password: ignored, offering %s instead", SOURCE_URL_ENV, DEFAULT_SOURCE_URL)
     branch = f"{DEFAULT_SOURCE_URL}/tree/{DEFAULT_BRANCH}"
     commit = published_commit(root)
     return SourceOffer(public=branch, running=f"{DEFAULT_SOURCE_URL}/tree/{commit}" if commit else branch)

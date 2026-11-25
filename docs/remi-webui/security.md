@@ -55,9 +55,10 @@ attackers who already have a login (they are administrators by design).
   `GET /api/v2/auth/status` and shows its own form (`webui/src/features/auth`),
   translated from its catalogs, which posts to `/api/v2/auth/login`. The
   status also names where the source code is (AGPL-3.0 section 13, the form
-  links it; licensing.md): before a login the repository and branch only,
-  never the running commit, which would tell anyone who reaches the server
-  which fixes it lacks. A 401
+  links it; licensing.md): before a login Remi offers its repository's
+  branch, never the commit it found, which would tell anyone who reaches
+  the server which fixes it lacks (`--source-url` is offered as given, and
+  must not carry a user name or password). A 401
   while the app is open shows the form over it. Without a built SPA (or
   under `--nowebui`) the 401 offers HTTP Basic (`WWW-Authenticate`).
 - Session cookie `remi_session`: `user.expiry.HMAC` signed with a

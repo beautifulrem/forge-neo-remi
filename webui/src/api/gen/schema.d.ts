@@ -2451,7 +2451,7 @@ export interface components {
             user?: string | null;
             /**
              * Source Url
-             * @description where users get the source code of the running server (GNU AGPL v3 section 13; --source-url): the running commit's tree once signed in (or without a login), before that the repository
+             * @description where users get the source code of the running server (GNU AGPL v3 section 13): --source-url as given, else the public repository, at the running commit's tree once signed in (or without a login) and its branch before that
              */
             source_url: string;
         };
