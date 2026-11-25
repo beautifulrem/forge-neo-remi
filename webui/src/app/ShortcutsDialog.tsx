@@ -61,6 +61,7 @@ const SHORTCUT_GROUPS: { group: string; entries: Entry[] }[] = [
       { label: "Zoom in / out", keys: ["+", "-"] },
       { label: "Fit / actual size", keys: ["0", "1"] },
       { label: "Tile preview", keys: ["T"] },
+      { label: "Cycle RGBA backdrop", keys: ["B"] },
       { label: "Download", keys: ["S"] },
       { label: "Close", keys: ["Esc"] },
     ],

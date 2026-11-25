@@ -1,10 +1,12 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { bootstrap } from "@/api/mock/fixtures"
 import { keys, queryClient } from "@/api/queries"
+import { VIEWER_KEYS } from "@/features/lightbox/keys"
 import { IDLE, type RunEvent, reduce, type RunState } from "@/features/progress/run-machine"
+import zhCN from "@/locales/zh-CN.json"
 import ShortcutsDialog from "./ShortcutsDialog"
 import { useShortcutsHelp } from "./shortcuts-help"
 
@@ -19,6 +21,15 @@ function openWith(ctrlEnterInterrupt: boolean) {
       <ShortcutsDialog />
     </QueryClientProvider>,
   )
+}
+
+/** The keys a group of the dialog lists, as shown. */
+function keysOf(group: string): string[] {
+  const section = screen.getByRole("region", { name: group })
+  // one Kbd per key, inside a KbdGroup (a kbd of its own)
+  return Array.from(section.querySelectorAll("kbd"))
+    .filter((kbd) => kbd.querySelector("kbd") === null)
+    .map((kbd) => kbd.textContent ?? "")
 }
 
 /** What Ctrl/Cmd+Enter does to a running job (the run machine the shortcut feeds). */
@@ -47,5 +58,23 @@ describe("keyboard shortcuts dialog", () => {
     openWith(true)
     expect(screen.getByText("Generate (while running: interrupt)")).toBeTruthy()
     expect(screen.queryByText(/queue another/)).toBeNull()
+  })
+
+  // B (the RGBA backdrop) worked in the viewer but was listed nowhere
+  it("lists every key the image viewer handles", () => {
+    openWith(false)
+    const shown = new Set(keysOf("Image viewer"))
+    const label: Record<string, string> = { ArrowLeft: "←", ArrowRight: "→", "=": "+" }
+    for (const key of Object.keys(VIEWER_KEYS)) expect(shown, key).toContain(label[key] ?? (key.length === 1 ? key.toUpperCase() : key))
+    expect(within(screen.getByRole("region", { name: "Image viewer" })).getByText("Cycle RGBA backdrop")).toBeInTheDocument()
+  })
+
+  // the dialog's labels are constants translated at render: the locale test does not see them
+  it.each([false, true])("has a zh-CN translation for every group and entry (interrupt only: %s)", (interruptOnly) => {
+    openWith(interruptOnly)
+    const zh = zhCN as Record<string, string>
+    const dialog = screen.getByRole("dialog")
+    const texts = [...Array.from(dialog.querySelectorAll("section"), (section) => section.getAttribute("aria-label") ?? ""), ...Array.from(dialog.querySelectorAll("dt"), (dt) => dt.textContent ?? "")]
+    expect(texts.filter((text) => !zh[text])).toEqual([])
   })
 })

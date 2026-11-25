@@ -266,7 +266,7 @@ The command palette (Ctrl+K, ⌘K on a Mac) lists every command with its shortcu
 | Generate | Ctrl/⌘+Enter generate (while running: interrupt and generate again, or only interrupt with the setting "Revert [Ctrl + Enter] to only interrupt the generation") · Ctrl/⌘+Shift+Enter add to queue · Alt+Enter skip · Esc interrupt (outside text fields and dialogs) · results: ← / → select, Enter open, Delete remove |
 | Prompt editor | Ctrl/⌘+↑ / ↓ change the weight of the selection · Alt+← / → move the tag · Tab or Enter accept a completion · Ctrl/⌘+Z undo · Ctrl+Y / ⌘⇧Z redo |
 | Image editor | B brush · E eraser · G fill · M rectangle · L lasso · I eyedropper · H hand · [ / ] brush size · Shift (hold) erase · Ctrl/⌘+Z / Y undo / redo · Ctrl/⌘+X clear layer · Ctrl/⌘+I invert mask · R or 0 fit · 1 actual size · + / − zoom · F maximize · Space+drag pan · ? help |
-| Lightbox | ← / → previous / next · Home / End · + / − / 0 / 1 zoom · S download · T tile preview · Esc close |
+| Lightbox | ← / → previous / next · Home / End · + / − / 0 / 1 zoom · S download · T tile preview · B cycle the RGBA backdrop · Esc close |
 | Gallery | arrows move · Enter open · Space select (Shift extends) · F star · Ctrl/⌘+A select all · Delete remove · Esc clear selection |
 | Networks | / search · arrows move · Enter apply · I metadata · E edit · Shift+F10 item menu |
 | Queue | Space pick up a job, ↑ / ↓ move it, Space drop, Esc cancel |

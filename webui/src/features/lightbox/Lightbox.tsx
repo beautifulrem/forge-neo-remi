@@ -19,6 +19,7 @@ import { downloadFile } from "@/features/gallery/files"
 import type { ResultItem } from "@/features/gallery/session-store"
 import { ResultActions } from "@/features/send-to/ResultActions"
 import { useGamepadNavigation, useWheelNavigation } from "./gamepad"
+import { type ViewerAction, viewerAction } from "./keys"
 import { clampPan, fitScale, initialView, pinchView, type Point, type Size, type ViewState, wheelFactor, zoomAt } from "./zoom"
 
 type LightboxProps = {
@@ -113,27 +114,23 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
     // here: its arrows (and keys a control already used) stay with it.
     if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
     if (!event.currentTarget.contains(event.target as Node)) return
-    const handled: Record<string, () => void> = {
-      ArrowLeft: () => go(-1),
-      ArrowRight: () => go(1),
-      Home: () => items[0] && onNavigate(items[0].key),
-      End: () => items.at(-1) && onNavigate(items.at(-1)!.key),
-      s: () => item && downloadFile(item.fileId),
-      S: () => item && downloadFile(item.fileId),
-      "+": () => zoomBy(ZOOM_STEP),
-      "=": () => zoomBy(ZOOM_STEP),
-      "-": () => zoomBy(1 / ZOOM_STEP),
-      "0": () => setView({ scale: fitted, x: 0, y: 0 }),
-      "1": () => setView({ scale: 1, x: 0, y: 0 }),
-      t: () => setTiled((v) => !v),
-      T: () => setTiled((v) => !v),
-      b: () => setBackdrop((v) => nextBackdrop(v)),
-      B: () => setBackdrop((v) => nextBackdrop(v)),
+    const actions: Record<ViewerAction, () => void> = {
+      previous: () => go(-1),
+      next: () => go(1),
+      first: () => items[0] && onNavigate(items[0].key),
+      last: () => items.at(-1) && onNavigate(items.at(-1)!.key),
+      download: () => item && downloadFile(item.fileId),
+      "zoom-in": () => zoomBy(ZOOM_STEP),
+      "zoom-out": () => zoomBy(1 / ZOOM_STEP),
+      fit: () => setView({ scale: fitted, x: 0, y: 0 }),
+      "actual-size": () => setView({ scale: 1, x: 0, y: 0 }),
+      tile: () => setTiled((v) => !v),
+      backdrop: () => setBackdrop((v) => nextBackdrop(v)),
     }
-    const run = handled[event.key]
-    if (run) {
+    const action = viewerAction(event.key)
+    if (action) {
       event.preventDefault()
-      run()
+      actions[action]()
     }
   }
 

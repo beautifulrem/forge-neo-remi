@@ -916,7 +916,9 @@ mode's schema is prefetched).
   `js_modal_lightbox_gamepad_repeat`; or a gamepad's left stick / d-pad
   with `js_modal_lightbox_gamepad`, repeating per
   `js_modal_lightbox_gamepad_repeat`), Home/End,
-  S downloads, +/−/0/1, T tile preview, middle click opens in a new tab,
+  S downloads, +/−/0/1, T tile preview, B cycles the RGBA backdrop
+  (`features/lightbox/keys.ts`; the shortcuts dialog lists each key there),
+  middle click opens in a new tab,
   Esc closes; initial zoom per `js_modal_lightbox_initially_zoomed`; follows
   the live preview with `js_live_preview_in_modal_lightbox`. It opens with
   the focus on the image, whose keys it handles (the popup's
