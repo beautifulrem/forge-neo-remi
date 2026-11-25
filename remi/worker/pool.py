@@ -8,7 +8,9 @@ and load balancing (fewest completed jobs, highest free VRAM).
 
 from __future__ import annotations
 
+import logging
 import os
+import re
 import threading
 import time
 from collections.abc import Callable, Sequence
@@ -29,9 +31,17 @@ from remi.worker.protocol import (
 )
 from remi.worker.subprocess_worker import SubprocessWorker
 
+log = logging.getLogger(__name__)
+
+
+GPU_ID_RE = re.compile(r"\d+|(?:GPU|MIG)-[0-9A-Fa-f-]+")
+"""what ``CUDA_VISIBLE_DEVICES`` takes: an index or a GPU / MIG UUID"""
+
 
 def parse_worker_gpus(spec: str | Sequence[str | int] | None) -> list[str]:
-    """Parse ``"0,1"`` or ``[0, 1]`` into deduplicated GPU id strings."""
+    """Parse ``"0,1"`` or ``[0, 1]`` into deduplicated GPU id strings. A
+    token that is no GPU id is left out with a warning (it would name a
+    worker and go into ``CUDA_VISIBLE_DEVICES`` and ``--gpu`` as it is)."""
 
     if spec is None:
         return []
@@ -39,7 +49,13 @@ def parse_worker_gpus(spec: str | Sequence[str | int] | None) -> list[str]:
         raw = [part.strip() for part in spec.split(",") if part.strip()]
     else:
         raw = [str(item).strip() for item in spec if str(item).strip()]
-    return list(dict.fromkeys(raw))
+    ids = []
+    for token in dict.fromkeys(raw):
+        if GPU_ID_RE.fullmatch(token):
+            ids.append(token)
+        else:
+            log.warning("ignoring worker GPU %r: not a GPU index or UUID", token)
+    return ids
 
 
 class InProcessWorker:

@@ -264,6 +264,10 @@ def test_a_prompt_starting_with_a_dash_stays_the_prompt():
 def test_multi_gpu_worker_pool_affinity_and_concurrent_dispatch():
     assert parse_worker_gpus("0, 1, 0, 2") == ["0", "1", "2"]
     assert parse_worker_gpus(None) == []
+    # ids only (CUDA_VISIBLE_DEVICES takes indices and GPU / MIG UUIDs): anything else is dropped with a warning
+    assert parse_worker_gpus("0, x, 1") == ["0", "1"]
+    uuid = "GPU-8a4e1b1f-0c3d-4f5e-9a7b-1c2d3e4f5a6b"
+    assert parse_worker_gpus(f"{uuid},MIG-1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f,0 1,--x,-1") == [uuid, "MIG-1c2d3e4f-5a6b-7c8d-9e0f-1a2b3c4d5e6f"]
 
     active_barrier = threading.Barrier(2, timeout=5.0)
     ran_on: dict[str, str] = {}
