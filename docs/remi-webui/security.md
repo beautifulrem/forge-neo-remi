@@ -11,7 +11,7 @@ connection), the ADetailer suite (detector downloads) and
 
 Contents: [Threat model](#threat-model) · [Controls](#controls) ·
 [Running exposed](#running-exposed) · [Residual risks](#residual-risks) ·
-[Audit record](#audit-record-2026-10)
+[Audit record](#audit-record-2026-10) · [Dependency advisories](#dependency-advisories)
 
 ## Threat model
 
@@ -172,7 +172,10 @@ attackers who already have a login (they are administrators by design).
   with one exception: the Prompt Upsampler's `local_model_path`
   (`POST /api/v2/prompt-tools/upsample` and a pipeline's upsample stage)
   loads a `.gguf` file (llama-cpp) or a model folder (transformers,
-  `local_files_only`, no remote code) from any path the server can read.
+  `local_files_only`, no remote code) from any path the server can read;
+  a crafted folder can still run code through transformers 4.x
+  (GHSA-fgcw-684q-jj6r, see [Dependency advisories](#dependency-advisories)),
+  so name only folders from a source you trust, as with any model file.
   `--hide-ui-dir-config` refuses it (see below).
 
 ### Paths and local actions
@@ -438,3 +441,29 @@ SPA.
 | 8 | `POST /sdapi/v1/options` with text holding an unpaired surrogate stored it and saved the settings: the save stopped half-way and left `config.json` cut short (#2 for the A1111 API), every setting lost at the next start | high | `/sdapi/v1` JSON bodies are checked as `/api/v2`'s are (422, nothing stored) |
 | 9 | A failed `--ngrok` connection printed the whole authtoken to the console, which launchers and services often log | low | the token is named by its last 4 characters; the authtoken (also `NGROK_AUTHTOKEN`), the basic-auth credentials and any `--ngrok-options` value under a secret-like name (`auth`, `secret`, `token`, `password`, `key`) are replaced by `***` in the printed reason, unless 4 characters or shorter (replacing so short a text would garble the message and still show where it was) |
 | 10 | A setting value nested about a thousand levels deep, posted to `/sdapi/v1/options` (a model pick too), `PATCH /api/v2/options` or a generation's `override_settings`, passed the checks and stopped `Options.save`'s recursive `json.dump` half way: `config.json` cut short (#2 again), every setting lost at the next start | high | a list or object nested deeper than 64 levels (`MAX_NESTING`) is refused on those routes before anything is set (422); `Options.save` writes the file whole or not at all (`modules/options.py`), so a value that reaches the settings another way can no longer cut it short |
+
+## Dependency advisories
+
+The advisories on the pinned Python packages, each checked against the code
+path it needs (advisory data from OSV). `transformers` and `diffusers` are the
+model runtime shared with Forge Neo, which pins the same versions: a pin moves
+with an upstream sync unless an advisory is reachable here and a patch release
+of the same line fixes it. Look again at each upstream sync
+([upstream-absorption.md](upstream-absorption.md)), or sooner when Remi starts
+using a path named below.
+
+### 2026-11-26: transformers 4.57.6 and diffusers 0.37.1 kept
+
+Every fix is in a new line (transformers 5.x, diffusers 0.38; 4.57.6 and
+0.37.1 are the last of theirs), whose model-loading changes need the GPU
+regression runs, and no client of the server can reach these paths.
+
+| advisory | fixed in | why it does not apply |
+|---|---|---|
+| transformers GHSA-29pf-2h5f-8g72 (CVE-2026-4372, high): a `config.json` that names a Hub kernel as `_attn_implementation_internal` makes `from_pretrained` download and run it | 5.3.0 | the setting is read (a model folder's config reaches it), but a Hub kernel loads only through the `kernels` package, which is no requirement and not installed: the load stops with an `ImportError` before anything is downloaded. Revisit if `kernels` is ever installed |
+| transformers GHSA-fgcw-684q-jj6r (CVE-2026-5241, high): a LightGlue `config.json` turns `trust_remote_code` on for the config it nests | 5.5.0 | reachable only through a model folder the operator names: the Prompt Upsampler's `local_model_path` (`remi/prompt_tools/pup.py`) loads any folder, and a crafted LightGlue config there runs code from another folder on the disk (checked offline with `AutoTokenizer.from_pretrained(..., local_files_only=True)`). Refused under `--hide-ui-dir-config`; the checkpoint loader reads configs only from the repository's `backend/huggingface/`, and JoyCaption downloads one fixed repository. Use model folders from sources you trust |
+| transformers GHSA-x9r9-c232-4q39 (CVE-2026-80047, high): `load_custom_generate` caches a repository's `custom_generate/generate.py` before the trust check | none yet | Remi never passes `custom_generate` or `trust_remote_code`; a generation mode that moved to a Hub repository raises before anything is fetched |
+| transformers GHSA-xrqw-3rrv-vx5w (CVE-2026-9856, high): a tokenizer's or processor's `save_pretrained` writes outside its folder through chat template names | 5.10.0 | Remi never saves a tokenizer or a processor |
+| transformers GHSA-69w3-r845-3855 (CVE-2026-1839): `Trainer` loads its RNG state with `torch.load` | 5.0.0 | no training; the bundled PyTorch loads with `weights_only=True` |
+| transformers PYSEC-2025-217 (CVE-2025-14929): the X-CLIP checkpoint conversion script deserializes untrusted data | none in 4.x | conversion scripts are never run |
+| diffusers GHSA-98h9-4798-4q5v (CVE-2026-44513, high), GHSA-7wx4-6vff-v64p (CVE-2026-45804, high), GHSA-j7w6-vpvq-j3gm (CVE-2026-44827): `DiffusionPipeline.from_pretrained` runs a repository's or folder's custom pipeline code without `trust_remote_code` | 0.38.0 | Remi builds no `DiffusionPipeline`: the loader reads the `model_index.json` of the repository's own `backend/huggingface/` folders (`DiffusionPipeline.load_config`, JSON only) and builds the model classes named there; a user's Diffusers folder (Z-Image, ERNIE, Fibo) is read as JSON and safetensors; `modules_forge/diffusers_patcher.py`, which would build a pipeline, is used nowhere |
