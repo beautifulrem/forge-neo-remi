@@ -320,13 +320,14 @@ def extension_of(path: str | None) -> str | None:
 
 def extension_of_owner(owner: Any) -> str | None:
     """The extension an action's owner comes from: a script or an Extras
-    operation by its ``filename``, a page or a module by its source file."""
+    operation by its ``filename`` (a page by the file that built it), a module
+    or a class by its source file."""
 
     path = getattr(owner, "filename", None)
     if not isinstance(path, str) or not path:
         try:
-            path = inspect.getsourcefile(owner if inspect.ismodule(owner) else type(owner))
-        except TypeError:
+            path = inspect.getfile(owner if inspect.ismodule(owner) else type(owner))
+        except (TypeError, OSError):  # a builtin, or a class without a module file
             path = None
     return extension_of(path)
 

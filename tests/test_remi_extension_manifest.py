@@ -416,3 +416,24 @@ def test_semver_manifest_and_actions_edge_cases(tmp_path):
     assert [a["code"] for a in merged["__advice__"]] == ["c1", "c2"]
     assert merged["x"] == {"value": 1, "enabled": False}
 
+
+
+def test_the_extension_an_owner_comes_from(tmp_path, monkeypatch):
+    """Scripts and Extras operations by their ``filename``, a module or a class by its
+    source file; outside the extension folders: none."""
+    import types
+
+    from modules import paths_internal
+
+    builtin = tmp_path / "extensions-builtin"
+    monkeypatch.setattr(paths_internal, "extensions_builtin_dir", str(builtin))
+    monkeypatch.setattr(paths_internal, "extensions_dir", str(tmp_path / "extensions"))
+    script = types.SimpleNamespace(filename=str(builtin / "ext-a" / "scripts" / "a.py"))
+    assert ui.extension_of_owner(script) == "ext-a"
+    operation = types.SimpleNamespace(filename=str(tmp_path / "extensions" / "ext-b" / "scripts" / "postprocessing_b.py"))
+    assert ui.extension_of_owner(operation) == "ext-b"
+    module = types.ModuleType("ext_c")
+    module.__file__ = str(builtin / "ext-c" / "scripts" / "c.py")
+    assert ui.extension_of_owner(module) == "ext-c"
+    assert ui.extension_of_owner(types.SimpleNamespace(filename=str(tmp_path / "scripts" / "loopback.py"))) is None
+    assert ui.extension_of_owner(object()) is None  # a builtin class: no source file

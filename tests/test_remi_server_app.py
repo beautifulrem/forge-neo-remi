@@ -114,6 +114,10 @@ def test_an_extension_action_that_fails_counts_against_its_extension(server, web
         def gone_upload(self, ctx, values):
             raise FileError("no upload", status=404)
 
+        @ui.action("key_bug", timeout=5)
+        def key_bug(self, ctx, values):
+            return {"x": {"value": values["missing"]}}  # a bug in the action, not a missing action
+
     monkeypatch.setitem(scripts.scripts_txt2img.by_id, "broken", Broken())
     ui.diagnostics.reset("broken-ext")
     client = TestClient(server.app, base_url=str(server.client.base_url), raise_server_exceptions=False)
@@ -126,12 +130,37 @@ def test_an_extension_action_that_fails_counts_against_its_extension(server, web
     assert run("slow").json()["__toast__"]["level"] == "error"
     assert run("bad_input").status_code == 422  # the user's input, not the extension's fault
     assert run("gone_upload").status_code == 404  # nor is a request the server answers with a 4xx
+    assert run("key_bug").json()["__toast__"]["level"] == "error"
     record = ui.diagnostics.get("broken-ext")
     assert record is not None
-    assert (record.action_errors, record.action_timeouts) == (2, 1)
-    assert [entry["kind"] for entry in record.recent_errors] == ["action_error", "action_error", "action_timeout"]
+    assert (record.action_errors, record.action_timeouts) == (3, 1)
+    assert [entry["kind"] for entry in record.recent_errors] == ["action_error", "action_error", "action_timeout", "action_error"]
     assert record.recent_errors[0]["message"] == "action boom: RuntimeError: kaput"
+    assert record.recent_errors[3]["message"] == "action key_bug: KeyError: 'missing'"
     ui.diagnostics.reset("broken-ext")
+
+    # a page an extension registers: its actions count against the extension too
+    from remi import pages
+
+    source = (
+        "from remi import pages, ui\n"
+        "class Actions:\n"
+        "    @ui.action('boom')\n"
+        "    def boom(self, ctx, values):\n"
+        "        raise RuntimeError('page kaput')\n"
+        "page = pages.register(pages.Page('diag-test', 'Diag', actions=Actions()))\n"
+    )
+    path = builtin / "page-ext" / "scripts" / "page.py"
+    namespace = {"__file__": str(path), "__name__": "page_ext_script"}
+    exec(compile(source, str(path), "exec"), namespace)
+    ui.diagnostics.reset("page-ext")
+    try:
+        assert client.post("/api/v2/actions/page:diag-test/boom", json={"values": {}}).status_code == 500
+        record = ui.diagnostics.get("page-ext")
+        assert record is not None and record.action_errors == 1
+    finally:
+        pages.unregister("diag-test", namespace["page"])
+        ui.diagnostics.reset("page-ext")
 
 
 def test_conflicts_by_action_and_by_rules_route(server):

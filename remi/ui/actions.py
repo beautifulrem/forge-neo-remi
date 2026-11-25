@@ -168,7 +168,7 @@ def call_action_isolated(
     if effective_timeout is None or effective_timeout <= 0:
         try:
             return _run()
-        except (ValidationError, KeyError):
+        except ValidationError:
             raise
         except Exception as error:
             if _answered(error):
@@ -202,7 +202,7 @@ def call_action_isolated(
 
     error = result_box.get("error")
     if error is not None:
-        if isinstance(error, (ValidationError, KeyError)) or _answered(error):
+        if isinstance(error, ValidationError) or _answered(error):
             raise error
         log.warning("isolated action %s.%s failed: %s", diag_owner, name, error)
         diagnostics.record_action_error(diag_owner, name, f"{type(error).__name__}: {error}", timed_out=False)
