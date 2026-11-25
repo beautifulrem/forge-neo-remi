@@ -521,6 +521,31 @@ async def refuse(scope: Scope, receive: Receive, send: Send, status: int, reason
     await response(scope, receive, send)
 
 
+class BaseHeadersMiddleware:
+    """Adds :data:`BASE_HEADERS` to every HTTP response (unless the route set
+    its own). Outermost, without any check of its own: it also covers what
+    middleware outside :class:`SecurityMiddleware` answers itself (upstream
+    adds ``CORSMiddleware`` outermost, which answers a CORS preflight)."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message: Any) -> None:
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                present = {name.lower() for name, _ in headers}
+                headers += [(name, value) for name, value in BASE_HEADERS if name not in present]
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+
 class SecurityMiddleware:
     """Host / cross-site / login checks for ``/api/v2``, ``/internal`` and
     the API docs, HTTP and WebSocket alike (pure ASGI, so it sees WebSocket
@@ -528,8 +553,8 @@ class SecurityMiddleware:
     ``/sdapi`` (:func:`sdapi_refusal`). Extension routes elsewhere keep
     ``extension_route_guard``; the SPA shell checks the login itself
     (:mod:`remi.server.spa`). ``login_page``: what a browser loading the API
-    docs without a login gets (:func:`refuse`). Adds :data:`BASE_HEADERS` to
-    every response."""
+    docs without a login gets (:func:`refuse`). The response headers come
+    from :class:`BaseHeadersMiddleware`."""
 
     def __init__(self, app: ASGIApp, auth: Auth, login_page: LoginPage | None = None) -> None:
         self.app = app
@@ -548,19 +573,10 @@ class SecurityMiddleware:
             refused = docs_refusal(self.auth, scope)
         elif path.startswith(SDAPI_PREFIX):
             refused = sdapi_refusal(self.auth, scope)
-
-        async def send_with_headers(message: Any) -> None:
-            if message["type"] == "http.response.start":
-                headers = list(message.get("headers", []))
-                present = {name.lower() for name, _ in headers}
-                headers += [(name, value) for name, value in BASE_HEADERS if name not in present]
-                message = {**message, "headers": headers}
-            await send(message)
-
         if refused is not None:
-            await refuse(scope, receive, send_with_headers, *refused, login_page=self.login_page)
+            await refuse(scope, receive, send, *refused, login_page=self.login_page)
             return
-        await self.app(scope, receive, send_with_headers if scope["type"] == "http" else send)
+        await self.app(scope, receive, send)
 
 
 def _cross_site(scope: Scope, conn: HTTPConnection) -> bool:

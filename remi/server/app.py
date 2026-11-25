@@ -19,13 +19,14 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware import Middleware
 from starlette.requests import HTTPConnection
 from starlette.types import Scope
 
 from remi.files import FileError
 from remi.jobs import JobError
 from remi.server.api_docs import add_docs_routes
-from remi.server.auth import BASE_HEADERS, PUBLIC_PATHS, Auth, SecurityMiddleware, credentials_from_cmd_opts, load_secret, route_path
+from remi.server.auth import BASE_HEADERS, PUBLIC_PATHS, Auth, BaseHeadersMiddleware, SecurityMiddleware, credentials_from_cmd_opts, load_secret, route_path
 from remi.server.limits import PUBLIC_BODY_LIMIT, BodyLimitMiddleware, body_limit
 from remi.server.services import Services, default_services
 from remi.server.spa import DIST, Spa
@@ -346,6 +347,7 @@ def create_app(
 
     initialize_util.setup_middleware(app)
     _no_credentials_for_every_origin(app)
+    app.user_middleware.insert(0, Middleware(BaseHeadersMiddleware))  # outside upstream's CORS (the stack is built on the first request)
 
     if spa is not None:
         app.router.default = spa  # type: ignore[assignment]

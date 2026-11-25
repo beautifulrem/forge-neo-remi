@@ -169,6 +169,17 @@ def test_every_response_has_nosniff_and_a_same_origin_referrer_policy(webui, tmp
             assert response.headers["referrer-policy"] == "same-origin"
 
 
+def test_a_cors_preflight_answer_has_the_base_headers_too(options, tmp_path):
+    # CORSMiddleware sits outside the security checks and answers a preflight itself
+    options(cors_allow_origins="https://dash.example")
+    with server_app(tmp_path) as server:
+        response = server.client.options("/api/v2/queue", headers={"Origin": "https://dash.example", "Access-Control-Request-Method": "POST"})
+        assert response.status_code == 200 and response.headers["access-control-allow-origin"] == "https://dash.example"
+        assert response.headers["x-content-type-options"] == "nosniff"
+        assert response.headers["referrer-policy"] == "same-origin"
+        assert response.headers["x-robots-tag"] == "noindex, nofollow"
+
+
 def test_no_response_asks_to_be_indexed(webui, tmp_path):
     """A WebUI exposed with --listen / --ngrok is a private tool, not a site:
     every response (the UI, the API, the docs, errors) tells crawlers so."""
