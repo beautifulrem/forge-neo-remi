@@ -96,6 +96,13 @@ describe("the focus ring token", () => {
     expect(weak).toEqual([])
   })
 
+  it("is the outline of a focus nothing else marks, in place of the browser's own", () => {
+    // the browser's `outline: auto` (its width and colour the browser's) on a link or the skip link;
+    // the a11y e2e ("visible focus") measures it on every main page
+    const base = css.slice(css.indexOf("@layer base {"))
+    expect(base).toMatch(/\n {2}:focus-visible \{\n {4}outline: 3px solid var\(--focus-ring\);\n {4}outline-offset: 0;\n {2}\}/)
+  })
+
   it("is the only focus ring colour drawn from --ring at a share of its own", () => {
     const ownShares = Object.entries(sources)
       .filter(([, source]) => /\b(?:ring|outline)-ring\/\d+\b|var\(--ring\) \d+%/.test(source))

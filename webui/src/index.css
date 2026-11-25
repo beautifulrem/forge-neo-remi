@@ -482,8 +482,13 @@
     color: var(--popover-foreground);
   }
 
+  /* A focus nothing else marks (a link in text, the skip link) draws the focus ring as an outline:
+     3 px of --focus-ring at the edge, where ring-3 draws it, not the browser's own outline (its width
+     and colour the browser's). A control that draws a ring takes the outline off (outline-none or
+     outline-hidden, utilities, which win over this base rule). */
   :focus-visible {
-    outline-offset: 2px;
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 0;
   }
 }
 

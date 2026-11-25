@@ -211,13 +211,37 @@ test.describe("axe with every accent", () => {
   }
 })
 
-/** Tabs through a page and lists the tab stops that show no focus indicator (outline or ring). */
-async function stopsWithoutFocusRing(page: Page, presses: number): Promise<string[]> {
-  const missing = new Set<string>()
+/**
+ * Tabs through a page and lists the tab stops whose focus indicator is not the focus ring: none at
+ * all, the browser's own outline (`outline-style: auto`, its width and colour the browser's), one
+ * 1 or 2 px wide, one in another colour than --focus-ring, or an outline and a ring drawn together.
+ * The focus ring is a 3 px box-shadow ring (`ring-3`) or a 3 px solid outline, in --focus-ring.
+ */
+async function focusIndicatorProblems(page: Page, presses: number): Promise<string[]> {
+  const problems = new Set<string>()
   const check = () =>
     page.evaluate(() => {
       const element = document.activeElement as HTMLElement | null
       if (!element || element === document.body) return null
+      const canvas = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!
+      /** The colour as 8-bit sRGB channels and alpha, whatever notation the computed style uses. */
+      const rgba = (color: string) => {
+        canvas.clearRect(0, 0, 1, 1)
+        canvas.fillStyle = "#000"
+        canvas.fillStyle = color
+        canvas.fillRect(0, 0, 1, 1)
+        return [...canvas.getImageData(0, 0, 1, 1).data] as [number, number, number, number]
+      }
+      /** --focus-ring as the element's own context resolves it (an accent scope re-derives it). */
+      const focusRing = (node: Element) => {
+        const probe = document.createElement("i")
+        probe.style.color = "var(--focus-ring)"
+        ;(node.parentElement ?? document.body).append(probe)
+        const color = rgba(getComputedStyle(probe).color)
+        probe.remove()
+        return color
+      }
+      const same = (a: number[], b: number[]) => a.every((x, i) => Math.abs(x - b[i]!) <= 3)
       // an inset ring is a box shadow, painted under the element's content: an image that fills the
       // element hides it (the gallery's tiles showed no ring)
       const covered = (node: Element) => {
@@ -227,23 +251,52 @@ async function stopsWithoutFocusRing(page: Page, presses: number): Promise<strin
           return r.left <= box.left + 4 && r.top <= box.top + 4 && r.right >= box.right - 4 && r.bottom >= box.bottom - 4
         })
       }
-      const shows = (node: Element) => {
-        const style = getComputedStyle(node)
-        if (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0) return true
-        // or on the layer over the content (`after:`), where an image cannot cover it
+      type Mark = { kind: "outline" | "ring"; width: number; color: number[]; auto: boolean }
+      /** What a node draws around itself: its outline, its `after:` layer's outline, its rings. */
+      const marks = (node: Element): Mark[] => {
+        const found: Mark[] = []
         const after = getComputedStyle(node, "::after")
-        if (after.content !== "none" && after.outlineStyle !== "none" && parseFloat(after.outlineWidth) > 0) return true
-        if (style.boxShadow === "none" || style.boxShadow === "") return false
-        // the visible part of the shadow: drop transparent layers, then inset ones over covered content
-        const layers = style.boxShadow.split(/,(?![^(]*\))/).filter((layer) => !/rgba\(0, 0, 0, 0\)/.test(layer))
-        return layers.some((layer) => !/inset/.test(layer) || !covered(node))
+        for (const style of after.content === "none" ? [getComputedStyle(node)] : [getComputedStyle(node), after]) {
+          const width = parseFloat(style.outlineWidth)
+          const color = rgba(style.outlineColor)
+          if (style.outlineStyle !== "none" && width > 0 && color[3] > 0) found.push({ kind: "outline", width, color, auto: style.outlineStyle === "auto" })
+        }
+        const shadow = getComputedStyle(node).boxShadow
+        if (shadow && shadow !== "none") {
+          for (const layer of shadow.split(/,(?![^(]*\))/)) {
+            const color = rgba(/^\s*([a-z-]+\([^)]*\)|#\w+|[a-z]+)/i.exec(layer)?.[1] ?? "transparent")
+            const [x = 0, y = 0, blur = 0, spread = 0] = [...layer.matchAll(/(-?[\d.]+)px/g)].map((m) => Number(m[1]))
+            // a ring: no offset, no blur, a spread; an inset one only where no image covers it
+            if (color[3] === 0 || x !== 0 || y !== 0 || blur !== 0 || spread <= 0) continue
+            if (/\binset\b/.test(layer) && covered(node)) continue
+            found.push({ kind: "ring", width: spread, color, auto: false })
+          }
+        }
+        return found
       }
+      const name = `${element.tagName.toLowerCase()}[${element.getAttribute("role") ?? ""}] ${element.getAttribute("aria-label") || element.textContent?.trim().slice(0, 40) || ""}`
+      // a control drawn by its wrapper is often an input nobody sees (a slider's range input, a file
+      // input behind its label, a colour input at opacity 0): it draws nothing, its wrapper does
+      const style = getComputedStyle(element)
+      const unseen = style.opacity === "0" || /^rect\(0px,? 0px,? 0px,? 0px\)$/.test(style.clip) || style.clipPath === "inset(50%)"
+      const own = unseen ? [] : marks(element)
+      if (own.some((mark) => mark.auto)) return `${name}: the browser's outline (outline-style: auto)`
       // a ring may be drawn by a wrapper that has the focus inside it (inputs in a group, the prompt editor)
+      const seen: Mark[] = []
       for (let node: Element | null = element, depth = 0; node && depth < 5; node = node.parentElement, depth++) {
-        if (shows(node) && (node === element || node.matches(":focus-within"))) return null
+        const drawn = node === element ? own : marks(node)
+        seen.push(...drawn)
+        const ring = focusRing(node)
+        const good = drawn.filter((mark) => mark.width >= 3 && same(mark.color, ring))
+        if (good.length === 0) continue
+        // one indicator: a 3 px outline and a ring together draw it twice (shadcn's 1 px outline
+        // inside the tabs' ring is an edge, not a second ring)
+        if (drawn.some((mark) => mark.kind === "outline" && mark.width >= 2) && drawn.some((mark) => mark.kind === "ring" && mark.width >= 3)) return `${name}: an outline and a ring`
+        return null
       }
-      const name = element.getAttribute("aria-label") || element.textContent?.trim().slice(0, 40) || element.tagName
-      return `${element.tagName.toLowerCase()}[${element.getAttribute("role") ?? ""}] ${name}`
+      if (seen.length === 0) return `${name}: no focus indicator`
+      const widest = Math.max(...seen.map((mark) => mark.width))
+      return widest < 3 ? `${name}: a ${widest} px indicator` : `${name}: not in --focus-ring (rgba ${seen.find((mark) => mark.width >= 3)!.color.join(",")})`
     })
   for (let i = 0; i < presses; i++) {
     await page.keyboard.press("Tab")
@@ -253,19 +306,21 @@ async function stopsWithoutFocusRing(page: Page, presses: number): Promise<strin
       await page.waitForTimeout(150)
       problem = await check()
     }
-    if (problem) missing.add(problem)
+    if (problem) problems.add(problem)
   }
-  return [...missing]
+  return [...problems]
 }
 
+// Tab stops with no focus class of their own fell back to the browser's outline (`outline: auto`):
+// its width and colour are the browser's, not the 3 px --focus-ring every other stop draws.
 test.describe("visible focus", () => {
-  for (const route of ["txt2img", "extensions", "settings", "gallery", "queue", "png-info", "networks"]) {
-    test(`every tab stop on #/${route} shows where the focus is`, async ({ page }) => {
+  for (const route of ["txt2img", "img2img", "extras", "png-info", "gallery", "networks", "queue", "settings", "extensions", "ext/toolbox", "ext/json-builder"]) {
+    test(`every tab stop on #/${route} shows the 3 px focus ring`, async ({ page }) => {
       await openRoute(page, route)
       await page.waitForLoadState("networkidle")
       // rings fade in (box-shadow transitions): read their end state
       await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" })
-      expect(await stopsWithoutFocusRing(page, 70)).toEqual([])
+      expect(await focusIndicatorProblems(page, 70)).toEqual([])
     })
   }
 })

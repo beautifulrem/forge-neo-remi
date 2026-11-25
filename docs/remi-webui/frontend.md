@@ -403,7 +403,17 @@ imperatively).
   ring read thinner than the rings beside it. `ring-0` takes the ring off a
   control whose group draws it, and shadcn's 1 px outline in the tabs and the
   scroll area sits inside its 3 px ring (`lib/design-guards.test.ts`, "focus
-  rings").
+  rings"). A focus nothing else marks (a link in text, the skip link) draws
+  the token as a 3 px outline at its edge, where `ring-3` draws it (the
+  `:focus-visible` rule of the `index.css` base layer), never the browser's
+  own `outline: auto`, whose width and colour are the browser's. A control
+  that draws a ring takes the outline off (`outline-none` or
+  `outline-hidden`: utilities, which win over the base rule), or it shows
+  both. `tests/e2e/a11y.spec.ts` ("visible focus") tabs through every main
+  page and measures each stop's indicator: a 3 px ring or outline in
+  `--focus-ring`, on the stop or on the wrapper that draws it, and fails on
+  the browser's outline, a 1 or 2 px one, another colour, or an outline and
+  a ring together.
 - See [Visual rules](#visual-rules) for the design rules every new screen
   follows.
 - shadcn components import `cn` from the `cn` package (what the base-nova
