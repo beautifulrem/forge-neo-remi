@@ -197,43 +197,23 @@ def checked_image_size(size: Any) -> tuple[int, int]:
     return width, height
 
 
-_CHECKED_IMAGE_CLASSES: dict[type, type] = {}
-
-
-def _checked_image_class(cls: type) -> type:
-    """A subclass of the PIL image class ``cls`` for the unpickler: its
-    ``__setstate__`` checks the declared size (PIL's allocates it before it
-    reads the data) and then turns the object into a ``cls``; it is never
-    constructed (``PngImageFile(path)`` would open any file on the server,
-    whose header then decides the size)."""
-
-    checked = _CHECKED_IMAGE_CLASSES.get(cls)
-    if checked is not None:
-        return checked
-
-    def __init__(self: Any, *args: Any, **kwargs: Any) -> None:
-        raise pickle.UnpicklingError(f"refused: constructing {cls.__name__}")
-
-    def __setstate__(self: Any, state: Any) -> None:
-        if not isinstance(state, (list, tuple)) or len(state) < 5:
-            raise pickle.UnpicklingError(f"not a {cls.__name__} state")
-        try:
-            checked_image_size(state[2])
-        except ValueError as error:
-            raise pickle.UnpicklingError(str(error)) from None
-        self.__class__ = cls
-        cls.__setstate__(self, list(state))
-
-    checked = type(cls.__name__, (cls,), {"__init__": __init__, "__setstate__": __setstate__, "__module__": __name__})
-    _CHECKED_IMAGE_CLASSES[cls] = checked
-    return checked
-
-
 class SafeUnpickler(pickle.Unpickler):
     """Only plain data, numpy arrays and PIL images (of at most
     :data:`remi.files.MAX_UPLOAD_PIXELS`, never constructed): any other
     global (a function, a class with side effects) refuses the whole
-    pickle."""
+    pickle.
+
+    An image class is handed out as a checking subclass: it refuses to be
+    constructed (``PngImageFile(path)`` would open any file on the server,
+    whose header then decides the size) and its ``__setstate__`` checks the
+    declared size before PIL's runs (which allocates it before reading the
+    data). The images get their own class back once the whole pickle is
+    loaded: until then a second BUILD of the same image is checked too."""
+
+    def __init__(self, file: Any) -> None:
+        super().__init__(file)
+        self._image_classes: dict[type, type] = {}
+        self._images: list[tuple[Any, type]] = []
 
     ALLOWED = {
         ("builtins", "set"), ("builtins", "frozenset"), ("builtins", "complex"), ("builtins", "bytearray"),
@@ -252,8 +232,36 @@ class SafeUnpickler(pickle.Unpickler):
             from PIL import Image
 
             if isinstance(cls, type) and issubclass(cls, Image.Image):
-                return _checked_image_class(cls)
+                return self._checked_image_class(cls)
         raise pickle.UnpicklingError(f"refused global {module}.{name}")
+
+    def _checked_image_class(self, cls: type) -> type:
+        checked = self._image_classes.get(cls)
+        if checked is not None:
+            return checked
+        images = self._images
+
+        def __init__(image: Any, *args: Any, **kwargs: Any) -> None:
+            raise pickle.UnpicklingError(f"refused: constructing {cls.__name__}")
+
+        def __setstate__(image: Any, state: Any) -> None:
+            if not isinstance(state, (list, tuple)) or len(state) < 5:
+                raise pickle.UnpicklingError(f"not a {cls.__name__} state")
+            try:
+                checked_image_size(state[2])
+            except ValueError as error:
+                raise pickle.UnpicklingError(str(error)) from None
+            cls.__setstate__(image, list(state))
+            images.append((image, cls))
+
+        checked = self._image_classes[cls] = type(cls.__name__, (cls,), {"__init__": __init__, "__setstate__": __setstate__, "__module__": __name__})
+        return checked
+
+    def load(self) -> Any:
+        value = super().load()
+        for image, cls in self._images:
+            image.__class__ = cls
+        return value
 
 
 def safe_loads(data: bytes) -> Any:

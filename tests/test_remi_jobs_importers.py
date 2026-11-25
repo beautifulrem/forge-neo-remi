@@ -150,6 +150,19 @@ def test_pickled_images_past_the_pixel_cap_are_refused_before_any_allocation(all
     assert type(opened) is PngImagePlugin.PngImageFile and opened.getpixel((0, 0)) == 7
 
 
+def test_a_pickled_image_built_twice_is_checked_both_times(allocations):
+    """BUILD leaves the image on the stack: a second state for the same image, declaring a
+    huge size after a checked 1x1, must not reach PIL's own ``__setstate__`` unchecked."""
+
+    import pickletools
+
+    image = pickle.dumps(Image.new("RGB", (1, 1)), protocol=3)[:-1]  # without its STOP
+    state = pickletools.optimize(pickle.dumps([{}, "RGB", (100_000, 100_000), None, b""], protocol=3))[2:-1]
+    with pytest.raises(pickle.UnpicklingError, match="too large"):
+        importers.safe_loads(image + state + pickle.BUILD + pickle.STOP)
+    assert all(width * height <= 1 for width, height in allocations)
+
+
 def test_the_unpickler_never_constructs_an_image(tmp_path):
     """A pickle could call an allowed image class: ``PngImageFile(path)`` opened any file on
     the server, and its header (not the pickle) decided the size."""
