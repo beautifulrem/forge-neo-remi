@@ -169,10 +169,12 @@ Uploads and outputs reach an action through `ctx.files` (`ui.ActionFiles`,
 which the server fills with its file store): `image(id)`, `image_size(id)`,
 `get(id)`, `path(id)`, `store_image(image, name)` and `store_bytes(data,
 name)` (extension-guide.md "Files"). Scripts, pages and built-in extensions
-use only `remi.ui` / `remi.pages`: nothing outside `remi/` (and the few
-listed WebUI glue modules, such as `modules/util.py`'s `open_folder`)
-imports `remi.server` or reaches the server's services through
-`ctx.request`; `tests/test_remi_layers.py` enforces it.
+build on `remi.ui`, `remi.pages` and `remi.core` (the prompt tools' extensions
+also read their settings through `remi.prompt_tools.options`). None of them
+imports `remi.server` or reaches the server's services through `ctx.request`;
+outside `remi/` only the few listed WebUI glue modules (such as
+`modules/util.py`'s `open_folder`) do. `tests/test_remi_layers.py` enforces
+that.
 
 ### Scripts
 
@@ -370,7 +372,7 @@ schema-format.md §3 body; other errors `{"detail": str}`.
 | GET / POST / PATCH / DELETE | `/boards`, `/boards/{id}`, `/boards/{id}/items`, `/boards/{id}/items/remove`, `/boards/{id}/items/{file_id}` | gallery project Boards (`remi/server/routes/boards.py`): organize outputs into collections without copying files; delete removes the board while keeping images in the gallery |
 | GET / POST | `/gallery/{file_id}/lineage`, `/gallery/compare` | asset parent/sibling/descendant lineage graph (indexed across `files.job_id`, `jobs.retry_of`, `init_img`, `upscale_from`, `ImageStitch` references) and structured parameter diff between two gallery outputs or infotexts |
 | POST | `/pnginfo` | `{file_id}` (upload or output) → PNG Info: `infotext`, parsed `params`, format / mode / size, `entries` (text chunks, comments, stealth info, every EXIF tag incl. the Exif / GPS / Interop IFDs, binary values as `<N bytes>`), `chunks` (PNG chunk list, IDAT runs merged, text keywords) (`remi/image_meta.py`) |
-| POST | `/outputs/save`, `/outputs/open-folder` | gallery "Save" / "Save zip" (`{ids, zip}` → copies in `outdir_save` through the save path, `log.csv`, zip as a file id); open an output folder on the WebUI machine (403 with `--hide-ui-dir-config`) |
+| POST | `/outputs/save`, `/outputs/open-folder` | gallery "Save" / "Save zip" (`{ids, zip}` → copies in `outdir_save` through the save path, `log.csv`, zip as a file id); open an output folder on the WebUI machine (403 with `--hide-ui-dir-config` and for a browser on another machine, as for reveal) |
 | GET / PATCH / POST / DELETE | `/extensions`, `/extensions/diagnostics`, `/extensions/check-updates`, `/extensions/{name}/check`, `/extensions/update`, `/extensions/install`, `/extensions/{name}` | installed extensions (`remote` without credentials, `remote_url`, `commit_url`, `restartable`, `disabled_by`, `index_url`); per-extension runtime health, `remi-extension.json` manifest status, load times, and recent hook/action errors & timeouts (`/extensions/diagnostics`); enable/disable (`{disabled?, disable_all?}`), check for updates (all, or one at a time for progress; a failed fetch is the status `unknown (remote error)`), apply updates (config-state backup first; 502 names those git could not update), install from a git URL (502 when git cannot clone), uninstall (not built-in ones); logic in `remi/extensions_admin.py`; git never prompts (`GIT_TERMINAL_PROMPT=0`, ssh `BatchMode=yes`, no terminal) and is bounded by timeouts; one git operation per repository at a time; writes refused (403) when extension access is disabled; changes load with `/server/reload`. Errors are `{detail, template, params}`: `template` is the English message with `{{name}}` placeholders, the key clients translate |
 | GET | `/extensions/index?url=&refresh=` | an extension index (default `WEBUI_EXTENSIONS_INDEX` or the A1111 list; fetched by the server, cached 10 min; 403 without extension access, 502 when unreachable): entries with `installed`, tag descriptions |
 | GET / POST / DELETE | `/extensions/config-states`, `/extensions/config-states/{id}`, `/extensions/config-states/{id}/restore` | config-state backups (`config_states/*.json`): list, save `{name}`, detail (each extension saved vs. now; the WebUI commit for reference), delete, restore `{what: "extensions"}` → `{reload}` (each extension is reset to its commit during the next reload). The WebUI checkout is never reset: old backups point at upstream commits and `git reset --hard` would drop the working tree |
@@ -381,7 +383,7 @@ schema-format.md §3 body; other errors `{"detail": str}`.
 | GET / POST | `/auth/status`, `/auth/login`, `/auth/logout` | login (session cookie) |
 | POST | `/server/reload`, `/server/restart` | rebuild the app in-process ("Reload UI"); restart the process (when the launcher can; answers first, then the serve loop stops the server, interrupts the running job and exits) |
 | GET / POST | `/sysinfo`, `/sysinfo/check` | system information; whether a sysinfo file's checksum matches (`{text}` → `{valid}`) |
-| GET | `/server/status` | `{restartable, extension_access, settings_frozen, model_loaded, version}` |
+| GET | `/server/status` | `{restartable, extension_access, settings_frozen, model_loaded, model_hash, version}` |
 | GET | `/licenses` | `html/licenses.html` as data (groups of `{id, name, url, description, license_url}`; the SPA fetches license texts itself) |
 | POST | `/options/validate` | setting values checked like `PATCH /options` but not applied (settings import) |
 
