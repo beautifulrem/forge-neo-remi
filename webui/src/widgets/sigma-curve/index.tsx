@@ -115,7 +115,7 @@ export default function SigmaCurve({ props, id, disabled }: WidgetProps<null, Pr
                 aria-pressed={current}
                 aria-label={describe(daemon, state)}
                 title={describe(daemon, state)}
-                onClick={() => props.tab && store.getState().setValue(owner, props.tab, daemon.value)}
+                onClick={() => props.tab && store.getState().setValues(owner, { [props.tab]: daemon.value })}
                 className={cn(
                   "relative flex h-12 flex-col rounded-md bg-muted/50 px-1 pt-0.5 pb-1 text-left outline-none",
                   "focus-visible:ring-3 focus-visible:ring-focus-ring",

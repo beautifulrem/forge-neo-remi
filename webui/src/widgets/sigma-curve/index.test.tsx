@@ -1,5 +1,6 @@
-import { fireEvent, render, screen } from "@testing-library/react"
-import { describe, expect, it } from "vitest"
+import { act, fireEvent, render, screen } from "@testing-library/react"
+import { toast } from "sonner"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { FormProvider, OwnerProvider } from "@/ui/context"
 import { createFormStore, type FormStore } from "@/ui/form-store"
 import type { CustomNode } from "@/ui/schema"
@@ -16,9 +17,12 @@ const DAEMONS = [
 const PROPS = { daemons: DAEMONS, tab: "daemon", enable: "enabled" }
 const NODE: CustomNode = { type: "custom", name: "curves", label: "", widget: "sigma-curve", props: PROPS, default: null }
 
-function setup(values: Record<string, unknown>): FormStore {
+function setup(values: Record<string, unknown>, { lockTab = false } = {}): FormStore {
   const store = createFormStore(`sigma-curve-${Math.random()}`, { persistDrafts: false })
-  store.getState().load([{ owner: OWNER, layout: null, defaults: { enabled: true, daemon: "1", d1_active: true, d1_amount: 0.1, d2_amount: -0.4, ...values } }])
+  store.getState().load([
+    { owner: OWNER, layout: { type: "choice", name: "daemon", label: "Daemon", choices: DAEMONS.map(({ value }) => ({ value, label: value })) }, defaults: { enabled: true, daemon: "1", d1_active: true, d1_amount: 0.1, d2_amount: -0.4, ...values } },
+    ...(lockTab ? [{ owner: "pin", layout: { type: "toggle" as const, name: "daemon", label: "Keep daemon", locks: `${OWNER}.daemon` }, defaults: { daemon: true } }] : []),
+  ])
   render(
     <FormProvider formId="txt2img" store={store}>
       <OwnerProvider owner={OWNER}>
@@ -30,6 +34,8 @@ function setup(values: Record<string, unknown>): FormStore {
 }
 
 describe("sigma-curve widget", () => {
+  afterEach(() => vi.restoreAllMocks())
+
   it("draws the selected daemon large and every daemon as a thumbnail", () => {
     setup({})
     const main = screen.getByRole("img", { name: /Daemon I: active, amount 0.1/ })
@@ -46,6 +52,16 @@ describe("sigma-curve widget", () => {
     expect(store.getState().values[OWNER]?.daemon).toBe("2")
     // Daemon II smooths (negative amount): drawn in the destructive colour
     expect(screen.getByRole("img", { name: /Daemon II: active, amount -0.4/ }).getAttribute("class")).toContain("text-destructive")
+  })
+
+  it("leaves a locked tab and names the lock", async () => {
+    const info = vi.spyOn(toast, "info").mockImplementation((() => "") as never)
+    const store = setup({ d2_active: true }, { lockTab: true })
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Daemon II/ }))
+    })
+    expect(store.getState().values[OWNER]?.daemon).toBe("1")
+    expect(info).toHaveBeenCalledExactlyOnceWith("Overridden by a lock: Daemon", expect.anything())
   })
 
   it("greys out inactive daemons and the whole preview when the script is off", () => {
