@@ -6,7 +6,7 @@
  * not contain buttons); the keyboard reaches the same actions through the
  * item menu (see NetworkGrid).
  */
-import { AlertTriangle, Box, Check, ImagePlus, Info, Layers, MoreHorizontal, Pencil, Sparkles, Type } from "@/components/icons"
+import { AlertTriangle, Check, ImagePlus, Info, Layers, MoreHorizontal, Pencil } from "@/components/icons"
 import { type CSSProperties, memo, type MouseEvent, type ReactNode, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
@@ -15,6 +15,7 @@ import { formatBytes } from "@/features/model-bar/model-options"
 import { useMediaQuery } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { isEditable, type MenuAnchor, thumbWidth } from "./items"
+import { KIND_ICON } from "./kind-icon"
 import { useArchLabel } from "./labels"
 
 export type ItemAction = "metadata" | "edit" | "preview" | "menu"
@@ -43,8 +44,6 @@ function hueOf(text: string): number {
 const gradient = (hue: number): CSSProperties => ({
   backgroundImage: `linear-gradient(135deg, oklch(0.62 0.09 ${hue}), oklch(0.34 0.06 ${(hue + 70) % 360}))`,
 })
-
-const KIND_ICON: Record<string, typeof Layers> = { lora: Layers, embeddings: Type, checkpoints: Box, vae: Sparkles, text_encoders: Type }
 
 /**
  * The preview with its blurred placeholder underneath (a muted loop for video
