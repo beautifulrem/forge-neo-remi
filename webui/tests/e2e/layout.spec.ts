@@ -636,6 +636,29 @@ test("a popover fits a phone held sideways and scrolls inside", async ({ page })
   await expect(popover.getByRole("textbox", { name: "Search modules" })).toBeInViewport()
 })
 
+// A popover scrolls up and down only: the Layers popover's switches reach 12 px past their row
+// (their hit boxes) into its 10 px padding, and it scrolled sideways by 2 px.
+test("the canvas Layers popover does not scroll sideways", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await openGenerate(page, "img2img")
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement("canvas")
+    canvas.width = 64
+    canvas.height = 64
+    return canvas.toDataURL("image/png").split(",")[1]!
+  })
+  const chooser = page.waitForEvent("filechooser")
+  await page.getByRole("button", { name: "Add a source image" }).click()
+  await (await chooser).setFiles({ name: "source.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") })
+  await page.getByRole("button", { name: "Layers and view" }).click()
+  const popover = page.getByRole("dialog", { name: "Layers and view" })
+  await expect(popover).toBeVisible()
+  await expect(popover.getByRole("switch").first()).toBeVisible()
+  // scrollable by the user: an axis that scrolls (auto / scroll) and more to scroll to
+  const scrolls = await popover.evaluate((element) => ["auto", "scroll"].includes(getComputedStyle(element).overflowX) && element.scrollWidth > element.clientWidth)
+  expect(scrolls, "scrolls sideways").toBe(false)
+})
+
 // While a job runs the Generate button shares its row with Skip and Interrupt: from 768 to 932 px
 // its "Queue another" was cut to "Qu…", with nothing to read the rest from. The label shows when
 // it fits beside the plus and only then: a fixed breakpoint hid it at 1280 px, where it fits.
