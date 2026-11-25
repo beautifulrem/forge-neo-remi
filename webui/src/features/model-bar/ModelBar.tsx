@@ -199,7 +199,7 @@ function ModulesPicker({ className, segmented = false }: { className?: string; s
           ) : null}
         </div>
         <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search…")} aria-label={t("Search modules")} className="h-8" />
-        <div role="group" aria-labelledby={`${id}-title`} className="flex max-h-72 flex-col gap-0.5 overflow-y-auto overscroll-contain">
+        <div role="group" aria-labelledby={`${id}-title`} className="flex max-h-72 flex-col gap-0.5 overflow-y-auto overscroll-contain pb-0.5">
           {[...missing.map((value) => ({ value, label: value, size: null, missing: true })), ...visible.map((m) => ({ ...m, missing: false }))].map(
             (m, index) => {
               const checkId = `${id}-module-${index}` // paths contain spaces and slashes

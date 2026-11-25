@@ -57,6 +57,14 @@ describe("model bar modules picker", () => {
     expect(patch).toHaveBeenCalledWith({ forge_additional_modules: ["qwen_image_vae.safetensors"] })
   })
 
+  it("leaves room under the last row for its checkbox's hit box, so a list that fits does not scroll", async () => {
+    renderBar()
+    fireEvent.click(modulesTriggers()[0]!)
+    const list = (await screen.findByRole("checkbox", { name: "ae.safetensors" })).closest("[role=group]")!
+    // a 28 px row, the checkbox's 32 px after: box centred on it: 2 px past the row
+    expect(list).toHaveClass("pb-0.5")
+  })
+
   it("writes nothing when the selection did not change", async () => {
     const { unmount } = renderBar()
     fireEvent.click(modulesTriggers()[0]!)

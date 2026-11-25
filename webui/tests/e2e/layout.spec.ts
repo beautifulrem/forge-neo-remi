@@ -663,6 +663,21 @@ test("a popover fits a phone held sideways and scrolls inside", async ({ page })
   await expect(popover.getByRole("textbox", { name: "Search modules" })).toBeInViewport()
 })
 
+// The modules list's last checkbox reached 2 px below the list with its hit box, so a list that fit
+// still scrolled by 2 px.
+test("the VAE / Text encoders list does not scroll when its rows fit", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await openGenerate(page)
+  const trigger = page.getByRole("button", { name: "VAE / Text encoders" })
+  if (!(await trigger.isVisible())) await page.getByRole("button", { name: "Model settings" }).click()
+  await trigger.click()
+  const popover = page.getByRole("dialog", { name: "VAE / Text encoders" })
+  const list = popover.getByRole("group", { name: "VAE / Text encoders" })
+  await expect(list.getByRole("checkbox").first()).toBeVisible()
+  const { scrollHeight, clientHeight } = await list.evaluate((element) => ({ scrollHeight: element.scrollHeight, clientHeight: element.clientHeight }))
+  expect(scrollHeight).toBe(clientHeight)
+})
+
 // A popover scrolls up and down only: the Layers popover's switches reach 12 px past their row
 // (their hit boxes) into its 10 px padding, and it scrolled sideways by 2 px.
 test("the canvas Layers popover does not scroll sideways", async ({ page }) => {
