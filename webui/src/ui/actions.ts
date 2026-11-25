@@ -143,18 +143,20 @@ export async function runAction(
   if (generations.get(key) !== generation) return null
 
   const split = splitResponse(owner, response)
-  applyResponse(ctx.store, owner, split)
+  // the conflicts pass (on load, after a paste, on conflict param edits) leaves locks unnamed
+  applyResponse(ctx.store, owner, split, { quietLocks: action === CONFLICTS_ACTION })
   return split
 }
 
-export function applyResponse(store: FormStore, owner: string, split: SplitResponse) {
+/** Applies an action's answer; the values a lock kept are named unless `quietLocks`. */
+export function applyResponse(store: FormStore, owner: string, split: SplitResponse, { quietLocks = false } = {}) {
   const state = store.getState()
   const kept = split.params.length > 0 ? state.applyPatches(split.params) : []
   if (split.outputs) state.setOutputs(owner, split.outputs)
   if (split.advice !== undefined) state.setAdvice(split.advice)
   if (split.capabilities !== undefined) state.setCapabilities(split.capabilities)
   // the values a lock kept: under the action's own toast, or in one of their own
-  const note = lockNote(state.index, kept)
+  const note = quietLocks ? undefined : lockNote(state.index, kept)
   if (split.toast) showToast(split.toast.level, messageText(i18n, split.toast.message), note)
   else if (note) showToast("info", note)
   if (split.settings) {

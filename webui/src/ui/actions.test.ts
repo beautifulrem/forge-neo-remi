@@ -1,6 +1,6 @@
 import * as sonner from "sonner"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { applyAdvicePatch, runAction, splitResponse } from "./actions"
+import { applyAdvicePatch, CONFLICTS_ACTION, runAction, splitResponse } from "./actions"
 import { createFormStore } from "./form-store"
 
 describe("splitResponse", () => {
@@ -98,7 +98,19 @@ describe("action patches a lock keeps", () => {
     // a patch that leaves the locked value as it is says nothing
     info.mockClear()
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ steps: { value: 20, enabled: true } }))
-    await runAction({ store, tab: "txt2img" }, "core", "__conflicts__")
+    await runAction({ store, tab: "txt2img" }, "core", "turbo")
+    expect(info).not.toHaveBeenCalled()
+  })
+
+  // the conflicts pass runs on load, after every paste and on conflict param edits: the lock is
+  // the user's own, and the paste or recipe that started the pass already named what it kept
+  it("leave the conflicts pass quiet", async () => {
+    const info = vi.spyOn(sonner.toast, "info").mockImplementation((() => "") as never)
+    const store = lockedForm()
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ steps: { value: 8, enabled: false } }))
+    await runAction({ store, tab: "txt2img" }, "core", CONFLICTS_ACTION)
+    await runAction({ store, tab: "txt2img" }, "core", CONFLICTS_ACTION)
+    expect(store.getState().values.core?.steps).toBe(20)
     expect(info).not.toHaveBeenCalled()
   })
 
