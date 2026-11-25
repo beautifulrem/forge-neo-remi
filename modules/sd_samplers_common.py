@@ -227,11 +227,12 @@ def _parse_replacements(setting: str) -> tuple[list[str], list[tuple[str, str]],
     return remove, replace, append
 
 
-def apply_lora_for_refiner(loras: list[extra_networks.ExtraNetworkParams]) -> list[extra_networks.ExtraNetworkParams]:
+def apply_lora_for_refiner(loras: list[extra_networks.ExtraNetworkParams], replacements: str | None = None) -> list[extra_networks.ExtraNetworkParams]:
     if not loras:
         return []
 
-    _remove, _replace, _append = _parse_replacements(opts.refiner_lora_replacement.strip())
+    # Remi: the job's replacements (p.refiner_lora_replacement, which frozen settings cannot store)
+    _remove, _replace, _append = _parse_replacements((opts.refiner_lora_replacement if replacements is None else replacements).strip())
 
     result = []
     for lora in loras:
@@ -338,7 +339,7 @@ def apply_refiner(cfg_denoiser: "CFGDenoiser", x: torch.Tensor, sigma: torch.Ten
         # 2. parse the LoRA to update ModelPatcher patches
         if not cfg_denoiser.p.disable_extra_networks:
             loras = cfg_denoiser.p.extra_network_data.pop("lora", None)
-            cfg_denoiser.p.extra_network_data["lora"] = apply_lora_for_refiner(loras)
+            cfg_denoiser.p.extra_network_data["lora"] = apply_lora_for_refiner(loras, getattr(cfg_denoiser.p, "refiner_lora_replacement", None))
             extra_networks.activate(cfg_denoiser.p, cfg_denoiser.p.extra_network_data)
 
         # 3. reload the LoRA
@@ -368,7 +369,7 @@ def apply_refiner(cfg_denoiser: "CFGDenoiser", x: torch.Tensor, sigma: torch.Ten
 
     if not cfg_denoiser.p.disable_extra_networks:
         loras = cfg_denoiser.p.extra_network_data.pop("lora", None)
-        cfg_denoiser.p.extra_network_data["lora"] = apply_lora_for_refiner(loras)
+        cfg_denoiser.p.extra_network_data["lora"] = apply_lora_for_refiner(loras, getattr(cfg_denoiser.p, "refiner_lora_replacement", None))
         extra_networks.activate(cfg_denoiser.p, cfg_denoiser.p.extra_network_data)
 
     # Remi: the conds must come from the refiner (an Anima-3.8B prompt is encoded for its connector);

@@ -77,16 +77,18 @@ class ScriptRefiner(scripts.ScriptBuiltinUI):
         p.refiner_checkpoint = refiner_checkpoint
         p.refiner_switch_at = refiner_switch_at
         p.refiner_cfg = None if (refiner_cfg < 1.0) else refiner_cfg
-        # Remi: saved only when it changed (config.json was rewritten on every refined job); frozen
-        # settings (--freeze-settings and its narrower forms) refuse the setter and the save, and the
-        # job's replacements still hold for this run
+        # Remi: the job's replacements go with the job (apply_refiner reads them from p); the setting
+        # only remembers them for the form, saved when they changed (config.json was rewritten on every
+        # refined job). Frozen settings (--freeze-settings and its narrower forms) refuse the setter and
+        # the save: the stored value stays, also for a later save of another setting
         replacements = replacements.strip()
+        p.refiner_lora_replacement = replacements
         if getattr(shared.opts, "refiner_lora_replacement", None) != replacements:
             try:
                 if shared.opts.set("refiner_lora_replacement", replacements):
                     shared.opts.save(shared.config_filename)
             except AssertionError:
-                shared.opts.data["refiner_lora_replacement"] = replacements
+                pass
 
     def postprocess(self, *args, **kwargs):
         self.restore_base_weights()

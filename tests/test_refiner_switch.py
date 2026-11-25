@@ -111,9 +111,10 @@ class _Denoiser:
         return shared.sd_model.denoise(x, sigma)
 
 
-def _sample(refiner_info, switch_at=0.5, refiner_cfg=None):
+def _sample(refiner_info, switch_at=0.5, refiner_cfg=None, **fields):
     """Euler sampling of a fixed latent; the processing object and the
-    names of the checkpoint used at every step."""
+    names of the checkpoint used at every step. ``fields``: more (or other)
+    attributes of the processing object."""
 
     from modules import sd_samplers_common
 
@@ -134,6 +135,7 @@ def _sample(refiner_info, switch_at=0.5, refiner_cfg=None):
         clear_prompt_cache=lambda: conds.append("clear"),
         setup_conds=lambda: conds.append("setup"),
     )
+    vars(p).update(fields)
     denoiser = _Denoiser(p)
     sigmas = torch.linspace(1.0, 0.0, STEPS + 1)
     x = torch.linspace(-1.0, 1.0, 16).reshape(1, 1, 4, 4)
@@ -228,11 +230,13 @@ def test_refiner_cfg_is_recorded_in_infotext_and_cleared_when_disabled(checkpoin
     assert (stale.refiner_checkpoint, stale.refiner_switch_at, stale.refiner_cfg) == (None, None, None)
 
 
-def test_the_lora_replacements_are_saved_only_when_changed_and_kept_when_settings_are_frozen(webui, monkeypatch, tmp_path):
-    """setup stores the job's LoRA replacements as the setting apply_refiner reads. It rewrote
-    config.json on every refined job, changed or not; under --freeze-settings (or with that
-    setting frozen) the refused setter raised out of the hook and the job lost its
-    replacements. Frozen, they now hold for this run without being saved."""
+def test_the_lora_replacements_are_saved_only_when_changed_and_never_when_settings_are_frozen(webui, monkeypatch, tmp_path):
+    """setup gives the job its LoRA replacements (``p``) and remembers them as the setting the
+    form starts from. It rewrote config.json on every refined job, changed or not; under
+    --freeze-settings (or with that setting frozen) the refused setter raised out of the hook
+    and the job lost its replacements. Frozen, the job keeps them and the stored value stays:
+    put into the settings for the run, a later save of another setting wrote them to
+    config.json."""
     import json
 
     from modules import options, shared
@@ -249,6 +253,7 @@ def test_the_lora_replacements_are_saved_only_when_changed_and_kept_when_setting
         p = SimpleNamespace()
         ScriptRefiner().setup(p, True, "anima-refiner", 0.5, 4.5, replacements)
         assert (p.refiner_checkpoint, p.refiner_switch_at, p.refiner_cfg) == ("anima-refiner", 0.5, 4.5)
+        assert p.refiner_lora_replacement == replacements.strip()
         return webui.opts.data["refiner_lora_replacement"]
 
     assert run("a=b") == run("  a=b\n") == "a=b"
@@ -257,8 +262,30 @@ def test_the_lora_replacements_are_saved_only_when_changed_and_kept_when_setting
     assert saves == [str(config)] and json.loads(config.read_text(encoding="utf8"))["refiner_lora_replacement"] == "x=y"
 
     monkeypatch.setattr(shared.cmd_opts, "freeze_settings", True)
-    assert run("c=d") == "c=d"
+    assert run("c=d") == "x=y"
     monkeypatch.setattr(shared.cmd_opts, "freeze_settings", False)
     monkeypatch.setattr(shared.cmd_opts, "freeze_specific_settings", "refiner_lora_replacement")
-    assert run("e=f") == "e=f"
-    assert saves == [str(config)] and json.loads(config.read_text(encoding="utf8"))["refiner_lora_replacement"] == "x=y"
+    assert run("e=f") == "x=y"
+    assert saves == [str(config)]
+    webui.opts.save(shared.config_filename)  # another setting's change: only this one is frozen
+    assert json.loads(config.read_text(encoding="utf8"))["refiner_lora_replacement"] == "x=y"
+
+
+def test_the_refiner_renames_the_jobs_loras_with_the_jobs_replacements(checkpoints, webui, monkeypatch):
+    """apply_refiner renames the job's LoRAs for the refiner with the replacements setup gave
+    the job (``p``), which frozen settings cannot store; without them (a job ``setup`` did
+    not see), with the stored setting."""
+
+    from modules import extra_networks, sd_samplers_common
+
+    _, refiner = checkpoints
+    monkeypatch.setitem(webui.opts.data, "refiner_lora_replacement", "high_noise=stored")
+    activated = []
+    monkeypatch.setattr(sd_samplers_common.extra_networks, "activate", lambda p, data: activated.append([params.items[0] for params in data["lora"]]))
+
+    def loras():
+        return {"lora": [extra_networks.ExtraNetworkParams(["anima_high_noise", "1"])]}
+
+    _sample(refiner, disable_extra_networks=False, extra_network_data=loras(), refiner_lora_replacement="high_noise=low_noise")
+    _sample(refiner, disable_extra_networks=False, extra_network_data=loras())
+    assert activated == [["anima_low_noise"], ["anima_stored"]]
