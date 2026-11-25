@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { tabSchema } from "@/api/mock/fixtures"
 import { api } from "@/api/endpoints"
+import { ApiError } from "@/api/http"
 import { keys, queryClient } from "@/api/queries"
 import type { Bootstrap } from "@/api/types"
 import { navigate } from "@/app/router"
@@ -91,6 +92,23 @@ describe("sendTo", () => {
     expect(values.core).toMatchObject({ init_img: "out-1", mode: "img2img", prompt: "a cat", width: 640, height: 768 })
     expect(values.sampler?.steps).toBe(12)
     expect(values.seed?.seed).toBe(-1) // send_seed off
+  })
+
+  // "Use parameters" reported "Parameters applied: 0" when the server could not read them
+  it("fails when the parameters cannot be read and there is no image to send instead", async () => {
+    vi.spyOn(api, "parseInfotext").mockRejectedValue(new ApiError(500, "the parser broke"))
+    await expect(sendTo("txt2img", { infotext: "a cat\nSteps: 12" }, {})).rejects.toBeInstanceOf(ApiError)
+  })
+
+  it("still sends the image when only its parameters cannot be read", async () => {
+    setOptions({})
+    vi.spyOn(api, "parseInfotext").mockRejectedValue(new ApiError(500, "the parser broke"))
+    getFormStore("img2img").setState({ revision: 0 })
+    const sent = sendTo("img2img", { fileId: "out-2", infotext: "a cat\nSteps: 12" })
+    await vi.waitFor(() => expect(location.hash).toBe("#/img2img"))
+    load("img2img")
+    await sent
+    expect(getFormStore("img2img").getState().values.core).toMatchObject({ init_img: "out-2" })
   })
 })
 

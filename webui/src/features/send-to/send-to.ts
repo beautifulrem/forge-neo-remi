@@ -118,7 +118,16 @@ export function sendFilter(): PasteFilter {
  */
 export async function sendTo(target: SendTarget, item: SendItem, filter: PasteFilter = sendFilter()): Promise<PasteResult> {
   const tab = formOf(target)
-  const parsed = item.infotext && tab !== "extras" ? await api.parseInfotext(item.infotext, tab).catch(() => null) : null
+  let parsed: Awaited<ReturnType<typeof api.parseInfotext>> | null = null
+  if (item.infotext && tab !== "extras") {
+    try {
+      parsed = await api.parseInfotext(item.infotext, tab)
+    } catch (error) {
+      // with an image to send, the image goes alone; without one, nothing would be sent and the
+      // caller would report "0 applied" instead of the failure
+      if (!item.fileId) throw error
+    }
+  }
   const entries = parsed ? parsedEntries(parsed) : []
   const image = item.fileId ? imageEntry(target, item.fileId) : null
   if (image && item.fileId) {
