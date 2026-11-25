@@ -1,11 +1,13 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
 import { bootstrap, models } from "@/api/mock/fixtures"
 import { useProgress } from "@/api/progress"
 import { keys, queryClient } from "@/api/queries"
+import { i18n } from "@/i18n"
+import zhCN from "@/locales/zh-CN.json"
 import ModelBar, { MODULES_HELP_URL } from "./ModelBar"
 import { WorkerHealthPill } from "./WorkerHealthPill"
 
@@ -176,6 +178,30 @@ describe("worker health pill single-status-dot rule", () => {
     )
     expect(screen.getByRole("button", { name: "Worker status" })).toHaveTextContent("1/2 GPU")
     expect(container.querySelector('[data-slot="worker-alert-dot"]')).not.toBeNull()
+  })
+})
+
+describe("worker health pill states", () => {
+  afterEach(async () => {
+    vi.restoreAllMocks()
+    queryClient.clear()
+    await act(() => i18n.changeLanguage("en"))
+  })
+
+  it("names each worker's state in the UI language", async () => {
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    queryClient.setQueryData(["workers"], { mode: "pool", workers: [{ worker_id: "w0", state: "idle", device: "cuda:0" }, { worker_id: "w1", state: "restarting", device: "cuda:1" }] })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <WorkerHealthPill />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(screen.getByRole("button", { name: zhCN["Worker status"] }))
+    const workers = await screen.findByRole("dialog")
+    expect(within(workers).getByText(zhCN["Idle"])).toBeInTheDocument()
+    expect(within(workers).getByText(zhCN["Restarting"])).toBeInTheDocument()
+    expect(within(workers).queryByText("idle")).toBeNull()
   })
 })
 

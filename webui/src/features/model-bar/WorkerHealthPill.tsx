@@ -63,6 +63,20 @@ const MODE_LABELS: Record<string, string> = {
   pool: "Multi-GPU pool",
 }
 
+/** The server's worker states (`remi/server/routes/workers.py` WorkerState) and the mock's. */
+const STATE_LABELS: Record<string, string> = {
+  starting: "Starting",
+  idle: "Idle",
+  busy: "Busy",
+  restarting: "Restarting",
+  stopped: "Stopped",
+  error: "Error",
+  unavailable: "Unavailable",
+  ready: "Ready",
+  running: "Running",
+  crashed: "Crashed",
+}
+
 export function WorkerHealthPill({ className }: { className?: string }) {
   const { t } = useTranslation()
   const id = useId()
@@ -120,7 +134,7 @@ export function WorkerHealthPill({ className }: { className?: string }) {
                   <span className="truncate font-medium text-foreground" title={worker.gpu_name || worker.device || worker.worker_id}>
                     {worker.gpu_name || worker.device || worker.worker_id}
                   </span>
-                  <span className="ml-auto shrink-0 font-mono text-[0.6875rem] text-muted-foreground">{worker.state}</span>
+                  <span className="ml-auto shrink-0 font-mono text-[0.6875rem] text-muted-foreground">{t(STATE_LABELS[worker.state] ?? worker.state)}</span>
                 </div>
                 {totalGb ? (
                   <div className="flex flex-col gap-1">

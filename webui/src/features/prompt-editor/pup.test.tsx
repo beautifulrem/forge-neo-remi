@@ -1,14 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { tabSchema } from "@/api/mock/fixtures"
 import { keys } from "@/api/queries"
+import { i18n } from "@/i18n"
+import zhCN from "@/locales/zh-CN.json"
 import { bootstrapWith } from "@/test/api-fixtures"
 import { FormProvider } from "@/ui/context"
 import { createFormStore } from "@/ui/form-store"
 import { tabOwners } from "@/ui/tab"
 import { diffPromptTokens } from "./diff"
-import { collectFormReferenceIds, detectPupFamily, formatAspectRatio } from "./pup"
+import { collectFormReferenceIds, detectPupFamily, formatAspectRatio, PUP_FAMILY_LABELS } from "./pup"
 import { PupTrigger } from "./PupTrigger"
 
 describe("diffPromptTokens", () => {
@@ -122,6 +124,41 @@ describe("PupTrigger & lazy PupUpsamplerDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Revert upsampled prompt" }))
     expect(setValue).toHaveBeenLastCalledWith("orange cat")
   })
+
+  it("names the result's model family and mode in the UI language", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ prompt: "a cat on a sill", original_prompt: "cat", model_family: "generic", mode: "t2i", backend: "openai_vlm", used_reference_count: 0, aspect_ratio: null, layout_rows: null, vgl_json: null, warnings: [] }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    )
+    const store = createFormStore("pup-ui-zh", { persistDrafts: false })
+    store.getState().load(tabOwners(tabSchema("txt2img")))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(keys.app, bootstrapWith({ forge_preset: "sdxl", sd_model_checkpoint: "animagine-xl.safetensors" }))
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      render(
+        <QueryClientProvider client={client}>
+          <FormProvider formId="txt2img" store={store}>
+            <PupTrigger value="cat" setValue={vi.fn()} />
+          </FormProvider>
+        </QueryClientProvider>,
+      )
+      fireEvent.click(screen.getByRole("button", { name: zhCN["Upsample prompt (PUP)"] }))
+      const dialog = await screen.findByRole("dialog", {}, { timeout: 15_000 })
+      fireEvent.click(within(dialog).getByRole("button", { name: zhCN["Upsample"] }))
+      await within(dialog).findByText(zhCN["Generic"])
+      expect(within(dialog).getByText(zhCN["Text to image"])).toBeInTheDocument()
+      expect(within(dialog).queryByText("generic")).toBeNull()
+      expect(within(dialog).queryByText("t2i")).toBeNull()
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
+    // "auto" is never a family a result names; it is the picker's own choice, translated there
+    expect("auto" in PUP_FAMILY_LABELS).toBe(false)
+  }, 20_000)
 
   it("says why upsampling failed in the UI language, keeping the model's answer", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(

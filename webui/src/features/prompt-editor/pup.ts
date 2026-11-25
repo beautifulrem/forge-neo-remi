@@ -10,8 +10,11 @@ import type { FormState } from "@/ui/form-store"
 export const PUP_FAMILIES = ["auto", "flux3", "qwen21", "moss", "fibo", "zimage", "ernie", "anima"] as const
 export type PupFamily = (typeof PUP_FAMILIES)[number]
 
-export const PUP_FAMILY_LABELS: Record<PupFamily, string> = {
-  auto: "Auto",
+/**
+ * Model names, shown as they are (not translated). No "auto": that is the picker's own choice,
+ * shown as `t("Auto")`, and a result always names the family the server picked.
+ */
+export const PUP_FAMILY_LABELS: Record<Exclude<PupFamily, "auto">, string> = {
   flux3: "FLUX.3",
   qwen21: "Qwen-2.1",
   moss: "MOSS",

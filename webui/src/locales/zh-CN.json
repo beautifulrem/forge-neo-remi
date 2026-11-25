@@ -1691,5 +1691,13 @@
   "Preview source": "预览图来源",
   "Offline": "离线",
   "Overridden by a lock: {{names}}": "被锁定覆盖：{{names}}",
-  "Not in this form: {{names}}": "此表单中没有：{{names}}"
+  "Not in this form: {{names}}": "此表单中没有：{{names}}",
+  "Generic": "通用",
+  "Starting": "启动中",
+  "Idle": "空闲",
+  "Busy": "忙碌",
+  "Restarting": "重启中",
+  "Unavailable": "不可用",
+  "Ready": "就绪",
+  "Crashed": "已崩溃"
 }

@@ -273,9 +273,12 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
           {result ? (
             <div className="flex flex-col gap-2 border-t border-border pt-3">
               <div className="flex flex-wrap items-center gap-2 font-mono text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">{PUP_FAMILY_LABELS[result.model_family as PupFamily] ?? result.model_family}</span>
+                <span className="font-medium text-foreground">
+                  {/* the server answers "generic" for a model without a template of its own */}
+                  {result.model_family === "generic" ? t("Generic") : (PUP_FAMILY_LABELS[result.model_family as keyof typeof PUP_FAMILY_LABELS] ?? result.model_family)}
+                </span>
                 <span aria-hidden className="size-0.5 rounded-full bg-muted-foreground/50" />
-                <span>{result.mode}</span>
+                <span>{t(PUP_MODE_LABELS[result.mode as PupMode] ?? result.mode)}</span>
                 <span aria-hidden className="size-0.5 rounded-full bg-muted-foreground/50" />
                 <span>{result.backend}</span>
                 {result.used_reference_count > 0 ? (
