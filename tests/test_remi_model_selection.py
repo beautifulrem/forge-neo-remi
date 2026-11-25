@@ -148,7 +148,8 @@ def test_a_frozen_model_setting_is_refused_also_while_a_job_runs(applied, monkey
     from modules.call_queue import queue_lock
 
     monkeypatch.setattr(model_selection, "_start_waiter", lambda: None)
-    monkeypatch.setattr(sd_models, "checkpoint_aliases", {"second.safetensors": object()})
+    monkeypatch.setattr(sd_models, "checkpoint_aliases", {"first.safetensors": object(), "second.safetensors": object()})
+    monkeypatch.setitem(shared.opts.data, "samples_format", "png")
     monkeypatch.setattr(shared.cmd_opts, flag, value)
     assert shared.opts.data_labels["sd_model_checkpoint"].section[0] == "sd"
     with queue_lock:
@@ -160,6 +161,14 @@ def test_a_frozen_model_setting_is_refused_also_while_a_job_runs(applied, monkey
     with pytest.raises(AssertionError):  # and with the lock free, as Options.set refuses it
         model_selection.select("sd_model_checkpoint", "second.safetensors")
     assert applied == []
+    # the stored pick posted back unchanged (a client sending what GET answered) is no change
+    with queue_lock:
+        model_selection.select("sd_model_checkpoint", "first.safetensors")
+    model_selection.apply_held(apply=lambda key, value: True)
+    model_selection.select("sd_model_checkpoint", "first.safetensors")
+    if flag != "freeze_settings":  # (--freeze-settings refuses saving the other settings too, as upstream does)
+        Api(FastAPI(), queue_lock).set_config({"sd_model_checkpoint": "first.safetensors", "samples_format": "webp"})
+        assert shared.opts.data["samples_format"] == "webp"
 
 
 def test_held_picks_reach_the_model_manager_as_it_stores_them(webui, monkeypatch, tmp_path):

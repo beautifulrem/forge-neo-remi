@@ -141,9 +141,10 @@ def select(key: str, value: Any, apply: Callable[[str, Any], bool] | None = None
     setting (``--freeze-settings*``) raises ``AssertionError``, as
     ``Options.set`` does, also when the pick would be held: the waiter's
     later apply failed there, only logged, after the request had answered
-    as if it worked."""
+    as if it worked. The stored pick sent again (a client posting back what
+    ``GET /sdapi/v1/options`` answered) is no change and passes."""
 
-    _check_not_frozen(key)
+    _check_not_frozen(key, value)
     lock = _generation_lock()
     if lock.acquire(blocking=False):
         try:
@@ -160,10 +161,15 @@ def select(key: str, value: Any, apply: Callable[[str, Any], bool] | None = None
     return True
 
 
-def _check_not_frozen(key: str) -> None:
+def _check_not_frozen(key: str, value: Any) -> None:
     from modules import shared
     from remi.setting_values import frozen_reason
 
+    stored = shared.opts.data.get(key)
+    if isinstance(value, list) and isinstance(stored, list) and all(isinstance(item, str) for item in value + stored):
+        value, stored = sorted(value), sorted(stored)  # modules in another order (modules_change sorts them)
+    if value == stored:  # unchanged: Options.set and the model manager leave it as it is
+        return
     reason = frozen_reason(shared.opts, key, shared.cmd_opts)
     if reason is not None:
         raise AssertionError(f"not possible to set '{key}': {reason}")
