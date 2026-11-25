@@ -33,15 +33,18 @@ def env(webui, tmp_path, monkeypatch):
     ext_dir = tmp_path / "extensions"
     ext_dir.mkdir()
     states = tmp_path / "config_states"
+    # where an installation with --data-dir kept its backups before they moved to the data folder
+    legacy = tmp_path / "install" / "config_states"
     monkeypatch.setattr(extensions, "extensions_dir", str(ext_dir))
     monkeypatch.setattr(extensions, "extensions", [])
     monkeypatch.setattr(config_states, "config_states_dir", str(states))
+    monkeypatch.setattr(admin, "_legacy_states_dir", lambda: str(legacy))
     monkeypatch.setattr(shared, "config_filename", str(tmp_path / "config.json"))
     monkeypatch.setattr(shared.opts, "disabled_extensions", [], raising=False)
     monkeypatch.setattr(shared.cmd_opts, "disable_extension_access", False)
     monkeypatch.setattr(admin, "_index_cache", None)
     with server_app(tmp_path / "remi") as server:
-        yield SimpleNamespace(server=server, client=server.client, ext_dir=ext_dir, states=states, tmp=tmp_path)
+        yield SimpleNamespace(server=server, client=server.client, ext_dir=ext_dir, states=states, legacy=legacy, tmp=tmp_path)
 
 
 def fake_ext(name, *, path, builtin=False, remote="https://github.com/u/repo.git", enabled=True, **extra):
@@ -416,6 +419,51 @@ def test_config_states_round_trip(env, monkeypatch):
     assert env.client.get("/api/v2/extensions/config-states/nope.json").status_code == 404
     assert env.client.delete(f"/api/v2/extensions/config-states/{saved['id']}").status_code == 204
     assert env.client.get("/api/v2/extensions/config-states").json() == []
+
+
+def test_backups_left_in_the_installation_folder_are_still_listed(env, monkeypatch):
+    """With --data-dir, backups were kept in the installation folder's config_states/ until they
+    moved to the data folder: those are listed and restored too (the data folder's copy wins a
+    name both hold), never written or deleted; new backups go to the data folder."""
+
+    from modules import shared
+
+    def backup(folder: Path, name: str, created_at: float, label: str) -> None:
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / name).write_text(json.dumps({"name": label, "created_at": created_at, "webui": {}, "extensions": {}}), encoding="utf-8")
+
+    backup(env.states, "2026_11_01-10_00_00_new.json", 1_793_000_000, "new")
+    backup(env.legacy, "2026_10_01-10_00_00_old.json", 1_790_000_000, "old")
+    backup(env.legacy, "2026_11_01-10_00_00_new.json", 1_700_000_000, "stale copy")
+    (env.legacy / "broken.json").write_text("{", encoding="utf-8")
+    listed = env.client.get("/api/v2/extensions/config-states").json()
+    assert [(state["id"], state["name"]) for state in listed] == [("2026_11_01-10_00_00_new.json", "new"), ("2026_10_01-10_00_00_old.json", "old")]
+    assert env.client.get("/api/v2/extensions/config-states/2026_10_01-10_00_00_old.json").json()["name"] == "old"
+
+    restored = env.client.post("/api/v2/extensions/config-states/2026_10_01-10_00_00_old.json/restore", json={"what": "extensions"})
+    assert restored.json() == {"reload": True}
+    assert Path(shared.opts.restore_config_state_file) == env.legacy / "2026_10_01-10_00_00_old.json"
+    shared.opts.restore_config_state_file = ""
+
+    refused = env.client.delete("/api/v2/extensions/config-states/2026_10_01-10_00_00_old.json")
+    assert refused.status_code == 422 and refused.json()["params"] == {"name": "2026_10_01-10_00_00_old.json"}
+    assert (env.legacy / "2026_10_01-10_00_00_old.json").is_file()
+    saved = env.client.post("/api/v2/extensions/config-states", json={"name": "fresh"}).json()
+    assert (env.states / saved["id"]).is_file() and not (env.legacy / saved["id"]).exists()
+    assert env.client.delete("/api/v2/extensions/config-states/2026_11_01-10_00_00_new.json").status_code == 204
+    assert (env.legacy / "2026_11_01-10_00_00_new.json").is_file()  # the copy in the installation folder is not touched
+
+
+def test_the_installation_folders_backups_are_read_only_when_the_data_folder_is_elsewhere(tmp_path, monkeypatch):
+    from modules import config_states, paths_internal
+
+    install, data = tmp_path / "install", tmp_path / "data"
+    monkeypatch.setattr(paths_internal, "script_path", str(install))
+    monkeypatch.setattr(config_states, "config_states_dir", str(data / "config_states"))
+    assert admin._legacy_states_dir() == str(install / "config_states")
+    # a default installation: the data folder is the installation folder
+    monkeypatch.setattr(config_states, "config_states_dir", str(install / "config_states"))
+    assert admin._legacy_states_dir() is None
 
 
 def test_a_fresh_backup_matches_the_current_state(env, monkeypatch):

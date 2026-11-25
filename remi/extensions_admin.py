@@ -813,6 +813,17 @@ def _states_dir() -> str:
     return config_states.config_states_dir
 
 
+def _legacy_states_dir() -> str | None:
+    """``config_states/`` in the installation folder, where an installation run with
+    ``--data-dir`` kept its backups before they moved to the data folder; None when that
+    is the data folder's (a default installation)."""
+
+    from modules import paths_internal
+
+    legacy = os.path.join(paths_internal.script_path, "config_states")
+    return None if os.path.realpath(legacy) == os.path.realpath(_states_dir()) else legacy
+
+
 def save_config_state(name: str = "") -> dict[str, Any]:
     """Write the current WebUI and extension commits to ``config_states/``."""
 
@@ -831,13 +842,49 @@ def save_config_state(name: str = "") -> dict[str, Any]:
     return state_summary(state)
 
 
+def _read_states(folder: str) -> list[dict[str, Any]]:
+    """The backups in ``folder`` (files that are no backup skipped), each with its ``filepath``."""
+
+    try:
+        names = sorted(os.listdir(folder))
+    except OSError:
+        return []
+    states = []
+    for name in names:
+        path = os.path.join(folder, name)
+        if not name.endswith(".json") or not os.path.isfile(path):
+            continue
+        try:
+            with open(path, encoding="utf-8") as file:
+                state = json.load(file)
+        except (OSError, ValueError):
+            continue
+        created = state.get("created_at") if isinstance(state, dict) else None
+        if isinstance(created, (int, float)) and not isinstance(created, bool):
+            states.append({**state, "filepath": path})
+    return states
+
+
 def _load_states() -> dict[str, dict[str, Any]]:
-    """State file name → state (newest first; unreadable files skipped)."""
+    """State file name → state (newest first; unreadable files skipped): the data folder's
+    backups, and those an older version left in the installation folder (read only; the data
+    folder's file wins a name both hold)."""
 
     from modules import config_states
 
     config_states.list_config_states()
-    return {os.path.basename(state["filepath"]): state for state in config_states.all_config_states.values()}
+    states = {os.path.basename(state["filepath"]): state for state in config_states.all_config_states.values()}
+    legacy = _legacy_states_dir()
+    if legacy is None:
+        return states
+    for state in _read_states(legacy):
+        states.setdefault(os.path.basename(state["filepath"]), state)
+    return dict(sorted(states.items(), key=lambda item: item[1]["created_at"], reverse=True))
+
+
+def _is_legacy(state: dict[str, Any]) -> bool:
+    legacy = _legacy_states_dir()
+    return legacy is not None and os.path.dirname(os.path.realpath(state["filepath"])) == os.path.realpath(legacy)
 
 
 def state_summary(state: dict[str, Any]) -> dict[str, Any]:
@@ -916,6 +963,8 @@ def config_state_detail(state_id: str) -> dict[str, Any]:
 def delete_config_state(state_id: str) -> None:
     check_access()
     state = _state(state_id)
+    if _is_legacy(state):
+        raise AdminError("the backup {{name}} is in the installation folder's config_states/, which is only read: move it to the data folder to delete it here", name=state_id)
     with lock:
         os.remove(state["filepath"])
 
