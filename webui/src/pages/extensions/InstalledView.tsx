@@ -209,7 +209,7 @@ function Group(props: { title: string; count: number; defaultOpen: boolean; filt
   return (
     // an inspector panel like the form sections (`ui/layout/panel.ts`), not a card
     <Collapsible open={open} onOpenChange={setOpen} className={panelClass(0)}>
-      <CollapsibleTrigger className={cn("flex min-h-8 w-full items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50", panelTitleClass(0))}>
+      <CollapsibleTrigger className={cn("flex min-h-8 w-full items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-focus-ring", panelTitleClass(0))}>
         {t(props.title)}
         <span className="text-xs font-normal text-muted-foreground tabular-nums">{props.count}</span>
         <ChevronDown className={cn("ml-auto size-4 text-muted-foreground transition-transform duration-150", !open && "-rotate-90")} aria-hidden />

@@ -236,7 +236,7 @@ function RowView({ item, kind, id, index, active, cursor, mismatch, onApply, onA
         onContextMenu={contextMenu(onAction, item, index)}
         className={cn(
           "flex size-full cursor-pointer items-center gap-3 rounded-lg px-2 transition-colors select-none group-hover/row:bg-muted",
-          "data-cursor:bg-accent data-cursor:ring-1 data-cursor:ring-ring/50",
+          "data-cursor:bg-accent data-cursor:ring-1 data-cursor:ring-focus-ring",
         )}
       >
         <div className="relative size-10 shrink-0">

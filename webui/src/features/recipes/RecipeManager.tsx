@@ -207,7 +207,7 @@ export function RecipeManager() {
               aria-pressed={family === item}
               onClick={() => setFamily(item)}
               className={cn(
-                "h-7 rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                "h-7 rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
                 item && "font-mono",
                 family === item ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
               )}

@@ -126,7 +126,7 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
       {listed.length > 0 || inapplicable.length > 0 ? (
         <Collapsible.Root open={open} onOpenChange={setOpen} render={<section aria-labelledby={`${id}-title`} />} className={cn("flex flex-col gap-2", panelClass(0))}>
           <div className="flex min-h-8 items-center gap-2">
-            <Collapsible.Trigger className={cn("group/trigger flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50", panelTitleClass(0))}>
+            <Collapsible.Trigger className={cn("group/trigger flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-focus-ring", panelTitleClass(0))}>
               <span id={`${id}-title`}>{t("Extensions")}</span>
               <span className="font-mono text-xs font-normal text-muted-foreground tabular-nums">{listed.length}</span>
               {activeCount > 0 ? <span className="font-mono text-xs font-medium text-primary tabular-nums">{t("{{count}} on", { count: activeCount })}</span> : null}
@@ -191,7 +191,7 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
                 data-slot="inapplicable-scripts"
                 className="mt-1 flex flex-col gap-2 border-t border-border/60 pt-2.5"
               >
-                <Collapsible.Trigger className="group/inapp flex min-h-7 w-full items-center gap-2 rounded-sm text-left text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
+                <Collapsible.Trigger className="group/inapp flex min-h-7 w-full items-center gap-2 rounded-sm text-left text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring">
                   <span className="truncate">{t("Not applicable for active model")}</span>
                   <span className="font-mono text-xs font-normal text-muted-foreground tabular-nums">{shownInapplicable.length}</span>
                   {inapplicableActiveCount > 0 ? (

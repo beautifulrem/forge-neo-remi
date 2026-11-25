@@ -114,7 +114,7 @@ export function SearchSelectImpl({ openOnMount, standInKey, ...props }: ImplProp
             <div className="border-b p-1">
               <Combobox.Input
                 placeholder={t("Search…")}
-                className="h-8 w-full rounded-md bg-input/30 px-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+                className="h-8 w-full rounded-md bg-input/30 px-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-focus-ring"
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && offerCustom && !isComposing(event)) {
                     event.preventDefault()

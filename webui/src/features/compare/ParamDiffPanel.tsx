@@ -125,7 +125,7 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
       {/* planned rows: the actions follow the title or take a row of their own as one group; where even
           that row is too narrow for the three (a phone), the toggle sits above the two apply buttons */}
       <div className="@container/diffbar flex flex-wrap items-center gap-2">
-        <CollapsibleTrigger className="flex h-7 items-center gap-1.5 rounded-sm px-1 text-xs font-semibold tracking-wide text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+        <CollapsibleTrigger className="flex h-7 items-center gap-1.5 rounded-sm px-1 text-xs font-semibold tracking-wide text-foreground outline-none focus-visible:ring-2 focus-visible:ring-focus-ring">
           <ChevronDown className={cn("size-3.5 text-muted-foreground transition-transform duration-150", !open && "-rotate-90")} aria-hidden />
           <ArrowRightLeft className="size-3.5 text-muted-foreground" aria-hidden />
           <span>{t("Parameters diff")}</span>

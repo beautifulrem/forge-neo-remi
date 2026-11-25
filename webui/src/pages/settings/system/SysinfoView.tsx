@@ -35,7 +35,7 @@ function Section({ name, value }: { name: string; value: unknown }) {
   return (
     // an inspector panel (`ui/layout/panel.ts`), not a card: the title on the column's edge, the chevron at the row's end
     <Collapsible open={open} onOpenChange={setOpen} className={panelClass(0)}>
-      <CollapsibleTrigger className={cn("flex min-h-8 w-full items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50", panelTitleClass(0))}>
+      <CollapsibleTrigger className={cn("flex min-h-8 w-full items-center gap-2 rounded-sm text-left outline-none focus-visible:ring-3 focus-visible:ring-focus-ring", panelTitleClass(0))}>
         <span className="flex-1">{t(name)}</span>
         {hint ? <span className="text-xs font-normal text-muted-foreground tabular-nums">{hint}</span> : null}
         <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")} aria-hidden />
@@ -55,7 +55,7 @@ function CheckFile() {
   const check = useMutation({ mutationFn: async (file: File) => api.system.checkSysinfo(await file.text()) })
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <label htmlFor={id} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "cursor-pointer focus-within:ring-3 focus-within:ring-ring/50")}>
+      <label htmlFor={id} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "cursor-pointer focus-within:ring-3 focus-within:ring-focus-ring")}>
         {check.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <FileCheck2 aria-hidden />}
         {t("Check a sysinfo file")}
         <input

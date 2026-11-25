@@ -81,6 +81,11 @@
   --border: oklch(0.20 0.014 255 / 10.5%);
   --input: oklch(0.20 0.014 255 / 20%);
   --ring: oklch(var(--brand-l) var(--brand-c) var(--brand-h));
+  /* The focus ring: --ring through a share of transparency. Half of it read at about 2.2:1 on the
+     paper; 80 % reaches 3:1 or more on the page and the stage's backdrop for every accent
+     (src/styles/focus-ring.test.ts). Re-derived with --ring wherever an accent is set. */
+  --focus-ring-alpha: 80%;
+  --focus-ring: color-mix(in oklab, var(--ring) var(--focus-ring-alpha), transparent);
   --chart-1: oklch(0.56 0.10 var(--brand-h));
   --chart-2: oklch(0.58 0.16 33);
   --chart-3: oklch(0.66 0.12 85);
@@ -139,6 +144,8 @@
   --brand-l: 0.75;
   --brand-hover-dl: 0.04;
   --brand-fg: oklch(0.17 0.022 var(--brand-h));
+  /* the darkroom keeps the half-strength focus ring */
+  --focus-ring-alpha: 50%;
 
   /* Darkroom Graphite & Warm Ivory studio palette: calibrated 4-step neutral ladder */
   --canvas: oklch(0.128 0.005 255);
@@ -221,6 +228,7 @@
   --primary-hover: oklch(calc(var(--brand-l) + var(--brand-hover-dl)) var(--brand-c) var(--brand-h));
   --primary-foreground: var(--brand-fg);
   --ring: oklch(var(--brand-l) var(--brand-c) var(--brand-h));
+  --focus-ring: color-mix(in oklab, var(--ring) var(--focus-ring-alpha), transparent);
 }
 
 /* Compact density scales every spacing utility (padding, gap, h-*, size-*). */
@@ -272,6 +280,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-focus-ring: var(--focus-ring);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -323,7 +332,7 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-focus-ring;
   }
 
   /* A right-to-left UI keeps numbers in their own order ("-1", "0.05"), aligned like the labels. */

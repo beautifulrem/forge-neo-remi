@@ -179,7 +179,7 @@ function BoxView({
       }}
       className={cn(
         "absolute flex min-h-5 min-w-5 touch-none flex-col overflow-hidden rounded-sm border-[1.5px] outline-none select-none",
-        "cursor-move transition-[border-color,box-shadow] focus-visible:ring-3 focus-visible:ring-ring/50",
+        "cursor-move transition-[border-color,box-shadow] focus-visible:ring-3 focus-visible:ring-focus-ring",
         // the selection is a ring; the shadow only while a drag holds the box (shadows are for what floats)
         (active || dragging) && "z-10 ring-3 ring-primary/30",
         dragging && "shadow-lg",

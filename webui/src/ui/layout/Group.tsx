@@ -29,7 +29,7 @@ export function Group({ node }: { node: GroupNode }) {
       <Collapsible.Trigger
         className={cn(
           "group/trigger -mx-1 flex items-center gap-1 rounded-sm px-1 py-1 text-left text-[0.8rem] font-medium text-muted-foreground outline-none",
-          "hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+          "hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring",
         )}
       >
         <ChevronRight aria-hidden className="size-3.5 transition-transform duration-200 group-data-[panel-open]/trigger:rotate-90" />

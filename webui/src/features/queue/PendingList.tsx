@@ -253,7 +253,7 @@ export function PendingList({ jobs }: { jobs: readonly Job[] }) {
                   aria-label={t("Move job #{{seq}}", { seq: job.seq })}
                   aria-pressed={grabbed}
                   aria-describedby="queue-reorder-help"
-                  className="grid h-9 w-6 shrink-0 cursor-grab touch-none place-items-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing"
+                  className="grid h-9 w-6 shrink-0 cursor-grab touch-none place-items-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring active:cursor-grabbing"
                   onPointerDown={(event) => {
                     if (event.button !== 0 || grab) return
                     event.currentTarget.setPointerCapture?.(event.pointerId)

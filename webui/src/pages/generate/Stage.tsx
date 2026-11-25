@@ -203,7 +203,7 @@ export function Stage({ tab, onOpenViewer, className, leading, trailing, toolbar
           type="button"
           onClick={onOpenViewer}
           aria-label={t("Open image viewer")}
-          className="group/stage flex size-full items-center justify-center outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="group/stage flex size-full items-center justify-center outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
         >
           {live ? (
             <LivePreview src={live} alt={t("Live preview")} />

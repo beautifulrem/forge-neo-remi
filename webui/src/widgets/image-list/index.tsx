@@ -188,7 +188,7 @@ export default function ImageListWidget({ value, onChange, props, disabled, id, 
               event.preventDefault()
               void add(Array.from(event.dataTransfer.files))
             }}
-            className="grid gap-1.5 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="grid gap-1.5 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
             style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
           >
             {ids.map((imageId, index) => {

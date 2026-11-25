@@ -81,7 +81,7 @@ export function DropZone(props: DropZoneProps) {
       }}
       className={cn(
         "relative cursor-pointer rounded-lg border border-dashed border-input outline-none transition-colors",
-        "hover:border-ring/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+        "hover:border-ring/60 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-focus-ring",
         "data-dragging:border-primary data-dragging:bg-primary/5",
         "aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20",
         disabled && "pointer-events-none opacity-60",

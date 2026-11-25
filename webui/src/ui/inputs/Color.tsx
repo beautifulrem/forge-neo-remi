@@ -39,7 +39,7 @@ export function Color({ node }: { node: ColorNode }) {
       disabled={disabled}
     >
       <div className="flex items-center gap-1.5">
-        <div className="relative size-8 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-input bg-checker focus-within:ring-3 focus-within:ring-ring/50">
+        <div className="relative size-8 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-input bg-checker focus-within:ring-3 focus-within:ring-focus-ring">
           <span aria-hidden className="absolute inset-0" style={{ backgroundColor: value }} />
           <input
             type="color"

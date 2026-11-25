@@ -38,7 +38,7 @@ function TagButton({ item, pressed, disabled, onToggle }: { item: FlatTag; press
       onClick={onToggle}
       className={cn(
         "flex max-w-full min-w-0 flex-col items-start rounded-md border px-2 py-1 text-left text-xs leading-tight transition-colors outline-none",
-        "hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50",
+        "hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-focus-ring disabled:opacity-50",
         pressed ? "border-primary/50 bg-primary/10 text-primary hover:bg-primary/15" : "border-border bg-background",
       )}
     >
@@ -167,7 +167,7 @@ function CategoryStrip({ categories, current, onSelect: setCategory }: { categor
           tabIndex={cat === current ? 0 : -1}
           onClick={() => setCategory(index)}
           className={cn(
-            "shrink-0 rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+            "shrink-0 rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-focus-ring",
             cat === current ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
           )}
         >

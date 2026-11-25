@@ -276,7 +276,7 @@ export default function QueuePage({ route }: { route?: Route } = {}) {
               aria-selected={active}
               onClick={() => setMode(id)}
               className={cn(
-                "relative inline-flex h-9 items-center gap-1.5 px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                "relative inline-flex h-9 items-center gap-1.5 px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
                 active
                   ? "text-foreground after:absolute after:inset-x-1 after:bottom-0 after:h-0.5 after:bg-primary"
                   : "text-muted-foreground hover:text-foreground",

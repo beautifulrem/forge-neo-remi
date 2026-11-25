@@ -189,7 +189,7 @@ function Manage(props: Props) {
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               {tw("Existing template")}
               <select
-                className="h-8 min-w-40 rounded-sm border border-transparent bg-field px-2 pr-7 text-sm text-foreground outline-none hover:bg-field-hover focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="h-8 min-w-40 rounded-sm border border-transparent bg-field px-2 pr-7 text-sm text-foreground outline-none hover:bg-field-hover focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-focus-ring"
                 value={target}
                 onChange={(event) => setChosen(event.target.value)}
               >

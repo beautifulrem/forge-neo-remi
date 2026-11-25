@@ -59,7 +59,7 @@ const theme = EditorView.theme({
   },
   "&.cm-focused": {
     outline: "none",
-    boxShadow: "inset 0 0 0 1px var(--ring), 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent)",
+    boxShadow: "inset 0 0 0 1px var(--ring), 0 0 0 3px var(--focus-ring)",
   },
   ".cm-scroller": {
     fontFamily: "var(--font-sans)",

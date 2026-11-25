@@ -307,7 +307,7 @@ export default function FavoritesPanel({ value, setValue, kind, disabled, close 
                       disabled={disabled}
                       onClick={() => use(item)}
                       title={item.kind === "tags" ? t("Add to the prompt") : t("Use this prompt")}
-                      className="min-w-0 flex-1 rounded-md px-1 py-0.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+                      className="min-w-0 flex-1 rounded-md px-1 py-0.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-focus-ring disabled:opacity-50"
                     >
                       <span className="flex items-center gap-1.5">
                         {item.name ? <span title={item.name} className="truncate text-xs font-semibold">{item.name}</span> : null}

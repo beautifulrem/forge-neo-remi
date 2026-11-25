@@ -114,7 +114,7 @@ export function HistoryGrid({ onOpen, orientation = "grid", className }: History
       tabIndex={0}
       onKeyDown={onKeyDown}
       className={cn(
-        "relative min-h-0 overscroll-contain rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        "relative min-h-0 overscroll-contain rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-focus-ring",
         strip ? "overflow-x-auto overflow-y-hidden" : "overflow-y-auto",
         className,
       )}

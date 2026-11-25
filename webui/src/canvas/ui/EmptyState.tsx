@@ -68,7 +68,7 @@ export function EmptyState({ busy, noUpload, blankSize, hint, error, loadFailed,
         disabled={busy}
         className={cn(
           "group/empty flex w-full max-w-sm flex-col items-center gap-3 rounded-md border border-dashed border-input px-6 py-8 text-center outline-none transition-colors",
-          "hover:border-ring/60 hover:bg-primary/5 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+          "hover:border-ring/60 hover:bg-primary/5 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-focus-ring",
           "aria-invalid:border-destructive/60",
         )}
       >

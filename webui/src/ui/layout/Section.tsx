@@ -70,7 +70,7 @@ export function Section({ node }: { node: SectionNode }) {
           className={cn(
             "group/trigger flex min-w-0 flex-1 items-center gap-1.5 self-stretch rounded-sm text-left outline-none",
             panelTitleClass(depth),
-            "focus-visible:ring-3 focus-visible:ring-ring/50",
+            "focus-visible:ring-3 focus-visible:ring-focus-ring",
           )}
         >
           <span id={`${id}-title`} title={title} className={cn("truncate", enabled && "text-foreground")}>

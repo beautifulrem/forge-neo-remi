@@ -64,7 +64,7 @@ function LicenseEntry({ entry, depth }: { entry: Entry; depth: number }) {
       </div>
       {entry.license_url ? (
         <Collapsible open={open} onOpenChange={setOpen}>
-          <CollapsibleTrigger className="relative flex w-fit items-center gap-1.5 rounded-sm py-0.5 text-left after:absolute after:-inset-x-2 after:-inset-y-2.5 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
+          <CollapsibleTrigger className="relative flex w-fit items-center gap-1.5 rounded-sm py-0.5 text-left after:absolute after:-inset-x-2 after:-inset-y-2.5 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring">
             <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} aria-hidden />
             {open ? t("Hide license") : t("Show license")}
           </CollapsibleTrigger>

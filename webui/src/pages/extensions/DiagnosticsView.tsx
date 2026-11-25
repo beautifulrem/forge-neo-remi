@@ -318,7 +318,7 @@ export function DiagnosticsView() {
                 aria-pressed={filter === btn.id}
                 onClick={() => setParams({ filter: btn.id })}
                 className={cn(
-                  "relative h-7 rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                  "relative h-7 rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
                   filter === btn.id
                     ? "bg-muted text-foreground"
                     : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",

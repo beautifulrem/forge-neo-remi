@@ -295,14 +295,22 @@ imperatively).
   (`pages/generate/LivePreview.tsx` stacks the new frame over the previous
   one without animating it: a 150 ms fade drew about 12 frames per step).
 - Scrollbars: thin, theme-aware (`--scrollbar`). Focus: visible rings from
-  `--ring` everywhere (`outline-ring/50`, `focus-visible:ring-3`).
+  `--focus-ring` everywhere (`outline-focus-ring`, `focus-visible:ring-3
+  focus-visible:ring-focus-ring`): `--ring` mixed with transparency, 80 %
+  of it in the light theme, where half of it read at about 2.2:1 on the
+  paper and 80 % reaches 3:1 on the page and on `--canvas` for every
+  accent (`styles/focus-ring.test.ts`), half in the dark theme. It is
+  re-derived with `--ring` wherever an accent is set. A focus ring takes
+  the token rather than a share of `--ring` of its own (`ring-ring/50`).
 - See [Visual rules](#visual-rules) for the design rules every new screen
   follows.
 - shadcn components import `cn` from the `cn` package (what the base-nova
   registry ships); app code imports it from `@/lib/utils`. Local fixes to
-  vendored components: scalar sliders render one thumb and forward
-  `getAriaLabel`; a select's value ellipsizes (line-clamp does nothing on
-  the flex value); a dialog or alert dialog is no taller and no wider than
+  vendored components: their focus rings take `ring-focus-ring` and
+  `outline-focus-ring` instead of the registry's `ring-ring/50`; scalar
+  sliders render one thumb and forward `getAriaLabel`; a select's value
+  ellipsizes (line-clamp does nothing on the flex value); a dialog or
+  alert dialog is no taller and no wider than
   the window less 2rem and the safe-area insets, and scrolls inside (up and
   down only; the full-screen editor opts out with `max-h-none`), and the command dialog no taller than the
   room below its top, its list shrinking; a popover, like the menus and
@@ -370,7 +378,7 @@ generated interfaces (sources: Linear's
   a shadow together, and no one-sided edge: a field (input, select, number,
   the prompt editor, `FIELD_BUTTON_CLASS`) is a flat fill (`--field`) with
   no underline or bottom shadow, and focus rings it evenly (`border-ring`
-  plus a 3 px `ring-ring/50`). Image tiles (network cards) keep a hairline
+  plus a 3 px `ring-focus-ring`). Image tiles (network cards) keep a hairline
   ring and no shadow. A focus ring over an image is drawn where the image
   cannot cover it: an inset ring is a box shadow and the tile's own outline
   is painted before its content, so an image that fills the tile hides

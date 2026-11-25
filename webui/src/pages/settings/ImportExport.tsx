@@ -72,7 +72,7 @@ export function ImportDialog({ open, onOpenChange, onStaged }: { open: boolean; 
         </DialogHeader>
         <label
           htmlFor={inputId}
-          className="flex cursor-pointer flex-col items-center gap-2 rounded-md border border-dashed px-4 py-6 text-center text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/40 focus-within:ring-3 focus-within:ring-ring/50"
+          className="flex cursor-pointer flex-col items-center gap-2 rounded-md border border-dashed px-4 py-6 text-center text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/40 focus-within:ring-3 focus-within:ring-focus-ring"
         >
           {busy ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <FileUp className="size-5" aria-hidden />}
           <span>{t("Choose a .json settings file")}</span>

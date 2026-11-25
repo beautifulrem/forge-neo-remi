@@ -177,7 +177,7 @@ export function PreviewDialog({ item, open, onOpenChange }: { item: NetworkItem 
                 const image = [...event.dataTransfer.files].find((candidate) => candidate.type.startsWith("image/"))
                 if (image) apply.mutate({ file: image })
               }}
-              className="flex w-full flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed px-4 py-12 text-sm text-muted-foreground transition-colors outline-none hover:border-ring/50 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="flex w-full flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed px-4 py-12 text-sm text-muted-foreground transition-colors outline-none hover:border-ring/50 hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring"
             >
               {apply.isPending ? <Loader2 className="size-6 animate-spin" aria-hidden /> : <ImageUp className="size-6" aria-hidden />}
               {t("Drop an image here or click to choose one")}

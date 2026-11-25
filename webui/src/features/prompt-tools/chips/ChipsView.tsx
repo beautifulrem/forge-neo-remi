@@ -108,7 +108,7 @@ function ChipItem({
           onFocus={onFocus}
           onPointerDown={onPointerDown}
           disabled={disabled}
-          className="rounded-sm px-1.5 text-[0.625rem] font-semibold tracking-widest text-muted-foreground outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="rounded-sm px-1.5 text-[0.625rem] font-semibold tracking-widest text-muted-foreground outline-none select-none focus-visible:ring-3 focus-visible:ring-focus-ring"
         >
           {chip.text}
         </button>
@@ -139,7 +139,7 @@ function ChipItem({
               disabled={disabled}
               className={cn(
                 "group/chip flex max-w-full touch-pan-y items-center gap-1 rounded-sm border bg-background px-1.5 py-0.5 text-left text-xs leading-tight transition-colors outline-none select-none",
-                "hover:border-foreground/25 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:border-primary/60",
+                "hover:border-foreground/25 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-focus-ring data-popup-open:border-primary/60",
                 chip.kind === "network" && "border-chart-2/40 bg-chart-2/8",
                 chip.kind === "wildcard" && "border-chart-5/40 bg-chart-5/8 italic",
                 chip.kind === "comment" && "border-dashed bg-transparent text-muted-foreground italic",
