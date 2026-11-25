@@ -21,14 +21,23 @@ least 90.
 Round 5 was scored at commit `11921e767`; dimensions 1 and 10 were rescored at
 `8fee2e6f2` after the layering and documentation fixes.
 
-## Remaining known deductions (round 5)
+## Known deductions (round 5)
+
+Still open unless a note says otherwise.
 
 - Generation correctness: the LoRA-dependent Anima features need a LoRA in
   `models/Lora` for a reviewer to observe them (`tools/anima_test_loras.py`
   writes test LoRAs; `tools/smoke_real.py --features` uses them); the
-  refiner's CFG and the prompt-schedule rescaler's switch are not written to
-  the infotext, so pasting does not restore them.
+  refiner's CFG and the prompt-schedule rescaler's switch were not written to
+  the infotext. Fixed since (`8976d9b70`): a refiner CFG of 1 or more is
+  written as `Refiner CFG scale` and pasted back
+  (`tests/test_refiner_switch.py`, `tests/test_infotext_paste_roundtrip.py`);
+  the rescaler writes `Anima schedule rescale` (`src35->tgt20@d0.5`), and
+  pasting it restores the source steps but leaves auto-rescale off, as the
+  pasted prompt is already rescaled
+  (`extensions-builtin/sd-forge-anima-prompt-rescale/tests/test_remi_params.py`).
 - Gradio removal: the dev-only legacy UI recorder (`tools/record_legacy_ui.py`,
   `tools/legacy_ui_recordings.py`) still builds Gradio controls in a separate
   Gradio-era interpreter to record porting fixtures.
-- See each round's reviewer reports for the full lists.
+- The reviewers' reports, with the full lists, are not kept in the
+  repository.
