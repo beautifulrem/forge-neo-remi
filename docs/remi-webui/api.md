@@ -470,7 +470,8 @@ What changed underneath, and what it means for clients:
   the presets) and a "restricted" setting (ignored, as above). The model
   selection is checked as on the settings page: a checkpoint the WebUI
   knows, a list of known VAE / text encoder names, an offered low-bits
-  dtype.
+  dtype. The settings it changed are announced (`options.changed`) as
+  after `PATCH /api/v2/options`, so open pages show the new values.
 - The Agent Scheduler (`/agent-scheduler/v1/*`) and Prompt Queue
   (`/prompt-queue/*`) APIs are **not** kept: use `POST /api/v2/jobs` and the
   `/api/v2/queue/*` routes. Their data is imported with

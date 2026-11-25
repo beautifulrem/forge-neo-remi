@@ -712,10 +712,16 @@ class Api:
         if problems:  # every refused value, in the order sent
             problems.sort(key=lambda problem: order.index(problem.param) if problem.param in order else len(order))
             raise HTTPException(status_code=422, detail=f"invalid settings: {ValidationError(problems)}"[:1000])
+        before = {key: shared.opts.data.get(key) for key in req}
         set_config(req, is_api=True)  # restrict_api settings (URL fetching) stay out of the API's reach
+        changed = [key for key in req if shared.opts.data.get(key) != before[key]]
         for key, value in picks.items():
-            if value is not None:
-                model_selection.select(key, value)  # applied now (and saved) when no generation runs
+            if value is not None and model_selection.select(key, value):  # applied now (and saved) when no generation runs
+                changed.append(key)
+        # Remi: announced as PATCH /api/v2/options announces a change, or open pages keep the old values
+        services = getattr(self.app.state, "services", None)
+        if changed and services is not None:
+            services.bus.publish("options.changed", keys=sorted(set(changed)))
 
     def get_cmd_flags(self):
         from modules import redact

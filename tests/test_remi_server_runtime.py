@@ -799,6 +799,34 @@ def test_sdapi_options_checks_values_as_the_settings_page_does(webui_tmp, monkey
         services.close()
 
 
+def test_sdapi_options_announces_the_settings_it_changed(webui_tmp, monkeypatch):
+    """Open pages learn of a change made through ``/sdapi/v1/options`` as of one made through
+    ``PATCH /api/v2/options`` (``options.changed``); they kept showing the old values."""
+    from fastapi.testclient import TestClient
+
+    from modules import shared
+    from remi.jobs import run_inline
+    from remi.server import Services, create_app
+    from remi.server.auth import Auth
+
+    monkeypatch.setattr(shared, "config_filename", str(webui_tmp / "config.json"))
+    for key in ("jpeg_quality", "enable_pnginfo"):
+        monkeypatch.setitem(shared.opts.data, key, shared.opts.data.get(key, shared.opts.data_labels[key].default))
+    quality = 91 if shared.opts.data["jpeg_quality"] == 90 else 90
+    services = Services.create(webui_tmp, dispatch=run_inline, realtime=False, housekeeping=False)
+    events: list[dict] = []
+    unsubscribe = services.bus.subscribe(SimpleNamespace(send_event=events.append, send_frame=lambda frame: None, wants_frames=lambda: False))
+    try:
+        app = create_app(services=services, auth=Auth(), sdapi=True, start_services=False)
+        with TestClient(app, base_url="http://127.0.0.1:7860", raise_server_exceptions=False) as client:
+            assert client.post("/sdapi/v1/options", json={"jpeg_quality": quality, "enable_pnginfo": shared.opts.data["enable_pnginfo"]}).status_code == 200
+            assert client.post("/sdapi/v1/options", json={"jpeg_quality": quality}).status_code == 200  # nothing changed: nothing to announce
+    finally:
+        unsubscribe()
+        services.close()
+    assert [event["keys"] for event in events if event["type"] == "options.changed"] == [["jpeg_quality"]]
+
+
 def test_sdapi_options_leaves_alone_what_the_settings_page_does_not_check(webui_tmp, monkeypatch):
     """What the check leaves as upstream's ``set_config`` had it: a setting set elsewhere
     (``sd_vae``, ``interactive=False``: "None" is A1111's usual value, and refusing it lost the
