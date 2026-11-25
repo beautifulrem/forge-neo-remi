@@ -51,6 +51,8 @@ const Toaster = ({ closeButtonAriaLabel, ...props }: ToasterProps & { closeButto
       toastOptions={{
         classNames: {
           toast: "cn-toast",
+          // a description's lines (one note or one listed value each) stay lines
+          description: "whitespace-pre-line",
         },
         closeButtonAriaLabel,
       }}

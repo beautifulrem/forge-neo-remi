@@ -113,7 +113,10 @@ imperatively).
   lifted above any control pinned to the bottom edge under them
   (`app/toast-offset.ts`): mark such a control `data-toast-obstacle` (the
   phone's bottom navigation and sticky Generate bar, the canvas's bottom
-  toolbars, the apply bars and the gallery's selection bar carry it).
+  toolbars, the apply bars and the gallery's selection bar carry it). A
+  description keeps its line breaks (`whitespace-pre-line` on the toaster's
+  description slot): put each note of a different kind, and each item of a
+  list ("Some values were skipped"), on a line of its own with `\n`.
 - **Pinned bars and the focus**: a bar pinned over an edge of a scroller (the
   generate and Extras run bars, the settings and extensions apply bars, the
   JSON Builder's send bar) takes its ref from `usePinnedBar(edge)`
