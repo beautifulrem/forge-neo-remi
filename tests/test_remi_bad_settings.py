@@ -14,8 +14,8 @@ from remi.testing import webui_state
 
 # Routes that stream, download or start work are not reads to probe here.
 SKIP = {"/internal/sysinfo-download", "/internal/profile-startup", "/api/v2/recipes/export", "/api/v2/prompt-tools/favorites-export", "/docs", "/docs/oauth2-redirect", "/redoc"}
-# 10**400: an int no float holds (math.isfinite raises on it)
-GARBAGE = ["x", math.inf, math.nan, -math.inf, 5, ["x"], {"a": 1}, 10**400]
+# 10**400: an int no float holds (math.isfinite raises on it); "x\udc80": text UTF-8 cannot write
+GARBAGE = ["x", math.inf, math.nan, -math.inf, 5, ["x"], {"a": 1}, 10**400, "x\udc80"]
 # numbers of the right kind beyond any slider: 1e303 MB overflowed into bytes, 1e-9 MB made no upload limit
 EXTREMES = [1e303, -1e303, 1e-9]
 
@@ -116,7 +116,7 @@ def test_a_value_reads_as_the_kind_of_its_default():
     assert fit([], 5) == [] and fit([], ["a"]) == ["a"] and fit([], [5]) == [] and fit([1, 2], [3]) == [3]
     assert fit("png", 5) == "png" and fit("png", "jpg") == "jpg"
     assert fit(None, 5) == 5 and fit("png", None) == "png"
-    assert fit(64, 10**400) == 64
+    assert fit(64, 10**400) == 64 and fit("png", "x\udc80") == "png" and fit([], ["a", "\udc80"]) == [] and fit(None, "\ud83d") is None
     assert fit(64, 1e303, (1, 2048)) == 2048 and fit(64, 1e-9, (1, 2048)) == 1 and fit(64, 100, (1, 2048)) == 100
 
 
@@ -158,7 +158,7 @@ def test_the_temp_folder_cleanup_reads_a_folder(server, garbage, tmp_path):
     from remi.server.launch import cleanup_temp_dir
 
     garbage(True, ["clean_temp_dir_at_start"])
-    for value in (["x"], 1.5, {"a": 1}):
+    for value in (["x"], 1.5, {"a": 1}, "x\udc80"):
         garbage(value, ["temp_dir"])
         cleanup_temp_dir()
     (tmp_path / "left.png").write_bytes(b"")

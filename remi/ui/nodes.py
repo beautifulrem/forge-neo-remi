@@ -463,6 +463,10 @@ class Text(Input):
         if value is None:
             return ""
         if isinstance(value, str):
+            from remi.setting_values import encodable
+
+            if not encodable(value):  # saved as UTF-8 (a setting, a job), it would fail half way
+                raise ParamError("the text has a broken character (an unpaired surrogate)")
             return value
         if _is_number(value):
             return str(value)

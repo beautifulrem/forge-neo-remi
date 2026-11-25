@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import math
 import secrets
@@ -72,10 +73,24 @@ def json_safe(value: Any) -> Any:
     return value
 
 
-class ErrorResponse(JSONResponse):
+class TextSafeResponse(JSONResponse):
+    """The API's JSON. Text with an unpaired surrogate ("\\udc80") cannot be
+    UTF-8: a setting written through ``/sdapi/v1/options`` (which checks
+    nothing) and read back by a tab's schema or the system info failed those
+    requests until the next start. Such text is written with JSON escapes."""
+
+    def render(self, content: Any) -> bytes:
+        try:
+            return super().render(content)
+        except UnicodeEncodeError:
+            return json.dumps(content, ensure_ascii=True, allow_nan=False, indent=None, separators=(",", ":")).encode("ascii")
+
+
+class ErrorResponse(TextSafeResponse):
     """The error handlers' JSON: errors echo the request's values, which may
-    be non-finite numbers (strict JSON cannot encode them; the plain
-    response would fail with a 500 and a logged traceback instead)."""
+    be non-finite numbers (strict JSON cannot encode them) or text with an
+    unpaired surrogate: the plain response would fail with a 500 and a logged
+    traceback instead."""
 
     def render(self, content: Any) -> bytes:
         return super().render(json_safe(content))
@@ -198,6 +213,7 @@ def create_app(
         # FastAPI's docs pages load their viewers from a CDN: ours serve the build's copies
         docs_url=None,
         redoc_url=None,
+        default_response_class=TextSafeResponse,
         exception_handlers={Exception: handle_exception, RequestValidationError: _request_validation_error, ValidationError: _validation_error, JobError: _job_error, FileError: _file_error},
     )
     app.state.services = services

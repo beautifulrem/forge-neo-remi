@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import hashlib
+import json
 import os
 import threading
 import uuid
@@ -152,7 +154,14 @@ def _sysinfo_text(attachment: bool) -> PlainTextResponse:
     from modules import sysinfo as info
 
     filename = f"sysinfo-{datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d-%H-%M')}.json"
-    return PlainTextResponse(info.get(), headers={"Content-Disposition": f'{"attachment" if attachment else "inline"}; filename="{filename}"'})
+    try:
+        text = info.get()
+    except UnicodeEncodeError:
+        # a setting holding an unpaired surrogate (an /sdapi/v1/options write) cannot be UTF-8:
+        # the same file with JSON escapes, its checksum taken the way sysinfo.check reads it
+        text = json.dumps(info.get_dict(), ensure_ascii=True, indent=4)
+        text = text.replace(info.checksum_token, hashlib.sha256(text.encode("utf8")).hexdigest())
+    return PlainTextResponse(text, headers={"Content-Disposition": f'{"attachment" if attachment else "inline"}; filename="{filename}"'})
 
 
 @internal.get("/sysinfo")

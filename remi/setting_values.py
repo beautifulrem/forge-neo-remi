@@ -34,6 +34,25 @@ def _finite(value: Any) -> bool:
         return False
 
 
+def encodable(value: Any) -> bool:
+    """Text UTF-8 can write, in a value or anything it holds: no unpaired
+    surrogate (``"\\udc80"`` in a JSON body). The settings file is written as
+    UTF-8, and one such character stopped the write half way, leaving a file
+    the WebUI could not start from."""
+
+    if isinstance(value, str):
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError:
+            return False
+        return True
+    if isinstance(value, (list, tuple)):
+        return all(encodable(item) for item in value)
+    if isinstance(value, dict):
+        return all(encodable(key) and encodable(item) for key, item in value.items())
+    return True
+
+
 def bounds(info: Any) -> tuple[float, float] | None:
     """The ``(minimum, maximum)`` a setting's slider offers, if it has both."""
 
@@ -48,12 +67,14 @@ def bounds(info: Any) -> tuple[float, float] | None:
 def fit(default: Any, value: Any, limits: tuple[float, float] | None = None) -> Any:
     """``value`` as a setting whose default is ``default``: the default when
     ``value`` is None or of another kind (a non-finite number, a list where a
-    number belongs, a number where a list of names belongs...); a number
-    within ``limits`` when given. A setting without a default (None) takes any
-    value."""
+    number belongs, a number where a list of names belongs, text UTF-8 cannot
+    write...); a number within ``limits`` when given. A setting without a
+    default (None) takes any value UTF-8 can write."""
 
-    if value is None or default is None:
-        return default if value is None else value
+    if value is None or not encodable(value):
+        return default
+    if default is None:
+        return value
     if isinstance(default, bool):
         if isinstance(value, bool):
             return value

@@ -133,6 +133,32 @@ def test_options_patch_rejects_everything_when_one_value_is_bad(server, webui, m
     assert webui.opts.jpeg_quality == 80
 
 
+def test_text_utf8_cannot_write_is_refused_and_the_settings_file_stays_whole(server, webui, monkeypatch, tmp_path):
+    # an unpaired surrogate ("\\udc80", a broken emoji pasted into a field) stopped the UTF-8 write of
+    # config.json half way: the request failed, the file was cut short and the WebUI would not start
+    from modules import shared
+
+    config = tmp_path / "config.json"
+    monkeypatch.setattr(shared, "config_filename", str(config))
+    monkeypatch.setitem(webui.opts.data, "jpeg_quality", 80)
+    assert server.client.patch("/api/v2/options", json={"jpeg_quality": 85}).status_code == 200
+    before = config.read_text(encoding="utf-8")
+    text_setting = "samples_filename_pattern"  # free text
+    body = '{"' + text_setting + '": "x\\udc80", "jpeg_quality": 90}'
+    response = server.client.patch("/api/v2/options", content=body, headers={"Content-Type": "application/json"})
+    assert response.status_code == 422, response.text
+    assert [error["param"] for error in response.json()["errors"]] == [text_setting]
+    assert config.read_text(encoding="utf-8") == before and json.loads(before)["jpeg_quality"] == 85
+    assert server.client.get("/api/v2/options").status_code == 200
+    # a style's text is written to styles.csv the same way
+    from modules import styles
+
+    monkeypatch.setattr(shared, "prompt_styles", styles.StyleDatabase([str(tmp_path / "styles.csv")]))
+    body = '{"prompt": "a cat \\ud83d", "negative_prompt": ""}'
+    assert server.client.put("/api/v2/styles/broken", content=body, headers={"Content-Type": "application/json"}).status_code == 422
+    assert "broken" not in shared.prompt_styles.styles
+
+
 def test_frozen_settings_are_refused_and_locked_in_the_schema(server, webui, monkeypatch):
     from modules import shared
 

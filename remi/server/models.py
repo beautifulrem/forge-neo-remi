@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 FormTab = Literal["txt2img", "img2img", "extras"]
 JobStatus = Literal["queued", "running", "completed", "failed", "cancelled", "interrupted"]
@@ -149,6 +149,16 @@ class Models(Model):
 class StyleBody(Model):
     prompt: str = ""
     negative_prompt: str = ""
+
+    @field_validator("prompt", "negative_prompt")
+    @classmethod
+    def _writable(cls, value: str) -> str:
+        from remi.setting_values import encodable
+
+        # styles.csv is written as UTF-8: the write failed and every later save of a style with it
+        if not encodable(value):
+            raise ValueError("the text has a broken character (an unpaired surrogate)")
+        return value
 
 
 class StylesApplyRequest(Model):

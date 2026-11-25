@@ -52,6 +52,7 @@ def coerce_values(opts: Any, values: Any, cmd_opts: Any) -> dict[str, Any]:
     """The coerced values, or :class:`ValidationError` listing every
     rejected one (nothing is applied then)."""
 
+    from remi.setting_values import encodable
     from remi.ui import nodes
     from remi.ui.settings import setting_node
 
@@ -64,6 +65,9 @@ def coerce_values(opts: Any, values: Any, cmd_opts: Any) -> dict[str, Any]:
         reason = frozen_reason(opts, key, cmd_opts)
         if reason is not None:
             problems.append(_error(key, reason))
+            continue
+        if not encodable(value):  # config.json is written as UTF-8: the write would stop half way
+            problems.append(_error(key, "the text has a broken character (an unpaired surrogate)"))
             continue
         if key in MODEL_KEYS:
             try:
