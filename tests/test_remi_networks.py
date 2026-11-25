@@ -784,4 +784,23 @@ def test_module_files_discovers_sharded_hf_text_encoder_folder_as_single_entry(t
     assert found["Qwen3.5-4B"] == str(sharded)
 
 
+def test_a_sharded_diffusers_vae_folder_is_a_module_the_settings_accept(tmp_path, monkeypatch):
+    """Forge lists such a folder in the VAE folders too (``find_files_with_extensions``) and loads it
+    (``load_torch_file`` reads the shard index; ``replace_state_dict`` converts diffusers VAEs)."""
+    from modules_forge.main_entry import find_files_with_extensions
+    from remi.model_selection import check_value
+
+    vae_root = tmp_path / "VAE"
+    sharded = vae_root / "Wan2.1-VAE"
+    sharded.mkdir(parents=True)
+    (sharded / "diffusion_pytorch_model.safetensors.index.json").write_text(json.dumps({"weight_map": {"decoder.conv_in.weight": "diffusion_pytorch_model-00001-of-00002.safetensors"}}), encoding="utf-8")
+    (sharded / "diffusion_pytorch_model-00001-of-00002.safetensors").write_bytes(b"")
+    (sharded / "diffusion_pytorch_model-00002-of-00002.safetensors").write_bytes(b"")
+
+    monkeypatch.setattr(module, "module_roots", lambda: {"vae": [str(vae_root)], "text_encoders": []})
+    assert [(name, path) for name, path, _root in module.module_files("vae")] == [("Wan2.1-VAE", str(sharded))]
+    assert check_value("forge_additional_modules", ["Wan2.1-VAE"]) == ["Wan2.1-VAE"]
+    assert find_files_with_extensions(str(vae_root), {".safetensors"}) == {"Wan2.1-VAE": str(sharded)}
+
+
 # endregion

@@ -497,7 +497,9 @@ def module_roots() -> dict[str, list[str]]:
 
 
 def module_files(kind: str) -> list[tuple[str, str, str]]:
-    """``(file name, path, folder)`` of the modules of ``kind``."""
+    """``(file name, path, folder)`` of the modules of ``kind``. A HuggingFace folder with a
+    safetensors shard index (a text encoder or a diffusers VAE) is one module, named by the
+    folder, as Forge's own list (``modules_forge.main_entry``) has it."""
 
     from backend.nn.anima_diffusers import is_sharded_hf_dir
 
@@ -506,7 +508,7 @@ def module_files(kind: str) -> list[tuple[str, str, str]]:
         if not os.path.isdir(root):
             continue
         for current, dirs, files in os.walk(root):
-            if kind == "text_encoders" and os.path.abspath(current) != root and is_sharded_hf_dir(current):
+            if os.path.abspath(current) != root and is_sharded_hf_dir(current):
                 name = os.path.basename(current)
                 found[name] = (name, current, root)
                 dirs[:] = []
