@@ -84,6 +84,20 @@ def test_page_validation():
         pages.register(object())
 
 
+def test_a_page_is_attributed_to_the_file_that_builds_it_past_a_base_class_elsewhere():
+    """Extensions → Diagnostics counts a page's failures against the extension that built it.
+    A page class subclassing another extension's ``Page`` subclass was counted against the base
+    class's extension: its ``__init__`` was taken for the code building the page."""
+
+    base_file, own_file = "/x/extensions/base-ext/scripts/base.py", "/x/extensions/own-ext/scripts/own.py"
+    base = {"__file__": base_file, "__name__": "base_ext_script"}
+    exec(compile("from remi import pages\nclass BasePage(pages.Page):\n    def __init__(self, id, title, **kw):\n        super().__init__(id, title, **kw)\ndef make(id):\n    return BasePage(id, 'Made')\n", base_file, "exec"), base)
+    own = {"__file__": own_file, "__name__": "own_ext_script", "BasePage": base["BasePage"], "make": base["make"]}
+    exec(compile("class MyPage(BasePage):\n    def __init__(me, id):\n        super().__init__(id, 'Mine')\nclass Plain(BasePage):\n    pass\nmine, plain, made = MyPage('mine'), Plain('plain', 'Plain'), make('made')\n", own_file, "exec"), own)
+    assert (own["mine"].filename, own["plain"].filename) == (own_file, own_file)
+    assert own["made"].filename == base_file  # built by the other extension's code: that one's
+
+
 def test_schema_export():
     page = pages.register(Echo("echo", "Echo", "wrench", send_to=[pages.SendTarget("image", "Echo")]))
     data = pages.page_schema("echo")

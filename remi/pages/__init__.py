@@ -226,7 +226,7 @@ class Page:
             raise SchemaError(f"page {id!r}: a page has params or a widget, not both")
         self.id, self.title, self.icon, self.widget = id, title, icon, widget
         # the file that built the page: Extensions → Diagnostics counts its actions' failures against that extension
-        self.filename = _caller_file()
+        self.filename = _caller_file(self)
         self._params_source = params
         self.on_load = on_load
         self.send_to = tuple(send_to)
@@ -432,15 +432,21 @@ class Page:
         self.__class__ = type(f"{type(self).__name__}[{self.id}]", (type(self),), members)
 
 
-def _caller_file() -> str | None:
-    """The source file of the code that is building a page (past this module and
-    a subclass's ``__init__``, which lives where the page is built)."""
+def _caller_file(page: Page) -> str | None:
+    """The source file of the code that is building ``page``: past this module
+    and the ``__init__`` of any subclass, which may come from another extension
+    (a base page class it offers)."""
 
     frame = sys._getframe(2)
-    while frame is not None and frame.f_globals.get("__name__") == __name__:
+    while frame is not None and (frame.f_globals.get("__name__") == __name__ or _initializes(frame, page)):
         frame = frame.f_back
     path = frame.f_globals.get("__file__") if frame is not None else None
     return path if isinstance(path, str) else None
+
+
+def _initializes(frame: types.FrameType, page: Page) -> bool:
+    code = frame.f_code
+    return code.co_name == "__init__" and code.co_argcount > 0 and frame.f_locals.get(code.co_varnames[0]) is page
 
 
 def _forward(name: str, spec: ActionSpec, bound: Callable[..., Any]) -> Callable[..., Any]:
