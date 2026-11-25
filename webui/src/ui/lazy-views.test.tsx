@@ -80,6 +80,11 @@ describe("deferred node views", { timeout: 30_000 }, () => {
     expect(screen.queryByRole("switch", { name: "Alpha" })).toBeNull()
     expect(bound.container.querySelector(".h-24")).toBeNull()
     bound.unmount()
+    // a bound value no tab has: the strip shows with no tab's content, as the strip itself does
+    const unmatched = renderNode({ type: "column", children: [mode, tabs("mode")] }, { mode: "Z", alpha: false, beta: true })
+    expect(unmatched.container.querySelector("[data-part=tab-strip]")).not.toBeNull()
+    expect(screen.queryByRole("switch")).toBeNull()
+    unmatched.unmount()
     // unbound: the first tab until another is picked
     const { container } = renderNode(tabs(), { alpha: false, beta: true })
     expect(screen.getByRole("switch", { name: "Alpha" })).toBeInTheDocument()

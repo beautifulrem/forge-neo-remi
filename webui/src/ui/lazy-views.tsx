@@ -16,7 +16,7 @@ import { retryableLazy } from "@/lib/retryable-lazy"
 import { cn } from "@/lib/utils"
 import { EnabledProvider } from "./context"
 import { useCondition } from "./hooks"
-import { useSelectedTab } from "./layout/tab-selection"
+import { useSelectedTab, useVisibleTabs } from "./layout/tab-selection"
 import { RenderChildren } from "./Renderer"
 import type { ImageNode, TabNode, TabsNode } from "./schema"
 
@@ -110,15 +110,17 @@ function TabContent({ tab }: { tab: TabNode }) {
 
 /**
  * Tabs while the strip's code loads: a stand-in as tall as the strip (an h-8 tab list, or the select it
- * becomes) over the selected tab's content, rendered as it will be; nothing when no tab shows.
+ * becomes) over the selected tab's content, rendered as it will be; nothing when no tab shows, as the
+ * strip itself, and no content when no shown tab is selected.
  */
 function TabsPlaceholder({ node }: { node: TabsNode }) {
+  const visible = useVisibleTabs(node)
   const tab = useSelectedTab(node)
-  if (!tab) return null
+  if (!visible.includes(true)) return null
   return (
     <div className="flex flex-col gap-3">
       <Skeleton data-part="tab-strip" className="h-8 w-full max-w-72 rounded-lg" aria-hidden />
-      <TabContent tab={tab} />
+      {tab ? <TabContent tab={tab} /> : null}
     </div>
   )
 }
