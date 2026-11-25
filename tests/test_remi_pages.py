@@ -435,3 +435,31 @@ def test_a_task_refusing_a_value_keeps_the_sentence_for_the_ui(server):
     assert ended["state"] == "failed" and ended["error"] == "unknown model 'x'"
     assert ended["errors"] == [{"owner": "page:echo", "param": "model", "message": "unknown model 'x'", "template": "unknown model {{name}}", "params": {"name": "'x'"}}]
     assert done["__toast__"] == {"level": "error", "message": {"text": "unknown model {{name}}", "params": {"name": "'x'"}}}
+
+
+def test_a_task_refusing_several_values_toasts_them_as_failed(server):
+    """Several refused values make the toast "Failed: {{error}}" with their English messages
+    joined, and the status keeps each value's sentence: the UI recognises this exact text and
+    fills the parameter from the status's values in its own language (task-runner follow.ts)."""
+
+    model = ui.Sentence("unknown model {{name}}", name="'x'")
+    style = ui.Sentence("unknown style {{name}}", name="'y'")
+
+    class Refusing(Echo):
+        @ui.action("run")
+        def run(self, ctx, values):
+            def work(task):
+                raise ui.ValidationError([ui.ParamError(model, param="model", owner=self.owner), ui.ParamError(style, param="style", owner=self.owner)])
+
+            return self.start_task(ctx, "run", work)
+
+    pages.register(Refusing("echo", "Echo"))
+    status = server.client.post("/api/v2/actions/page:echo/run", json={"values": {}}).json()["__outputs__"]["task:run"]
+    done = _poll(server, {"values": {}, "task": "run", "id": status["id"]}, lambda s: s["done"])
+    ended = done["__outputs__"]["task:run"]
+    assert ended["state"] == "failed" and ended["error"] == "unknown model 'x'; unknown style 'y'"
+    assert ended["errors"] == [
+        {"owner": "page:echo", "param": "model", "message": "unknown model 'x'", "template": "unknown model {{name}}", "params": {"name": "'x'"}},
+        {"owner": "page:echo", "param": "style", "message": "unknown style 'y'", "template": "unknown style {{name}}", "params": {"name": "'y'"}},
+    ]
+    assert done["__toast__"] == {"level": "error", "message": {"text": "Failed: {{error}}", "params": {"error": "unknown model 'x'; unknown style 'y'"}}}
