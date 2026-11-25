@@ -1,3 +1,4 @@
+import { QueryErrorResetBoundary } from "@tanstack/react-query"
 import { TriangleAlert } from "@/components/icons"
 import { Component, type ErrorInfo, type ReactNode } from "react"
 import { Button } from "@/components/ui/button"
@@ -18,7 +19,17 @@ type Props = {
 
 type State = { error: Error | null; resetKey: unknown }
 
-export class ErrorBoundary extends Component<Props, State> {
+/**
+ * Catches a render error below it and offers to try again. A suspense query
+ * that threw is fetched again on its next mount only once its error boundary
+ * is reset (TanStack Query): each boundary has its own, reset on every retry
+ * ("Try again", coming back to the page, the browser back online).
+ */
+export function ErrorBoundary(props: Props) {
+  return <QueryErrorResetBoundary>{({ reset }) => <Boundary {...props} onRetry={reset} />}</QueryErrorResetBoundary>
+}
+
+class Boundary extends Component<Props & { onRetry: () => void }, State> {
   state: State = { error: null, resetKey: this.props.resetKey }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
@@ -53,6 +64,7 @@ export class ErrorBoundary extends Component<Props, State> {
   retry = () => {
     if (!this.state.error) return
     retryFailedLoads()
+    this.props.onRetry()
     this.setState({ error: null })
   }
 
