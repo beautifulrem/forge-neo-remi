@@ -218,9 +218,22 @@ async function stopsWithoutFocusRing(page: Page, presses: number): Promise<strin
     page.evaluate(() => {
       const element = document.activeElement as HTMLElement | null
       if (!element || element === document.body) return null
+      // an inset ring is a box shadow, painted under the element's content: an image that fills the
+      // element hides it (the gallery's tiles showed no ring)
+      const covered = (node: Element) => {
+        const box = node.getBoundingClientRect()
+        return [...node.querySelectorAll("img, canvas, video")].some((media) => {
+          const r = media.getBoundingClientRect()
+          return r.left <= box.left + 4 && r.top <= box.top + 4 && r.right >= box.right - 4 && r.bottom >= box.bottom - 4
+        })
+      }
       const shows = (node: Element) => {
         const style = getComputedStyle(node)
-        return (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0) || (style.boxShadow !== "none" && style.boxShadow !== "")
+        if (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0) return true
+        if (style.boxShadow === "none" || style.boxShadow === "") return false
+        // the visible part of the shadow: drop transparent layers, then inset ones over covered content
+        const layers = style.boxShadow.split(/,(?![^(]*\))/).filter((layer) => !/rgba\(0, 0, 0, 0\)/.test(layer))
+        return layers.some((layer) => !/inset/.test(layer) || !covered(node))
       }
       // a ring may be drawn by a wrapper that has the focus inside it (inputs in a group, the prompt editor)
       for (let node: Element | null = element, depth = 0; node && depth < 5; node = node.parentElement, depth++) {

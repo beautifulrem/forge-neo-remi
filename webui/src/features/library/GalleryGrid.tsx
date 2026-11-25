@@ -138,7 +138,8 @@ const Tile = memo(function Tile({ item, width, height, selected, selecting, inde
             onStar(item)
           }
         }}
-        className="block size-full cursor-zoom-in outline-none focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-inset data-[selecting]:cursor-pointer"
+        // the focus ring is an outline drawn inside the tile: an inset ring (a box shadow) paints under the image
+        className="block size-full cursor-zoom-in outline-none focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-solid focus-visible:outline-ring data-[selecting]:cursor-pointer"
         data-selecting={selecting || undefined}
       >
         <img
