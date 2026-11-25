@@ -249,7 +249,7 @@ docker run --device /dev/kfd --device /dev/dri --group-add video -p 127.0.0.1:78
 | 用户扩展 | `extensions/` |
 | 扩展备份 | `config_states/`（扩展 → 备份与恢复）。早期版本不论 `--data-dir` 如何设置都把它们放在安装目录中：这些备份仍会列出并可以恢复，新备份写入数据目录，旧备份移到这里后才能在页面上删除 |
 | 内置扩展的数据 | `extension-data/`：Spectrum 预设、LoRA 分段与画师混合模板、提示词黑名单、后期处理预设、提示词工坊的设置 |
-| **Remi 数据** | `remi-data/`：`jobs.db`（队列、历史、多阶段管线链与模板）、`files.db`（文件索引、图库星标、项目看板与资产血缘）、`recipes.db`（跨模型配方）、`uploads/`（你上传的图片，超过 `remi_upload_retention_days` 后清理）、`outputs/`（未被保存设置写入输出目录的结果，按同样规则清理，但在图库中加星、加入看板或所属任务已加星的结果会保留）、`thumbs/`（缩略图缓存）、`networks/`（提取的预览图和占位图）、`prompt-tools.db`（提示词历史、收藏、补全使用频率）、`secret.key` 和 `revoked-sessions.json`（登录会话） |
+| **Remi 数据** | `remi-data/`：`jobs.db`（队列、历史、多阶段管线链与模板）、`files.db`（文件索引、图库星标、项目看板与资产血缘）、`recipes.db`（跨模型配方）、`uploads/`（你上传的图片，超过 `remi_upload_retention_days` 后清理，但排队中的任务、未完成的管线或已保存的管线模板仍在使用的会保留）、`outputs/`（未被保存设置写入输出目录的结果，按同样规则清理，但在图库中加星、加入看板或所属任务已加星的结果会保留）、`thumbs/`（缩略图缓存）、`networks/`（提取的预览图和占位图）、`prompt-tools.db`（提示词历史、收藏、补全使用频率）、`secret.key` 和 `revoked-sessions.json`（登录会话） |
 | 自定义 CSS | `user.css`（存在时应用到网页界面） |
 | 完成提示音 | `notification.mp3`（数据目录中没有时也会读取安装目录中的） |
 | 浏览器本地 | 表单值（草稿）、外观、语言、面板尺寸：保存在浏览器的本地存储中。生成菜单中的“重置所有参数”可将表单恢复为默认值 |

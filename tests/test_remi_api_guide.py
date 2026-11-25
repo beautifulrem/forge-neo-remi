@@ -37,6 +37,8 @@ def test_the_guide_names_the_headers_that_mark_a_proxied_request():
     from remi.server.deps import PROXY_HEADERS
 
     text = GUIDE.read_text(encoding="utf-8")
-    assert "X-Forwarded-*" not in text
     for name in PROXY_HEADERS:
         assert f"`{name}`" in text.lower(), name
+    # nor does any other doc say a wildcard (architecture.md's reveal row did)
+    wildcards = [doc.name for doc in GUIDE.parent.glob("*.md") if "X-Forwarded-*" in doc.read_text(encoding="utf-8")]
+    assert wildcards == []
