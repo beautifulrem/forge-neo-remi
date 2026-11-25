@@ -959,7 +959,6 @@
   "Anima-Turbo checkpoint with CFG {{cfg}} / {{steps}} steps: it is distilled for CFG 1 and 8-12 steps (see the Official Turbo preset); higher values over-cook it.": "Anima-Turbo 模型当前为 CFG {{cfg}} / {{steps}} 步：它按 CFG 1、8–12 步蒸馏（见官方 Turbo 预设），更高的值会使画面过烤。",
   "Bria Fibo 2.0 Dev detected with steps={{steps}}, cfg={{cfg}}: the undistilled 8.1B Dev checkpoint typically needs ~28-50 steps and CFG 3.5-5.0.": "检测到 Bria Fibo 2.0 Dev，steps={{steps}}，cfg={{cfg}}：未蒸馏的 8.1B Dev 模型通常需要约 28–50 步、CFG 3.5–5.0。",
   "Bria Fibo 2.0 Edit Turbo detected with steps={{steps}}, cfg={{cfg}}: the 4-step Edit Turbo variant works best at 4 steps with CFG 1.0.": "检测到 Bria Fibo 2.0 Edit Turbo，steps={{steps}}，cfg={{cfg}}：这个 4 步 Edit Turbo 变体在 4 步、CFG 1.0 时效果最好。",
-  "Bria Fibo 2.0 VGL: {{issue}}": "Bria Fibo 2.0 VGL：{{issue}}",
   "Bria Fibo 2.0 supports at most {{max}} reference images; {{count}} are attached.": "Bria Fibo 2.0 最多支持 {{max}} 张参考图，当前附加了 {{count}} 张。",
   "Bria Fibo 2.0: prompt begins with '{' but is not valid JSON; fix syntax or use the VGL JSON Builder.": "Bria Fibo 2.0：提示词以“{”开头，但不是有效的 JSON；请修正语法，或使用 VGL JSON 构建器。",
   "ERNIE-Image Base (8B Apache-2.0) detected with steps={{steps}}, cfg={{cfg}}: undistilled Base typically needs ~28-50 steps with CFG 3.5-4.5.": "检测到 ERNIE-Image Base（8B，Apache-2.0），steps={{steps}}，cfg={{cfg}}：未蒸馏的 Base 通常需要约 28–50 步、CFG 3.5–4.5。",
@@ -1041,5 +1040,12 @@
   "scripts: expected an object of values by script id, got {{type}}": "scripts：应为以脚本 id 为键的取值对象，实际为 {{type}}",
   "{{given}} values for {{expected}} params": "{{expected}} 个参数却给了 {{given}} 个值",
   "presets apply to txt2img and img2img": "预设只适用于 txt2img 和 img2img",
-  "{{value}} is not a \"setting: value\" pair": "{{value}} 不是“设置: 值”形式的条目"
+  "{{value}} is not a \"setting: value\" pair": "{{value}} 不是“设置: 值”形式的条目",
+  "The VGL prompt must be a JSON object.": "VGL 提示词必须是 JSON 对象。",
+  "The VGL prompt lacks the required field '{{field}}'.": "VGL 提示词缺少必填字段“{{field}}”。",
+  "VGL field '{{field}}' must be a non-empty string.": "VGL 字段“{{field}}”必须是非空字符串。",
+  "VGL field '{{field}}' must be a JSON array.": "VGL 字段“{{field}}”必须是 JSON 数组。",
+  "VGL objects[{{index}}] must be a JSON object.": "VGL objects[{{index}}] 必须是 JSON 对象。",
+  "VGL objects[{{index}}] needs a non-empty 'description'.": "VGL objects[{{index}}] 需要非空的“description”。",
+  "VGL field '{{field}}' must be a JSON object.": "VGL 字段“{{field}}”必须是 JSON 对象。"
 }

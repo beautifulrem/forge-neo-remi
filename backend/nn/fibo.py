@@ -123,37 +123,38 @@ def parse_vgl_prompt(prompt: str) -> dict[str, Any] | None:
 
 
 def validate_vgl_prompt(vgl: Mapping[str, Any]) -> list[str]:
-    """Validate a VGL 2.0 structured prompt dict; returns a list of issues (empty = valid)."""
+    """Validate a VGL 2.0 structured prompt dict; returns a list of issues (empty = valid).
+    Each is a ``Sentence``: its English text, and a template the UI translates."""
+
+    from remi.ui.sentence import Sentence
 
     if not isinstance(vgl, Mapping):
-        return ["VGL prompt must be a JSON object."]
+        return [Sentence("The VGL prompt must be a JSON object.")]
 
     issues: list[str] = []
     for field in VGL_REQUIRED_FIELDS:
         if field not in vgl:
-            issues.append(f"Missing required VGL field '{field}'.")
+            issues.append(Sentence("The VGL prompt lacks the required field '{{field}}'.", field=field))
 
-    if "short_description" in vgl and (not isinstance(vgl["short_description"], str) or not vgl["short_description"].strip()):
-        issues.append("'short_description' must be a non-empty string.")
-
-    if "style_medium" in vgl and (not isinstance(vgl["style_medium"], str) or not vgl["style_medium"].strip()):
-        issues.append("'style_medium' must be a non-empty string.")
+    for field in ("short_description", "style_medium"):
+        if field in vgl and (not isinstance(vgl[field], str) or not vgl[field].strip()):
+            issues.append(Sentence("VGL field '{{field}}' must be a non-empty string.", field=field))
 
     if "objects" in vgl:
         objs = vgl["objects"]
         if not isinstance(objs, list):
-            issues.append("'objects' must be a JSON array.")
+            issues.append(Sentence("VGL field '{{field}}' must be a JSON array.", field="objects"))
         else:
             for idx, item in enumerate(objs):
                 if not isinstance(item, Mapping):
-                    issues.append(f"objects[{idx}] must be a JSON object.")
+                    issues.append(Sentence("VGL objects[{{index}}] must be a JSON object.", index=idx))
                     continue
                 if not isinstance(item.get("description"), str) or not str(item.get("description")).strip():
-                    issues.append(f"objects[{idx}] is missing a non-empty 'description'.")
+                    issues.append(Sentence("VGL objects[{{index}}] needs a non-empty 'description'.", index=idx))
 
     for sub_obj in ("lighting", "aesthetics", "photographic_characteristics"):
         if sub_obj in vgl and not isinstance(vgl[sub_obj], Mapping):
-            issues.append(f"'{sub_obj}' must be a JSON object.")
+            issues.append(Sentence("VGL field '{{field}}' must be a JSON object.", field=sub_obj))
 
     return issues
 
@@ -711,8 +712,7 @@ def fibo_workflow_advice(p, *, opts=None) -> list[str]:
         if parsed is None:
             advice.append("Bria Fibo 2.0: prompt begins with '{' but is not valid JSON; fix syntax or use the VGL JSON Builder.")
         else:
-            for issue in validate_vgl_prompt(parsed):
-                advice.append(Sentence("Bria Fibo 2.0 VGL: {{issue}}", issue=issue))
+            advice.extend(validate_vgl_prompt(parsed))  # each a sentence of its own (the UI translates it)
 
     refs = [*(getattr(sd_model, "ref_latents", None) or ())]
     if getattr(sd_model, "ini_latent", None) is not None:

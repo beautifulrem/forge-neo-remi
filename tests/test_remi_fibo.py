@@ -119,6 +119,24 @@ def test_fibo_vgl_json_protocol_and_license_metadata():
     assert len(bad_issues) >= 3
 
 
+def test_fibo_vgl_issues_are_sentences_the_ui_translates():
+    """The VGL advice was ``Sentence("Bria Fibo 2.0 VGL: {{issue}}", issue=...)`` with the issue
+    formatted in English: the UI could translate the frame, never the issue. Each issue is a
+    sentence of its own (its template a catalog key), and is the advice itself."""
+    from remi.ui import Sentence
+
+    catalog = json.loads((Path(__file__).resolve().parents[1] / "localizations" / "zh_CN.json").read_text(encoding="utf-8"))
+    vgl = {"short_description": "", "style_medium": 3, "objects": [7, {"location": "left"}], "lighting": []}
+    issues = validate_vgl_prompt(vgl) + validate_vgl_prompt({"objects": {}}) + validate_vgl_prompt([])
+    assert len({issue.template for issue in issues}) == 7
+    assert all(isinstance(issue, Sentence) and catalog.get(issue.template) for issue in issues)
+    assert "The VGL prompt lacks the required field 'objects'." in [str(issue) for issue in validate_vgl_prompt({})]
+
+    p = SimpleNamespace(sd_model=SimpleNamespace(is_fibo_engine=True, is_fibo_turbo=True, ref_latents=[], ini_latent=None), prompt=json.dumps(vgl), steps=4, cfg_scale=1.0)
+    advice = fibo_workflow_advice(p)
+    assert advice == validate_vgl_prompt(vgl) and all(item.template in catalog for item in advice)
+
+
 def test_fibo_dit_forward_caches_multiref_and_spectrum():
     dit_capabilities_ext.register_extended_dit_capabilities()
     dev_model = _tiny_fibo(hidden_size=32, num_heads=2, num_layers=2, is_edit_turbo=False)
