@@ -227,6 +227,8 @@ export default function GalleryPage() {
       {selection.ids.size > 0 ? (
         // a phone's bottom navigation keeps the home indicator's room below the page; from md the page reaches the screen's edge
         <div
+          // a new query rebuilds the grid (its key): the bar pins itself again over the new scroller
+          key={JSON.stringify(query)}
           ref={bulkBarRef}
           className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-3 md:bottom-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]"
         >

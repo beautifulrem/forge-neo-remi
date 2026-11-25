@@ -377,6 +377,27 @@ test.describe("focus is not hidden under a pinned bar", () => {
       expect(hidden).toEqual([])
     })
   }
+
+  // A new query remounts the grid; with the results cached the bar stays up over the new scroller.
+  test("#/gallery selection bar over a grid rebuilt from cached results", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await openRoute(page, "gallery")
+    await page.waitForLoadState("networkidle")
+    // all of them: the selection outlives the new order
+    await page.getByTestId("gallery-scroller").locator("[data-gallery-tile] button").first().focus()
+    await page.keyboard.press("ControlOrMeta+a")
+    const bar = page.getByRole("toolbar", { name: "Selected images" })
+    await expect(bar).toBeVisible()
+    const sort = page.getByRole("combobox", { name: "Sort" })
+    for (const option of ["Oldest first", "Newest first"]) {
+      await sort.click()
+      await page.getByRole("option", { name: option }).click()
+      await page.waitForLoadState("networkidle")
+    }
+    await expect(bar).toBeVisible()
+    const room = () => page.getByTestId("gallery-scroller").evaluate((element) => parseFloat(getComputedStyle(element).scrollPaddingBottom) || 0)
+    await expect.poll(room).toBeGreaterThan(0)
+  })
 })
 
 test.describe("axe on a phone", () => {
