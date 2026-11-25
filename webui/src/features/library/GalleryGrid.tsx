@@ -184,7 +184,7 @@ const Tile = memo(function Tile({ item, width, height, selected, selecting, inde
             // Hidden (opacity 0), the corner controls take no taps: a tap there opens the image.
             // Keyboard focus shows them (focus-visible), not any focus: a tap focuses the tile
             // between the finger lifting and the click, which then went to neither control.
-            "pointer-events-none group-hover/tile:pointer-events-auto group-has-[:focus-visible]/tile:pointer-events-auto group-data-[shown]/overlay:pointer-events-auto relative m-0.5 grid size-5 place-items-center rounded-full border-2 border-white/90 after:absolute after:-inset-1.5 after:rounded-full text-primary-foreground shadow outline-none focus-visible:ring-3 focus-visible:ring-ring",
+            "pointer-events-none group-hover/tile:pointer-events-auto group-has-[:focus-visible]/tile:pointer-events-auto group-data-[shown]/overlay:pointer-events-auto relative m-0.5 grid size-5 place-items-center rounded-full border-2 border-white/90 after:absolute after:-inset-1.5 after:rounded-full text-primary-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring",
             selected ? "border-primary bg-primary" : "bg-black/20 hover:bg-black/40",
           )}
         >

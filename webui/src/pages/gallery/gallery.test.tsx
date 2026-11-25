@@ -102,6 +102,15 @@ describe("gallery page", { timeout: 20_000 }, () => {
     await waitFor(() => expect(calls.find((call) => call.path === "/gallery/delete")?.body).toEqual({ ids: ["img1", "img3"], delete_files: true }))
   })
 
+  // One depth cue per element (frontend.md): the check mark has its white edge, not an edge and a shadow.
+  it("draws a tile's check mark with an edge and no shadow", async () => {
+    mockServer([item(1)])
+    renderPage()
+    const check = await screen.findByRole("checkbox", { name: "Select 00001.png", hidden: true })
+    expect(check.className.split(/\s+/)).toContain("border-2")
+    expect(check.className.split(/\s+/).filter((name) => /(^|:)shadow/.test(name))).toEqual([])
+  })
+
   it("a click with a selection extends it; Escape clears it", async () => {
     mockServer([item(1), item(2), item(3)])
     renderPage()
