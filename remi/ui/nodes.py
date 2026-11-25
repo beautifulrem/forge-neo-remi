@@ -869,7 +869,9 @@ class Json(Input):
         except ParamError:
             raise
         except (TypeError, ValueError) as error:
-            raise ParamError(str(error)) from None
+            # a Sentence keeps its template for the UI (str() would leave its English text)
+            reason = error.args[0] if len(error.args) == 1 and isinstance(error.args[0], Sentence) else str(error)
+            raise ParamError(reason) from None
 
 
 class Custom(Json):

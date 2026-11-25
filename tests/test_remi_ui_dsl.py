@@ -360,3 +360,18 @@ def test_a_sentence_survives_copy_and_pickle(make):
     for again in (copy.copy(sentence), copy.deepcopy(sentence), pickle.loads(pickle.dumps(sentence))):
         assert type(again) is ui.Sentence and again == sentence
         assert again.template == sentence.template and again.params == sentence.params
+
+
+def test_a_json_validator_refusing_with_a_sentence_keeps_its_template():
+    """``Json(validate=)`` may raise ``ValueError(Sentence(...))``; it was turned into a
+    ``ParamError(str(error))`` and reached the UI as English text without its template."""
+
+    def validate(value):
+        raise ValueError(ui.Sentence("too many {{what}}: {{count}}", what="items", count=len(value)))
+
+    layout = ui.ScriptLayout(ui.Json("data", [], validate=validate), owner="owner")
+    with pytest.raises(ui.ValidationError) as caught:
+        layout.coerce({"data": [1, 2, 3]})
+    error = caught.value.errors[0].to_json()
+    assert error["message"] == "too many items: 3" and error["template"] == "too many {{what}}: {{count}}"
+    assert error["params"] == {"what": "items", "count": "3"}
