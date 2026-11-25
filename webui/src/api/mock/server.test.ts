@@ -7,8 +7,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { sentenceParams } from "@/api/http"
 import { validationMessage } from "@/features/errors/error-text"
 import { i18n } from "@/i18n"
-import { serverCatalogZh } from "./fixtures"
-import { actionPatch, validateJob } from "./server"
+import { bootstrap, serverCatalogZh } from "./fixtures"
+import { actionPatch, handleMockRequest, validateJob } from "./server"
 import { MockSocket } from "./socket"
 
 const HAN = /\p{Script=Han}/u
@@ -68,9 +68,22 @@ describe("the mock's action toasts", () => {
 })
 
 describe("the mock's model load", () => {
-  afterEach(() => vi.useRealTimers())
+  const initial = { ...bootstrap.options }
+  afterEach(() => {
+    vi.useRealTimers()
+    Object.assign(bootstrap.options, initial)
+  })
 
-  it("sends what the server sends: one model.loading with its stage and model, then model.loaded", async () => {
+  async function call(method: string, path: string, body?: unknown) {
+    const init: RequestInit = { method, headers: { Accept: "application/json" } }
+    if (body !== undefined) Object.assign(init, { headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    return handleMockRequest(new Request(`http://localhost/api/v2${path}`, init))
+  }
+
+  // As on the server (remi/server/options.py, remi/core/presets.py): a model change only selects
+  // it, and the next job loads it, announcing model.loading at its start and model.loaded once loaded
+  // (remi/jobs/queue.py, `_note_model_loading` / `poll`).
+  it("loads a changed model at the next job, not at the change", async () => {
     vi.useFakeTimers()
     const socket = new MockSocket()
     const events: Record<string, unknown>[] = []
@@ -78,10 +91,30 @@ describe("the mock's model load", () => {
       if (typeof event.data === "string") events.push(JSON.parse(event.data) as Record<string, unknown>)
     }
     await vi.advanceTimersByTimeAsync(200)
+    const changed = call("PATCH", "/options", { sd_model_checkpoint: "flux1-dev.safetensors [f1e2d3]" })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect((await changed).status).toBe(200)
     actionPatch("core", "__forge_preset__", { preset: "flux" } as never)
-    await vi.advanceTimersByTimeAsync(5000)
+    await vi.advanceTimersByTimeAsync(3000)
+    const model = (event: Record<string, unknown>) => String(event.type).startsWith("model.")
+    expect(events.filter(model)).toEqual([])
+    expect(bootstrap.models.checkpoint).toBe("flux1-dev.safetensors [f1e2d3]")
+
+    const queued = call("POST", "/jobs", { tab: "txt2img", core: { prompt: "a cat", batch_size: 1 }, scripts: { sampler: { steps: 3 } } })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect((await queued).status).toBeLessThan(300)
+    const order = events.filter((event) => model(event) || event.type === "job.started" || event.type === "job.progress").map((event) => String(event.type))
+    expect(order.slice(0, 4)).toEqual(["job.started", "model.loading", "model.loaded", "job.progress"])
+    expect(events.filter(model)).toEqual([
+      { type: "model.loading", stage: "loading", model: "flux1-dev.safetensors [f1e2d3]" },
+      { type: "model.loaded", model: "flux1-dev.safetensors [f1e2d3]" },
+    ])
+
+    // loaded now: the next job starts at once
+    events.length = 0
+    void call("POST", "/jobs", { tab: "txt2img", core: { prompt: "a dog", batch_size: 1 }, scripts: { sampler: { steps: 3 } } })
+    await vi.advanceTimersByTimeAsync(10_000)
     socket.close()
-    expect(events.filter((event) => event.type === "model.loading")).toEqual([{ type: "model.loading", stage: "loading", model: "flux preset" }])
-    expect(events.filter((event) => event.type === "model.loaded")).toEqual([{ type: "model.loaded", model: "flux preset" }])
+    expect(events.filter(model)).toEqual([])
   })
 })

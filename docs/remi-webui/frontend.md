@@ -1638,8 +1638,11 @@ source image marks the field and shows the toast without a request);
 `GET /jobs` is paged (`cursor`, `limit`), `repeat` queues copies and retry
 works; interrupted jobs end as `job.completed` with status `interrupted`.
 `/prompt/tokens`, `/styles` (+ `/styles/apply`), `/infotext/parse`,
-`/infotext/image` and the `__forge_preset__` action answer too; model
-changes emit `model.loading` (stage "loading") and then `model.loaded`. There is a
+`/infotext/image` and the `__forge_preset__` action answer too; as on the
+server, a model change (`PATCH /options`, a preset) only selects the model and
+the next job loads it, sending `model.loading` (stage "loading") at its start
+and then `model.loaded` (`api/mock/model.ts`; `/models/reload` loads it at
+once). There is a
 schema-rendered extension page (`Toolbox`) and a zh_CN server catalog
 sample. `api/mock/library.ts` serves the Gallery (260 outputs of varied
 sizes, forms, models and dates; stars, removal, zip, reveal), PNG Info and

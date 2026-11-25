@@ -17,6 +17,7 @@ import { authRoutes, mockRefusal } from "./auth"
 import { mockAdviceFor, mockCapabilitiesForPreset } from "./capabilities"
 import { missingLoras, networkRoutes } from "./networks"
 import { libraryRoutes } from "./library"
+import { loadPendingModel } from "./model"
 import { workbenchRoutes } from "./workbench"
 
 type Handler = (match: RegExpExecArray, body: unknown, url: URL, headers: Headers) => unknown | Promise<unknown>
@@ -75,16 +76,6 @@ const FORGE_PRESETS: Record<string, [number, number, string, number]> = {
   qwen21: [1024, 1, "Euler", 8],
   moss: [1024, 3.5, "Euler", 24],
   flux3: [1024, 1, "Euler", 8],
-}
-
-/**
- * Emits what a real model switch produces (`remi/jobs/queue.py`): one `model.loading` with the
- * server's only stage, "loading", and the model (no progress: the server cannot tell it), then
- * `model.loaded`.
- */
-function simulateModelLoad(model: string) {
-  setTimeout(() => broadcast({ type: "model.loading", stage: "loading", model }), 150)
-  setTimeout(() => broadcast({ type: "model.loaded", model }), 1500)
 }
 
 /** The Hires. fix target size (`calculate_target_resolution`): the resize sizes win over the factor; one left at 0 keeps the aspect ratio. */
@@ -151,7 +142,7 @@ export function actionPatch(owner: string, action: string, body: ActionRequest &
         String(bootstrap.options.sd_model_checkpoint ?? ""),
         String(bootstrap.options.forge_unet_storage_dtype ?? ""),
       )
-      simulateModelLoad(`${preset} preset`)
+      // selects the preset's model: the next job loads it (model.ts)
       broadcast({ type: "options.changed", keys: ["forge_preset"] })
       return {
         width: { value: size },
@@ -429,6 +420,8 @@ async function runJob(job: Job, request: JobRequest) {
   const hue = Math.floor(Math.random() * 360)
   broadcast({ type: "job.started", job_id: job.id, seq: job.seq, steps, job_count: batches })
   broadcast({ type: "queue.changed", ...queueStatus() })
+  // a model selected since the last load loads now, before the first step (remi/jobs/queue.py)
+  await loadPendingModel()
 
   let made = 0
   // oxlint-disable-next-line eslint/no-unmodified-loop-condition -- the interrupt handler sets `cancelled` while this awaits
@@ -655,22 +648,6 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
       if (index === -1) throw new MockHttpError(404, { detail: "Mock: unknown style" })
       styles.splice(index, 1)
       return undefined
-    },
-  ],
-  ["GET", /^\/options$/, () => ({ version: 1, categories: [], quicksettings: ["sd_model_checkpoint"], values: bootstrap.options })],
-  [
-    "PATCH",
-    /^\/options$/,
-    async (_m, body) => {
-      await delay(400)
-      Object.assign(bootstrap.options, body)
-      const changed = body as Record<string, unknown>
-      if (typeof changed.sd_model_checkpoint === "string") bootstrap.models.checkpoint = changed.sd_model_checkpoint
-      if (["sd_model_checkpoint", "forge_additional_modules", "forge_unet_storage_dtype"].some((key) => key in changed)) {
-        simulateModelLoad(String(bootstrap.options.sd_model_checkpoint))
-      }
-      broadcast({ type: "options.changed", keys: Object.keys(body as object) })
-      return { version: 1, categories: [], quicksettings: [], values: bootstrap.options }
     },
   ],
   ["POST", /^\/actions\/([^/]+)\/([^/]+)$/, async (m, body) => {

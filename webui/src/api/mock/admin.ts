@@ -8,6 +8,7 @@
 import type { SettingsSchema } from "@/ui/schema"
 import settingsContract from "./contract/settings.json"
 import { bootstrap } from "./fixtures"
+import { loadedModel, reloadModel, unloadModel } from "./model"
 import { MockHttpError } from "./server"
 import { broadcast } from "./socket"
 
@@ -141,7 +142,6 @@ let downUntil = 0
 /** Changes when the mock server "goes down" (a reload or restart). */
 let instance = "mock-1"
 let hashes = { running: false, done: 0, total: 0, failed: [] as string[], current: [] as string[], finished_at: null as string | null }
-let modelLoaded: string | null = String(bootstrap.options.sd_model_checkpoint ?? "") || null
 
 const LICENSES = {
   groups: [
@@ -167,6 +167,8 @@ export const adminRoutes: [method: string, pattern: RegExp, handler: Handler][] 
       Object.assign(values, changes)
       for (const key of Object.keys(changes)) if (key in bootstrap.options) (bootstrap.options as Record<string, unknown>)[key] = changes[key]
       if (QUICK in changes) (bootstrap.options as Record<string, unknown>)[QUICK] = changes[QUICK]
+      // a model change only selects it: the next job loads it (model.ts)
+      if (typeof changes.sd_model_checkpoint === "string") bootstrap.models.checkpoint = changes.sd_model_checkpoint
       broadcast({ type: "options.changed", keys: Object.keys(changes) })
       return schema()
     },
@@ -183,7 +185,7 @@ export const adminRoutes: [method: string, pattern: RegExp, handler: Handler][] 
     if (Date.now() < downUntil) throw new MockHttpError(503, { detail: "Mock: restarting" })
     return { instance }
   }],
-  ["GET", /^\/server\/status$/, () => ({ restartable: true, extension_access: true, settings_frozen: false, model_loaded: modelLoaded, model_hash: modelLoaded ? "4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a" : null, version: "mock" })],
+  ["GET", /^\/server\/status$/, () => ({ restartable: true, extension_access: true, settings_frozen: false, model_loaded: loadedModel(), model_hash: loadedModel() ? "4f1c2a9d8e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a" : null, version: "mock" })],
   [
     "POST",
     /^\/server\/(reload|restart)$/,
@@ -195,24 +197,14 @@ export const adminRoutes: [method: string, pattern: RegExp, handler: Handler][] 
       return { ok: true, message: m[1] === "restart" ? "restarting" : "reloading" }
     },
   ],
-  ["POST", /^\/models\/unload$/, () => ((modelLoaded = null), { ok: true })],
-  [
-    "POST",
-    /^\/models\/reload$/,
-    async () => {
-      broadcast({ type: "model.loading", stage: "loading", model: bootstrap.options.sd_model_checkpoint })
-      await delay(1200)
-      modelLoaded = String(bootstrap.options.sd_model_checkpoint ?? "model")
-      broadcast({ type: "model.loaded", model: modelLoaded })
-      return { ok: true, message: modelLoaded }
-    },
-  ],
+  ["POST", /^\/models\/unload$/, () => (unloadModel(), { ok: true })],
+  ["POST", /^\/models\/reload$/, async () => ({ ok: true, message: await reloadModel() })],
   [
     "GET",
     /^\/models\/loaded$/,
     () => ({
-      checkpoint: modelLoaded,
-      items: modelLoaded
+      checkpoint: loadedModel(),
+      items: loadedModel()
         ? [
             { name: "KModel", memory_mb: 4870, device: "mps" },
             { name: "IntegratedAutoencoderKL", memory_mb: 160, device: "mps" },
