@@ -145,7 +145,7 @@ Without Node.js on the machine:
 
   Copy `webui/dist` into the same place of the target installation. Rebuild and copy again after each update that changes `webui/`.
 
-`REMI_SKIP_WEBUI_BUILD=1` turns the automatic build off (any non-empty value does, `0` included); `--skip-install` and `--skip-prepare-environment` skip it too.
+`REMI_SKIP_WEBUI_BUILD=1` turns the automatic build off (`0`, `false`, `no`, `off` or empty leave it on); `--skip-install` and `--skip-prepare-environment` skip it too.
 
 ### Docker (NVIDIA or AMD GPU)
 

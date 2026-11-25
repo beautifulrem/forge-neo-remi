@@ -446,8 +446,9 @@ torch.ones([1], device=device).mul_(2.0).cpu()
 
 
 WEBUI_DIR = Path(script_path) / "webui"
-WEBUI_SOURCES = ("package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "index.html", "vite.config.ts", "tsconfig.json", "tsconfig.app.json", "tsconfig.node.json", "src", "public")
-"""What the SPA build depends on (hashed into the build stamp)."""
+WEBUI_SOURCES = ("package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "index.html", "vite.config.ts", "tsconfig.json", "tsconfig.app.json", "tsconfig.node.json", "src", "public", "tools/notices.mjs", "tools/shadcn-ui.LICENSE.txt")
+"""What the SPA build depends on (hashed into the build stamp); vite.config.ts
+imports tools/notices.mjs, which reads the licence text beside it."""
 WEBUI_STAMP = ".remi-build-stamp"
 PNPM_FALLBACK = "pnpm@12"
 """pnpm run through npx when neither pnpm nor corepack is installed"""
@@ -521,7 +522,8 @@ def build_webui(webui_dir: Path = WEBUI_DIR) -> bool:
 
     dist = webui_dir / "dist"
     built = (dist / "index.html").is_file()
-    if os.environ.get("REMI_SKIP_WEBUI_BUILD") or not (webui_dir / "package.json").is_file():
+    skip = os.environ.get("REMI_SKIP_WEBUI_BUILD", "").strip().lower() not in ("", "0", "false", "no", "off")
+    if skip or not (webui_dir / "package.json").is_file():
         return built
     stamp = webui_source_stamp(webui_dir)
     stamp_file = dist / WEBUI_STAMP

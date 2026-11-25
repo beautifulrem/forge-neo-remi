@@ -145,7 +145,7 @@ export COMMANDLINE_ARGS="--uv"
 
   把 `webui/dist` 复制到目标安装的相同位置。每次更新改动了 `webui/` 后，都需要重新构建并复制。
 
-设置环境变量 `REMI_SKIP_WEBUI_BUILD=1` 可关闭自动构建（任何非空值都会关闭，包括 `0`）；`--skip-install` 和 `--skip-prepare-environment` 也会跳过构建。
+设置环境变量 `REMI_SKIP_WEBUI_BUILD=1` 可关闭自动构建（`0`、`false`、`no`、`off` 或空值不关闭）；`--skip-install` 和 `--skip-prepare-environment` 也会跳过构建。
 
 ### Docker（NVIDIA 或 AMD GPU）
 

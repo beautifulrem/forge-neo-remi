@@ -460,6 +460,45 @@ def test_webui_build_always_uses_pnpm_and_its_lockfile_or_explains(tmp_path, cap
     assert launch_utils.build_webui(webui) is True and "out of date" in capsys.readouterr().out
 
 
+def test_the_build_stamp_covers_every_file_the_build_reads():
+    """vite.config.ts imports tools/notices.mjs (the licence notices): a change there alone
+    kept the old build, as the stamp hashed only WEBUI_SOURCES."""
+    import re
+
+    from modules import launch_utils
+
+    config = (launch_utils.WEBUI_DIR / "vite.config.ts").read_text(encoding="utf-8")
+    local = re.findall(r'from "\./([^"]+)"', config)
+    assert "tools/notices.mjs" in local
+    for path in local:
+        assert any(path == name or path.startswith(name + "/") for name in launch_utils.WEBUI_SOURCES), path
+
+
+@pytest.mark.parametrize(("value", "skips"), [("1", True), ("true", True), ("yes", True), ("0", False), ("false", False), ("no", False), ("off", False), ("", False)])
+def test_remi_skip_webui_build_reads_as_a_flag(tmp_path, monkeypatch, value, skips):
+    """``REMI_SKIP_WEBUI_BUILD=0`` skipped the build like ``1`` (any non-empty value did)."""
+    from modules import launch_utils
+
+    webui = tmp_path / "webui"
+    webui.mkdir()
+    (webui / "package.json").write_text("{}")
+    monkeypatch.setenv("REMI_SKIP_WEBUI_BUILD", value)
+    ran = []
+    monkeypatch.setattr(launch_utils, "webui_build_commands", lambda: [["build"]])
+    monkeypatch.setattr(launch_utils, "node_version", lambda node: "v22.12.0")
+    monkeypatch.setattr(shutil, "which", lambda name: "/n/" + name)
+
+    def fake_run(command, cwd, shell):
+        ran.append(command)
+        (webui / "dist").mkdir(exist_ok=True)
+        (webui / "dist" / "index.html").write_text("<html>")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(launch_utils.subprocess, "run", fake_run)
+    assert launch_utils.build_webui(webui) is not skips
+    assert ran == ([] if skips else [["build"]])
+
+
 def test_webui_build_states_the_node_requirement_of_the_readme(tmp_path, capsys, monkeypatch):
     """The launcher names the same Node.js versions as the README (Vite's engines) and warns on older ones."""
 
