@@ -20,6 +20,11 @@ export function onLoadFailed(listener: () => void): () => void {
   }
 }
 
+/** Runs `retry` (once) on the next {@link retryFailedLoads}: a load that is not a component's (a language's catalog). */
+export function retryWithFailedLoads(retry: () => void): void {
+  failed.add(retry)
+}
+
 /**
  * Lets every component whose chunk failed to load fetch it again on its next
  * render. Called by an error boundary's "Try again" and when the browser is

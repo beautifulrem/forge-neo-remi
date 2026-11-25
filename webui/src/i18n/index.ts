@@ -14,6 +14,7 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
+import { notifyLoadFailed, retryWithFailedLoads } from "@/lib/retryable-lazy"
 import { cjkSpacing } from "./cjk-spacing"
 // English needs only its plural forms ("_one" / "_other" of keys written for the other count)
 import englishPlurals from "../locales/en.json"
@@ -146,9 +147,15 @@ const loaded = new Set<string>()
 /** The newest activateLocale call: an older one that finishes loading later does not switch. */
 let activation = 0
 
-async function loadChrome(locale: string): Promise<Record<string, string>> {
+/** The chrome catalog (its own chunk), or null when it could not be fetched. */
+async function loadChrome(locale: string): Promise<Record<string, string> | null> {
   const loader = chromeCatalogs[`../locales/${locale}.json`]
-  return loader ? loader() : {}
+  try {
+    return loader ? await loader() : {}
+  } catch (error) {
+    console.warn(`[i18n] chrome catalog for ${locale} unavailable`, error)
+    return null
+  }
 }
 
 /** The server catalog, or null when it could not be loaded (it is asked for again next time). */
@@ -162,12 +169,33 @@ async function loadServer(locale: string): Promise<Record<string, string> | null
   }
 }
 
-/** Loads both catalogs for `locale` (once) and switches to it. */
+/**
+ * Asks for `locale` again once its chrome catalog may load: the browser back online, or a failed
+ * load retried ("Try again"). Only while it is still the language asked for last (`call`).
+ */
+function retryLater(call: number, locale: string) {
+  const retry = () => {
+    window.removeEventListener("online", retry)
+    if (call === activation) void activateLocale(locale)
+  }
+  window.addEventListener("online", retry)
+  retryWithFailedLoads(retry)
+}
+
+/**
+ * Loads both catalogs for `locale` (once) and switches to it. When its chrome catalog (a chunk)
+ * cannot be fetched, the language stays as it is and is asked for again later (`retryLater`).
+ */
 export async function activateLocale(locale: string): Promise<void> {
   const call = ++activation
   const lng = languageTag(locale)
   if (lng !== DEFAULT_LOCALE && !loaded.has(lng)) {
     const [chrome, server] = await Promise.all([loadChrome(lng), loadServer(lng)])
+    if (!chrome) {
+      notifyLoadFailed()
+      if (call === activation) retryLater(call, locale)
+      return
+    }
     i18n.addResourceBundle(lng, "chrome", chrome, true, true)
     if (server) i18n.addResourceBundle(lng, "server", server, true, true)
     if (server) loaded.add(lng)

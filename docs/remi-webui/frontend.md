@@ -1599,7 +1599,10 @@ older server) nothing is shown.
 - Locale ids: BCP 47 in the app (`zh-CN`, `<html lang>`), underscore form for
   the server (`zh_CN`). The user's choice persists (`remi-locale`); without
   one, the server default (`Bootstrap.locale`) then the browser language is
-  used. Switching does not reload the page.
+  used. Switching does not reload the page. A language whose chrome
+  catalog (a chunk) could not be fetched is not switched to; it is asked
+  for again when the browser is back online or a failed load is retried
+  ("Try again"), unless another language was chosen meanwhile.
 - **Writing direction**: `activateLocale` sets `<html dir>` from the
   locale (`textDirection`: CLDR through `Intl.Locale` text info, with a list
   of right-to-left languages as a fallback), so an Arabic, Hebrew, Persian or
