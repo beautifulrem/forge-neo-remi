@@ -30,27 +30,32 @@ const STATUS_LABEL: Record<WsStatus, string> = {
 /**
  * Connection state: a dot with a hover tooltip for pointer users and a
  * polite, non-focusable live region for screen readers (no extra tab stop).
+ * While the connection is lost the dot carries a word too: a touch screen
+ * has no hover to show the tooltip.
  */
-function ConnectionDot() {
+export function ConnectionDot() {
   const { t } = useTranslation()
   const status = useWs((s) => s.status)
   const label = t(STATUS_LABEL[status])
+  // not while first connecting: that lasts a moment on every load
+  const lost = status === "reconnecting" || status === "closed"
   return (
     <>
       <span role="status" className="sr-only">
         {label}
       </span>
       <Tooltip>
-        <TooltipTrigger render={<span aria-hidden className="grid size-7 place-items-center rounded-sm" />}>
+        <TooltipTrigger render={<span aria-hidden className={cn("flex h-7 min-w-7 shrink-0 items-center justify-center gap-1.5 rounded-sm", lost && "px-1.5")} />}>
           <span
             className={cn(
-              "size-1.5 rounded-full",
+              "size-1.5 shrink-0 rounded-full",
               status === "open" && "bg-success",
               // still, not pulsing: a reconnect can last as long as a job runs
               (status === "connecting" || status === "idle" || status === "reconnecting") && "bg-warning",
               status === "closed" && "bg-destructive",
             )}
           />
+          {lost ? <span className="text-[0.6875rem] whitespace-nowrap text-muted-foreground">{t("Offline")}</span> : null}
         </TooltipTrigger>
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>

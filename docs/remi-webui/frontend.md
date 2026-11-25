@@ -214,7 +214,8 @@ imperatively).
     `INT8-ConvRot`, `NVFP4`, `SVDQuant`, `FP8`, `Turbo`, `RGBA`) render as
     whisper-quiet borderless inline mono micro-tags.
   - **Single Status-Dot Rule**: `ConnectionDot` is the sole green LED in the
-    header. `WorkerHealthPill` (`GET /api/v2/workers`) stays a calm borderless
+    header; a lost connection adds the word "Offline" beside it (a touch
+    screen cannot hover its tooltip). `WorkerHealthPill` (`GET /api/v2/workers`) stays a calm borderless
     ghost monochrome readout (`CPU MPS` / `CUDA` / `1/2 GPU`) when healthy and
     only shows an amber/red indicator dot when a worker is degraded or failed.
   - **Live Darkroom Aspect-Ratio Viewfinder**: when the Generate stage has no

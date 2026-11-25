@@ -1689,5 +1689,6 @@
   "Select all images": "全选图像",
   "Remove the selected images": "移除所选图像",
   "Candidates": "候选图",
-  "Preview source": "预览图来源"
+  "Preview source": "预览图来源",
+  "Offline": "离线"
 }
