@@ -272,6 +272,26 @@ describe("available extensions", { timeout: 20_000 }, () => {
     await waitFor(() => expect(install).toHaveBeenCalledWith({ url: "https://github.com/u/ext-7" }))
   })
 
+  // Another tab and back asked for Load index again, though the index was in hand.
+  it("shows the loaded index again after the tab remounts", async () => {
+    const index = vi.spyOn(api.extensions, "index").mockResolvedValue(indexOf(20))
+    const first = renderPage("tab=available")
+    const field = await screen.findByRole("textbox", { name: "Extension index URL" }, { timeout: 8000 })
+    await waitFor(() => expect(field).toBeEnabled())
+    fireEvent.change(field, { target: { value: "https://example.org/other.json" } })
+    fireEvent.click(screen.getByRole("button", { name: "Load index" }))
+    expect(await screen.findByRole("list", { name: "Available extensions" })).toBeInTheDocument()
+    first.unmount()
+
+    renderPage("tab=available")
+    expect(await screen.findByRole("list", { name: "Available extensions" }, { timeout: 8000 })).toBeInTheDocument()
+    // the same index, from the cache: the field says which one, the button reloads it
+    expect(screen.getByRole("textbox", { name: "Extension index URL" })).toHaveValue("https://example.org/other.json")
+    expect(screen.getByRole("button", { name: "Reload index" })).toBeInTheDocument()
+    expect(index).toHaveBeenCalledTimes(1)
+    expect(index).toHaveBeenCalledWith({ url: "https://example.org/other.json" }, expect.anything())
+  })
+
   // When the extension list failed, the tab showed a disabled, empty URL field and nothing else.
   it("says why it cannot load the index when the extension list failed, with a Retry", async () => {
     const list = vi.spyOn(api.extensions, "list").mockRejectedValue(new ApiError(409, "busy")) // a client error: not retried

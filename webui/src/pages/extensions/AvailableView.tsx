@@ -188,13 +188,21 @@ function IndexList({ items, tags, access }: { items: IndexEntry[]; tags: Record<
 /** The filters in the address (`#/extensions?tab=available&q=lora&sort=stars&tags=ads`). */
 const AVAILABLE_PARAMS = { q: "", sort: "newest", recent: "1", tags: [...DEFAULT_HIDDEN_TAGS].sort().join(","), tagmode: "hide", match: "any" }
 
+/**
+ * The index URL last loaded. Another tab and back remounts the view: it shows
+ * that index again (cached, or refetched if it went stale) without a second
+ * Load, while the query cache still knows it.
+ */
+let loadedUrl: string | null = null
+const remembered = () => (loadedUrl !== null && queryClient.getQueryState(extensionKeys.index(loadedUrl)) ? loadedUrl : null)
+
 export function AvailableView() {
   const { t } = useTranslation()
   const installed = useQuery(installedQuery)
   const defaultUrl = installed.data?.index_url ?? ""
   const access = installed.data?.access ?? false
-  const [urlDraft, setUrlDraft] = useState<string | null>(null)
-  const [url, setUrl] = useState<string | null>(null)
+  const [urlDraft, setUrlDraft] = useState<string | null>(remembered)
+  const [url, setUrl] = useState<string | null>(remembered)
   const [params, setParams] = useRouteParams(AVAILABLE_PARAMS)
   const [query, setQuery] = useRouteSearch(params.q, (q) => setParams({ q }))
   const tagSet = useMemo<ReadonlySet<string>>(() => new Set(params.tags.split(",").filter(Boolean)), [params.tags])
@@ -220,6 +228,7 @@ export function AvailableView() {
 
   const load = () => {
     const next = (urlDraft ?? defaultUrl).trim()
+    loadedUrl = next
     if (next === source && url !== null) reload.mutate()
     else setUrl(next)
   }
