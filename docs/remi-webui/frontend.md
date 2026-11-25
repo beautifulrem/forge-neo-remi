@@ -324,7 +324,10 @@ imperatively).
   middle), and in the run bar's status line
   only while the stage does not show it (img2img's Source view, the progress
   bar turned off), so the form does not move for the length of a job. The
-  header's hairline is the global indicator on every page.
+  header's hairline is the global indicator on every page. In a short
+  window the picture a job makes keeps at least half the window's height:
+  what is least needed meanwhile (the history strip) folds a scroll away,
+  its title left in sight, rather than every block shrinking together.
 - Typography: self-hosted OFL faces (`@fontsource-variable`, no CDN), each
   split by unicode range so only the slices a page renders download, declared
   in `styles/fonts.css`: **Remi Sans** is Geist (the UI's Latin letters and
@@ -926,10 +929,18 @@ mode's schema is prefetched).
   history strip first, then the parameters with the run controls stuck to
   the bottom (and the stacked model bar). The run controls are sticky at the
   top of the parameters pane; with the pane collapsed they move to the stage
-  header. A short window (a phone held sideways) scrolls the stage column:
-  the img2img Source view keeps the editor's 16rem floor (`SOURCE_FLOOR`
-  holds the stage open) and the history strip follows it, never under it;
-  the result picture has no floor and scales down to the room there is.
+  header. A short window (a phone held sideways, `max-height: 32rem`)
+  scrolls the stage column: the stage keeps the column less the history
+  strip's title row (`SHORT_WINDOW_STAGE` in `index.tsx`), so the picture
+  being made takes half the window or more (at 844×390, 246 px where the
+  strip left it 142, and 214 px where it left img2img's Result view 110),
+  and the strip's thumbnails are a scroll away with its title in sight.
+  That holds whether a job runs or not: running only, the finished picture
+  would shrink back to a third of the window as it lands, and Generate
+  forever would flip the layout at every run. The img2img Source view keeps
+  the editor's 16rem floor (`SOURCE_FLOOR` holds the stage open, and wins)
+  and the history strip follows it, never under it; the result picture has
+  no floor of its own and scales down to the room there is.
 - **Form loading** (`use-form-loader.ts`): the page loads its schema itself
   (not `TabForm`), once per schema object. On a reload (options changed, UI
   preset) image ids survive and params still at their old default follow

@@ -1058,6 +1058,58 @@ for (const [width, height] of [
   })
 }
 
+/** Puts a 640×480 picture on img2img's canvas. */
+async function addSourceImage(page: Page) {
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement("canvas")
+    canvas.width = 640
+    canvas.height = 480
+    canvas.getContext("2d")!.fillRect(0, 0, 640, 480)
+    return canvas.toDataURL("image/png").split(",")[1]!
+  })
+  const chooser = page.waitForEvent("filechooser")
+  await page.getByRole("button", { name: "Add a source image" }).click()
+  await (await chooser).setFiles({ name: "source.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") })
+  await expect(page.getByRole("img", { name: /^Image editor/ })).toBeVisible()
+}
+
+// Held sideways, the stage column gave the history strip 132 px and the picture being made 142 px
+// (110 px on img2img's Result view, under its view tabs), a third of the window or less. In a short
+// window the stage takes the column less the strip's title row: the strip is a scroll away.
+for (const [width, height] of [
+  [844, 390],
+  [932, 430],
+] as const) {
+  for (const tab of ["txt2img", "img2img"] as const) {
+    test(`the picture being made takes half the window or more at ${width}×${height} on ${tab}`, async ({ page }) => {
+      await page.setViewportSize({ width, height })
+      await openGenerate(page, tab)
+      if (tab === "img2img") await addSourceImage(page)
+      await page.keyboard.press(`${mod}+Enter`)
+      const progress = page.locator("[data-slot=stage-progress]")
+      await expect(progress).toBeVisible()
+      // the stage's picture area: the live preview, under the progress strip along its bottom edge
+      const area = (await progress.locator("xpath=..").boundingBox())!
+      expect(area.height, "the picture's area").toBeGreaterThanOrEqual(height / 2)
+      expect(area.y, "the picture's top").toBeGreaterThanOrEqual(0)
+      expect(area.y + area.height, "the picture's bottom").toBeLessThanOrEqual(height)
+      // the history strip's title stays in sight, and the strip is a scroll away
+      const history = page.getByRole("region", { name: "History" })
+      const titleHit = () =>
+        history.getByRole("heading", { name: "History" }).evaluate((element) => {
+          const box = element.getBoundingClientRect()
+          return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2))
+        })
+      expect(await titleHit(), "the history's title is in sight").toBe(true)
+      const strip = history.getByText("Results of this session appear here")
+      await strip.scrollIntoViewIfNeeded()
+      await expect(strip).toBeInViewport()
+      expect(await titleHit(), "the history's title, scrolled to").toBe(true)
+      await page.getByRole("button", { name: "Interrupt" }).click()
+    })
+  }
+}
+
 // The reset dot (a changed value's way back to its default) was a 24 × 20 px target between a
 // label and the row's controls: it takes the room up to them, never reaching one.
 for (const [width, height] of [

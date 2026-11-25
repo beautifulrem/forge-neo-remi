@@ -174,6 +174,15 @@ function PaneToggle({ collapsed, side, onToggle }: { collapsed: boolean; side: "
   )
 }
 
+/**
+ * A short window (a phone held sideways) gives the stage its column less the history strip's title
+ * row: the picture, live or finished, takes the room, and the strip's thumbnails are a scroll away
+ * with their title in sight (`min-h-7` and the column's `gap-2`). Running or not: the finished
+ * picture would shrink back to a third of the window as it lands, and Generate forever would flip
+ * the layout at every run. The img2img Source view keeps its own floor (`SOURCE_FLOOR` wins).
+ */
+const SHORT_WINDOW_STAGE = "[@media(max-height:32rem)]:min-h-[calc(100%-(--spacing(9)))]"
+
 function DesktopLayout({ tab, openViewer, wide }: { tab: GenerateTab; openViewer: (key?: string) => void; wide: boolean }) {
   const { t } = useTranslation()
   const layout = useDefaultLayout({ id: wide ? "remi-generate-3" : "remi-generate-2", panelIds: wide ? ["params", "stage", "history"] : ["params", "stage"] })
@@ -208,13 +217,14 @@ function DesktopLayout({ tab, openViewer, wide }: { tab: GenerateTab; openViewer
       </ResizablePanel>
       <ResizableHandle withHandle aria-label={t("Resize the parameters panel")} />
       <ResizablePanel id="stage" minSize={320}>
-        {/* A short window (a phone held sideways) scrolls the column: the img2img editor keeps its
-            floor and the history strip follows it instead of lying under it. */}
+        {/* A short window (a phone held sideways) scrolls the column: the stage keeps all of it but
+            the history strip's title, the img2img editor its floor, and the strip follows them
+            instead of lying under them. */}
         <div className="flex h-full flex-col gap-2 overflow-y-auto overscroll-contain p-3">
           <Stage
             tab={tab}
             onOpenViewer={() => openViewer()}
-            className="min-h-0 flex-1"
+            className={cn("min-h-0 flex-1", !wide && SHORT_WINDOW_STAGE)}
             leading={<PaneToggle side="left" collapsed={paramsCollapsed} onToggle={() => toggle(paramsRef)} />}
             trailing={wide ? <PaneToggle side="right" collapsed={historyCollapsed} onToggle={() => toggle(historyRef)} /> : null}
             toolbar={paramsCollapsed ? <GenerateBar tab={tab} showAdvice={false} className="min-w-0 flex-1" /> : null}
