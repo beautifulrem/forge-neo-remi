@@ -3,12 +3,13 @@
 import dataclasses
 import io
 import os
+import sqlite3
 from pathlib import Path
 
 import pytest
 from PIL import Image, PngImagePlugin
 
-from remi.files import FileError, FileStore, clean_name, snap_width, sniff
+from remi.files import FileError, FileStore, clean_name, connect, snap_width, sniff, transaction
 from remi.networks import NetworkEntry, NetworkIndex
 from remi.server.testing import server_app
 from remi.testing import webui_state
@@ -799,5 +800,78 @@ def test_a_jobs_outputs_are_found_through_an_index(tmp_path):
     try:
         plan = store._db.execute("EXPLAIN QUERY PLAN SELECT id FROM files WHERE job_id = ? AND kind = 'output' AND id != ? ORDER BY created", ("j", "f")).fetchall()
         assert "files_job" in " ".join(str(row[-1]) for row in plan)
+    finally:
+        store.close()
+
+
+class _FailingConnection:
+    """A connection whose listed statements fail (``COMMIT``: a disk that filled up)."""
+
+    def __init__(self, db, *fail):
+        self.db = db
+        self.fail = {sql.upper() for sql in fail}
+
+    def execute(self, sql, *args):
+        if sql.strip().upper() in self.fail:
+            raise sqlite3.OperationalError(f"{sql} failed")
+        return self.db.execute(sql, *args)
+
+    @property
+    def in_transaction(self):
+        return self.db.in_transaction
+
+
+def test_a_failed_commit_rolls_back_and_leaves_the_connection_usable(tmp_path):
+    db = connect(tmp_path / "t.db")
+    try:
+        db.execute("CREATE TABLE t (x INTEGER)")
+        proxy = _FailingConnection(db, "COMMIT")
+        with pytest.raises(sqlite3.OperationalError, match="COMMIT"), transaction(proxy):
+            proxy.execute("INSERT INTO t VALUES (1)")
+        assert not db.in_transaction
+        with transaction(db):
+            db.execute("INSERT INTO t VALUES (2)")
+        assert [row[0] for row in db.execute("SELECT x FROM t")] == [2]
+    finally:
+        db.close()
+
+
+def test_a_failed_rollback_does_not_hide_the_error_that_caused_it(tmp_path):
+    db = connect(tmp_path / "t.db")
+    try:
+        proxy = _FailingConnection(db, "ROLLBACK")
+        with pytest.raises(ValueError, match="the body"), transaction(proxy, "BEGIN"):
+            raise ValueError("the body failed")
+        db.execute("ROLLBACK")
+    finally:
+        db.close()
+
+
+@pytest.mark.parametrize("which", ["recipes", "prompt_tools", "chains"])
+def test_a_store_whose_commit_failed_takes_the_next_transaction(tmp_path, which):
+    """The stores' multi-row writes: a COMMIT that fails must not leave the
+    shared connection inside the transaction (every later BEGIN would fail)."""
+
+    from remi.jobs.chains import ChainStore, StageSpec
+    from remi.prompt_tools.store import PromptToolsStore
+    from remi.recipes import RecipeStore
+
+    if which == "recipes":
+        store = RecipeStore(tmp_path / "recipes.db")
+        write = lambda: store.import_recipes({"recipes": [{"name": f"r{len(store.list())}"}]})  # noqa: E731
+    elif which == "prompt_tools":
+        store = PromptToolsStore(tmp_path / "prompt-tools.db")
+        write = lambda: store.set_meta("k", "v")  # noqa: E731
+    else:
+        store = ChainStore(tmp_path / "chains.db")
+        write = lambda: store.create_chain([StageSpec(kind="generate")])  # noqa: E731
+    try:
+        real = store._db
+        store._db = _FailingConnection(real, "COMMIT")
+        with pytest.raises(sqlite3.OperationalError):
+            write()
+        store._db = real
+        assert not real.in_transaction
+        write()
     finally:
         store.close()

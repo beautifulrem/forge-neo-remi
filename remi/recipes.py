@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from remi.files import FileStore, connect
+from remi.files import FileStore, connect, transaction
 
 RECIPE_EXPORT_VERSION = 1
 VALID_TABS = ("txt2img", "img2img", "extras")
@@ -355,15 +355,8 @@ class RecipeStore:
         if len(items) > MAX_IMPORT_RECIPES:
             raise RecipeError(f"cannot import more than {MAX_IMPORT_RECIPES} recipes at once")
         # one transaction: an entry that fails leaves none of the earlier ones behind
-        with self._lock:
-            self._db.execute("BEGIN IMMEDIATE")
-            try:
-                result = self._import_entries(items, overwrite=overwrite)
-            except BaseException:
-                self._db.execute("ROLLBACK")
-                raise
-            self._db.execute("COMMIT")
-        return result
+        with self._lock, transaction(self._db):
+            return self._import_entries(items, overwrite=overwrite)
 
     def _import_entries(self, items: list[Any], *, overwrite: bool) -> dict[str, Any]:
         added = updated = skipped = 0

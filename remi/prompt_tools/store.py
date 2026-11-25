@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from remi.files import decode_offset, encode_cursor
+from remi.files import decode_offset, encode_cursor, transaction
 
 SCHEMA_VERSION = 1
 FAVORITE_KINDS = ("prompt", "negative", "tags")
@@ -126,14 +126,8 @@ class PromptToolsStore:
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Connection]:
-        with self._lock:
-            self._db.execute("BEGIN IMMEDIATE")
-            try:
-                yield self._db
-            except BaseException:
-                self._db.execute("ROLLBACK")
-                raise
-            self._db.execute("COMMIT")
+        with self._lock, transaction(self._db):
+            yield self._db
 
     def _all(self, sql: str, params: Sequence[Any] = ()) -> list[sqlite3.Row]:
         with self._lock:

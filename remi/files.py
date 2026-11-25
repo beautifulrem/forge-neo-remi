@@ -11,6 +11,7 @@ or name), size-limited, deduplicated by SHA-256 and stored under
 from __future__ import annotations
 
 import base64
+import contextlib
 import dataclasses
 import hashlib
 import logging
@@ -211,6 +212,33 @@ def connect(path: Path) -> sqlite3.Connection:
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA synchronous=NORMAL")
     return db
+
+
+@contextlib.contextmanager
+def transaction(db: Any, begin: str = "BEGIN IMMEDIATE") -> Iterator[None]:
+    """``begin`` … ``COMMIT`` around the block (the caller holds the
+    connection's lock). An error in the block rolls back and is raised as it
+    was, even when the rollback fails too; a ``COMMIT`` that fails (a full
+    disk, a busy reader) leaves an open transaction, which is rolled back so
+    the connection takes the next one."""
+
+    db.execute(begin)
+    try:
+        yield
+    except BaseException:
+        if db.in_transaction:
+            try:
+                db.execute("ROLLBACK")
+            except sqlite3.Error:
+                log.warning("rolling back a failed transaction failed too", exc_info=True)
+        raise
+    try:
+        db.execute("COMMIT")
+    except BaseException:
+        if db.in_transaction:
+            with contextlib.suppress(sqlite3.Error):
+                db.execute("ROLLBACK")
+        raise
 
 
 class FileStore:

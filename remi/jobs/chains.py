@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from remi.files import FileStore, connect, decode_cursor, encode_cursor
+from remi.files import FileStore, connect, decode_cursor, encode_cursor, transaction
 from remi.jobs.queue import JobError, JobQueue, Submission
 from remi.jobs.store import CANCELLED, COMPLETED, FAILED, INTERRUPTED, Job, JobStore
 from remi.realtime import EventBus
@@ -392,14 +392,8 @@ class ChainStore:
         """Several writes that land together or not at all (the connection
         autocommits otherwise)."""
 
-        with self._lock:
-            self._db.execute("BEGIN")
-            try:
-                yield
-            except BaseException:
-                self._db.execute("ROLLBACK")
-                raise
-            self._db.execute("COMMIT")
+        with self._lock, transaction(self._db, "BEGIN"):
+            yield
 
     def _insert_stages(self, chain_id: str, stages: Sequence[StageSpec]) -> None:
         for idx, spec in enumerate(stages):
