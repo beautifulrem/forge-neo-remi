@@ -168,6 +168,65 @@ describe("zh-CN catalog file", () => {
   })
 })
 
+/**
+ * Keys no source names literally, each with what shows it. The rest are found by `unusedKeys`.
+ */
+const SHOWN_UNNAMED: Record<string, string> = {
+  "EXIF Interop": "a metadata group the server names `EXIF {label}` (remi/image_meta.py)",
+}
+
+/** The text of the server's sources: a sentence it sends as it is takes the chrome translation first. */
+function serverSources(): string {
+  const root = join(process.cwd(), "..")
+  const parts: string[] = []
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "__pycache__") continue
+      const path = join(dir, entry.name)
+      if (entry.isDirectory()) walk(path)
+      else if (/\.(py|html)$/.test(entry.name)) parts.push(readFileSync(path, "utf8"))
+    }
+  }
+  for (const dir of ["remi", "modules", "modules_forge", "backend", "extensions-builtin", "scripts", "html"]) walk(join(root, dir))
+  return parts.join("\n")
+}
+
+/** zh-CN keys no chrome string, string literal of the SPA or server sentence names. */
+function unusedKeys(): string[] {
+  const literals = new Set<string>()
+  for (const source of Object.values(sources)) {
+    for (const m of source.matchAll(/"((?:[^"\\\n]|\\.)*)"/g)) {
+      try {
+        literals.add(JSON.parse(`"${m[1]}"`) as string)
+      } catch {
+        // not a JSON-compatible literal
+      }
+    }
+  }
+  const chrome = chromeKeys()
+  const named = (key: string) => {
+    // a plural form or a context key ("…_one", "…_theme") is named by its base
+    const forms = new Set([key, key.replace(/_(?:one|other)$/, ""), key.replace(/_[a-z]+$/, "")])
+    return [...forms].some((form) => chrome.has(form) || literals.has(form))
+  }
+  const left = Object.keys(zh).filter((key) => !named(key))
+  const server = serverSources()
+  expect(server.length).toBeGreaterThan(1_000_000) // the server's sources were found
+  return left.filter((key) => !server.includes(key) && !server.includes(key.replace(/_[a-z]+$/, "")))
+}
+
+describe("zh-CN catalog keys", () => {
+  // About thirty translations outlived their strings (old page placeholders, sentences since
+  // reworded, a queue banner that went): dead weight for translators, and a reworded string
+  // looked translated where only its old wording was.
+  it("are all shown somewhere", () => {
+    const unused = unusedKeys()
+    expect(unused.filter((key) => !(key in SHOWN_UNNAMED))).toEqual([])
+    // an entry that no longer applies: the key is gone or a source now names it
+    expect(Object.keys(SHOWN_UNNAMED).filter((key) => !(key in zh) || !unused.includes(key))).toEqual([])
+  })
+})
+
 describe("zh-CN chrome vs server catalogs", () => {
   it("never overrides a server translation with a different one", () => {
     // t() looks in the chrome catalog first: a chrome key that the server translates
