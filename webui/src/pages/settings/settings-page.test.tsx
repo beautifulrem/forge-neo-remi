@@ -118,6 +118,23 @@ describe("settings page", { timeout: 20_000 }, () => {
     expect(screen.getByText("Unsaved changes: 1")).toBeInTheDocument()
   })
 
+  it("scrolls the current section into the nav's view", async () => {
+    const scrolled: Element[] = []
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this)
+    }
+    try {
+      vi.spyOn(api.system, "licenses").mockResolvedValue({ groups: [] })
+      renderPage("view=licenses")
+      const nav = await screen.findByRole("navigation", { name: "Settings sections" }, { timeout: 8000 })
+      // the system views sit below every section: on a short screen the current one is out of sight
+      await waitFor(() => expect(scrolled).toContain(within(nav).getByRole("button", { name: "Licenses" })))
+    } finally {
+      Element.prototype.scrollIntoView = original
+    }
+  })
+
   it("shows nothing-found with a way out, and filters to unsaved edits", async () => {
     renderPage()
     const search = await screen.findByRole("searchbox", { name: "Search settings" }, { timeout: 8000 })

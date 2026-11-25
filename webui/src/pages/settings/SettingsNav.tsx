@@ -1,4 +1,5 @@
 /** Settings section navigation: categories → sections (match counts, unsaved dots), then the system views. */
+import { useEffect, useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
@@ -33,8 +34,15 @@ export function SettingsNav({ sections, loading = false, view, activeSection, fi
     if (last && last.id === section.categoryId) last.sections.push(section)
     else categories.push({ id: section.categoryId, label: section.categoryLabel, sections: [section] })
   }
+  // the current item in sight: a system view opened from a link sits below every section
+  const navRef = useRef<HTMLElement>(null)
+  const current = view === "settings" ? activeSection : view
+  const shown = current !== null && !loading
+  useEffect(() => {
+    if (shown) navRef.current?.querySelector("[aria-current]")?.scrollIntoView?.({ block: "nearest" })
+  }, [current, shown])
   return (
-    <nav aria-label={t("Settings sections")} className="flex flex-col gap-4 p-3">
+    <nav ref={navRef} aria-label={t("Settings sections")} className="flex flex-col gap-4 p-3">
       {categories.map((category) => (
         <div key={category.id} className="flex flex-col gap-0.5">
           <p className="px-2 pb-1 text-[0.8rem] font-semibold">{t(category.label)}</p>
