@@ -44,6 +44,8 @@ describe("ServerView", () => {
     expect(alert.closest("header")).not.toBeNull()
     expect(alert).toHaveClass("-my-1")
     expect(screen.queryByText(/^Version /)).toBeNull()
+    // the model's place says it is not known rather than staying empty
+    expect(screen.getByText("Unknown")).toBeInTheDocument()
     expect(screen.queryByText("No model loaded")).toBeNull()
     expect(screen.queryByText("Not available")).toBeNull()
     expect(screen.queryByText(/webui\.sh/)).toBeNull()

@@ -280,7 +280,12 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
               </Badge>
             ) : status.isPending ? (
               <Skeleton className="h-5 w-28 max-w-full" />
-            ) : null}
+            ) : (
+              // the status failed: which model is loaded is not known
+              <Badge variant="outline" className="text-muted-foreground">
+                {t("Unknown")}
+              </Badge>
+            )}
           </div>
         }
         footer={
