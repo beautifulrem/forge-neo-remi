@@ -396,6 +396,44 @@ async function fieldMarks(field: Locator): Promise<{ ring: string; edge: string 
 // comes after `focus-visible:ring-focus-ring` in Tailwind's CSS, so a focused invalid field looked like an unfocused one.
 // Focus wins: focused, it draws the focus ring, and its red edge tells it from a valid field with the focus. The prompt
 // editor showed nothing invalid at all once focused (its own focus ring wins over the classes), and no edge.
+/**
+ * The contrast of a field's edge (its border, painted over its fill, or over the surface with
+ * bg-clip-padding) against the surface around the field and against its fill, the lower of the two:
+ * an invalid field's red edge is a state indicator, 3:1 against what is next to it (WCAG 1.4.11).
+ */
+async function edgeContrast(field: Locator): Promise<number> {
+  return field.evaluate((element) => {
+    const canvas = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!
+    const rgba = (color: string) => {
+      canvas.clearRect(0, 0, 1, 1)
+      canvas.fillStyle = "#000"
+      canvas.fillStyle = color
+      canvas.fillRect(0, 0, 1, 1)
+      const [r, g, b, a] = canvas.getImageData(0, 0, 1, 1).data
+      return { rgb: [r!, g!, b!].map((x) => x / 255), alpha: a! / 255 }
+    }
+    const over = (color: string, under: number[]) => {
+      const { rgb, alpha } = rgba(color)
+      return rgb.map((x, i) => alpha * x + (1 - alpha) * under[i]!)
+    }
+    const luminance = (rgb: number[]) => {
+      const [r, g, b] = rgb.map((x) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)) as [number, number, number]
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+    const contrast = (a: number[], b: number[]) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number]
+      return (hi + 0.05) / (lo + 0.05)
+    }
+    let surfaceColor = "rgba(0, 0, 0, 0)"
+    for (let node = element.parentElement; node && rgba(surfaceColor).alpha === 0; node = node.parentElement) surfaceColor = getComputedStyle(node).backgroundColor
+    const surface = rgba(surfaceColor).rgb
+    const style = getComputedStyle(element)
+    const fill = over(style.backgroundColor, surface)
+    const edge = over(style.borderTopColor, style.backgroundClip === "padding-box" ? surface : fill)
+    return Math.round(Math.min(contrast(edge, surface), contrast(edge, fill)) * 100) / 100
+  })
+}
+
 test.describe("invalid fields", () => {
   for (const theme of ["light", "dark"] satisfies Theme[]) {
     test(`${theme}: draw the focus ring once focused, and keep their red edge`, async ({ page }) => {
@@ -423,6 +461,9 @@ test.describe("invalid fields", () => {
       await size.evaluate((element: HTMLElement) => element.blur())
       await expect(size).toHaveAttribute("aria-invalid", "true")
       const sizeBlurred = await fieldMarks(size)
+      // its red edge against the popover and against its own fill: the dark theme drew it at half
+      // strength, 2.6:1 against the fill
+      expect(await edgeContrast(size), "the size field's red edge").toBeGreaterThanOrEqual(3)
       await page.keyboard.press("Escape")
       // the prompt editor, refused by the server (the mock refuses "#invalid")
       const prompt = await setPrompt(page, "a cat #invalid")

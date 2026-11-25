@@ -112,3 +112,118 @@ describe("the focus ring token", () => {
     expect(ownShares).toEqual([])
   })
 })
+
+/** An `oklch(L C H)` or `oklch(L C H / A%)` token: its colour and its alpha (0..1). */
+function oklcha(value: string | undefined): { color: [number, number, number]; alpha: number } {
+  const match = /^oklch\(([\d.]+) ([\d.]+) ([\d.]+)(?: \/ ([\d.]+)%)?\)$/.exec(value ?? "")
+  if (!match) throw new Error(`not an oklch() colour: ${value}`)
+  return { color: [Number(match[1]), Number(match[2]), Number(match[3])], alpha: match[4] === undefined ? 1 : Number(match[4]) / 100 }
+}
+
+/** `color` at `alpha` painted over `under` (sRGB channels), the way the browser blends it. */
+const over = (color: number[], alpha: number, under: number[]) => color.map((x, i) => alpha * x + (1 - alpha) * under[i]!)
+
+function contrast(a: number[], b: number[]): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number]
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+/**
+ * An invalid field's red edge (docs/remi-webui/frontend.md, "Visual rules"): `border-destructive`, or
+ * a share of it, under an invalid variant (aria-invalid, data-invalid, has-aria-invalid…). It is a
+ * state indicator: 3:1 against what is next to it (WCAG 1.4.11), the surface around the field and
+ * the field's fill inside the edge. A border is painted over its element's background (over the
+ * surface with bg-clip-padding, a button's): both are checked. The dark theme drew it at half
+ * strength, 2.6:1 to 2.8:1 against a field's fill and 1.9:1 against a switch's track. Focused, the
+ * edge's outer neighbour is the focus ring, which under the coral accent is nearly the same red: no
+ * share of --destructive clears that (nor a checked switch's --primary fill), and the message an
+ * invalid field shows covers it (lib/design-guards.test.ts, "invalid fields").
+ */
+describe("the invalid edge", () => {
+  const classes = Object.entries(sources).flatMap(([file, source]) =>
+    (source.match(/[^\s"'`{}]+/g) ?? []).map((cls) => ({ file: file.replace(/^\.\.\//, ""), cls })),
+  )
+  const edges = classes.flatMap(({ file, cls }) => {
+    const m = /^(.*):border-destructive(?:\/(\d+))?$/.exec(cls)
+    if (!m || !/invalid/.test(m[1]!)) return []
+    const dark = m[1]!.split(":").includes("dark")
+    return [{ file, cls, share: m[2] === undefined ? 1 : Number(m[2]) / 100, themes: dark ? (["dark"] as const) : (["light", "dark"] as const) }]
+  })
+  /** The share of a utility a kit file writes, e.g. the switch's unchecked track (`bg-foreground/24`). */
+  function share(file: string, cls: RegExp): number {
+    const m = cls.exec(sources[`../${file}`] ?? "")
+    if (!m) throw new Error(`${cls} not in ${file}`)
+    return Number(m[1]) / 100
+  }
+  /** The tokens an invalid edge and what is around it read: an accent may set none of them. */
+  const EDGE_TOKENS = ["destructive", "foreground", "input", "field", "field-hover", "background", "card", "popover", "canvas"]
+
+  it("is drawn by the kit's fields and depends on no accent", () => {
+    for (const file of ["components/ui/input.tsx", "components/ui/textarea.tsx", "components/ui/select-styles.ts", "components/ui/combobox-styles.ts", "components/ui/switch.tsx", "components/ui/checkbox.tsx", "components/ui/number-field.tsx", "components/ui/input-group.tsx"]) {
+      expect(edges.some((edge) => edge.file === file), file).toBe(true)
+    }
+    const accentRules = [...css.matchAll(/^([^\n{}]*\[data-accent[^{}]*)\{([^}]*)\}/gm)]
+    expect(accentRules.length).toBeGreaterThan(ACCENTS.length)
+    const set = accentRules.flatMap((rule) => [...rule[2]!.matchAll(/--([\w-]+):/g)].map((m) => m[1]!)).filter((name) => EDGE_TOKENS.includes(name))
+    expect(set).toEqual([])
+  })
+
+  /**
+   * What an edge is drawn around and where (by default a field's fill, hovered too, on the page, a
+   * card or a popover): a switch's unchecked track, a checkbox's or radio's box, nothing (a drop
+   * zone, a toggle, a badge); a button's border is painted over the surface (bg-clip-padding), its
+   * fill the field's when it acts as one (FIELD_BUTTON_CLASS); the image editor's drop target sits
+   * on its stage.
+   */
+  const AROUND: Record<string, { fills: string[]; overSurface?: boolean; surfaces?: string[] }> = {
+    "components/ui/switch.tsx": { fills: ["switch track"] },
+    "components/ui/checkbox.tsx": { fills: ["box"] },
+    "components/ui/radio-group.tsx": { fills: ["box"] },
+    "components/ui/button.tsx": { fills: ["none", "field", "field-hover"], overSurface: true },
+    "components/ui/toggle.tsx": { fills: ["none"] },
+    "components/ui/badge.tsx": { fills: ["none"] },
+    "ui/inputs/DropZone.tsx": { fills: ["none"] },
+    "canvas/ui/EmptyState.tsx": { fills: ["none"], surfaces: ["canvas"] },
+  }
+  const FIELD = { fills: ["field", "field-hover"], surfaces: ["background", "card", "popover"] }
+
+  const cases = (["light", "dark"] as const).flatMap((theme) => ACCENTS.map((accent) => [theme, accent] as const))
+  it.each(cases)("reaches 3:1 against the surface and the field's fill in the %s theme with the %s accent", (theme) => {
+    const rule = block(theme === "light" ? ":root" : ".dark")
+    // a token's value, a comment after it left out
+    const tone = (name: string) => oklcha(new RegExp(`^ +--${name}: ([^;]+);`, "m").exec(rule)?.[1])
+    const destructive = srgb(tone("destructive").color)
+    const surfaces = Object.fromEntries(["background", "card", "popover", "canvas"].map((name) => [name, srgb(tone(name).color)]))
+    const fills: Record<string, { color: number[]; alpha: number }> = {
+      none: { color: [0, 0, 0], alpha: 0 },
+      field: { color: srgb(tone("field").color), alpha: tone("field").alpha },
+      "field-hover": { color: srgb(tone("field-hover").color), alpha: tone("field-hover").alpha },
+      "switch track": {
+        color: srgb(tone("foreground").color),
+        alpha: theme === "light" ? share("components/ui/switch.tsx", /\sdata-unchecked:bg-foreground\/(\d+)\s/) : share("components/ui/switch.tsx", /\sdark:data-unchecked:bg-foreground\/(\d+)\s/),
+      },
+      // no fill in the light theme
+      box: theme === "light" ? { color: [0, 0, 0], alpha: 0 } : { color: srgb(tone("input").color), alpha: tone("input").alpha * share("components/ui/checkbox.tsx", /\sdark:bg-input\/(\d+)\s/) },
+    }
+    const weak = new Map<string, string>()
+    for (const edge of edges.filter((edge) => (edge.themes as readonly string[]).includes(theme))) {
+      const around = { ...FIELD, ...AROUND[edge.file] }
+      let worst = { ratio: Infinity, where: "" }
+      for (const surfaceName of around.surfaces) {
+        const surface = surfaces[surfaceName]!
+        for (const fillName of around.fills) {
+          const fill = fills[fillName]!
+          const inside = over(fill.color, fill.alpha, surface)
+          const painted = over(destructive, edge.share, around.overSurface ? surface : inside)
+          for (const [neighbour, next] of [["surface", surface], ["fill", inside]] as const) {
+            const ratio = contrast(painted, next)
+            if (ratio < worst.ratio) worst = { ratio, where: `${neighbour}: ${fillName} on ${surfaceName}` }
+          }
+        }
+      }
+      if (worst.ratio < 3) weak.set(`${edge.file}: ${edge.cls}`, `${worst.ratio.toFixed(2)}:1 against the ${worst.where}`)
+    }
+    expect(edges.length).toBeGreaterThan(12)
+    expect(Object.fromEntries(weak)).toEqual({})
+  })
+})

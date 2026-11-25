@@ -529,11 +529,20 @@ generated interfaces (sources: Linear's
   no underline or bottom shadow, and focus rings it evenly (`border-ring`
   plus a 3 px `ring-focus-ring`). An invalid field (`aria-invalid`, or
   `data-invalid` on the group that draws it) has a red edge
-  (`border-destructive`, which the shadcn input, textarea, select, combobox
-  and checkable controls thin to 50 % in the dark theme; an inset 1 px ring
+  (`border-destructive`, full strength in both themes; an inset 1 px ring
   on the prompt editor, which has no border) and, while it has no focus, a
-  3 px halo of 20 % `--destructive` (40 % in the dark theme on those and the
-  input group). Focus wins: focused, it draws the
+  3 px halo of 20 % `--destructive` (40 % in the dark theme on the shadcn
+  input, textarea, select, combobox, checkable controls and the input
+  group). The edge is a state indicator, 3:1 against the surface around the
+  field and against the field's own fill (WCAG 1.4.11). shadcn's dark theme
+  thinned it to 50 %: 2.5:1 against a hovered field's fill on a popover,
+  1.9:1 against a switch's track. A switch needs 88 % of `--destructive`,
+  so the edge is the whole token, as the number field, the input group, the
+  search select and the drop zone already drew it: 5.5:1 or more against a
+  field's fill and 3.5:1 against a switch's track in the dark theme, 5.1:1
+  and 3.2:1 in the light one, the same for every accent
+  (`styles/focus-ring.test.ts`, "the invalid edge"; `tests/e2e/a11y.spec.ts`,
+  "invalid fields"). Focus wins: focused, it draws the
   focus ring like any field, and its red edge tells it from a valid field
   with the focus. The halo is written for the unfocused state, `not-` the
   variant the field's focus ring is drawn under
