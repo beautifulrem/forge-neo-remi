@@ -74,8 +74,10 @@ function isResult(value: unknown): value is ExtrasResult {
   )
 }
 
-/** A size in pixels, or none stored. */
-const isPixels = (value: unknown) => value === null || value === undefined || (typeof value === "number" && Number.isInteger(value) && value >= 0)
+/** A size in pixels, or none stored. A function declaration: `persist` rehydrates inside `create()` above, before a const below it exists. */
+function isPixels(value: unknown): boolean {
+  return value === null || value === undefined || (typeof value === "number" && Number.isInteger(value) && value >= 0)
+}
 
 /** A stored output: every field the page renders or passes on is of its kind (an object as a React child crashed the page). */
 function isOutput(value: unknown): value is JobOutput {

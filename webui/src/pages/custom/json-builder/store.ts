@@ -78,8 +78,14 @@ export const useBuilder = create<BuilderState>()(
   ),
 )
 
-const positive = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0
-const str = (v: unknown): v is string => typeof v === "string"
+// Function declarations, not consts: `persist` rehydrates inside `create()` above, before a const below it exists.
+function positive(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v) && v > 0
+}
+
+function str(v: unknown): v is string {
+  return typeof v === "string"
+}
 
 function restoreItem(value: unknown): Item | null {
   if (!value || typeof value !== "object") return null

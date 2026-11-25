@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { decompilePrompt } from "./decompile"
 import { restore, useBuilder } from "./store"
 import { COMPILED } from "./testdata"
@@ -106,5 +106,19 @@ describe("restore", () => {
     useBuilder.setState(restore({ width: 512, height: 768, items: [{ id: 1, label: "object", caption: "c", text: "", bbox: [10, 20, 110, 60] }] }))
     useBuilder.getState().setSize(1024, 1536, true)
     expect(useBuilder.getState().items[0]!.bbox).toEqual([20, 40, 220, 120])
+  })
+
+  it("restores the stored draft when the page loads", async () => {
+    // rehydration runs inside create(), before the rest of the module is evaluated
+    const stored = { width: 768, height: 512, caption: "kept", items: [{ id: 3, label: "object", caption: "c", text: "", bbox: [10, 20, 110, 60] }], lastId: 3 }
+    localStorage.setItem("remi-json-builder", JSON.stringify({ state: stored, version: 1 }))
+    try {
+      vi.resetModules()
+      const fresh = (await import("./store")).useBuilder.getState()
+      expect([fresh.width, fresh.height, fresh.caption, fresh.lastId]).toEqual([768, 512, "kept", 3])
+      expect(fresh.items.map((item) => item.bbox)).toEqual([[10, 20, 110, 60]])
+    } finally {
+      localStorage.removeItem("remi-json-builder")
+    }
   })
 })

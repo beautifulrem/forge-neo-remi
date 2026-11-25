@@ -111,4 +111,17 @@ describe("extras runs", () => {
     expect(useExtrasRuns.getState().results.map((result) => result.jobId)).toEqual(["j", "plain"])
     sessionStorage.clear()
   })
+
+  it("restores the session's runs when the page reloads", async () => {
+    // rehydration runs inside create(), before the rest of the module is evaluated
+    const result = { jobId: "j1", at: 1, source: null, info: "", error: "", outputs: [{ id: "o1", kind: "image", width: 64, height: 48, infotext: "", role: null, missing: false }] }
+    sessionStorage.setItem("remi-extras-runs", JSON.stringify({ state: { results: [result], jobs: [], sources: {} }, version: 1 }))
+    try {
+      vi.resetModules()
+      const fresh = (await import("./run")).useExtrasRuns.getState()
+      expect(fresh.results.map((run) => run.jobId)).toEqual(["j1"])
+    } finally {
+      sessionStorage.removeItem("remi-extras-runs")
+    }
+  })
 })

@@ -128,6 +128,15 @@ imperatively).
   page CSS to `<head>`), so a user rule beats an app rule of the same
   specificity. It is linked again on the next page load after the file
   changes (served `no-cache`).
+- **Persisted stores** (Zustand `persist`): the stored state is read back
+  inside `create()`, while the module is still being evaluated. Everything
+  `merge`/`migrate` reaches, directly or through the checks it calls, is
+  declared above the store or as a `function` (hoisted): a `const` below
+  the store is still in its temporal dead zone, the `ReferenceError` is
+  swallowed and the store silently starts empty (the next write then
+  overwrites what was stored). Test a store's restore by seeding the
+  storage and importing the module afresh (`vi.resetModules()`), not by
+  calling its `merge` directly.
 
 ## Design system
 
