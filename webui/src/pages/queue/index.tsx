@@ -5,7 +5,7 @@
  * queue again, open in its form, view outputs). The menu imports the Agent
  * Scheduler and Prompt Queue data, stops generate-forever jobs and clears.
  */
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { Ban, BookOpen, Eraser, GitMerge, Import, Infinity as InfinityIcon, ListOrdered, MoreHorizontal, Pause, Play, Search, Star } from "@/components/icons"
 import { Suspense, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -63,6 +63,8 @@ const FORMS: readonly string[] = ["txt2img", "img2img", "extras"]
 
 /** The history filters in the address (`#/queue?status=failed&form=img2img&starred=1&q=cat`). */
 const HISTORY_PARAMS = { status: "all", form: ALL_TABS, starred: "", q: "" }
+/** The phone layout's tab, in the address like the filters: Back from a job opened in its form returns to it. */
+const SECTION_PARAMS = { section: "queue" }
 
 function Pending({ status }: { status: QueueStatus | undefined }) {
   const { t } = useTranslation()
@@ -102,7 +104,8 @@ function History({ onView }: { onView: (job: Job, index: number) => void }) {
   const starred = params.starred === "1"
   const tab = FORMS.includes(params.form) ? (params.form as FormTab) : ALL_TABS
   const query = { status: HISTORY_STATUSES[filter], ...(q ? { q } : {}), ...(starred ? { starred: true } : {}), ...(tab !== ALL_TABS ? { tab } : {}) }
-  const history = useInfiniteQuery(historyQuery(query))
+  // another filter keeps the rows shown until its own page arrives, not a skeleton in between
+  const history = useInfiniteQuery({ ...historyQuery(query), placeholderData: keepPreviousData })
   const jobs = history.data?.pages.flatMap((page) => page.items) ?? []
   const total = history.data?.pages[0]?.total ?? null
   const tabs = [
@@ -166,7 +169,7 @@ function History({ onView }: { onView: (job: Job, index: number) => void }) {
           {q || starred || filter !== "all" || tab !== ALL_TABS ? t("No jobs match.") : t("Finished jobs appear here.")}
         </p>
       ) : (
-        <HistoryList jobs={jobs} total={total} hasMore={history.hasNextPage} loadingMore={history.isFetchingNextPage} loadFailed={history.isFetchNextPageError} onLoadMore={() => void history.fetchNextPage()} onView={onView} />
+        <HistoryList jobs={jobs} total={total} hasMore={history.hasNextPage && !history.isPlaceholderData} loadingMore={history.isFetchingNextPage} loadFailed={history.isFetchNextPageError} onLoadMore={() => void history.fetchNextPage()} onView={onView} />
       )}
     </section>
   )
@@ -194,6 +197,8 @@ export default function QueuePage({ route }: { route?: Route } = {}) {
     else params.set("view", next)
     navigate({ name: "queue", query: params.size > 0 ? params : undefined }, { replace: true })
   }
+  const [sectionParams, setSectionParams] = useRouteParams(SECTION_PARAMS)
+  const section = sectionParams.section === "history" ? "history" : "queue"
   const [importing, setImporting] = useState(false)
   const [confirm, setConfirm] = useState<Confirm>(null)
   const [keepStarred, setKeepStarred] = useState(true)
@@ -311,7 +316,7 @@ export default function QueuePage({ route }: { route?: Route } = {}) {
           <div className="flex min-h-0 flex-col">{history}</div>
         </div>
       ) : (
-        <Tabs defaultValue="queue" className="flex min-h-0 flex-1 flex-col gap-0 p-3">
+        <Tabs value={section} onValueChange={(value) => setSectionParams({ section: String(value) })} className="flex min-h-0 flex-1 flex-col gap-0 p-3">
           <TabsList variant="line" className="w-full justify-start border-b pb-px">
             <TabsTrigger value="queue" className="flex-none px-2.5">
               <ListOrdered aria-hidden />
