@@ -212,8 +212,10 @@ def test_selection_changes_go_through_the_main_entry_with_the_preset(webui, monk
     # the module list is scanned before the first module change
     assert fake.calls == [("checkpoint_change", "anima.safetensors", "anima"), ("refresh_models",), ("modules_change", ["qwen.safetensors"], "anima"), ("dtype_change", "float8-e4m3fn", "anima"), ("refresh_models",)]
     fake.calls.clear()
-    runtime.select_modules([])
-    assert fake.calls == [("modules_change", [], "anima")]
+    runtime.select_modules([])  # the selection the settings show (none): nothing to do
+    assert fake.calls == []
+    runtime.select_modules(["qwen.safetensors"])  # scanned once already
+    assert fake.calls == [("modules_change", ["qwen.safetensors"], "anima")]
 
 
 def test_the_main_entry_is_the_forge_module(monkeypatch):
