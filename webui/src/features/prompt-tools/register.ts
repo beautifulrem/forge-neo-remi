@@ -12,11 +12,24 @@ import { onWsEvent } from "@/api/ws"
 import { registerCompletionSource } from "@/features/prompt-editor/completion-registry"
 import { registerPromptDecorator } from "@/features/prompt-editor/decorators"
 import { lazyModule } from "@/lib/lazy-module"
+import { notifyLoadFailed } from "@/lib/retryable-lazy"
 import { PromptToolsDecorator } from "./PromptToolsDecorator"
 import { toolKeys } from "./queries"
 
 // the completion engine, fetched at the first completion (again after a failed fetch: offline)
 const engine = lazyModule(() => import("./completion/source"))
+
+/**
+ * The engine, or null while it cannot load (no completions then). Typing asks for it, so a failure
+ * is told to `chunk-reload.ts`, as any load the user asked for (`loadForUse`): the server may run
+ * another build, whose chunks have other names.
+ */
+function loadEngine() {
+  return engine.load().catch(() => {
+    notifyLoadFailed()
+    return null
+  })
+}
 
 function forgetCompletions() {
   engine.get()?.clearCompletionCache()
@@ -25,7 +38,7 @@ function forgetCompletions() {
 registerCompletionSource(
   "prompt-tools",
   async (context) => {
-    const module = await engine.load().catch(() => null) // no completions while it cannot load
+    const module = await loadEngine()
     return module ? module.promptToolsCompletions(context) : null
   },
   { priority: 10 },
