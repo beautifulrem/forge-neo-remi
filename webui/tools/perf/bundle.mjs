@@ -10,13 +10,14 @@
 //
 // --check applies tools/perf/budget.json (or the given file): the initial JS, every route and
 // every other lazy entry against their limits, the exempt editor chunks and the recorded
-// exceptions (each with its own cap); exits 1 on a violation (tools/check.sh, step perf:bundle).
+// exceptions (each with its own cap), and that no script carries the mock backend (src/api/mock);
+// exits 1 on a violation (tools/check.sh, step perf:bundle).
 // --load splits the scripts a measured page load fetched (browser.mjs --only load) into the
 // initial JS, the default route, the exempt editors and the rest of the first view.
-import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { brotliCompressSync, constants, gzipSync } from "node:zlib"
-import { analyse, check, firstView } from "./budget.mjs"
+import { analyse, check, firstView, mockChunks } from "./budget.mjs"
 
 const argv = process.argv.slice(2)
 const dist = argv[0] && !argv[0].startsWith("--") ? argv[0] : "dist"
@@ -60,6 +61,9 @@ report.initial.rawKB = Number(kb(report.initial.files.reduce((n, f) => n + size(
 report.initial.css = cssFiles.map((file) => ({ file, ...size(file) }))
 report.largest = chunks.slice(0, 15)
 report.totalJs = { files: chunks.length, gzip: chunks.reduce((n, c) => n + c.gzip, 0) }
+// every script written, whether something loads it or not (an orphan chunk is in no import list)
+const scripts = readdirSync(path.join(dist, "assets")).map((name) => `assets/${name}`)
+report.mockChunks = mockChunks(scripts, (file) => readFileSync(path.join(dist, file), "utf8"))
 
 console.log(`Initial JS: ${report.initial.gzipKB} KB gzip, ${report.initial.brotliKB} KB brotli, ${report.initial.rawKB} KB raw (${report.initial.files.length} files; budget ${budget.initialKB} KB)`)
 for (const file of report.initial.files) console.log(`  ${file.padEnd(48)} ${kb(size(file).gzip).padStart(7)} KB gzip`)

@@ -99,7 +99,9 @@ function compactQuery(query: Query): Record<string, string> {
 
 async function transport(sent: Request): Promise<Response> {
   let response: Response
-  if (MOCK) {
+  // Read the env inline (not through MOCK): the bundler then drops the mock backend's chunk from a
+  // production build (tools/perf/bundle.mjs --check fails on it).
+  if (import.meta.env.VITE_MOCK === "1") {
     const { handleMockRequest } = await import("./mock/server")
     response = await handleMockRequest(sent)
   } else response = await request(sent)

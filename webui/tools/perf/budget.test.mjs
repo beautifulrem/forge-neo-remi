@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { analyse, check, classify, closure, entryFiles, firstView } from "./budget.mjs"
+import { analyse, check, classify, closure, entryFiles, firstView, mockChunks } from "./budget.mjs"
 
 // A small build: index.html loads main (which imports vendor); two routes share a form chunk; an
 // editor and a widget are lazy.
@@ -76,6 +76,18 @@ describe("bundle budget", () => {
     const report = analyse(manifest, html, size, budget)
     expect(check(report, { ...budget, lazyKB: 160, exempt: { "src/gone.tsx": "removed" } })).toEqual(["src/gone.tsx: named in the budget but not a lazily loaded entry of this build"])
     expect(check(report, { ...budget, lazyKB: 160, defaultRouteParts: ["src/gone.tsx"] })).toEqual(["src/gone.tsx: named in the budget but not a lazily loaded entry of this build"])
+  })
+
+  // `if (MOCK) await import("./mock/server")` behind a module constant kept the mock backend's
+  // 300 KB chunk in the production build: emitted, referenced by nothing
+  it("rejects a production build that carries the mock backend", () => {
+    const files = { "assets/main.js": "import{a as t}from\"./vendor.js\";", "assets/server-x.js": "function _n(e){}export{_n as handleMockRequest};", "assets/socket-y.js": "export{r as MockSocket};" }
+    expect(mockChunks(Object.keys(files), (file) => files[file])).toEqual(["assets/server-x.js", "assets/socket-y.js"])
+    const report = analyse(manifest, html, size, budget)
+    expect(check({ ...report, mockChunks: ["assets/server-x.js"] }, { ...budget, lazyKB: 160 })).toEqual([
+      "assets/server-x.js: the mock backend (src/api/mock) in a production build: read import.meta.env.VITE_MOCK inline where it is imported",
+    ])
+    expect(check({ ...report, mockChunks: [] }, { ...budget, lazyKB: 160 })).toEqual([])
   })
 
   it("splits a measured first view into initial, default route, editors and the rest", () => {

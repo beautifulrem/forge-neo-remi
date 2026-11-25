@@ -82,8 +82,19 @@ function defaultView(manifest, budget) {
  * load at once must not hide its size); an exception or exemption naming an entry the build no
  * longer has.
  */
+/**
+ * The scripts that carry the mock backend (src/api/mock): its server and socket keep their export
+ * names, which the dynamic imports destructure. A production build has none: each import sits
+ * behind `import.meta.env.VITE_MOCK` read inline, which the bundler folds away (a module constant
+ * in between keeps the chunk, emitted and referenced by nothing). `read(file)`: the script's text.
+ */
+export function mockChunks(files, read) {
+  return files.filter((file) => file.endsWith(".js") && /\bexport\s*\{[^}]*\b(?:handleMockRequest|MockSocket)\b/.test(read(file)))
+}
+
 export function check(report, budget) {
   const problems = []
+  for (const file of report.mockChunks ?? []) problems.push(`${file}: the mock backend (src/api/mock) in a production build: read import.meta.env.VITE_MOCK inline where it is imported`)
   if (report.initial.gzipKB > budget.initialKB) problems.push(`initial JS ${report.initial.gzipKB} KB > ${budget.initialKB} KB`)
   const keys = new Set(report.entries.map((entry) => entry.key))
   for (const key of [...Object.keys(budget.exempt ?? {}), ...Object.keys(budget.exceptions ?? {}), budget.defaultRoute, ...(budget.defaultRouteParts ?? [])].filter(Boolean)) {

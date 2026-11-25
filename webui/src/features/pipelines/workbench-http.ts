@@ -1,13 +1,13 @@
 /**
  * Thin typed JSON transport for workbench `/api/v2/*` endpoints.
- * Built strictly on `@/api/http`'s `apiUrl`, `ApiError` and `MOCK` (routing
- * mock-mode requests through `@/api/mock/server`'s `handleMockRequest` via a
- * dynamic import so production bundles tree-shake the mock server cleanly).
+ * Built strictly on `@/api/http`'s `apiUrl` and `ApiError`; mock-mode requests
+ * go to `@/api/mock/server`'s `handleMockRequest` through a dynamic import behind
+ * `import.meta.env.VITE_MOCK` read inline, so a production build has no mock chunk.
  */
-import { ApiError, apiUrl, MOCK, type Query, request } from "@/api/http"
+import { ApiError, apiUrl, type Query, request } from "@/api/http"
 import { sessionRefused } from "@/api/session"
 
-export { ApiError, MOCK }
+export { ApiError }
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"
@@ -46,7 +46,8 @@ export async function workbenchRequest<T>(path: string, options: RequestOptions 
   }
   const url = apiUrl(path, query)
   let response: Response
-  if (MOCK) {
+  // the env read inline, as in @/api/http's transport: a production build then has no mock chunk
+  if (import.meta.env.VITE_MOCK === "1") {
     const { handleMockRequest } = await import("@/api/mock/server")
     const fullUrl = new URL(url, typeof location === "undefined" ? "http://localhost" : location.origin)
     response = await handleMockRequest(new Request(fullUrl, init))
