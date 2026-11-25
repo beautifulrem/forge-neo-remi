@@ -146,8 +146,10 @@ def test_repair_resets_null_and_values_outside_the_choices():
         "devices": choice(["CPU"], ["CPU", "CUDA"]),
         "vae": choice("Automatic", ("Automatic",), interactive=False),  # set elsewhere: the list is not its range
         "fine": choice(64, (8, 64)),
+        "typed": choice("a", ("a", "b"), allow_custom_value=True),  # the list suggests; any text is a value
+        "custom": choice(["a"], ["a", "b"], allow_custom=True),
     }
-    data = {"count": None, "unset": None, "step": 100000, "action": "Stop webui", "devices": ["CPU", "TPU"], "vae": "my.vae", "fine": 8.0}
+    data = {"count": None, "unset": None, "step": 100000, "action": "Stop webui", "devices": ["CPU", "TPU"], "vae": "my.vae", "fine": 8.0, "typed": "c", "custom": ["c"]}
     opts = SimpleNamespace(data_labels=labels, data=dict(data))
     assert repair(opts) == ["count", "step", "devices"]
     assert opts.data == {**data, "count": 6, "step": 64, "devices": ["CPU"]}

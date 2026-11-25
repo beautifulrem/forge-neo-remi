@@ -13,11 +13,14 @@ the WebUI. Upstream code and the third-party extensions bundled with Remi keep
 their reads; the server's start (``repair()``) leaves them values of their
 kind.
 
-The guard flags every read of ``shared.opts`` (any expression named ``opts``,
-``shared.opts`` or ``_opts()``) that is not a method of ``Options``: attribute
-reads, ``getattr(opts, ...)`` and the raw ``opts.data`` mapping. Assignments
-are writes and pass. A place that wants the stored value as it is says why in
-``RAW``.
+The guard flags every read of ``shared.opts`` (a name bound to it,
+``shared.opts``, ``modules.shared.opts``, or a call of a function named for
+it, ``_opts()`` or ``_resolve_opts(...)``) that is not a method of
+``Options``: attribute reads, ``getattr(opts, ...)`` and the raw ``opts.data``
+mapping. Assignments, ``del`` and the ``opts.data`` methods called only to
+write (``update``, ``clear``, a ``pop`` whose result is unused) pass. A place
+that wants the stored value as it is says why in ``RAW``. A parameter that is
+passed the settings under another name is out of its sight.
 """
 
 import ast
@@ -52,17 +55,36 @@ RAW = {
 }
 
 
+# opts.data methods that only write (their result is None, or unused)
+DATA_WRITES = {"update", "clear", "pop", "setdefault"}
+
+
+def _is_shared(node: ast.AST) -> bool:
+    """``shared`` or ``modules.shared``."""
+
+    if isinstance(node, ast.Name):
+        return node.id == "shared"
+    return isinstance(node, ast.Attribute) and node.attr == "shared" and isinstance(node.value, ast.Name) and node.value.id == "modules"
+
+
 def _is_opts(node: ast.AST, names: set[str]) -> bool:
-    """``shared.opts``, a name bound to it, or a call of ``opts()`` / ``_opts()`` / ``self.opts()``."""
+    """``shared.opts`` (``modules.shared.opts``), a name bound to it, or a call
+    of a function named for it: ``opts()``, ``_opts()``, ``self.opts()``,
+    ``_resolve_opts(opts)``."""
 
     if isinstance(node, ast.Name):
         return node.id in names
     if isinstance(node, ast.Attribute):
-        return node.attr == "opts" and isinstance(node.value, ast.Name) and node.value.id == "shared"
+        return node.attr == "opts" and _is_shared(node.value)
     if isinstance(node, ast.Call):
         func = node.func
-        return (isinstance(func, ast.Name) and func.id in ("opts", "_opts")) or (isinstance(func, ast.Attribute) and func.attr in ("opts", "_opts"))
+        name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else ""
+        return (name == "opts" or name.endswith("_opts")) and not name.endswith("cmd_opts")  # cmd_opts: the command line
     return False
+
+
+def _is_data(node: ast.AST, names: set[str]) -> bool:
+    return isinstance(node, ast.Attribute) and node.attr == "data" and _is_opts(node.value, names)
 
 
 def _aliases(tree: ast.AST) -> set[str]:
@@ -100,8 +122,17 @@ class _Reads(ast.NodeVisitor):
 
     def visit_Subscript(self, node: ast.Subscript) -> None:
         # opts.data[key] = value (or del): a write
-        if not isinstance(node.ctx, ast.Load) and isinstance(node.value, ast.Attribute) and node.value.attr == "data" and _is_opts(node.value.value, self.names):
+        if not isinstance(node.ctx, ast.Load) and _is_data(node.value, self.names):
             self.visit(node.slice)
+            return
+        self.generic_visit(node)
+
+    def visit_Expr(self, node: ast.Expr) -> None:
+        # opts.data.update(...), opts.data.pop(key, None) as a statement: a write
+        call = node.value
+        if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute) and call.func.attr in DATA_WRITES and _is_data(call.func.value, self.names):
+            for argument in [*call.args, *call.keywords]:
+                self.visit(argument)
             return
         self.generic_visit(node)
 
@@ -143,6 +174,28 @@ def direct_reads() -> list[str]:
 
 def test_remi_reads_settings_through_setting():
     assert direct_reads() == []
+
+
+def test_the_guard_sees_reads_through_a_resolver_and_the_full_module_path():
+    source = """
+import modules.shared
+from remi.core.capabilities import _resolve_opts
+
+def f(opts=None):
+    active = _resolve_opts(opts)
+    a = getattr(active, "forge_preset", None)
+    b = modules.shared.opts.samples_format
+    opts.data.update({"x": 1})
+    opts.data.pop("legacy", None)
+    opts.data.clear()
+    c = opts.data.pop("taken", None)
+    d = _cmd_opts().lora_dir
+"""
+    assert [what for _line, _function, what in reads_in(source, "probe.py")] == [
+        "getattr(opts, 'forge_preset')",
+        "opts.samples_format",
+        "opts.data",
+    ]
 
 
 def test_the_guard_sees_each_form_of_read():

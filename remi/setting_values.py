@@ -73,10 +73,12 @@ def choices(info: Any) -> tuple[Any, ...] | None:
     """The values a setting's written-out choices offer (a radio, a dropdown,
     the checkboxes of a list; the value of a ``(label, value)`` pair). None
     for a setting without them, one whose list is built when it is shown (it
-    may be stale) and one set elsewhere (``interactive=False``: ``sd_vae``)."""
+    may be stale), one set elsewhere (``interactive=False``: ``sd_vae``) and one
+    whose list only suggests (``allow_custom_value``, ``allow_custom``: any
+    typed value is one)."""
 
     args = getattr(info, "component_args", None)
-    if not isinstance(args, dict) or args.get("interactive") is False:
+    if not isinstance(args, dict) or args.get("interactive") is False or args.get("allow_custom_value") or args.get("allow_custom"):
         return None
     offered = args.get("choices")
     if not isinstance(offered, (list, tuple)) or not offered:

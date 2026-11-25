@@ -310,11 +310,13 @@ def extension_of(path: str | None) -> str | None:
         return None
     from modules.paths_internal import extensions_builtin_dir, extensions_dir
 
-    real = os.path.realpath(path)
-    for root in (extensions_dir, extensions_builtin_dir):
-        root = os.path.realpath(root)
-        if real.startswith(root + os.sep):
-            return os.path.relpath(real, root).split(os.sep)[0]
+    # as written first: an extension folder may be a link to a checkout elsewhere
+    for resolve in (os.path.abspath, os.path.realpath):
+        where = resolve(path)
+        for root in (extensions_dir, extensions_builtin_dir):
+            root = resolve(root)
+            if where.startswith(root + os.sep):
+                return os.path.relpath(where, root).split(os.sep)[0]
     return None
 
 

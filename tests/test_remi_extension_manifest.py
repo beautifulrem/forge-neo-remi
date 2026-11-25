@@ -437,3 +437,9 @@ def test_the_extension_an_owner_comes_from(tmp_path, monkeypatch):
     assert ui.extension_of_owner(module) == "ext-c"
     assert ui.extension_of_owner(types.SimpleNamespace(filename=str(tmp_path / "scripts" / "loopback.py"))) is None
     assert ui.extension_of_owner(object()) is None  # a builtin class: no source file
+    # an extension folder linked in from elsewhere (a developer's checkout) is still the extension
+    checkout = tmp_path / "dev" / "ext-d"
+    (checkout / "scripts").mkdir(parents=True)
+    (tmp_path / "extensions").mkdir()
+    (tmp_path / "extensions" / "ext-d").symlink_to(checkout, target_is_directory=True)
+    assert ui.extension_of_owner(types.SimpleNamespace(filename=str(tmp_path / "extensions" / "ext-d" / "scripts" / "d.py"))) == "ext-d"

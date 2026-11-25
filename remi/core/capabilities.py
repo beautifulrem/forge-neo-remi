@@ -16,6 +16,7 @@ from backend.nn.model_capabilities import (
     ensure_ext_capabilities_loaded,
     normalize_preset_name,
 )
+from remi.setting_values import setting
 from remi.ui.sentence import sentence_fields
 
 
@@ -45,7 +46,7 @@ def active_preset(opts: Any = None) -> str:
     """The active UI preset name (default ``"sd"``)."""
 
     active_opts = _resolve_opts(opts)
-    raw = getattr(active_opts, "forge_preset", None) if active_opts is not None else None
+    raw = setting("forge_preset", "sd", opts=active_opts) if active_opts is not None else None
     return normalize_preset_name(raw or "sd")
 
 
