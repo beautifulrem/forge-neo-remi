@@ -591,6 +591,40 @@ def test_styles_crud(server, webui, tmp_path, monkeypatch):
     assert server.client.delete("/api/v2/styles/Moody").status_code == 204
     assert server.client.delete("/api/v2/styles/Moody").status_code == 404
     assert server.client.put("/api/v2/styles/%20", json={}).status_code == 422
+    assert server.client.put("/api/v2/styles/Moody", json={"prompt": "x"}).status_code == 200
+    assert server.client.delete("/api/v2/styles/%20Moody%20").status_code == 204  # trimmed like PUT
+
+
+def test_style_writes_do_not_overlap(server, webui, tmp_path, monkeypatch):
+    import threading
+    import time
+
+    from modules import shared, styles
+
+    database = styles.StyleDatabase([str(tmp_path / "styles.csv")])
+    monkeypatch.setattr(shared, "prompt_styles", database)
+    saving, overlaps = [], []
+    save = database.save_styles
+
+    def slow_save(*args):
+        saving.append(1)
+        overlaps.append(len(saving) > 1)
+        time.sleep(0.05)
+        try:
+            save(*args)
+        finally:
+            saving.pop()
+
+    monkeypatch.setattr(database, "save_styles", slow_save)
+    names = [f"style {index}" for index in range(8)]
+    threads = [threading.Thread(target=server.client.put, args=(f"/api/v2/styles/{name}",), kwargs={"json": {"prompt": name}}) for name in names]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(10)
+    assert not any(overlaps)  # two saves rewriting one CSV at once can lose styles
+    assert sorted(style["name"] for style in server.client.get("/api/v2/styles").json()) == names
+    assert sorted(styles.StyleDatabase([str(tmp_path / "styles.csv")]).styles) == names
 
 
 def test_token_count(server, monkeypatch):

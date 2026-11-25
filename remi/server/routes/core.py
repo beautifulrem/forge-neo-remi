@@ -4,6 +4,7 @@ models, styles, token counts, options and extension pages."""
 from __future__ import annotations
 
 import os
+import threading
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Request, Response
@@ -436,6 +437,10 @@ def unload_model(services: ServicesDep) -> dict[str, Any]:
     return {"ok": True}
 
 
+STYLES_LOCK = threading.Lock()
+"""held while a style is changed and the styles CSV rewritten (routes run on threads)"""
+
+
 def _styles() -> list[dict[str, Any]]:
     from modules import shared
 
@@ -455,9 +460,10 @@ def save_style(name: str, body: m.StyleBody, services: ServicesDep) -> dict[str,
     if not name or name == "None":
         raise HTTPException(status_code=422, detail="a style needs a name")
     database = shared.prompt_styles
-    existing = database.styles.get(name)
-    database.styles[name] = styles.PromptStyle(name, body.prompt, body.negative_prompt, existing.path if existing else str(database.default_path))
-    database.save_styles()
+    with STYLES_LOCK:
+        existing = database.styles.get(name)
+        database.styles[name] = styles.PromptStyle(name, body.prompt, body.negative_prompt, existing.path if existing else str(database.default_path))
+        database.save_styles()
     services.bus.publish("options.changed", keys=["styles"])
     return {"name": name, "prompt": body.prompt, "negative_prompt": body.negative_prompt}
 
@@ -466,9 +472,11 @@ def save_style(name: str, body: m.StyleBody, services: ServicesDep) -> dict[str,
 def delete_style(name: str, services: ServicesDep) -> Response:
     from modules import shared
 
-    if shared.prompt_styles.styles.pop(name, None) is None:
-        raise not_found(f"no style {name!r}")
-    shared.prompt_styles.save_styles()
+    name = name.strip()
+    with STYLES_LOCK:
+        if shared.prompt_styles.styles.pop(name, None) is None:
+            raise not_found(f"no style {name!r}")
+        shared.prompt_styles.save_styles()
     services.bus.publish("options.changed", keys=["styles"])
     return Response(status_code=204)
 
