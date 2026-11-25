@@ -75,6 +75,14 @@ def coerce_values(opts: Any, values: Any, cmd_opts: Any) -> dict[str, Any]:
             except ParamError as error:
                 problems.append(_error(key, error.message))
             continue
+        if key == "forge_preset":  # free text in the settings, but only an offered preset has its model settings
+            from remi.core.presets import check_preset
+
+            try:
+                result[key] = check_preset(value)
+            except ValidationError as error:
+                problems.extend(_error(key, problem.message) for problem in error.errors)
+            continue
         current = getattr(opts, key)
         node = setting_node(key, opts.data_labels[key], current)
         if not isinstance(node, nodes.Input):

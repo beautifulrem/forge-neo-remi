@@ -170,3 +170,37 @@ def test_held_picks_reach_the_model_manager_as_it_stores_them(webui, monkeypatch
     finally:
         shared.opts.data.clear()
         shared.opts.data.update(saved)
+
+
+# A preset without its own model settings (a stored name --disable-preset removed, or one of another
+# kind written through /sdapi): main_entry set the global setting, then raised KeyError on the preset's
+# own one: the change answered 422 while half applied (shown, never loaded nor saved)
+@pytest.mark.parametrize("preset", ["gone", 5])
+def test_a_model_change_under_a_preset_without_settings_names_no_preset(webui, monkeypatch, preset):
+    from modules import shared
+
+    seen = []
+
+    class MainEntry:
+        def dtype_change(self, value, preset):
+            seen.append(preset)
+            return True
+
+    monkeypatch.setitem(shared.opts.data, "forge_preset", preset)
+    monkeypatch.setattr(model_selection, "_main_entry", lambda: MainEntry())
+    assert model_selection._apply_now("forge_unet_storage_dtype", "Automatic") is True
+    assert seen == [None]
+    monkeypatch.setitem(shared.opts.data, "forge_preset", "sd")
+    model_selection._apply_now("forge_unet_storage_dtype", "Automatic")
+    assert seen[-1] == ("sd" if "forge_unet_storage_dtype_sd" in shared.opts.data_labels else None)
+
+
+def test_the_options_refuse_a_preset_that_is_not_offered(webui, tmp_path, monkeypatch):
+    from modules import shared
+
+    monkeypatch.setattr(shared, "config_filename", str(tmp_path / "config.json"))
+    with server_app(tmp_path / "data") as server:
+        response = server.client.patch("/api/v2/options", json={"forge_preset": "nosuch"})
+        assert response.status_code == 422, response.text
+        assert [error["param"] for error in response.json()["errors"]] == ["forge_preset"]
+        assert shared.opts.forge_preset != "nosuch"
