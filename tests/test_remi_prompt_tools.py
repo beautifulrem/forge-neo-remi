@@ -692,12 +692,28 @@ def server(webui, data, tmp_path):
     pt.forget(server.services)
 
 
-def test_settings_export_cleanly(webui, data):
-    from remi.prompt_tools import options
-    from remi.ui.settings import settings_schema
+@pytest.fixture
+def tool_settings(webui):
+    """The prompt tools' settings, registered as at the WebUI's start, and taken out again:
+    the labels are the shared ``options_templates``, so every later suite's ``webui_state``
+    saw them, and the core catalog test took them for core settings."""
 
+    from remi.prompt_tools import options
+
+    labels = webui.opts.data_labels
+    added = (set(options.TAG_OPTION_KEYS) | set(options.TOOL_OPTION_KEYS)) - set(labels)
     options.register_tag_options(pt.tag_dir, pt.refresh)
     options.register_tool_options()
+    yield options
+    for key in added:
+        labels.pop(key, None)
+        webui.opts.data.pop(key, None)
+
+
+def test_settings_export_cleanly(webui, data, tool_settings):
+    from remi.ui.settings import settings_schema
+
+    options = tool_settings
     schema = settings_schema(webui.opts)
     sections = {section["id"]: section for category in schema["categories"] for section in category["sections"]}
     for section_id, keys in (("tac", options.TAG_OPTION_KEYS), ("prompt_tools", options.TOOL_OPTION_KEYS)):
@@ -708,14 +724,11 @@ def test_settings_export_cleanly(webui, data):
     assert [choice["value"] for choice in tag_file["choices"]] == ["None", "danbooru.csv", "extra-quality-tags.csv"]
 
 
-def test_settings_are_translated_by_their_extensions(webui, data):
+def test_settings_are_translated_by_their_extensions(webui, data, tool_settings):
     from pathlib import Path
 
-    from remi.prompt_tools import options
     from remi.ui.settings import settings_schema
 
-    options.register_tag_options(pt.tag_dir, pt.refresh)
-    options.register_tool_options()
     sections = {section["id"]: section for category in settings_schema(webui.opts)["categories"] for section in category["sections"]}
     root = Path(__file__).resolve().parents[1] / "extensions-builtin"
     for section_id, extension in (("tac", "sd-webui-tagcomplete-neo"), ("prompt_tools", "sd-webui-prompt-all-in-one-neo")):
