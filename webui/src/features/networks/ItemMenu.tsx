@@ -5,9 +5,11 @@
  */
 import { Menu } from "@base-ui/react/menu"
 import { Copy, FolderOpen, ImagePlus, Info, MinusCircle, Pencil, PlusCircle, Power } from "@/components/icons"
+import { useId, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { NetworkItem, NetworkKind } from "@/api/types"
 import { DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu-impl"
+import { finalFocus } from "@/components/ui/final-focus"
 import { useCollisionPadding } from "@/lib/safe-area"
 import { isEditable, type MenuAnchor } from "./items"
 
@@ -18,6 +20,16 @@ function positionerAnchor(anchor: MenuAnchor | null) {
   if (!anchor || anchor instanceof HTMLElement) return anchor
   const { x, y, element } = anchor
   return { getBoundingClientRect: () => ({ x, y, left: x, top: y, right: x, bottom: y, width: 0, height: 0 }), contextElement: element }
+}
+
+/**
+ * Where the focus goes back to: the grid the card is in (its cursor is on the card), whether the
+ * menu opened from the card's "…" button (a pointer shortcut out of the Tab order, with no focus
+ * ring), a right click or Shift+F10.
+ */
+function gridOf(anchor: MenuAnchor | null): HTMLElement | null {
+  if (!anchor) return null
+  return (anchor instanceof HTMLElement ? anchor : anchor.element).closest<HTMLElement>("[role=listbox]")
 }
 
 export function ItemMenu({
@@ -39,6 +51,10 @@ export function ItemMenu({
 }) {
   const { t } = useTranslation()
   const collisionPadding = useCollisionPadding()
+  const popupId = useId()
+  // the anchor is gone by the time the closed menu gives the focus back: keep the last one
+  const [lastAnchor, setLastAnchor] = useState(anchor)
+  if (anchor && anchor !== lastAnchor) setLastAnchor(anchor)
   const open = Boolean(item && anchor)
   const atPointer = Boolean(anchor && !(anchor instanceof HTMLElement))
   const editable = item ? isEditable(item) : false
@@ -66,6 +82,9 @@ export function ItemMenu({
       <Menu.Portal>
         <Menu.Positioner collisionPadding={collisionPadding} anchor={positionerAnchor(anchor)} side="bottom" align={atPointer ? "start" : "end"} sideOffset={atPointer ? 2 : 4} className="isolate z-50 outline-none">
           <Menu.Popup
+            id={popupId}
+            // unless an item opened a dialog meanwhile (final-focus.ts)
+            finalFocus={finalFocus(gridOf(lastAnchor), popupId)}
             aria-label={item?.title}
             className="z-50 max-h-(--available-height) min-w-48 origin-(--transform-origin) overflow-y-auto rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-150 outline-none data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95"
           >
