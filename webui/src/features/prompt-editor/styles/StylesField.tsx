@@ -40,6 +40,8 @@ export function StylesField({ node, prompt = "prompt", negative = "negative_prom
   const { t } = useTranslation()
   const { store } = useForm()
   const [editing, setEditing] = useState(false)
+  // mounted from the first opening on: closing the editor (Esc) keeps an unsaved draft
+  const [editorMounted, setEditorMounted] = useState(false)
   const selected = useFormState((s) => s.values.core?.[node.name])
   const count = Array.isArray(selected) ? selected.length : 0
 
@@ -70,10 +72,16 @@ export function StylesField({ node, prompt = "prompt", negative = "negative_prom
       <ToolButton label={t("Apply the selected styles to the prompts")} onClick={() => void materialize()} disabled={count === 0}>
         <Stamp />
       </ToolButton>
-      <ToolButton label={t("Edit styles")} onClick={() => setEditing(true)}>
+      <ToolButton
+        label={t("Edit styles")}
+        onClick={() => {
+          setEditing(true)
+          setEditorMounted(true)
+        }}
+      >
         <Pencil />
       </ToolButton>
-      {editing ? (
+      {editorMounted ? (
         <Suspense fallback={null}>
           <StyleEditorDialog
             open={editing}

@@ -1,10 +1,14 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { keys, queryClient } from "@/api/queries"
 import type { PromptStyle } from "@/api/types"
+import { FormProvider, OwnerProvider } from "@/ui/context"
+import { createFormStore } from "@/ui/form-store"
+import type { MultiChoiceNode } from "@/ui/schema"
 import { StyleEditorDialog } from "./StyleEditorDialog"
+import { StylesField } from "./StylesField"
 
 // The real editor is CodeMirror: a plain textarea stands in for it here.
 vi.mock("@/features/prompt-editor", () => ({
@@ -15,12 +19,16 @@ vi.mock("@/features/prompt-editor", () => ({
 
 const CINEMATIC: PromptStyle = { name: "Cinematic", prompt: "cinematic still, {prompt}", negative_prompt: "cartoon" }
 
-function renderEditor(initial: string | null = "Cinematic") {
-  return render(
+function editor(open: boolean, initial: string | null = "Cinematic") {
+  return (
     <QueryClientProvider client={queryClient}>
-      <StyleEditorDialog open onOpenChange={() => {}} currentPrompts={() => ({ prompt: "", negative: "" })} initial={initial} />
-    </QueryClientProvider>,
+      <StyleEditorDialog open={open} onOpenChange={() => {}} currentPrompts={() => ({ prompt: "", negative: "" })} initial={initial} />
+    </QueryClientProvider>
   )
+}
+
+function renderEditor(initial: string | null = "Cinematic") {
+  return render(editor(true, initial))
 }
 
 const prompt = () => screen.getByRole("textbox", { name: "Style prompt" }) as HTMLTextAreaElement
@@ -71,10 +79,66 @@ describe("style editor opened on the form's style", () => {
     vi.spyOn(api.styles, "list").mockResolvedValue([CINEMATIC])
     renderEditor()
     fireEvent.change(prompt(), { target: { value: "film grain, {prompt}" } })
-    await queryClient.invalidateQueries({ queryKey: keys.styles })
+    await act(() => queryClient.invalidateQueries({ queryKey: keys.styles }))
     expect(prompt().value).toBe("film grain, {prompt}")
     expect(negative().value).toBe("cartoon")
-    expect(saveButton().disabled).toBe(false)
+    await waitFor(() => expect(saveButton().disabled).toBe(false))
+  })
+
+  // Another client may have changed the style since the cached list was fetched (no event says
+  // so): saving the stale copy wrote its old text back over the other client's change.
+  it("asks for the list again on every opening and saves only once it has answered", async () => {
+    queryClient.setQueryData(keys.styles, [CINEMATIC])
+    let answer: (styles: PromptStyle[]) => void = () => {}
+    const list = vi.spyOn(api.styles, "list").mockImplementation(() => new Promise((resolve) => (answer = resolve)))
+    const { rerender } = render(editor(true))
+    expect(list).toHaveBeenCalledTimes(1)
+    fireEvent.change(prompt(), { target: { value: "film grain, {prompt}" } })
+    expect(saveButton().disabled).toBe(true)
+    await act(async () => answer([CINEMATIC]))
+    await waitFor(() => expect(saveButton().disabled).toBe(false))
+
+    rerender(editor(false))
+    rerender(editor(true))
+    expect(list).toHaveBeenCalledTimes(2)
+    await waitFor(() => expect(saveButton().disabled).toBe(true))
+    await act(async () => answer([CINEMATIC]))
+    await waitFor(() => expect(saveButton().disabled).toBe(false))
+  })
+
+  it("starts on the form's style again after closing once the edit is saved", async () => {
+    const PASTEL: PromptStyle = { name: "Pastel", prompt: "pastel, {prompt}", negative_prompt: "" }
+    const stored = [CINEMATIC, PASTEL]
+    queryClient.setQueryData(keys.styles, stored)
+    vi.spyOn(api.styles, "list").mockImplementation(async () => structuredClone(stored))
+    vi.spyOn(api.styles, "save").mockImplementation(async (style) => {
+      stored[0] = style
+      return style
+    })
+    const { rerender } = render(editor(true))
+    fireEvent.change(prompt(), { target: { value: "film grain, {prompt}" } })
+    await waitFor(() => expect(saveButton().disabled).toBe(false))
+    fireEvent.click(saveButton())
+    // saved: nothing left to keep
+    await waitFor(() => expect(saveButton().disabled).toBe(true))
+    rerender(editor(false))
+    rerender(editor(true, "Pastel"))
+    await waitFor(() => expect(prompt().value).toBe("pastel, {prompt}"))
+  })
+
+  it("shows the fields' outline while the list loads, so the dialog keeps its height", () => {
+    vi.spyOn(api.styles, "list").mockReturnValue(new Promise(() => {}))
+    renderEditor()
+    const status = screen.getByRole("status")
+    expect(status.querySelectorAll("[data-slot=skeleton]")).toHaveLength(6)
+  })
+
+  it("puts the footer's buttons in one column on a phone", async () => {
+    queryClient.setQueryData(keys.styles, [CINEMATIC])
+    vi.spyOn(api.styles, "list").mockResolvedValue([CINEMATIC])
+    renderEditor()
+    const actions = saveButton().parentElement!
+    expect(actions).toHaveClass("flex-col-reverse", "sm:flex-row")
   })
 
   it("offers a retry when the list does not load", async () => {
@@ -85,10 +149,44 @@ describe("style editor opened on the form's style", () => {
       const retry = await screen.findByRole("button", { name: "Retry" })
       expect(saveButton().disabled).toBe(true)
       list.mockResolvedValue([CINEMATIC])
+      retry.focus()
       fireEvent.click(retry)
       await waitFor(() => expect(prompt().value).toBe("cinematic still, {prompt}"))
+      // the focus moves to the list it was waiting for, not to the dialog
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Style" })))
     } finally {
       queryClient.setQueryDefaults(keys.styles, {})
     }
   })
+})
+
+describe("style editor of the form's styles field", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    queryClient.clear()
+  })
+
+  it("keeps an unsaved edit when the editor is closed with Esc", async () => {
+    queryClient.setQueryData(keys.styles, [CINEMATIC])
+    vi.spyOn(api.styles, "list").mockResolvedValue([CINEMATIC])
+    const store = createFormStore("styles-field", { persistDrafts: false })
+    store.getState().setValues("core", { styles: ["Cinematic"] })
+    const node: MultiChoiceNode = { type: "multichoice", name: "styles", label: "Styles", choices: [{ value: "Cinematic", label: "Cinematic" }] }
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FormProvider formId="txt2img" store={store}>
+          <OwnerProvider owner="core">
+            <StylesField node={node} />
+          </OwnerProvider>
+        </FormProvider>
+      </QueryClientProvider>,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Edit styles" }))
+    const field = await screen.findByRole("textbox", { name: "Style prompt" }, { timeout: 10_000 })
+    fireEvent.change(field, { target: { value: "film grain, {prompt}" } })
+    fireEvent.keyDown(field, { key: "Escape" })
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    fireEvent.click(screen.getByRole("button", { name: "Edit styles" }))
+    expect(((await screen.findByRole("textbox", { name: "Style prompt" })) as HTMLTextAreaElement).value).toBe("film grain, {prompt}")
+  }, 20_000)
 })

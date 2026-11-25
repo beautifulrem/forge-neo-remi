@@ -5,7 +5,7 @@
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { ClipboardCopy, Save, Trash2 } from "@/components/icons"
-import { Suspense, useId, useState } from "react"
+import { Suspense, useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { LoadFailed } from "@/components/LoadFailed"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { LazyPromptEditor } from "../index"
 import { recountStyledTokens } from "../use-token-count"
@@ -49,7 +50,9 @@ function refreshStyles() {
 export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial }: StyleEditorDialogProps) {
   const { t } = useTranslation()
   const id = useId()
-  const styles = useQuery({ ...stylesQuery, enabled: open })
+  // Every opening asks for the list again (stale at once): another client, or an edit of
+  // styles.csv, may have changed a style since it was fetched, and no event says so.
+  const styles = useQuery({ ...stylesQuery, enabled: open, staleTime: 0 })
   // Until the user edits, the editor shows the form's style as the list has it: the list may
   // arrive after the dialog opens, and an editor left blank would save a blank style over it.
   const [edited, setEdited] = useState<PromptStyle | null>(null)
@@ -59,6 +62,22 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
   const [confirmDelete, setConfirmDelete] = useState(false)
   const existing = styles.data?.find((style) => style.name === draft.name)
   const dirty = !existing || existing.prompt !== draft.prompt || existing.negative_prompt !== draft.negative_prompt
+
+  // The dialog stays mounted once opened (StylesField): closing it (Esc) keeps an unsaved edit for
+  // the next opening, while an untouched or saved one starts again on the form's style.
+  const [shownOpen, setShownOpen] = useState(open)
+  if (open !== shownOpen) {
+    setShownOpen(open)
+    if (!open && !dirty) setEdited(null)
+  }
+
+  // After a retry, the focus goes to the list it brought, not to the dialog the Retry button left.
+  const focusAfterRetry = useRef(false)
+  const fieldsShown = (fields: HTMLDivElement | null) => {
+    if (!fields || !focusAfterRetry.current) return
+    focusAfterRetry.current = false
+    fields.querySelector<HTMLElement>("[role=combobox]")?.focus()
+  }
 
   const select = (name: string) => {
     const style = styles.data?.find((s) => s.name === name)
@@ -99,13 +118,28 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
             {/* No fields before the list: an edit made then would start from a blank style and save
                 that blank over the real one. */}
             {styles.isError && !styles.data ? (
-              <LoadFailed error={styles.error} message={t("Could not load the styles")} onRetry={() => void styles.refetch()} className="py-0" />
+              <LoadFailed
+                error={styles.error}
+                message={t("Could not load the styles")}
+                onRetry={() => {
+                  focusAfterRetry.current = true
+                  void styles.refetch()
+                }}
+                className="py-0"
+              />
             ) : !styles.data ? (
-              <p role="status" className="py-6 text-center text-sm text-muted-foreground">
-                {t("Loading…")}
-              </p>
+              // the fields' outline, so the dialog does not grow when the list arrives
+              <div role="status" className="flex flex-col gap-3">
+                <span className="sr-only">{t("Loading…")}</span>
+                {["h-8", "h-20", "h-20"].map((field, index) => (
+                  <div key={index} aria-hidden className="flex flex-col gap-1.5">
+                    <Skeleton className="h-5 w-24" />
+                    <Skeleton className={field} />
+                  </div>
+                ))}
+              </div>
             ) : (
-              <>
+              <div ref={fieldsShown} className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1.5">
                   <label id={`${id}-name`} className="text-[0.8rem] font-medium">
                     {t("Style", { context: "prompt" })}
@@ -136,7 +170,7 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
                     </Suspense>
                   </div>
                 ))}
-              </>
+              </div>
             )}
           </div>
           <DialogFooter className="flex-wrap gap-2 sm:justify-between">
@@ -151,13 +185,14 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
               <ClipboardCopy />
               {t("Copy from prompts")}
             </Button>
-            <div className="flex gap-2">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
               <Button variant="outline" disabled={!existing || remove.isPending} onClick={() => setConfirmDelete(true)}>
                 <Trash2 />
                 {t("Delete")}
               </Button>
-              {/* Without the list, saving could replace a style this editor does not show. */}
-              <Button disabled={!styles.data || !draft.name.trim() || !dirty || save.isPending} onClick={() => save.mutate()}>
+              {/* Without the list, or before a fresh one answers, saving could replace a style this
+                  editor does not show as it is. */}
+              <Button disabled={!styles.data || styles.isFetching || !draft.name.trim() || !dirty || save.isPending} onClick={() => save.mutate()}>
                 <Save />
                 {t("Save")}
               </Button>
