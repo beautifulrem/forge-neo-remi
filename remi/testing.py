@@ -11,6 +11,7 @@ from __future__ import annotations
 import ast
 import importlib
 import json
+import tempfile
 import warnings
 from collections.abc import Iterable, Sequence
 from contextlib import contextmanager
@@ -47,6 +48,8 @@ def webui_state(options: dict | None = None, *, script_classes=None, postprocess
     saved = {name: getattr(shared, name) for name in ("opts", "options_templates", "prompt_styles")}
     shared.options_templates = shared_options.options_templates
     shared.opts = options_module.Options(shared_options.options_templates, shared_options.restricted_opts)
+    # saving styles writes the file and a .bak: not in the data folder (the repository under pytest)
+    styles_dir = tempfile.TemporaryDirectory(prefix="remi-test-styles-")
     try:
         for key, value in (options or {}).items():
             shared.opts.data[key] = value
@@ -54,7 +57,7 @@ def webui_state(options: dict | None = None, *, script_classes=None, postprocess
         import modules.processing  # noqa: F401 - the WebUI's import order (sd_models <-> processing)
         from modules import scripts, scripts_postprocessing, styles
 
-        shared.prompt_styles = styles.StyleDatabase([str(Path(shared.data_path) / "__remi_tests_no_styles__.csv")])
+        shared.prompt_styles = styles.StyleDatabase([str(Path(styles_dir.name) / "styles.csv")])
         saved_scripts = (scripts.scripts_txt2img, scripts.scripts_img2img, scripts.scripts_postproc, list(scripts.scripts_data))
         try:
             scripts.scripts_data[:] = processing_script_classes()
@@ -79,6 +82,7 @@ def webui_state(options: dict | None = None, *, script_classes=None, postprocess
     finally:
         for name, value in saved.items():
             setattr(shared, name, value)
+        styles_dir.cleanup()
 
 
 # region Public extension contract verification

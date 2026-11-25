@@ -54,6 +54,22 @@ def anima_checkpoint(monkeypatch):
     monkeypatch.setattr(sd_models.model_data, "forge_loading_parameters", {"checkpoint_info": SimpleNamespace(filename="anima.safetensors")}, raising=False)
 
 
+def test_the_test_state_keeps_its_styles_file_out_of_the_data_folder():
+    """``save_styles`` writes the file (and a ``.bak``): in the data folder, the
+    repository root under pytest."""
+
+    from pathlib import Path
+
+    from modules import shared
+
+    with webui_state():
+        styles_file = Path(shared.prompt_styles.default_path)
+        assert not styles_file.is_relative_to(Path(shared.data_path).resolve()) and not styles_file.is_relative_to(Path(shared.data_path))
+        shared.prompt_styles.save_styles()
+        assert styles_file.exists()
+    assert not styles_file.exists()  # cleaned up with the state
+
+
 # region Forms
 
 
