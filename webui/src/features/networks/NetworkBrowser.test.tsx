@@ -218,6 +218,22 @@ describe("network browser: windows, filters, errors", { timeout: 60_000 }, () =>
     await waitFor(() => expect(all).toHaveTextContent("4,546"), slow)
   })
 
+  it("says the folders could not load, and loads them on Retry, instead of a skeleton for good", async () => {
+    seedBootstrap()
+    let broken = true
+    mockApi({ fail: (call) => broken && call.path === "/networks/lora/facets" })
+    layout(1200, 800)
+    renderBrowser()
+    await listbox()
+    fireEvent.click(screen.getByRole("button", { name: "Folders" }))
+    const folders = await screen.findByRole("dialog", { name: "Folders" }, slow)
+    const alert = await within(folders).findByRole("alert", {}, { timeout: 20_000 })
+    expect(alert).toHaveTextContent("The server ran into an error (500).")
+    broken = false
+    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }))
+    expect(await within(folders).findByRole("tree", { name: "Folders" }, slow)).toBeInTheDocument()
+  })
+
   it("starts LoRA with the compatible filter when lora_preset_filter is on", async () => {
     seedBootstrap({ lora_preset_filter: true })
     const calls = mockApi({ options: { lora_preset_filter: true } })

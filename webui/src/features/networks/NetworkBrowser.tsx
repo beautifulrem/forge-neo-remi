@@ -339,6 +339,7 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
   const retry = () => {
     if (kinds.isError) void kinds.refetch()
     if (list.isError || !kinds.isError) list.refetch()
+    if (facets.isError) void facets.refetch()
   }
 
   const filtered = Boolean(query.trim() || folder || archs.length || compatible)
@@ -394,6 +395,8 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
       selected={folder}
       onSelect={(path) => setKindFilter(surface, "folder", kindId, path || undefined)}
     />
+  ) : facets.isError ? (
+    <LoadFailed error={facets.error} onRetry={() => void facets.refetch()} className="px-2" />
   ) : (
     <div className="flex flex-col gap-1.5 p-2" aria-hidden>
       {Array.from({ length: 6 }, (_, i) => (
