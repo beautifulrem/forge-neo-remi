@@ -36,6 +36,20 @@ describe("deferred node views", { timeout: 30_000 }, () => {
   // An image field's placeholder was a 160 px block where the empty field (its label over the drop
   // zone) is 122 px: what came after it jumped up when the code arrived.
   it("stand in for an empty image field with its label over the drop zone", async () => {
+    // A mask painted over its source renders nothing (the editor shows it): it took a 160 px block
+    // next to the editor's while their code loaded.
+    const editor = renderNode(
+      {
+        type: "column",
+        children: [
+          { type: "image", name: "init", label: "Image" },
+          { type: "image", name: "mask", label: "Mask", kind: "mask", source: "init" },
+        ],
+      },
+      { init: null, mask: null },
+    )
+    expect(editor.container.querySelectorAll("[data-slot=skeleton]")).toHaveLength(1)
+    editor.unmount()
     const { container } = renderNode({ type: "image", name: "source", label: "Source" }, { source: null })
     const classes = (element: Element) => element.className.split(/\s+/)
     expect(classes(container.querySelector("[data-part=label]")!)).toContain("h-5")

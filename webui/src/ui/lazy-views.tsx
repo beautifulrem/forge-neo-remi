@@ -77,9 +77,10 @@ export function ImageFieldSkeleton({ label }: { label: boolean }) {
   )
 }
 
-/** An upload field starts empty; the image editor keeps its block. */
+/** An upload field starts empty; the image editor keeps its block; a layer painted on it renders nothing. */
 function ImagePlaceholder({ node }: { node: ImageNode }) {
   const role = useImageRole(node)
+  if (role === "layer") return null
   return role === "upload" ? <ImageFieldSkeleton label={Boolean(node.label)} /> : <Skeleton className="h-40 w-full rounded-lg" />
 }
 

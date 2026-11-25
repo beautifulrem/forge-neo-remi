@@ -1779,7 +1779,8 @@ Keeping a first view small:
   does not move when the code arrives: an output's is its label over the
   "No output yet" line, each a line of the same text size (nothing for an
   output without a label); an image upload field's is its label line over the
-  empty drop zone (`ImageFieldSkeleton`).
+  empty drop zone (`ImageFieldSkeleton`), and a layer painted on an editor
+  (which renders nothing there) has none.
 - Dialogs and surfaces that open on demand (img2img's source panel and
   stage, the networks item dialogs, the lightbox, the style editor) are
   `retryableLazy()` and mounted on first use.
