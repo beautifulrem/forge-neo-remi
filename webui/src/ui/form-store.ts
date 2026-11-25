@@ -3,9 +3,11 @@
  * action overrides (choices / visible / enabled / label / info / bounds),
  * outputs, and UI state (section open, selected tabs).
  *
- * Values, open sections and selected tabs persist as drafts in localStorage
- * (`remi-form:<formId>`), written at most every 300 ms and on page hide.
- * Uploads, hidden server state and `persist: false` inputs are not drafted.
+ * Values, open sections and selected tabs persist as drafts (`remi-form:<formId>`),
+ * written at most every 300 ms and on page hide: in sessionStorage for this
+ * tab's reloads, and in localStorage as the latest draft a new tab starts from
+ * (`draftStorage`). Uploads, hidden server state and `persist: false` inputs
+ * are not drafted.
  *
  * Programmatic writes (`setValues`, `applyPatches`) skip params locked by a
  * toggle's `locks` (see locks.ts); `setValue` and `reset` are user edits.
@@ -139,19 +141,43 @@ function withoutErrors(errors: FormState["errors"], owner: string, names: Iterab
   return next ? { ...errors, [owner]: next } : errors
 }
 
-/** localStorage with coalesced writes: a slider drag must not serialise the form per frame. */
-function debouncedStorage(delay = 300): StateStorage {
+// Quota exceeded or storage disabled: drafts are best-effort.
+function readStored(storage: () => Storage, key: string): string | null {
+  try {
+    return storage().getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeStored(storage: () => Storage, key: string, value: string | null) {
+  try {
+    if (value === null) storage().removeItem(key)
+    else storage().setItem(key, value)
+  } catch {
+    // kept in memory for this page's life
+  }
+}
+
+/**
+ * Where the drafts live: this tab's draft in sessionStorage (a reload keeps it, other tabs do not
+ * share it) and the latest draft of any tab in localStorage (a new tab starts from it). A draft is
+ * read from this tab's own first; drafts stored before there were two have only the latest. Writes
+ * are coalesced: a slider drag must not serialise the form per frame.
+ */
+function draftStorage(delay = 300): StateStorage {
   const pending = new Map<string, string>()
+  // what this tab last read or wrote per key: a write that changes nothing in it (cleared errors,
+  // a schema reload) leaves the latest draft to the tab that changed it
+  const known = new Map<string, string | null>()
   let timer: ReturnType<typeof setTimeout> | undefined
   const flush = () => {
     clearTimeout(timer)
     timer = undefined
     for (const [key, value] of pending) {
-      try {
-        localStorage.setItem(key, value)
-      } catch {
-        // Quota exceeded or storage disabled: drafts are best-effort.
-      }
+      writeStored(() => sessionStorage, key, value)
+      if (known.get(key) !== value) writeStored(() => localStorage, key, value)
+      known.set(key, value)
     }
     pending.clear()
   }
@@ -160,19 +186,26 @@ function debouncedStorage(delay = 300): StateStorage {
     document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && flush())
   }
   return {
-    getItem: (key) => pending.get(key) ?? localStorage.getItem(key),
+    getItem: (key) => {
+      if (pending.has(key)) return pending.get(key)!
+      const value = readStored(() => sessionStorage, key) ?? readStored(() => localStorage, key)
+      known.set(key, value)
+      return value
+    },
     setItem: (key, value) => {
       pending.set(key, value)
       timer ??= setTimeout(flush, delay)
     },
     removeItem: (key) => {
       pending.delete(key)
-      localStorage.removeItem(key)
+      known.delete(key)
+      writeStored(() => sessionStorage, key, null)
+      writeStored(() => localStorage, key, null)
     },
   }
 }
 
-const storage = createJSONStorage<Persisted>(() => debouncedStorage())
+const storage = createJSONStorage<Persisted>(() => draftStorage())
 
 export const draftKey = (formId: string) => `remi-form:${formId}`
 
@@ -205,7 +238,7 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
 
     load(owners, options = {}) {
       const index = buildIndex(owners)
-      // Before the first load the values are the drafts hydrated from localStorage
+      // Before the first load the values are the drafts hydrated from storage
       const hydrated = get().revision === 0
       const drafts = get().values
       const values: Record<string, OwnerValues> = {}

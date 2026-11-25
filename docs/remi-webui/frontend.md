@@ -745,8 +745,17 @@ Rules the renderer implements:
 - **Form store** (one per form id: `txt2img`, `img2img`, `extras`,
   `page:<id>`): values and defaults per owner, action overrides
   (`choices/visible/enabled/label/info/minimum/maximum/step`), outputs, open
-  sections, selected tabs. Drafts persist in `localStorage`
-  (`remi-form:<formId>`, writes coalesced to 300 ms and flushed on page hide).
+  sections, selected tabs. Drafts persist under `remi-form:<formId>`
+  (writes coalesced to 300 ms and flushed on page hide), twice
+  (`draftStorage`): in `sessionStorage`, this tab's own draft, and in
+  `localStorage`, the latest draft of any tab. A draft is read from this
+  tab's own first, so with two browser tabs open each one's reload brings
+  back its own prompt, and a new tab (no draft of its own) starts from the
+  most recent one; a duplicated tab copies its original's. A write that
+  changes nothing this tab last read or wrote (cleared errors, a schema
+  reload) leaves the latest draft to the tab that changed it. Decision:
+  drafts are not kept in step across open tabs (no `storage` listener): a
+  prompt must not change under the user because another tab was edited.
   On load, a draft value is kept only if it still fits the node (type,
   choice membership) and is coerced like the server does (range clamp,
   integer rounding, `number.precision`); upload ids (`image`, `image_list`,

@@ -205,6 +205,58 @@ describe("form store", () => {
     expect(saved.state.values.core).not.toHaveProperty("init")
   })
 
+  describe("with several browser tabs open", () => {
+    const draft = (prompt: string) => JSON.stringify({ state: { values: { core: { prompt } }, open: {}, tabs: {} }, version: 1 })
+    const storedPrompt = (storage: Storage, formId: string) => (JSON.parse(storage.getItem(draftKey(formId)) ?? "{}") as { state?: { values: { core: { prompt: string } } } }).state?.values.core.prompt
+    // the drafts' writes wait 300 ms; a page hide writes them at once
+    const flush = () => window.dispatchEvent(new Event("pagehide"))
+
+    // With one draft per form in localStorage, a reload brought back whatever tab had written last.
+    it("restores this tab's own draft on a reload, not the one another tab wrote since", () => {
+      sessionStorage.setItem(draftKey("tabs-own"), draft("this tab's prompt"))
+      localStorage.setItem(draftKey("tabs-own"), draft("another tab's prompt"))
+      const store = createFormStore("tabs-own")
+      store.getState().load(owners)
+      expect(store.getState().values.core!.prompt).toBe("this tab's prompt")
+    })
+
+    it("starts a new tab from the latest draft of any tab (also one an older version stored)", () => {
+      localStorage.setItem(draftKey("tabs-new"), draft("the latest prompt"))
+      const store = createFormStore("tabs-new")
+      store.getState().load(owners)
+      expect(store.getState().values.core!.prompt).toBe("the latest prompt")
+    })
+
+    it("writes the draft for this tab and as the latest one for a new tab", () => {
+      const store = createFormStore("tabs-write")
+      store.getState().load(owners)
+      store.getState().setValue("core", "prompt", "written here")
+      flush()
+      expect(storedPrompt(sessionStorage, "tabs-write")).toBe("written here")
+      expect(storedPrompt(localStorage, "tabs-write")).toBe("written here")
+    })
+
+    // Every change of the store writes its draft: cleared errors or a schema reload in an idle tab
+    // replaced the prompt the user had just typed in another tab as the one a new tab starts from.
+    it("leaves the latest draft to the tab that changed it when a write changes nothing", () => {
+      const store = createFormStore("tabs-idle")
+      store.getState().load(owners)
+      store.getState().setValue("core", "prompt", "typed here first")
+      flush()
+      // then another tab writes its draft
+      localStorage.setItem(draftKey("tabs-idle"), draft("typed in another tab"))
+      store.getState().clearErrors()
+      store.getState().load(owners)
+      flush()
+      expect(storedPrompt(localStorage, "tabs-idle")).toBe("typed in another tab")
+      expect(storedPrompt(sessionStorage, "tabs-idle")).toBe("typed here first")
+      // an edit here is the latest draft again
+      store.getState().setValue("core", "prompt", "typed here again")
+      flush()
+      expect(storedPrompt(localStorage, "tabs-idle")).toBe("typed here again")
+    })
+  })
+
   it("applies patches: values and display overrides", () => {
     const store = createFormStore("t5", { persistDrafts: false })
     store.getState().load(owners)
