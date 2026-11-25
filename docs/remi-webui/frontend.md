@@ -50,7 +50,7 @@ pages/<page>/       one lazily loaded chunk per page; pages/ext/ = extension pag
 components/         app-level components (SearchSelect, Segmented, ErrorBoundary, …)
 components/ui/      vendored shadcn components (edit sparingly; lint-exempt)
 i18n/               i18next setup, locale store, catalog loading
-locales/            chrome translations, one JSON per locale (zh-CN.json)
+locales/            chrome translations, one JSON per locale (zh-CN.json; en.json: English plural forms only)
 lib/                appearance store (theme.ts), toast, media query, cn()
 styles/             fonts.css, shadcn.css (keyframes and variants the vendored components use)
 test/               setup.ts (jsdom shims, jest-dom, i18n init), fake-socket.ts (WebSocket double)
