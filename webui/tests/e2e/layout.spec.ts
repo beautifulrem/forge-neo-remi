@@ -1119,12 +1119,14 @@ for (const [width, height] of [
 // Held sideways narrower than 768 px (667×375, 740×360) the page is the phone layout, whose stage
 // was 70vh tall and ran under the run bar pinned to the bottom: the bar covered the progress strip
 // along the stage's bottom edge and the picture's foot. The stage ends clear of the bar
-// (`--pinned-bottom`); upright, where 70vh already does, it keeps its height.
+// (`--pinned-bottom`); upright from 640 px tall, where 70vh already does, it keeps its height, and
+// at 320×568, where 70vh ran 18 px under the bar, it ends clear of it too.
 for (const [width, height] of [
   [667, 375],
   [740, 360],
   [390, 844],
   [360, 640],
+  [320, 568],
 ] as const) {
   for (const tab of ["txt2img", "img2img"] as const) {
     test(`the picture being made and its progress are clear of the run bar at ${width}×${height} on ${tab}`, async ({ page }) => {
@@ -1145,7 +1147,7 @@ for (const [width, height] of [
         return [box.x + 2, box.x + box.width / 2, box.right - 2].every((x) => strip.contains(document.elementFromPoint(x, y)))
       })
       expect(shown, "the progress is covered").toBe(true)
-      if (height > width) {
+      if (height >= 640) {
         const stage = page.getByRole("region", { name: tab === "img2img" ? "Image area" : "Result", exact: true })
         const stageHeight = (await stage.boundingBox())!.height
         expect(Math.abs(stageHeight - Math.min(height * 0.7, 576)), "upright, the stage keeps 70vh").toBeLessThanOrEqual(1)

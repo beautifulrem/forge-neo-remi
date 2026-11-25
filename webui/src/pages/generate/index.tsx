@@ -258,7 +258,8 @@ function DesktopLayout({ tab, openViewer, wide }: { tab: GenerateTab; openViewer
  * the column's foot. Held sideways (667×375, 740×360) 70vh ran under the bar, which covered the
  * progress strip along the stage's bottom edge and the picture's foot: the stage ends 4 px above the
  * bar (`--pinned-bottom` is the bar's depth with 8 px of clearance; the stage's top padding is
- * `p-3`), which upright phones, whose 70vh already ends clear of it, do not reach. 8rem at least.
+ * `p-3`). Upright from 640 px tall 70vh already ends clear of the bar and stays; shorter upright
+ * windows (320×568), where it ran under the bar too, get the same bound. 8rem at least.
  */
 const PHONE_STAGE = "h-[min(70vh,36rem,max(8rem,calc(100cqh-var(--pinned-bottom,0px)-(--spacing(2)))))]"
 

@@ -1003,8 +1003,10 @@ mode's schema is prefetched).
   bar and the bar covers neither the progress line nor the picture's foot
   (at 667×375 the whole picture in 147 px, where 151 px of a 227 px one
   showed above the bar). Half the window is out of reach there: the header,
-  the bottom navigation and the run bar take 184 of 375 px. Upright, 70vh
-  already ends clear of the bar and the stage keeps it.
+  the bottom navigation and the run bar take 184 of 375 px. Upright from
+  640 px tall, 70vh already ends clear of the bar and the stage keeps it;
+  shorter upright windows, where 70vh ran under the bar too (18 px at
+  320×568), get the same bound. The Source view's floor still wins.
 - **Form loading** (`use-form-loader.ts`): the page loads its schema itself
   (not `TabForm`), once per schema object. On a reload (options changed, UI
   preset) image ids survive and params still at their old default follow
