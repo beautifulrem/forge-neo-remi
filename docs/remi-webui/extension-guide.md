@@ -385,6 +385,9 @@ def refresh_models(self, ctx: ui.ActionContext, values: dict) -> dict:
   hook that raised during a job (the job goes on without it and lists it in its
   warnings) count against the extension's folder in `remi.ui.manifest.diagnostics`,
   shown in **Extensions → Diagnostics** (`GET /api/v2/extensions/diagnostics`).
+  An error the extension's own code reports with `modules.errors.report` during
+  a job, its hook going on, counts there as a warning (the extension shows as
+  degraded, not failed).
   An error the request caused does not count: a `ValidationError`, or a 4xx
   `HTTPException`, `FileError` or `JobError`. A status on any other error
   (a remote service's 401 or 429 seen through `urllib` or an SDK) is the

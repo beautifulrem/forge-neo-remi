@@ -53,11 +53,26 @@ MAX_ATTEMPTS = 3
 _SCRIPT_ERROR = re.compile(r"^Error running (\w+): (.+)$")
 
 
+def _extension_in(error: BaseException | None) -> str | None:
+    """The extension of the innermost traceback frame inside one, if any."""
+
+    from remi.ui.manifest import extension_of
+
+    found = None
+    trace = error.__traceback__ if error is not None else None
+    while trace is not None:
+        found = extension_of(trace.tb_frame.f_code.co_filename) or found
+        trace = trace.tb_next
+    return found
+
+
 @contextlib.contextmanager
 def script_errors(sink: list[dict[str, Any]]) -> Iterator[None]:
     """Collects what ``modules.errors.report`` reports meanwhile (a script
     hook that raised; the run goes on without it) as job warnings: notes
-    ``{"message", "values"}`` with an English catalog key."""
+    ``{"message", "values"}`` with an English catalog key. Extensions →
+    Diagnostics counts a hook that raised as the extension's hook error, and
+    another report from the extension's code as its hook warning."""
 
     errors = sys.modules.get("modules.errors")
     if errors is None:
@@ -79,6 +94,9 @@ def script_errors(sink: list[dict[str, Any]]) -> Iterator[None]:
                 diagnostics.record_hook_error(extension, f"{match[1]}: {detail or '?'}")
         else:
             note = {"message": "{{error}}", "values": {"error": f"{message.splitlines()[0] if message else ''} {detail}".strip()}}
+            extension = _extension_in(error)
+            if extension is not None:  # an extension's code that reported an error and went on: a warning
+                diagnostics.record_hook_warning(extension, note["values"]["error"])
         if note not in sink and len(sink) < MAX_WARNINGS:
             sink.append(note)
 

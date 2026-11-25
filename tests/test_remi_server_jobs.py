@@ -173,6 +173,44 @@ def test_script_errors_during_a_job_become_its_warnings(webui, tmp_path, monkeyp
         assert server.client.get(f"/api/v2/jobs/{clean['job_id']}").json()["warnings"] == []
 
 
+def test_an_error_an_extension_reports_during_a_job_is_its_warning(webui, tmp_path, monkeypatch):
+    """An error an extension's own code reports while a job runs, without its hook failing (a
+    cache it could not read, a helper it skipped), counts as a hook warning of that extension:
+    Extensions → Diagnostics showed "degraded" for warnings no code ever recorded."""
+
+    from modules import errors, paths_internal
+    from remi import ui
+
+    monkeypatch.setattr(paths_internal, "extensions_dir", "/x/extensions")
+    ui.diagnostics.reset("CacheExt")
+    namespace: dict = {}
+    exec(compile("def read_cache():\n    raise ValueError('cache.json is broken')\n", "/x/extensions/CacheExt/scripts/cache.py", "exec"), namespace)
+
+    state = FakeState()
+    stub = StubExecutor(state)
+
+    def executor(job, ctx):
+        try:
+            namespace["read_cache"]()
+        except ValueError:
+            errors.report("Could not read the tag cache", exc_info=True)
+        try:
+            raise OSError("not an extension's")
+        except OSError:
+            errors.report("Could not read the WebUI's own file", exc_info=True)
+        return stub(job, ctx)
+
+    with server_app(tmp_path, state=state, executor=executor) as server:
+        created = submit(server)
+        assert server.services.queue.wait_idle()
+        job = server.client.get(f"/api/v2/jobs/{created['job_id']}").json()
+        assert job["status"] == COMPLETED and len(job["warnings"]) == 2
+        record = ui.diagnostics.get("CacheExt")
+        assert record is not None and (record.hook_warnings, record.hook_errors) == (1, 0)
+        assert record.last_error == "Could not read the tag cache ValueError: cache.json is broken"
+        assert [name for name, rec in ui.diagnostics.snapshot().items() if rec.hook_warnings] == ["CacheExt"]
+
+
 def test_processing_comments_become_job_warnings(webui, tmp_path):
     """``p.comment()`` notes (e.g. Sparse Attention running its slower
     reference implementation on this device) reach the job's warnings
