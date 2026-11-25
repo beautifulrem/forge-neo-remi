@@ -129,7 +129,8 @@ export default function GalleryPage() {
         setSelection(selectAll(order))
       } else if (event.key === "Escape" && selection.ids.size > 0) {
         setSelection(EMPTY_SELECTION)
-      } else if (event.key === "Delete" && selection.ids.size > 0) {
+      } else if ((event.key === "Delete" || event.key === "Backspace") && selection.ids.size > 0) {
+        // a Mac's delete key is Backspace (Delete is Fn+Delete there), as in the history strip
         setDeleting(ordered(selection, order))
       }
     }

@@ -109,6 +109,15 @@ describe("gallery page", { timeout: 20_000 }, () => {
     expect(screen.queryByRole("toolbar", { name: "Selected images" })).not.toBeInTheDocument()
   })
 
+  // A Mac's delete key is Backspace: only Delete (Fn+Delete there) asked to remove the selection
+  it.each(["Delete", "Backspace"])("%s asks to remove the selection", async (key) => {
+    mockServer([item(1), item(2)])
+    renderPage()
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select 00002.png" }))
+    fireEvent.keyDown(window, { key })
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("Remove this image?")
+  })
+
   it("is one tab stop moved with the arrow keys; Space selects, F stars", async () => {
     const calls = mockServer([item(1), item(2), item(3), item(4), item(5), item(6)])
     renderPage()
