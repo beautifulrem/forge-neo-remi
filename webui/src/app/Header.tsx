@@ -96,10 +96,15 @@ export function Header({ title, locales }: { title: string; locales: LocaleInfo[
   return (
     // Opaque, no backdrop-filter: only the page background is behind it, and its progress line
     // changes every step (a blur would be redrawn with it).
-    <header className="relative flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-3 md:px-4">
+    <header className="group/header relative flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-3 md:px-4">
       {/* page controls keep their size; the model bar (checkpoint name) is what shrinks, and on a phone,
-          where it is hidden, the page title (the bottom bar names the page too) */}
-      <h1 title={title} className="min-w-0 truncate font-heading text-xl font-semibold tracking-[-0.02em] sm:shrink-0">
+          where it is hidden, the page title (the bottom bar names the page too). Beside a page's own
+          tabs (`data-page-tabs`, Generate's modes) a phone's title gives way whole rather than leave a
+          stub: visually hidden, still the page's heading. */}
+      <h1
+        title={title}
+        className="min-w-0 truncate font-heading text-xl font-semibold tracking-[-0.02em] max-sm:group-has-data-page-tabs/header:sr-only sm:shrink-0"
+      >
         {title}
       </h1>
       <div ref={setSlot} className="flex shrink-0 items-center gap-2" />

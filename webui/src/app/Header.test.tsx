@@ -2,6 +2,7 @@ import { act, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 import { useWs } from "@/api/ws"
 import { ConnectionDot, Header } from "./Header"
+import { HeaderSlot } from "./header-slot"
 
 // The connection's state was a coloured dot alone, its name in a hover tooltip: a touch screen
 // showed no words for it.
@@ -47,5 +48,31 @@ describe("the header on a phone while offline", () => {
     expect(title).not.toHaveClass("shrink-0")
     const controls = screen.getAllByRole("button", { name: "Search" })[0]!.parentElement!
     expect(controls).toHaveClass("shrink-0", "sm:shrink")
+  })
+})
+
+// On a phone Generate's title was cut to a stub ("G…" at 360 px in English) beside its txt2img /
+// img2img tabs, which name the page already, as the bottom bar does. A page whose own tabs are in
+// the header gives the title's room to them below sm: visually hidden, still the page's heading.
+describe("the header on a phone, on a page with its own tabs", () => {
+  it("hides the title visually below sm, keeping it as the page's heading", () => {
+    render(
+      <>
+        <Header title="Generate" locales={[]} />
+        <HeaderSlot>
+          <nav aria-label="Mode" data-page-tabs="">
+            <a href="#/txt2img">txt2img</a>
+          </nav>
+        </HeaderSlot>
+      </>,
+    )
+    const header = screen.getByRole("banner")
+    const title = screen.getByRole("heading", { level: 1, name: "Generate" })
+    // read out, never hidden from screen readers
+    expect(title).not.toHaveAttribute("aria-hidden")
+    expect(title).not.toHaveClass("hidden")
+    expect(header).toHaveClass("group/header")
+    expect(title).toHaveClass("max-sm:group-has-data-page-tabs/header:sr-only")
+    expect(header.querySelector("[data-page-tabs]")).toBe(screen.getByRole("navigation", { name: "Mode" }))
   })
 })

@@ -132,6 +132,8 @@ describe("generate page layout", { timeout: 30_000 }, () => {
     viewport(400)
     const { header } = renderPage("img2img")
     const nav = within(header).getByRole("navigation", { name: "Mode" })
+    // the page's own tabs: on a phone the header's title gives way to them
+    expect(nav).toHaveAttribute("data-page-tabs")
     const links = within(nav).getAllByRole("link")
     expect(links.map((link) => [link.textContent, link.getAttribute("aria-current")])).toEqual([
       ["txt2img", null],

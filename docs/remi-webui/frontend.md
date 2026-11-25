@@ -98,7 +98,12 @@ imperatively).
 - **Header**: page title, a page slot (`<HeaderSlot>` from
   `app/header-slot.tsx` portals page controls into it), the model quick-bar,
   command palette button, WS connection dot, appearance menu, and a progress
-  line while a job runs.
+  line while a job runs. On a phone (below `sm`) a page whose own tabs are
+  in the slot (Generate's txt2img / img2img, marked `data-page-tabs`) takes
+  the title's room: the title is visually hidden there (`sr-only`, still the
+  page's `h1`), as the tabs and the bottom bar name the page, rather than
+  cut to a stub ("G…"); a page without tabs there keeps its title,
+  truncated with its full text as a `title` once its controls take the row.
 - **Command palette** (Ctrl/Cmd+K, `cmdk`, its own chunk loaded on first
   open). Register commands with
   `useRegisterCommands(source, commands)`; labels and groups are English and
@@ -235,7 +240,7 @@ imperatively).
     header; a lost connection adds the word "Offline" beside it (a touch
     screen cannot hover its tooltip), in the dot's own 28 px room first; on a
     phone the page title then yields to it (truncated, its full text as a
-    title), never the controls. `WorkerHealthPill` (`GET /api/v2/workers`) stays a calm borderless
+    title, or not shown beside the page's own tabs), never the controls. `WorkerHealthPill` (`GET /api/v2/workers`) stays a calm borderless
     ghost monochrome readout (`CPU MPS` / `CUDA` / `1/2 GPU`) when healthy and
     only shows an amber/red indicator dot when a worker is degraded or failed.
   - **Live Darkroom Aspect-Ratio Viewfinder**: when the Generate stage has no

@@ -97,6 +97,56 @@ test.describe("the header on a phone while offline", () => {
   }
 })
 
+// Beside Generate's txt2img / img2img tabs the page title was cut to a stub on a phone ("G…" at
+// 360 px in English), and a pinned quick setting pushed the appearance menu past the window. The
+// title gives way to the page's own tabs there (still the page's heading); a page without them
+// keeps its title whole.
+test.describe("the header on a phone with a quick setting pinned", () => {
+  /** Where the header's last control ends past its content box (its right padding), in px. */
+  async function pastPadding(page: Page): Promise<number> {
+    return page.locator("header").first().evaluate((header) => {
+      const style = getComputedStyle(header)
+      const contentRight = header.getBoundingClientRect().right - parseFloat(style.paddingRight)
+      const rights = [...header.querySelectorAll<HTMLElement>("button, a[href]")].map((element) => element.getBoundingClientRect()).filter((rect) => rect.width > 0).map((rect) => rect.right)
+      return Math.max(...rights) - contentRight
+    })
+  }
+
+  for (const [locale, title, gallery] of [
+    ["en", "Generate", "Gallery"],
+    ["zh-CN", "生成", "图库"],
+  ] as const) {
+    test(`the title is whole or gives way to the page's tabs at 360 px (${locale})`, async ({ page }) => {
+      await page.setViewportSize({ width: 360, height: 800 })
+      await presetStorage(page, { locale })
+      await page.goto("/#/settings")
+      const pin = page.getByRole("button", { name: /^(Pin .*quick settings|将.*固定)/ }).first()
+      await pin.click()
+      await expect(pin).toHaveAttribute("aria-pressed", "true")
+      await page.evaluate(() => (location.hash = "#/txt2img"))
+      await expect(page.getByRole("textbox", { name: /^(Prompt|提示词)$/ })).toBeVisible()
+      const header = page.locator("header").first()
+      await expect(header.getByRole("button", { name: /^(Quick settings|快捷设置)$/ })).toBeVisible()
+
+      // still the page's heading, shown whole or not at all: never a stub
+      const heading = header.getByRole("heading", { level: 1, name: title })
+      await expect(heading).toBeAttached()
+      const shown = await heading.evaluate((element) => ({ width: element.getBoundingClientRect().width, cut: element.scrollWidth > element.clientWidth + 0.5 }))
+      expect(shown.width <= 1 || !shown.cut, `the title is cut to ${shown.width.toFixed(0)} px`).toBe(true)
+      await expect.poll(() => headerProblems(page)).toEqual([])
+      expect(await header.evaluate((element) => element.scrollWidth <= element.clientWidth + 0.5), "the header overflows").toBe(true)
+      expect(await pastPadding(page), "a control is in the header's padding").toBeLessThanOrEqual(0.5)
+
+      // a page without tabs of its own in the header keeps its title, whole
+      await page.evaluate(() => (location.hash = "#/gallery"))
+      const galleryTitle = header.getByRole("heading", { level: 1, name: gallery })
+      await expect(galleryTitle).toBeVisible()
+      expect(await galleryTitle.evaluate((element) => element.scrollWidth <= element.clientWidth + 0.5), "the gallery's title is cut").toBe(true)
+      await expect.poll(() => headerProblems(page)).toEqual([])
+    })
+  }
+})
+
 test.describe("generate panes", () => {
   test.use({ viewport: { width: 1440, height: 900 } })
 

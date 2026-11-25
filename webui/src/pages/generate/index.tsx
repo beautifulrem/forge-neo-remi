@@ -52,7 +52,9 @@ function ModeSwitch({ tab }: { tab: GenerateTab }) {
     { value: "img2img", label: t("img2img") },
   ]
   return (
-    <nav aria-label={t("Mode")} className="inline-flex h-12 shrink-0 items-stretch gap-4 pl-2">
+    // the page's own tabs (`data-page-tabs`): on a phone the header's title gives way to them, and
+    // they lose the room that set them apart from it
+    <nav aria-label={t("Mode")} data-page-tabs="" className="inline-flex h-12 shrink-0 items-stretch gap-4 sm:pl-2">
       {modes.map((mode) => (
         <a
           key={mode.value}
