@@ -287,6 +287,11 @@ To let other machines in:
    WebUI behind an HTTPS reverse proxy (bind it to loopback and let the proxy
    forward; the session cookie becomes `Secure` when the proxy reports
    HTTPS). Without TLS, passwords and cookies cross the network in clear text.
+   The WebUI sends no `Strict-Transport-Security` (HSTS) header, not even
+   with `--tls-*`, so a browser sent to `http://` (a typed name, an old link,
+   an attacker on the network) does not insist on HTTPS. Let the HTTPS proxy
+   add it, e.g. nginx
+   `add_header Strict-Transport-Security "max-age=31536000" always;`.
 3. **API:** `--api` exposes `/sdapi/v1`; set `--api-auth` for it (otherwise
    it uses the WebUI login). Scripts can send Basic credentials. Do not use
    `--api-no-auth-on-localhost` when other people can run programs on the
@@ -329,11 +334,9 @@ To let other machines in:
   `--api-no-auth-on-localhost`, to the API; use `--hide-ui-dir-config` and
   leave that flag off when sharing that way.
 - **DNS answers that change between the address check and the connection**
-  are not caught for a client-named extension index URL either (it is only
-  reachable where extension access is allowed).
-- **DNS answers that change between the address check and the connection**
-  are not caught for `/sdapi` image URLs; turn `api_enable_requests` off on
-  servers that must not reach their network.
+  are not caught for `/sdapi` image URLs (turn `api_enable_requests` off on
+  servers that must not reach their network), nor for a client-named
+  extension index URL (only reachable where extension access is allowed).
 - **Request bodies** are buffered up to their cap (twice
   `remi_upload_max_mb`): each concurrent request of a client allowed to call
   the API can hold that much memory while it is parsed.
