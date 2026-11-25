@@ -5,7 +5,6 @@
  * the generation parameters.
  */
 import { ChevronDown, Expand, Radio } from "@/components/icons"
-import * as m from "motion/react-m"
 import { type ReactNode, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useStore } from "zustand"
@@ -210,14 +209,16 @@ export function Stage({ tab, onOpenViewer, className, leading, trailing, toolbar
             <LivePreview src={live} alt={t("Live preview")} />
           ) : (
             // a finished picture is laid on the table: one short settle, only when the picture changes
-            <m.img
+            // (`key`). A CSS animation, not motion's: the image must show even when motion's feature
+            // chunk never loads (an element motion starts at opacity 0 stays there without it).
+            <img
               key={src}
               src={src}
               alt={t("Generated image")}
-              initial={{ opacity: 0, scale: 0.985 }}
-              animate={{ opacity: job ? 0.9 : 1, scale: 1 }}
-              transition={{ duration: 0.2, ease: [0.2, 0, 0, 1] }}
-              className="max-h-full max-w-full object-contain"
+              className={cn(
+                "max-h-full max-w-full object-contain transition-opacity duration-200 animate-in fade-in zoom-in-[0.985] ease-[cubic-bezier(0.2,0,0,1)]",
+                job && "opacity-90",
+              )}
             />
           )}
         </button>

@@ -138,6 +138,9 @@ describe("generate page", () => {
     expect(useSession.getState().items.map((item) => item.fileId)).toEqual(["out-a", "out-b"])
     const image = await screen.findByRole("img", { name: "Generated image" })
     expect(image.getAttribute("src")).toContain("/files/out-a")
+    // shown without motion's feature chunk (rendered here without it): a motion element starting
+    // at opacity 0 stayed invisible for the session when that chunk failed to load
+    expect(image.style.opacity).not.toBe("0")
     expect(screen.getByText("a cat")).toBeInTheDocument()
   })
 })
