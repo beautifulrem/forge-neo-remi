@@ -327,6 +327,11 @@ characters) and 502 when the provider fails or answers something unusable.
 A field over its own limit is a 422 in FastAPI's `{"detail": [...]}` shape
 (`/translate`: over 200 texts; `/generate`: a description or prompt over
 4,000 characters); `/generate` also answers 422 for an empty description.
+A value a tool itself refuses (`/generate`: a blank description;
+`/upsample`: a malformed `aspect_ratio`, `bbox_draft`, `mode` or
+`reference_images` entry, a `local_model_path` that does not exist) is listed
+as in any other 422 (`{"errors": [...]}`, `owner` null and `param` the
+request field), with the `template` and `params` that translate it.
 
 `/internal/ping` answers `{"instance"}` (an id that changes with every
 reload or restart), `/internal/progress` and `/internal/pending-tasks` keep

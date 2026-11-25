@@ -699,6 +699,9 @@ def test_writing_a_prompt_from_a_description():
         with pytest.raises(TranslationError) as error:
             generate_prompt(bad_config, description, post=chat)
         assert error.value.status == status
+    with pytest.raises(TranslationError) as refused:
+        generate_prompt(config, "  ", post=chat)
+    assert (refused.value.param, refused.value.message) == ("description", "describe the image first")  # listed as a refused value
     with pytest.raises(TranslationError):
         generate_prompt(config, "cat", post=lambda *args: {"choices": [{"message": {"content": "  "}}]})
 
@@ -920,6 +923,24 @@ def test_upsample_loads_a_local_model_path_only_without_hide_ui_dir_config(serve
     assert calls == [None, "/srv/models/qwen.gguf"]
 
 
+def test_upsample_route_lists_a_refused_value_with_its_template(server):
+    refused = server.client.post("/api/v2/prompt-tools/upsample", json={"prompt": "a dog", "aspect_ratio": "wide"})
+    assert refused.status_code == 422
+    assert refused.json() == {
+        "errors": [
+            {
+                "owner": None,
+                "param": "aspect_ratio",
+                "message": "invalid aspect_ratio 'wide'; expected 'W:H' or 'WxH'",
+                "template": "invalid aspect_ratio {{value}}; expected 'W:H' or 'WxH'",
+                "params": {"value": "'wide'"},
+            }
+        ]
+    }
+    data_only = server.client.post("/api/v2/prompt-tools/upsample", json={"prompt": "a dog", "reference_images": ["https://example.com/x.png"]})
+    assert data_only.status_code == 422 and data_only.json()["errors"][0]["param"] == "reference_images"
+
+
 def test_unloading_an_extension_turns_its_feature_off(data):
     tags, groups = pt.registry.tag_dirs[0], pt.registry.group_dirs[0]
     pt.unregister_tag_data(tags)
@@ -1093,7 +1114,8 @@ def test_history_api_and_recording_from_jobs(server):
     api = "/api/v2/prompt-tools/history"
     created = server.client.post(api, json={"prompt": "a cat", "negative_prompt": "blurry", "tab": "txt2img"})
     assert created.status_code == 201 and created.json()["uses"] == 1
-    assert server.client.post(api, json={}).status_code == 422
+    empty = server.client.post(api, json={})
+    assert empty.status_code == 422 and empty.json() == {"errors": [{"owner": None, "param": "prompt", "message": "both prompts are empty"}]}
     entry = created.json()
     assert server.client.patch(f"{api}/{entry['id']}", json={"name": "cat"}).json()["name"] == "cat"
     assert server.client.patch(f"{api}/missing", json={"name": "x"}).status_code == 404

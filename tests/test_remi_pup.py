@@ -357,6 +357,10 @@ def test_local_qwen35_runner_gguf_transformers_and_release_vram(tmp_path, monkey
     with pytest.raises(TranslationError) as missing_err:
         pup.LocalQwen35PUPRunner(tmp_path / "missing.gguf").generate("sys", "usr")
     assert missing_err.value.status == 422
+    # the refused field and a sentence the UI translates (the path is its value)
+    assert missing_err.value.param == "local_model_path"
+    assert missing_err.value.message.template == "local_model_path does not exist: {{path}}"
+    assert missing_err.value.message.params == {"path": str(tmp_path / "missing.gguf")}
 
     bad_file = tmp_path / "weights.bin"
     bad_file.write_bytes(b"BIN")
@@ -737,3 +741,36 @@ def test_upsampling_through_the_endpoint_follows_the_prompt_tools_switch(tmp_pat
             assert _default_upsampler(stage, None, []) == "a fox+"
         finally:
             pt.forget(server.services)
+
+
+def test_every_value_a_prompt_tool_refuses_has_a_catalog_key():
+    """A refused value (422) reaches the UI as ``errors``, translated by its message: each must be a
+    constant or a ``Sentence`` template that localizations/zh_CN.json has (an f-string never could)."""
+
+    import ast
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    catalog = json.loads((root / "localizations" / "zh_CN.json").read_text(encoding="utf-8"))
+    found, formatted = [], []
+    for path in sorted((root / "remi" / "prompt_tools").glob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        for node in ast.walk(ast.parse(source)):
+            if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "TranslationError" and len(node.args) >= 2):
+                continue
+            status = node.args[1]
+            if not (isinstance(status, ast.Constant) and status.value == 422):
+                continue
+            message = node.args[0]
+            if isinstance(message, ast.Call) and getattr(message.func, "id", None) == "Sentence":
+                message = message.args[0]
+            if isinstance(message, ast.Constant) and isinstance(message.value, str):
+                found.append(message.value)
+            else:
+                formatted.append(f"{path.name}: {ast.get_source_segment(source, node.args[0])}")
+    assert formatted == []
+    assert "local_model_path does not exist: {{path}}" in found and "describe the image first" in found
+    missing = [text for text in found if not catalog.get(text)]
+    assert missing == []
+    assert all(re.findall(r"\{\{(\w+)\}\}", catalog[text]) == re.findall(r"\{\{(\w+)\}\}", text) for text in found)

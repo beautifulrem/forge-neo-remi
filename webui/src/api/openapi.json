@@ -6996,7 +6996,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Detail"
+                  "$ref": "#/components/schemas/ValidationErrorBody"
                 }
               }
             }
@@ -7074,7 +7074,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Detail"
+                  "$ref": "#/components/schemas/ValidationErrorBody"
                 }
               }
             }
@@ -7152,7 +7152,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Detail"
+                  "$ref": "#/components/schemas/ValidationErrorBody"
                 }
               }
             }
@@ -7446,7 +7446,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Detail"
+                  "$ref": "#/components/schemas/ValidationErrorBody"
                 }
               }
             },

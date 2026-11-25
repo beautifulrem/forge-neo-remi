@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { toast } from "sonner"
 import { describe, expect, it, vi } from "vitest"
 import { ApiError, RequestError, validationErrors } from "@/api/http"
@@ -129,6 +131,24 @@ describe("serviceFailureText", () => {
     expect(serviceFailureText(failed(500))).toBe("The server ran into an error (500).")
     expect(serviceFailureText(new RequestError(new TypeError("Failed to fetch")))).toBe("The server cannot be reached.")
     expect(serviceFailureText(new ApiError(409, "x"), { 409: "Choose a model first." })).toBe("Choose a model first.")
+  })
+
+  // A value a prompt tool refused (a local model path that does not exist) came as free text, which
+  // read only "The server rejected the request.": it is a refused value now, with its template.
+  it("says why a value was refused, in the UI language", async () => {
+    const template = "local_model_path does not exist: {{path}}"
+    const refused = new ApiError(422, "HTTP 422", { errors: [{ owner: null, param: "local_model_path", message: "local_model_path does not exist: /m.gguf", template, params: { path: "/m.gguf" } }] })
+    expect(serviceFailureText(refused)).toBe("local_model_path does not exist: /m.gguf")
+    // the shipped catalog has it (localizations/zh_CN.json)
+    const catalog = JSON.parse(readFileSync(join(process.cwd(), "..", "localizations", "zh_CN.json"), "utf8")) as Record<string, string>
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", template, catalog[template]!)
+    await i18n.changeLanguage("zh-CN")
+    try {
+      expect(serviceFailureText(refused)).toBe("本地模型路径不存在：/m.gguf")
+    } finally {
+      await i18n.changeLanguage("en")
+    }
   })
 })
 

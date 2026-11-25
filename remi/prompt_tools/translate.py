@@ -37,9 +37,15 @@ CJK_RE = re.compile(r"[぀-ヿ㐀-䶿一-鿿가-힯豈-﫿]")
 
 
 class TranslationError(RuntimeError):
-    def __init__(self, message: str, status: int = 502) -> None:
+    """A prompt tool that failed, with the HTTP status that says why. A refused value (422) names
+    its request field (``param``), and its ``message`` is a catalog key or a :class:`Sentence`: the
+    route lists it as a rejected value, which the UI translates."""
+
+    def __init__(self, message: str, status: int = 502, *, param: str | None = None) -> None:
         super().__init__(message)
+        self.message = message
         self.status = status
+        self.param = param
 
 
 @dataclass(frozen=True)
@@ -225,7 +231,7 @@ def generate_prompt(
         raise TranslationError("writing prompts needs the OpenAI-compatible translation provider with its URL and model", 409)
     description = description.strip()
     if not description:
-        raise TranslationError("describe the image first", 422)
+        raise TranslationError("describe the image first", 422, param="description")
     if max_chars is not None and len(description) + len(current) > max_chars:
         raise TranslationError("the description is too long", 413)
     system = instructions.strip() or (NEGATIVE_INSTRUCTIONS if negative else DEFAULT_INSTRUCTIONS)

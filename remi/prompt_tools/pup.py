@@ -42,6 +42,7 @@ from remi.prompt_tools.translate import (
     _http_post,
     generate_prompt,
 )
+from remi.ui.sentence import Sentence
 
 log = logging.getLogger(__name__)
 
@@ -253,7 +254,7 @@ def normalize_aspect_ratio(aspect_ratio: str | tuple[int, int] | list[int] | Non
         return None
     if isinstance(aspect_ratio, (tuple, list)):
         if len(aspect_ratio) != 2:
-            raise TranslationError(f"aspect_ratio must have 2 elements, got {aspect_ratio!r}", 422)
+            raise TranslationError(Sentence("aspect_ratio must have 2 elements, got {{value}}", value=repr(aspect_ratio)), 422, param="aspect_ratio")
         w_val, h_val = float(aspect_ratio[0]), float(aspect_ratio[1])
     elif isinstance(aspect_ratio, str):
         text = aspect_ratio.strip()
@@ -261,13 +262,13 @@ def normalize_aspect_ratio(aspect_ratio: str | tuple[int, int] | list[int] | Non
             return None
         match = _ASPECT_RE.match(text)
         if not match:
-            raise TranslationError(f"invalid aspect_ratio {aspect_ratio!r}; expected 'W:H' or 'WxH'", 422)
+            raise TranslationError(Sentence("invalid aspect_ratio {{value}}; expected 'W:H' or 'WxH'", value=repr(aspect_ratio)), 422, param="aspect_ratio")
         w_val, h_val = float(match.group(1)), float(match.group(2))
     else:
-        raise TranslationError(f"unsupported aspect_ratio type: {type(aspect_ratio).__name__}", 422)
+        raise TranslationError(Sentence("unsupported aspect_ratio type: {{type}}", type=type(aspect_ratio).__name__), 422, param="aspect_ratio")
 
     if w_val <= 0 or h_val <= 0 or not math.isfinite(w_val) or not math.isfinite(h_val):
-        raise TranslationError("aspect_ratio dimensions must be positive finite numbers", 422)
+        raise TranslationError("aspect_ratio dimensions must be positive finite numbers", 422, param="aspect_ratio")
 
     wi, hi = round(w_val * 100), round(h_val * 100)
     divisor = math.gcd(wi, hi) or 1
@@ -294,28 +295,28 @@ def _normalize_bbox_rows(bbox_draft: Sequence[dict[str, Any]]) -> list[dict[str,
     rows: list[dict[str, Any]] = []
     for idx, raw in enumerate(bbox_draft):
         if not isinstance(raw, dict):
-            raise TranslationError(f"bbox_draft[{idx}] must be an object", 422)
+            raise TranslationError(Sentence("bbox_draft[{{index}}] must be an object", index=idx), 422, param="bbox_draft")
         candidate_boxes = [raw[k] for k in ("bbox", "src_bbox", "tgt_bbox") if raw.get(k) is not None]
         if not candidate_boxes:
-            raise TranslationError(f"bbox_draft[{idx}] needs 'bbox' or 'src_bbox'/'tgt_bbox'", 422)
+            raise TranslationError(Sentence("bbox_draft[{{index}}] needs 'bbox' or 'src_bbox'/'tgt_bbox'", index=idx), 422, param="bbox_draft")
         if any(_is_unit_box(b) for b in candidate_boxes):
             try:
                 rows.extend(flux3_layout.boxes_to_canvas([raw]))
             except (TypeError, ValueError) as err:  # a box that is not a list of four numbers
-                raise TranslationError(str(err), 422) from err
+                raise TranslationError(Sentence("bbox_draft[{{index}}] has an invalid box: {{reason}}", index=idx, reason=err), 422, param="bbox_draft") from err
         else:
             row_id = str(raw.get("id") or f"obj_{idx + 1}")
             desc = str(raw.get("desc") or "")
             if raw.get("bbox") is not None:
                 valid = flux3_layout.valid_canvas_box(raw["bbox"])
                 if valid is None:
-                    raise TranslationError(f"bbox_draft[{idx}] has invalid canvas box: {raw['bbox']!r}", 422)
+                    raise TranslationError(Sentence("bbox_draft[{{index}}] has invalid canvas box: {{box}}", index=idx, box=repr(raw["bbox"])), 422, param="bbox_draft")
                 rows.append({"id": row_id, "bbox": [round(v) for v in valid], "desc": desc})
             else:
                 src_v = flux3_layout.valid_canvas_box(raw["src_bbox"]) if raw.get("src_bbox") is not None else None
                 tgt_v = flux3_layout.valid_canvas_box(raw["tgt_bbox"]) if raw.get("tgt_bbox") is not None else None
                 if (raw.get("src_bbox") is not None and src_v is None) or (raw.get("tgt_bbox") is not None and tgt_v is None):
-                    raise TranslationError(f"bbox_draft[{idx}] has invalid src_bbox/tgt_bbox", 422)
+                    raise TranslationError(Sentence("bbox_draft[{{index}}] has invalid src_bbox/tgt_bbox", index=idx), 422, param="bbox_draft")
                 rows.append(
                     {
                         "id": row_id,
@@ -415,9 +416,9 @@ def prepare_reference_images(
                 data_uris.append(uri)
                 pil_images.append(resized)
             else:
-                raise TranslationError(f"reference_images[{idx}] file not found: {text}", 422)
+                raise TranslationError(Sentence("reference_images[{{index}}] file not found: {{path}}", index=idx, path=text), 422, param="reference_images")
         else:
-            raise TranslationError(f"unsupported reference image type at index {idx}: {type(item).__name__}", 422)
+            raise TranslationError(Sentence("unsupported reference image type at index {{index}}: {{type}}", index=idx, type=type(item).__name__), 422, param="reference_images")
 
     return data_uris, pil_images, warnings
 
@@ -605,14 +606,15 @@ class LocalQwen35PUPRunner:
 
     def generate(self, system: str, user_text: str, *, image_uris: Sequence[str] = (), pil_images: Sequence[Image.Image] = ()) -> str:
         if not os.path.exists(self.model_path):
-            raise TranslationError(f"local_model_path does not exist: {self.model_path}", 422)
+            raise TranslationError(Sentence("local_model_path does not exist: {{path}}", path=self.model_path), 422, param="local_model_path")
         if os.path.isfile(self.model_path) and self.model_path.lower().endswith(".gguf"):
             return self._run_gguf(system, user_text, image_uris)
         if os.path.isdir(self.model_path):
             return self._run_transformers(system, user_text, pil_images)
         raise TranslationError(
-            f"unsupported local Qwen3.5 PUP checkpoint format: {self.model_path} (expected .gguf file or HuggingFace model directory)",
+            Sentence("unsupported local Qwen3.5 PUP checkpoint format: {{path}} (expected .gguf file or HuggingFace model directory)", path=self.model_path),
             422,
+            param="local_model_path",
         )
 
 
@@ -646,7 +648,7 @@ def upsample_prompt(
 
     original = (prompt or "").strip()
     if not original:
-        raise TranslationError("describe the image first", 422)
+        raise TranslationError("describe the image first", 422, param="prompt")
     if len(original) + len(current or "") > _MAX_PUP_CHARS:
         raise TranslationError("the prompt is too long for upsampling", 413)
 
@@ -658,7 +660,7 @@ def upsample_prompt(
 
     req_mode = (mode or "auto").strip().lower()
     if req_mode not in SUPPORTED_PUP_MODES:
-        raise TranslationError(f"unsupported upsample mode {mode!r}; expected one of {', '.join(SUPPORTED_PUP_MODES)}", 422)
+        raise TranslationError(Sentence("unsupported upsample mode {{mode}}; expected one of {{modes}}", mode=repr(mode), modes=", ".join(SUPPORTED_PUP_MODES)), 422, param="mode")
 
     norm_aspect = normalize_aspect_ratio(aspect_ratio)
     locked_rows = _normalize_bbox_rows(bbox_draft) if bbox_draft else None

@@ -12,10 +12,13 @@ from pydantic import Field
 from remi import prompt_tools as pt
 from remi.server import models as m
 from remi.server.deps import ServicesDep, behind_generation
+from remi.ui import ParamError, ValidationError
 
 router = APIRouter(prefix="/prompt-tools")
 
 ERRORS = {404: {"model": m.Detail}, 409: {"model": m.Detail}, 422: {"model": m.Detail}}
+# a prompt tool that refuses a value lists it, as a form does (owner null: a field of the request)
+TOOL_ERRORS = {**ERRORS, 413: {"model": m.Detail}, 422: {"model": m.ValidationErrorBody}, 502: {"model": m.Detail}}
 
 CompletionMode = Literal["tag", "lora", "embedding", "chant", "network", "wildcard", "wildcard-value"]
 CompletionType = Literal["tag", "extra", "lora", "embedding", "chant", "wildcard", "wildcard-value"]
@@ -29,6 +32,15 @@ def tools(services: ServicesDep) -> pt.PromptTools:
 
 
 ToolsDep = Annotated[pt.PromptTools, Depends(tools)]
+
+
+def _tool_error(error: pt.TranslationError) -> Exception:
+    """A failed prompt tool as its HTTP error: a refused value (422) as a rejected value, whose
+    message (a catalog key or a ``Sentence``) the UI translates; anything else as ``detail``."""
+
+    if error.status == 422:
+        return ValidationError([ParamError(error.message, param=error.param)])
+    return HTTPException(status_code=error.status, detail=str(error))
 
 
 def _store_call(call: Any) -> Any:
@@ -333,27 +345,27 @@ def refresh() -> dict[str, Any]:
 # region Translation and tag groups
 
 
-@router.post("/translate", response_model=PromptTranslation, responses={**ERRORS, 413: {"model": m.Detail}, 502: {"model": m.Detail}}, summary="Translate prompt pieces with the configured provider")
+@router.post("/translate", response_model=PromptTranslation, responses=TOOL_ERRORS, summary="Translate prompt pieces with the configured provider")
 def translate(body: PromptTranslateRequest, tools: ToolsDep) -> dict[str, Any]:
     try:
         translations = tools.translate(body.texts, body.target)
     except pt.TranslationError as error:
-        raise HTTPException(status_code=error.status, detail=str(error)) from error
+        raise _tool_error(error) from error
     return {"provider": tools.translation_config().provider, "translations": translations}
 
 
-@router.post("/generate", response_model=PromptGenerated, responses={**ERRORS, 413: {"model": m.Detail}, 502: {"model": m.Detail}}, summary="Write a prompt from a description with the OpenAI-compatible provider")
+@router.post("/generate", response_model=PromptGenerated, responses=TOOL_ERRORS, summary="Write a prompt from a description with the OpenAI-compatible provider")
 def generate(body: PromptGenerateRequest, tools: ToolsDep) -> dict[str, Any]:
     try:
         return {"prompt": tools.generate(body.description, current=body.prompt, negative=body.negative)}
     except pt.TranslationError as error:
-        raise HTTPException(status_code=error.status, detail=str(error)) from error
+        raise _tool_error(error) from error
 
 
 @router.post(
     "/upsample",
     response_model=PromptUpsampled,
-    responses={**ERRORS, 413: {"model": m.Detail}, 502: {"model": m.Detail}},
+    responses=TOOL_ERRORS,
     summary="Multimodal & local Prompt Upsampler (PUP) with model-family templates",
 )
 def upsample(body: PromptUpsampleRequest, tools: ToolsDep, services: ServicesDep) -> dict[str, Any]:
@@ -367,7 +379,7 @@ def upsample(body: PromptUpsampleRequest, tools: ToolsDep, services: ServicesDep
         resolved_refs.append(record.path)
     for item in body.reference_images:
         if not isinstance(item, str) or not item.startswith("data:image/"):
-            raise HTTPException(status_code=422, detail="reference_images entries must be data:image/... URIs; pass uploaded/output images via reference_file_ids")
+            raise ValidationError([ParamError("reference_images entries must be data:image/... URIs; pass uploaded/output images via reference_file_ids", param="reference_images")])
         resolved_refs.append(item)
     if body.local_model_path:
         from modules import shared
@@ -402,7 +414,7 @@ def upsample(body: PromptUpsampleRequest, tools: ToolsDep, services: ServicesDep
         else:
             result = run()
     except pt.TranslationError as error:
-        raise HTTPException(status_code=error.status, detail=str(error)) from error
+        raise _tool_error(error) from error
     return result.to_dict()
 
 
@@ -444,11 +456,11 @@ def history(
     return {"items": items, "next_cursor": next_cursor, "total": total}
 
 
-@router.post("/history", response_model=PromptHistoryItem, status_code=201, responses=ERRORS, summary="Add prompts to the history")
+@router.post("/history", response_model=PromptHistoryItem, status_code=201, responses={**ERRORS, 422: {"model": m.ValidationErrorBody}}, summary="Add prompts to the history")
 def add_history(body: PromptHistoryCreate, tools: ToolsDep) -> dict[str, Any]:
     item = _store_call(lambda: tools.store.record_history(body.prompt, body.negative_prompt, body.tab, limit=int(pt.opt.option("prompt_tools_history_limit"))))
     if item is None:
-        raise HTTPException(status_code=422, detail="both prompts are empty")
+        raise ValidationError([ParamError("both prompts are empty", param="prompt")])
     return item
 
 
