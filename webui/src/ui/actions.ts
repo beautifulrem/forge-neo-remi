@@ -177,6 +177,13 @@ export async function applyAdvicePatch(ctx: ActionContext, item: AdviceItem): Pr
   if (!item.patch) return false
   const { __options__: optionUpdates, ...rest } = item.patch
   const split = splitResponse("core", rest)
+  // The server options first: a fix the server refuses (frozen settings) leaves the form as it
+  // was, never half applied.
+  if (isRecord(optionUpdates) && Object.keys(optionUpdates).length > 0) {
+    await api.patchOptions(optionUpdates)
+    queryClient.setQueryData<Bootstrap>(keys.app, (app) => (app ? { ...app, options: { ...app.options, ...optionUpdates } } : app))
+    void queryClient.invalidateQueries({ queryKey: keys.options })
+  }
   const changedByOwner = new Map<string, string[]>()
   if (split.params.length > 0) {
     const note = lockNote(ctx.store.getState().index, ctx.store.getState().applyPatches(split.params))
@@ -186,11 +193,6 @@ export async function applyAdvicePatch(ctx: ActionContext, item: AdviceItem): Pr
       if (!list.includes(name)) list.push(name)
       changedByOwner.set(owner, list)
     }
-  }
-  if (isRecord(optionUpdates) && Object.keys(optionUpdates).length > 0) {
-    await api.patchOptions(optionUpdates)
-    queryClient.setQueryData<Bootstrap>(keys.app, (app) => (app ? { ...app, options: { ...app.options, ...optionUpdates } } : app))
-    void queryClient.invalidateQueries({ queryKey: keys.options })
   }
   if (changedByOwner.size > 0) {
     runBulkChangeEffects(

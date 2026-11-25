@@ -1,7 +1,10 @@
 import * as sonner from "sonner"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { api } from "@/api/endpoints"
+import { ApiError } from "@/api/http"
 import { applyAdvicePatch, CONFLICTS_ACTION, runAction, splitResponse } from "./actions"
 import { createFormStore } from "./form-store"
+import type { AdviceItem } from "./schema"
 
 describe("splitResponse", () => {
   it("separates reserved keys and resolves cross-owner params", () => {
@@ -144,5 +147,22 @@ describe("runAction failures", () => {
     const store = createFormStore("probe", { persistDrafts: false })
     expect(await runAction({ store, tab: "txt2img" }, "core", "swap_dimensions")).toBeNull()
     expect(shown).toEqual([["Action failed", { description: text }]])
+  })
+})
+
+// The fix wrote the form's values first and then saved the server options: when saving failed the
+// toast said the fix could not be applied, yet half of it (the steps) already was.
+describe("applyAdvicePatch", () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it("leaves the form as it was when the server options cannot be saved", async () => {
+    vi.spyOn(api, "patchOptions").mockRejectedValue(new ApiError(422, "frozen"))
+    const store = createFormStore("advice-probe", { persistDrafts: false })
+    store.getState().load([
+      { owner: "core", layout: { type: "slider", name: "steps", label: "Steps", minimum: 1, maximum: 150, step: 1, integer: true }, defaults: { steps: 30 } },
+    ])
+    const item: AdviceItem = { code: "turbo", severity: "warning", message: "Use 8 steps and PNG", patch: { steps: { value: 8 }, __options__: { samples_format: "png" } } }
+    await expect(applyAdvicePatch({ store, tab: "txt2img" }, item)).rejects.toThrow()
+    expect(store.getState().values.core?.steps).toBe(30)
   })
 })
