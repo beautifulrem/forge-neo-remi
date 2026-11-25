@@ -45,8 +45,9 @@ test.describe("layout at 1280×720", () => {
       await presetStorage(page, { locale })
       // Quick settings in the header too (the most crowded case).
       await page.goto("/#/settings")
-      await page.getByRole("button", { name: /^(Pin .*quick settings|将.*固定)/ }).first().click()
-      await expect(page.getByRole("button", { name: /^(Unpin .*quick settings|从快捷设置中取消固定)/ }).first()).toBeVisible()
+      const pin = page.getByRole("button", { name: /^(Pin .*quick settings|将.*固定)/ }).first()
+      await pin.click()
+      await expect(pin).toHaveAttribute("aria-pressed", "true")
       await page.evaluate(() => (location.hash = "#/txt2img"))
       await expect(page.getByRole("textbox", { name: /^(Prompt|提示词)$/ })).toBeVisible()
       await expect(page.locator("header").getByRole("button", { name: /^(Quick settings|快捷设置)$/ })).toBeVisible()

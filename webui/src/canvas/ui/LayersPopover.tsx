@@ -16,7 +16,8 @@ import { Hint, ValueSlider } from "./controls"
 function VisibilityToggle({ visible, onChange, label }: { visible: boolean; onChange: (visible: boolean) => void; label: string }) {
   const { t } = useTranslation()
   return (
-    <Button variant="ghost" size="icon-xs" aria-pressed={visible} aria-label={visible ? t("Hide {{layer}}", { layer: label }) : t("Show {{layer}}", { layer: label })} onClick={() => onChange(!visible)}>
+    // a toggle: one name, pressed while the layer shows (the eye draws the state, as in a layer list)
+    <Button variant="ghost" size="icon-xs" aria-pressed={visible} aria-label={t("Show {{layer}}", { layer: label })} onClick={() => onChange(!visible)}>
       {visible ? <Eye /> : <EyeOff className="text-muted-foreground" />}
     </Button>
   )

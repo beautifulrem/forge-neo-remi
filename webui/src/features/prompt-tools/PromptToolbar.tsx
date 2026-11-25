@@ -5,7 +5,7 @@
  * panel is its own lazy chunk, loaded when first opened).
  */
 import { formatShortcut } from "@/app/commands"
-import { BrushCleaning, History, KeyRound, Languages, LayoutGrid, Sparkles, Star, Tags, TextCursorInput } from "@/components/icons"
+import { BrushCleaning, History, KeyRound, Languages, LayoutGrid, Sparkles, Star, Tags } from "@/components/icons"
 import { type ReactNode, Suspense, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
@@ -216,8 +216,9 @@ export default function PromptToolbar(props: PromptToolbarProps) {
 
   return (
     <div role="group" aria-label={t("Prompt tools")} className="-mt-0.5 flex min-h-6 flex-wrap items-center gap-0.5">
-      <ToolButton label={chips ? t("Edit as text") : t("Show as tags")} pressed={chips} onClick={() => setView(viewKey, chips ? "text" : "chips")}>
-        {chips ? <TextCursorInput /> : <Tags />}
+      {/* a toggle: one name, the pressed tint says the tags show */}
+      <ToolButton label={t("Show as tags")} pressed={chips} onClick={() => setView(viewKey, chips ? "text" : "chips")}>
+        <Tags />
       </ToolButton>
       <ToolButton
         label={t("Tidy up the separators")}

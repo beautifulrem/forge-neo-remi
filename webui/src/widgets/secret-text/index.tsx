@@ -37,8 +37,8 @@ export default function SecretText({ value, onChange, props, disabled, id, label
       <InputGroupAddon align="inline-end">
         <InputGroupButton
           size="icon-xs"
+          // an action named for what it does next (Show / Hide), so not a toggle as well
           aria-label={shown ? tw("Hide") : tw("Show")}
-          aria-pressed={shown}
           disabled={disabled}
           onClick={() => setShown((current) => !current)}
         >

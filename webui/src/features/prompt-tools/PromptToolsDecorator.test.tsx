@@ -64,11 +64,15 @@ describe("prompt tools around a prompt editor", () => {
 
   it("switches between the text editor and the tag view (kept mounted, remembered)", async () => {
     setup("a, b")
-    fireEvent.click(await screen.findByRole("button", { name: "Show as tags" }, SLOW))
+    const toggle = await screen.findByRole("button", { name: "Show as tags" }, SLOW)
+    expect(toggle).toHaveAttribute("aria-pressed", "false")
+    fireEvent.click(toggle)
     expect(await screen.findByRole("list", { name: "Tags of Prompt" }, SLOW)).toBeInTheDocument()
+    // a toggle keeps its name; its pressed state says the tags show
+    expect(screen.getByRole("button", { name: "Show as tags" })).toHaveAttribute("aria-pressed", "true")
     expect(screen.getByRole("textbox", { name: "Prompt editor", hidden: true })).not.toBeVisible()
     expect(usePromptViews.getState().views["positive:Prompt"]).toBe("chips")
-    fireEvent.click(screen.getByRole("button", { name: "Edit as text" }))
+    fireEvent.click(screen.getByRole("button", { name: "Show as tags" }))
     await waitFor(() => expect(screen.getByRole("textbox", { name: "Prompt editor" })).toBeVisible(), SLOW)
   }, 20_000)
 

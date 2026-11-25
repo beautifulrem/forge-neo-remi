@@ -179,17 +179,18 @@ describe("generate page layout", { timeout: 30_000 }, () => {
     relayout()
     fireEvent.click(await screen.findByRole("button", { name: "Show history" }))
     relayout()
-    expect(await screen.findByRole("button", { name: "Hide history" })).toHaveAttribute("aria-pressed", "true")
+    // named for what they do next, so not toggles as well
+    expect(await screen.findByRole("button", { name: "Hide history" })).not.toHaveAttribute("aria-pressed")
 
     fireEvent.click(screen.getByRole("button", { name: "Hide parameters" }))
     relayout()
     const show = await screen.findByRole("button", { name: "Show parameters" })
-    expect(show).toHaveAttribute("aria-pressed", "false")
+    expect(show).not.toHaveAttribute("aria-pressed")
     // the run controls are now in the stage's toolbar
     await waitFor(() => expect(onStage()).toHaveLength(1))
     fireEvent.click(show)
     relayout()
-    expect(await screen.findByRole("button", { name: "Hide parameters" })).toHaveAttribute("aria-pressed", "true")
+    expect(await screen.findByRole("button", { name: "Hide parameters" })).not.toHaveAttribute("aria-pressed")
     await waitFor(() => expect(onStage()).toEqual([]))
   })
 })

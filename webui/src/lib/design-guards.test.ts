@@ -116,3 +116,49 @@ describe("tab strips", () => {
     expect(handWritten).toEqual([])
   })
 })
+
+describe("toggle names", () => {
+  // An opening JSX tag, its attribute values balanced to three levels of braces.
+  const TAG = /<([A-Za-z][\w.]*)\b(?:[^>"'{}]|"[^"]*"|'[^']*'|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})*>/g
+
+  /** The expression of `attr={…}` in a tag, or undefined. */
+  function attribute(tag: string, attr: string): string | undefined {
+    const start = new RegExp(`\\s${attr}=\\{`).exec(tag)
+    if (!start) return undefined
+    let depth = 1
+    let i = start.index + start[0].length
+    for (const from = i; i < tag.length; i++) {
+      if (tag[i] === "{") depth++
+      if (tag[i] === "}" && --depth === 0) return tag.slice(from, i)
+    }
+    return undefined
+  }
+
+  /** Whether a name switches on a condition: a ternary, or a constant in the file that is one. */
+  function switches(expression: string, source: string): boolean {
+    if (/\?[^.?]/.test(expression.replace(/\?\./g, ""))) return true
+    const constant = /^\s*(\w+)\s*$/.exec(expression)?.[1]
+    const declared = constant ? new RegExp(`const ${constant} = ([^\\n]+)`).exec(source)?.[1] : undefined
+    return declared !== undefined && /\?[^.?]/.test(declared.replace(/\?\./g, ""))
+  }
+
+  it("keep one name while pressed", () => {
+    // frontend.md: a toggle (aria-pressed) keeps one name and its pressed state says on or off; a
+    // button whose name says what the next click does ("Show all", "Unpin") is an action, not a toggle.
+    const offenders = files.flatMap(({ file, source: raw }) => {
+      // comments out of the way: an apostrophe in one reads as the start of a string
+      const source = raw.replace(/^\s*\/\/.*$/gm, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+      return [...source.matchAll(TAG)].flatMap((m) => {
+        const tag = m[0]
+        if (attribute(tag, "aria-pressed") === undefined && attribute(tag, "pressed") === undefined) return []
+        // the name (a title with text beside it only describes)
+        const names = ["aria-label", "label"].map((attr) => attribute(tag, attr)).filter((value) => value !== undefined)
+        // a visible name between the tag and its closing tag: text picked by a condition
+        const body = tag.endsWith("/>") ? "" : source.slice(m.index + tag.length, source.indexOf(`</${m[1]}>`, m.index))
+        const switched = names.some((name) => switches(name, source)) || /\{[^{}]*\?\s*t\(/.test(body)
+        return switched ? [`${file}: <${m[1]}>`] : []
+      })
+    })
+    expect(offenders).toEqual([])
+  })
+})

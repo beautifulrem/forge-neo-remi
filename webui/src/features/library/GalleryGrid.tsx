@@ -206,7 +206,7 @@ const Tile = memo(function Tile({ item, width, height, selected, selecting, inde
           type="button"
           tabIndex={-1}
           aria-pressed={item.starred}
-          aria-label={item.starred ? t("Unstar") : t("Star")}
+          aria-label={t("Star")}
           onMouseDown={keepFocus}
           onClick={() => onStar(item)}
           className="pointer-events-none group-hover/tile:pointer-events-auto group-has-[:focus-visible]/tile:pointer-events-auto group-data-[shown]/overlay:pointer-events-auto grid size-6 place-items-center rounded-full text-white outline-none hover:bg-black/30 focus-visible:ring-3 focus-visible:ring-ring"

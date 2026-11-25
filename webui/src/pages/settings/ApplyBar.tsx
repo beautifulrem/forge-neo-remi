@@ -29,7 +29,8 @@ export function ApplyBar(props: { count: number; onApply: () => void; onDiscard:
         <p className="min-w-0 flex-1 text-sm tabular-nums" aria-live="polite">
           {applying ? t("Applying…") : t("Unsaved changes: {{count}}", { count: props.count })}
         </p>
-        <Button variant="ghost" size="sm" onClick={props.onReview} aria-pressed={props.reviewing} disabled={applying}>
+        {/* an action named for what it does next, not a toggle: no aria-pressed beside a changing name */}
+        <Button variant="ghost" size="sm" onClick={props.onReview} disabled={applying}>
           {props.reviewing ? t("Show all") : t("Review")}
         </Button>
         <Button variant="outline" size="sm" onClick={props.onDiscard} disabled={applying}>

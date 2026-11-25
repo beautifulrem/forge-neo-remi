@@ -145,7 +145,7 @@ function HistoryRow({ job, onView }: { job: Job; onView: (job: Job, index: numbe
         ) : null}
       </div>
       <div className="flex shrink-0 flex-col items-end justify-between gap-0.5 self-stretch sm:flex-row sm:items-center sm:self-auto">
-        <IconAction label={job.starred ? t("Unstar") : t("Star")} pressed={job.starred} onClick={() => void starJob(job, !job.starred)}>
+        <IconAction label={t("Star")} pressed={job.starred} onClick={() => void starJob(job, !job.starred)}>
           <Star className={cn(job.starred && "fill-star text-star")} />
         </IconAction>
         <IconAction label={t("Queue again")} disabled={!job.replayable} onClick={() => void requeue(job)}>

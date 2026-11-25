@@ -165,7 +165,8 @@ function PaneToggle({ collapsed, side, onToggle }: { collapsed: boolean; side: "
   const label = side === "left" ? (collapsed ? t("Show parameters") : t("Hide parameters")) : collapsed ? t("Show history") : t("Hide history")
   const Icon = side === "left" ? (collapsed ? PanelLeftOpen : PanelLeftClose) : collapsed ? PanelRightOpen : PanelRightClose
   return (
-    <Button variant="ghost" size="icon-sm" aria-label={label} title={label} aria-pressed={!collapsed} onClick={onToggle}>
+    // an action named for what it does next (Show / Hide), so not a toggle as well
+    <Button variant="ghost" size="icon-sm" aria-label={label} title={label} onClick={onToggle}>
       <Icon />
     </Button>
   )

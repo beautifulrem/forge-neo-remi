@@ -20,7 +20,8 @@ describe("secret-text widget", () => {
     expect(onChange).toHaveBeenCalledWith("abc")
     fireEvent.click(screen.getByRole("button", { name: "Show" }))
     expect(input).toHaveAttribute("type", "text")
-    expect(screen.getByRole("button", { name: "Hide" })).toHaveAttribute("aria-pressed", "true")
+    // named for what it does next, so not a toggle as well
+    expect(screen.getByRole("button", { name: "Hide" })).not.toHaveAttribute("aria-pressed")
   })
 
   it("translates every chrome string", () => {

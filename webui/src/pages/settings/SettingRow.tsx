@@ -5,7 +5,7 @@
  * choices, pin to quick settings, revert the unsaved edit).
  */
 import { useQuery } from "@tanstack/react-query"
-import { ExternalLink, Lock, Pin, PinOff, RefreshCw, Undo2 } from "@/components/icons"
+import { ExternalLink, Lock, Pin, RefreshCw, Undo2 } from "@/components/icons"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useStore } from "zustand"
@@ -183,11 +183,12 @@ function SettingActions({ node }: { node: SettingNode }) {
       ) : null}
       {MODEL_BAR_KEYS.has(key) ? null : (
         <RowAction
-          label={pinned ? t("Unpin {{label}} from quick settings", { label }) : t("Pin {{label}} to quick settings", { label })}
+          // a toggle: one name, the pressed tint says the setting is pinned
+          label={t("Pin {{label}} to quick settings", { label })}
           pressed={pinned}
           onClick={() => void setPinned(key, !pinned)}
         >
-          {pinned ? <PinOff /> : <Pin />}
+          <Pin />
         </RowAction>
       )}
     </div>
