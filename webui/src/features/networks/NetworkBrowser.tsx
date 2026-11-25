@@ -235,7 +235,11 @@ function ErrorState({ title, error, onRetry }: { title: string; error: Error | n
             <CircleAlert aria-hidden />
           </EmptyMedia>
           <EmptyTitle>{title}</EmptyTitle>
-          {error ? <EmptyDescription className="line-clamp-3 [overflow-wrap:anywhere]">{errorText(error)}</EmptyDescription> : null}
+          {error ? (
+            <EmptyDescription className="line-clamp-3 [overflow-wrap:anywhere]" title={errorText(error)}>
+              {errorText(error)}
+            </EmptyDescription>
+          ) : null}
         </EmptyHeader>
         <EmptyContent>
           <Button variant="outline" size="sm" onClick={onRetry}>

@@ -266,6 +266,8 @@ describe("network browser: windows, filters, errors", { timeout: 60_000 }, () =>
     // the server's English detail is for logs: the page says what happened in the UI language
     expect(alert).not.toHaveTextContent("the server had a problem")
     expect(alert).toHaveTextContent("The server ran into an error (500).")
+    // clamped to three lines: the whole reason is the title
+    expect(within(alert).getByText("The server ran into an error (500).")).toHaveAttribute("title", "The server ran into an error (500).")
     broken = false
     fireEvent.click(within(alert).getByRole("button", { name: "Retry" }))
     await within(await listbox()).findAllByRole("option", {}, slow)

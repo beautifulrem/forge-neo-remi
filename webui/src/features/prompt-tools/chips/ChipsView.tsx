@@ -153,7 +153,7 @@ function ChipItem({
           {chip.kind === "comment" ? <MessageSquare aria-hidden className="size-3 shrink-0" /> : null}
           {chip.disabled && chip.kind !== "comment" ? <EyeOff aria-hidden className="size-3 shrink-0 text-muted-foreground" /> : null}
           <span className="flex min-w-0 flex-col py-px">
-            <span className={cn("max-w-64 truncate font-medium", chip.disabled && "line-through decoration-muted-foreground/60")} style={color ? { color } : undefined}>
+            <span title={text} className={cn("max-w-64 truncate font-medium", chip.disabled && "line-through decoration-muted-foreground/60")} style={color ? { color } : undefined}>
               {text}
             </span>
             {translation ? <span title={translation} className="max-w-64 truncate text-[0.625rem] font-normal text-muted-foreground">{translation}</span> : null}

@@ -45,7 +45,7 @@ export function TagChips({
                 )}
                 style={on ? undefined : { backgroundColor: `color-mix(in oklch, var(--primary) ${Math.round(6 + weight * 26)}%, var(--muted))` }}
               >
-                <span className="truncate" style={{ fontWeight: weight > 0.6 ? 600 : weight > 0.3 ? 500 : 400 }}>
+                <span className="truncate" title={tag} style={{ fontWeight: weight > 0.6 ? 600 : weight > 0.3 ? 500 : 400 }}>
                   {tag}
                 </span>
                 <span className={cn("tabular-nums", on ? "text-primary-foreground" : "text-foreground/70")}>{count}</span>

@@ -36,6 +36,8 @@ describe("tag chips view", () => {
     const list = screen.getByRole("list", { name: "Tags of Prompt" })
     expect(list).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /^1girl$/ })).toBeInTheDocument()
+    // a long tag ends in an ellipsis: its text in full is the title
+    expect(screen.getByText("long_hair")).toHaveAttribute("title", "long_hair")
     expect(screen.getByRole("button", { name: /^long_hair, Weight 1\.2/ })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /^style, Extra network, Weight 0\.8/ })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "BREAK" })).toBeInTheDocument()

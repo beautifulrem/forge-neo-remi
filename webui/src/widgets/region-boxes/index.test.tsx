@@ -76,7 +76,8 @@ describe("region-boxes", { timeout: 20_000 }, () => {
     expect(region(1)).toHaveAccessibleName("Region 1: x 0.00, y 0.00, width 0.50, height 1.00")
     expect(region(1).style.left).toBe("0%")
     expect(region(2).style.left).toBe("50%")
-    expect(within(region(1)).getByText("a red cat")).toBeInTheDocument()
+    // clamped to three lines: the whole prompt is its title
+    expect(within(region(1)).getByText("a red cat")).toHaveAttribute("title", "a red cat")
     // An empty prompt is shown as unused; the inactive region is out of the tab order
     expect(within(region(2)).getByText("Empty prompt: not used")).toBeInTheDocument()
     expect(canvas.querySelector('[data-region="3"]')).toHaveAttribute("tabindex", "-1")
