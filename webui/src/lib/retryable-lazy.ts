@@ -4,6 +4,17 @@ import { RequestError } from "@/api/http"
 /** Loads that failed, each with the swap that lets its component load again. */
 const failed = new Set<() => void>()
 
+/** Told of every load that failed (`chunk-reload.ts`: a new build on the server). */
+const failureListeners = new Set<() => void>()
+
+/** Calls `listener` whenever a component's chunk fails to load; returns the function that stops it. */
+export function onLoadFailed(listener: () => void): () => void {
+  failureListeners.add(listener)
+  return () => {
+    failureListeners.delete(listener)
+  }
+}
+
 /**
  * Lets every component whose chunk failed to load fetch it again on its next
  * render. Called by an error boundary's "Try again" and when the browser is
@@ -32,6 +43,7 @@ export function retryableLazy<T extends ComponentType<any>>(load: () => Promise<
         failed.add(() => {
           current = make()
         })
+        for (const listener of failureListeners) listener()
         throw new RequestError(error)
       }),
     )

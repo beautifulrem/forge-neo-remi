@@ -503,9 +503,13 @@ generated interfaces (sources: Linear's
 Build: chunks and their preloads resolve relative to the importing module
 (`experimental.renderBuiltUrl`), so the app works under `--subpath`; the
 server prefixes `index.html`'s absolute URLs. A tab opened before an update
-that asks for a chunk the new build lacks reloads once (`vite:preloadError`,
-at most once a minute). `index.html` carries `darkreader-lock` (the app has
-its own dark theme).
+that asks for a chunk the new build lacks loads the new build
+(`lib/chunk-reload.ts`): when a page or control could not load its chunk
+(`retryableLazy`), the app fetches the shell and reloads only if it starts
+other module scripts than this page's, at most once a minute. A failed
+prefetch (a nav item on hover) never reloads, nor does a chunk that failed
+while the server is down: the page's error view, with "Try again", stays.
+`index.html` carries `darkreader-lock` (the app has its own dark theme).
 
 ## Schema renderer (`src/ui`)
 
