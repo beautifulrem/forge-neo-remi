@@ -43,7 +43,7 @@ def test_alpha_below_the_threshold_is_cleared(webui, monkeypatch, threshold, exp
     monkeypatch.setattr(images, "opts", webui.opts)  # bound at import (by whichever suite imported it first)
     monkeypatch.setitem(webui.opts.data, "alpha_threshold", threshold)
     result = images._process_alpha(_rgba([0, 15, 16, 255]))
-    assert result.mode == "RGBA" and list(result.getdata()) == expected
+    assert result.mode == "RGBA" and list(result.get_flattened_data()) == expected
 
 
 def test_opaque_rgba_becomes_rgb_and_rgb_is_untouched(webui):

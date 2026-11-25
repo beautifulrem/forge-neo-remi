@@ -266,12 +266,12 @@ class TestValues:
 
         painted = Image.new("RGBA", (4, 1), (0, 0, 0, 0))
         painted.putpixel((0, 0), (0, 0, 0, 255))  # the colour does not matter, the alpha does
-        assert list(mask_channel(painted).getdata()) == [255, 0, 0, 0]
+        assert list(mask_channel(painted).get_flattened_data()) == [255, 0, 0, 0]
         plain = Image.new("L", (4, 1), 0)
         plain.putpixel((1, 0), 255)
         # An L mask, also once converted to opaque RGBA (Image(mode="RGBA")), reads by luminance
-        assert list(mask_channel(plain).getdata()) == [0, 255, 0, 0]
-        assert list(mask_channel(plain.convert("RGBA")).getdata()) == [0, 255, 0, 0]
+        assert list(mask_channel(plain).get_flattened_data()) == [0, 255, 0, 0]
+        assert list(mask_channel(plain.convert("RGBA")).get_flattened_data()) == [0, 255, 0, 0]
         assert mask_channel(None) is None
 
     def test_args_round_trip(self):
