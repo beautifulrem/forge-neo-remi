@@ -801,7 +801,11 @@ class JobQueue:
             # The executor starts the progress task; one that failed (or never got there) must not stay "pending".
             self._pending_done(job)
             self.poll()
-        status = CANCELLED if job.id in self._cancelled else INTERRUPTED if job.id in self._interrupted else COMPLETED
+        with self._cv:
+            # an interrupt past the queue (/sdapi/v1/interrupt, an extension) flips the state only;
+            # begin() cleared the flag for this job, so a set one is this job's
+            interrupted = job.id in self._interrupted or (self._begun and bool(getattr(self.state(), "interrupted", False)))
+        status = CANCELLED if job.id in self._cancelled else INTERRUPTED if interrupted else COMPLETED
         outputs = self._register(job, result or JobResult())
         for note in getattr(result, "warnings", None) or []:
             if note not in warnings and len(warnings) < MAX_WARNINGS:

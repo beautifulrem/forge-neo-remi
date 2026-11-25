@@ -435,6 +435,18 @@ def test_interrupting_the_running_job_keeps_its_results(webui, tmp_path):
         assert job["status"] == INTERRUPTED and len(job["outputs"]) == 1
 
 
+def test_an_interrupt_past_the_queue_records_the_running_job_as_interrupted(webui, tmp_path):
+    # /sdapi/v1/interrupt (or an extension) interrupts shared.state itself, past the queue: the
+    # job stops as with /api/v2/interrupt and must be recorded the same way, not as completed
+    with blocked_server(tmp_path) as server:
+        job_id = submit(server)["job_id"]
+        assert server.executor.started.wait(5)
+        server.state.interrupt()  # what /sdapi/v1/interrupt does to shared.state
+        assert server.services.queue.wait_idle()
+        job = server.client.get(f"/api/v2/jobs/{job_id}").json()
+        assert job["status"] == INTERRUPTED and len(job["outputs"]) == 1
+
+
 def test_interrupt_after_current_lets_the_current_image_finish_first(webui, tmp_path, monkeypatch):
     # The setting "Don't Interrupt in the middle": the first interrupt of a
     # job making several images stops after the current one; a second stops at once

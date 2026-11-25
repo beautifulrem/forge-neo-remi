@@ -439,7 +439,10 @@ What changed underneath, and what it means for clients:
   1, "Masked content: latent noise" sets `inpainting_fill` to 2.
 - `/sdapi/v1` requests run on the generation lock directly; they are not
   stored in the Remi queue or its history, but they wait for (and block) the
-  queue's worker, and `/api/v2/interrupt` stops them.
+  queue's worker, and `/api/v2/interrupt` stops them. `/sdapi/v1/interrupt`
+  stops a running Remi job as well, which is then recorded as `interrupted`
+  (results kept), as after `POST /api/v2/jobs/{id}/interrupt`; a
+  generate-forever job so stopped is not queued again.
 - `/sdapi/v1/options` cannot change settings marked "restricted"; the
   WebUI's own `PATCH /api/v2/options` can.
 - `/sdapi/v1/options` checks a changed value as `PATCH /api/v2/options`
