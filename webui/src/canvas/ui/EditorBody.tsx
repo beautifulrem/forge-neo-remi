@@ -633,7 +633,7 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
           aria-label={layerLabel ? `${editorName} · ${layerLabel}` : editorName}
           // Nothing to paint: one finger scrolls the page (two fingers pan and zoom the image).
           className={cn(
-            "absolute inset-0 overflow-hidden outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:ring-inset",
+            "absolute inset-0 overflow-hidden outline-none select-none focus-visible:ring-3 focus-visible:ring-focus-ring focus-visible:ring-inset",
             paintable ? "touch-none" : "touch-pan-y",
           )}
         >

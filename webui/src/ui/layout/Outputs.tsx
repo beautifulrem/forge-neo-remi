@@ -56,7 +56,7 @@ export function GalleryView({ node }: { node: GalleryNode }) {
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))] gap-1.5" aria-label={node.label ? t(node.label) : t("Images")}>
           {images.map((image, i) => (
             <li key={`${image.src}-${i}`} className="overflow-hidden rounded-md bg-checker">
-              <a href={image.src} target="_blank" rel="noopener noreferrer" className="block outline-none focus-visible:ring-3 focus-visible:ring-ring/60">
+              <a href={image.src} target="_blank" rel="noopener noreferrer" className="block outline-none focus-visible:ring-3 focus-visible:ring-focus-ring">
                 <img src={image.src} alt={image.caption ?? ""} loading="lazy" className="aspect-square w-full object-cover" />
               </a>
               {image.caption ? <p title={image.caption} className="truncate px-1.5 py-1 text-xs text-muted-foreground">{image.caption}</p> : null}

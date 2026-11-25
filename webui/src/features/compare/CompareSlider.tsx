@@ -104,7 +104,7 @@ export function CompareSlider({ before, after, beforeLabel, afterLabel, aspect, 
           event.preventDefault()
           setPosition(next)
         }}
-        className="absolute top-1/2 grid size-9 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize place-items-center rounded-full bg-white text-neutral-900 shadow-md ring-1 ring-black/10 outline-none focus-visible:ring-4 focus-visible:ring-ring/70"
+        className="absolute top-1/2 grid size-9 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize place-items-center rounded-full bg-white text-neutral-900 shadow-md ring-1 ring-black/10 outline-none focus-visible:ring-4 focus-visible:ring-focus-ring"
         style={{ left: percent }}
       >
         <ChevronsLeftRight className="size-4" aria-hidden />

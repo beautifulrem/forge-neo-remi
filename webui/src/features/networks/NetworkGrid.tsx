@@ -173,7 +173,7 @@ export function NetworkGrid({ items, total, kind, view, size, isActive, currentA
         onFocus={(event) => {
           if (event.target === event.currentTarget && cursorRef.current < 0 && items.length > 0) setCursor(0)
         }}
-        className={cn("@container relative min-h-0 overflow-y-auto overscroll-contain px-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:ring-inset", className)}
+        className={cn("@container relative min-h-0 overflow-y-auto overscroll-contain px-2 outline-none focus-visible:ring-3 focus-visible:ring-focus-ring focus-visible:ring-inset", className)}
       >
         <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
           {virtualRows.map((row) => {

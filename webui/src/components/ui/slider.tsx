@@ -54,7 +54,7 @@ function Slider({
             getAriaLabel={getAriaLabel}
             getAriaValueText={getAriaValueText}
             className={cn(
-              "group/cap relative block h-4.5 w-2.5 shrink-0 rounded-[2.5px] border border-(--slider-cap-edge) bg-(--slider-cap) shadow-[0_1px_2px_var(--slider-cap-shade)] ring-ring/45 transition-[border-color,box-shadow] select-none",
+              "group/cap relative block h-4.5 w-2.5 shrink-0 rounded-[2.5px] border border-(--slider-cap-edge) bg-(--slider-cap) shadow-[0_1px_2px_var(--slider-cap-shade)] ring-focus-ring transition-[border-color,box-shadow] select-none",
               "group-data-vertical/slider:h-2.5 group-data-vertical/slider:w-4.5",
               // the notch: across the cap, along the groove's normal
               "before:absolute before:top-1/2 before:left-1/2 before:h-2 before:w-px before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full before:bg-(--slider-notch) before:transition-colors",

@@ -81,9 +81,10 @@
   --border: oklch(0.20 0.014 255 / 10.5%);
   --input: oklch(0.20 0.014 255 / 20%);
   --ring: oklch(var(--brand-l) var(--brand-c) var(--brand-h));
-  /* The focus ring: --ring through a share of transparency. Half of it read at about 2.2:1 on the
-     paper; 80 % reaches 3:1 or more on the page and the stage's backdrop for every accent
-     (src/styles/focus-ring.test.ts). Re-derived with --ring wherever an accent is set. */
+  /* The focus ring: --ring through a share of transparency, the same for every focus ring. Half
+     of it read at about 2.2:1 on the paper; 80 % reaches 3:1 or more on the page and the stage's
+     backdrop for every accent (src/styles/focus-ring.test.ts). Re-derived with --ring wherever an
+     accent is set. */
   --focus-ring-alpha: 80%;
   --focus-ring: color-mix(in oklab, var(--ring) var(--focus-ring-alpha), transparent);
   --chart-1: oklch(0.56 0.10 var(--brand-h));
@@ -144,8 +145,8 @@
   --brand-l: 0.75;
   --brand-hover-dl: 0.04;
   --brand-fg: oklch(0.17 0.022 var(--brand-h));
-  /* the darkroom keeps the half-strength focus ring */
-  --focus-ring-alpha: 50%;
+  /* the darkroom's focus ring: half of --ring stayed under 3:1 on the page for some accents */
+  --focus-ring-alpha: 60%;
 
   /* Darkroom Graphite & Warm Ivory studio palette: calibrated 4-step neutral ladder */
   --canvas: oklch(0.128 0.005 255);

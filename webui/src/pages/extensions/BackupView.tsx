@@ -191,7 +191,7 @@ export function BackupView({ access }: { access: boolean }) {
                   }
                 }}
                 className={cn(
-                  "cursor-default rounded-lg px-3 py-2 outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/60",
+                  "cursor-default rounded-lg px-3 py-2 outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-focus-ring",
                   state.id === current && "bg-accent",
                 )}
               >

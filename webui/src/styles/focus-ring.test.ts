@@ -1,9 +1,10 @@
 /**
  * The focus ring (docs/remi-webui/frontend.md, "Visual rules") is one token, `--focus-ring`:
- * `--ring` mixed with transparency, as strong as each theme needs. Half of `--ring` read at about
- * 2.2:1 on the light theme's paper, too faint for a focus indicator (3:1), so every focus ring
- * takes the token, and the light theme's mix reaches 3:1 on the page and on the image backdrop
- * for every accent.
+ * `--ring` mixed with transparency, as strong as each theme needs. Focus rings used to write
+ * their own share of `--ring` (40 to 70 %); half of it read at about 2.2:1 on the light theme's
+ * paper and under 3:1 on the dark theme's page for some accents, too faint for a focus indicator.
+ * Every focus ring takes the token, and each theme's mix reaches 3:1 on the page and on the image
+ * backdrop for every accent.
  */
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
@@ -64,35 +65,42 @@ function alpha(rule: string): number {
 
 const FOCUS_RING = "color-mix(in oklab, var(--ring) var(--focus-ring-alpha), transparent)"
 
+/** Each accent's ring colour in `theme`: its hue and chroma, and the lightness that theme gives it. */
+function accentRings(theme: "light" | "dark"): Map<string, [number, number, number]> {
+  const accents = [...css.matchAll(/^\[data-accent="(\w+)"\] \{ --brand-h: ([\d.]+); --brand-c: ([\d.]+); --brand-l: ([\d.]+); \}$/gm)]
+  // the dark theme sets one lightness for every accent, and its own for a few
+  const dark = new Map([...css.matchAll(/^\.dark \[data-accent(?:="(\w+)")?\] \{ --brand-l: ([\d.]+); \}$/gm)].map((m) => [m[1] ?? "", Number(m[2])]))
+  expect(dark.has("")).toBe(true)
+  return new Map(accents.map((m) => [m[1]!, [theme === "light" ? Number(m[4]) : (dark.get(m[1]!) ?? dark.get(""))!, Number(m[3]), Number(m[2])]]))
+}
+
 describe("the focus ring token", () => {
   it("is --ring at each theme's strength, re-derived wherever an accent is set, and a Tailwind colour", () => {
     expect(token(block(":root"), "focus-ring")).toBe(FOCUS_RING)
     expect(token(block("[data-accent]"), "focus-ring")).toBe(FOCUS_RING)
     expect(token(block("[data-accent]"), "ring")).toBe("oklch(var(--brand-l) var(--brand-c) var(--brand-h))")
     expect(css).toMatch(/^ +--color-focus-ring: var\(--focus-ring\);$/m)
-    // the dark theme keeps the ring it had: half of --ring
-    expect(alpha(block(".dark"))).toBe(0.5)
   })
 
-  it("reaches 3:1 on the light theme's page and image backdrop for every accent", () => {
-    const root = block(":root")
-    const surfaces = { background: srgb(oklch(token(root, "background"))), canvas: srgb(oklch(token(root, "canvas"))) }
-    const accents = new Map([...css.matchAll(/^\[data-accent="(\w+)"\] \{ --brand-h: ([\d.]+); --brand-c: ([\d.]+); --brand-l: ([\d.]+); \}$/gm)].map((m) => [m[1]!, [Number(m[4]), Number(m[3]), Number(m[2])] as [number, number, number]]))
+  it.each(["light", "dark"] as const)("reaches 3:1 on the %s theme's page and image backdrop for every accent", (theme) => {
+    const rule = block(theme === "light" ? ":root" : ".dark")
+    const surfaces = { background: srgb(oklch(token(rule, "background"))), canvas: srgb(oklch(token(rule, "canvas"))) }
+    const accents = accentRings(theme)
     expect([...accents.keys()].sort()).toEqual([...ACCENTS].sort())
     const weak = [...accents].flatMap(([accent, color]) =>
       Object.entries(surfaces)
-        .map(([surface, value]) => ({ accent, surface, ratio: Math.round(ringContrast(srgb(color), alpha(root), value) * 100) / 100 }))
+        .map(([surface, value]) => ({ accent, surface, ratio: Math.round(ringContrast(srgb(color), alpha(rule), value) * 100) / 100 }))
         .filter(({ ratio }) => ratio < 3),
     )
     expect(weak).toEqual([])
   })
 
-  it("is what every half-strength ring of the app became", () => {
-    const halfRings = Object.entries(sources)
-      .filter(([, source]) => /\b(?:ring|outline)-ring\/50\b|var\(--ring\) 50%/.test(source))
+  it("is the only focus ring colour drawn from --ring at a share of its own", () => {
+    const ownShares = Object.entries(sources)
+      .filter(([, source]) => /\b(?:ring|outline)-ring\/\d+\b|var\(--ring\) \d+%/.test(source))
       .map(([file]) => file.replace(/^\.\//, "styles/").replace(/^\.\.\//, ""))
     expect(Object.keys(scripts).length).toBeGreaterThan(100)
     expect(stylesheets["../index.css"]).toContain("@theme inline")
-    expect(halfRings).toEqual([])
+    expect(ownShares).toEqual([])
   })
 })

@@ -59,7 +59,7 @@ function ModeSwitch({ tab }: { tab: GenerateTab }) {
           aria-current={mode.value === tab ? "page" : undefined}
           className={cn(
             "relative flex h-12 items-center text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors outline-none select-none",
-            "after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-transparent rounded-sm hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-inset",
+            "after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-transparent rounded-sm hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-inset",
             "aria-[current=page]:text-foreground aria-[current=page]:after:bg-primary",
           )}
         >

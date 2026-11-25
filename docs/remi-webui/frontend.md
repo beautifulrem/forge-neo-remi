@@ -297,11 +297,14 @@ imperatively).
 - Scrollbars: thin, theme-aware (`--scrollbar`). Focus: visible rings from
   `--focus-ring` everywhere (`outline-focus-ring`, `focus-visible:ring-3
   focus-visible:ring-focus-ring`): `--ring` mixed with transparency, 80 %
-  of it in the light theme, where half of it read at about 2.2:1 on the
-  paper and 80 % reaches 3:1 on the page and on `--canvas` for every
-  accent (`styles/focus-ring.test.ts`), half in the dark theme. It is
-  re-derived with `--ring` wherever an accent is set. A focus ring takes
-  the token rather than a share of `--ring` of its own (`ring-ring/50`).
+  of it in the light theme (half of it read at about 2.2:1 on the paper)
+  and 60 % in the dark theme (half stayed under 3:1 on the page for some
+  accents), so that it reaches 3:1 on the page and on `--canvas` for
+  every accent in both (`styles/focus-ring.test.ts`). It is re-derived
+  with `--ring` wherever an accent is set. A focus ring, a keyboard
+  cursor or highlight included, takes the token, never a share of `--ring`
+  of its own (`ring-ring/60`; the test fails on one); a hover ring, which
+  marks no focus, takes `--primary` (`hover:ring-primary/40`).
 - See [Visual rules](#visual-rules) for the design rules every new screen
   follows.
 - shadcn components import `cn` from the `cn` package (what the base-nova

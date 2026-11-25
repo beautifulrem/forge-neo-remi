@@ -55,7 +55,7 @@ function Thumbs({ ids, selected, onSelect, label }: { ids: readonly string[]; se
             onClick={() => onSelect(id)}
             className={cn(
               "relative aspect-square overflow-hidden rounded-lg bg-checker ring-offset-2 ring-offset-background outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              on ? "ring-2 ring-primary" : "hover:ring-2 hover:ring-ring/40",
+              on ? "ring-2 ring-primary" : "hover:ring-2 hover:ring-primary/40",
             )}
           >
             <img src={api.thumbUrl(id, 192)} alt="" loading="lazy" decoding="async" className="size-full object-cover" />

@@ -173,7 +173,7 @@ function CardView({ item, kind, id, index, active, cursor, mismatch, width, onAp
           "relative size-full cursor-pointer overflow-hidden rounded-md bg-card ring-1 ring-border transition-shadow select-none",
           "group-hover/card:ring-foreground/30",
           "data-active:ring-2 data-active:ring-primary",
-          "data-cursor:outline-2 data-cursor:outline-offset-2 data-cursor:outline-ring/70",
+          "data-cursor:outline-2 data-cursor:outline-offset-2 data-cursor:outline-focus-ring",
         )}
       >
         <Preview item={item} width={width} className={cn("absolute inset-0 transition-[filter]", mismatch && "opacity-70 saturate-50")} />

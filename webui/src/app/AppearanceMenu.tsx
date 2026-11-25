@@ -152,7 +152,7 @@ function AccentSwatch(props: { accent: Accent; label: string; selected: boolean 
             data-accent={props.accent}
             className={cn(
               "grid size-6 place-items-center rounded-full bg-primary text-primary-foreground outline-none transition-transform",
-              "hover:scale-110 focus-visible:ring-3 focus-visible:ring-ring/60 data-highlighted:scale-110 data-highlighted:ring-3 data-highlighted:ring-ring/60",
+              "hover:scale-110 focus-visible:ring-3 focus-visible:ring-focus-ring data-highlighted:scale-110 data-highlighted:ring-3 data-highlighted:ring-focus-ring",
               props.selected && "ring-2 ring-foreground/70 ring-offset-2 ring-offset-popover",
             )}
           />

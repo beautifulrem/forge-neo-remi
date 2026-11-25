@@ -183,7 +183,7 @@ export function BottomTab({ item, active, onClick, onRail = false }: { item: Nav
       aria-current={active ? "page" : undefined}
       className={cn(
         "flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[0.6875rem] outline-none focus-visible:ring-3",
-        onRail ? "text-rail-muted focus-visible:ring-rail-foreground/60" : "text-muted-foreground focus-visible:ring-ring/60",
+        onRail ? "text-rail-muted focus-visible:ring-rail-foreground/60" : "text-muted-foreground focus-visible:ring-focus-ring",
         active && (onRail ? "text-rail-foreground" : "text-foreground"),
       )}
     >
