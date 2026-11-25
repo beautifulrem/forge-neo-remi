@@ -20,6 +20,7 @@ from typing import Any
 from remi.setting_values import setting
 from remi.ui import nodes
 from remi.ui.context import Context, ensure_context
+from remi.ui.errors import ParamError, ValidationError
 from remi.ui.schema import SCHEMA_VERSION, jsonable
 
 REMI_WIDGETS = (nodes.Toggle, nodes.Slider, nodes.Number, nodes.Text, nodes.Choice, nodes.MultiChoice, nodes.Color, nodes.State, nodes.Json, nodes.Markdown, nodes.Html, nodes.Separator, nodes.Row)
@@ -246,6 +247,36 @@ def settings_schema(opts, ctx: Context | None = None, *, categories=None, quicks
         "values": {key: jsonable(held[key] if key in held else setting(key, opts=opts)) for key in stored},
         "defaults": {key: jsonable(info.default) for key, info in stored.items()},
     }
+
+
+def check_api_values(opts, values: Mapping[str, Any]) -> dict[str, Any]:
+    """``POST /sdapi/v1/options``: ``values`` with each one that changes a
+    setting checked and coerced as the settings page does (its widget's kind,
+    range and choices), or :class:`ValidationError` listing every refused one
+    (nothing is set then). A value equal to the stored one passes as it is, as
+    upstream's ``set_config`` skips it (a client posting back what GET
+    answered). The route takes out the model selection and refuses unknown
+    settings itself; which settings the API may change (``restrict_api``,
+    ``--freeze-settings``) stays ``Options.set``'s call. Here rather than in
+    ``remi.server.options``: ``modules/api`` does not import the server."""
+
+    ctx = Context()
+    result = dict(values)
+    problems: list[ParamError] = []
+    for key, value in values.items():
+        info = opts.data_labels.get(key)
+        if info is None or value == opts.data.get(key):
+            continue
+        node = setting_node(key, info, setting(key, opts=opts))
+        if not isinstance(node, nodes.Input):  # a help block: nothing to check
+            continue
+        try:
+            result[key] = node.coerce(value, ctx)
+        except ParamError as error:
+            problems.append(ParamError(error.message, owner="settings", param=key))
+    if problems:
+        raise ValidationError(problems)
+    return result
 
 
 def refresh_setting(opts, key: str) -> dict:

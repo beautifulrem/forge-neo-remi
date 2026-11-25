@@ -675,8 +675,8 @@ class Api:
             raise HTTPException(status_code=422, detail=f"unknown checkpoint: {name}"[:1000])
         # Remi: a changed value is checked as the settings page checks it (kind, range, choices); one
         # of the wrong kind reached upstream readers and broke them until the next start
-        from remi.server.options import check_api_values
         from remi.ui import ValidationError
+        from remi.ui.settings import check_api_values
 
         try:
             req = check_api_values(shared.opts, req)

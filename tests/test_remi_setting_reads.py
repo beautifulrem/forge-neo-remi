@@ -51,7 +51,7 @@ OPTIONS_MEMBERS = {
 RAW = {
     # (path, function): why the stored value is read as it is
     ("remi/server/options.py", "coerce_values"): "compares the posted value with the stored one (an unchanged value outside stale choices is kept)",
-    ("remi/server/options.py", "check_api_values"): "skips a posted value equal to the stored one, as upstream's set_config does",
+    ("remi/ui/settings.py", "check_api_values"): "skips a posted value equal to the stored one, as upstream's set_config does",
     ("remi/server/options.py", "apply_values"): "tells a setting that refused the value (its stored value unchanged) from one that took it",
     ("remi/prompt_tools/options.py", "register_tag_options"): "moves values stored under the tools' earlier names to the current ones",
     ("remi/prompt_tools/options.py", "take_legacy_translation_key"): "removes the API key an earlier version stored in the settings",
