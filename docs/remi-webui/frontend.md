@@ -509,9 +509,15 @@ its own dark theme).
 
 ## Schema renderer (`src/ui`)
 
-`<TabForm schema={TabSchema}/>` renders a generation tab (core form +
-scripts); `<PageForm schema={PageSchema}/>` renders one owner (extension
-pages). `jobRequest(store, schema)` (`ui/tab.ts`) builds the `POST /jobs` body.
+The generation pages and Extras load a tab with `useFormLoader`
+(`pages/generate/use-form-loader.ts`: loads the schema before the first paint;
+on a reload it keeps uploaded images, moves untouched params to their new
+defaults and re-derives patch locks;
+`ensureSchemaLoaded` does the same for code that reads a form away from its
+page) and render it with `CoreForm` and `ScriptsPanel` from `RenderNode` /
+`RenderLayout`. `ui/SchemaForm.tsx` (`TabForm`, `PageForm`) is a harness for
+the renderer's tests only. `jobRequest(store, schema)` (`ui/tab.ts`) builds the
+`POST /jobs` body.
 
 | file | role |
 | --- | --- |
