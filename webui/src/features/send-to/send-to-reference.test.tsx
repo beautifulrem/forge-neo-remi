@@ -74,13 +74,14 @@ describe("send-to Reference Image (ImageStitch)", () => {
 
   it("names the references a lock kept, in the send's own toast, and counts none added", async () => {
     const store = getFormStore("txt2img")
-    store.getState().setValues("imagestitch_integrated", { references: ["existing-1"], enable: true })
+    // ImageStitch is off: nothing added, so it stays off
+    store.getState().setValues("imagestitch_integrated", { references: ["existing-1"], enable: false })
     // a toggle that locks the reference list is on
     store.setState((s) => ({ locks: [{ owner: "keep", name: "refs", target: ["imagestitch_integrated", "references"] }], values: { ...s.values, keep: { refs: true } } }))
     const info = vi.spyOn(toast, "info")
     const success = vi.spyOn(toast, "success")
     expect(await sendToReference([{ fileId: "new-2" }], "txt2img")).toEqual({ tab: "txt2img", owner: "imagestitch_integrated", added: 0, total: 1, locked: ["imagestitch_integrated.references"] })
-    expect(store.getState().values.imagestitch_integrated?.references).toEqual(["existing-1"])
+    expect(store.getState().values.imagestitch_integrated).toEqual({ references: ["existing-1"], enable: false })
     sendToReferenceWithFeedback([{ fileId: "new-3" }], "txt2img")
     await waitFor(() => expect(info).toHaveBeenCalledWith("Overridden by a lock: Reference Image(s)"))
     expect(info).toHaveBeenCalledOnce() // not "already in Reference Images", nor a second note

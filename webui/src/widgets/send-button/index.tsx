@@ -54,11 +54,10 @@ export default function SendButton({ props, disabled, id }: WidgetProps<null, Pr
     if (props.to === "prompt") {
       const text = read()
       const target = props.target ?? "txt2img"
-      if (typeof text !== "string" || !sendToPrompt(target, text, props.mode ?? "append", props.navigate ?? true)) {
-        toast.info(tw("Nothing to send"))
-      } else if (props.navigate === false) {
-        toast.success(tw("Added to the {{target}} prompt", { target: tw(target) }))
-      }
+      const sent = typeof text === "string" ? sendToPrompt(target, text, props.mode ?? "append", props.navigate ?? true) : "empty"
+      // "kept": the write named the lock
+      if (sent === "empty") toast.info(tw("Nothing to send"))
+      else if (sent === "sent" && props.navigate === false) toast.success(tw("Added to the {{target}} prompt", { target: tw(target) }))
       return
     }
     if (props.to === "url") {

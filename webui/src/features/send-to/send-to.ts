@@ -200,25 +200,23 @@ function applyReferences(tab: "txt2img" | "img2img", items: readonly SendItem[])
   }
 
   const nextList = [...existing, ...incoming]
-  const values: ParamValues = { [target.param]: nextList }
   const changed: string[] = []
-  if (incoming.length > 0) changed.push(target.param)
-  if (target.enableParam && !state.values[target.owner]?.[target.enableParam]) {
-    values[target.enableParam] = true
-    changed.push(target.enableParam)
+  // the list first: ImageStitch is switched on only for references that arrived
+  const kept = incoming.length > 0 ? state.setValues(target.owner, { [target.param]: nextList }, { quiet: true }) : []
+  const listKept = kept.includes(target.param)
+  if (incoming.length > 0 && !listKept) changed.push(target.param)
+  if (!listKept && target.enableParam && !state.values[target.owner]?.[target.enableParam]) {
+    if (state.setValues(target.owner, { [target.enableParam]: true }, { quiet: true }).length > 0) kept.push(target.enableParam)
+    else changed.push(target.enableParam)
   }
 
-  let kept: string[] = []
   if (changed.length > 0) {
-    kept = state.setValues(target.owner, values, { quiet: true })
     const reveal = state.index.reveal.get(target.owner)?.get(target.param)
     for (const key of reveal?.open ?? []) state.setOpen(key, true)
     for (const [key, value] of reveal?.tabs ?? []) state.setTab(key, value)
-    const written = changed.filter((name) => !kept.includes(name))
-    if (written.length > 0) runChangeEffects({ store, tab }, target.owner, written)
+    runChangeEffects({ store, tab }, target.owner, changed)
   }
 
-  const listKept = kept.includes(target.param)
   return {
     tab,
     owner: target.owner,

@@ -98,11 +98,15 @@ export function readPrompts(formId: string): Prompts {
   return { positive: text(core[PROMPT_PARAMS.positive]), negative: text(core[PROMPT_PARAMS.negative]) }
 }
 
-/** Writes changed prompts into the form (also before its schema loaded: `load` keeps them). */
-export function writePrompts(formId: string, changes: Partial<Prompts>) {
+/**
+ * Writes changed prompts into the form (also before its schema loaded: `load` keeps them), both or
+ * neither: false when a lock kept a prompt (the write names it).
+ */
+export function writePrompts(formId: string, changes: Partial<Prompts>): boolean {
   const values: Record<string, string> = {}
   for (const [kind, value] of Object.entries(changes) as [PromptTarget, string][]) values[PROMPT_PARAMS[kind]] = value
-  if (Object.keys(values).length) getFormStore(formId).getState().setValues("core", values)
+  if (Object.keys(values).length === 0) return true
+  return getFormStore(formId).getState().setValues("core", values, { whole: true }).length === 0
 }
 
 /** The form's prompts, reactive. */

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { queryClient } from "@/api/queries"
 import type { NetworkItem } from "@/api/types"
+import { getFormStore } from "@/ui/form-store"
 import { applyItem } from "./actions"
 
 const checkpoint = (extra: Partial<NetworkItem> = {}): NetworkItem => ({
@@ -19,6 +20,19 @@ const checkpoint = (extra: Partial<NetworkItem> = {}): NetworkItem => ({
   ...extra,
 })
 const KIND = { action: "checkpoint", negative: false } as const
+
+describe("applying a prompt card", () => {
+  afterEach(() => getFormStore("img2img").setState({ values: {}, locks: [] }))
+
+  // a LoRA card with negative text: its two texts go in together or not at all
+  it("adds nothing, and claims nothing, while a lock keeps a prompt it would change", () => {
+    const store = getFormStore("img2img")
+    store.setState({ values: { core: { prompt: "a cat", negative_prompt: "" }, keep: { prompt: true } }, locks: [{ owner: "keep", name: "prompt", target: ["core", "prompt"] }] })
+    const lora = checkpoint({ kind: "lora", name: "moss", title: "moss", prompt: "<lora:moss:1>", negative_prompt: "blurry", value: undefined })
+    expect(applyItem(lora, { action: "prompt", negative: true }, "img2img", "positive")).toBeNull()
+    expect(store.getState().values.core).toEqual({ prompt: "a cat", negative_prompt: "" })
+  })
+})
 
 describe("applying a checkpoint card", () => {
   afterEach(() => {

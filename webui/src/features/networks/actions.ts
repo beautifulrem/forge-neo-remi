@@ -99,8 +99,8 @@ export function applyItem(item: NetworkItem, kind: Pick<NetworkKind, "action" | 
   }
   if (kind.action !== "prompt") return null
   const plan = planInsertion(readPrompts(form), item, { negativeAllowed: kind.negative, target, separator: currentSeparator() })
-  if (!plan) return null
-  writePrompts(form, plan.changes)
+  // a lock on a prompt keeps the card out (the write names it): nothing to announce
+  if (!plan || !writePrompts(form, plan.changes)) return null
   const changed = Object.keys(plan.changes)
   return { added: plan.added, target: changed.length > 1 ? "both" : (changed[0] as PromptTarget) }
 }

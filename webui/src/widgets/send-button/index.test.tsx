@@ -52,13 +52,21 @@ describe("sendToPrompt", () => {
   it("appends to or replaces the txt2img prompt, as a draft when the form is not loaded", () => {
     const store = getFormStore("txt2img")
     store.getState().setValues("core", { prompt: "masterpiece," })
-    expect(sendToPrompt("txt2img", "  1girl  ", "append", false)).toBe(true)
+    expect(sendToPrompt("txt2img", "  1girl  ", "append", false)).toBe("sent")
     expect(store.getState().values.core?.prompt).toBe("masterpiece, 1girl")
     expect(location.hash).toBe("#/ext/workshop")
-    expect(sendToPrompt("txt2img", "solo", "replace", true)).toBe(true)
+    expect(sendToPrompt("txt2img", "solo", "replace", true)).toBe("sent")
     expect(store.getState().values.core?.prompt).toBe("solo")
     expect(location.hash).toBe("#/txt2img")
-    expect(sendToPrompt("txt2img", "   ", "replace", true)).toBe(false)
+    expect(sendToPrompt("txt2img", "   ", "replace", true)).toBe("empty")
+  })
+
+  it("says when a lock kept the prompt (the write names it)", () => {
+    const store = getFormStore("txt2img")
+    store.setState((s) => ({ locks: [{ owner: "keep", name: "prompt", target: ["core", "prompt"] }], values: { ...s.values, core: { ...s.values.core, prompt: "mine" }, keep: { prompt: true } } }))
+    expect(sendToPrompt("txt2img", "1girl", "append", false)).toBe("kept")
+    expect(store.getState().values.core?.prompt).toBe("mine")
+    store.setState({ locks: [] })
   })
 })
 
@@ -91,6 +99,17 @@ describe("send-button widget", () => {
     fireEvent.click(screen.getByRole("button", { name: "→ 1. Quality" }))
     expect(getFormStore("txt2img").getState().values.core?.prompt).toBe("a, best quality")
     expect(success).toHaveBeenCalledWith("Added to the txt2img prompt")
+  })
+
+  it("does not say it added text a lock kept out of the prompt", () => {
+    const store = getFormStore("txt2img")
+    store.setState((s) => ({ locks: [{ owner: "keep", name: "prompt", target: ["core", "prompt"] }], values: { ...s.values, core: { ...s.values.core, prompt: "a" }, keep: { prompt: true } } }))
+    setup({ to: "prompt", source: "text", mode: "append", navigate: false, label: "→ 1. Quality" }, { text: "best quality" })
+    const success = vi.spyOn(toast, "success")
+    fireEvent.click(screen.getByRole("button", { name: "→ 1. Quality" }))
+    expect(store.getState().values.core?.prompt).toBe("a")
+    expect(success).not.toHaveBeenCalled()
+    store.setState({ locks: [] })
   })
 
   it("says when there is nothing to send", () => {

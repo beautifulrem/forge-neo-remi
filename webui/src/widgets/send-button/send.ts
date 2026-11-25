@@ -18,18 +18,19 @@ export function appendText(current: string, text: string): string {
 /**
  * Writes `text` into a generation form's prompt (`core.prompt`), appended or
  * replacing it, and optionally shows that form. A form not loaded yet keeps
- * it as its draft, which its first load restores. False for empty text.
+ * it as its draft, which its first load restores. "empty" for empty text,
+ * "kept" when a lock kept the prompt (the write names it).
  */
-export function sendToPrompt(target: Extract<FormTab, "txt2img" | "img2img">, text: string, mode: "append" | "replace", show: boolean): boolean {
+export function sendToPrompt(target: Extract<FormTab, "txt2img" | "img2img">, text: string, mode: "append" | "replace", show: boolean): "sent" | "empty" | "kept" {
   const trimmed = text.trim()
-  if (!trimmed) return false
+  if (!trimmed) return "empty"
   const store = getFormStore(target)
   const current = store.getState().values.core?.prompt
   const next = mode === "append" ? appendText(typeof current === "string" ? current : "", trimmed) : trimmed
-  store.getState().setValues("core", { prompt: next })
-  if (store.getState().revision > 0) runChangeEffects({ store, tab: target }, "core", ["prompt"])
+  const kept = store.getState().setValues("core", { prompt: next }).length > 0
+  if (!kept && store.getState().revision > 0) runChangeEffects({ store, tab: target }, "core", ["prompt"])
   if (show) navigate({ name: "generate", tab: target })
-  return true
+  return kept ? "kept" : "sent"
 }
 
 /** Opens an http(s) URL in a new tab; false for anything else. */
