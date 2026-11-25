@@ -10,7 +10,8 @@ import { toast } from "sonner"
 import { ApiError, fieldMessages, RequestError, validationErrors } from "@/api/http"
 import { i18n, t } from "@/i18n"
 import { sentenceText } from "@/ui/messages"
-import type { FieldMessage } from "@/ui/schema"
+import type { FormIndex } from "@/ui/form-index"
+import type { FieldMessage, ValidationError } from "@/ui/schema"
 
 export type StatusTexts = Partial<Record<number, string>>
 
@@ -95,9 +96,20 @@ export function fieldErrorText(errors: readonly FieldMessage[] | undefined, lang
   return errors?.length ? validationText(errors, language) : undefined
 }
 
-/** The "Some parameters are invalid" toast for rejected or missing values (the fields show them inline). */
-export function toastInvalid(errors: readonly FieldMessage[]): void {
-  toast.error(t("Some parameters are invalid"), { description: validationText(errors) })
+/**
+ * The "Some parameters are invalid" toast for rejected or missing values (the fields show them
+ * inline). Each message is named by its field's label in `index` (the form's), since the field
+ * may be in a closed section; one the form does not show (a script no longer loaded) is the message
+ * alone.
+ */
+export function toastInvalid(errors: readonly ValidationError[], index?: FormIndex): void {
+  const language = i18n.language
+  const lines = errors.map((error) => {
+    const message = validationMessage(error, language)
+    const label = index?.inputs.get(error.owner)?.get(error.param)?.label
+    return label ? t("{{field}}: {{message}}", { field: t(label), message }) : message
+  })
+  toast.error(t("Some parameters are invalid"), { description: [...new Set(lines)].join(" · ") })
 }
 
 /**

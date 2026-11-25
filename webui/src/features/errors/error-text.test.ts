@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest"
-import { ApiError, RequestError } from "@/api/http"
-import { errorText, failureText, renderFailureText, serverText, serviceFailureText, validationText } from "./error-text"
+import { toast } from "sonner"
+import { describe, expect, it, vi } from "vitest"
+import { ApiError, RequestError, validationErrors } from "@/api/http"
+import { tabSchema } from "@/api/mock/fixtures"
+import { buildIndex } from "@/ui/form-index"
+import { tabOwners } from "@/ui/tab"
+import { errorText, failureText, renderFailureText, serverText, serviceFailureText, toastInvalid, validationText } from "./error-text"
 
 const failed = (status: number) => new ApiError(status, `HTTP ${status}`, { detail: "English detail for the logs" })
 
@@ -75,6 +79,22 @@ describe("validationText", () => {
     } finally {
       await i18n.changeLanguage("en")
     }
+  })
+})
+
+// The toast for a refused job listed only the messages ("must be at most 150, got 200"): with the
+// form's sections closed, nothing said which value they were about.
+describe("toastInvalid", () => {
+  it("names the field of each refused value", () => {
+    const failed = vi.spyOn(toast, "error")
+    const refused = new ApiError(422, "HTTP 422", {
+      errors: [
+        { owner: "sampler", param: "steps", message: "must be at most 150, got 200", template: "must be at most {{maximum}}, got {{value}}", params: { maximum: "150", value: "200" } },
+        { owner: "gone", param: "x", message: "the script is not loaded" },
+      ],
+    })
+    toastInvalid(validationErrors(refused)!, buildIndex(tabOwners(tabSchema("txt2img"))))
+    expect(failed).toHaveBeenCalledWith("Some parameters are invalid", { description: "Sampling steps: must be at most 150, got 200 · the script is not loaded" })
   })
 })
 

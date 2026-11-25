@@ -118,7 +118,7 @@ export async function runExtras(): Promise<void> {
     const missing = missingInputs(schema, body)
     if (missing.length > 0) {
       store.getState().setErrors(missing)
-      toastInvalid(missing)
+      toastInvalid(missing, store.getState().index)
       return
     }
     const created = await api.jobs.create(body)
@@ -131,7 +131,7 @@ export async function runExtras(): Promise<void> {
     const errors = validationErrors(error)
     if (errors) {
       store.getState().setErrors(errors)
-      toastInvalid(errors)
+      toastInvalid(errors, store.getState().index)
     } else {
       toast.error(t("Could not queue the job"), { description: errorText(error) })
     }

@@ -85,7 +85,7 @@ export async function saveEdit(tab: FormTab): Promise<boolean> {
   const missing = missingInputs(schema, { core })
   if (missing.length > 0) {
     store.getState().setErrors(missing)
-    toastInvalid(missing)
+    toastInvalid(missing, store.getState().index)
     return false
   }
   useQueueEdit.setState((s) => ({ saving: { ...s.saving, [tab]: true } }))
@@ -101,7 +101,7 @@ export async function saveEdit(tab: FormTab): Promise<boolean> {
     const errors = validationErrors(error)
     if (errors) {
       store.getState().setErrors(errors)
-      toastInvalid(errors)
+      toastInvalid(errors, store.getState().index)
     } else if (error instanceof ApiError && (error.status === 409 || error.status === 404)) {
       cancelEdit(tab)
       toast.error(t("Job #{{seq}} already started or was removed", { seq: session.seq }), {
@@ -153,7 +153,7 @@ async function enqueue(tab: FormTab): Promise<string | null> {
   const missing = missingInputs(schema, request)
   if (missing.length > 0) {
     store.getState().setErrors(missing)
-    toastInvalid(missing)
+    toastInvalid(missing, store.getState().index)
     return null
   }
   try {
@@ -170,7 +170,7 @@ async function enqueue(tab: FormTab): Promise<string | null> {
     const errors = validationErrors(error)
     if (errors) {
       store.getState().setErrors(errors)
-      toastInvalid(errors)
+      toastInvalid(errors, store.getState().index)
     } else {
       toast.error(t("Could not queue the job"), { description: message(error) })
     }

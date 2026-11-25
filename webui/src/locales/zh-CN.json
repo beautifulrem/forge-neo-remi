@@ -1703,5 +1703,6 @@
   "extensions that are already installed": "已安装的扩展",
   "This control failed to render: {{reason}}": "此控件渲染失败：{{reason}}",
   "The dialog could not be shown": "无法显示该对话框",
-  "The image could not be read.": "无法读取该图像。"
+  "The image could not be read.": "无法读取该图像。",
+  "{{field}}: {{message}}": "{{field}}：{{message}}"
 }

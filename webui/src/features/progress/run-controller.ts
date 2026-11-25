@@ -117,7 +117,7 @@ async function submit(tab: GenerateTab, key: string, upscale?: UpscaleSource) {
     if (missing.length > 0) {
       // the server would reject it: mark the fields without sending a request that must fail
       store.getState().setErrors(missing)
-      toastInvalid(missing)
+      toastInvalid(missing, store.getState().index)
       dispatchRun(tab, { type: "rejected", key })
       return
     }
@@ -135,7 +135,7 @@ async function submit(tab: GenerateTab, key: string, upscale?: UpscaleSource) {
     const errors = validationErrors(error)
     if (errors) {
       store.getState().setErrors(errors)
-      toastInvalid(errors)
+      toastInvalid(errors, store.getState().index)
     } else {
       toast.error(t("Could not queue the job"), { description: errorText(error) })
     }
