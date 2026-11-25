@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor } from "@testing-library/react"
+import { act, render, screen, waitFor } from "@testing-library/react"
 import { toast } from "sonner"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { ApiError } from "@/api/http"
@@ -7,11 +7,12 @@ import { queryClient } from "@/api/queries"
 import { NetworksDrawerHost } from "./NetworksDrawerHost"
 import { useNetworksUi } from "./store"
 
-const drawer = vi.hoisted(() => ({ error: new Error("the drawer broke") as Error }))
+const drawer = vi.hoisted(() => ({ error: new Error("the drawer broke") as Error | null }))
 
 vi.mock("./NetworksDrawer", () => ({
   default: () => {
-    throw drawer.error
+    if (drawer.error) throw drawer.error
+    return <p>the drawer</p>
   },
 }))
 
@@ -36,7 +37,26 @@ describe("networks drawer host", () => {
     )
     await waitFor(() => expect(useNetworksUi.getState().drawerOpen).toBe(false))
     expect(screen.getByText("the prompts")).toBeInTheDocument()
-    expect(failed).toHaveBeenCalledWith("The networks panel could not be shown", { description: "the drawer broke" })
+    expect(failed).toHaveBeenCalledWith("The networks panel could not be shown", expect.objectContaining({ description: "the drawer broke" }))
+  })
+
+  // The toast said the panel failed and offered nothing: opening it again meant finding its button.
+  it("offers to open the panel again from the failure toast", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const failed = vi.spyOn(toast, "error")
+    useNetworksUi.setState({ drawerOpen: true })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <NetworksDrawerHost tab="txt2img" />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(failed).toHaveBeenCalled())
+    const action = (failed.mock.calls[0]?.[1] as { action?: { label: string; onClick: () => void } } | undefined)?.action
+    expect(action?.label).toBe("Retry")
+    drawer.error = null
+    act(() => action?.onClick())
+    expect(useNetworksUi.getState().drawerOpen).toBe(true)
+    expect(await screen.findByText("the drawer")).toBeInTheDocument()
   })
 
   // A list the drawer needs failed to load: the toast said the server's English detail.
@@ -50,6 +70,6 @@ describe("networks drawer host", () => {
         <NetworksDrawerHost tab="txt2img" />
       </QueryClientProvider>,
     )
-    await waitFor(() => expect(failed).toHaveBeenCalledWith("The networks panel could not be shown", { description: "The server is busy; try again shortly." }))
+    await waitFor(() => expect(failed).toHaveBeenCalledWith("The networks panel could not be shown", expect.objectContaining({ description: "The server is busy; try again shortly." })))
   })
 })

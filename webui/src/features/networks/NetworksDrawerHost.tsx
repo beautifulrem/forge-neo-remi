@@ -102,7 +102,11 @@ export function NetworksDrawerHost({ tab }: { tab: GenerateTab }) {
           fallback={null}
           onError={(error) => {
             toggle(false)
-            toast.error(t("The networks panel could not be shown"), { description: renderFailureText(error) })
+            toast.error(t("The networks panel could not be shown"), {
+              description: renderFailureText(error),
+              // opening it again loads a chunk that failed afresh (retryFailedLoads below)
+              action: { label: t("Retry"), onClick: () => toggle(true) },
+            })
             // a chunk that failed to load is fetched again when the panel is next opened (closed, it does not render)
             retryFailedLoads()
           }}
