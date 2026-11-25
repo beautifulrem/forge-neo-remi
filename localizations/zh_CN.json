@@ -1069,5 +1069,13 @@
   "a style needs a name": "样式需要名称",
   "unknown Anima preset {{label}}": "未知的 Anima 预设 {{label}}",
   "the metadata file {{file}} cannot be read; saving would replace it, so fix or remove it first": "无法读取元数据文件 {{file}}；保存会覆盖它，请先修复或删除该文件",
-  "{{field}}: {{reason}}": "{{field}}：{{reason}}"
+  "{{field}}: {{reason}}": "{{field}}：{{reason}}",
+  "VGL warning: {{issue}}": "VGL 警告：{{issue}}",
+  "VGL JSON mode expected a JSON object; returning raw text output.": "VGL JSON 模式需要 JSON 对象；已返回原始文本输出。",
+  "Layout warning: {{problem}}": "布局警告：{{problem}}",
+  "Trimmed reference images from {{count}} to {{limit}} (model limit).": "参考图已从 {{count}} 张裁减为 {{limit}} 张（模型上限）。",
+  "row {{row}} has no id": "第 {{row}} 行缺少 id",
+  "duplicate id {{id}}": "重复的 id {{id}}",
+  "{{id}}: boxes must be [y_min, x_min, y_max, x_max] integers on the 0-1000 canvas": "{{id}}：框必须是 0-1000 画布上的 [y_min, x_min, y_max, x_max] 整数",
+  "{{id}} is not cited as <{{id}}> in the caption": "描述中未以 <{{id}}> 引用 {{id}}"
 }

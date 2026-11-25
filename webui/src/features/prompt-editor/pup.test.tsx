@@ -161,6 +161,41 @@ describe("PupTrigger & lazy PupUpsamplerDialog", () => {
     expect("auto" in PUP_FAMILY_LABELS).toBe(false)
   }, 20_000)
 
+  it("shows the upsampler's warnings in the UI language", async () => {
+    const warning = {
+      message: "Layout warning: cat_1 is not cited as <cat_1> in the caption",
+      template: "Layout warning: {{problem}}",
+      params: { problem: "cat_1 is not cited as <cat_1> in the caption", "problem.template": "{{id}} is not cited as <{{id}}> in the caption", "problem.id": "cat_1" },
+    }
+    const answer = { prompt: "a cat", original_prompt: "cat", model_family: "flux3", mode: "t2i_bbox", backend: "openai_vlm", used_reference_count: 0, aspect_ratio: null, layout_rows: null, vgl_json: null }
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ ...answer, warnings: [warning, { message: "VGL JSON mode expected a JSON object; returning raw text output." }] }), { status: 200, headers: { "Content-Type": "application/json" } }))
+    const store = createFormStore("pup-ui-warnings", { persistDrafts: false })
+    store.getState().load(tabOwners(tabSchema("txt2img")))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(keys.app, bootstrapWith({ forge_preset: "flux3", sd_model_checkpoint: "flux3-klein.safetensors" }))
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    i18n.addResource("zh-CN", "server", "Layout warning: {{problem}}", "布局警告：{{problem}}")
+    i18n.addResource("zh-CN", "server", "{{id}} is not cited as <{{id}}> in the caption", "描述中未以 <{{id}}> 引用 {{id}}")
+    i18n.addResource("zh-CN", "server", "VGL JSON mode expected a JSON object; returning raw text output.", "VGL JSON 模式需要 JSON 对象；返回原始文本输出。")
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      render(
+        <QueryClientProvider client={client}>
+          <FormProvider formId="txt2img" store={store}>
+            <PupTrigger value="cat" setValue={vi.fn()} />
+          </FormProvider>
+        </QueryClientProvider>,
+      )
+      fireEvent.click(screen.getByRole("button", { name: zhCN["Upsample prompt (PUP)"] }))
+      const dialog = await screen.findByRole("dialog", {}, { timeout: 15_000 })
+      fireEvent.click(within(dialog).getByRole("button", { name: zhCN["Upsample"] }))
+      expect(await within(dialog).findByText("布局警告：描述中未以 <cat_1> 引用 cat_1")).toBeVisible()
+      expect(within(dialog).getByText("VGL JSON 模式需要 JSON 对象；返回原始文本输出。")).toBeVisible()
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
+  }, 20_000)
+
   it("says why upsampling failed in the UI language, keeping the model's answer", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ detail: "local GGUF PUP execution failed: out of memory" }), { status: 502, headers: { "Content-Type": "application/json" } }),

@@ -247,7 +247,10 @@ def reconcile_boxes(text: str, locked: list[dict]) -> str:
 
 def layout_problems(prompt: str) -> list[str]:
     """What a FLUX.3 layout prompt gets wrong (empty for a plain caption or a well-formed layout):
-    malformed boxes, duplicate ids, and table ids the caption does not cite as ``<id>``."""
+    malformed boxes, duplicate ids, and table ids the caption does not cite as ``<id>``. Each is a
+    :class:`remi.ui.Sentence` the UI translates."""
+
+    from remi.ui import Sentence
 
     caption, rows = split_caption(prompt)
     if rows is None:
@@ -256,17 +259,17 @@ def layout_problems(prompt: str) -> list[str]:
     seen = set()
     for i, row in enumerate(rows):
         if not isinstance(row, dict) or not isinstance(row.get("id"), str):
-            problems.append(f"row {i + 1} has no id")
+            problems.append(Sentence("row {{row}} has no id", row=i + 1))
             continue
         row_id = row["id"]
         if row_id in seen:
-            problems.append(f"duplicate id {row_id}")
+            problems.append(Sentence("duplicate id {{id}}", id=row_id))
         seen.add(row_id)
         boxes = [row[key] for key in ("bbox", "src_bbox", "tgt_bbox") if row.get(key) is not None]
         if not boxes or any(valid_canvas_box(box) is None for box in boxes):
-            problems.append(f"{row_id}: boxes must be [y_min, x_min, y_max, x_max] integers on the 0-1000 canvas")
+            problems.append(Sentence("{{id}}: boxes must be [y_min, x_min, y_max, x_max] integers on the 0-1000 canvas", id=row_id))
         if f"<{row_id}>" not in caption:
-            problems.append(f"{row_id} is not cited as <{row_id}> in the caption")
+            problems.append(Sentence("{{id}} is not cited as <{{id}}> in the caption", id=row_id))
     return problems
 
 

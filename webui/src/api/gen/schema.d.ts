@@ -5100,6 +5100,20 @@ export interface components {
              */
             max_tokens: number;
         };
+        /**
+         * PromptUpsampleWarning
+         * @description English, with the catalog key and values the UI translates (as model advice).
+         */
+        PromptUpsampleWarning: {
+            /** Message */
+            message: string;
+            /** Template */
+            template?: string | null;
+            /** Params */
+            params?: {
+                [key: string]: string | string[];
+            } | null;
+        };
         /** PromptUpsampled */
         PromptUpsampled: {
             /** Prompt */
@@ -5127,7 +5141,7 @@ export interface components {
              * Warnings
              * @default []
              */
-            warnings: string[];
+            warnings: components["schemas"]["PromptUpsampleWarning"][];
         };
         /** PromptUsageRecord */
         PromptUsageRecord: {

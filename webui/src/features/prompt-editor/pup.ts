@@ -6,6 +6,7 @@
 import { MOCK } from "@/api/http"
 import { workbenchRequest } from "@/features/pipelines/workbench-http"
 import type { FormState } from "@/ui/form-store"
+import type { SentenceParams } from "@/ui/schema"
 
 export const PUP_FAMILIES = ["auto", "flux3", "qwen21", "moss", "fibo", "zimage", "ernie", "anima"] as const
 export type PupFamily = (typeof PUP_FAMILIES)[number]
@@ -56,8 +57,11 @@ export type PupResponse = {
   aspect_ratio: string | null
   layout_rows: unknown[] | null
   vgl_json: Record<string, unknown> | null
-  warnings: string[]
+  /** English, with the catalog key and values the UI translates (as model advice). */
+  warnings: PupWarning[]
 }
+
+export type PupWarning = { message: string; template?: string | null; params?: SentenceParams | null }
 
 /** Detects the best PUP model family from the active preset, checkpoint name, or schema capability family. */
 export function detectPupFamily(preset?: string | null, checkpoint?: string | null, capabilityFamily?: string | null): PupFamily {

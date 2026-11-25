@@ -774,3 +774,36 @@ def test_every_value_a_prompt_tool_refuses_has_a_catalog_key():
     missing = [text for text in found if not catalog.get(text)]
     assert missing == []
     assert all(re.findall(r"\{\{(\w+)\}\}", catalog[text]) == re.findall(r"\{\{(\w+)\}\}", text) for text in found)
+
+
+def test_the_upsampler_warnings_are_sentences_the_ui_translates():
+    """The warnings were English text: each is a sentence whose template (and, for a VGL or a
+    layout problem, the template of the problem it names) the catalogs have, and the answer
+    carries them as model advice does (``message``, ``template``, ``params``)."""
+    from remi.ui import Sentence
+
+    vgl = pup.upsample_prompt("product shot", model_family="fibo", config=_openai_cfg(), post=lambda _u, _h, _b: {"choices": [{"message": {"content": '{"short_description": "only one key"}'}}]})
+    raw = pup.upsample_prompt("product shot", model_family="fibo", mode="vgl_json", config=_openai_cfg(), post=lambda _u, _h, _b: {"choices": [{"message": {"content": "Not JSON"}}]})
+    layout = pup.upsample_prompt(
+        "cat on chair",
+        model_family="flux3",
+        bbox_draft=[{"id": "cat_1", "bbox": [0.1, 0.1, 0.5, 0.5], "desc": "cat"}],
+        config=_openai_cfg(),
+        post=lambda _u, _h, _b: {"choices": [{"message": {"content": 'A tabby cat sitting on a chair. [{"id": "cat_1", "bbox": [100, 100, 500, 500], "desc": "cat"}]'}}]},
+    )
+    _uris, _pils, trimmed = pup.prepare_reference_images(["https://example.com/a.png"] * 3, max_references=2)
+    warnings = [*vgl.warnings, *raw.warnings, *layout.warnings, *trimmed]
+    assert warnings and all(isinstance(warning, Sentence) for warning in warnings)
+    assert {warning.template for warning in warnings} == {
+        "VGL warning: {{issue}}",
+        "VGL JSON mode expected a JSON object; returning raw text output.",
+        "Layout warning: {{problem}}",
+        "Trimmed reference images from {{count}} to {{limit}} (model limit).",
+    }
+    assert {warning.params["issue"].template for warning in vgl.warnings} >= {"The VGL prompt lacks the required field '{{field}}'."}
+    assert {warning.params["problem"].template for warning in layout.warnings} == {"{{id}} is not cited as <{{id}}> in the caption"}
+
+    answer = layout.to_dict()["warnings"][0]
+    assert answer["message"] == "Layout warning: cat_1 is not cited as <cat_1> in the caption"
+    assert answer["template"] == "Layout warning: {{problem}}" and answer["params"]["problem.template"] == "{{id}} is not cited as <{{id}}> in the caption"
+    assert raw.to_dict()["warnings"] == [{"message": "VGL JSON mode expected a JSON object; returning raw text output."}]

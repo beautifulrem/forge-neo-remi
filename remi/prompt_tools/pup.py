@@ -42,7 +42,7 @@ from remi.prompt_tools.translate import (
     _http_post,
     generate_prompt,
 )
-from remi.ui.sentence import Sentence
+from remi.ui.sentence import Sentence, sentence_fields
 
 log = logging.getLogger(__name__)
 
@@ -96,7 +96,8 @@ class UpsampleResult:
             "aspect_ratio": self.aspect_ratio,
             "layout_rows": self.layout_rows,
             "vgl_json": self.vgl_json,
-            "warnings": list(self.warnings),
+            # as model advice: English, with the template and params the UI translates
+            "warnings": [{"message": str(warning), **sentence_fields(warning)} for warning in self.warnings],
         }
 
 
@@ -364,7 +365,7 @@ def prepare_reference_images(
     warnings: list[str] = []
     items = list(reference_images)
     if len(items) > max_references:
-        warnings.append(f"Trimmed reference images from {len(items)} to {max_references} (model limit).")
+        warnings.append(Sentence("Trimmed reference images from {{count}} to {{limit}} (model limit).", count=len(items), limit=max_references))
         items = items[:max_references]
 
     num_refs = len(items)
@@ -755,7 +756,7 @@ def upsample_prompt(
         if parsed_rows is not None:
             layout_rows = parsed_rows
             for problem in flux3_layout.layout_problems(upsampled):
-                warnings.append(f"Layout warning: {problem}")
+                warnings.append(Sentence("Layout warning: {{problem}}", problem=problem))
     elif resolved_mode == "vgl_json" or family == "fibo":
         try:
             from backend.nn.fibo import parse_vgl_prompt, validate_vgl_prompt
@@ -765,9 +766,9 @@ def upsample_prompt(
                 vgl_json = parsed_vgl
                 upsampled = json.dumps(parsed_vgl, ensure_ascii=False, indent=2)
                 for issue in validate_vgl_prompt(parsed_vgl):
-                    warnings.append(f"VGL warning: {issue}")
+                    warnings.append(Sentence("VGL warning: {{issue}}", issue=issue))
             elif resolved_mode == "vgl_json":
-                warnings.append("VGL JSON mode expected a JSON object; returning raw text output.")
+                warnings.append(Sentence("VGL JSON mode expected a JSON object; returning raw text output."))
         except Exception:
             pass
 

@@ -15554,6 +15554,55 @@
         ],
         "title": "PromptUpsampleRequest"
       },
+      "PromptUpsampleWarning": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "PromptUpsampleWarning",
+        "description": "English, with the catalog key and values the UI translates (as model advice)."
+      },
       "PromptUpsampled": {
         "properties": {
           "prompt": {
@@ -15619,7 +15668,7 @@
           },
           "warnings": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/PromptUpsampleWarning"
             },
             "type": "array",
             "title": "Warnings",

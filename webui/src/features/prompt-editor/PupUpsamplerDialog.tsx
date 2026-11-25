@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { useForm, useFormState } from "@/ui/hooks"
+import { sentenceText } from "@/ui/messages"
 import { useUploadInfo } from "@/ui/uploads"
 import { diffPromptTokens } from "./diff"
 import {
@@ -298,7 +299,7 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
                   {result.warnings.map((warn, i) => (
                     <div key={i} className="flex items-start gap-1.5">
                       <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                      <span>{warn}</span>
+                      <span>{sentenceText(i18n, warn.message, warn.template, warn.params, i18n.language)}</span>
                     </div>
                   ))}
                 </div>

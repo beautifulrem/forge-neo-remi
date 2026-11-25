@@ -180,6 +180,14 @@ class PromptUpsampleRequest(m.Model):
     max_tokens: int = Field(1024, ge=16, le=8192)
 
 
+class PromptUpsampleWarning(m.Model):
+    """English, with the catalog key and values the UI translates (as model advice)."""
+
+    message: str
+    template: str | None = None
+    params: dict[str, str | list[str]] | None = None
+
+
 class PromptUpsampled(m.Model):
     prompt: str
     original_prompt: str
@@ -190,7 +198,7 @@ class PromptUpsampled(m.Model):
     aspect_ratio: str | None = None
     layout_rows: list[dict[str, Any]] | None = None
     vgl_json: dict[str, Any] | None = None
-    warnings: list[str] = []
+    warnings: list[PromptUpsampleWarning] = []
 
 
 class PromptTranslationKey(m.Model):

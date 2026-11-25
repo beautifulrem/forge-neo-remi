@@ -183,7 +183,7 @@ def job_strings() -> set[str]:
 
 # Model families' workflow advice (the bar above Generate; the notes a job ends with) and why a
 # script does not apply: folders or files
-ADVICE_SOURCES = ("backend/nn", "modules/anima_presets.py")
+ADVICE_SOURCES = ("backend/nn", "modules/anima_presets.py", "remi/prompt_tools/pup.py")
 
 
 def _advice_nodes():
