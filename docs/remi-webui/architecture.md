@@ -502,7 +502,8 @@ client has a bounded event queue and one preview slot.
   Housekeeping (at start, then hourly) prunes uploads and unsaved outputs
   older than `remi_upload_retention_days` (but those that queued jobs,
   unfinished pipelines and saved pipeline templates name) and pipeline
-  stage cache entries as old (a re-run then runs that stage again), and
+  stage cache entries no pipeline reused for as long (a re-run then runs
+  that stage again), and
   indexes the output folders.
 - Pipelines (`remi/jobs/chains.py`): each generation stage is a queued job
   (`meta.chain_id`, `meta.stage_index`); the queue's completion hook moves

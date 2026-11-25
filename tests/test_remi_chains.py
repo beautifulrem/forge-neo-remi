@@ -446,6 +446,36 @@ def test_housekeeping_prunes_old_stage_cache_entries(tmp_path):
             services.close()
 
 
+def test_reusing_a_cached_stage_keeps_it_from_the_prune(tmp_path):
+    """Housekeeping forgets the entries no pipeline used lately, not the
+    ones stored long ago and reused since; a dry-run plan is no use."""
+
+    files = FileStore(tmp_path / "files")
+    jobs = JobStore(tmp_path / "jobs.db")
+    bus = EventBus()
+    state = FakeState()
+    queue = JobQueue(jobs, files, bus, executor=lambda job, ctx: None, dispatch=run_inline, lock=threading.Lock(), validate=lambda *a: None, state=lambda: state, hash_layout=lambda tab: "h")
+    calls = []
+    runner = ChainRunner(ChainStore(jobs), queue, files, bus, upsampler=lambda s, p, o: calls.append(p) or f"{s.core['prompt']}, detailed", model_fingerprint=lambda: "m")
+    store = runner.store
+    try:
+        stages = [StageSpec(kind="prompt_upsample", core={"prompt": "fox"})]
+        first = runner.create_chain(stages)
+        assert runner.wait_idle(5) and store.get_chain(first.id).status == "completed"
+        stage_hash = store.get_chain(first.id).stages[0].stage_hash
+        month_ago = time.time() - 30 * 86400
+        store._db.execute("UPDATE stage_cache SET created = ?", (month_ago,))
+        assert runner.plan_chain(stages)[0]["cache_hit"] and store.get_cached(stage_hash).created == month_ago
+        again = runner.create_chain(stages)
+        assert runner.wait_idle(5) and store.get_chain(again.id).stages[0].status == "cached" and len(calls) == 1
+        assert store.get_cached(stage_hash).created > month_ago
+        assert store.prune_cache(time.time() - 7 * 86400) == 0 and store.get_cached(stage_hash) is not None
+    finally:
+        runner.close()
+        files.close()
+        jobs.close()
+
+
 def test_a_page_of_chains_loads_its_stages_in_one_query(tmp_path):
     with ChainStore(tmp_path / "chains.db") as store:
         made = [store.create_chain([StageSpec(kind="generate", core={"prompt": f"p{i}"}), StageSpec(kind="refine")]) for i in range(5)]

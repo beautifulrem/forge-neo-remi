@@ -181,7 +181,7 @@ class CachedStageOutput:
     output_prompt: str | None
     infotext: str | None
     job_id: str | None
-    created: float
+    created: float  # stored, or last reused by a pipeline
 
 
 def _check_finite(value: Any, path: str) -> None:
@@ -682,9 +682,17 @@ class ChainStore:
                 (stage_hash, kind, json.dumps(list(output_file_ids), ensure_ascii=False), output_prompt, infotext, job_id, time.time()),
             )
 
+    def touch_cached(self, stage_hash: str, when: float) -> None:
+        """A pipeline reused this entry at ``when``: its ``created`` is the
+        last use from now on, so :meth:`prune_cache` keeps the entries in use."""
+
+        with self._lock:
+            self._db.execute("UPDATE stage_cache SET created = ? WHERE stage_hash = ?", (when, stage_hash))
+
     def prune_cache(self, older_than: float) -> int:
-        """Forget the cached stage outputs stored before ``older_than`` (a
-        time); how many went. A pipeline that needs one runs the stage again."""
+        """Forget the cached stage outputs stored or last reused before
+        ``older_than`` (a time); how many went. A pipeline that needs one runs
+        the stage again."""
 
         with self._lock:
             return self._db.execute("DELETE FROM stage_cache WHERE created < ?", (older_than,)).rowcount
@@ -1282,6 +1290,7 @@ class ChainRunner:
         forced = self.store.get_forced(chain_id)
         cached_entry = None if next_stage.index in forced else self.store.get_cached(stage_hash)
         if self._cache_valid(cached_entry) and cached_entry is not None:
+            self.store.touch_cached(stage_hash, now)
             self.store.update_stage(
                 chain_id,
                 next_stage.index,
