@@ -823,7 +823,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Enable/disable extensions (loaded with the next reload) */
+        /** Enable/disable extensions (loaded with the next reload; 409 while the settings are frozen) */
         patch: operations["configure_api_v2_extensions_patch"];
         trace?: never;
     };
@@ -991,7 +991,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Restore the extensions of a backup (each is reset to its recorded commit while the next Reload UI runs; the WebUI checkout is never reset) */
+        /** Restore the extensions of a backup (each is reset to its recorded commit while the next Reload UI runs; the WebUI checkout is never reset; 409 while the settings are frozen) */
         post: operations["restore_config_state_api_v2_extensions_config_states__state_id__restore_post"];
         delete?: never;
         options?: never;
@@ -7853,6 +7853,15 @@ export interface operations {
                     "application/json": components["schemas"]["AdminErrorBody"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminErrorBody"];
+                };
+            };
             /** @description Unprocessable Content */
             422: {
                 headers: {
@@ -8421,6 +8430,15 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

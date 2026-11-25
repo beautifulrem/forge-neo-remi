@@ -2672,7 +2672,7 @@
         }
       },
       "patch": {
-        "summary": "Enable/disable extensions (loaded with the next reload)",
+        "summary": "Enable/disable extensions (loaded with the next reload; 409 while the settings are frozen)",
         "operationId": "configure_api_v2_extensions_patch",
         "requestBody": {
           "content": {
@@ -2717,6 +2717,16 @@
           },
           "422": {
             "description": "Unprocessable Content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -3343,7 +3353,7 @@
     },
     "/api/v2/extensions/config-states/{state_id}/restore": {
       "post": {
-        "summary": "Restore the extensions of a backup (each is reset to its recorded commit while the next Reload UI runs; the WebUI checkout is never reset)",
+        "summary": "Restore the extensions of a backup (each is reset to its recorded commit while the next Reload UI runs; the WebUI checkout is never reset; 409 while the settings are frozen)",
         "operationId": "restore_config_state_api_v2_extensions_config_states__state_id__restore_post",
         "parameters": [
           {
@@ -3406,6 +3416,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
           }
         }
       }

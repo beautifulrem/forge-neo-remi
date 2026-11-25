@@ -485,6 +485,18 @@ def disabled_extensions() -> list[str]:
     return [name for name in setting("disabled_extensions", []) if isinstance(name, str)]
 
 
+def _refuse_frozen(*keys: str) -> None:
+    """409 when a ``--freeze-settings*`` flag keeps one of these settings as
+    it is (the setter would fail an assertion after the checks passed)."""
+
+    from modules import shared
+    from remi.ui.settings import frozen_reason
+
+    for key in keys:
+        if (reason := frozen_reason(shared.opts, key, shared.cmd_opts)) is not None:
+            raise AdminError(reason, status=409)
+
+
 def configure(disabled: Iterable[str] | None = None, disable_all: str | None = None, *, config_filename: str | None = None) -> None:
     """Set which extensions are disabled (the others are enabled) and the
     "disable all" mode; saved to the config file; loaded on the next reload."""
@@ -492,6 +504,7 @@ def configure(disabled: Iterable[str] | None = None, disable_all: str | None = N
     from modules import shared
 
     check_access()
+    _refuse_frozen(*(["disabled_extensions"] if disabled is not None else []), *(["disable_all_extensions"] if disable_all is not None else []))
     known = {ext.name for ext in all_extensions()}
     if disabled is not None:
         disabled = list(dict.fromkeys(disabled))
@@ -635,6 +648,7 @@ def uninstall(name: str) -> None:
     stay loaded until the next reload."""
 
     from modules import extensions, shared
+    from remi.ui.settings import frozen_reason
 
     check_access()
     ext = find(name)
@@ -649,10 +663,11 @@ def uninstall(name: str) -> None:
             shutil.rmtree(path, onexc=_make_writable)
         else:
             shutil.rmtree(path, onerror=_make_writable)
-        if name in (disabled := disabled_extensions()):
+        extensions.extensions[:] = [item for item in extensions.extensions if item.name != name]
+        # its name in the disabled list is harmless where the settings are frozen
+        if name in (disabled := disabled_extensions()) and frozen_reason(shared.opts, "disabled_extensions", shared.cmd_opts) is None:
             shared.opts.disabled_extensions = [item for item in disabled if item != name]
             shared.opts.save(shared.config_filename)
-        extensions.extensions[:] = [item for item in extensions.extensions if item.name != name]
 
 
 # endregion
@@ -981,6 +996,7 @@ def restore_config_state(state_id: str, what: str = "extensions") -> dict[str, A
     check_access()
     if what not in RESTORE_TARGETS:
         raise AdminError("only the extensions of a backup can be restored; the WebUI checkout is never reset from here")
+    _refuse_frozen("restore_config_state_file")
     state = _state(state_id)
     with lock:
         shared.opts.restore_config_state_file = state["filepath"]

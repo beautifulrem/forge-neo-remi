@@ -273,6 +273,35 @@ def test_uninstall_deletes_user_extensions_only(env, monkeypatch):
     assert env.client.delete("/api/v2/extensions/gone").status_code == 404
 
 
+def test_frozen_settings_refuse_extension_changes_but_not_uninstall(env, monkeypatch):
+    from modules import extensions, shared
+
+    one = fake_ext("one", path=env.ext_dir / "one")
+    folder = env.ext_dir / "gone"
+    folder.mkdir()
+    monkeypatch.setattr(extensions, "extensions", [one, fake_ext("gone", path=folder, enabled=False)])
+    saved = env.client.post("/api/v2/extensions/config-states", json={"name": "before"}).json()
+    monkeypatch.setattr(shared.opts, "disabled_extensions", ["gone"], raising=False)
+    config = Path(shared.config_filename)
+    config.write_text('{"disabled_extensions": ["gone"]}', encoding="utf8")
+    monkeypatch.setattr(shared.cmd_opts, "freeze_settings", True)
+
+    response = env.client.patch("/api/v2/extensions", json={"disabled": ["one", "gone"]})
+    assert response.status_code == 409 and response.json()["detail"] == "changing settings is disabled (--freeze-settings)"
+    assert env.client.patch("/api/v2/extensions", json={"disable_all": "extra"}).status_code == 409
+    response = env.client.post(f"/api/v2/extensions/config-states/{saved['id']}/restore", json={"what": "extensions"})
+    assert response.status_code == 409 and response.json()["template"] == "changing settings is disabled (--freeze-settings)"
+    # an uninstall still removes the folder and the list entry; the stale disabled name is harmless
+    assert env.client.delete("/api/v2/extensions/gone").status_code == 204
+    assert not folder.exists() and [item["name"] for item in env.client.get("/api/v2/extensions").json()["items"]] == ["one"]
+    assert config.read_text(encoding="utf8") == '{"disabled_extensions": ["gone"]}'
+    assert not shared.opts.restore_config_state_file and one.enabled
+
+    monkeypatch.setattr(shared.cmd_opts, "freeze_settings", False)
+    monkeypatch.setattr(shared.cmd_opts, "freeze_specific_settings", "disable_all_extensions", raising=False)
+    assert env.client.patch("/api/v2/extensions", json={"disable_all": "extra"}).json()["detail"] == "this setting is frozen"
+
+
 def test_uninstall_refuses_folders_outside_the_extensions_folder(env, monkeypatch):
     from modules import extensions
 

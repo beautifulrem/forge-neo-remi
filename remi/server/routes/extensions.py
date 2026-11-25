@@ -75,7 +75,7 @@ def _configure_and_list(disabled: list[str] | None, disable_all: str | None) -> 
     return admin.listing()
 
 
-@router.patch("/extensions", response_model=m.ExtensionList, responses=ERRORS, summary="Enable/disable extensions (loaded with the next reload)")
+@router.patch("/extensions", response_model=m.ExtensionList, responses={**ERRORS, 409: {"model": m.AdminErrorBody}}, summary="Enable/disable extensions (loaded with the next reload; 409 while the settings are frozen)")
 async def configure(body: m.ExtensionsPatch) -> dict[str, Any]:
     return await run_in_threadpool(_configure_and_list, body.disabled, body.disable_all)
 
@@ -188,8 +188,8 @@ async def delete_config_state(state_id: str) -> Response:
 @router.post(
     "/extensions/config-states/{state_id}/restore",
     response_model=m.RestoreResult,
-    responses=ERRORS,
-    summary="Restore the extensions of a backup (each is reset to its recorded commit while the next Reload UI runs; the WebUI checkout is never reset)",
+    responses={**ERRORS, 409: {"model": m.AdminErrorBody}},
+    summary="Restore the extensions of a backup (each is reset to its recorded commit while the next Reload UI runs; the WebUI checkout is never reset; 409 while the settings are frozen)",
 )
 async def restore_config_state(state_id: str, body: m.ConfigStateRestore) -> dict[str, Any]:
     return await run_in_threadpool(admin.restore_config_state, state_id, body.what)
