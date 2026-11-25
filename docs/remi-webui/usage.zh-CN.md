@@ -234,7 +234,7 @@ docker run --device /dev/kfd --device /dev/dri --group-add video -p 127.0.0.1:78
 
 在 Apple Silicon 上，`REMI_MPS_DEQUANT_CACHE_MB` 设置在步骤之间缓存多少 MiB 反量化后的权重（`0` 关闭缓存）。不设置时，缓存最多占推理所需之外剩余统一内存的四分之一，上限 2 GiB。手动设置的值按原样使用，不受这个上限约束；不是整数的值会被忽略，负数会关闭缓存，两者都会在控制台给出警告。
 
-**已变更的参数。** 仅用于 Gradio 的参数已移除：请把 `--gradio-auth` / `--gradio-auth-path` 改为 `--auth` / `--auth-file`，并删除 `--gradio-debug`、`--gradio-allowed-path` 和 `--no-gradio-queue`。遇到未知参数时 WebUI 会拒绝启动，因此旧的登录参数不会被悄悄忽略。`--share` 仍被接受，但只会输出警告（请改用 `--listen`、反向代理或 `--ngrok`）；`--use-textbox-seed` 不再起作用；`--theme light|dark|system` 是尚未在外观菜单中选择主题的浏览器所用的主题（与以前一样，URL 中的 `?__theme=light` 会选定主题）；`--agent-scheduler-sqlite-file` 告诉队列导入器旧 Agent Scheduler 数据库的位置。不要盲目安装所有 attention 后端；原生 PyTorch attention 往往兼容性最好，详见上游[额外安装说明](https://github.com/Haoming02/sd-webui-forge-classic/wiki/Extra-Installations)。
+**已变更的参数。** 仅用于 Gradio 的参数已移除：请把 `--gradio-auth` / `--gradio-auth-path` 改为 `--auth` / `--auth-file`，并删除 `--gradio-debug`、`--gradio-allowed-path` 和 `--no-gradio-queue`。遇到未知参数时 WebUI 会拒绝启动，因此旧的登录参数不会被悄悄忽略。`--share` 仍被接受，但只会输出警告（请改用 `--listen`、反向代理或 `--ngrok`）；`--use-textbox-seed`、`--ui-config-file`（不再读取 `ui-config.json`）、`--api-log`、`--ngrok-region` 和 `--add-stop-route` 不再起作用；`--theme light|dark|system` 是尚未在外观菜单中选择主题的浏览器所用的主题（与以前一样，URL 中的 `?__theme=light` 会选定主题）；`--agent-scheduler-sqlite-file` 告诉队列导入器旧 Agent Scheduler 数据库的位置。不要盲目安装所有 attention 后端；原生 PyTorch attention 往往兼容性最好，详见上游[额外安装说明](https://github.com/Haoming02/sd-webui-forge-classic/wiki/Extra-Installations)。
 
 ## 数据存储位置
 

@@ -53,3 +53,23 @@ def test_help_with_other_flags_still_exits_cleanly():
 
     assert result.returncode == 0, result.stderr
     assert "--controlnet-loglevel" in result.stdout
+
+
+USAGE = (ROOT / "docs" / "remi-webui" / "usage.md", "**Changed options.**")
+USAGE_ZH = (ROOT / "docs" / "remi-webui" / "usage.zh-CN.md", "**已变更的参数。**")
+
+
+def test_flags_without_effect_say_so_and_the_usage_guide_names_them():
+    from modules.cmd_args import parser
+
+    # nothing reads these any more: --api-log logged /sdapi requests in the Gradio-era API
+    # middleware, --ui-config-file named the Gradio UI's ui-config.json
+    for dest in ("api_log", "ui_config_file"):
+        for folder in ("modules", "modules_forge", "remi", "backend"):
+            for path in (ROOT / folder).rglob("*.py"):
+                assert f"cmd_opts.{dest}" not in path.read_text(encoding="utf-8", errors="replace"), (dest, path)
+    no_effect = sorted(option for action in parser._actions if (action.help or "").startswith("does not do anything") for option in action.option_strings)
+    assert {"--api-log", "--ui-config-file"} <= set(no_effect)
+    for path, heading in (USAGE, USAGE_ZH):
+        paragraph = next(line for line in path.read_text(encoding="utf-8").splitlines() if line.startswith(heading))
+        assert [flag for flag in no_effect if f"`{flag}`" not in paragraph] == [], path.name
