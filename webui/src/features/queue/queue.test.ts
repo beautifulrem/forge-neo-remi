@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { jobEntries } from "./edit-session"
 import { durationOf, formatDuration } from "./queries"
 import { dropTarget, moveIndex, planMove, priorityLabel } from "./reorder"
@@ -67,5 +67,22 @@ describe("queue helpers", () => {
       { owner: "core", values: { prompt: "x" } },
       { owner: "seed", values: { seed: 3 } },
     ])
+  })
+})
+
+describe("removing a job", () => {
+  it("takes a job already gone (a second press, another tab) as removed, without an error", async () => {
+    const { toast } = await import("sonner")
+    const { api } = await import("@/api/endpoints")
+    const { ApiError } = await import("@/api/http")
+    const { removeJob } = await import("./queries")
+    const failed = vi.spyOn(toast, "error").mockImplementation(() => "")
+    vi.spyOn(api.jobs, "remove").mockRejectedValue(new ApiError(404, "no such job"))
+    await removeJob({ id: "j1", status: "completed" } as never)
+    expect(failed).not.toHaveBeenCalled()
+    // any other failure still says so
+    vi.spyOn(api.jobs, "remove").mockRejectedValue(new ApiError(500, "boom"))
+    await removeJob({ id: "j1", status: "completed" } as never)
+    expect(failed).toHaveBeenCalledTimes(1)
   })
 })

@@ -199,4 +199,17 @@ describe("prompt history", () => {
     expect(screen.getByText(/^4 minutes ago/)).toBeInTheDocument()
     expect(list).toHaveBeenCalledTimes(1) // no new data: the time alone moved it on
   }, 20_000)
+
+  it("takes an entry already gone (a second press, another tab) as deleted, without an error", async () => {
+    const { toast } = await import("sonner")
+    const failed = vi.spyOn(toast, "error").mockImplementation(() => "")
+    const item: HistoryItem = { id: "h1", tab: "txt2img", prompt: "a cat", negative_prompt: "", name: "", created: 0, last_used: 0, uses: 1 }
+    const list = vi.spyOn(promptToolsApi.history, "list").mockResolvedValue({ items: [item], next_cursor: null })
+    const remove = vi.spyOn(promptToolsApi.history, "remove").mockRejectedValue(new ApiError(404, "no such history entry"))
+    render(<HistoryPanel {...panelProps("")} />, { wrapper })
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }, { timeout: 15_000 }))
+    await waitFor(() => expect(remove).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2)) // the list is read again
+    expect(failed).not.toHaveBeenCalled()
+  }, 20_000)
 })

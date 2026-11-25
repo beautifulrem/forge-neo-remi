@@ -3,6 +3,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
 import { useProgress } from "@/api/progress"
+import { alreadyGone } from "@/api/http"
 import { keys, queryClient } from "@/api/queries"
 import type { Job, JobsQuery } from "@/api/types"
 import { errorText, type StatusTexts } from "@/features/errors/error-text"
@@ -72,8 +73,9 @@ export function duplicate(job: Job) {
   return act(() => api.jobs.duplicate(job.id), t("Could not duplicate the job"), t("Duplicated"), notReplayable())
 }
 
+/** Cancels a queued job or removes a finished one; one already gone (removed twice) is removed. */
 export function removeJob(job: Job) {
-  return act(() => api.jobs.remove(job.id), job.status === "queued" ? t("Could not cancel the job") : t("Could not remove the job"))
+  return act(() => api.jobs.remove(job.id).catch(alreadyGone), job.status === "queued" ? t("Could not cancel the job") : t("Could not remove the job"))
 }
 
 export function setPriority(job: Job, priority: number) {

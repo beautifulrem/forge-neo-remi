@@ -5,6 +5,7 @@
  */
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query"
 import { formatShortcut } from "@/app/commands"
+import { alreadyGone } from "@/api/http"
 import { Check, ListPlus, Pencil, Star, Trash2 } from "@/components/icons"
 import { type ReactNode, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -90,7 +91,8 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
 
   const remove = async (item: HistoryItem) => {
     try {
-      await promptToolsApi.history.remove(item.id, field)
+      // an entry already gone (deleted twice before the list caught up) is deleted
+      await promptToolsApi.history.remove(item.id, field).catch(alreadyGone)
       await refresh()
     } catch (error) {
       failed(t("Could not update the history"), error)

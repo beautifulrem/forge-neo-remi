@@ -50,6 +50,15 @@ export class RequestError extends TypeError {
   }
 }
 
+/**
+ * For a request that removes something (`.catch(alreadyGone)`): a 404 means it is gone already (a
+ * second press before the list caught up, another tab), which is what was asked, not a failure.
+ * Any other failure is thrown on.
+ */
+export function alreadyGone(error: unknown): void {
+  if (!(error instanceof ApiError && error.status === 404)) throw error
+}
+
 /** The caller gave up on the request (an `AbortSignal`): not a failure to explain. */
 export function isAbort(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError"
