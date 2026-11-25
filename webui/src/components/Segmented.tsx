@@ -31,7 +31,7 @@ export function Segmented<V extends string | number>(props: SegmentedProps<V>) {
       aria-invalid={props["aria-invalid"] || undefined}
       className={cn(
         // equal columns as wide as the longest label (stretched when the group is full width), one row
-        "inline-grid max-w-full auto-cols-fr grid-flow-col items-center gap-0.5 rounded-lg bg-muted p-0.5 data-disabled:opacity-60",
+        "inline-grid max-w-full auto-cols-fr grid-flow-col items-center gap-0.5 rounded-lg bg-muted p-0.5 data-disabled:opacity-60 dark:on-popover:bg-background",
         props.className,
       )}
     >

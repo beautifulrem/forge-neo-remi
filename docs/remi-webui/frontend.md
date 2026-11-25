@@ -448,7 +448,10 @@ generated interfaces (sources: Linear's
   `rounded-md`; dialogs are `rounded-xl` and their flush footer takes the
   same radius. A well inside a dialog or popover (a list box, a layer row)
   is a flat `bg-background` fill with no edge: it sits below the popover in
-  both themes, where `--muted` does not in dark. A native `select` (the
+  both themes, where `--muted` does not in dark. A segmented control's or a
+  tab strip's `--muted` track takes that tone there in the dark theme
+  (`dark:on-popover:bg-background`; `on-popover` is any dialog, alert
+  dialog, popover or sheet). A native `select` (the
   table widgets) draws the Select component's chevron from
   `--select-chevron`, whose hex must equal the theme's `--muted-foreground`
   (`lib/theme.test.ts` checks it), and takes `pr-7` for it; a chip or badge inside a row is `rounded-xs`/`rounded-md`,

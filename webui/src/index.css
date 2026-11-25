@@ -8,6 +8,11 @@
 /* `compact` density, also on <html>. */
 @custom-variant compact (&:is([data-density="compact"] *));
 /*
+ * `on-popover`: inside a surface of the popover tone (dialog, alert dialog, popover, sheet).
+ * A track or well there takes the page tone in the dark theme, where --muted sits level with it.
+ */
+@custom-variant on-popover (&:where([data-slot=dialog-content] *, [data-slot=alert-dialog-content] *, [data-slot=popover-content] *, [data-slot=sheet-content] *));
+/*
  * `touch-only`: no mouse or trackpad (a phone or tablet): keyboard hints
  * ("⌘Enter") are hidden there (src/lib/input-modality.ts is the same test in code).
  */
