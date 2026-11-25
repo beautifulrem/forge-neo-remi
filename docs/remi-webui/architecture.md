@@ -556,6 +556,7 @@ client has a bounded event queue and one preview slot.
 - SPA: `webui/dist` is the router fallback (extension routes win): hashed
   `/assets` cached for a year and sent from the build's precompressed `.br` /
   `.gz` copies when the client accepts them (never as files of their own),
+  other build files cached for an hour (`private` when they need a login),
   `index.html` no-cache and served for client
   routes, with `window.__REMI_ROOT__` and prefixed asset URLs under
   `--subpath`. `launch.py` builds it when missing or when its sources or

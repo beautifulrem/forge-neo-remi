@@ -100,6 +100,25 @@ def test_a_page_load_without_a_login_gets_the_spa_shell(webui, tmp_path):
         assert client.get("/docs", headers={"Accept": "text/html"}).status_code != 401  # (503 here: no docs viewer in this build)
 
 
+def test_build_files_behind_the_login_are_not_cached_by_shared_caches(webui, tmp_path):
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<!doctype html><html><head></head><body></body></html>")
+    (dist / "THIRD-PARTY-NOTICES.txt").write_text("notices")
+    (dist / "favicon.svg").write_text("<svg/>")
+    (dist / "assets" / "app-1a2b.js").write_text("console.log(1)")
+    with server_app(tmp_path / "data", auth=Auth({"ann": "s3cret"}, b"k" * 32), spa_dir=dist) as server:
+        client = server.client
+        assert client.get("/THIRD-PARTY-NOTICES.txt").status_code == 401
+        client.post("/api/v2/auth/login", json={"username": "ann", "password": "s3cret"})
+        notices = client.get("/THIRD-PARTY-NOTICES.txt")
+        assert notices.status_code == 200 and notices.headers["cache-control"].startswith("private"), notices.headers["cache-control"]
+        assert client.get("/favicon.svg").headers["cache-control"].startswith("public")  # reachable without a login
+        assert "immutable" in client.get("/assets/app-1a2b.js").headers["cache-control"]
+    with server_app(tmp_path / "open", spa_dir=dist) as server:  # no login: nothing to keep private
+        assert server.client.get("/THIRD-PARTY-NOTICES.txt").headers["cache-control"].startswith("public")
+
+
 def test_without_a_built_spa_a_page_load_offers_basic_auth(locked):
     page = locked.client.get("/", headers={"Accept": "text/html"})
     assert page.status_code == 401 and page.json() == {"detail": "Not authenticated"}

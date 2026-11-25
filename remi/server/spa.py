@@ -3,7 +3,9 @@ matched (it is the router's fallback, so routes extensions add later win).
 
 Hashed files under ``/assets`` are cached for a year and served from their
 precompressed ``.br`` / ``.gz`` copies (written by the build) when the client
-accepts them (the copies are never served as files of their own); ``index.html`` (also served for client routes) is never cached.
+accepts them (the copies are never served as files of their own); other
+build files for an hour, ``private`` when they need a login; ``index.html``
+(also served for client routes) is never cached.
 Behind ``--subpath`` the shell's absolute asset URLs get the prefix and
 ``window.__REMI_ROOT__`` tells the app where its API lives;
 ``window.__REMI_THEME__`` carries ``--theme`` (the theme of browsers that
@@ -29,7 +31,7 @@ from starlette.datastructures import Headers
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from starlette.types import Receive, Scope, Send
 
-from remi.server.auth import Auth, html_headers, refusal, refuse, route_path
+from remi.server.auth import PUBLIC_PATHS, Auth, html_headers, refusal, refuse, route_path
 
 DIST = Path(__file__).resolve().parents[2] / "webui" / "dist"
 API_PREFIXES = ("/api/", "/sdapi/", "/internal/")
@@ -175,7 +177,9 @@ class Spa:
         file = self._file(path)
         if file is not None:
             if not path.startswith("/assets/"):
-                return FileResponse(file, headers={"Cache-Control": "public, max-age=3600"})
+                # shared caches must not keep a file that needs a login
+                scope = "private" if self.auth.required and not path.startswith(PUBLIC_PATHS) else "public"
+                return FileResponse(file, headers={"Cache-Control": f"{scope}, max-age=3600"})
             headers = {"Cache-Control": IMMUTABLE, "Vary": "Accept-Encoding"}
             accepted = accepted_codings(accept_encoding)
             for coding, suffix in PRECOMPRESSED:
