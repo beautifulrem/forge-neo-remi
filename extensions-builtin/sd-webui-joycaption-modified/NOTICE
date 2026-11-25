@@ -1,0 +1,13 @@
+JoyCaption caption-type prompts and extra options
+Copyright 2024 fpgaminer@bitcoin-mining.com
+Source: https://github.com/fpgaminer/joycaption (gradio-app/app.py)
+License: Apache License 2.0, a copy of which is in LICENSE-APACHE-2.0 next to
+this file
+
+joycaption_lib/prompts.py keeps the caption types and the extra-options list
+of JoyCaption's demo (the fancyfeast/joy-caption-beta-one Space on Hugging
+Face, which states no license; the same prompts are in the repository above)
+and adds its own. The rest of this extension is distributed under the
+repository's GNU AGPL v3.
+
+The JoyCaption model weights are downloaded on first use, not redistributed.

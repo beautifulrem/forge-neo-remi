@@ -15,7 +15,7 @@ from the Gradio UI, security and troubleshooting.
 | [Remi Anima generation and parameter guide](../remi-anima-generation-guide.zh-CN.md) (zh-CN) | choosing and combining the Anima samplers, guidance, spatial and LoRA features |
 | [api.md](api.md) | script and tool authors: REST `/api/v2`, the WebSocket protocol and binary previews, `/sdapi/v1` compatibility, auth, curl and Python examples |
 | [security.md](security.md) | administrators: the threat model, every security control, how to run the server exposed (`--listen`, TLS, proxies), residual risks |
-| [licensing.md](licensing.md) | operators and maintainers: the source offer of AGPL-3.0 section 13 (`--source-url`) |
+| [licensing.md](licensing.md) | operators and maintainers: the source offer of AGPL-3.0 section 13 (`--source-url`); origin, license and third-party code of each built-in extension without a license file of its own |
 | Built-in extension READMEs (`extensions-builtin/*/README.md`) | what each bundled extension does, e.g. [Agent Scheduler (superseded by the Queue)](../../extensions-builtin/agent-scheduler/README.md) and [Prompt Tools](../../extensions-builtin/sd-webui-prompt-all-in-one-neo/README.md) |
 
 ## Developing for Remi

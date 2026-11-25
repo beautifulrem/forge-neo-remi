@@ -1,0 +1,11 @@
+This folder is what is left of the Agent Scheduler extension
+(https://github.com/ArtVentureX/sd-webui-agent-scheduler), which was bundled
+here in its "Agent Scheduler Neo" fork and replaced by the Remi Queue. Its
+README states "This project is licensed under the Apache License 2.0"; the
+repository has no LICENSE or NOTICE file and names no copyright holder. A copy
+of the license is in LICENSE-APACHE-2.0 next to this file.
+
+What remains: preload.py keeps the extension's command line flags
+(--agent-scheduler-sqlite-file from the original preload.py, and
+--agent-scheduler-trust-unsigned-params) so existing launch commands keep
+working; its help texts and README.md were written for Remi.

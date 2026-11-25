@@ -115,4 +115,4 @@ Remi 建立在 [AUTOMATIC1111](https://github.com/AUTOMATIC1111/stable-diffusion
 
 主项目采用 [GNU Affero General Public License v3.0](LICENSE)。内置扩展、vendored 组件及第三方模型权重（例如采用 CC BY-NC 4.0 许可的 Bria Fibo 2.0）均附带各自许可证，使用前请查阅对应目录的 `LICENSE` 文件与模型卡。
 
-网页界面会向用户提供正在运行的服务器的源代码（AGPL-3.0 第 13 条）：登录界面、设置 → 许可证和设置 → 服务器与模型都有链接。如果你运行修改过的副本并让他人通过网络使用，请公开你的源代码，并用 `--source-url` 指向它启动服务器。详见 [docs/remi-webui/licensing.md](docs/remi-webui/licensing.md)。
+网页界面会向用户提供正在运行的服务器的源代码（AGPL-3.0 第 13 条）：登录界面、设置 → 许可证和设置 → 服务器与模型都有链接。如果你运行修改过的副本并让他人通过网络使用，请公开你的源代码，并用 `--source-url` 指向它启动服务器。详见 [docs/remi-webui/licensing.md](docs/remi-webui/licensing.md)，其中也列出了没有自带许可证文件的内置扩展的来源与许可证。
