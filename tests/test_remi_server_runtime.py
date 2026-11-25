@@ -628,4 +628,23 @@ def test_sdapi_infotext_fills_request_fields_and_script_args(webui_tmp):
         assert (request.width, request.height) == (640, 512) and request.cfg_scale == 7  # set by the request: kept
 
 
+def test_sdapi_infotext_sets_the_inpaint_choices_by_their_index(webui_tmp):
+    """Mask mode, Masked content and Inpaint area are written by label; the img2img request
+    takes the index (``inpaint_full_res`` is index 1, "Only masked"). Read as text, "Whole
+    picture" made ``inpaint_full_res`` True and "latent noise" failed ``int()`` and was dropped,
+    so the three had no effect (api.md: the same code as the SPA's paste)."""
+    from modules.api import api, models
+
+    with server_app(webui_tmp):
+        text = "a cat\nSteps: 9, Size: 512x512, Mask mode: Inpaint not masked, Masked content: latent noise, Inpaint area: Whole picture, Masked area padding: 16"
+        request = models.StableDiffusionImg2ImgProcessingAPI(infotext=text)
+        api.Api.apply_infotext(None, request, "img2img", script_runner=scripts.scripts_img2img, mentioned_script_args={})
+        assert (request.inpainting_mask_invert, request.inpainting_fill, request.inpaint_full_res, request.inpaint_full_res_padding) == (1, 2, False, 16)
+        assert request.steps == 9
+        # a field the request sets wins over the infotext
+        request = models.StableDiffusionImg2ImgProcessingAPI(infotext=text, inpainting_fill=1)
+        api.Api.apply_infotext(None, request, "img2img", script_runner=scripts.scripts_img2img, mentioned_script_args={})
+        assert (request.inpainting_fill, request.inpaint_full_res) == (1, False)
+
+
 # endregion

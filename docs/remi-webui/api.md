@@ -391,7 +391,10 @@ What changed underneath, and what it means for clients:
   the same layouts.
 - **Infotext** (`"infotext"` in a txt2img/img2img request) is parsed by the
   same code as the SPA's paste (`remi.core.infotext.parse_infotext`), so it
-  also restores extension parameters; explicit request fields win.
+  also restores extension parameters; explicit request fields win. A choice
+  the infotext names by label fills its request field with what the
+  processing takes: "Inpaint area: Only masked" sets `inpaint_full_res` to
+  1, "Masked content: latent noise" sets `inpainting_fill` to 2.
 - `/sdapi/v1` requests run on the generation lock directly; they are not
   stored in the Remi queue or its history, but they wait for (and block) the
   queue's worker, and `/api/v2/interrupt` stops them.

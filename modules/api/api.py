@@ -386,9 +386,23 @@ class Api:
             except (TypeError, ValueError, OverflowError):  # OverflowError: "Steps: 1e999"
                 pass
 
+        # Remi: the form's values are what the UI shows (a choice's label); a request field takes the
+        # processing argument, which for a choice by index ("Inpaint area: Only masked") is its index
+        from remi.core import forms
+
+        core_nodes = forms.core_layout(tabname, script_runner).by_name
+        arg_ctx = Context()
+
+        def arg(name, value):
+            node = core_nodes.get(name)
+            try:
+                return node.to_arg(value, arg_ctx) if node is not None else value
+            except Exception:  # a value the node refuses: put() sees it as before
+                return value
+
         for name, value in parsed["core"].items():
             if name != "override_settings":
-                put(INFOTEXT_API_FIELDS.get(name, name), value)
+                put(INFOTEXT_API_FIELDS.get(name, name), arg(name, value))
         for owner, names in INFOTEXT_SCRIPT_FIELDS.items():
             for name in names:
                 if name in parsed["scripts"].get(owner, {}):
