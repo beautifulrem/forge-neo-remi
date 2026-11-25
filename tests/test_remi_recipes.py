@@ -273,3 +273,17 @@ def test_an_update_checks_the_family_too(tmp_path):
         with pytest.raises(RecipeError):
             store.update(recipe.id, {"model_family": "f" * 101})
         assert store.update(recipe.id, {"model_family": "  "}).model_family is None
+
+
+def test_a_patch_nested_deeper_than_the_limit_is_refused_not_a_server_error(tmp_path):
+    """The NaN check walked a patch recursively: about a thousand levels (the JSON parser
+    goes deeper) raised RecursionError, a 500."""
+
+    deep: object = 1
+    for _ in range(900):
+        deep = {"a": deep}
+    with webui_state(), server_app(tmp_path) as server:
+        for body in ({"name": "Deep core", "core_patch": {"x": deep}}, {"name": "Deep scripts", "scripts_patch": {"s": {"x": deep}}}):
+            answer = server.client.post("/api/v2/recipes", json=body)
+            assert answer.status_code == 422, answer.text
+        assert server.client.post("/api/v2/recipes", json={"name": "Shallow", "core_patch": {"x": [[{"a": 1}]]}}).status_code == 201

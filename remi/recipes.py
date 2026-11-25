@@ -100,6 +100,18 @@ CREATE INDEX IF NOT EXISTS recipes_updated ON recipes(updated DESC);
 _COLUMNS = "id, name, description, model_family, capabilities, tab, core_patch, scripts_patch, tags, created, updated"
 
 
+def _check_patch(value: dict[str, Any], path: str) -> dict[str, Any]:
+    """A patch without NaN or Infinity, nested no deeper than the settings may
+    be (checked first, without recursion: about a thousand levels, which the
+    JSON parser takes, stopped the recursive check and the response with a 500)."""
+
+    from remi.setting_values import MAX_NESTING, nested_deeper
+
+    if nested_deeper(value, MAX_NESTING):
+        raise RecipeError(f"{path} is nested deeper than {MAX_NESTING} levels")
+    return _check_finite(value, path)
+
+
 def _check_finite(value: Any, path: str) -> Any:
     if isinstance(value, float) and not math.isfinite(value):
         raise RecipeError(f"{path} must not contain NaN or Infinity")
@@ -158,7 +170,7 @@ def _clean_core_patch(patch: Any) -> dict[str, Any]:
         return {}
     if not isinstance(patch, Mapping):
         raise RecipeError("core_patch must be an object")
-    return _check_finite(dict(patch), "core_patch")
+    return _check_patch(dict(patch), "core_patch")
 
 
 def _clean_scripts_patch(patch: Any) -> dict[str, dict[str, Any]]:
@@ -172,7 +184,7 @@ def _clean_scripts_patch(patch: Any) -> dict[str, dict[str, Any]]:
             raise RecipeError("scripts_patch keys must be non-empty script ids")
         if not isinstance(values, Mapping):
             raise RecipeError(f"scripts_patch[{script_id!r}] must be an object")
-        cleaned[script_id.strip()] = _check_finite(dict(values), f"scripts_patch.{script_id}")
+        cleaned[script_id.strip()] = _check_patch(dict(values), f"scripts_patch.{script_id}")
     return cleaned
 
 
