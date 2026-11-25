@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider, useSuspenseQuery } from "@tanstack/re
 import { fireEvent, render, screen } from "@testing-library/react"
 import { Suspense } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { ApiError } from "@/api/http"
+import { ApiError, RequestError } from "@/api/http"
 import { ErrorBoundary } from "./ErrorBoundary"
 
 function Schema({ load }: { load: () => Promise<string> }) {
@@ -39,7 +39,7 @@ describe("error boundary", () => {
 
   it("asks again when the page is shown again", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    const load = vi.fn<() => Promise<string>>().mockRejectedValueOnce(new Error("The server is busy")).mockResolvedValue("the schema")
+    const load = vi.fn<() => Promise<string>>().mockRejectedValueOnce(new ApiError(503, "The server is busy")).mockResolvedValue("the schema")
     const client = new QueryClient()
     const page = (key: string, shown: boolean) => (
       <QueryClientProvider client={client}>
@@ -115,5 +115,43 @@ describe("error boundary", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("This control failed to render: The server ran into an error (500).")
     expect(screen.queryByText(/Internal server error/)).toBeNull()
     client.clear()
+  })
+
+  // A boundary mounted with an error already caught fetched once more (a load that failed before,
+  // the More sheet opened again), but did so for any error: a render bug rendered, threw and was
+  // logged twice. Only a request is asked again.
+  it("renders a broken control once when it mounts", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const onError = vi.fn()
+    function Broken(): never {
+      throw new Error("undefined is not a function")
+    }
+    render(
+      <ErrorBoundary onError={onError}>
+        <Broken />
+      </ErrorBoundary>,
+    )
+    expect(screen.getByRole("alert")).toHaveTextContent("undefined is not a function")
+    expect(onError).toHaveBeenCalledTimes(1)
+  })
+
+  it("asks again on mount for a load that got no answer", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    // the chunk is reachable again once the failure has been caught
+    let reachable = false
+    const onError = vi.fn(() => {
+      reachable = true
+    })
+    function Chunk() {
+      if (!reachable) throw new RequestError(new TypeError("Failed to fetch"))
+      return <p>the panel</p>
+    }
+    render(
+      <ErrorBoundary onError={onError}>
+        <Chunk />
+      </ErrorBoundary>,
+    )
+    expect(screen.getByText("the panel")).toBeInTheDocument()
+    expect(onError).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,6 +1,7 @@
 import { QueryErrorResetBoundary } from "@tanstack/react-query"
 import { TriangleAlert } from "@/components/icons"
 import { Component, type ErrorInfo, type ReactNode } from "react"
+import { ApiError, RequestError } from "@/api/http"
 import { Button } from "@/components/ui/button"
 import { renderFailureText } from "@/features/errors/error-text"
 import { t } from "@/i18n"
@@ -21,10 +22,19 @@ type Props = {
 type State = { error: Error | null; resetKey: unknown }
 
 /**
+ * A request that failed (answered or not): asking again may work. A render bug would only throw
+ * again, so the boundary does not render it again by itself (only "Try again" does).
+ */
+function isRequest(error: Error | null): boolean {
+  return error instanceof ApiError || error instanceof RequestError
+}
+
+/**
  * Catches a render error below it and offers to try again. A suspense query
  * that threw is fetched again on its next mount only once its error boundary
  * is reset (TanStack Query): each boundary has its own, reset on every retry
- * ("Try again", coming back to the page, the browser back online).
+ * ("Try again", the browser back online, and for a failed request also coming
+ * back to the page or the boundary mounting with it).
  */
 export function ErrorBoundary(props: Props) {
   return <QueryErrorResetBoundary>{({ reset }) => <Boundary {...props} onRetry={reset} />}</QueryErrorResetBoundary>
@@ -49,12 +59,12 @@ class Boundary extends Component<Props & { onRetry: () => void }, State> {
   componentDidMount() {
     window.addEventListener("online", this.retry)
     // mounted on a load that failed before (the More sheet opened again): fetch it once more
-    if (this.state.error) this.retry()
+    if (isRequest(this.state.error)) this.retry()
   }
 
   componentDidUpdate(previous: Props) {
     // back on a page whose load failed (the route key changed): fetch it once more
-    if (previous.resetKey !== this.props.resetKey && this.state.error) this.retry()
+    if (previous.resetKey !== this.props.resetKey && isRequest(this.state.error)) this.retry()
   }
 
   componentWillUnmount() {
