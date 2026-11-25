@@ -664,6 +664,25 @@ test("a dialog fits a phone held sideways and scrolls inside", async ({ page }) 
   expect(hit).toBe(true)
 })
 
+// A wide dialog was centred on the window, not on its safe area: with the notch on one side only
+// (left 59, right 0) the shortcuts dialog, narrowed by both insets, sat 45 px from the left edge,
+// under the notch, and 16 + 59 px from the right one.
+test("a wide dialog keeps clear of a notch on one side", async ({ page }) => {
+  const size = { width: 844, height: 390 }
+  const insets = { top: 0, left: 59, bottom: 0, right: 0 }
+  await page.setViewportSize(size)
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send("Emulation.setSafeAreaInsetsOverride" as never, { insets } as never)
+  await openGenerate(page)
+  await page.locator("body").press("?")
+  const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" })
+  await expect(dialog.getByRole("button", { name: "Close" })).toBeVisible()
+  await page.waitForTimeout(300) // the opening zoom
+  const box = (await dialog.boundingBox())!
+  expect(Math.round(box.x), "its left edge: past the notch and the 1rem gutter").toBeGreaterThanOrEqual(insets.left + 16)
+  expect(Math.round(box.x + box.width), "its right edge").toBeLessThanOrEqual(size.width - insets.right - 16)
+})
+
 // A popover taller than the room beside its trigger ran off the window: held sideways (844×390),
 // the VAE / Text encoders picker had its title and search above the top edge, out of reach.
 test("a popover fits a phone held sideways and scrolls inside", async ({ page }) => {

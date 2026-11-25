@@ -368,7 +368,9 @@ imperatively).
   sheet and the settings sections at the bottom and their open sides; the
   More sheet, shown on a phone only, at the bottom), and a centred dialog subtracts the insets from any size it
   takes from the viewport (the base dialog and alert dialog, `96vw`,
-  `90dvh`; the command dialog's room below its top). The nav rail pads its
+  `90dvh`; the command dialog's room below its top) and the base dialog and
+  alert dialog centre on the safe area, not the window (moved by half the
+  difference of the opposite insets: a notch on one side only). The nav rail pads its
   bottom for the home indicator, and a bar pinned to the bottom of a page
   (the gallery's selection bar) stands clear of it from `md` (below, the
   phone's bottom bar already keeps that room under the page). What positions itself
