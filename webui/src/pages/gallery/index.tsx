@@ -130,8 +130,11 @@ export default function GalleryPage() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return
       const target = event.target instanceof Element ? event.target : null
-      if (target?.closest("input, textarea, [contenteditable], [role=dialog]")) return
+      // a field, a dialog (the delete confirmation is an alertdialog), or a menu or list popup has
+      // these keys to itself: Escape closes it, Delete and Mod+A act inside it
+      if (target?.closest("input, textarea, [contenteditable], [role=dialog], [role=alertdialog], [role=menu], [role=listbox]")) return
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a" && order.length > 0) {
         event.preventDefault()
         setSelection(selectAll(order))

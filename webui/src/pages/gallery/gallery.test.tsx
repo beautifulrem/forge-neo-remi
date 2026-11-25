@@ -27,10 +27,11 @@ const item = (index: number, extra: Partial<GalleryItem> = {}): GalleryItem => (
   ...extra,
 })
 
-function mockServer(items: GalleryItem[]) {
+function mockServer(items: GalleryItem[], boards: unknown[] = []) {
   const calls: Call[] = []
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-    const request = input as Request
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    // the typed client sends a Request; the boards client a URL and its init
+    const request = typeof input === "string" ? new Request(new URL(input, location.origin), init) : (input as Request)
     const url = new URL(request.url)
     const path = url.pathname.replace("/api/v2", "")
     const text = request.method === "GET" ? "" : await request.text()
@@ -40,6 +41,7 @@ function mockServer(items: GalleryItem[]) {
     else if (path === "/gallery/facets")
       data = { models: [{ name: "anima", count: items.length }], categories: [{ name: "txt2img", count: items.length }], oldest: null, newest: null, total: items.length, starred: 0 }
     else if (path === "/gallery/star" || path === "/gallery/delete") data = { count: 1 }
+    else if (path === "/boards") data = boards
     return new Response(JSON.stringify(data), { status: 200, headers: { "Content-Type": "application/json" } })
   })
   return calls
@@ -117,6 +119,39 @@ describe("gallery page", { timeout: 20_000 }, () => {
     fireEvent.click(await screen.findByRole("checkbox", { name: "Select 00002.png" }))
     fireEvent.keyDown(window, { key })
     expect(await screen.findByRole("alertdialog")).toHaveTextContent("Remove this image?")
+  })
+
+  // The menu's own keys: Escape closed the menu and cleared the selection, Delete asked to remove it
+  it("leaves the selection to a menu's Escape and Delete", async () => {
+    const board = { id: "b1", name: "Portraits", description: "", item_count: 2, cover_file_id: null, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" }
+    mockServer([item(1), item(2)], [board])
+    useGalleryView.setState({ boardId: "b1" })
+    try {
+      renderPage()
+      fireEvent.click(await screen.findByRole("checkbox", { name: "Select 00001.png" }))
+      fireEvent.click(await screen.findByRole("button", { name: "Board actions" }))
+      const menu = await screen.findByRole("menu")
+      const entry = within(menu).getAllByRole("menuitem")[0]!
+      fireEvent.keyDown(entry, { key: "Delete" })
+      expect(screen.queryByRole("alertdialog")).toBeNull()
+      fireEvent.keyDown(entry, { key: "Escape" })
+      expect(screen.getByRole("toolbar", { name: "Selected images", hidden: true })).toHaveTextContent("1 selected")
+    } finally {
+      useGalleryView.setState({ boardId: null })
+    }
+  })
+
+  it("leaves the selection alone while the delete confirmation is open", async () => {
+    mockServer([item(1), item(2), item(3)])
+    renderPage()
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select 00001.png" }))
+    fireEvent.keyDown(window, { key: "Delete" })
+    const dialog = await screen.findByRole("alertdialog")
+    const cancel = within(dialog).getByRole("button", { name: "Cancel" })
+    fireEvent.keyDown(cancel, { key: "a", ctrlKey: true })
+    fireEvent.keyDown(cancel, { key: "Backspace" })
+    expect(dialog).toHaveTextContent("Remove this image?")
+    expect(screen.getByRole("toolbar", { name: "Selected images", hidden: true })).toHaveTextContent("1 selected")
   })
 
   it("is one tab stop moved with the arrow keys; Space selects, F stars", async () => {
