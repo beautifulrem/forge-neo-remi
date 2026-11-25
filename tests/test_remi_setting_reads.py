@@ -8,10 +8,10 @@ LoRA list with a multiplier of ``10**400``, the gallery's Save, the Detail
 Daemon form). ``setting()`` reads the value as the kind of its default, within
 its slider's range and among its fixed choices.
 
-The scope is Remi's own package, ``remi/``: the routes, services and forms of
-the WebUI. Upstream code and the third-party extensions bundled with Remi keep
-their reads; the server's start (``repair()``) leaves them values of their
-kind.
+The scope is Remi's own code: the package ``remi/`` (the routes, services and
+forms of the WebUI) and the extensions Remi wrote (their tests aside). Upstream
+code and the third-party extensions bundled with Remi keep their reads; the
+server's start (``repair()``) leaves them values of their kind.
 
 The guard flags every read of ``shared.opts`` (a name bound to it,
 ``shared.opts`` under any name the file gives the module, ``modules.shared.opts``,
@@ -29,7 +29,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCOPE = ROOT / "remi"
+SCOPES = (
+    ROOT / "remi",
+    # extensions Remi wrote: the Hires guard rounds to the grid processing's sRound reads with setting()
+    ROOT / "extensions-builtin" / "sd_forge_anima_hires_guard",
+    ROOT / "extensions-builtin" / "sd-postprocess-suite",
+)
 IMPLEMENTATION = {"remi/setting_values.py"}
 
 OPTIONS_MEMBERS = {
@@ -179,9 +184,9 @@ def reads(path: Path) -> list[tuple[int, str, str]]:
 
 def direct_reads() -> list[str]:
     found = []
-    for path in sorted(SCOPE.rglob("*.py")):
+    for path in sorted(path for scope in SCOPES for path in scope.rglob("*.py")):
         relative = path.relative_to(ROOT).as_posix()
-        if relative in IMPLEMENTATION:
+        if relative in IMPLEMENTATION or "tests" in path.relative_to(ROOT).parts[1:]:
             continue
         for line, function, what in reads(path):
             if (relative, function) not in RAW:

@@ -474,10 +474,11 @@ class PostProcessSuite(scripts.Script):
         if not init_images:
             return
         try:
-            from modules import images, shared
+            from modules import images
+            from remi.setting_values import setting
             new_images = []
             for img in init_images:
-                flat = images.flatten(img, shared.opts.img2img_background_color)
+                flat = images.flatten(img, setting("img2img_background_color", "#808080"))
                 if not keep_size:
                     flat = images.resize_image(p.resize_mode, flat, p.width, p.height)
                 processed = P.run_pipeline(flat, list(args))

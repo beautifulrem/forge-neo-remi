@@ -11,6 +11,7 @@ from lib_anima_hires import BALANCED, GuardLimits, guard_dimensions
 from modules import script_callbacks, scripts, shared
 from modules.anima_support import is_anima_engine, require_finite, table_params
 from remi import ui
+from remi.setting_values import setting
 
 logger = logging.getLogger("AnimaHiresGuard")
 setup_logger(logger)
@@ -38,9 +39,10 @@ def _is_anima(process) -> bool:
 
 
 def _forge_resolution_step() -> int:
-    """The grid Forge rounds every Hires target to (processing's ``sRound``)."""
+    """The grid Forge rounds every Hires target to (processing's ``sRound``,
+    which reads the setting the same way: one of its choices, else 64)."""
 
-    return max(1, int(getattr(shared.opts, "res_step", 64) or 64))
+    return max(1, int(setting("res_step", 64, opts=shared.opts)))
 
 
 # (preset control name, infotext key) of each script argument, in order
@@ -117,7 +119,7 @@ class AnimaHiresGuardScript(scripts.Script):
         require_finite(self.title(), base_mp=base_mp, hires_mp=hires_mp, max_upscale=max_upscale)
         if not enabled or not _is_anima(process):
             return
-        if getattr(process, "enable_hr", False) and getattr(shared.opts, "use_old_hires_fix_width_height", False):
+        if getattr(process, "enable_hr", False) and setting("use_old_hires_fix_width_height", False, opts=shared.opts):
             # Width/height are then the final hires size and processing
             # derives the first pass (and hr_resize_x/y) from them later.
             reason = "skipped: the legacy hires width/height setting is on"
