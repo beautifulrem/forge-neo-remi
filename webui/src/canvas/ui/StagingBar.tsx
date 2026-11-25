@@ -4,7 +4,7 @@
  * comparison, and Accept as new base layer (`--glow` CTA) or Discard without
  * losing zoom/pan.
  */
-import { Check, ChevronLeft, ChevronRight, Columns2, Eye, EyeOff, Trash2, X } from "@/components/icons"
+import { Check, ChevronLeft, ChevronRight, Columns2, Eye, Trash2, X } from "@/components/icons"
 import { useEffect, useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
@@ -133,7 +133,8 @@ export function StagingBar({
         onClick={() => onCompareOriginalChange(!session.compareOriginal)}
         disabled={busy}
       >
-        {session.compareOriginal ? <EyeOff /> : <Eye />}
+        {/* the label says what it does and the pressed tint that it is on: EyeOff read as "hide" */}
+        <Eye />
       </IconButton>
 
       <IconButton label={t("Split compare")} pressed={session.splitCompare} onClick={onToggleSplit} disabled={busy}>

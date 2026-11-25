@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useProgress } from "@/api/progress"
+import { Eye } from "@/components/icons"
 import { MAX_STAGED_CANDIDATES, requestStagingFocus, takeStagingFocus, useCanvasStaging, wireImg2imgStaging } from "./staging"
 import { StagingBar } from "../ui/StagingBar"
 
@@ -118,6 +119,21 @@ describe("canvas in-place staging store", () => {
     expect(toggle).toHaveAttribute("aria-pressed", "false")
     fireEvent.click(toggle)
     expect(handlers.onCompareOriginalChange).toHaveBeenCalledWith(true)
+  })
+
+  // Showing the original, the button wore EyeOff ("hide"), the opposite of what it was doing: the
+  // label stays "Show the original" and the pressed tint says it is on, so the glyph stays the eye.
+  it("shows the eye on the original toggle whether it is on or off", () => {
+    const eye = render(<Eye />).container.querySelector("svg")!.innerHTML
+    const handlers = { onPrev: vi.fn(), onNext: vi.fn(), onSelect: vi.fn(), onOpacityChange: vi.fn(), onCompareOriginalChange: vi.fn(), onToggleSplit: vi.fn(), onAccept: vi.fn(), onDiscardCurrent: vi.fn(), onDiscardAll: vi.fn() }
+    for (const compareOriginal of [false, true]) {
+      const session = { candidates: [{ fileId: "cand-1" }], index: 0, opacity: 0.8, compareOriginal, splitCompare: false, splitPosition: 0.5 }
+      const view = render(<StagingBar session={session} docKey="img2img" {...handlers} />)
+      const toggle = screen.getByRole("button", { name: "Show the original" })
+      expect(toggle).toHaveAttribute("aria-pressed", String(compareOriginal))
+      expect(toggle.querySelector("svg")!.innerHTML, `pressed: ${compareOriginal}`).toBe(eye)
+      view.unmount()
+    }
   })
 
   it("takes the focus when staged by a button that goes away, and only then", () => {
