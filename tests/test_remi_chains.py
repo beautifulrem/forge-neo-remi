@@ -441,3 +441,17 @@ def test_housekeeping_prunes_old_stage_cache_entries(tmp_path):
             assert store.prune_cache(time.time() + 1) == 1 and store.get_cached("new") is None
         finally:
             services.close()
+
+
+def test_a_page_of_chains_loads_its_stages_in_one_query(tmp_path):
+    with ChainStore(tmp_path / "chains.db") as store:
+        made = [store.create_chain([StageSpec(kind="generate", core={"prompt": f"p{i}"}), StageSpec(kind="refine")]) for i in range(5)]
+        singly = {chain.id: store.get_chain(chain.id) for chain in made}
+        statements: list[str] = []
+        store._db.set_trace_callback(statements.append)
+        try:
+            items, _cursor, total = store.list_chains(limit=50)
+        finally:
+            store._db.set_trace_callback(None)
+        assert total == 5 and {chain.id: chain for chain in items} == singly
+        assert len([sql for sql in statements if "FROM stage_runs" in sql]) == 1

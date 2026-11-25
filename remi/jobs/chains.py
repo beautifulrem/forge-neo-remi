@@ -351,19 +351,23 @@ class ChainStore:
                 ),
             )
 
-    def _load_stages(self, chain_id: str) -> list[StageRun]:
+    def _load_stages(self, chain_ids: Sequence[str]) -> dict[str, list[StageRun]]:
+        """The stages of each chain (one query for a page of chains)."""
+
+        stages: dict[str, list[StageRun]] = {chain_id: [] for chain_id in chain_ids}
+        if not stages:
+            return stages
         rows = self._db.execute(
-            """
+            f"""
             SELECT chain_id, stage_index, kind, name, enabled, tab, core, scripts, config,
                    status, stage_hash, cached, job_id, output_file_ids, output_prompt,
                    infotext, error, started, finished
-            FROM stage_runs WHERE chain_id = ? ORDER BY stage_index ASC
+            FROM stage_runs WHERE chain_id IN ({",".join("?" * len(stages))}) ORDER BY chain_id, stage_index ASC
             """,
-            (chain_id,),
+            list(stages),
         ).fetchall()
-        stages: list[StageRun] = []
         for row in rows:
-            stages.append(
+            stages[row[0]].append(
                 StageRun(
                     chain_id=row[0],
                     index=int(row[1]),
@@ -388,10 +392,9 @@ class ChainStore:
             )
         return stages
 
-    def _row_to_chain(self, row: tuple[Any, ...]) -> JobChain:
-        chain_id = row[0]
+    def _row_to_chain(self, row: tuple[Any, ...], stages: list[StageRun]) -> JobChain:
         return JobChain(
-            id=chain_id,
+            id=row[0],
             name=row[1],
             status=row[2],
             current_stage=int(row[3]),
@@ -403,7 +406,7 @@ class ChainStore:
             updated=float(row[9]),
             started=row[10],
             finished=row[11],
-            stages=self._load_stages(chain_id),
+            stages=stages,
         )
 
     def create_chain(
@@ -442,7 +445,7 @@ class ChainStore:
                 "SELECT id, name, status, current_stage, priority, user, model_fingerprint, error, created, updated, started, finished FROM chains WHERE id = ?",
                 (chain_id,),
             ).fetchone()
-            return self._row_to_chain(row) if row is not None else None
+            return self._row_to_chain(row, self._load_stages([chain_id])[chain_id]) if row is not None else None
 
     def list_chains(self, *, status: str | None = None, cursor: str | None = None, limit: int = 50) -> tuple[list[JobChain], str | None, int]:
         where = ["1=1"]
@@ -471,7 +474,8 @@ class ChainStore:
                 f"SELECT id, name, status, current_stage, priority, user, model_fingerprint, error, created, updated, started, finished FROM chains WHERE {page_where} ORDER BY created DESC, id DESC LIMIT ?",
                 [*page_args, limit + 1],
             ).fetchall()
-            items = [self._row_to_chain(row) for row in rows[:limit]]
+            stages = self._load_stages([row[0] for row in rows[:limit]])
+            items = [self._row_to_chain(row, stages[row[0]]) for row in rows[:limit]]
         next_cursor = encode_cursor(repr(items[-1].created), items[-1].id) if len(rows) > limit and items else None
         return items, next_cursor, int(total)
 
