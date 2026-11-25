@@ -609,19 +609,13 @@ def test_translate_http_post_and_provider_error_paths(monkeypatch):
     # _http_post success, RequestException, HTTP 500, and non-JSON
     import requests
 
-    class FakeResp:
-        def __init__(self, status_code: int, payload=None, text: str = "", json_err: bool = False):
-            self.status_code = status_code
-            self._payload = payload
-            self.text = text
-            self._json_err = json_err
+    def answer(status_code: int, body: bytes):
+        response = requests.models.Response()
+        response.status_code = status_code
+        response.raw = io.BytesIO(body)
+        return response
 
-        def json(self):
-            if self._json_err:
-                raise ValueError("not json")
-            return self._payload
-
-    monkeypatch.setattr(requests, "post", lambda *_a, **_kw: FakeResp(200, {"ok": True}))
+    monkeypatch.setattr(requests, "post", lambda *_a, **_kw: answer(200, b'{"ok": true}'))
     assert _http_post("http://x", {}, {}) == {"ok": True}
 
     def raise_req(*_a, **_kw):
@@ -631,13 +625,50 @@ def test_translate_http_post_and_provider_error_paths(monkeypatch):
     with pytest.raises(TranslationError, match="unreachable"):
         _http_post("http://x", {}, {})
 
-    monkeypatch.setattr(requests, "post", lambda *_a, **_kw: FakeResp(500, text="server error"))
-    with pytest.raises(TranslationError, match="answered 500"):
+    monkeypatch.setattr(requests, "post", lambda *_a, **_kw: answer(500, b"server error"))
+    with pytest.raises(TranslationError, match="answered 500: server error"):
         _http_post("http://x", {}, {})
 
-    monkeypatch.setattr(requests, "post", lambda *_a, **_kw: FakeResp(200, json_err=True))
+    monkeypatch.setattr(requests, "post", lambda *_a, **_kw: answer(200, b"<html>"))
     with pytest.raises(TranslationError, match="sent no JSON"):
         _http_post("http://x", {}, {})
+
+
+def test_a_provider_answer_is_read_up_to_a_limit(monkeypatch):
+    """A misbehaving endpoint must not fill the server's memory: the answer is
+    streamed and refused past 4 MB, and an error page is read only as far as it is shown."""
+
+    import requests
+
+    read: list[int] = []
+    sent: dict[str, object] = {}
+
+    class Body(io.BytesIO):
+        def read(self, size=-1):
+            data = super().read(size)
+            read.append(len(data))
+            return data
+
+    def post(*_args, **kwargs):
+        sent.update(kwargs)
+        response = requests.models.Response()
+        response.status_code = post.status
+        response.raw = Body(b'{"a": "' + b"x" * (5 * 1024 * 1024) + b'"}')
+        post.responses.append(response)
+        return response
+
+    post.responses = []
+    post.status = 200
+    monkeypatch.setattr(requests, "post", post)
+    with pytest.raises(TranslationError, match="larger than 4 MB") as too_large:
+        _http_post("http://x", {}, {})
+    assert too_large.value.status == 502 and sent["stream"] is True
+    assert sum(read) <= 4 * 1024 * 1024 + 64 * 1024 and post.responses[-1].raw.closed
+    read.clear()
+    post.status = 500
+    with pytest.raises(TranslationError, match="answered 500"):
+        _http_post("http://x", {}, {})
+    assert sum(read) <= 64 * 1024
 
 
 def test_a_reference_image_over_the_pixel_limit_is_refused_before_decoding(monkeypatch):

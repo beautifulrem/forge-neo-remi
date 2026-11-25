@@ -31,6 +31,8 @@ NETWORK_PROVIDERS = ("libretranslate", "openai", "deepl")
 MAX_TEXTS = 200
 MAX_CHARS = 20_000
 TIMEOUT = (5, 60)
+MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+"""what is read of a provider's answer (a long prompt and its JSON envelope fit well within)"""
 CJK_RE = re.compile(r"[぀-ヿ㐀-䶿一-鿿가-힯豈-﫿]")
 
 
@@ -80,17 +82,33 @@ Post = Callable[[str, Mapping[str, str], Any], Any]
 """``(url, headers, json body) -> decoded JSON`` (tests replace it)."""
 
 
+def _read_up_to(response: Any, limit: int) -> tuple[bytes, bool]:
+    """At most ``limit`` bytes of a streamed answer; True when there was more."""
+
+    body = bytearray()
+    for chunk in response.iter_content(chunk_size=64 * 1024):
+        body += chunk
+        if len(body) > limit:
+            return bytes(body[:limit]), True
+    return bytes(body), False
+
+
 def _http_post(url: str, headers: Mapping[str, str], body: Any) -> Any:
     import requests
 
     try:
-        response = requests.post(url, headers=dict(headers), json=body, timeout=TIMEOUT)
+        # streamed, so an endpoint that answers without end cannot fill the memory
+        with requests.post(url, headers=dict(headers), json=body, timeout=TIMEOUT, stream=True) as response:
+            if response.status_code >= 400:
+                head, _more = _read_up_to(response, 1024)
+                raise TranslationError(f"translation service answered {response.status_code}: {head.decode('utf-8', 'replace')[:200]}")
+            content, too_large = _read_up_to(response, MAX_RESPONSE_BYTES)
     except requests.RequestException as error:
         raise TranslationError(f"translation service unreachable: {error}") from error
-    if response.status_code >= 400:
-        raise TranslationError(f"translation service answered {response.status_code}: {response.text[:200]}")
+    if too_large:
+        raise TranslationError(f"the translation service's answer is larger than {MAX_RESPONSE_BYTES // (1024 * 1024)} MB")
     try:
-        return response.json()
+        return json.loads(content)
     except ValueError as error:
         raise TranslationError("translation service sent no JSON") from error
 
