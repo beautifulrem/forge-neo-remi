@@ -520,12 +520,11 @@ def tab_titles() -> list[str]:
 
 
 def _tab_settings() -> tuple[list[str], set[str]]:
-    try:
-        from modules import shared
+    from remi.setting_values import setting
 
-        options = shared.opts
-        order = [title for title in getattr(options, "ui_tab_order", None) or () if isinstance(title, str)]
-        hidden = {title for title in getattr(options, "hidden_tabs", None) or () if isinstance(title, str)}
+    try:
+        order = [title for title in setting("ui_tab_order", []) if isinstance(title, str)]
+        hidden = {title for title in setting("hidden_tabs", []) if isinstance(title, str)}
         return order, hidden
     except Exception:  # outside the WebUI
         return [], set()

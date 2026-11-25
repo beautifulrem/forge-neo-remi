@@ -822,10 +822,9 @@ def _default_model_fingerprint() -> str:
     file replaced under the same name does not reuse the old outputs."""
 
     try:
-        from modules import shared
+        from remi.setting_values import setting
 
-        opts = shared.opts
-        checkpoint = str(getattr(opts, "sd_model_checkpoint", "") or "")
+        checkpoint = str(setting("sd_model_checkpoint", "") or "")
         identity = ""
         try:
             from modules import sd_models
@@ -836,18 +835,18 @@ def _default_model_fingerprint() -> str:
                 identity = _file_identity(getattr(info, "filename", None))
         except Exception:
             pass
-        modules = getattr(opts, "forge_additional_modules", None) or []
+        modules = setting("forge_additional_modules", [])
         parts = [
             checkpoint,
             identity,
-            getattr(opts, "forge_preset", "") or "",
-            getattr(opts, "forge_unet_storage_dtype", "") or "",
-            getattr(opts, "sd_vae", "") or "",
-            ",".join(sorted(f"{m}@{_file_identity(m)}" for m in modules)) if isinstance(modules, (list, tuple)) else str(modules),
-            getattr(opts, "CLIP_stop_at_last_layers", "") or "",
-            getattr(opts, "emphasis", "") or "",
-            getattr(opts, "eta_noise_seed_delta", "") or "",
-            getattr(opts, "randn_source", "") or "",
+            setting("forge_preset", "") or "",
+            setting("forge_unet_storage_dtype", "") or "",
+            setting("sd_vae", "") or "",
+            ",".join(sorted(f"{m}@{_file_identity(m)}" for m in modules)),
+            setting("CLIP_stop_at_last_layers") or "",
+            setting("emphasis") or "",
+            setting("eta_noise_seed_delta") or "",
+            setting("randn_source") or "",
         ]
         return "|".join(str(p) for p in parts)
     except Exception:

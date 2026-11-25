@@ -259,7 +259,9 @@ def preview_format(opts: Any) -> int:
     """JPEG when the live preview format is JPEG, WebP otherwise (PNG previews
     are sent as WebP)."""
 
-    return FORMAT_JPEG if getattr(opts, "live_previews_image_format", "jpeg") == "jpeg" else FORMAT_WEBP
+    from remi.setting_values import setting
+
+    return FORMAT_JPEG if setting("live_previews_image_format", "jpeg", opts=opts) == "jpeg" else FORMAT_WEBP
 
 
 def encode_preview(image: Any, fmt: int, quality: int = 80) -> bytes:
@@ -311,10 +313,10 @@ class PreviewEncoder(_Loop):
         """monotonic time before which no further frame goes out (the fps throttle)"""
 
     def interval(self) -> float:
-        from remi.setting_values import fit
+        from remi.setting_values import setting
 
         # a number of its kind (not NaN, which turned the throttle off, nor 10**400), else the default
-        fps = float(fit(float(DEFAULT_PREVIEW_FPS), getattr(self.opts(), "live_preview_fps", None)) or DEFAULT_PREVIEW_FPS)
+        fps = float(setting("live_preview_fps", float(DEFAULT_PREVIEW_FPS), opts=self.opts()) or DEFAULT_PREVIEW_FPS)
         return 1.0 / min(max(fps, 0.5), 30.0)
 
     def notify(self) -> None:
@@ -389,9 +391,11 @@ class PreviewEncoder(_Loop):
             self._unlisten()
 
     def tick(self, last: Any) -> Any:
+        from remi.setting_values import setting
+
         ref = self.current_job()
         opts = self.opts()
-        if ref is None or not getattr(opts, "live_previews_enable", True):
+        if ref is None or not setting("live_previews_enable", True, opts=opts):
             return None
         if not self.bus.wants_frames():  # nobody watching: do not encode
             return last

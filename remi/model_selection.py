@@ -48,13 +48,14 @@ def _main_entry() -> Any:
 
 def _apply_now(key: str, value: Any) -> bool:
     from modules import shared
+    from remi.setting_values import setting
 
     main_entry = _main_entry()
     # main_entry also stores the pick as the preset's own (forge_checkpoint_<preset>, ...), which only an
     # offered preset has: for another (a stored name --disable-preset removed, a value of another kind)
     # it set the global setting and then raised KeyError, half applied. None: the global setting alone
-    preset = shared.opts.forge_preset
-    if not isinstance(preset, str) or f"forge_unet_storage_dtype_{preset}" not in shared.opts.data_labels:
+    preset = setting("forge_preset", "")
+    if f"forge_unet_storage_dtype_{preset}" not in shared.opts.data_labels:
         preset = None
     preset = cast(str, preset)  # modules_change and the others check it for None
 

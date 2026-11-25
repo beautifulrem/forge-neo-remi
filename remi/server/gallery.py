@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from remi.files import FileRecord
+from remi.setting_values import setting
 
 LOG_FIELDS = ["prompt", "seed", "width", "height", "sampler", "cfgs", "steps", "filename", "negative_prompt", "sd_model_name", "sd_model_hash"]
 
@@ -93,7 +94,6 @@ def save_outputs(records: list[FileRecord], *, make_zip: bool = False) -> SaveRe
     from PIL import Image
 
     from modules import images, infotext_utils, shared
-    from remi.setting_values import setting
 
     opts = shared.opts
     # the settings page can clear the folder: an empty one is its default, as for the other output folders
@@ -141,14 +141,14 @@ def save_outputs(records: list[FileRecord], *, make_zip: bool = False) -> SaveRe
 
 
 def _zip(folder: str, result: SaveResult, first: tuple[SavedParams, Any] | None) -> str:
-    from modules import images, shared
+    from modules import images
 
     name = "images"
     if first is not None:
         p, image = first
         try:
             namegen = images.FilenameGenerator(p, p.seed, p.prompt, image, True)
-            name = namegen.apply(shared.opts.grid_zip_filename_pattern or "[datetime]_[[model_name]]_[seed]-[seed_last]") or name
+            name = namegen.apply(setting("grid_zip_filename_pattern", "") or "[datetime]_[[model_name]]_[seed]-[seed_last]") or name
         except Exception:
             pass
     path = _free_name(folder, f"{name}.zip")
@@ -170,8 +170,6 @@ def _free_name(folder: str, name: str) -> str:
 
 def output_folder(kind: str) -> str:
     """The output folder of ``kind`` (a key of :data:`OUTPUT_FOLDERS`)."""
-
-    from remi.setting_values import setting
 
     names = OUTPUT_FOLDERS.get(kind)
     if names is None:

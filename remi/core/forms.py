@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from remi import ui
 from remi.core import hints
+from remi.setting_values import setting
 
 if TYPE_CHECKING:
     from modules.scripts import ScriptRunner
@@ -49,8 +50,6 @@ SAME_SCHEDULER = "Use same scheduler"
 
 
 def resolution_step() -> int:
-    from remi.setting_values import setting
-
     step = int(setting("res_step", 64))  # a number of its kind, else 64
     return step if step > 0 else 64
 
@@ -82,17 +81,15 @@ def _upscaler_names() -> list[str]:
 def _hr_checkpoints() -> list[str]:
     from modules import shared
 
-    return [SAME_CHECKPOINT, *sorted(shared.list_checkpoint_tiles(shared.opts.sd_checkpoint_dropdown_use_short))]
+    return [SAME_CHECKPOINT, *sorted(shared.list_checkpoint_tiles(setting("sd_checkpoint_dropdown_use_short", False)))]
 
 
 def _hr_modules() -> list[str]:
-    from modules import shared
-
     # The module list main_entry scanned, without importing it (it loads the processing pipeline)
     main_entry = sys.modules.get("modules_forge.main_entry")
     if main_entry is None:
         return [SAME_MODULES]
-    modules = main_entry.module_list.keys() if shared.opts.sd_modules_dropdown_use_short else main_entry.module_map.values()
+    modules = main_entry.module_list.keys() if setting("sd_modules_dropdown_use_short", True) else main_entry.module_map.values()
     return [SAME_MODULES, *sorted(modules)]
 
 
@@ -276,10 +273,8 @@ def _script_selector(runner: ScriptRunner | None) -> ui.Node:
 
 
 def _hires_fix() -> ui.Node:
-    from modules import shared
-
-    show_sampler = bool(getattr(shared.opts, "hires_fix_show_sampler", False))
-    show_prompts = bool(getattr(shared.opts, "hires_fix_show_prompts", False))
+    show_sampler = setting("hires_fix_show_sampler", False)
+    show_prompts = setting("hires_fix_show_prompts", False)
     # Shown by the option, or when a pasted infotext sets them
     sampler_rows = None if show_sampler else ui.any_of(ui.param("hr_checkpoint_name", ne=SAME_CHECKPOINT), ui.param("hr_sampler_name", ne=SAME_SAMPLER), ui.param("hr_scheduler", ne=SAME_SCHEDULER))
     prompt_rows = None if show_prompts else ui.any_of(ui.param("hr_prompt"), ui.param("hr_negative_prompt"))
@@ -330,9 +325,7 @@ def ordered_categories() -> list[str]:
 
 
 def txt2img_form(runner: ScriptRunner | None = None) -> ui.Node:
-    from modules import shared
-
-    together = bool(getattr(shared.opts, "dimensions_and_batch_together", True))
+    together = setting("dimensions_and_batch_together", True)
     sections: list[ui.Node] = []
     for category in ordered_categories():
         if category == "prompt":
@@ -422,9 +415,7 @@ def _img2img_inpaint() -> ui.Node:
 
 
 def img2img_form(runner: ScriptRunner | None = None) -> ui.Node:
-    from modules import shared
-
-    together = bool(getattr(shared.opts, "dimensions_and_batch_together", True))
+    together = setting("dimensions_and_batch_together", True)
     sections: list[ui.Node] = []
     for category in ordered_categories():
         if category == "prompt":

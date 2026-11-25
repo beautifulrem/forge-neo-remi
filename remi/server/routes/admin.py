@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException
 from remi.server import models as m
 from remi.server.auth import LICENSE_TEXT_ORIGIN
 from remi.server.deps import ServicesDep, opts
+from remi.setting_values import setting
 
 log = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ def reload_model(services: ServicesDep, body: m.ModelReloadRequest | None = None
     from remi import model_selection
     from remi.server import runtime
 
-    model = model_selection.held().get("sd_model_checkpoint") or getattr(opts(), "sd_model_checkpoint", None) or None
+    model = model_selection.held().get("sd_model_checkpoint") or setting("sd_model_checkpoint", "", opts=opts()) or None
     force = bool(body and body.force)
 
     services.bus.publish("model.loading", stage="loading", model=model)

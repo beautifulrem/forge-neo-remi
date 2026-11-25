@@ -2,6 +2,7 @@ import torch
 
 from modules import scripts, sd_models, shared
 from remi import ui
+from remi.setting_values import setting
 
 LORA_REPLACEMENTS_HELP = """
 Use this setting to load different LoRAs between the normal pass and the refiner pass
@@ -59,7 +60,7 @@ class ScriptRefiner(scripts.ScriptBuiltinUI):
                 ui.Group(
                     "LoRA Replacements",
                     ui.Markdown(LORA_REPLACEMENTS_HELP),
-                    ui.Text("replacements", lambda: shared.opts.refiner_lora_replacement, lines=4, max_lines=12, placeholder=LORA_REPLACEMENTS_PLACEHOLDER, label=""),
+                    ui.Text("replacements", lambda: setting("refiner_lora_replacement", ""), lines=4, max_lines=12, placeholder=LORA_REPLACEMENTS_PLACEHOLDER, label=""),
                     open=True,
                 ),
             ],

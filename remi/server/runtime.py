@@ -14,6 +14,8 @@ import os
 import warnings
 from typing import Any
 
+from remi.setting_values import setting
+
 log = logging.getLogger(__name__)
 
 BUILTIN_TABS = (("txt2img", "txt2img"), ("img2img", "img2img"), ("extras", "Extras"), ("png-info", "PNG Info"), ("gallery", "Gallery"), ("networks", "Networks"))
@@ -34,7 +36,7 @@ def prepare(*, models: bool = True) -> None:
     register_options()
     # every setting is registered now: one of the wrong kind (config.json, /sdapi/v1/options) reads as its default
     repair(shared.opts)
-    apply_warning_filters(bool(getattr(shared.opts, "show_warnings", False)))
+    apply_warning_filters(setting("show_warnings", False))
     shared.tab_names[:] = [title for _id, title in BUILTIN_TABS]
     initialize_runners()
     shared.tab_names.extend(_page_titles())  # extension pages, as their tabs were
@@ -133,7 +135,7 @@ def initialize_model_selection() -> None:
 
     from modules import sd_models, shared
 
-    if shared.opts.sd_model_checkpoint in (None, "", "None", "none"):
+    if setting("sd_model_checkpoint", "") in ("", "None", "none"):
         if not sd_models.checkpoints_list:
             sd_models.list_models()
         if sd_models.checkpoints_list:
@@ -175,9 +177,9 @@ def unet_dtypes() -> list[str]:
     main_entry = sys.modules.get("modules_forge.main_entry")
     if main_entry is not None:
         return list(main_entry.forge_unet_storage_dtype_options)
-    from modules import shared
 
-    return [shared.opts.forge_unet_storage_dtype] if getattr(shared.opts, "forge_unet_storage_dtype", None) else ["Automatic"]
+    dtype = setting("forge_unet_storage_dtype", "")
+    return [dtype] if dtype else ["Automatic"]
 
 
 def select_checkpoint(name: str) -> bool:

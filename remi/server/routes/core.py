@@ -12,7 +12,7 @@ from remi.server import i18n
 from remi.server import models as m
 from remi.server.deps import ServicesDep, UserDep, is_local_client, not_found, opts, publish_options_changed
 from remi.server.runtime import BUILTIN_TABS
-from remi.setting_values import fit, setting
+from remi.setting_values import setting
 
 router = APIRouter()
 
@@ -172,7 +172,7 @@ def bootstrap(request: Request, services: ServicesDep, user: UserDep) -> dict[st
         "pages": pages,
         "locales": i18n.locales(),
         "locale": i18n.default_locale(),
-        "options": {key: held[key] if key in held else fit(info.default, options.data.get(key, info.default)) for key in BOOTSTRAP_OPTIONS if (info := options.data_labels.get(key)) is not None},
+        "options": {key: held[key] if key in held else setting(key, opts=options) for key in BOOTSTRAP_OPTIONS if key in options.data_labels},
         "models": models_summary(),
         "not_ported": not_ported(),
         "auth": {"required": auth.required, "user": user},
@@ -489,7 +489,7 @@ def token_count(text: str, steps: int, styles: list[str], *, positive: bool = Tr
     params = script_callbacks.BeforeTokenCounterParams(text, steps, styles, is_positive=positive)
     script_callbacks.before_token_counter_callback(params)
     text, steps, styles, positive = params.prompt, params.steps, params.styles, params.is_positive
-    if shared.opts.include_styles_into_token_counters:
+    if setting("include_styles_into_token_counters", True):
         apply = shared.prompt_styles.apply_styles_to_prompt if positive else shared.prompt_styles.apply_negative_styles_to_prompt
         text = apply(text, styles)
     text = strip_comments(text).strip()

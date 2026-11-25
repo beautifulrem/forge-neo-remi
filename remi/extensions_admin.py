@@ -475,6 +475,16 @@ def listing() -> dict[str, Any]:
     }
 
 
+def disabled_extensions() -> list[str]:
+    """The names of the disabled extensions: a list of names whatever the
+    setting holds (5, null or a name as a string after an /sdapi/v1/options
+    write failed the extensions page, or matched names by substring)."""
+
+    from remi.setting_values import setting
+
+    return [name for name in setting("disabled_extensions", []) if isinstance(name, str)]
+
+
 def configure(disabled: Iterable[str] | None = None, disable_all: str | None = None, *, config_filename: str | None = None) -> None:
     """Set which extensions are disabled (the others are enabled) and the
     "disable all" mode; saved to the config file; loaded on the next reload."""
@@ -494,8 +504,9 @@ def configure(disabled: Iterable[str] | None = None, disable_all: str | None = N
             raise AdminError("disable_all must be none, extra or all, not {{value}}", value=disable_all)
         shared.opts.disable_all_extensions = disable_all
     shared.opts.save(config_filename or shared.config_filename)
+    disabled_now = disabled_extensions()
     for ext in all_extensions():
-        ext.enabled = ext.name not in shared.opts.disabled_extensions
+        ext.enabled = ext.name not in disabled_now
 
 
 def check_one(ext: Any) -> None:
@@ -638,8 +649,8 @@ def uninstall(name: str) -> None:
             shutil.rmtree(path, onexc=_make_writable)
         else:
             shutil.rmtree(path, onerror=_make_writable)
-        if name in shared.opts.disabled_extensions:
-            shared.opts.disabled_extensions = [item for item in shared.opts.disabled_extensions if item != name]
+        if name in (disabled := disabled_extensions()):
+            shared.opts.disabled_extensions = [item for item in disabled if item != name]
             shared.opts.save(shared.config_filename)
         extensions.extensions[:] = [item for item in extensions.extensions if item.name != name]
 

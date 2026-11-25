@@ -39,7 +39,9 @@ def _opts(opts: Any) -> Any:
 
 
 def current_preset(opts: Any = None) -> str:
-    return str(getattr(_opts(opts), "forge_preset", "sd") or "sd")
+    from remi.setting_values import setting
+
+    return setting("forge_preset", "sd", opts=_opts(opts)) or "sd"
 
 
 def ui_preset_choices() -> list[str]:
@@ -72,15 +74,14 @@ def forge_preset_patch(tab: str, preset: str | None = None, opts: Any = None) ->
     it to the core defaults and the Sampler script's defaults follow it."""
 
     from modules_forge.presets import is_video, use_distill, use_shift
-    from remi.setting_values import bounds, fit
+    from remi.setting_values import setting
 
     opts = _opts(opts)
     preset = preset or current_preset(opts)
 
     def get(name: str, default: Any) -> Any:
         # a value of the preset's kind within its slider (10**400 steps failed every tab's schema)
-        info = getattr(opts, "data_labels", {}).get(name)
-        return fit(default, getattr(opts, name, default), bounds(info) if info is not None else None)
+        return setting(name, default, opts=opts)
 
     prefix = "t2i" if tab == "txt2img" else "i2i"
     patch: Patch = {}
@@ -158,11 +159,11 @@ def forge_preset_settings(preset: str, opts: Any = None) -> dict[str, Any]:
     """The settings the UI preset ``preset`` selects: itself, its checkpoint,
     VAE/text encoder modules and low-bits dtype."""
 
-    from remi.setting_values import fit
+    from remi.setting_values import setting
 
     opts = _opts(opts)
     # each as the kind of its default (a number where the module list belongs raised)
-    get = lambda name, default: fit(default, getattr(opts, name, default))  # noqa: E731
+    get = lambda name, default: setting(name, default, opts=opts)  # noqa: E731
     modules = [os.path.basename(module) for module in get(f"forge_additional_modules_{preset}", [])]
     if not get("sd_modules_dropdown_use_short", True) and (main_entry := _main_entry()) is not None:
         modules = [main_entry.module_map.get(module, module) for module in modules]
@@ -182,6 +183,7 @@ def apply_forge_preset(preset: str) -> dict[str, Any]:
 
     from modules import shared
     from modules_forge import main_entry
+    from remi.setting_values import setting
 
     preset = check_preset(preset)
     settings = forge_preset_settings(preset)
@@ -193,7 +195,7 @@ def apply_forge_preset(preset: str) -> dict[str, Any]:
     shared.opts.save(shared.config_filename)
     if changed:
         main_entry.refresh_model_loading_parameters()
-    return {key: getattr(shared.opts, key, value) for key, value in settings.items()}
+    return {key: setting(key, value) for key, value in settings.items()}
 
 
 def preset_bindings(layouts: Mapping[str, Any]) -> list[tuple[str, str, str, Any]]:

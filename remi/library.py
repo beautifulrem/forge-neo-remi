@@ -128,9 +128,10 @@ def model_of(infotext: str | None) -> str | None:
 def output_folders() -> list[tuple[str, str]]:
     """``(category, absolute folder)`` of the configured output folders."""
 
+    from remi.setting_values import setting
+
     try:
         from modules import shared
-        from remi.setting_values import fit
 
         opts = shared.opts
     except Exception:
@@ -138,7 +139,7 @@ def output_folders() -> list[tuple[str, str]]:
     found = []
     for category, names in CATEGORY_FOLDERS:
         for name in names:
-            value = fit("", getattr(opts, name, ""))  # a list or a number there: unset
+            value = setting(name, "", opts=opts)  # a list or a number there: unset
             if value:
                 found.append((category, os.path.realpath(os.path.abspath(value))))
     return found

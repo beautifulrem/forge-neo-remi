@@ -228,19 +228,19 @@ def worker_options_from_cmd_opts(cmd_opts: Any = None) -> tuple[bool, str | None
     (``--worker-process``, ``--worker-gpus``, ``--worker-mlx``) with
     ``REMI_WORKER_*`` environment variable fallbacks."""
 
-    opts = cmd_opts
-    if opts is None:
+    flags = cmd_opts
+    if flags is None:
         try:
             from modules.shared_cmd_options import cmd_opts as active_opts
 
-            opts = active_opts
+            flags = active_opts
         except Exception:
-            opts = None
+            flags = None
 
-    cli_process = bool(getattr(opts, "worker_process", False)) if opts is not None else False
-    raw_gpus = getattr(opts, "worker_gpus", None) if opts is not None else None
+    cli_process = bool(getattr(flags, "worker_process", False)) if flags is not None else False
+    raw_gpus = getattr(flags, "worker_gpus", None) if flags is not None else None
     cli_gpus = str(raw_gpus).strip() or None if raw_gpus is not None else None
-    cli_mlx = bool(getattr(opts, "worker_mlx", False)) if opts is not None else False
+    cli_mlx = bool(getattr(flags, "worker_mlx", False)) if flags is not None else False
 
     use_process = cli_process or os.environ.get("REMI_WORKER_PROCESS") == "1"
     use_gpus = cli_gpus if cli_gpus is not None else (os.environ.get("REMI_WORKER_GPUS") or None)

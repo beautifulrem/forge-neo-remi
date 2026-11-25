@@ -129,6 +129,90 @@ def test_repair_keeps_values_of_their_kind_and_reports_the_others():
     assert opts.data == {"steps": 30, "tabs": [], "show": False, "free": {"a": 1}, "unknown": "x"}
 
 
+def test_repair_resets_null_and_values_outside_the_choices():
+    """A null of a setting with a default (``"detail_daemon_count": null`` took the Detail
+    Daemon off the form at every start), and a value its written-out choices do not
+    offer (``res_step = 100000``), read by upstream code and extensions as they are."""
+    from types import SimpleNamespace
+
+    def choice(default, choices, **args):
+        return SimpleNamespace(default=default, component_args={"choices": choices, **args})
+
+    labels = {
+        "count": SimpleNamespace(default=6),
+        "unset": SimpleNamespace(default=None),
+        "step": choice(64, (8, 16, 64)),
+        "action": choice("Do nothing", (("Do nothing", "Do nothing"), ("Stop the WebUI", "Stop webui"))),
+        "devices": choice(["CPU"], ["CPU", "CUDA"]),
+        "vae": choice("Automatic", ("Automatic",), interactive=False),  # set elsewhere: the list is not its range
+        "fine": choice(64, (8, 64)),
+    }
+    data = {"count": None, "unset": None, "step": 100000, "action": "Stop webui", "devices": ["CPU", "TPU"], "vae": "my.vae", "fine": 8.0}
+    opts = SimpleNamespace(data_labels=labels, data=dict(data))
+    assert repair(opts) == ["count", "step", "devices"]
+    assert opts.data == {**data, "count": 6, "step": 64, "devices": ["CPU"]}
+
+
+# B13-1: reads the GET probe above does not reach (a write route, a route with a path, a value the SPA
+# posts back): each one was a 500 or a 422 after an /sdapi/v1/options write of the wrong kind.
+@pytest.mark.parametrize("value", [5, None, 1.5, "abc", {"a": 1}, [5]], ids=_id)
+def test_the_disabled_extensions_read_as_a_list_of_names(server, garbage, value, tmp_path, monkeypatch):
+    from modules import extensions, shared
+
+    monkeypatch.setattr(shared, "config_filename", str(tmp_path / "config.json"))
+    enabled = {ext.name: ext.enabled for ext in extensions.extensions}
+    garbage(value, ["disabled_extensions"])
+    try:
+        response = server.client.patch("/api/v2/extensions", json={"disable_all": "none"})
+        assert response.status_code == 200, response.text
+    finally:
+        for ext in extensions.extensions:
+            ext.enabled = enabled.get(ext.name, ext.enabled)
+
+
+@pytest.mark.parametrize("value", [10**400, math.inf, math.nan, -math.inf, "x", 1e303, -1e303], ids=_id)
+def test_the_network_multiplier_reads_as_a_weight(server, garbage, value):
+    from remi.networks import default_multiplier, format_weight, js_text
+    from remi.setting_values import bounds
+
+    garbage(value, ["extra_networks_default_multiplier"])
+    weight = default_multiplier()
+    limits = bounds(server.opts.data_labels["extra_networks_default_multiplier"])
+    assert math.isfinite(weight) and (limits is None or limits[0] <= weight <= limits[1]), weight
+    # an ExtraNetworksPage's prompt names the setting (the card a page shows)
+    assert js_text('"<lora:x:" + opts.extra_networks_default_multiplier + ">"') == f"<lora:x:{format_weight(weight)}>"
+
+
+def test_the_app_reads_its_options_within_their_sliders(server, garbage):
+    from remi.server.routes.core import BOOTSTRAP_OPTIONS
+    from remi.setting_values import bounds
+
+    labels = server.opts.data_labels
+    sliders = {key: limits for key in BOOTSTRAP_OPTIONS if key in labels and (limits := bounds(labels[key])) is not None}
+    assert sliders  # live_preview_fps, show_progress_every_n_steps...
+    garbage(1e303, list(sliders))
+    options = server.client.get("/api/v2/app").json()["options"]
+    assert {key: options[key] for key in sliders} == {key: limits[1] for key, limits in sliders.items()}
+
+
+@pytest.mark.parametrize("value", [["x"], True, {"a": 1}, 5], ids=_id)
+def test_the_refiner_replacements_default_to_text(server, garbage, value):
+    """The form's default is posted back by the SPA: a list there made every txt2img job a 422."""
+
+    garbage(value, ["refiner_lora_replacement"])
+    nodes = [server.client.get("/api/v2/schema/txt2img").json()]
+    while nodes:
+        node = nodes.pop()
+        if isinstance(node, dict):
+            if node.get("name") == "replacements":
+                assert isinstance(node.get("default"), str), node
+                return
+            nodes.extend(node.values())
+        elif isinstance(node, list):
+            nodes.extend(node)
+    raise AssertionError("no replacements field in the txt2img schema")
+
+
 # The upload limit is read on every request (the body limit): "x" failed them all, 0 refused every upload.
 def test_the_upload_limit_reads_as_a_size_above_zero(server, garbage):
     from remi.server.services import configured_upload_limit
@@ -146,7 +230,8 @@ def test_the_resolution_step_reads_as_a_step_above_zero(server, garbage):
     from modules.processing import sRound
     from remi.core.forms import resolution_step
 
-    for value in ("x", math.inf, 0, -8, 0.5, 10**400, ["x"]):
+    # 100000, 4096, 1e303: numbers, but not one of the steps offered (the hires target read as 0x0)
+    for value in ("x", math.inf, 0, -8, 0.5, 10**400, ["x"], 100000, 4096, 1e303, 63.5):
         garbage(value, ["res_step"])
         assert resolution_step() == 64 and sRound(100) == 128, _id(value)  # sRound divided by 0.5 as int 0
     garbage(32, ["res_step"])
@@ -171,11 +256,14 @@ def test_the_preview_rate_reads_as_a_rate(server, garbage):
     from remi.realtime import DEFAULT_PREVIEW_FPS, PreviewEncoder
 
     encoder = PreviewEncoder(server.services.bus, lambda: None, state=lambda: None, opts=lambda: server.opts)
-    for value in ("x", math.nan, 10**400, ["x"], 0):
+    for value in ("x", math.nan, 10**400, ["x"]):
         garbage(value, ["live_preview_fps"])
         assert encoder.interval() == 1.0 / DEFAULT_PREVIEW_FPS, _id(value)  # NaN turned the throttle off
+    # within the slider (1-30 fps)
     garbage(1e303, ["live_preview_fps"])
     assert encoder.interval() == 1.0 / 30.0
+    garbage(0, ["live_preview_fps"])
+    assert encoder.interval() == 1.0
 
 
 # 1e303 entries overflowed SQLite's LIMIT: recording a prompt failed

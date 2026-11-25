@@ -14,6 +14,8 @@ import time
 import webbrowser
 from typing import Any
 
+from remi.setting_values import setting
+
 log = logging.getLogger(__name__)
 
 DEFAULT_PORT = 7860
@@ -216,8 +218,6 @@ class ServerThread:
 def cleanup_temp_dir() -> None:
     """``clean_temp_dir_at_start``: delete PNGs left in ``opts.temp_dir``."""
 
-    from remi.setting_values import setting
-
     temp_dir = setting("temp_dir")  # read before the start repairs the settings: a string, else the default
     if not temp_dir or not os.path.isdir(temp_dir):
         return
@@ -233,7 +233,6 @@ def serve(*, webui: bool, startup_timer: Any = None) -> None:
     from modules import extension_route_guard, initialize, script_callbacks, timer
     from modules.shared_cmd_options import cmd_opts
     from remi.server import create_app, default_services, runtime
-    from remi.setting_values import setting
 
     startup_timer = startup_timer or timer.startup_timer
     services = default_services()
@@ -335,11 +334,11 @@ def _start_server(app: Any, host: str, port: int, cmd_opts: Any, attempts: int =
 
 
 def _auto_launch(cmd_opts: Any) -> bool:
-    from modules import shared
 
-    if cmd_opts.autolaunch or shared.opts.auto_launch_browser == "Remote":
+    browser = setting("auto_launch_browser", "Local")
+    if cmd_opts.autolaunch or browser == "Remote":
         return True
-    return shared.opts.auto_launch_browser == "Local" and not cmd_opts.webui_is_non_local
+    return browser == "Local" and not cmd_opts.webui_is_non_local
 
 
 def _wait_for_command() -> str:

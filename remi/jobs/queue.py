@@ -121,22 +121,17 @@ def _state() -> Any:
 def _interrupt_after_current() -> bool:
     """The setting "Don't Interrupt in the middle" (``interrupt_after_current``)."""
 
-    opts = getattr(sys.modules.get("modules.shared"), "opts", None)
-    try:
-        return bool(opts is not None and opts.interrupt_after_current)
-    except AttributeError:
-        return False
+    return bool(_option("interrupt_after_current", False))
 
 
 def _option(name: str, default: Any) -> Any:
-    """A setting (``default`` without the WebUI or when unset)."""
+    """A setting as the kind of ``default`` (``default`` without the WebUI, when
+    unset or of another kind)."""
+
+    from remi.setting_values import setting
 
     opts = getattr(sys.modules.get("modules.shared"), "opts", None)
-    try:
-        value = getattr(opts, name) if opts is not None else None
-    except AttributeError:
-        value = None
-    return default if value is None else value
+    return default if opts is None else setting(name, default, opts=opts)
 
 
 def _set_option(name: str, value: Any) -> None:

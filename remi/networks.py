@@ -42,6 +42,7 @@ from typing import Any, Protocol
 from remi import network_metadata as nm
 from remi.files import FileStore, decode_offset, encode_cursor
 from remi.image_meta import utf8_text
+from remi.setting_values import setting
 
 log = logging.getLogger(__name__)
 
@@ -380,10 +381,8 @@ def format_weight(weight: float) -> str:
 
 
 def default_multiplier() -> float:
-    try:
-        return float(getattr(_opts(), "extra_networks_default_multiplier", 1.0))
-    except (TypeError, ValueError):
-        return 1.0
+    # a number within its slider: 10**400 (float() raised) or inf failed the LoRA list
+    return float(setting("extra_networks_default_multiplier", 1.0))
 
 
 class LoraProvider:
@@ -562,7 +561,8 @@ def js_text(expression: Any) -> str:
                 except ValueError:
                     return expression
             elif option is not None:
-                value = getattr(_opts(), option[5:], "")
+                value = setting(option[5:])
+                value = "" if value is None else value
                 parts.append(format_weight(value) if isinstance(value, float) else str(value))
             else:
                 parts.append(number)
@@ -851,16 +851,16 @@ def notify_changed(*kinds: str) -> None:
 
 def _current_arch() -> str | None:
     try:
-        return getattr(_opts(), "forge_preset", None) or None
-    except Exception:
+        return setting("forge_preset", "") or None
+    except Exception:  # outside the WebUI
         return None
 
 
-def tab_order(setting: Any) -> list[str]:
+def tab_order(value: Any) -> list[str]:
     """The names of the "Extra Networks Tab Order" setting
     (``ui_extra_networks_tab_reorder``: comma-separated, case-insensitive)."""
 
-    return [name.strip().casefold() for name in str(setting or "").split(",") if name.strip()]
+    return [name.strip().casefold() for name in str(value or "").split(",") if name.strip()]
 
 
 def tab_rank(info: KindInfo, preferred: list[str]) -> int:
@@ -876,8 +876,8 @@ def tab_rank(info: KindInfo, preferred: list[str]) -> int:
 
 def _option(name: str, default: Any) -> Any:
     try:
-        return getattr(_opts(), name, default)
-    except Exception:
+        return setting(name, default)
+    except Exception:  # outside the WebUI
         return default
 
 
