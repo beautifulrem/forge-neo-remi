@@ -58,7 +58,7 @@ function Thumbs({ ids, selected, onSelect, label }: { ids: readonly string[]; se
             tabIndex={index === tabStop ? 0 : -1}
             onClick={() => onSelect(id)}
             className={cn(
-              "relative aspect-square overflow-hidden rounded-lg bg-checker ring-offset-2 ring-offset-background outline-none focus-visible:ring-3 focus-visible:ring-ring",
+              "relative aspect-square overflow-hidden rounded-lg bg-checker ring-offset-2 ring-offset-background outline-none focus-visible:ring-3 focus-visible:ring-focus-ring",
               on ? "ring-2 ring-primary" : "hover:ring-2 hover:ring-primary/40",
             )}
           >

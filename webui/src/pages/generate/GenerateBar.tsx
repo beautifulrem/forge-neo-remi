@@ -127,7 +127,7 @@ function StatusLine({ tab }: { tab: GenerateTab }) {
               type="button"
               aria-label={t("Stop generating forever")}
               onClick={() => dispatchRun(tab, { type: "forever", on: false })}
-              className="relative grid size-4 place-items-center rounded-xs outline-none after:absolute after:-inset-3 hover:bg-primary/20 focus-visible:ring-3 focus-visible:ring-ring"
+              className="relative grid size-4 place-items-center rounded-xs outline-none after:absolute after:-inset-3 hover:bg-primary/20 focus-visible:ring-3 focus-visible:ring-focus-ring"
             >
               <X className="size-3" />
             </button>
@@ -141,7 +141,7 @@ function StatusLine({ tab }: { tab: GenerateTab }) {
               type="button"
               aria-label={t("Cancel the remaining runs")}
               onClick={() => dispatchRun(tab, { type: "stop-repeats" })}
-              className="relative grid size-4 place-items-center rounded-xs outline-none after:absolute after:-inset-3 hover:bg-foreground/10 focus-visible:ring-3 focus-visible:ring-ring"
+              className="relative grid size-4 place-items-center rounded-xs outline-none after:absolute after:-inset-3 hover:bg-foreground/10 focus-visible:ring-3 focus-visible:ring-focus-ring"
             >
               <X className="size-3" />
             </button>

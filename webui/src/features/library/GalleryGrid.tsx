@@ -169,7 +169,7 @@ const Tile = memo(function Tile({ item, width, height, selected, selecting, inde
         }}
         // the focus ring is an outline on a layer over the image (after:): an inset ring (a box shadow) and
         // the button's own outline paint under it once the hover zoom puts the image on a layer of its own
-        className="relative block size-full cursor-zoom-in outline-none after:pointer-events-none after:absolute after:inset-0 focus-visible:after:outline-3 focus-visible:after:-outline-offset-3 focus-visible:after:outline-solid focus-visible:after:outline-ring data-[selecting]:cursor-pointer"
+        className="relative block size-full cursor-zoom-in outline-none after:pointer-events-none after:absolute after:inset-0 focus-visible:after:outline-3 focus-visible:after:-outline-offset-3 focus-visible:after:outline-solid focus-visible:after:outline-focus-ring data-[selecting]:cursor-pointer"
         data-selecting={selecting || undefined}
       >
         <img
@@ -196,7 +196,7 @@ const Tile = memo(function Tile({ item, width, height, selected, selecting, inde
             // Keyboard focus shows them (focus-visible), not any focus: a tap focuses the tile
             // between the finger lifting and the click, which then went to neither control. A press
             // on one leaves the focus where it is (`keepFocus`).
-            "pointer-events-none group-hover/tile:pointer-events-auto group-has-[:focus-visible]/tile:pointer-events-auto group-data-[shown]/overlay:pointer-events-auto relative m-0.5 grid size-5 place-items-center rounded-full border-2 border-white/90 after:absolute after:-inset-1.5 after:rounded-full text-primary-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring",
+            "pointer-events-none group-hover/tile:pointer-events-auto group-has-[:focus-visible]/tile:pointer-events-auto group-data-[shown]/overlay:pointer-events-auto relative m-0.5 grid size-5 place-items-center rounded-full border-2 border-white/90 after:absolute after:-inset-1.5 after:rounded-full text-primary-foreground outline-none focus-visible:ring-3 focus-visible:ring-focus-ring",
             selected ? "border-primary bg-primary" : "bg-black/20 hover:bg-black/40",
           )}
         >
@@ -209,7 +209,7 @@ const Tile = memo(function Tile({ item, width, height, selected, selecting, inde
           aria-label={t("Star")}
           onMouseDown={keepFocus}
           onClick={() => onStar(item)}
-          className="pointer-events-none group-hover/tile:pointer-events-auto group-has-[:focus-visible]/tile:pointer-events-auto group-data-[shown]/overlay:pointer-events-auto grid size-6 place-items-center rounded-full text-white outline-none hover:bg-black/30 focus-visible:ring-3 focus-visible:ring-ring"
+          className="pointer-events-none group-hover/tile:pointer-events-auto group-has-[:focus-visible]/tile:pointer-events-auto group-data-[shown]/overlay:pointer-events-auto grid size-6 place-items-center rounded-full text-white outline-none hover:bg-black/30 focus-visible:ring-3 focus-visible:ring-focus-ring"
         >
           <Star className={cn("size-4 drop-shadow", item.starred && "fill-star text-star")} aria-hidden />
         </button>

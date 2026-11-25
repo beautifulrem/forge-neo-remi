@@ -24,7 +24,7 @@ function Logo() {
     <a
       href={routeHref({ name: "generate", tab: "txt2img" })}
       aria-label="Remi WebUI"
-      className="grid size-10 place-items-center rounded-md text-rail-foreground outline-none focus-visible:ring-3 focus-visible:ring-rail-foreground/60"
+      className="grid size-10 place-items-center rounded-md text-rail-foreground outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
     >
       <svg viewBox="0 0 32 32" className="size-7" aria-hidden>
         <mask id="remi-logo-holes">
@@ -60,7 +60,7 @@ function RailLink({ item, active }: { item: NavItem; active: boolean }) {
             onFocus={() => preloadRoute(item.route)}
             className={cn(
               "group/rail relative grid size-10 shrink-0 place-items-center rounded-md text-rail-muted transition-colors outline-none",
-              "hover:bg-sidebar-accent/70 hover:text-rail-foreground focus-visible:ring-3 focus-visible:ring-rail-foreground/60",
+              "hover:bg-sidebar-accent/70 hover:text-rail-foreground focus-visible:ring-3 focus-visible:ring-focus-ring",
               active && "text-rail-current hover:bg-transparent hover:text-rail-current",
             )}
           />
@@ -154,7 +154,7 @@ export function BottomBar({ items, route }: { items: NavItem[]; route: Route }) 
         onClick={() => setMore(true)}
         aria-haspopup="dialog"
         className={cn(
-          "flex flex-1 flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[0.6875rem] text-rail-muted outline-none focus-visible:ring-3 focus-visible:ring-rail-foreground/60",
+          "flex flex-1 flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[0.6875rem] text-rail-muted outline-none focus-visible:ring-3 focus-visible:ring-focus-ring",
           restActive && "text-rail-foreground",
         )}
       >
@@ -182,8 +182,8 @@ export function BottomTab({ item, active, onClick, onRail = false }: { item: Nav
       onClick={onClick}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[0.6875rem] outline-none focus-visible:ring-3",
-        onRail ? "text-rail-muted focus-visible:ring-rail-foreground/60" : "text-muted-foreground focus-visible:ring-focus-ring",
+        "flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-[0.6875rem] outline-none focus-visible:ring-3 focus-visible:ring-focus-ring",
+        onRail ? "text-rail-muted" : "text-muted-foreground",
         active && (onRail ? "text-rail-foreground" : "text-foreground"),
       )}
     >

@@ -206,9 +206,9 @@ describe("toggle names", () => {
 })
 
 describe("focus rings", () => {
-  // A variant of a focus state: focus, focus-visible, focus-within, group- or peer-focus…, or
-  // has-[…:focus…].
-  const FOCUS_VARIANT = /(?:^|[:-])(?:focus|focus-visible|focus-within)(?:\/[\w-]+)?:|:focus(?:-visible|-within)?\]/
+  // A variant of a focus state: focus, focus-visible, focus-within, group- or peer-focus…,
+  // has-[…:focus…], or a focus a widget marks itself (data-focused, data-[focus-visible]).
+  const FOCUS_VARIANT = /(?:^|[:-])(?:focus|focus-visible|focus-within)(?:\/[\w-]+)?:|:focus(?:-visible|-within)?\]|(?:^|[:-])data-\[?focus[\w-]*(?:=[^\]]*)?\]?(?:\/[\w-]+)?:/
   /** The variants, kind and width of a ring or outline width class, or undefined for any other utility. */
   function width(cls: string): { prefix: string; kind: string; width: string } | undefined {
     const m = /^(.*?)(ring|outline)-(\d+|\[[^\]]+\])$/.exec(cls)
@@ -248,6 +248,39 @@ describe("focus rings", () => {
     const SHADCN_EDGE = new Set(["components/ui/tabs.tsx", "components/ui/scroll-area.tsx"])
     const off = [...rings, ...cursors].filter(({ file, kind, width }) => width !== "3" && width !== "0" && !(kind === "outline" && width === "1" && SHADCN_EDGE.has(file)))
     expect(off.map(({ file, cls }) => `${file}: ${cls}`)).toEqual([])
+  })
+
+  /** The utility of a class: what follows its last variant (a colon outside brackets). */
+  function utility(cls: string): string {
+    let depth = 0
+    let start = 0
+    for (let i = 0; i < cls.length; i++) {
+      if (cls[i] === "[" || cls[i] === "(") depth++
+      else if (cls[i] === "]" || cls[i] === ")") depth--
+      else if (cls[i] === ":" && depth === 0) start = i + 1
+    }
+    return cls.slice(start).replace(/^!|!$/g, "")
+  }
+
+  it("take the focus ring colour", () => {
+    // frontend.md: every focus ring is drawn in --focus-ring (`ring-focus-ring`, `outline-focus-ring`).
+    // `ring-ring` / `outline-ring` drew it in the opaque brand colour, the nav rail in a grey of its
+    // own and a destructive button in a 20 % red (about 1.3:1). A border in `border-ring` beside the
+    // ring (a field) is not the ring.
+    const colours = files.flatMap(({ file, source }) =>
+      (source.match(/[^\s"'`{}]+/g) ?? [])
+        .filter((cls) => FOCUS_VARIANT.test(cls))
+        .flatMap((cls) => {
+          const m = /^(?:inset-)?(ring|outline)-(.+)$/.exec(utility(cls))
+          if (!m) return []
+          const value = m[2]!
+          // a width, the offset, the inset switch or the style: not a colour
+          if (/^(?:\d+|\[\d*\.?\d+px\]|\[length:[^\]]+\]|offset-.+|inset|none|hidden|solid|dashed|dotted|double)$/.test(value)) return []
+          return [{ file, cls, value }]
+        }),
+    )
+    expect(colours.filter(({ value }) => value === "focus-ring").length).toBeGreaterThan(70)
+    expect(colours.filter(({ value }) => value !== "focus-ring").map(({ file, cls }) => `${file}: ${cls}`)).toEqual([])
   })
 })
 

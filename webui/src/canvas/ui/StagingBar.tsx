@@ -88,7 +88,7 @@ export function StagingBar({
                 aria-label={t("Candidate {{index}} of {{count}}", { index: idx + 1, count })}
                 aria-pressed={idx === session.index}
                 onClick={() => onSelect(idx)}
-                className="group grid size-6 place-items-center rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring"
+                className="group grid size-6 place-items-center rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
               >
                 <span
                   aria-hidden

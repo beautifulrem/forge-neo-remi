@@ -389,8 +389,14 @@ imperatively).
   every accent in both (`styles/focus-ring.test.ts`). It is re-derived
   with `--ring` wherever an accent is set. A focus ring, a keyboard
   cursor or highlight included, takes the token, never a share of `--ring`
-  of its own (`ring-ring/60`; the test fails on one); a hover ring, which
-  marks no focus, takes `--primary` (`hover:ring-primary/40`). Every focus
+  of its own (`ring-ring/60`; the test fails on one), nor `--ring` itself
+  (`ring-ring`, `outline-ring`: the opaque brand colour, louder than every
+  ring beside it) or the colour of another role (the nav rail's grey, a
+  destructive button's 20 % red at about 1.3:1): under a focus variant the
+  only ring or outline colour is `focus-ring` (`lib/design-guards.test.ts`,
+  "focus rings"; a field's `border-ring` beside the ring is its edge, not
+  the ring). A hover ring, which marks no focus, takes `--primary`
+  (`hover:ring-primary/40`). Every focus
   ring is 3 px wide (`ring-3`, or a 3 px outline over an image), and so is a
   keyboard cursor drawn in the token (the networks grid's current item: an
   outline on the tile's `after:` layer, an inset ring on a list row); a 2 px
@@ -403,7 +409,8 @@ imperatively).
 - shadcn components import `cn` from the `cn` package (what the base-nova
   registry ships); app code imports it from `@/lib/utils`. Local fixes to
   vendored components: their focus rings take `ring-focus-ring` and
-  `outline-focus-ring` instead of the registry's `ring-ring/50`; scalar
+  `outline-focus-ring` instead of the registry's `ring-ring/50` (the
+  destructive button and badge keep it: no `ring-destructive/20`); scalar
   sliders render one thumb and forward `getAriaLabel`; a select's value
   ellipsizes (line-clamp does nothing on the flex value); a dialog or
   alert dialog is no taller and no wider than

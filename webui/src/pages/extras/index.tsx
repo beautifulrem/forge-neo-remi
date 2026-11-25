@@ -250,7 +250,7 @@ function ResultStage() {
               className={cn(
                 // the focus ring outside the thumbnail, the selection a layer inside it over the image:
                 // the selected one shows the focus too (a ring drawn inside sat under that layer)
-                "relative size-16 shrink-0 overflow-hidden rounded-md bg-checker outline-none focus-visible:ring-3 focus-visible:ring-ring",
+                "relative size-16 shrink-0 overflow-hidden rounded-md bg-checker outline-none focus-visible:ring-3 focus-visible:ring-focus-ring",
                 "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit]",
                 entry.key === item?.key && "after:shadow-[inset_0_0_0_2px_var(--primary),inset_0_0_0_3px_var(--background)]",
               )}
@@ -291,7 +291,7 @@ function RecentRuns() {
               aria-selected={result.jobId === selected}
               aria-label={first ? t("Images of this run: {{count}}", { count: result.outputs.length }) : t("Run without images")}
               onClick={() => useExtrasRuns.setState({ selected: result.jobId })}
-              className={cn("grid size-12 shrink-0 place-items-center overflow-hidden rounded-md bg-muted outline-none focus-visible:ring-3 focus-visible:ring-ring", result.jobId === selected && "ring-2 ring-primary")}
+              className={cn("grid size-12 shrink-0 place-items-center overflow-hidden rounded-md bg-muted outline-none focus-visible:ring-3 focus-visible:ring-focus-ring", result.jobId === selected && "ring-2 ring-primary")}
             >
               {first ? <img src={api.thumbUrl(first.id, 96)} alt="" className="size-full object-cover" /> : result.error ? <Ban className="size-4 text-destructive" aria-hidden /> : <ImageIcon className="size-4 text-muted-foreground" aria-hidden />}
             </button>

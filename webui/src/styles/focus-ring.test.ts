@@ -3,8 +3,8 @@
  * `--ring` mixed with transparency, as strong as each theme needs. Focus rings used to write
  * their own share of `--ring` (40 to 70 %); half of it read at about 2.2:1 on the light theme's
  * paper and under 3:1 on the dark theme's page for some accents, too faint for a focus indicator.
- * Every focus ring takes the token, and each theme's mix reaches 3:1 on the page and on the image
- * backdrop for every accent.
+ * Every focus ring takes the token, and each theme's mix reaches 3:1 on the page, on the nav rail and
+ * on the image backdrop for every accent.
  */
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
@@ -82,9 +82,10 @@ describe("the focus ring token", () => {
     expect(css).toMatch(/^ +--color-focus-ring: var\(--focus-ring\);$/m)
   })
 
-  it.each(["light", "dark"] as const)("reaches 3:1 on the %s theme's page and image backdrop for every accent", (theme) => {
+  it.each(["light", "dark"] as const)("reaches 3:1 on the %s theme's page, nav rail and image backdrop for every accent", (theme) => {
     const rule = block(theme === "light" ? ":root" : ".dark")
-    const surfaces = { background: srgb(oklch(token(rule, "background"))), canvas: srgb(oklch(token(rule, "canvas"))) }
+    // the nav rail is --sidebar (--rail): its links take the token too
+    const surfaces = { background: srgb(oklch(token(rule, "background"))), sidebar: srgb(oklch(token(rule, "sidebar"))), canvas: srgb(oklch(token(rule, "canvas"))) }
     const accents = accentRings(theme)
     expect([...accents.keys()].sort()).toEqual([...ACCENTS].sort())
     const weak = [...accents].flatMap(([accent, color]) =>

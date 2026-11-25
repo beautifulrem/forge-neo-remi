@@ -83,7 +83,7 @@ function HistoryRow({ job, onView }: { job: Job; onView: (job: Job, index: numbe
               type="button"
               onClick={() => onView(job, index)}
               aria-label={t("View image {{index}} of job #{{seq}}", { index: index + 1, seq: job.seq })}
-              className={cn("relative size-14 overflow-hidden rounded-md bg-checker outline-none focus-visible:ring-3 focus-visible:ring-ring", index > 0 && "hidden sm:block")}
+              className={cn("relative size-14 overflow-hidden rounded-md bg-checker outline-none focus-visible:ring-3 focus-visible:ring-focus-ring", index > 0 && "hidden sm:block")}
             >
               <OutputThumb id={output.id} gone={output.missing === true} />
               {index === THUMBS - 1 && images.length > THUMBS ? (
