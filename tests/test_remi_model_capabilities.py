@@ -512,6 +512,16 @@ def test_check_script_applicability_edge_cases():
     assert ok is False and reason == "Requires Anima engine hooks (active model: Qwen-Image-2.1)"
 
 
+def test_a_lone_capability_string_names_one_capability():
+    from remi.core import capabilities as cap_mod
+
+    assert check_script_applicability("anima_hooks", ["anima_hooks"]) == (True, None)
+    script = SimpleNamespace(requires_capabilities="anima_hooks")
+    assert cap_mod.script_applicability(script, {"anima_hooks"}, summary={"engine_label": "Anima"}) == {"requires_capabilities": ["anima_hooks"], "applicable": True}
+    off = cap_mod.script_applicability(script, {"spectrum"}, summary={"engine_label": "FLUX.3"})
+    assert off["requires_capabilities"] == ["anima_hooks"] and off["applicable"] is False
+
+
 def test_remi_core_capabilities_full_branch_coverage(monkeypatch):
     from remi.core import capabilities as cap_mod
 

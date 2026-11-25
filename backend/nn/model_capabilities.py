@@ -529,8 +529,27 @@ def all_preset_capability_summaries() -> dict[str, dict[str, Any]]:
     return result
 
 
+def capability_list(declared: Any) -> list[str]:
+    """A ``requires_capabilities`` declaration as a list of tokens: a lone
+    string is one capability, not one per character."""
+
+    if isinstance(declared, str):
+        declared = (declared,)
+    return [str(cap) for cap in (declared or ()) if cap]
+
+
+def known_capabilities() -> frozenset[str]:
+    """Every capability token a model can expose: the labelled ones and any
+    a registered DiT family declares."""
+
+    tokens = set(CAPABILITY_LABELS)
+    for summary in all_preset_capability_summaries().values():
+        tokens.update(summary["capabilities"])
+    return frozenset(tokens)
+
+
 def check_script_applicability(
-    requires_capabilities: Collection[str] | None,
+    requires_capabilities: Collection[str] | str | None,
     active_capabilities: Collection[str],
     *,
     engine_label: str | None = None,
@@ -539,7 +558,7 @@ def check_script_applicability(
     """Evaluate whether a script declaring ``requires_capabilities`` applies to
     a model with ``active_capabilities``. Returns ``(applicable, reason_or_none)``."""
 
-    required = [str(cap) for cap in (requires_capabilities or ()) if cap]
+    required = capability_list(requires_capabilities)
     if not required:
         return True, None
     active = set(active_capabilities)

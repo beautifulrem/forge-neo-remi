@@ -77,8 +77,11 @@ display health/metadata in the Extensions → Diagnostics view:
 
 - `api_version` (required when the file is present): SemVer version or range
   (`"1.0"`, `"^1.0"`, `">=1.0,<2.0"`), checked by `remi.ui.version.check_api_compatibility`.
-- `requires_capabilities` / `requires_widgets`: optional declarative capability
-  tags and custom widget names validated by `remi.ui.manifest.load_manifest`.
+- `requires_capabilities` / `requires_widgets`: optional lists of capability
+  tags and custom widget names. Extensions → Diagnostics warns about a capability
+  that no model exposes; widgets are only checked by
+  `verify_extension_contract(..., known_widgets=[...])`, since the SPA's widgets
+  are compiled into its bundle.
 - Missing manifests remain valid for backward compatibility (`status: "missing"`).
 
 ## 2. Scripts and their hooks

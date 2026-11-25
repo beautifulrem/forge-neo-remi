@@ -34,6 +34,13 @@ def test_semver_parsing_and_api_compatibility():
     assert ui.check_api_compatibility("0.9 || >=1.0", "1.0").compatible is True
     assert ui.check_api_compatibility("not-a-version", "1.0").compatible is False
 
+    # a space after the operator still reads as one comparator
+    assert ui.check_api_compatibility(">= 1.0", "1.0").compatible is True
+    assert ui.check_api_compatibility("^ 1.0", "1.4").compatible is True
+    assert ui.check_api_compatibility("0.9 || >= 1.0", "1.2").compatible is True
+    spaced = ui.check_api_compatibility(">= 1.0, < 2.0", "2.0")
+    assert spaced.compatible is False and spaced.reason.startswith("requires")
+
 
 def test_manifest_loading_and_validation(tmp_path):
     # Missing manifest is allowed (backwards compatible)
@@ -63,6 +70,11 @@ def test_manifest_loading_and_validation(tmp_path):
     # Unknown widget generates warning, not error
     warn_res = ui.load_manifest(tmp_path, known_widgets=["stage-timeline"])
     assert warn_res.status == "valid" and warn_res.warnings
+
+    # Unknown capability: a warning as well (the server passes the ones its models expose)
+    caps_res = ui.load_manifest(tmp_path, known_widgets=["image-list"], known_capabilities=["spectrum"])
+    assert caps_res.status == "valid" and caps_res.warnings == ("unknown required capabilities: anima_hooks",)
+    assert ui.load_manifest(tmp_path, known_widgets=["image-list"], known_capabilities=["anima_hooks"]).warnings == ()
 
     # Incompatible API version
     incompat = ui.validate_manifest_dict({"api_version": ">=2.0", "license": "MIT"})
@@ -148,7 +160,11 @@ def test_extension_diagnostics_report_and_route(tmp_path, monkeypatch):
     assert report["summary"]["disabled"] == 1
     assert report["summary"]["with_manifest"] == 2
 
-    monkeypatch.setattr(extensions_admin, "all_extensions", lambda: fake_exts)
+    ext_typo = tmp_path / "ext_typo"
+    ext_typo.mkdir()
+    (ext_typo / ui.MANIFEST_FILENAME).write_text(json.dumps({"api_version": "1.0", "requires_capabilities": ["anima_hooks", "anima_hook"]}), encoding="utf-8")
+    typo = SimpleNamespace(name="ext_typo", enabled=True, is_builtin=False, path=str(ext_typo))
+    monkeypatch.setattr(extensions_admin, "all_extensions", lambda: [*fake_exts, typo])
     with webui_state(), server_app(tmp_path) as server:
         resp = server.client.get("/api/v2/extensions/diagnostics")
         assert resp.status_code == 200
@@ -158,6 +174,9 @@ def test_extension_diagnostics_report_and_route(tmp_path, monkeypatch):
         assert by_name["ext_ok"]["load_time_ms"] == 14.5
         assert by_name["ext_bad"]["manifest_status"] == "incompatible"
         assert by_name["ext_off"]["health"] == "disabled"
+        # the route checks required capabilities against the ones models expose
+        assert by_name["ext_typo"]["manifest_warnings"] == ["unknown required capabilities: anima_hook"]
+        assert by_name["ext_typo"]["health"] == "degraded"
     ui.diagnostics.reset()
 
 

@@ -11,6 +11,7 @@ from typing import Any
 
 from backend.nn.dit_registry import AdviceItem, derive_model_advice
 from backend.nn.model_capabilities import (
+    capability_list,
     capability_summary_for_preset,
     check_script_applicability,
     ensure_ext_capabilities_loaded,
@@ -87,8 +88,7 @@ def script_applicability(
     """Compute ``requires_capabilities``, ``applicable``, and optional
     ``inapplicable_reason`` metadata for a ``scripts.Script`` instance."""
 
-    raw_req = getattr(script, "requires_capabilities", ()) or ()
-    required = [str(cap) for cap in raw_req if cap]
+    required = capability_list(getattr(script, "requires_capabilities", ()))
     if active_caps is None or summary is None:
         resolved_summary = summary if summary is not None else active_capability_summary(opts=opts, preset=preset)
         caps = active_caps if active_caps is not None else resolved_summary.get("capabilities", ())

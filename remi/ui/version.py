@@ -20,6 +20,7 @@ REMI_MIN_SUPPORTED_API_VERSION = "1.0"
 
 _SEMVER_RE = re.compile(r"^v?(?P<major>0|[1-9]\d*)(?:\.(?P<minor>0|[1-9]\d*))?(?:\.(?P<patch>0|[1-9]\d*))?(?:-(?P<pre>[0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 _COMPARATOR_RE = re.compile(r"^(?P<op>==|!=|>=|<=|>|<|\^|~|=)?\s*(?P<ver>.+)$")
+_OPERATOR_SPACE_RE = re.compile(r"(==|!=|>=|<=|[<>=^~])\s+")
 
 
 @dataclass(frozen=True, order=True)
@@ -152,7 +153,8 @@ def check_api_compatibility(required_range: str | None, current: str = REMI_API_
     if not alternatives:
         return CompatibilityResult(True, current, spec, None)
     for alt in alternatives:
-        clauses = [part for part in re.split(r"[,\s]+", alt) if part]
+        # glue each operator to its version first: ">= 1.0" is one clause, not ">=" and "1.0"
+        clauses = [part for part in re.split(r"[,\s]+", _OPERATOR_SPACE_RE.sub(r"\1", alt)) if part]
         try:
             if all(_matches_clause(current_ver, clause) for clause in clauses):
                 return CompatibilityResult(True, current, spec, None)

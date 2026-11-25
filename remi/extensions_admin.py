@@ -986,8 +986,15 @@ def _startup_load_times_ms() -> dict[str, float]:
     return times
 
 
-def diagnostics_report(*, extensions_list: Iterable[Any] | None = None, known_widgets: Iterable[str] | None = None) -> dict[str, Any]:
-    """Collect per-extension health, manifest status, load times and error counts."""
+def diagnostics_report(
+    *,
+    extensions_list: Iterable[Any] | None = None,
+    known_widgets: Iterable[str] | None = None,
+    known_capabilities: Iterable[str] | None = None,
+) -> dict[str, Any]:
+    """Collect per-extension health, manifest status, load times and error counts.
+    A manifest's required widgets and capabilities are checked against
+    ``known_widgets`` / ``known_capabilities`` when given."""
 
     from remi.ui.manifest import diagnostics as collector
     from remi.ui.manifest import load_manifest
@@ -998,6 +1005,8 @@ def diagnostics_report(*, extensions_list: Iterable[Any] | None = None, known_wi
     disabled_map = _disabled_scripts_by_extension()
     startup_times = _startup_load_times_ms()
     recorded = collector.snapshot()
+    widgets = None if known_widgets is None else frozenset(known_widgets)
+    capabilities = None if known_capabilities is None else frozenset(known_capabilities)
 
     items: list[dict[str, Any]] = []
     summary = {"total": 0, "healthy": 0, "degraded": 0, "error": 0, "disabled": 0, "with_manifest": 0}
@@ -1007,7 +1016,7 @@ def diagnostics_report(*, extensions_list: Iterable[Any] | None = None, known_wi
         enabled = bool(getattr(ext, "enabled", True))
         builtin = bool(getattr(ext, "is_builtin", False))
         path = getattr(ext, "path", "") or ""
-        mres = load_manifest(path, known_widgets=known_widgets) if path else load_manifest(".", known_widgets=known_widgets)
+        mres = load_manifest(path or ".", known_widgets=widgets, known_capabilities=capabilities)
         if not path or not os.path.isdir(path):
             from remi.ui.manifest import ManifestValidationResult
 

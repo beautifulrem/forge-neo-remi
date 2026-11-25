@@ -97,9 +97,12 @@ def validate_manifest_dict(
     data: Any,
     *,
     known_widgets: Iterable[str] | None = None,
+    known_capabilities: Iterable[str] | None = None,
     api_version: str = REMI_API_VERSION,
 ) -> ManifestValidationResult:
-    """Validate a parsed ``remi-extension.json`` mapping."""
+    """Validate a parsed ``remi-extension.json`` mapping. Required widgets and
+    capabilities missing from ``known_widgets`` / ``known_capabilities`` (when
+    given) are warnings."""
 
     if not isinstance(data, Mapping):
         return ManifestValidationResult(None, "invalid", ("manifest root must be a JSON object",), (), False)
@@ -147,6 +150,11 @@ def validate_manifest_dict(
         missing_widgets = [w for w in requires_widgets if w not in available]
         if missing_widgets:
             warnings.append(f"unknown required widgets: {', '.join(missing_widgets)}")
+    if known_capabilities is not None and requires_capabilities:
+        available = set(known_capabilities)
+        missing_capabilities = [c for c in requires_capabilities if c not in available]
+        if missing_capabilities:
+            warnings.append(f"unknown required capabilities: {', '.join(missing_capabilities)}")
 
     if errors:
         return ManifestValidationResult(None, "invalid", tuple(errors), tuple(warnings), False)
@@ -179,6 +187,7 @@ def load_manifest(
     extension_dir: str | Path,
     *,
     known_widgets: Iterable[str] | None = None,
+    known_capabilities: Iterable[str] | None = None,
     api_version: str = REMI_API_VERSION,
 ) -> ManifestValidationResult:
     """Read and validate ``<extension_dir>/remi-extension.json`` if present."""
@@ -190,7 +199,7 @@ def load_manifest(
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
         return ManifestValidationResult(None, "invalid", (f"cannot parse {MANIFEST_FILENAME}: {error}",), (), False)
-    return validate_manifest_dict(raw, known_widgets=known_widgets, api_version=api_version)
+    return validate_manifest_dict(raw, known_widgets=known_widgets, known_capabilities=known_capabilities, api_version=api_version)
 
 
 @dataclass
