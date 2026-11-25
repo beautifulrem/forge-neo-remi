@@ -7,7 +7,7 @@
  */
 import { useQuery } from "@tanstack/react-query"
 import { ArrowRight, ClipboardCopy, FileSearch, ImageUp, Images, ListTree, Paintbrush, Rows3, SlidersHorizontal, Upload, Wand, X } from "@/components/icons"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
@@ -197,20 +197,22 @@ export default function PngInfoPage({ route }: { route: Route }) {
   const { busy, upload } = useUpload((id) => show(id))
   const onFiles = (files: File[]) => files[0] && void upload(files[0])
 
-  // Paste anywhere on the page (not into a text field) reads the pasted image.
-  useEffect(() => {
-    const onPaste = (event: ClipboardEvent) => {
-      if (event.defaultPrevented || busy) return
-      const target = event.target instanceof Element ? event.target : null
-      if (target?.closest("input, textarea, [contenteditable]")) return
-      const file = Array.from(event.clipboardData?.files ?? []).find((item) => item.type.startsWith("image/"))
-      if (!file) return
-      event.preventDefault()
-      void upload(file)
-    }
-    window.addEventListener("paste", onPaste)
-    return () => window.removeEventListener("paste", onPaste)
+  // Paste anywhere on the page (not into a text field) reads the pasted image: one listener for
+  // the page's life, reading the latest render's state.
+  const onPaste = useEffectEvent((event: ClipboardEvent) => {
+    if (event.defaultPrevented || busy) return
+    const target = event.target instanceof Element ? event.target : null
+    if (target?.closest("input, textarea, [contenteditable]")) return
+    const file = Array.from(event.clipboardData?.files ?? []).find((item) => item.type.startsWith("image/"))
+    if (!file) return
+    event.preventDefault()
+    void upload(file)
   })
+  useEffect(() => {
+    const listener = (event: ClipboardEvent) => onPaste(event)
+    window.addEventListener("paste", listener)
+    return () => window.removeEventListener("paste", listener)
+  }, [])
 
   if (!fileId) {
     return (

@@ -184,6 +184,28 @@ describe("PNG Info page", () => {
     expect(await screen.findByRole("heading", { name: "cat.png" })).toBeInTheDocument()
   })
 
+  it("listens for pasted images once, not again on every render", async () => {
+    const calls = mockServer()
+    const listen = vi.spyOn(window, "addEventListener")
+    const { rerender } = renderPage()
+    // the page's own listener; the drop zone's follows its props and is not counted
+    const pastes = () => listen.mock.calls.filter(([type, listener]) => type === "paste" && !String(listener).includes("hovered")).length
+    const before = pastes()
+    for (let i = 0; i < 3; i++) {
+      rerender(
+        <QueryClientProvider client={queryClient}>
+          <PngInfoPage route={{ name: "png-info" }} />
+        </QueryClientProvider>,
+      )
+    }
+    expect(pastes()).toBe(before)
+    // and the one listener still reads a pasted image
+    const paste = new Event("paste", { bubbles: true, cancelable: true }) as ClipboardEvent
+    Object.defineProperty(paste, "clipboardData", { value: { files: [new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], "p.png", { type: "image/png" })] } })
+    act(() => void document.body.dispatchEvent(paste))
+    await waitFor(() => expect(calls.some((call) => call.path === "/uploads")).toBe(true))
+  })
+
   it("groups entries in order", () => {
     expect(groupEntries(metadata.entries).map(([group, rows]) => [group, rows.length])).toEqual([
       ["Image", 1],

@@ -141,6 +141,21 @@ describe("gallery page", { timeout: 20_000 }, () => {
     }
   })
 
+  it("listens for its keys once, not again on every render", async () => {
+    mockServer([item(1), item(2), item(3)])
+    const listen = vi.spyOn(window, "addEventListener")
+    renderPage()
+    await screen.findByRole("checkbox", { name: "Select 00001.png" })
+    const before = listen.mock.calls.filter(([type]) => type === "keydown").length
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select 00001.png" }))
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select 00002.png", hidden: true }))
+    expect(screen.getByRole("toolbar", { name: "Selected images" })).toHaveTextContent("2 selected")
+    expect(listen.mock.calls.filter(([type]) => type === "keydown").length).toBe(before)
+    // and the listener sees the selection as it is now
+    fireEvent.keyDown(window, { key: "Escape" })
+    expect(screen.queryByRole("toolbar", { name: "Selected images" })).toBeNull()
+  })
+
   it("leaves the selection alone while the delete confirmation is open", async () => {
     mockServer([item(1), item(2), item(3)])
     renderPage()

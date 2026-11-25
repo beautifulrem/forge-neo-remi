@@ -9,7 +9,7 @@
  */
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { Columns2, Download, GalleryVerticalEnd, Images, RefreshCw, Star, StarOff, Trash2, X } from "@/components/icons"
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useEffectEvent, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
@@ -128,26 +128,28 @@ export default function GalleryPage() {
     { id: "gallery.starred", label: "Show starred images only", group: "Gallery", run: () => view.set({ starred: true }) },
   ])
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return
-      const target = event.target instanceof Element ? event.target : null
-      // a field, a dialog (the delete confirmation is an alertdialog), or a menu or list popup has
-      // these keys to itself: Escape closes it, Delete and Mod+A act inside it
-      if (target?.closest("input, textarea, [contenteditable], [role=dialog], [role=alertdialog], [role=menu], [role=listbox]")) return
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a" && order.length > 0) {
-        event.preventDefault()
-        setSelection(selectAll(order))
-      } else if (event.key === "Escape" && selection.ids.size > 0) {
-        setSelection(EMPTY_SELECTION)
-      } else if ((event.key === "Delete" || event.key === "Backspace") && selection.ids.size > 0) {
-        // a Mac's delete key is Backspace (Delete is Fn+Delete there), as in the history strip
-        setDeleting(ordered(selection, order))
-      }
+  // one listener for the page's life; it reads the selection of the latest render
+  const onKey = useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented) return
+    const target = event.target instanceof Element ? event.target : null
+    // a field, a dialog (the delete confirmation is an alertdialog), or a menu or list popup has
+    // these keys to itself: Escape closes it, Delete and Mod+A act inside it
+    if (target?.closest("input, textarea, [contenteditable], [role=dialog], [role=alertdialog], [role=menu], [role=listbox]")) return
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a" && order.length > 0) {
+      event.preventDefault()
+      setSelection(selectAll(order))
+    } else if (event.key === "Escape" && selection.ids.size > 0) {
+      setSelection(EMPTY_SELECTION)
+    } else if ((event.key === "Delete" || event.key === "Backspace") && selection.ids.size > 0) {
+      // a Mac's delete key is Backspace (Delete is Fn+Delete there), as in the history strip
+      setDeleting(ordered(selection, order))
     }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
   })
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => onKey(event)
+    window.addEventListener("keydown", listener)
+    return () => window.removeEventListener("keydown", listener)
+  }, [])
 
   const header = (
     <HeaderSlot>
