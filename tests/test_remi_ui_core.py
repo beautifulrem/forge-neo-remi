@@ -416,6 +416,30 @@ def test_the_extras_video_clip_must_be_a_file_on_the_server(webui, monkeypatch, 
     assert [(error["param"], error["message"]) for error in caught.value.to_json()["errors"]] == [("video_input", not_a_path)]
 
 
+def test_extras_tabs_say_why_their_path_inputs_are_gone_with_hidden_dirs(webui, monkeypatch):
+    """The tabs stay (the mode is an index), so without a note Single Video was an empty tab."""
+
+    from modules import shared
+    from remi.core.tabs import tab_schema
+
+    def notes(schema):
+        def walk(node):
+            if node.get("type") == "tab":
+                yield node["value"], [child.get("text") for child in node.get("children", []) if child.get("type") == "markdown"]
+            for child in node.get("children", []):
+                yield from walk(child)
+
+        return dict(walk(schema["core"]["layout"]))
+
+    note = "Disabled when launched with --hide-ui-dir-config."
+    monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", True)
+    hidden = notes(tab_schema("extras"))
+    assert note in hidden["Batch from Directory"] and note in hidden["Single Video"]
+    assert note not in hidden["Single Image"]
+    monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", False)
+    assert all(note not in texts for texts in notes(tab_schema("extras")).values())
+
+
 def test_the_client_check_gives_the_reason_a_hidden_path_input_is_refused(webui, monkeypatch):
     """The client checks ``core.required`` before submitting: with --hide-ui-dir-config the
     Extras directory and video inputs are hidden, so "an input directory is required" asked for

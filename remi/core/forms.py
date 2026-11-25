@@ -474,6 +474,8 @@ def extras_form() -> ui.Node:
     from modules import shared
 
     hide_dirs = bool(shared.cmd_opts.hide_ui_dir_config)
+    # the tabs stay (the mode is an index): they say why their inputs are gone
+    hidden_note = [ui.Markdown("Disabled when launched with --hide-ui-dir-config.")] if hide_dirs else []
     return ui.Column(
         ui.Choice("mode", EXTRAS_MODES, "Single Image", type="index", label="Mode", hidden=True),
         ui.Tabs(
@@ -481,6 +483,7 @@ def extras_form() -> ui.Node:
             ui.Tab("Batch Process", ui.ImageList("image_batch", label="Batch Process"), value="Batch Process"),
             ui.Tab(
                 "Batch from Directory",
+                *hidden_note,
                 ui.Text("input_dir", "", label="Input directory", placeholder="A directory on the same machine where the server is running.", hidden=hide_dirs),
                 ui.Text("output_dir", "", label="Output directory", placeholder="Leave blank to save images to the default path.", hidden=hide_dirs),
                 ui.Toggle("show_extras_results", True, label="Show result images"),
@@ -488,6 +491,7 @@ def extras_form() -> ui.Node:
             ),
             ui.Tab(
                 "Single Video",
+                *hidden_note,
                 ui.Text("video_input", "", label="Input Clip", info='For video longer than 1 minute, please extract the frames and use "Batch from Directory" instead', placeholder="Path to a video file", hidden=hide_dirs),
                 value="Single Video",
             ),
