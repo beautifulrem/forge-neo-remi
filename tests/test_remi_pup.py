@@ -248,10 +248,19 @@ def test_aspect_ratio_and_bbox_normalization_edge_cases():
         [{"id": "bad_unit", "src_bbox": [0.1, 0.1, 0.5, 0.5], "tgt_bbox": [0.1, 0.2]}],
         [{"id": "bad_canvas", "bbox": [900, 900, 100, 100]}],
         [{"id": "bad_src", "src_bbox": [900, 900, 100, 100], "tgt_bbox": [10, 10, 200, 200]}],
+        [{"src_bbox": [0.1, 0.1, 0.5, 0.5], "tgt_bbox": 7}],
+        [{"src_bbox": [0.1, 0.1, 0.5, 0.5], "tgt_bbox": [None, None, None, None]}],
     ):
         with pytest.raises(TranslationError) as err:
             pup._normalize_bbox_rows(bad_draft)  # type: ignore[arg-type]
         assert err.value.status == 422
+
+    # the model's box table with ids that are not strings: its rows are dropped, the locked ones kept
+    from backend.nn.flux3_layout import reconcile_boxes, split_caption
+
+    locked = [{"id": "cat_1", "bbox": [100, 100, 500, 500], "desc": "cat"}]
+    for answer in ('c [{"id": ["x"], "bbox": [1, 1, 500, 500]}]', 'c [{"id": ["x"], "bbox": [100, 100, 500, 500]}, {"id": {"y": 1}, "bbox": [100, 100, 500, 500]}]'):
+        assert split_caption(reconcile_boxes(answer, locked))[1] == locked
 
 
 def test_prepare_reference_images_all_input_types_and_limits(tmp_path):

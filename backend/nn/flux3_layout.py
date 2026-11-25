@@ -211,7 +211,8 @@ def reconcile_boxes(text: str, locked: list[dict]) -> str:
     """The upsampler's answer with the user's boxes re-imposed (BFL ``reconcile``)."""
 
     caption, rows = split_caption(text)
-    rows = rows or []
+    # only the model's rows with a string id can be renamed or kept (another id may not even be hashable)
+    rows = [row for row in rows or [] if isinstance(row, dict) and isinstance(row.get("id"), str)]
     locked_ids = {row["id"] for row in locked}
     row_ids = {row.get("id") for row in rows if isinstance(row, dict)}
     renamed = {}

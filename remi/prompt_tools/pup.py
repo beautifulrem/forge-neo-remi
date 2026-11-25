@@ -301,7 +301,7 @@ def _normalize_bbox_rows(bbox_draft: Sequence[dict[str, Any]]) -> list[dict[str,
         if any(_is_unit_box(b) for b in candidate_boxes):
             try:
                 rows.extend(flux3_layout.boxes_to_canvas([raw]))
-            except ValueError as err:
+            except (TypeError, ValueError) as err:  # a box that is not a list of four numbers
                 raise TranslationError(str(err), 422) from err
         else:
             row_id = str(raw.get("id") or f"obj_{idx + 1}")
