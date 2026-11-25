@@ -20,6 +20,8 @@ export type TaskStatus = {
   progress: number | null
   text: string | Message | null
   error: string | null
+  /** The refused values of a task that failed on them (`ParamError` JSON: their templates translate). */
+  errors?: unknown
   done: boolean
   cancelling?: boolean
 }

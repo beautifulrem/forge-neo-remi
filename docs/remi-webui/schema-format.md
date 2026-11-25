@@ -463,11 +463,13 @@ id `page:<id>`) and return §5 patches; `__outputs__` fill the page's
 **Tasks.** An action that starts long work answers at once with
 `{"__outputs__": {"task:<name>": Status}}`, `Status = {id, name, state
 ("queued"|"running"|"completed"|"failed"|"cancelled"), progress (0…1 or
-null), text (string or message, §5), error, done, cancelling}`. The client
+null), text (string or message, §5), error, errors, done, cancelling}`
+(`errors`: the refused values, as in §3, of a task whose work raised a
+`ValidationError`, else null; their templates translate). The client
 polls the page's `__task__` action with `{"task": name, "id": status.id}`:
 running answers may carry partial outputs; the answer once the task has
 ended carries the task's result patch (values, outputs, a toast; a failure
-adds an error toast). `{"resume": true}` (a view mounting again) asks for
+adds an error toast: the refused value's message itself when there is one). `{"resume": true}` (a view mounting again) asks for
 the status; it carries the result too while no view has received it (the
 task ended while none followed it, e.g. during a reload). The
 `__cancel__` action (`{"task": name}`) asks the task to stop.

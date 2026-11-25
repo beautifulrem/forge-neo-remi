@@ -149,6 +149,26 @@ describe("task-runner widget", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Failed: out of memory")
   })
 
+  it("shows the values a task refused in the UI language", async () => {
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", "unknown model {{name}}", "未知模型 {{name}}")
+    const errors = [{ owner: OWNER, param: "model", message: "unknown model 'x'", template: "unknown model {{name}}", params: { name: "'x'" } }]
+    server({
+      caption: [{ __outputs__: { "task:caption": status("queued") } }],
+      __task__: [{ __outputs__: { "task:caption": null } }, { __outputs__: { "task:caption": status("failed", { error: "unknown model 'x'", errors }) } }],
+    })
+    await i18n.changeLanguage("zh-CN")
+    try {
+      setup()
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Caption image" }))
+      })
+      expect(await screen.findByRole("alert")).toHaveTextContent("失败：未知模型 'x'")
+    } finally {
+      await i18n.changeLanguage("en")
+    }
+  })
+
   it("translates every chrome string", () => {
     const catalog = zh as Record<string, string>
     expect(widgetKeys(source).filter((key) => !catalog[key])).toEqual([])

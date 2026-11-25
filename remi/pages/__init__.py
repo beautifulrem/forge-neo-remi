@@ -108,6 +108,9 @@ class Task:
         self.fraction: float | None = None
         self.text: str | dict | None = None
         self.error: str | None = None
+        self.errors: list[dict[str, Any]] | None = None
+        """the refused values (``ParamError.to_json()``) of a task that failed with a
+        ``ValidationError``: their templates go to the UI, as a job's do"""
         self.result: dict[str, Any] = {}
         self.outputs: dict[str, Any] = {}
         self.started = time.time()
@@ -160,15 +163,17 @@ class Task:
                 "progress": self.fraction,
                 "text": self.text,
                 "error": self.error,
+                "errors": self.errors,
                 "done": self.done,
                 "cancelling": self._cancel.is_set() and not self.done,
             }
 
-    def _finish(self, state: str, *, result: Mapping[str, Any] | None = None, error: str | None = None) -> None:
+    def _finish(self, state: str, *, result: Mapping[str, Any] | None = None, error: str | None = None, errors: list[dict[str, Any]] | None = None) -> None:
         with self._lock:
             self.state = state
             self.result = dict(result or {})
             self.error = error
+            self.errors = errors
             if state == "completed":
                 self.fraction = 1.0
             self.finished = time.time()
@@ -352,7 +357,7 @@ class Page:
             except TaskCancelled:
                 task._finish("cancelled", result=ui.toast("Cancelled", "info"))
             except ui.ValidationError as error:
-                task._finish("failed", error="; ".join(str(item.message) for item in error.errors))
+                task._finish("failed", error="; ".join(str(item.message) for item in error.errors), errors=error.to_json()["errors"])
             except Exception as error:
                 log.exception("page %s: task %s failed", self.id, name)
                 task._finish("failed", error=str(error) or type(error).__name__)
@@ -399,7 +404,7 @@ class Page:
             task.delivered = task.delivered or deliver
         if deliver:
             if task.state == "failed":
-                patch.update(ui.toast(message("Failed: {{error}}", error=task.error or ""), "error"))
+                patch.update(_failure_toast(task))
             patch = {**task.result, **patch, "__outputs__": {**task.result.get("__outputs__", {}), **patch["__outputs__"]}}
         return patch
 
@@ -455,6 +460,16 @@ def _forward(name: str, spec: ActionSpec, bound: Callable[..., Any]) -> Callable
 
     call.__name__ = name
     return ui.action(name, gpu=spec.gpu, timeout=spec.timeout)(call)
+
+
+def _failure_toast(task: Task) -> dict[str, Any]:
+    """The toast of a failed task: the one value it refused, by its catalog key or template
+    (the UI translates it); else "Failed:" and the error text."""
+
+    if task.errors and len({item["message"] for item in task.errors}) == 1:
+        item = task.errors[0]
+        return ui.toast(message(item["template"], **item["params"]) if "template" in item else item["message"], "error")
+    return ui.toast(message("Failed: {{error}}", error=task.error or ""), "error")
 
 
 def _task_patch(task: Task) -> dict[str, Any]:

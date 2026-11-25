@@ -387,3 +387,27 @@ def test_failed_tasks_toast_their_error(server):
     done = _poll(server, {"values": {}, "task": "run", "id": status["id"]}, lambda s: s["done"])
     assert done["__outputs__"]["task:run"]["state"] == "failed" and "division" in done["__outputs__"]["task:run"]["error"]
     assert done["__toast__"]["level"] == "error" and done["__toast__"]["message"]["text"] == "Failed: {{error}}"
+
+
+def test_a_task_refusing_a_value_keeps_the_sentence_for_the_ui(server):
+    """A task whose work raises ``ValidationError``: its messages went into one English
+    string, so a ``Sentence`` (a message that names the value) lost its template. The
+    status carries the refused values as jobs do (``errors``), and a single one is the toast."""
+
+    reason = ui.Sentence("unknown model {{name}}", name="'x'")
+
+    class Refusing(Echo):
+        @ui.action("run")
+        def run(self, ctx, values):
+            def work(task):
+                raise ui.ValidationError([ui.ParamError(reason, param="model", owner=self.owner)])
+
+            return self.start_task(ctx, "run", work)
+
+    pages.register(Refusing("echo", "Echo"))
+    status = server.client.post("/api/v2/actions/page:echo/run", json={"values": {}}).json()["__outputs__"]["task:run"]
+    done = _poll(server, {"values": {}, "task": "run", "id": status["id"]}, lambda s: s["done"])
+    ended = done["__outputs__"]["task:run"]
+    assert ended["state"] == "failed" and ended["error"] == "unknown model 'x'"
+    assert ended["errors"] == [{"owner": "page:echo", "param": "model", "message": "unknown model 'x'", "template": "unknown model {{name}}", "params": {"name": "'x'"}}]
+    assert done["__toast__"] == {"level": "error", "message": {"text": "unknown model {{name}}", "params": {"name": "'x'"}}}

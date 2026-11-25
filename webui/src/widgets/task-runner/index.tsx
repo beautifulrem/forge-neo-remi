@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next"
 import type { ActionExtra } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
+import { jobErrorText } from "@/features/errors/error-text"
 import { useForm, useFormState, useOwner, useRunAction } from "@/ui/hooks"
 import { messageText } from "@/ui/messages"
 import type { WidgetProps } from "@/ui/widgets"
@@ -115,7 +116,7 @@ export default function TaskRunner({ props, disabled, id }: WidgetProps<null, Pr
         </div>
       ) : status?.state === "failed" && status.error ? (
         <p className="text-xs text-destructive" role="alert">
-          {tw("Failed: {{error}}", { error: status.error })}
+          {tw("Failed: {{error}}", { error: jobErrorText(status.error, status.errors, i18n.language) })}
         </p>
       ) : null}
     </div>
