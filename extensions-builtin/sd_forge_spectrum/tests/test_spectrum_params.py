@@ -130,11 +130,35 @@ def test_a_failed_save_leaves_the_saved_presets_whole(presets, tmp_path):
     with pytest.raises(TypeError):
         PresetManager.save_preset("broken", {"a set json cannot write"})
     assert stored.read_bytes() == before and sorted(os.listdir(tmp_path)) == ["presets.json"]
-    del presets["broken"]
-    PresetManager.save_preset("next", *SETTINGS)
+    PresetManager.save_preset("next", *SETTINGS)  # the failed preset is not kept to fail it too
     assert sorted(json.loads(stored.read_text(encoding="utf-8"))) == ["kept", "next"]
     if sys.platform != "win32":
         assert stored.stat().st_mode & 0o777 == 0o640  # a replaced file keeps its permissions
+
+
+def test_a_failed_save_or_delete_leaves_the_presets_in_memory_as_saved(presets, monkeypatch):
+    """The change was made in memory before the file was written: a preset JSON cannot write
+    stayed there and failed every later save until a restart, and a failed delete showed the
+    preset gone although the file still had it."""
+    import modules.anima_user_data as user_data
+
+    PresetManager.save_preset("kept", *SETTINGS)
+    saved = json.loads(json.dumps(presets))
+    with pytest.raises(TypeError):
+        PresetManager.save_preset("kept", {"a set json cannot write"})
+    with pytest.raises(TypeError):
+        PresetManager.save_preset("broken", {"a set json cannot write"})
+    assert presets == saved
+
+    def full_disk(path, write, **kwargs):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(user_data, "atomic_replace", full_disk)
+    with pytest.raises(OSError):
+        PresetManager.delete_preset("kept")
+    with pytest.raises(OSError):
+        PresetManager.save_preset("other", *SETTINGS)
+    assert presets == saved
 
 
 def test_delete_removes_the_preset_and_clears_the_name(presets):

@@ -1,5 +1,7 @@
+import contextlib
 import os.path
 import threading
+from collections.abc import Iterator
 from json import dumps, load
 from typing import Final
 
@@ -106,7 +108,7 @@ class PresetManager:
             logger.error("Invalid Preset Name...")
             return None
 
-        with _WRITE_LOCK:
+        with _WRITE_LOCK, cls._kept_on_failure():
             cls.presets.update({preset_name: [*args]})
             cls._write()
             names = cls.list_preset()
@@ -119,7 +121,7 @@ class PresetManager:
         """Delete ``preset_name``; returns the remaining preset names, or None
         when there is no such preset."""
 
-        with _WRITE_LOCK:
+        with _WRITE_LOCK, cls._kept_on_failure():
             if preset_name not in cls.presets:
                 logger.error(f'Preset "{preset_name}" was not found...')
                 return None
@@ -129,6 +131,21 @@ class PresetManager:
 
         logger.info(f'Preset "{preset_name}" Deleted!')
         return names
+
+    @classmethod
+    @contextlib.contextmanager
+    def _kept_on_failure(cls) -> Iterator[None]:
+        """The presets as they were (in their order) when the change fails to be written: a
+        preset JSON cannot write would otherwise stay and fail every later save, and a failed
+        delete would show the preset gone while the file keeps it."""
+
+        before = dict(cls.presets)
+        try:
+            yield
+        except BaseException:
+            cls.presets.clear()
+            cls.presets.update(before)
+            raise
 
     @classmethod
     def _write(cls) -> None:
