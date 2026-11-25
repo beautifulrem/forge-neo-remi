@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { errorText } from "@/features/errors/error-text"
+import { infotextKeyLabel } from "@/features/infotext/display"
 import { cn } from "@/lib/utils"
 import { getFormStore } from "@/ui/form-store"
 import { lockNote } from "@/ui/locks"
@@ -235,7 +236,9 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
                       <tbody className="divide-y divide-border/50 font-mono tabular-nums">
                         {coreRows.map((row) => (
                           <tr key={row.key}>
-                            <td className="px-2.5 py-1 font-sans font-medium text-muted-foreground">{row.key}</td>
+                            <td className="px-2.5 py-1 font-sans font-medium text-muted-foreground" title={infotextKeyLabel(t, row.key) === row.key ? undefined : row.key}>
+                              {infotextKeyLabel(t, row.key)}
+                            </td>
                             <td className={cn("px-2.5 py-1 [overflow-wrap:anywhere]", row.changed && row.a && "bg-diff-del-bg/60 text-diff-del")}>
                               {row.a ? nameBreaks(row.a) : "—"}
                             </td>

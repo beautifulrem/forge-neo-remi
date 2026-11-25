@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
@@ -173,5 +173,31 @@ describe("RGBA 4-backdrop & CompareDialog UI", () => {
     expect(screen.getByText("sdxl_base.safetensors").innerHTML).toBe("sdxl_<wbr>base.<wbr>safetensors")
     expect(cell.className).not.toMatch(/break-all/)
     expect(cell.className).toMatch(/\[overflow-wrap:anywhere\]/)
+  })
+
+
+  // The core parameters table showed the raw infotext keys ("Steps", "CFG scale") in every language;
+  // the infotext panel and PNG Info show their translation, the key as a title.
+  it("names the core parameters in the UI language, with the infotext key as a title", async () => {
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", "Steps", "步数")
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <CompareDialog
+            images={[
+              { id: "a1", name: "a.png", width: 832, height: 1216, infotext: INFO_A },
+              { id: "b1", name: "b.png", width: 832, height: 1216, infotext: INFO_B },
+            ]}
+            onOpenChange={() => {}}
+          />
+        </QueryClientProvider>,
+      )
+      const label = await screen.findByText("步数", { selector: "td" })
+      expect(label).toHaveAttribute("title", "Steps")
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
   })
 })
