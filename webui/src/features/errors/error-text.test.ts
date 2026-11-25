@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { ApiError } from "@/api/http"
-import { errorText, failureText, validationText } from "./error-text"
+import { errorText, failureText, serviceFailureText, validationText } from "./error-text"
 
 const failed = (status: number) => new ApiError(status, `HTTP ${status}`, { detail: "English detail for the logs" })
 
@@ -85,5 +85,22 @@ describe("failureText", () => {
     expect(failureText(new TypeError("Failed to fetch"))).toBe("The server cannot be reached.")
     expect(failureText("offline")).toBe("The server cannot be reached.")
     expect(failureText(new Error("The preset was not applied"))).toBe("The preset was not applied")
+  })
+})
+
+// The prompt tools (translate, write a prompt, PUP) showed the server's English detail as is: a
+// provider that failed is only explained by its own answer, which stays, behind a sentence in the UI
+// language; every other failure is explained by its status, as elsewhere.
+describe("serviceFailureText", () => {
+  it("keeps what a failed service answered behind a sentence in the UI language", () => {
+    expect(serviceFailureText(new ApiError(502, "translation service answered 401: invalid key"))).toBe("The service failed: translation service answered 401: invalid key")
+  })
+
+  it("explains the other failures by their status", () => {
+    expect(serviceFailureText(new ApiError(409, "no translation provider is configured"))).toBe("Set up the service in Settings first.")
+    expect(serviceFailureText(new ApiError(413, "too much text to translate at once"))).toBe("The text is too long.")
+    expect(serviceFailureText(failed(500))).toBe("The server ran into an error (500).")
+    expect(serviceFailureText(new TypeError("Failed to fetch"))).toBe("The server cannot be reached.")
+    expect(serviceFailureText(new ApiError(409, "x"), { 409: "Choose a model first." })).toBe("Choose a model first.")
   })
 })

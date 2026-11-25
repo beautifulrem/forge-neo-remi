@@ -122,4 +122,25 @@ describe("PupTrigger & lazy PupUpsamplerDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Revert upsampled prompt" }))
     expect(setValue).toHaveBeenLastCalledWith("orange cat")
   })
+
+  it("says why upsampling failed in the UI language, keeping the model's answer", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ detail: "local GGUF PUP execution failed: out of memory" }), { status: 502, headers: { "Content-Type": "application/json" } }),
+    )
+    const store = createFormStore("pup-ui-failed", { persistDrafts: false })
+    store.getState().load(tabOwners(tabSchema("txt2img")))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(keys.app, bootstrapWith({ forge_preset: "flux3", sd_model_checkpoint: "flux3-klein.safetensors" }))
+    render(
+      <QueryClientProvider client={client}>
+        <FormProvider formId="txt2img" store={store}>
+          <PupTrigger value="orange cat" setValue={vi.fn()} />
+        </FormProvider>
+      </QueryClientProvider>,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Upsample prompt (PUP)" }))
+    await screen.findByRole("dialog", {}, { timeout: 15_000 })
+    fireEvent.click(screen.getByRole("button", { name: "Upsample" }))
+    expect(await screen.findByText("The service failed: local GGUF PUP execution failed: out of memory")).toBeVisible()
+  }, 20_000)
 })

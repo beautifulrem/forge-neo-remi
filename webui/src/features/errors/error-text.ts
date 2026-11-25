@@ -51,6 +51,25 @@ export function failureText(error: unknown, texts: StatusTexts = {}): string {
 }
 
 /**
+ * A failed prompt tool (translating, writing or upsampling a prompt). A service that failed (502:
+ * the translation service, the chat model, a local model) is explained only by its own answer, so
+ * that answer follows a sentence in the UI language. A 413 here is text that is too long, a 409 a
+ * service that is not set up.
+ */
+export function serviceFailureText(error: unknown, texts: StatusTexts = {}): string {
+  if (error instanceof ApiError && error.status === 502) return t("The service failed: {{detail}}", { detail: error.message })
+  return failureText(error, { 409: t("Set up the service in Settings first."), 413: t("The text is too long."), ...texts })
+}
+
+/**
+ * What a component that failed to render says: a request that failed by its status (the server's
+ * detail is English), a bug by its own message (a `TypeError` here is a bug, not `fetch` failing).
+ */
+export function renderFailureText(error: Error): string {
+  return error instanceof ApiError ? errorText(error) : error.message
+}
+
+/**
  * Rejected values in the UI language: each distinct message translated with
  * the same key as the inline error under its field (the server's messages
  * are catalog keys, see `core.required`).

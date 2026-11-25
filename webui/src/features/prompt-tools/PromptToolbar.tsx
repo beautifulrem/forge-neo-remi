@@ -9,6 +9,7 @@ import { BrushCleaning, History, KeyRound, Languages, LayoutGrid, Sparkles, Star
 import { type ReactNode, Suspense, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { serviceFailureText } from "@/features/errors/error-text"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -124,7 +125,7 @@ function TranslateTool({ value, setValue, disabled, config, viewKey }: PromptToo
     try {
       await action()
     } catch (error) {
-      toast.error(t("Translation failed"), { description: error instanceof Error ? error.message : String(error) })
+      toast.error(t("Translation failed"), { description: serviceFailureText(error) })
     } finally {
       setBusy(false)
     }

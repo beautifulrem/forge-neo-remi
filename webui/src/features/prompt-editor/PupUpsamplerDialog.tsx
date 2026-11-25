@@ -7,6 +7,7 @@ import { Check, Loader2, RotateCcw, Sparkles, TriangleAlert } from "@/components
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { serviceFailureText } from "@/features/errors/error-text"
 import { useClientOption } from "@/api/app-options"
 import { api } from "@/api/endpoints"
 import { Button } from "@/components/ui/button"
@@ -139,7 +140,7 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
       setEditing(false)
     } catch (failure) {
       if (controller.signal.aborted) return
-      setError(failure instanceof Error ? failure.message : String(failure))
+      setError(serviceFailureText(failure))
     } finally {
       if (request.current === controller) request.current = null
       setBusy(false)

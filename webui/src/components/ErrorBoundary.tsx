@@ -2,6 +2,7 @@ import { QueryErrorResetBoundary } from "@tanstack/react-query"
 import { TriangleAlert } from "@/components/icons"
 import { Component, type ErrorInfo, type ReactNode } from "react"
 import { Button } from "@/components/ui/button"
+import { renderFailureText } from "@/features/errors/error-text"
 import { t } from "@/i18n"
 import { retryFailedLoads } from "@/lib/retryable-lazy"
 
@@ -84,7 +85,7 @@ class Boundary extends Component<Props & { onRetry: () => void }, State> {
         <TriangleAlert className="size-8 text-destructive" aria-hidden />
         <div className="space-y-1">
           <p className="font-medium">{t("Something went wrong")}</p>
-          <p className="max-w-md text-sm break-words text-muted-foreground">{error.message}</p>
+          <p className="max-w-md text-sm break-words text-muted-foreground">{renderFailureText(error)}</p>
         </div>
         <Button variant="outline" size="sm" onClick={this.retry}>
           {t("Try again")}

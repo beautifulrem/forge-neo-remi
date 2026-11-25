@@ -1,7 +1,9 @@
 import { QueryClientProvider } from "@tanstack/react-query"
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { type ReactNode, useState } from "react"
+import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { ApiError } from "@/api/http"
 import { queryClient } from "@/api/queries"
 import { TEST_CONFIG } from "./testing"
 import { type PromptToolsConfig, promptToolsApi } from "./api"
@@ -77,6 +79,15 @@ describe("prompt tools around a prompt editor", () => {
     fireEvent.click(await screen.findByRole("menuitem", { name: "Write the prompt in English" }, SLOW))
     await waitFor(() => expect(onChange).toHaveBeenLastCalledWith("1girl, (long hair:1.2)"), SLOW)
     expect(translate).toHaveBeenCalledWith(["长发"], "en")
+  }, 20_000)
+
+  it("says why the translation failed in the UI language, keeping the service's answer", async () => {
+    vi.spyOn(promptToolsApi, "translate").mockRejectedValue(new ApiError(502, "translation service answered 403: quota exceeded"))
+    const failed = vi.spyOn(toast, "error")
+    setup("1girl, 长发", { ...CONFIG, tools: { ...CONFIG.tools, translation: "dictionary" } })
+    fireEvent.click(await screen.findByRole("button", { name: "Translate" }, SLOW))
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Write the prompt in English" }, SLOW))
+    await waitFor(() => expect(failed).toHaveBeenCalledWith("Translation failed", { description: "The service failed: translation service answered 403: quota exceeded" }), SLOW)
   }, 20_000)
 
   it("toggles quick tags in the prompt", async () => {

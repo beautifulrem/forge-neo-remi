@@ -164,11 +164,19 @@ describe("writing a prompt", () => {
     expect(setValue).toHaveBeenLastCalledWith("1girl, reading, cherry blossoms")
   })
 
-  it("shows the service's error", async () => {
-    vi.spyOn(promptToolsApi, "generate").mockRejectedValue(new Error("translation service unreachable"))
+  it("shows the service's error, after a sentence in the UI language", async () => {
+    vi.spyOn(promptToolsApi, "generate").mockRejectedValue(new ApiError(502, "translation service unreachable"))
     render(<GeneratePanel {...panelProps("")} />, { wrapper })
     fireEvent.change(screen.getByLabelText("Describe the image"), { target: { value: "a cat" } })
     fireEvent.click(screen.getByRole("button", { name: "Write" }))
-    expect(await screen.findByRole("alert")).toHaveTextContent("translation service unreachable")
+    expect(await screen.findByRole("alert")).toHaveTextContent("The service failed: translation service unreachable")
+  })
+
+  it("explains a refused request in the UI language", async () => {
+    vi.spyOn(promptToolsApi, "generate").mockRejectedValue(new ApiError(409, "writing prompts needs the OpenAI-compatible translation provider with its URL and model"))
+    render(<GeneratePanel {...panelProps("")} />, { wrapper })
+    fireEvent.change(screen.getByLabelText("Describe the image"), { target: { value: "a cat" } })
+    fireEvent.click(screen.getByRole("button", { name: "Write" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent("Set up the service in Settings first.")
   })
 })

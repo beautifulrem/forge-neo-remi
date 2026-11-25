@@ -1683,5 +1683,8 @@
   "LibreTranslate": "LibreTranslate",
   "DeepL": "DeepL",
   "Page unavailable": "页面不可用",
-  "No generation parameters. The image's other metadata is under All metadata.": "没有生成参数。图像的其他元数据在“全部元数据”中。"
+  "No generation parameters. The image's other metadata is under All metadata.": "没有生成参数。图像的其他元数据在“全部元数据”中。",
+  "The service failed: {{detail}}": "服务出错：{{detail}}",
+  "Set up the service in Settings first.": "请先在设置中配置该服务。",
+  "The text is too long.": "文本过长。"
 }

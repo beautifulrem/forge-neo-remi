@@ -7,6 +7,7 @@ import { Layers } from "@/components/icons"
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { renderFailureText } from "@/features/errors/error-text"
 import { type Command, formatShortcut, useRegisterCommands } from "@/app/commands"
 import { HeaderSlot } from "@/app/header-slot"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
@@ -101,7 +102,7 @@ export function NetworksDrawerHost({ tab }: { tab: GenerateTab }) {
           fallback={null}
           onError={(error) => {
             toggle(false)
-            toast.error(t("The networks panel could not be shown"), { description: error.message })
+            toast.error(t("The networks panel could not be shown"), { description: renderFailureText(error) })
             // a chunk that failed to load is fetched again when the panel is next opened (closed, it does not render)
             retryFailedLoads()
           }}

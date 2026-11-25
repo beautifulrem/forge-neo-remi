@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider, useSuspenseQuery } from "@tanstack/re
 import { fireEvent, render, screen } from "@testing-library/react"
 import { Suspense } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { ApiError } from "@/api/http"
 import { ErrorBoundary } from "./ErrorBoundary"
 
 function Schema({ load }: { load: () => Promise<string> }) {
@@ -54,6 +55,26 @@ describe("error boundary", () => {
     rerender(page("txt2img", true))
     expect(await screen.findByText("the schema")).toBeInTheDocument()
     expect(load).toHaveBeenCalledTimes(2)
+    client.clear()
+  })
+
+  // The page fallback showed the server's English detail ("Internal server error (id …); the details
+  // are in the server log") in the Chinese UI: a failed request is explained by its status.
+  it("explains a failed request in the UI language", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const load = vi.fn<() => Promise<string>>().mockRejectedValue(new ApiError(500, "Internal server error (id 0a1b2c); the details are in the server log"))
+    const client = new QueryClient()
+    render(
+      <QueryClientProvider client={client}>
+        <ErrorBoundary resetKey="txt2img">
+          <Suspense fallback={<p>Loading</p>}>
+            <Schema load={load} />
+          </Suspense>
+        </ErrorBoundary>
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText("The server ran into an error (500).")).toBeInTheDocument()
+    expect(screen.queryByText(/Internal server error/)).toBeNull()
     client.clear()
   })
 })

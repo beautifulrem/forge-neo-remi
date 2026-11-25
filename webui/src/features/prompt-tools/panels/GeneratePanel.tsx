@@ -11,13 +11,10 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { serviceFailureText } from "@/features/errors/error-text"
 import { promptToolsApi } from "../api"
 import { PanelHeader } from "./panel"
 import { appendText, type PanelProps } from "./helpers"
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
 
 export default function GeneratePanel({ value, setValue, kind, disabled, close }: PanelProps) {
   const { t } = useTranslation()
@@ -36,7 +33,7 @@ export default function GeneratePanel({ value, setValue, kind, disabled, close }
     try {
       setResult(await promptToolsApi.generate({ description: description.trim(), prompt: buildOn ? value : "", negative }))
     } catch (failure) {
-      setError(errorText(failure))
+      setError(serviceFailureText(failure))
     } finally {
       setBusy(false)
     }
