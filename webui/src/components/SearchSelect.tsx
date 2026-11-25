@@ -14,7 +14,7 @@
 import { useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
-import { lazyModule, prefetch, standInFocus } from "@/lib/lazy-module"
+import { lazyModule, loadForUse, prefetch, standInFocus } from "@/lib/lazy-module"
 import { SEARCH_SELECT_TRIGGER_CLASS, selectedOption, type SearchSelectProps } from "./search-select-shared"
 import { SearchSelectTriggerContent } from "./SearchSelectTriggerContent"
 
@@ -33,7 +33,8 @@ export function SearchSelect(props: SearchSelectProps) {
 
   const activate = (how: "open" | "focus") => {
     setActivation((current) => (current === "open" ? current : how))
-    prefetch(implementation)
+    if (how === "open") loadForUse(implementation)
+    else prefetch(implementation)
   }
   const selected = selectedOption(props.options, props.value)
   return (

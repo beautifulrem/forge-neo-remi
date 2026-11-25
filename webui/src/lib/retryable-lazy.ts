@@ -7,6 +7,11 @@ const failed = new Set<() => void>()
 /** Told of every load that failed (`chunk-reload.ts`: a new build on the server). */
 const failureListeners = new Set<() => void>()
 
+/** Tells the listeners that a chunk someone asked for did not load (`lazy-module.ts` too). */
+export function notifyLoadFailed(): void {
+  for (const listener of failureListeners) listener()
+}
+
 /** Calls `listener` whenever a component's chunk fails to load; returns the function that stops it. */
 export function onLoadFailed(listener: () => void): () => void {
   failureListeners.add(listener)
@@ -43,7 +48,7 @@ export function retryableLazy<T extends ComponentType<any>>(load: () => Promise<
         failed.add(() => {
           current = make()
         })
-        for (const listener of failureListeners) listener()
+        notifyLoadFailed()
         throw new RequestError(error)
       }),
     )

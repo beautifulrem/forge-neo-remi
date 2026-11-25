@@ -514,10 +514,15 @@ Build: chunks and their preloads resolve relative to the importing module
 server prefixes `index.html`'s absolute URLs. A tab opened before an update
 that asks for a chunk the new build lacks loads the new build
 (`lib/chunk-reload.ts`): when a page or control could not load its chunk
-(`retryableLazy`), the app fetches the shell and reloads only if it starts
+(`retryableLazy`, or a popup asked to open: `loadForUse` in
+`lib/lazy-module.ts`), the app fetches the shell and reloads only if it starts
 other module scripts than this page's, at most once a minute. A failed
-prefetch (a nav item on hover) never reloads, nor does a chunk that failed
-while the server is down: the page's error view, with "Try again", stays.
+prefetch (a nav item or a popup trigger on hover) never reloads, nor does a
+chunk that failed while the server is down: the page's error view, with "Try
+again", stays. A module fetched on intent is a `lazyModule`, which forgets a
+failed fetch so the next intent fetches again (a promise kept with
+`x ??= import(...)` would keep the control broken for the session;
+`lib/lazy-module.test.ts` fails on one).
 `index.html` carries `darkreader-lock` (the app has its own dark theme).
 
 ## Schema renderer (`src/ui`)

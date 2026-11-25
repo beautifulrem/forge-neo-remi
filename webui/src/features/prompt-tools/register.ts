@@ -11,18 +11,25 @@ import { queryClient } from "@/api/queries"
 import { onWsEvent } from "@/api/ws"
 import { registerCompletionSource } from "@/features/prompt-editor/completion-registry"
 import { registerPromptDecorator } from "@/features/prompt-editor/decorators"
+import { lazyModule } from "@/lib/lazy-module"
 import { PromptToolsDecorator } from "./PromptToolsDecorator"
 import { toolKeys } from "./queries"
 
-type Engine = typeof import("./completion/source")
-let engine: Promise<Engine> | null = null
-const loadEngine = () => (engine ??= import("./completion/source"))
+// the completion engine, fetched at the first completion (again after a failed fetch: offline)
+const engine = lazyModule(() => import("./completion/source"))
 
 function forgetCompletions() {
-  if (engine) void engine.then((module) => module.clearCompletionCache())
+  engine.get()?.clearCompletionCache()
 }
 
-registerCompletionSource("prompt-tools", async (context) => (await loadEngine()).promptToolsCompletions(context), { priority: 10 })
+registerCompletionSource(
+  "prompt-tools",
+  async (context) => {
+    const module = await engine.load().catch(() => null) // no completions while it cannot load
+    return module ? module.promptToolsCompletions(context) : null
+  },
+  { priority: 10 },
+)
 registerPromptDecorator("prompt-tools", PromptToolsDecorator)
 
 onWsEvent("options.changed", () => {

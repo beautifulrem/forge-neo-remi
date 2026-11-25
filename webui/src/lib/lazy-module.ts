@@ -7,6 +7,7 @@
  * subscriber re-renders with the module.
  */
 import { useSyncExternalStore } from "react"
+import { notifyLoadFailed } from "./retryable-lazy"
 
 export type LazyModule<M> = {
   /** Starts the fetch (once; again after a failed one); resolves with the module. */
@@ -49,6 +50,19 @@ export function lazyModule<M>(importer: () => Promise<M>): LazyModule<M> {
 /** Starts a fetch on intent; a failure is retried on the next intent instead of surfacing here. */
 export function prefetch(module: LazyModule<unknown>): void {
   module.load().catch(() => {})
+}
+
+/**
+ * Fetches a module the user asked for (a popup to open): a failure is retried on the next ask
+ * (`onFailed` lets the control go back to its closed state for it), and also told to
+ * `chunk-reload.ts`, which reloads when the server now runs another build (the old chunk is gone
+ * for good). A hover's {@link prefetch} never is: nobody asked yet.
+ */
+export function loadForUse(module: LazyModule<unknown>, onFailed?: () => void): void {
+  module.load().catch(() => {
+    notifyLoadFailed()
+    onFailed?.()
+  })
 }
 
 /**

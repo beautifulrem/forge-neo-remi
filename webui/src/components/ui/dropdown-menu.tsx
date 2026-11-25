@@ -17,36 +17,22 @@
 import { mergeProps } from "@base-ui/react/merge-props"
 import * as React from "react"
 import { cn } from "cn"
+import { lazyModule, loadForUse, prefetch } from "@/lib/lazy-module"
 import type * as Impl from "./dropdown-menu-impl"
 import { finalFocus } from "./final-focus"
 
 type Module = typeof Impl
 
-let loaded: Module | null = null
-let loading: Promise<Module> | null = null
-const listeners = new Set<() => void>()
+/** The menu implementation, fetched on intent (again after a failed fetch). */
+const implementation = lazyModule<Module>(() => import("./dropdown-menu-impl"))
 
-/** Fetches the menu implementation (once); resolves with it. */
+/** Fetches the menu implementation (once it loaded, at once); resolves with it. */
 function loadDropdownMenu(): Promise<Module> {
-  loading ??= import("./dropdown-menu-impl").then((module) => {
-    loaded = module
-    for (const listener of listeners) listener()
-    return module
-  })
-  return loading
+  return implementation.load()
 }
-
-function subscribe(listener: () => void) {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-const getLoaded = () => loaded
 
 function useImplementation(): Module | null {
-  return React.useSyncExternalStore(subscribe, getLoaded, getLoaded)
+  return implementation.useModule()
 }
 
 type RootProps = React.ComponentProps<Module["DropdownMenu"]>
@@ -90,9 +76,6 @@ function DropdownMenu({ open: openProp, defaultOpen = false, onOpenChange, child
   const closedAt = React.useRef(0)
   const triggerId = React.useId()
   const popupId = React.useId()
-  React.useEffect(() => {
-    if (open) void loadDropdownMenu()
-  }, [open])
   const setOpen = (next: boolean, details?: ChangeDetails) => {
     if (!next && details?.reason === "outside-press" && pressedOn(anchor, details.event)) closedAt.current = performance.now()
     if (openProp === undefined) setOwnOpen(next)
@@ -102,6 +85,11 @@ function DropdownMenu({ open: openProp, defaultOpen = false, onOpenChange, child
     if (!open && performance.now() - closedAt.current < 400) return
     setOpen(!open)
   }
+  // a menu whose code could not load closes again: the next press asks for it again
+  const loadFailed = React.useEffectEvent(() => setOpen(false))
+  React.useEffect(() => {
+    if (open) loadForUse(implementation, loadFailed)
+  }, [open])
   return <MenuContext value={{ open, setOpen, toggle, root, anchor, setAnchor, triggerId, popupId }}>{children as React.ReactNode}</MenuContext>
 }
 
@@ -151,8 +139,8 @@ function DropdownMenuTrigger({
     className: typeof className === "function" ? className(state) : className,
     style: typeof style === "function" ? style(state) : style,
     // intent: fetch the menu before the press
-    onPointerEnter: () => void loadDropdownMenu(),
-    onFocus: () => void loadDropdownMenu(),
+    onPointerEnter: () => prefetch(implementation),
+    onFocus: () => prefetch(implementation),
     onClick: (event: React.MouseEvent) => {
       if (!event.defaultPrevented && !props.disabled) menu.toggle()
     },

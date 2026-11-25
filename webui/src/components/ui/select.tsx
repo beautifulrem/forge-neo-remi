@@ -16,7 +16,7 @@ import type { Select as SelectPrimitive } from "@base-ui/react/select"
 import { ChevronDownIcon } from "@/components/icons"
 import * as React from "react"
 import { cn } from "cn"
-import { lazyModule, prefetch, standInFocus } from "@/lib/lazy-module"
+import { lazyModule, loadForUse, prefetch, standInFocus } from "@/lib/lazy-module"
 import type * as Impl from "./select-impl"
 import { SELECT_TRIGGER_CLASS, SELECT_VALUE_CLASS } from "./select-styles"
 
@@ -45,7 +45,8 @@ function Select<Value, Multiple extends boolean | undefined = false>(props: Sele
   const activate = (how: "open" | "focus") => {
     if (how === "open") pendingOpen.current = true
     setActivation((current) => current ?? how)
-    prefetch(implementation)
+    if (how === "open") loadForUse(implementation)
+    else prefetch(implementation)
   }
   const takeOpen = () => {
     const open = pendingOpen.current

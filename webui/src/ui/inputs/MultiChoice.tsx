@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { COMBOBOX_CHIP_CLASS, COMBOBOX_CHIP_REMOVE_CLASS, COMBOBOX_CHIPS_CLASS, COMBOBOX_CHIPS_INPUT_CLASS } from "@/components/ui/combobox-styles"
 import { cn } from "@/lib/utils"
-import { lazyModule, prefetch, standInFocus } from "@/lib/lazy-module"
+import { lazyModule, loadForUse, prefetch, standInFocus } from "@/lib/lazy-module"
 import { useParam } from "../hooks"
 import { describedBy, hintRef } from "../a11y"
 import { Field } from "../Field"
@@ -115,7 +115,8 @@ function ChipsField(props: Omit<ChipsSelectProps, "query" | "setQuery">) {
 
   const activate = (how: "open" | "focus") => {
     setActivation((current) => (current === "open" ? current : how))
-    prefetch(chipsSelect)
+    if (how === "open") loadForUse(chipsSelect)
+    else prefetch(chipsSelect)
   }
   const byValue = new Map(props.options.map((o) => [o.value, o]))
   const chips: Option[] = props.selected.map((v) => byValue.get(v) ?? { value: v, label: String(v) })

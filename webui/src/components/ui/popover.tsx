@@ -17,7 +17,7 @@
 import { mergeProps } from "@base-ui/react/merge-props"
 import * as React from "react"
 import { cn } from "cn"
-import { lazyModule, prefetch } from "@/lib/lazy-module"
+import { lazyModule, loadForUse, prefetch } from "@/lib/lazy-module"
 import type * as Impl from "./popover-impl"
 import { finalFocus } from "./final-focus"
 
@@ -65,7 +65,7 @@ function Popover({ open: openProp, defaultOpen = false, onOpenChange, children, 
   const closedAt = React.useRef(0)
   const popupId = React.useId()
   React.useEffect(() => {
-    if (open) prefetch(implementation)
+    if (open) loadForUse(implementation)
   }, [open])
   const setOpen = (next: boolean, details?: ChangeDetails) => {
     if (!next && details?.reason === "outside-press" && pressedOn(anchor, details.event)) closedAt.current = performance.now()
