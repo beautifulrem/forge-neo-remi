@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { ApiError } from "@/api/http"
-import { errorText, failureText, serviceFailureText, validationText } from "./error-text"
+import { ApiError, RequestError } from "@/api/http"
+import { errorText, failureText, renderFailureText, serviceFailureText, validationText } from "./error-text"
 
 const failed = (status: number) => new ApiError(status, `HTTP ${status}`, { detail: "English detail for the logs" })
 
@@ -102,5 +102,15 @@ describe("serviceFailureText", () => {
     expect(serviceFailureText(failed(500))).toBe("The server ran into an error (500).")
     expect(serviceFailureText(new TypeError("Failed to fetch"))).toBe("The server cannot be reached.")
     expect(serviceFailureText(new ApiError(409, "x"), { 409: "Choose a model first." })).toBe("Choose a model first.")
+  })
+})
+
+// An error boundary showed a request that got no answer (the server down, a chunk that could not be
+// fetched) in the browser's English: only a bug keeps its own message there.
+describe("renderFailureText", () => {
+  it("explains a request by its status and a bug by its own message", () => {
+    expect(renderFailureText(failed(500))).toBe("The server ran into an error (500).")
+    expect(renderFailureText(new RequestError(new TypeError("Failed to fetch")))).toBe("The server cannot be reached.")
+    expect(renderFailureText(new TypeError("Cannot read properties of undefined (reading 'x')"))).toBe("Cannot read properties of undefined (reading 'x')")
   })
 })

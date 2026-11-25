@@ -201,7 +201,8 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
   const model = useMutation({
     mutationFn: (action: "unload" | "load" | "reload") => (action === "unload" ? api.system.unloadModel() : api.system.reloadModel(action === "reload")),
     onSuccess: (_data, action) => toast.success(action === "unload" ? t("The model was unloaded") : t("The model is loaded")),
-    onError: (error) => toast.error(t("The model action failed"), { description: adminErrorMessage(error, t) }),
+    // a 422 is a model that failed to load: the server's own toast says why (`model.loaded`)
+    onError: (error) => toast.error(t("The model action failed"), { description: adminErrorMessage(error, t, { 422: t("The model could not be loaded.") }) }),
     onSettled: () => {
       void status.refetch()
       void queryClient.invalidateQueries({ queryKey: loadedModelsQuery.queryKey })

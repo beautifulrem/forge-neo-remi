@@ -1,4 +1,5 @@
 import { type ComponentProps, type ComponentType, createElement, lazy, type LazyExoticComponent } from "react"
+import { RequestError } from "@/api/http"
 
 /** Loads that failed, each with the swap that lets its component load again. */
 const failed = new Set<() => void>()
@@ -18,9 +19,10 @@ export function retryFailedLoads(): void {
 /**
  * `React.lazy` that can load again: lazy() keeps a failed import for good, so
  * after a chunk failed (offline, a replaced build) an error boundary's "Try
- * again" rendered the same failure. A failed load reaches the boundary as
- * usual; {@link retryFailedLoads} then swaps in a fresh lazy component, and
- * the next render fetches the chunk again.
+ * again" rendered the same failure. A failed load reaches the boundary as a
+ * {@link RequestError} (a request that got no answer, said in the UI language);
+ * {@link retryFailedLoads} then swaps in a fresh lazy component, and the next
+ * render fetches the chunk again.
  */
 // oxlint-disable-next-line typescript/no-explicit-any -- the constraint React.lazy has
 export function retryableLazy<T extends ComponentType<any>>(load: () => Promise<{ default: T }>): ComponentType<ComponentProps<T>> {
@@ -30,7 +32,7 @@ export function retryableLazy<T extends ComponentType<any>>(load: () => Promise<
         failed.add(() => {
           current = make()
         })
-        throw error
+        throw new RequestError(error)
       }),
     )
   let current = make()

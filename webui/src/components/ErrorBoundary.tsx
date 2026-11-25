@@ -76,7 +76,7 @@ class Boundary extends Component<Props & { onRetry: () => void }, State> {
     if (this.props.inline) {
       return (
         <div role="alert" className="rounded-lg bg-destructive/5 p-2 text-xs text-destructive">
-          {t("This control failed to render")}: {error.message}
+          {t("This control failed to render")}: {renderFailureText(error)}
         </div>
       )
     }

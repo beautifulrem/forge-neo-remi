@@ -277,7 +277,8 @@ describe("available extensions", { timeout: 20_000 }, () => {
     const list = vi.spyOn(api.extensions, "list").mockRejectedValue(new ApiError(409, "busy")) // a client error: not retried
     renderPage("tab=available")
     const alert = await screen.findByRole("alert", {}, { timeout: 8000 })
-    expect(alert).toHaveTextContent("busy")
+    expect(alert).toHaveTextContent("It changed meanwhile; refresh and try again.") // by status, not the English detail
+    expect(alert).not.toHaveTextContent("busy")
     expect(screen.getByRole("button", { name: "Load index" })).toBeDisabled()
     list.mockResolvedValue(listing([]))
     fireEvent.click(within(alert).getByRole("button", { name: "Retry" }))
@@ -287,13 +288,13 @@ describe("available extensions", { timeout: 20_000 }, () => {
 
   // An index that failed to load was a red line with no way to try again but the form above.
   it("offers a retry when the index fails to load", async () => {
-    const index = vi.spyOn(api.extensions, "index").mockRejectedValue(new ApiError(404, "The index was not found"))
+    const index = vi.spyOn(api.extensions, "index").mockRejectedValue(new ApiError(404, "the index was not found", { detail: "the index was not found", template: "the index at {{url}} was not found", params: { url: "https://example.org/index.json" } }))
     renderPage("tab=available")
     const load = await screen.findByRole("button", { name: "Load index" }, { timeout: 8000 })
     await waitFor(() => expect(load).toBeEnabled()) // once the extension list says access is on
     fireEvent.click(load)
     const alert = await screen.findByRole("alert")
-    expect(alert).toHaveTextContent("The index was not found")
+    expect(alert).toHaveTextContent("the index at https://example.org/index.json was not found") // its template, with its params
     index.mockResolvedValue(indexOf(20))
     fireEvent.click(within(alert).getByRole("button", { name: "Retry" }))
     expect(await screen.findByRole("list", { name: "Available extensions" })).toBeInTheDocument()

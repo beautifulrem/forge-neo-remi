@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from "vitest"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { retryableLazy } from "./retryable-lazy"
 
-const chunkError = () => new Error("Failed to fetch dynamically imported module")
+// what a browser rejects a dynamic import with when the chunk cannot be fetched
+const chunkError = () => new TypeError("Failed to fetch dynamically imported module: http://127.0.0.1:7860/assets/AvailableView-abc.js")
 const page = { default: () => <p>loaded page</p> }
 
 /** A chunk that fails `failures` times, then loads (Infinity: never). */
@@ -37,6 +38,15 @@ describe("retryableLazy", () => {
     expect(await screen.findByRole("alert")).toBeInTheDocument()
     await settle()
     expect(load).toHaveBeenCalledTimes(2)
+  })
+
+  // The page error view showed the browser's English sentence with the asset's URL: a chunk that
+  // could not be fetched is a request that got no answer, not a bug.
+  it("says a chunk that could not be fetched in the UI language", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mount(retryableLazy(loader(Infinity)))
+    expect(await screen.findByText("The server cannot be reached.")).toBeInTheDocument()
+    expect(screen.queryByText(/dynamically imported module/)).toBeNull()
   })
 
   it("fetches the chunk again on Try again", async () => {

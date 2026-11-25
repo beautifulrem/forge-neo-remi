@@ -37,6 +37,38 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * A request that got no answer the app can read: the server could not be reached (`fetch` failed:
+ * stopped, restarting, offline) or answered with a body that is not JSON (a proxy's error page). A
+ * `TypeError`, as `fetch` failing is, so every check for an unreachable server holds; error views
+ * explain it by `errorText`, never by its (browser's English) message.
+ */
+export class RequestError extends TypeError {
+  constructor(cause: unknown) {
+    super("the request got no answer", { cause })
+    this.name = "RequestError"
+  }
+}
+
+/** The caller gave up on the request (an `AbortSignal`): not a failure to explain. */
+export function isAbort(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError"
+}
+
+/** `error`, marked as a {@link RequestError} unless it is an answer (`ApiError`), already marked or an abort. */
+export function requestFailure(error: unknown): unknown {
+  return error instanceof ApiError || error instanceof RequestError || isAbort(error) ? error : new RequestError(error)
+}
+
+/** `fetch`, with a failure to get an answer marked as a {@link RequestError}. */
+export async function request(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init)
+  } catch (error) {
+    throw requestFailure(error)
+  }
+}
+
 export type Query = Record<string, string | number | boolean | null | undefined>
 
 /** An API URL for `<img>`, `<a>` and `<audio>` (`path` is relative to /api/v2). */
@@ -56,14 +88,14 @@ function compactQuery(query: Query): Record<string, string> {
   return out
 }
 
-async function transport(request: Request): Promise<Response> {
+async function transport(sent: Request): Promise<Response> {
   let response: Response
   if (MOCK) {
     const { handleMockRequest } = await import("./mock/server")
-    response = await handleMockRequest(request)
-  } else response = await fetch(request)
+    response = await handleMockRequest(sent)
+  } else response = await request(sent)
   // The session ended or the server now requires a login: the app asks for it (features/auth).
-  if (response.status === 401 && !new URL(request.url).pathname.startsWith(`${API_BASE}/auth/`)) sessionRefused()
+  if (response.status === 401 && !new URL(sent.url).pathname.startsWith(`${API_BASE}/auth/`)) sessionRefused()
   return response
 }
 
@@ -79,7 +111,13 @@ type Result<T> = { data?: T; error?: unknown; response: Response }
 
 /** The data of a generated-client call, or an `ApiError` for any non-2xx answer. */
 export async function unwrap<T>(call: Promise<Result<T>>): Promise<T> {
-  const { data, error, response } = await call
+  let result: Result<T>
+  try {
+    result = await call
+  } catch (error) {
+    throw requestFailure(error) // no answer, or a body that is not JSON
+  }
+  const { data, error, response } = result
   if (!response.ok) throw new ApiError(response.status, errorMessage(response.status, error), error)
   return data as T
 }

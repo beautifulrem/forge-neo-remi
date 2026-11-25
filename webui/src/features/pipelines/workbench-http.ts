@@ -4,7 +4,7 @@
  * mock-mode requests through `@/api/mock/server`'s `handleMockRequest` via a
  * dynamic import so production bundles tree-shake the mock server cleanly).
  */
-import { ApiError, apiUrl, MOCK, type Query } from "@/api/http"
+import { ApiError, apiUrl, MOCK, type Query, request } from "@/api/http"
 import { sessionRefused } from "@/api/session"
 
 export { ApiError, MOCK }
@@ -51,7 +51,7 @@ export async function workbenchRequest<T>(path: string, options: RequestOptions 
     const fullUrl = new URL(url, typeof location === "undefined" ? "http://localhost" : location.origin)
     response = await handleMockRequest(new Request(fullUrl, init))
   } else {
-    response = await fetch(url, init)
+    response = await request(url, init)
   }
   // an expired session asks for the login, as every other request does (see `transport` in @/api/http)
   if (response.status === 401 && !path.startsWith("/auth/")) sessionRefused()

@@ -5,6 +5,7 @@
  */
 import type { components } from "@/api/gen/schema"
 import { ApiError } from "@/api/http"
+import { errorText, type StatusTexts } from "@/features/errors/error-text"
 
 type Schemas = components["schemas"]
 export type ExtensionInfo = Schemas["ExtensionInfo"]
@@ -39,18 +40,18 @@ export type Translate = (key: string, options?: Record<string, unknown>) => stri
 /**
  * A server error in the user's language: extension and system errors carry
  * their English `template` (`{{name}}` placeholders, a catalog key) and
- * `params`; anything else is its message (translated when it is a key).
+ * `params`; any other failure is said by its status (`errorText`, with the
+ * caller's own sentences in `texts`), never by the server's English detail.
  */
-export function adminErrorMessage(error: unknown, t: Translate): string {
+export function adminErrorMessage(error: unknown, t: Translate, texts?: StatusTexts): string {
   if (error instanceof ApiError && error.detail && typeof error.detail === "object") {
     const { template, params } = error.detail as { template?: unknown; params?: unknown }
     if (typeof template === "string" && template) {
       const values = params && typeof params === "object" && !Array.isArray(params) ? (params as Record<string, unknown>) : {}
-      return t(template, { ...values, defaultValue: error.message })
+      return t(template, values)
     }
   }
-  if (error instanceof Error) return t(error.message, { defaultValue: error.message })
-  return String(error)
+  return errorText(error, texts)
 }
 
 // ---------------------------------------------------------------- URLs

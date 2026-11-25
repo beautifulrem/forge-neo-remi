@@ -1381,7 +1381,15 @@ older server) nothing is shown.
   service's own answer after a translated sentence: it is the only clue to
   what to fix; 409 and 413 have their own sentences), and
   `renderFailureText` is for an error boundary (a request by its status, a
-  render bug by its own message).
+  render bug by its own message). A request that got no answer (`fetch`
+  failed, a body that is not JSON, a lazy chunk that could not be fetched)
+  is marked where it happens as a `RequestError` (`api/http.ts` `request` /
+  `unwrap`, `lib/retryable-lazy.ts`), so a boundary can tell it from a bug;
+  the caller's own abort is left as it is. Admin errors (extensions,
+  Settings > Server) are said by their `template` and `params`, anything
+  else by status (`adminErrorMessage`). `features/errors/failure-text.test.ts`
+  fails on any read of an error's message, detail or text outside
+  `error-text.ts` and `api/` that is not listed there with its reason.
 - `src/locales/zh-CN.json` must contain every chrome key:
   `locales/locales.test.ts` scans the sources and fails on a missing key or a
   mismatched `{{placeholder}}`.

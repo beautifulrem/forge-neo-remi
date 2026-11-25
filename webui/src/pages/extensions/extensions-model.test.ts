@@ -154,7 +154,18 @@ describe("server error messages", () => {
     expect(adminErrorMessage(failed, t)).toBe("git fetch 失败：offline")
     const unknown = new ApiError(422, "the index is too large", { detail: "the index is too large", template: "the index is too large", params: {} })
     expect(adminErrorMessage(unknown, t)).toBe("the index is too large")
-    expect(adminErrorMessage(new Error("plain"), t)).toBe("plain")
+  })
+
+  // Without a template the extensions pages and Settings > Server showed the server's English
+  // detail, or the browser's "Failed to fetch", as the whole message.
+  it("explains any other failure by its status, in the UI language", async () => {
+    const { ApiError, RequestError } = await import("@/api/http")
+    const { adminErrorMessage } = await import("./extensions-model")
+    expect(adminErrorMessage(new ApiError(500, "Internal server error (id 0a1b2c); the details are in the server log"), t)).toBe("The server ran into an error (500).")
+    expect(adminErrorMessage(new ApiError(422, "Field required", { detail: [{ msg: "Field required", loc: ["body", "url"] }] }), t)).toBe("The server rejected the request.")
+    expect(adminErrorMessage(new RequestError(new TypeError("Failed to fetch")), t)).toBe("The server cannot be reached.")
+    expect(adminErrorMessage(new TypeError("Failed to fetch"), t)).toBe("The server cannot be reached.")
+    expect(adminErrorMessage(new ApiError(422, "the model was not loaded: FileNotFoundError: x.safetensors"), t, { 422: "The model was not loaded." })).toBe("The model was not loaded.")
   })
 })
 

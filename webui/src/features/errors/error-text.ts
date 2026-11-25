@@ -7,7 +7,7 @@
  * messages are catalog keys (`validationText`).
  */
 import { toast } from "sonner"
-import { ApiError, validationErrors } from "@/api/http"
+import { ApiError, RequestError, validationErrors } from "@/api/http"
 import { t } from "@/i18n"
 import type { ValidationError } from "@/ui/schema"
 
@@ -62,11 +62,13 @@ export function serviceFailureText(error: unknown, texts: StatusTexts = {}): str
 }
 
 /**
- * What a component that failed to render says: a request that failed by its status (the server's
- * detail is English), a bug by its own message (a `TypeError` here is a bug, not `fetch` failing).
+ * What a component that failed to render says: a request by its status (the server's detail and the
+ * browser's reason are English): one the server answered (`ApiError`) or one that got no answer
+ * (`RequestError`: the server down, a chunk that could not be fetched). Anything else is a bug and
+ * keeps its own message.
  */
 export function renderFailureText(error: Error): string {
-  return error instanceof ApiError ? errorText(error) : error.message
+  return error instanceof ApiError || error instanceof RequestError ? errorText(error) : error.message
 }
 
 /**
