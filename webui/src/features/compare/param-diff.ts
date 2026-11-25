@@ -8,7 +8,7 @@
 import { api } from "@/api/endpoints"
 import type { FormTab, ParamValues } from "@/api/types"
 import { splitInfotext } from "@/features/infotext/display"
-import { type PasteEntry } from "@/features/infotext/paste"
+import { type PasteEntry, type PasteResult } from "@/features/infotext/paste"
 import { workbenchRequest } from "@/features/pipelines/workbench-http"
 import { deliver } from "@/features/send-to/send-to"
 
@@ -338,8 +338,9 @@ export function patchToEntries(patch: AdoptPatch | undefined): PasteEntry[] {
  * Applies ONLY the differing parameters of side `"a"` or `"b"` into `tab`:
  * uses the server's `adopt_*_patch` when populated, else parses the chosen
  * side's infotext and keeps only parameters whose keys differ from the other side.
+ * Resolves with the params set and the ones a lock kept.
  */
-export async function applyCompareDiffToForm(diff: CompareDiffResult, side: "a" | "b", tab: FormTab = "txt2img"): Promise<number> {
+export async function applyCompareDiffToForm(diff: CompareDiffResult, side: "a" | "b", tab: FormTab = "txt2img"): Promise<PasteResult> {
   const targetTab: FormTab = tab === "extras" ? "txt2img" : tab
   const serverPatch = side === "a" ? diff.adopt_a_patch : diff.adopt_b_patch
   const direct = patchToEntries(serverPatch)
@@ -347,7 +348,7 @@ export async function applyCompareDiffToForm(diff: CompareDiffResult, side: "a" 
 
   const chosenInfotext = side === "a" ? diff.infotext_a : diff.infotext_b
   const otherInfotext = side === "a" ? diff.infotext_b : diff.infotext_a
-  if (!chosenInfotext) return 0
+  if (!chosenInfotext) return { count: 0, locked: [] }
 
   const [parsedChosen, parsedOther] = await Promise.all([
     api.parseInfotext(chosenInfotext, targetTab),
@@ -369,6 +370,6 @@ export async function applyCompareDiffToForm(diff: CompareDiffResult, side: "a" 
     const scriptDiff = diffValues(values, parsedOther?.scripts?.[owner])
     if (Object.keys(scriptDiff).length > 0) entries.push({ owner, values: scriptDiff })
   }
-  if (entries.length === 0) return 0
+  if (entries.length === 0) return { count: 0, locked: [] }
   return deliver(targetTab, entries, {})
 }

@@ -14,6 +14,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { errorText } from "@/features/errors/error-text"
 import { cn } from "@/lib/utils"
+import { getFormStore } from "@/ui/form-store"
+import { lockNote } from "@/ui/locks"
 import { applyCompareDiffToForm, fetchCompareDiff, type TokenDiff, totalDiffCount } from "./param-diff"
 
 export type CompareSide = {
@@ -116,14 +118,17 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
     if (!diff) return
     setApplying(side)
     try {
-      const applied = await applyCompareDiffToForm(diff, side, targetTab)
-      if (applied === 0) {
+      const { count: applied, locked } = await applyCompareDiffToForm(diff, side, targetTab)
+      const note = lockNote(getFormStore(targetTab).getState().index, locked)
+      if (applied === 0 && !note) {
         toast.info(t("No parameter differences to apply"))
       } else {
+        // the differences a lock kept are named, and not counted
         toast.success(
           side === "a" ? t("Applied A differences ({{count}})", { count: applied }) : t("Applied B differences ({{count}})", { count: applied }),
+          note ? { description: note } : undefined,
         )
-        onApplied?.()
+        if (applied > 0) onApplied?.()
       }
     } catch (error) {
       toast.error(t("Could not apply parameter differences"), { description: errorText(error) })

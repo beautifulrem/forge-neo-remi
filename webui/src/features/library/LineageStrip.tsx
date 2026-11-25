@@ -14,7 +14,7 @@ import type { FormTab, GalleryItem } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { errorText } from "@/features/errors/error-text"
 import { parsedEntries } from "@/features/infotext/paste"
-import { deliverPaste } from "@/features/send-to/send-to"
+import { deliver } from "@/features/send-to/send-to"
 import { cn } from "@/lib/utils"
 import { getFormStore } from "@/ui/form-store"
 import { lockNote } from "@/ui/locks"
@@ -92,7 +92,7 @@ export function LineageStrip({ item, onSelectImage, onClose }: LineageStripProps
         core: (detail.core ?? {}) as Record<string, unknown>,
         scripts: (detail.scripts ?? {}) as Record<string, Record<string, unknown>>,
       })
-      const { locked } = await deliverPaste(tab, entries, {})
+      const { locked } = await deliver(tab, entries, {})
       onClose()
       const note = lockNote(getFormStore(tab).getState().index, locked)
       toast.success(t("Source job loaded into {{tab}}", { tab }), note ? { description: note } : undefined)

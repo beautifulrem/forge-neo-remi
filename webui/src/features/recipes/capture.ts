@@ -7,7 +7,7 @@ import { queryClient, schemaQuery } from "@/api/queries"
 import type { FormTab, ParamValues } from "@/api/types"
 import { i18n, t } from "@/i18n"
 import type { PasteEntry, PasteResult } from "@/features/infotext/paste"
-import { deliverPaste } from "@/features/send-to/send-to"
+import { deliver } from "@/features/send-to/send-to"
 import { ensureSchemaLoaded } from "@/pages/generate/use-form-loader"
 import { jsonEqual } from "@/ui/conditions"
 import { getFormStore } from "@/ui/form-store"
@@ -124,7 +124,7 @@ export function conflictOverrides(response: Partial<Pick<RecipeApplyResponse, "p
   return overridden
 }
 
-/** Applies a recipe's `core_patch` and `scripts_patch` into its target form via `deliverPaste()`. */
+/** Applies a recipe's `core_patch` and `scripts_patch` into its target form via `deliver()`. */
 export function applyRecipeEntries(
   tab: FormTab,
   core: ParamValues,
@@ -136,5 +136,5 @@ export function applyRecipeEntries(
     if (values && Object.keys(values).length > 0) entries.push({ owner, values })
   }
   if (entries.length === 0) return Promise.resolve({ count: 0, locked: [] })
-  return deliverPaste(tab, entries, {})
+  return deliver(tab, entries, {})
 }

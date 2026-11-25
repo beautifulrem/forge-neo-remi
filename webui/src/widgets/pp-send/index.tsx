@@ -17,7 +17,9 @@ import type { ActionExtra, FormTab } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { useSession } from "@/features/gallery/session-store"
 import { deliver, formOf, imageEntry, type SendTarget } from "@/features/send-to/send-to"
+import { getFormStore } from "@/ui/form-store"
 import { useForm, useRunAction } from "@/ui/hooks"
+import { lockNote } from "@/ui/locks"
 import type { WidgetProps } from "@/ui/widgets"
 import { registerWidgetCatalogs } from "../_lib/i18n"
 import { sourceItem } from "./source"
@@ -49,9 +51,12 @@ export default function PpSend({ props, disabled, id }: WidgetProps<null, Props>
         return
       }
       const entry = imageEntry(target, sent)
-      const delivered = entry ? await deliver(formOf(target), [entry]) : 0
-      if (delivered > 0) toast.success(inpaint ? tw("Post-processed image sent to inpaint") : tw("Post-processed image sent to img2img"), { id: progress })
-      else toast.error(tw("Could not send the post-processed image"), { id: progress })
+      const { count, locked } = entry ? await deliver(formOf(target), [entry]) : { count: 0, locked: [] }
+      // the values a lock kept (all of them: the reason nothing arrived)
+      const note = lockNote(getFormStore(formOf(target)).getState().index, locked)
+      const options = { id: progress, ...(note ? { description: note } : {}) }
+      if (count > 0) toast.success(inpaint ? tw("Post-processed image sent to inpaint") : tw("Post-processed image sent to img2img"), options)
+      else toast.error(tw("Could not send the post-processed image"), options)
     } catch (error) {
       toast.error(tw("Could not send the post-processed image"), { id: progress, description: failureText(error) })
     } finally {

@@ -40,7 +40,7 @@ describe("deliver", () => {
     load("img2img")
     const store = getFormStore("img2img")
     store.getState().setValues("core", { init_img: "old", mask: "old-mask" })
-    const count = await deliver("img2img", [imageEntry("inpaint", "new")!])
+    const { count } = await deliver("img2img", [imageEntry("inpaint", "new")!])
     // init_img, mode and the two layers painted over it (the uploaded mask is not).
     expect(count).toBe(4)
     expect(store.getState().values.core).toMatchObject({ init_img: "new", mode: "Inpaint", mask: null, sketch: null })
@@ -50,14 +50,14 @@ describe("deliver", () => {
   })
 
   it("applies at once to the form on screen", async () => {
-    const count = await deliver("txt2img", [{ owner: "core", values: { prompt: "now" } }])
+    const { count } = await deliver("txt2img", [{ owner: "core", values: { prompt: "now" } }])
     expect(count).toBe(1)
     expect(getFormStore("txt2img").getState().values.core?.prompt).toBe("now")
   })
 
   it("applies to a loaded generate form at once and shows it", async () => {
     load("img2img")
-    expect(await deliver("img2img", [{ owner: "core", values: { prompt: "kept" } }])).toBe(1)
+    expect(await deliver("img2img", [{ owner: "core", values: { prompt: "kept" } }])).toEqual({ count: 1, locked: [] })
     expect(location.hash).toBe("#/img2img")
     expect(getFormStore("img2img").getState().values.core?.prompt).toBe("kept")
   })
@@ -68,7 +68,7 @@ describe("deliver", () => {
     expect(location.hash).toBe("#/img2img")
     load("img2img")
     // init_img, mode, prompt and the cleared mask and sketch.
-    expect(await pending).toBe(5)
+    expect((await pending).count).toBe(5)
     expect(getFormStore("img2img").getState().values.core).toMatchObject({ init_img: "upload-9", mode: "Inpaint", prompt: "later" })
   })
 })

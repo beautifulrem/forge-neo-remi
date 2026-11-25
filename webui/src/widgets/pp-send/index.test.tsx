@@ -2,9 +2,11 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useSession } from "@/features/gallery/session-store"
+import { tabSchema } from "@/api/mock/fixtures"
 import { deliver } from "@/features/send-to/send-to"
 import { FormProvider, OwnerProvider } from "@/ui/context"
-import { createFormStore } from "@/ui/form-store"
+import { createFormStore, getFormStore } from "@/ui/form-store"
+import { tabOwners } from "@/ui/tab"
 import type { CustomNode } from "@/ui/schema"
 import { widgetKeys } from "../_lib/i18n"
 import PpSend from "./index"
@@ -13,7 +15,7 @@ import zh from "./locales/zh-CN.json"
 
 vi.mock("@/features/send-to/send-to", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/send-to/send-to")>()),
-  deliver: vi.fn(async () => 2),
+  deliver: vi.fn(async () => ({ count: 2, locked: [] as string[] })),
 }))
 
 const OWNER = "post_processing_suite"
@@ -97,7 +99,7 @@ describe("pp-send widget", () => {
     answer("pp-copy")
     act(() => useSession.getState().addJob({ jobId: "j2", tab: "txt2img", outputs: [{ id: "out", kind: "image" }] }))
     setup({ action: "apply_send", target: "inpaint" })
-    vi.mocked(deliver).mockResolvedValueOnce(0)
+    vi.mocked(deliver).mockResolvedValueOnce({ count: 0, locked: [] })
     const success = vi.spyOn(toast, "success")
     const failure = vi.spyOn(toast, "error")
     fireEvent.click(screen.getByRole("button", { name: "Apply PP → Send to inpaint" }))
@@ -107,6 +109,23 @@ describe("pp-send widget", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Apply PP → Send to inpaint" }))
     await waitFor(() => expect(success).toHaveBeenCalledWith("Post-processed image sent to inpaint", expect.anything()))
+  })
+
+  it("names the values a lock kept from the sent image", async () => {
+    answer("pp-copy")
+    getFormStore("img2img").getState().load(tabOwners(tabSchema("img2img")))
+    act(() => useSession.getState().addJob({ jobId: "j3", tab: "txt2img", outputs: [{ id: "out", kind: "image" }] }))
+    setup({ action: "apply_send", target: "inpaint" })
+    const success = vi.spyOn(toast, "success")
+    const failure = vi.spyOn(toast, "error")
+    // the image arrived, its mode was locked
+    vi.mocked(deliver).mockResolvedValueOnce({ count: 1, locked: ["core.mode"] })
+    fireEvent.click(screen.getByRole("button", { name: "Apply PP → Send to inpaint" }))
+    await waitFor(() => expect(success).toHaveBeenCalledWith("Post-processed image sent to inpaint", expect.objectContaining({ description: "Overridden by a lock: Mode" })))
+    // nothing arrived: the failure says why
+    vi.mocked(deliver).mockResolvedValueOnce({ count: 0, locked: ["core.init_img", "core.mode"] })
+    fireEvent.click(screen.getByRole("button", { name: "Apply PP → Send to inpaint" }))
+    await waitFor(() => expect(failure).toHaveBeenCalledWith("Could not send the post-processed image", expect.objectContaining({ description: expect.stringMatching(/^Overridden by a lock: .+ and Mode$/) })))
   })
 
   it("has a zh-CN translation for every chrome string", () => {

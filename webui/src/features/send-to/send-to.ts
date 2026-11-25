@@ -73,14 +73,10 @@ const KEEPS_VALUES: ReadonlySet<FormTab> = new Set(["txt2img", "img2img", "extra
 /**
  * Applies `entries` to form `tab` and shows its page: right away when the
  * form is loaded (and on screen, or a form that keeps its values),
- * otherwise after its next schema load. Resolves with the number of params set.
+ * otherwise after its next schema load. Resolves with the params set and the
+ * ones a lock kept (`applyPaste`), which the caller names with `lockNote`.
  */
-export function deliver(tab: FormTab, entries: readonly PasteEntry[], filter: PasteFilter = {}): Promise<number> {
-  return deliverPaste(tab, entries, filter).then((result) => result.count)
-}
-
-/** `deliver`, resolving with the params set and the ones a lock kept (`applyPaste`). */
-export function deliverPaste(tab: FormTab, entries: readonly PasteEntry[], filter: PasteFilter = {}): Promise<PasteResult> {
+export function deliver(tab: FormTab, entries: readonly PasteEntry[], filter: PasteFilter = {}): Promise<PasteResult> {
   const store = getFormStore(tab)
   const onScreen = routeKey(currentRoute()) === routeKey(routeOf(tab))
   if (store.getState().revision > 0 && (onScreen || KEEPS_VALUES.has(tab))) {
@@ -118,7 +114,7 @@ export function sendFilter(): PasteFilter {
  * Sends a result to a form: its image (output file ids are valid image
  * inputs) and, for the generation forms, its parameters (`send_seed` /
  * `send_size` / `send_cfg` respected). Resolves with the params set and the
- * ones a lock kept (`deliverPaste`).
+ * ones a lock kept (`deliver`).
  */
 export async function sendTo(target: SendTarget, item: SendItem, filter: PasteFilter = sendFilter()): Promise<PasteResult> {
   const tab = formOf(target)
@@ -129,7 +125,7 @@ export async function sendTo(target: SendTarget, item: SendItem, filter: PasteFi
     entries.push(image)
     describeFile(item.fileId, item)
   }
-  return deliverPaste(tab, entries, filter)
+  return deliver(tab, entries, filter)
 }
 
 export type ReferenceTarget = {

@@ -1,5 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { tabSchema } from "@/api/mock/fixtures"
@@ -10,6 +11,7 @@ import { tabOwners } from "@/ui/tab"
 import { nextBackdrop } from "./backdrop-modes"
 import { BackdropPicker } from "./BackdropPicker"
 import { applyCompareDiffToForm, diffInfotext, diffPromptTokens, totalDiffCount } from "./param-diff"
+import { ParamDiffPanel } from "./ParamDiffPanel"
 
 const INFO_A = [
   "1girl, silver hair, moonlit garden, <lora:detail_v1:0.8>, <lora:lighting:0.5>",
@@ -66,7 +68,7 @@ describe("structured parameter diff math", () => {
     getFormStore("txt2img").getState().load(tabOwners(tabSchema("txt2img")))
     const diff = diffInfotext(INFO_A, INFO_B)
     diff.adopt_b_patch = { core: { cfg_scale: 4 }, scripts: { sampler: { steps: 32 }, seed: { seed: 2002 } }, raw_params: {} }
-    const count = await applyCompareDiffToForm(diff, "b", "txt2img")
+    const { count } = await applyCompareDiffToForm(diff, "b", "txt2img")
     expect(count).toBe(3)
     const values = getFormStore("txt2img").getState().values
     expect(values.core?.cfg_scale).toBe(4)
@@ -80,10 +82,32 @@ describe("structured parameter diff math", () => {
       .mockResolvedValueOnce({ tab: "txt2img", core: { cfg_scale: 4, width: 832 }, scripts: { sampler: { steps: 32 } } })
       .mockResolvedValueOnce({ tab: "txt2img", core: { cfg_scale: 5, width: 832 }, scripts: { sampler: { steps: 28 } } })
     const diff = diffInfotext(INFO_A, INFO_B)
-    const count = await applyCompareDiffToForm(diff, "b", "txt2img")
+    const { count } = await applyCompareDiffToForm(diff, "b", "txt2img")
     expect(count).toBe(2) // width was identical so skipped
     expect(getFormStore("txt2img").getState().values.core?.cfg_scale).toBe(4)
     expect(getFormStore("txt2img").getState().values.sampler?.steps).toBe(32)
+  })
+
+  it("names the differences a lock kept, and leaves them out of the count", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 404 }))
+    const success = vi.spyOn(toast, "success")
+    const store = getFormStore("txt2img")
+    store.getState().load(tabOwners(tabSchema("txt2img")))
+    // a toggle that locks the CFG scale (`locks: "core.cfg_scale"`) is on, over a value of the user's own
+    store.setState((s) => ({ locks: [{ owner: "keep", name: "cfg", target: ["core", "cfg_scale"] }], values: { ...s.values, core: { ...s.values.core, cfg_scale: 7 }, keep: { cfg: true } } }))
+    vi.spyOn(api, "parseInfotext")
+      .mockResolvedValueOnce({ tab: "txt2img", core: { cfg_scale: 4 }, scripts: { sampler: { steps: 32 } } })
+      .mockResolvedValueOnce({ tab: "txt2img", core: { cfg_scale: 5 }, scripts: { sampler: { steps: 28 } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ParamDiffPanel a={{ id: "a1", name: "a.png", infotext: INFO_A }} b={{ id: "b1", name: "b.png", infotext: INFO_B }} />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole("button", { name: "Apply B to form" }))
+    await waitFor(() => expect(success).toHaveBeenCalledWith("Applied B differences (1)", { description: "Overridden by a lock: CFG Scale" }))
+    expect(store.getState().values.core?.cfg_scale).toBe(7)
+    expect(store.getState().values.sampler?.steps).toBe(32)
+    vi.restoreAllMocks()
   })
 })
 

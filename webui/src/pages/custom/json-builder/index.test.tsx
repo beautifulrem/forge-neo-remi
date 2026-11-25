@@ -106,6 +106,20 @@ describe("JSON Builder page", () => {
     expect([core?.width, core?.height]).toEqual([1024, 1024])
   })
 
+  it("names the values a lock kept from the sent prompt and size", async () => {
+    const success = vi.spyOn(toast, "success")
+    const store = getFormStore("txt2img")
+    store.getState().load(tabOwners(tabSchema("txt2img")))
+    // a toggle that locks the width (`locks: "core.width"`) is on, over a width of the user's own
+    store.setState((s) => ({ locks: [{ owner: "keep", name: "size", target: ["core", "width"] }], values: { ...s.values, core: { ...s.values.core, width: 768 }, keep: { size: true } } }))
+    renderPage()
+    fireEvent.change(screen.getByLabelText("Caption"), { target: { value: "a room" } })
+    fireEvent.change(screen.getByLabelText("Caption of item 1"), { target: { value: "a lamp" } })
+    fireEvent.click(screen.getByRole("button", { name: "Send to txt2img" }))
+    await waitFor(() => expect(success).toHaveBeenCalledWith("Sent to txt2img", { description: "Overridden by a lock: Width" }))
+    expect(store.getState().values.core?.width).toBe(768)
+  })
+
   it("warns when the size is past what the target form accepts", async () => {
     const warning = vi.spyOn(toast, "warning")
     const success = vi.spyOn(toast, "success")

@@ -24,6 +24,7 @@ import { deliver } from "@/features/send-to/send-to"
 import { cn } from "@/lib/utils"
 import type { CustomPageProps } from "@/pages/ext"
 import { getFormStore } from "@/ui/form-store"
+import { lockNote } from "@/ui/locks"
 import { CANVAS_TYPES, LABELS } from "./compile"
 import { type Box, type CanvasType, decompilePrompt, type Label, splitPrompt } from "./decompile"
 import { ASPECT_RATIOS, type AspectRatio, buildDraft, finalPrompt, type Item, LABEL_NAMES, type Missing, type EditableField, missingFields, resolutionFor, round16 } from "./draft"
@@ -651,11 +652,14 @@ export default function JsonBuilderPage(_props: CustomPageProps) {
     const target = t(TARGET_NAMES[tab])
     const { width, height } = state
     deliver(tab, [{ owner: "core", values: { prompt, width, height } }])
-      .then((count) => {
-        if (count === 0) return void toast.error(t("Could not send to {{target}}", { target }))
+      .then(({ count, locked }) => {
+        // the values a lock kept are named (sent with nothing else, they are why nothing changed)
+        const note = lockNote(getFormStore(tab).getState().index, locked)
+        if (count === 0 && !note) return void toast.error(t("Could not send to {{target}}", { target }))
+        const described = note ? { description: note } : undefined
         const limit = sizeLimit(tab, width, height)
-        if (limit === null) toast.success(t("Sent to {{target}}", { target }))
-        else toast.warning(t("Sent to {{target}}, but it accepts at most {{max}} px per side: change the size before generating", { target, max: limit }))
+        if (limit === null) toast.success(t("Sent to {{target}}", { target }), described)
+        else toast.warning(t("Sent to {{target}}, but it accepts at most {{max}} px per side: change the size before generating", { target, max: limit }), described)
       })
       .catch((err: unknown) => toast.error(t("Could not send to {{target}}", { target }), { description: message(err) }))
   }
