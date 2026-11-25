@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, Query, Response
 from pydantic import Field
 
 from remi.recipes import RECIPE_EXPORT_VERSION, RecipeError, apply_recipe, recipe_json, recipes_for
 from remi.server import models as m
 from remi.server.deps import ServicesDep, iso
+from remi.ui.sentence import Sentence
 
 router = APIRouter(prefix="/recipes")
 
@@ -93,11 +94,8 @@ class RecipeApplyResult(m.Model):
     warning_notes: list[m.Note] = Field([], description="the warnings as notes: each English message's template and the values that fill it, for the UI to translate")
 
 
-def _call(fn: Any) -> Any:
-    try:
-        return fn()
-    except RecipeError as error:
-        raise HTTPException(status_code=error.status, detail=str(error)) from error
+def _missing(recipe_id: str) -> RecipeError:
+    return RecipeError(Sentence("no recipe {{id}}", id=repr(recipe_id)), status=404)
 
 
 @router.get("", response_model=RecipeList, summary="List parameter recipes")
@@ -117,17 +115,15 @@ def list_recipes(
 @router.post("", response_model=RecipeItem, status_code=201, responses=ERRORS, summary="Create a parameter recipe")
 def create_recipe(body: RecipeCreate, services: ServicesDep) -> dict[str, Any]:
     store = recipes_for(services.files)
-    recipe = _call(
-        lambda: store.create(
-            body.name,
-            description=body.description,
-            model_family=body.model_family,
-            capabilities=body.capabilities,
-            tab=body.tab,
-            core_patch=body.core_patch,
-            scripts_patch=body.scripts_patch,
-            tags=body.tags,
-        )
+    recipe = store.create(
+        body.name,
+        description=body.description,
+        model_family=body.model_family,
+        capabilities=body.capabilities,
+        tab=body.tab,
+        core_patch=body.core_patch,
+        scripts_patch=body.scripts_patch,
+        tags=body.tags,
     )
     return recipe_json(recipe, iso)
 
@@ -141,7 +137,7 @@ def export_recipes(services: ServicesDep, response: Response) -> dict[str, Any]:
 @router.post("/import", response_model=RecipeImportResult, responses=ERRORS, summary="Import recipes from JSON")
 def import_recipes(body: RecipeImportRequest, services: ServicesDep) -> dict[str, Any]:
     store = recipes_for(services.files)
-    res = _call(lambda: store.import_recipes({"version": body.version, "recipes": body.recipes}, overwrite=body.overwrite))
+    res = store.import_recipes({"version": body.version, "recipes": body.recipes}, overwrite=body.overwrite)
     return {
         "added": res["added"],
         "updated": res["updated"],
@@ -154,7 +150,7 @@ def import_recipes(body: RecipeImportRequest, services: ServicesDep) -> dict[str
 def get_recipe(recipe_id: str, services: ServicesDep) -> dict[str, Any]:
     recipe = recipes_for(services.files).get(recipe_id)
     if recipe is None:
-        raise HTTPException(status_code=404, detail=f"no recipe {recipe_id!r}")
+        raise _missing(recipe_id)
     return recipe_json(recipe, iso)
 
 
@@ -162,14 +158,14 @@ def get_recipe(recipe_id: str, services: ServicesDep) -> dict[str, Any]:
 def update_recipe(recipe_id: str, body: RecipeUpdate, services: ServicesDep) -> dict[str, Any]:
     store = recipes_for(services.files)
     changes = {field: getattr(body, field) for field in body.model_fields_set}
-    recipe = _call(lambda: store.update(recipe_id, changes))
+    recipe = store.update(recipe_id, changes)
     return recipe_json(recipe, iso)
 
 
 @router.delete("/{recipe_id}", status_code=204, responses=ERRORS, summary="Delete a recipe")
 def delete_recipe(recipe_id: str, services: ServicesDep) -> Response:
     if not recipes_for(services.files).delete(recipe_id):
-        raise HTTPException(status_code=404, detail=f"no recipe {recipe_id!r}")
+        raise _missing(recipe_id)
     return Response(status_code=204)
 
 
@@ -177,14 +173,12 @@ def delete_recipe(recipe_id: str, services: ServicesDep) -> Response:
 def apply_recipe_route(recipe_id: str, body: RecipeApplyRequest, services: ServicesDep) -> dict[str, Any]:
     recipe = recipes_for(services.files).get(recipe_id)
     if recipe is None:
-        raise HTTPException(status_code=404, detail=f"no recipe {recipe_id!r}")
-    applied = _call(
-        lambda: apply_recipe(
-            recipe,
-            tab=body.tab,
-            core=body.core,
-            scripts=body.scripts,
-            check_conflicts=body.check_conflicts,
-        )
+        raise _missing(recipe_id)
+    applied = apply_recipe(
+        recipe,
+        tab=body.tab,
+        core=body.core,
+        scripts=body.scripts,
+        check_conflicts=body.check_conflicts,
     )
     return {"recipe": recipe_json(recipe, iso), **applied}

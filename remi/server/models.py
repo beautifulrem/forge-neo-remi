@@ -44,6 +44,9 @@ class ValidationErrorBody(Model):
 
 class Detail(Model):
     detail: str
+    # a refused queue, pipeline or recipe operation: the sentence's catalog key and values (the detail is English)
+    template: str | None = None
+    params: dict[str, str | list[str]] | None = None
 
 
 class Ok(Model):

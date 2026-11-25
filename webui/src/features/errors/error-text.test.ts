@@ -64,6 +64,31 @@ describe("errorText", () => {
     }
   })
 
+
+  // A recipe name already taken read "It changed meanwhile; refresh and try again.", and a job the
+  // queue cannot run again the Queue page's own guess at what a 409 means.
+  it("says the sentence a refused request carries, in the UI language", async () => {
+    const sentence = (status: number, detail: string, template: string, params: Record<string, string>) => new ApiError(status, detail, { detail, template, params })
+    const taken = sentence(409, "a recipe named 'Portrait' already exists", "a recipe named {{name}} already exists", { name: "'Portrait'" })
+    const stage = sentence(409, "a pipeline stage cannot generate forever", "a pipeline stage cannot generate forever", {})
+    const queueTexts = { 409: "The job changed meanwhile (it started or finished)." }
+    expect(errorText(taken)).toBe("a recipe named 'Portrait' already exists")
+    expect(errorText(stage, queueTexts)).toBe("a pipeline stage cannot generate forever")
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", "a recipe named {{name}} already exists", "已存在名为 {{name}} 的配方")
+    i18n.addResource("zh-CN", "server", "a pipeline stage cannot generate forever", "管线阶段不能无限生成")
+    await i18n.changeLanguage("zh-CN")
+    try {
+      expect(errorText(taken)).toBe("已存在名为 'Portrait' 的配方")
+      expect(errorText(stage, queueTexts)).toBe("管线阶段不能无限生成")
+      expect(failureText(taken)).toBe("已存在名为 'Portrait' 的配方")
+    } finally {
+      await i18n.changeLanguage("en")
+    }
+    // a body without a template is said by its status
+    expect(errorText(failed(409), queueTexts)).toBe("The job changed meanwhile (it started or finished).")
+  })
+
   it("falls back on the status class for other codes", () => {
     expect(errorText(failed(500))).toBe("The server ran into an error (500).")
     expect(errorText(failed(502))).toBe("The server ran into an error (502).")

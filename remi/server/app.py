@@ -25,6 +25,7 @@ from starlette.types import Scope
 
 from remi.files import FileError
 from remi.jobs import JobError
+from remi.recipes import RecipeError
 from remi.server.api_docs import add_docs_routes
 from remi.server.auth import BASE_HEADERS, PUBLIC_PATHS, Auth, BaseHeadersMiddleware, SecurityMiddleware, credentials_from_cmd_opts, load_secret, route_path
 from remi.server.limits import PUBLIC_BODY_LIMIT, BodyLimitMiddleware, body_limit
@@ -33,6 +34,7 @@ from remi.server.spa import DIST, Spa
 from remi.server.ws import Hub
 from remi.setting_values import encodable
 from remi.ui import ParamError, ValidationError
+from remi.ui.sentence import error_fields
 
 log = logging.getLogger(__name__)
 
@@ -158,8 +160,11 @@ def _validation_error(request: Request, error: ValidationError) -> JSONResponse:
     return ErrorResponse(status_code=422, content=error.to_json())
 
 
-def _job_error(request: Request, error: JobError) -> JSONResponse:
-    return ErrorResponse(status_code=error.status, content={"detail": str(error)})
+def _refused(request: Request, error: JobError | RecipeError) -> JSONResponse:
+    """A queue, pipeline or recipe operation that cannot be done: its sentence
+    in English (``detail``) and its template and values, which the UI translates."""
+
+    return ErrorResponse(status_code=error.status, content={"detail": str(error), **error_fields(error.message)})
 
 
 def _file_error(request: Request, error: FileError) -> JSONResponse:
@@ -305,7 +310,7 @@ def create_app(
         docs_url=None,
         redoc_url=None,
         default_response_class=TextSafeResponse,
-        exception_handlers={Exception: handle_exception, RequestValidationError: _request_validation_error, ValidationError: _validation_error, JobError: _job_error, FileError: _file_error},
+        exception_handlers={Exception: handle_exception, RequestValidationError: _request_validation_error, ValidationError: _validation_error, JobError: _refused, RecipeError: _refused, FileError: _file_error},
         # every route's JSON body, /sdapi's (added below) included
         dependencies=[Depends(refuse_broken_text)],
     )

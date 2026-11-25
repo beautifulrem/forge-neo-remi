@@ -114,6 +114,12 @@ describe("mock workbench routes", () => {
     })
     expect(created.status).toBe(200)
     const id = created.data.id as string
+    // a name already taken is refused with the server's sentence (the UI translates its template)
+    const taken = await call("POST", "/recipes", { name: "Studio Portrait" })
+    expect(taken).toEqual({
+      status: 409,
+      data: { detail: "a recipe named 'Studio Portrait' already exists", template: "a recipe named {{name}} already exists", params: { name: "'Studio Portrait'" } },
+    })
 
     const fetched = await call("GET", `/recipes/${id}`)
     expect(fetched.status).toBe(200)
@@ -204,7 +210,10 @@ describe("mock workbench routes", () => {
     expect((await call("POST", `/chains/${chainId}/pause`)).data.status).toBe("paused")
     expect((await call("POST", `/chains/${chainId}/resume`)).data.status).toBe("completed")
     // a finished run cannot be cancelled (it would overwrite its result), as on the server
-    expect((await call("POST", `/chains/${chainId}/cancel`)).status).toBe(409)
+    expect(await call("POST", `/chains/${chainId}/cancel`)).toEqual({
+      status: 409,
+      data: { detail: "chain is already completed", template: "chain is already {{status}}", params: { status: "completed" } },
+    })
     expect((await call("DELETE", `/chains/${chainId}`)).status).toBe(204)
     expect((await call("GET", `/chains/${chainId}`)).status).toBe(404)
 

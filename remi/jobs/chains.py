@@ -38,6 +38,7 @@ from remi.files import FileStore, connect, decode_cursor, encode_cursor, transac
 from remi.jobs.queue import JobError, JobQueue, Submission
 from remi.jobs.store import CANCELLED, CHAIN_SCHEMA, COMPLETED, FAILED, INTERRUPTED, Job, JobStore
 from remi.realtime import EventBus
+from remi.ui.sentence import Sentence
 
 log = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ class StageSpec:
 
     def __post_init__(self) -> None:
         if self.kind not in STAGE_KINDS:
-            raise ChainError(f"stage kind must be one of {', '.join(STAGE_KINDS)}", status=422)
+            raise ChainError(Sentence("stage kind must be one of {{kinds}}", kinds=", ".join(STAGE_KINDS)), status=422)
         if not self.tab:
             self.tab = DEFAULT_STAGE_TABS[self.kind]
         if not self.name:
@@ -186,7 +187,7 @@ class CachedStageOutput:
 
 def _check_finite(value: Any, path: str) -> None:
     if isinstance(value, float) and not math.isfinite(value):
-        raise ChainError(f"{path} must not contain NaN or Infinity", status=422)
+        raise ChainError(Sentence("{{path}} must not contain NaN or Infinity", path=path), status=422)
     if isinstance(value, Mapping):
         for key, item in value.items():
             _check_finite(item, f"{path}.{key}")
@@ -441,9 +442,9 @@ class ChainStore:
         status: str = "queued",
     ) -> JobChain:
         if not stages:
-            raise ChainError("a chain requires at least one stage", status=422)
+            raise ChainError(Sentence("a chain requires at least one stage"), status=422)
         if len(stages) > MAX_STAGES:
-            raise ChainError(f"a chain may have at most {MAX_STAGES} stages", status=422)
+            raise ChainError(Sentence("a chain may have at most {{maximum}} stages", maximum=MAX_STAGES), status=422)
         check_stages_finite(stages)
         chain_id = secrets.token_hex(8)
         now = time.time()
@@ -539,7 +540,7 @@ class ChainStore:
 
     def replace_stages(self, chain_id: str, stages: Sequence[StageSpec]) -> None:
         if not stages or len(stages) > MAX_STAGES:
-            raise ChainError(f"stages count must be between 1 and {MAX_STAGES}", status=422)
+            raise ChainError(Sentence("stages count must be between 1 and {{maximum}}", maximum=MAX_STAGES), status=422)
         check_stages_finite(stages)
         with self._transaction():
             self._db.execute("DELETE FROM stage_runs WHERE chain_id = ?", (chain_id,))
@@ -739,9 +740,9 @@ class ChainStore:
     ) -> ChainTemplate:
         clean_name = (name or "").strip()
         if not clean_name:
-            raise ChainError("template name is required", status=422)
+            raise ChainError(Sentence("template name is required"), status=422)
         if not stages or len(stages) > MAX_STAGES:
-            raise ChainError(f"template must contain 1..{MAX_STAGES} stages", status=422)
+            raise ChainError(Sentence("template must contain 1..{{maximum}} stages", maximum=MAX_STAGES), status=422)
         check_stages_finite(stages)
         template_id = secrets.token_hex(8)
         now = time.time()
@@ -765,7 +766,7 @@ class ChainStore:
                     ),
                 )
             except sqlite3.IntegrityError as error:
-                raise ChainError(f"a chain template named {clean_name!r} already exists", status=409) from error
+                raise ChainError(Sentence("a chain template named {{name}} already exists", name=repr(clean_name)), status=409) from error
         tmpl = self.get_template(template_id)
         assert tmpl is not None
         return tmpl
@@ -1059,9 +1060,9 @@ class ChainRunner:
         with self._lock:
             chain = self.store.get_chain(chain_id)
             if chain is None:
-                raise ChainError(f"no chain {chain_id!r}", status=404)
+                raise ChainError(Sentence("no chain {{id}}", id=repr(chain_id)), status=404)
             if chain.status == "running" or any(st.status == "running" for st in chain.stages):
-                raise ChainError("cancel or pause the running chain before re-running", status=409)
+                raise ChainError(Sentence("cancel or pause the running chain before re-running"), status=409)
             if stages is not None:
                 self.store.replace_stages(chain_id, stages)
             else:
@@ -1079,9 +1080,9 @@ class ChainRunner:
         with self._lock:
             chain = self.store.get_chain(chain_id)
             if chain is None:
-                raise ChainError(f"no chain {chain_id!r}", status=404)
+                raise ChainError(Sentence("no chain {{id}}", id=repr(chain_id)), status=404)
             if chain.status in TERMINAL_CHAIN_STATUSES:
-                raise ChainError(f"cannot pause chain in status {chain.status!r}", status=409)
+                raise ChainError(Sentence("cannot pause chain in status {{status}}", status=repr(chain.status)), status=409)
             updated = self.store.update_chain(chain_id, status="paused")
             assert updated is not None
             self._publish_chain(updated)
@@ -1093,9 +1094,9 @@ class ChainRunner:
         with self._lock:
             chain = self.store.get_chain(chain_id)
             if chain is None:
-                raise ChainError(f"no chain {chain_id!r}", status=404)
+                raise ChainError(Sentence("no chain {{id}}", id=repr(chain_id)), status=404)
             if chain.status != "paused":
-                raise ChainError(f"chain is {chain.status!r}, not paused", status=409)
+                raise ChainError(Sentence("chain is {{status}}, not paused", status=repr(chain.status)), status=409)
             running = any(st.status == "running" for st in chain.stages)
             updated = self.store.update_chain(chain_id, status="running" if running else "queued")
             assert updated is not None
@@ -1108,9 +1109,9 @@ class ChainRunner:
         with self._lock:
             chain = self.store.get_chain(chain_id)
             if chain is None:
-                raise ChainError(f"no chain {chain_id!r}", status=404)
+                raise ChainError(Sentence("no chain {{id}}", id=repr(chain_id)), status=404)
             if chain.status in TERMINAL_CHAIN_STATUSES:
-                raise ChainError(f"chain is already {chain.status}", status=409)
+                raise ChainError(Sentence("chain is already {{status}}", status=chain.status), status=409)
             now = time.time()
             active_jobs = [st.job_id for st in chain.stages if st.status == "running" and st.job_id]
             for st in chain.stages:
@@ -1133,7 +1134,7 @@ class ChainRunner:
             if chain is None:
                 return False
             if chain.status == "running" or any(st.status == "running" for st in chain.stages):
-                raise ChainError("cannot delete a running chain; cancel it first", status=409)
+                raise ChainError(Sentence("cannot delete a running chain; cancel it first"), status=409)
             return self.store.delete_chain(chain_id)
 
     def reconcile(self) -> int:
@@ -1250,7 +1251,7 @@ class ChainRunner:
             with self._lock:
                 chain = self.store.get_chain(chain_id)
                 if chain is None:
-                    raise ChainError(f"no chain {chain_id!r}", status=404)
+                    raise ChainError(Sentence("no chain {{id}}", id=repr(chain_id)), status=404)
                 if chain.status in ("paused", *TERMINAL_CHAIN_STATUSES):
                     return chain
                 if any(st.status == "running" for st in chain.stages):

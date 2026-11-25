@@ -33,6 +33,12 @@ export class MockHttpError extends Error {
   }
 }
 
+/** A refused queue, pipeline or recipe operation, as the server answers it: the English sentence and its template and values. */
+export function refused(status: number, template: string, params: Record<string, string> = {}): MockHttpError {
+  const detail = template.replace(/\{\{(\w+)\}\}/g, (match, name: string) => params[name] ?? match)
+  return new MockHttpError(status, { detail, template, params })
+}
+
 const jobs: Job[] = []
 let seq = 0
 let uploadSeq = 0
@@ -736,7 +742,7 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     (_m, body) => {
       const { id, after, before, priority } = body as { id: string; after?: string | null; before?: string | null; priority?: number | null }
       const from = queue.findIndex((q) => q.job.id === id)
-      if (from === -1) throw new MockHttpError(409, { detail: "Mock: the job is not queued any more" })
+      if (from === -1) throw refused(409, "the job is not queued any more")
       const [entry] = queue.splice(from, 1)
       if (typeof priority === "number") entry!.job.priority = priority
       const anchor = after ? queue.findIndex((q) => q.job.id === after) : -1
@@ -777,7 +783,7 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
     (m, body) => {
       const job = jobs.find((j) => j.id === m[1])
       if (!job) throw new MockHttpError(404, { detail: "Mock: unknown job" })
-      if (job.status !== "queued") throw new MockHttpError(409, { detail: "only queued jobs can be edited" })
+      if (job.status !== "queued") throw refused(409, "only queued jobs can be edited")
       const { core, scripts } = body as { core: Record<string, unknown>; scripts: Record<string, Record<string, unknown>> }
       const request = { ...requests.get(job.id)!, core, scripts }
       const errors = validateJob(request)

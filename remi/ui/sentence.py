@@ -51,6 +51,15 @@ def sentence_fields(text: Any, prefix: str = "") -> dict[str, Any]:
     return {}
 
 
+def error_fields(text: Any) -> dict[str, Any]:
+    """``{"template", "params"}`` of a :class:`Sentence`, also of one without
+    params, else ``{}``: what the body of a refused request adds next to its
+    English ``detail``. The template tells the UI the detail is a sentence its
+    catalogs translate; a detail without one is said by its status."""
+
+    return {"template": text.template, "params": _json_params(text.params)} if isinstance(text, Sentence) else {}
+
+
 def _json_params(params: dict[str, str | list[str]], prefix: str = "") -> dict[str, str | list[str]]:
     """Params as JSON. A sentence param is its English text, with its template and params
     beside it under its name (``reason.template``, ``reason.value``): still all strings, and

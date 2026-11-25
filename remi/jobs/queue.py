@@ -34,6 +34,7 @@ from remi.jobs.runner import Executor, JobResult, run_job, run_on_main_thread
 from remi.jobs.store import CANCELLED, COMPLETED, FAILED, INTERRUPTED, QUEUED, RUNNING, Job, JobStore
 from remi.jobs.texts import DELETED, END_NOT_SAVED, MODEL_NOT_LOADED, OUT_OF_MEMORY
 from remi.realtime import EventBus, JobRef
+from remi.ui.sentence import Sentence
 
 log = logging.getLogger(__name__)
 
@@ -140,10 +141,13 @@ class RecentSubmissions:
 
 
 class JobError(ValueError):
-    """A queue operation that cannot be done (``status``: HTTP status)."""
+    """A queue operation that cannot be done (``status``: HTTP status). Its
+    ``message`` is a :class:`Sentence`: the error body carries its template,
+    which the UI translates."""
 
-    def __init__(self, message: str, status: int = 409):
+    def __init__(self, message: Sentence, status: int = 409):
         super().__init__(message)
+        self.message = message
         self.status = status
 
 
@@ -483,7 +487,7 @@ class JobQueue:
             return jobs
 
     def _submit(self, submission: Submission, *, user: str | None) -> list[Job]:
-        from remi.ui import ParamError, Sentence, ValidationError
+        from remi.ui import ParamError, ValidationError
         from remi.ui.schema import SCHEMA_VERSION
 
         if submission.tab not in TABS:
@@ -509,7 +513,7 @@ class JobQueue:
         return kept if kept is not None else (core or {}, scripts or {})
 
     def _check_upscale_source(self, tab: str, file_id: str) -> None:
-        from remi.ui import ParamError, Sentence, ValidationError
+        from remi.ui import ParamError, ValidationError
 
         if tab != "txt2img":
             raise ValidationError([ParamError("only txt2img jobs Hires. fix an existing image", param="upscale_from")])
@@ -520,7 +524,7 @@ class JobQueue:
     def retry(self, job_id: str, *, user: str | None = None) -> Job:
         job = self.get(job_id)
         if job.status in (QUEUED, RUNNING):
-            raise JobError("the job has not finished")
+            raise JobError(Sentence("the job has not finished"))
         return self._copy(job, user=user)
 
     def duplicate(self, job_id: str, *, user: str | None = None) -> Job:
@@ -531,7 +535,7 @@ class JobQueue:
 
     def _copy(self, job: Job, *, user: str | None, after: str | None = None) -> Job:
         if not job.replayable:
-            raise JobError("this job has arguments that do not map to the current parameters; open it in its form to queue it again")
+            raise JobError(Sentence("this job has arguments that do not map to the current parameters; open it in its form to queue it again"))
         self.validate(job.tab, job.core, job.scripts)  # the layout or its uploads may have changed
         meta = {key: job.meta[key] for key in ("name", "upscale_from") if job.meta.get(key)}
         new = self.store.add(job.tab, job.core, job.scripts, priority=job.priority, layout_hash=self.hash_layout(job.tab), schema_version=job.schema_version, summary=job.summary, user=user, retry_of=job.id, after=after, meta=meta or None)
@@ -546,14 +550,14 @@ class JobQueue:
 
         job = self.get(job_id)
         if job.status != QUEUED:
-            raise JobError("only queued jobs can be edited")
+            raise JobError(Sentence("only queued jobs can be edited"))
         if job.meta.get("chain_id"):
             # its result is cached under the stage's parameters: edit the pipeline instead
-            raise JobError("this job is a pipeline stage; edit the pipeline and re-run it")
+            raise JobError(Sentence("this job is a pipeline stage; edit the pipeline and re-run it"))
         core, scripts = self._checked(job.tab, core, scripts)
         updated = self.store.update_params(job_id, core, scripts, layout_hash=self.hash_layout(job.tab), schema_version=SCHEMA_VERSION, summary=_summary(core, job.tab))
         if updated is None:
-            raise JobError("the job started meanwhile")
+            raise JobError(Sentence("the job started meanwhile"))
         self._changed()
         return updated
 
@@ -594,7 +598,7 @@ class JobQueue:
 
     def skip(self, job_id: str) -> None:
         if not self._signal(job_id, self._skips):
-            raise JobError("the job is not running")
+            raise JobError(Sentence("the job is not running"))
 
     def delete(self, job_id: str) -> None:
         """Cancel a running job, or remove a queued or finished one."""
@@ -623,13 +627,13 @@ class JobQueue:
                 return
             # the worker claimed it between the read and the delete (the store keeps running
             # jobs): cancel it as the running job it now is
-        raise JobError("the job changed while it was being removed; try again")
+        raise JobError(Sentence("the job changed while it was being removed; try again"))
 
     def update(self, job_id: str, *, priority: int | None = None, forever: bool | None = None) -> Job:
         job = self.get(job_id)
         if forever and job.meta.get("chain_id"):
             # its copies would carry no chain and requeue each other on their own
-            raise JobError("a pipeline stage cannot generate forever")
+            raise JobError(Sentence("a pipeline stage cannot generate forever"))
         job = self.store.update(job_id, priority=priority, forever=forever)
         self._changed()
         return job
@@ -643,7 +647,7 @@ class JobQueue:
 
         self.get(job_id)
         if not self.store.move(job_id, after=after, before=before, priority=priority):
-            raise JobError("the job is not queued any more")
+            raise JobError(Sentence("the job is not queued any more"))
         self._changed()
 
     def interrupt_all(self, *, clear_queue: bool = False, stop_forever: bool = True) -> None:
@@ -680,7 +684,7 @@ class JobQueue:
     def get(self, job_id: str) -> Job:
         job = self.store.get(job_id)
         if job is None:
-            raise JobError("no such job", 404)
+            raise JobError(Sentence("no such job"), 404)
         return job
 
     def _signal(self, job_id: str, bucket: set[str]) -> bool:

@@ -2824,6 +2824,12 @@ export interface components {
         Detail: {
             /** Detail */
             detail: string;
+            /** Template */
+            template?: string | null;
+            /** Params */
+            params?: {
+                [key: string]: string | string[];
+            } | null;
         };
         /** DisabledScriptInfo */
         DisabledScriptInfo: {

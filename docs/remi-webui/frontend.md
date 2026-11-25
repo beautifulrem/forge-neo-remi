@@ -1577,9 +1577,12 @@ older server) nothing is shown.
 - **Failure text**: a failure is shown in the UI language. The server's
   error details are English (for logs and API clients), so the server's
   `detail` (an `ApiError`'s message) is never the whole message:
-  `features/errors/error-text.ts` `errorText` says a sentence chosen by
-  status (callers pass their own for a status that means something specific
-  to them; a 422 lists the refused values' messages, which are catalog keys),
+  `features/errors/error-text.ts` `errorText` says the sentence a refused
+  request's body carries (`template` and `params`: a queue, pipeline,
+  recipe or admin operation; it says more than any reading of the status)
+  or else a sentence chosen by status (callers pass their own for a status
+  that means something specific to them, such as a name already taken; a
+  422 lists the refused values' messages, which are catalog keys),
   `failureText` also keeps the app's own errors (already translated
   sentences), `serviceFailureText` is for the prompt tools (a 502 keeps the
   service's own answer after a translated sentence: it is the only clue to

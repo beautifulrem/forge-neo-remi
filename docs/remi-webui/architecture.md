@@ -343,7 +343,8 @@ All bodies and responses are Pydantic models (`remi/server/models.py`), so
 `/openapi.json` describes the API; `tools/export_openapi.py` writes it to
 `webui/src/api/openapi.json` for the generated TS client (`--check` fails when
 it is stale; a test runs it). Rejected values answer 422 with the
-schema-format.md §3 body; other errors `{"detail": str}`.
+schema-format.md §3 body; other errors `{"detail": str}`, with `template` and
+`params` when the operation refused is a queue, pipeline, recipe or extension one.
 
 | Method | Path | Purpose |
 |---|---|---|

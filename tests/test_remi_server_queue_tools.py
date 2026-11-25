@@ -118,6 +118,8 @@ def test_a_job_that_is_not_replayable_is_never_retried_or_duplicated(server):
     for action in ("retry", "duplicate"):
         response = server.client.post(f"/api/v2/jobs/{job.id}/{action}")
         assert response.status_code == 409 and "do not map" in response.json()["detail"]
+        # a sentence without values is its own catalog key: the template tells the UI it is one
+        assert response.json()["template"] == response.json()["detail"] and response.json()["params"] == {}
     detail = server.client.get(f"/api/v2/jobs/{job.id}").json()
     assert detail["replayable"] is False and detail["opaque"] == {"count": 2, "preview": ["1", "2"]}
 

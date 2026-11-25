@@ -16,7 +16,7 @@ import type { Recipe } from "@/features/recipes/types"
 import { mockAdviceFor, mockCapabilitiesForPreset, normalizeMockPreset } from "./capabilities"
 import { bootstrap } from "./fixtures"
 import { findLibraryItem } from "./library"
-import { conflictPatch, MockHttpError } from "./server"
+import { conflictPatch, MockHttpError, refused } from "./server"
 import { broadcast } from "./socket"
 
 export { mockAdviceFor, mockCapabilitiesForPreset, normalizeMockPreset }
@@ -577,7 +577,8 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
     (_m, body) => {
       const b = (body ?? {}) as Partial<Recipe>
       const name = String(b.name ?? "").trim()
-      if (!name) throw new MockHttpError(422, { detail: "recipe name must not be empty" })
+      if (!name) throw refused(422, "recipe name is required")
+      if (recipes.some((r) => r.name === name)) throw refused(409, "a recipe named {{name}} already exists", { name: `'${name}'` })
       const now = new Date().toISOString()
       const created: Recipe = {
         id: `recipe-mock-${++recipeSeq}`,
@@ -666,7 +667,8 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
       const patch = (body ?? {}) as Partial<Recipe>
       if (patch.name !== undefined) {
         const trimmed = String(patch.name).trim()
-        if (!trimmed) throw new MockHttpError(422, { detail: "recipe name must not be empty" })
+        if (!trimmed) throw refused(422, "recipe name is required")
+        if (recipes.some((r) => r.name === trimmed && r.id !== id)) throw refused(409, "a recipe named {{name}} already exists", { name: `'${trimmed}'` })
         found.name = trimmed
       }
       if (patch.description !== undefined) found.description = String(patch.description)
@@ -918,7 +920,7 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
       const found = chains.find((c) => c.id === id)
       if (!found) throw new MockHttpError(404, { detail: `no chain ${id}` })
       if (action === "cancel" && ["completed", "failed", "cancelled"].includes(found.status)) {
-        throw new MockHttpError(409, { detail: `chain is already ${found.status}` })
+        throw refused(409, "chain is already {{status}}", { status: found.status })
       }
       found.status = action === "pause" ? "paused" : action === "cancel" ? "cancelled" : "completed"
       found.updated_at = new Date().toISOString()

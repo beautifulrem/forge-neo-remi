@@ -497,7 +497,11 @@ def test_stages_with_non_finite_numbers_are_refused(tmp_path):
     with webui_state(), server_app(tmp_path, validate=lambda tab, core, scripts: None) as server:
         headers = {"Content-Type": "application/json"}
         template = server.client.post("/api/v2/chains/templates", content=body, headers=headers)
-        assert template.status_code == 422 and "cfg_scale" in template.json()["detail"]
+        assert template.status_code == 422 and template.json() == {
+            "detail": "stages[0].core.cfg_scale must not contain NaN or Infinity",
+            "template": "{{path}} must not contain NaN or Infinity",
+            "params": {"path": "stages[0].core.cfg_scale"},
+        }
         chain = server.client.post("/api/v2/chains", content=body.replace("cfg_scale", "steps").replace('"stages"', '"run_now": false, "stages"'), headers=headers)
         assert chain.status_code == 422
         store = server.services.chains.store

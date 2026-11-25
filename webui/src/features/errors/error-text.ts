@@ -3,13 +3,15 @@
  * error details are English (they are for logs and API clients), so the
  * pages show a sentence chosen by status code instead; callers pass their
  * own (already translated) sentence for the statuses that mean something
- * specific to them. A 422 that lists the refused values says why: those
+ * specific to them. A refused queue, pipeline or recipe operation says why
+ * with the sentence its body carries (`template`, a catalog key, and
+ * `params`), and a 422 that lists the refused values says why: those
  * messages are catalog keys (`validationText`). A text shown by a render
  * takes the render's language (`useTranslation().i18n.language`): the React
  * Compiler keeps a render's text until the values it read change.
  */
 import { toast } from "sonner"
-import { ApiError, fieldMessages, RequestError, validationErrors } from "@/api/http"
+import { ApiError, fieldMessages, RequestError, sentenceParams, validationErrors } from "@/api/http"
 import { i18n, t } from "@/i18n"
 import { sentenceText } from "@/ui/messages"
 import type { FormIndex } from "@/ui/form-index"
@@ -20,6 +22,8 @@ export type StatusTexts = Partial<Record<number, string>>
 export function errorText(error: unknown, texts: StatusTexts = {}, language = i18n.language): string {
   const lng = language
   if (!(error instanceof ApiError)) return t("The server cannot be reached.", { lng })
+  const sentence = bodySentence(error, language)
+  if (sentence !== null) return sentence
   const own = texts[error.status]
   if (own) return own
   switch (error.status) {
@@ -44,6 +48,20 @@ export function errorText(error: unknown, texts: StatusTexts = {}, language = i1
     default:
       return error.status >= 500 ? t("The server ran into an error ({{status}}).", { status: error.status, lng }) : t("The request failed ({{status}}).", { status: error.status, lng })
   }
+}
+
+/**
+ * The sentence a refused request's body carries (`remi.ui.Sentence`: `{detail, template, params}`),
+ * in the UI language; null for any other body. It says more than any reading of the status: a
+ * recipe name already taken is a 409, as a job that started meanwhile is.
+ */
+function bodySentence(error: ApiError, language: string): string | null {
+  const body = error.detail
+  if (!body || typeof body !== "object") return null
+  const { detail, template, params } = body as { detail?: unknown; template?: unknown; params?: unknown }
+  if (typeof template !== "string" || !template) return null
+  // the English sentence where the catalogs lack the template (English itself)
+  return sentenceText(i18n, typeof detail === "string" && detail ? detail : error.message, template, sentenceParams(params) ?? {}, language)
 }
 
 /**

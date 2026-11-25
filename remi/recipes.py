@@ -29,10 +29,13 @@ MAX_IMPORT_RECIPES = 500
 
 
 class RecipeError(ValueError):
-    """A recipe validation or state error with an HTTP status code."""
+    """A recipe validation or state error with an HTTP status code. Its
+    ``message`` is a :class:`Sentence`: the error body carries its template,
+    which the UI translates."""
 
-    def __init__(self, message: str, status: int = 422) -> None:
+    def __init__(self, message: Sentence, status: int = 422) -> None:
         super().__init__(message)
+        self.message = message
         self.status = status
 
 
@@ -109,13 +112,13 @@ def _check_patch(value: dict[str, Any], path: str) -> dict[str, Any]:
     from remi.setting_values import MAX_NESTING, nested_deeper
 
     if nested_deeper(value, MAX_NESTING):
-        raise RecipeError(f"{path} is nested deeper than {MAX_NESTING} levels")
+        raise RecipeError(Sentence("{{path}} is nested deeper than {{maximum}} levels", path=path, maximum=MAX_NESTING))
     return _check_finite(value, path)
 
 
 def _check_finite(value: Any, path: str) -> Any:
     if isinstance(value, float) and not math.isfinite(value):
-        raise RecipeError(f"{path} must not contain NaN or Infinity")
+        raise RecipeError(Sentence("{{path}} must not contain NaN or Infinity", path=path))
     if isinstance(value, Mapping):
         return {str(k): _check_finite(v, f"{path}.{k}") for k, v in value.items()}
     if isinstance(value, (list, tuple)):
@@ -125,16 +128,16 @@ def _check_finite(value: Any, path: str) -> Any:
 
 def _clean_name(name: Any) -> str:
     if not isinstance(name, str) or not name.strip():
-        raise RecipeError("recipe name is required")
+        raise RecipeError(Sentence("recipe name is required"))
     cleaned = name.strip()
     if len(cleaned) > 200:
-        raise RecipeError("recipe name must be at most 200 characters")
+        raise RecipeError(Sentence("recipe name must be at most {{maximum}} characters", maximum=200))
     return cleaned
 
 
 def _clean_tab(tab: Any) -> str:
     if not isinstance(tab, str) or tab not in VALID_TABS:
-        raise RecipeError(f"tab must be one of {', '.join(VALID_TABS)}")
+        raise RecipeError(Sentence("tab must be one of {{tabs}}", tabs=", ".join(VALID_TABS)))
     return tab
 
 
@@ -142,10 +145,10 @@ def _clean_family(family: Any) -> str | None:
     if family is None:
         return None
     if not isinstance(family, str):
-        raise RecipeError("model_family must be a string")
+        raise RecipeError(Sentence("model_family must be a string"))
     cleaned = family.strip()
     if len(cleaned) > 100:
-        raise RecipeError("model_family must be at most 100 characters")
+        raise RecipeError(Sentence("model_family must be at most {{maximum}} characters", maximum=100))
     return cleaned or None
 
 
@@ -153,12 +156,12 @@ def _clean_str_list(values: Any, field_name: str) -> list[str]:
     if values is None:
         return []
     if not isinstance(values, (list, tuple, set, frozenset)):
-        raise RecipeError(f"{field_name} must be a list of strings")
+        raise RecipeError(Sentence("{{field}} must be a list of strings", field=field_name))
     result: list[str] = []
     seen: set[str] = set()
     for item in values:
         if not isinstance(item, str):
-            raise RecipeError(f"{field_name} entries must be strings")
+            raise RecipeError(Sentence("{{field}} entries must be strings", field=field_name))
         text = item.strip()
         if text and text not in seen:
             seen.add(text)
@@ -170,7 +173,7 @@ def _clean_core_patch(patch: Any) -> dict[str, Any]:
     if patch is None:
         return {}
     if not isinstance(patch, Mapping):
-        raise RecipeError("core_patch must be an object")
+        raise RecipeError(Sentence("core_patch must be an object"))
     return _check_patch(dict(patch), "core_patch")
 
 
@@ -178,13 +181,13 @@ def _clean_scripts_patch(patch: Any) -> dict[str, dict[str, Any]]:
     if patch is None:
         return {}
     if not isinstance(patch, Mapping):
-        raise RecipeError("scripts_patch must be an object")
+        raise RecipeError(Sentence("scripts_patch must be an object"))
     cleaned: dict[str, dict[str, Any]] = {}
     for script_id, values in patch.items():
         if not isinstance(script_id, str) or not script_id.strip():
-            raise RecipeError("scripts_patch keys must be non-empty script ids")
+            raise RecipeError(Sentence("scripts_patch keys must be non-empty script ids"))
         if not isinstance(values, Mapping):
-            raise RecipeError(f"scripts_patch[{script_id!r}] must be an object")
+            raise RecipeError(Sentence("scripts_patch[{{id}}] must be an object", id=repr(script_id)))
         cleaned[script_id.strip()] = _check_patch(dict(values), f"scripts_patch.{script_id}")
     return cleaned
 
@@ -315,7 +318,7 @@ class RecipeStore:
                     ),
                 )
             except sqlite3.IntegrityError as error:
-                raise RecipeError(f"a recipe named {cleaned_name!r} already exists", status=409) from error
+                raise RecipeError(Sentence("a recipe named {{name}} already exists", name=repr(cleaned_name)), status=409) from error
         created = self.get(recipe_id)
         assert created is not None
         return created
@@ -328,7 +331,7 @@ class RecipeStore:
     def _update(self, recipe_id: str, changes: Mapping[str, Any]) -> Recipe:
         existing = self.get(recipe_id)
         if existing is None:
-            raise RecipeError(f"no recipe {recipe_id!r}", status=404)
+            raise RecipeError(Sentence("no recipe {{id}}", id=repr(recipe_id)), status=404)
         name = _clean_name(changes["name"]) if "name" in changes and changes["name"] is not None else existing.name
         description = str(changes["description"]).strip()[:2000] if "description" in changes and changes["description"] is not None else existing.description
         model_family = _clean_family(changes["model_family"]) if "model_family" in changes else existing.model_family
@@ -356,7 +359,7 @@ class RecipeStore:
                     ),
                 )
             except sqlite3.IntegrityError as error:
-                raise RecipeError(f"a recipe named {name!r} already exists", status=409) from error
+                raise RecipeError(Sentence("a recipe named {{name}} already exists", name=repr(name)), status=409) from error
         updated = self.get(recipe_id)
         assert updated is not None
         return updated
@@ -373,12 +376,12 @@ class RecipeStore:
 
     def import_recipes(self, payload: Mapping[str, Any], *, overwrite: bool = False) -> dict[str, Any]:
         if not isinstance(payload, Mapping):
-            raise RecipeError("import payload must be a JSON object")
+            raise RecipeError(Sentence("import payload must be a JSON object"))
         items = payload.get("recipes")
         if not isinstance(items, list):
-            raise RecipeError("import payload must include a 'recipes' list")
+            raise RecipeError(Sentence("import payload must include a 'recipes' list"))
         if len(items) > MAX_IMPORT_RECIPES:
-            raise RecipeError(f"cannot import more than {MAX_IMPORT_RECIPES} recipes at once")
+            raise RecipeError(Sentence("cannot import more than {{maximum}} recipes at once", maximum=MAX_IMPORT_RECIPES))
         # one transaction: an entry that fails leaves none of the earlier ones behind
         with self._lock, transaction(self._db):
             return self._import_entries(items, overwrite=overwrite)
@@ -388,7 +391,7 @@ class RecipeStore:
         imported: list[Recipe] = []
         for entry in items:
             if not isinstance(entry, Mapping):
-                raise RecipeError("each imported recipe must be an object")
+                raise RecipeError(Sentence("each imported recipe must be an object"))
             name = _clean_name(entry.get("name"))
             existing = self.get_by_name(name)
             fields = {

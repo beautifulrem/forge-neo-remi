@@ -877,6 +877,11 @@ export const serverCatalogZh: Record<string, string> = {
   "the job's end could not be saved": "未能保存任务的结束状态",
   "deleted from the queue": "已从队列中删除",
   "not replayable: its arguments do not map to the current parameters": "无法重放：其参数与当前参数对应不上",
+  "a recipe named {{name}} already exists": "已存在名为 {{name}} 的配方",
+  "recipe name is required": "请填写配方名称",
+  "chain is already {{status}}": "管线已处于 {{status}} 状态",
+  "only queued jobs can be edited": "只能编辑排队中的任务",
+  "the job is not queued any more": "该任务已不在队列中",
   "the model was not loaded": "模型未能加载",
   // sentences the server fills in (remi.ui.Sentence): translated by their template
   "Requires {{capabilities}} (active model: {{model}})": "需要 {{capabilities}}（当前模型：{{model}}）",

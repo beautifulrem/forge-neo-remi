@@ -204,7 +204,13 @@ def test_recipes_http_routes(tmp_path, monkeypatch):
         assert reimported.status_code == 200 and reimported.json()["added"] == 1
 
         # Route 409/404 error paths
-        assert server.client.post("/api/v2/recipes", json={"name": "Studio Portrait"}).status_code == 409
+        taken = server.client.post("/api/v2/recipes", json={"name": "Studio Portrait"})
+        # the UI translates the sentence (its template) rather than reading the status as "it changed meanwhile"
+        assert taken.status_code == 409 and taken.json() == {
+            "detail": "a recipe named 'Studio Portrait' already exists",
+            "template": "a recipe named {{name}} already exists",
+            "params": {"name": "'Studio Portrait'"},
+        }
         assert server.client.delete("/api/v2/recipes/missing-id").status_code == 404
         assert server.client.post("/api/v2/recipes/missing-id/apply", json={}).status_code == 404
 
