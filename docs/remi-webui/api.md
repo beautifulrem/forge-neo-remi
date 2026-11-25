@@ -334,7 +334,7 @@ server sends `hello`, then a snapshot: `queue.changed`, and `job.started` +
 | `job.started` | `job_id`, `seq`, `tab` | the worker holds the generation lock and starts it |
 | `job.progress` | `job_id`, `seq`, `tab`, `step`, `steps`, `eta` (s), `job_no` (0-based), `job_count`, `progress` (0–1), `text` | while running |
 | `job.completed` | `job_id`, `seq`, `tab`, `status` (`completed`, `interrupted`, `cancelled`), `outputs`, `infotext`, `warnings` (only when a script step raised and was skipped, or the processing left a note with `p.comment()`, e.g. a feature skipped on this device; also the job's `warnings`) | finished with results (possibly none) |
-| `job.failed` | `job_id`, `seq`, `tab`, `status` (`failed`, `cancelled`), `error`, `errors`? | failed, or cancelled before it ran |
+| `job.failed` | `job_id`, `seq`, `tab`, `status` (`failed`, `cancelled`, `interrupted`), `error`, `errors`? | failed, or cancelled before it ran; `interrupted` when a running job is deleted after the store failed to save its end (`error`: the job's end could not be saved) |
 | `options.changed` | `keys` | settings changed (by anyone) |
 | `networks.changed` | `kind`? | a network list was rescanned |
 | `outputs.changed` | `ids` | gallery stars or removals |
