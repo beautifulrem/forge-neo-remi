@@ -171,10 +171,14 @@ class Throttle:
     def record_failure(self, client: str) -> None:
         now = time.time()
         with self._lock:
+            moments = self._failures.pop(client, [])  # re-inserted last: the dict runs from least to most recent
             if len(self._failures) >= MAX_THROTTLED_CLIENTS:  # forget clients idle for a minute
-                for key in [key for key, moments in self._failures.items() if not moments or now - moments[-1] >= 60]:
+                for key in [key for key, times in self._failures.items() if not times or now - times[-1] >= 60]:
                     del self._failures[key]
-            self._failures.setdefault(client, []).append(now)
+            while len(self._failures) >= MAX_THROTTLED_CLIENTS:  # still full (many addresses, IPv6): the least recent go
+                del self._failures[next(iter(self._failures))]
+            moments.append(now)
+            self._failures[client] = moments
 
 
 API_AUTH_THROTTLE = Throttle()

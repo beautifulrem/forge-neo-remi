@@ -158,6 +158,20 @@ def test_failed_login_bookkeeping_is_bounded(monkeypatch):
     assert set(auth.throttle._failures) == {"10.1.1.1"}
 
 
+def test_failed_login_bookkeeping_is_bounded_while_clients_are_active(monkeypatch):
+    from remi.server import auth as module
+
+    monkeypatch.setattr(module, "MAX_THROTTLED_CLIENTS", 10)
+    auth = Auth({"ann": "1"})
+    for index in range(50):  # many addresses failing within the minute
+        auth.record_failure(f"2001:db8::{index}")
+        assert len(auth.throttle._failures) <= 10
+    auth.record_failure("2001:db8::49")  # a client that keeps failing stays, the oldest go
+    auth.record_failure("2001:db8::ff")
+    assert {"2001:db8::49", "2001:db8::ff"} <= set(auth.throttle._failures)
+    assert len(auth.throttle._failures) <= 10
+
+
 def test_the_api_docs_need_a_login(locked):
     for path in ("/docs", "/redoc", "/openapi.json"):
         assert locked.client.get(path).status_code == 401, path
