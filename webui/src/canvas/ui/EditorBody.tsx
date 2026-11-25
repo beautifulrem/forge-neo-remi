@@ -146,6 +146,9 @@ type ViewOps = {
 /** Whether a tool is offered: the eyedropper only on a sketch layer whose colour the user picks. */
 const offered = (tool: Tool, pickable: boolean) => tool !== "eyedropper" || pickable
 
+/** Popups that portal outside the editor and handle their own keys. */
+const POPUPS = '[data-slot="popover-content"], [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]'
+
 export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways, maximized, onMaximize, busy, ready, loadFailed, onRetry, onFiles, onBlank, onRemove, onAcceptStaged }: BodyProps) {
   const { t } = useTranslation()
   const mod = isMac() ? "⌘" : "Ctrl"
@@ -521,8 +524,15 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
       interactionRef.current?.setSpace(false)
       interactionRef.current?.setShift(false)
     }
+    // A key pressed in a popup outside the editor (its Layers popover, portaled to the body) is the
+    // popup's: an arrow on its buttons, Escape that closes it, Space that presses a button. The
+    // dialog of the maximised editor holds the editor: its keys stay the editor's.
+    const inPopupOutside = (target: EventTarget | null) => {
+      const popup = target instanceof Element ? target.closest(POPUPS) : null
+      return popup !== null && !popup.contains(rootRef.current)
+    }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || !isActive() || isTyping(event.target)) return
+      if (event.defaultPrevented || !isActive() || isTyping(event.target) || inPopupOutside(event.target)) return
       if (event.code === "Space") {
         event.preventDefault()
         interactionRef.current?.setSpace(true)

@@ -3,7 +3,7 @@
  * candidate only when nothing else in the editor has the key, whichever of the
  * editor and the generate page started listening first.
  */
-import { act, fireEvent, render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen, within } from "@testing-library/react"
 import { useState } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { dispatchRun, useRuns } from "@/features/progress/run-controller"
@@ -49,7 +49,7 @@ function newDoc() {
 }
 
 /** The generate page's shortcuts, and the editor shown with it or later (the Source view after "Stage latest result"). */
-function Page({ editorFirst = false, busy = false, onAcceptStaged = () => {} }: { editorFirst?: boolean; busy?: boolean; onAcceptStaged?: (candidate: unknown) => void }) {
+function Page({ editorFirst = false, busy = false, withMask = false, onAcceptStaged = () => {} }: { editorFirst?: boolean; busy?: boolean; withMask?: boolean; onAcceptStaged?: (candidate: unknown) => void }) {
   useGenerateShortcuts("img2img")
   const [shown, setShown] = useState(editorFirst)
   const [doc] = useState(newDoc)
@@ -61,7 +61,7 @@ function Page({ editorFirst = false, busy = false, onAcceptStaged = () => {} }: 
       {shown ? (
         <EditorBody
           doc={doc}
-          editor={{ docKey: DOC, image: "bg", onImageChange: () => {} } as never}
+          editor={{ docKey: DOC, image: "bg", onImageChange: () => {}, ...(withMask ? { layers: { mask: { kind: "mask", value: null } }, activeLayer: "mask" } : {}) } as never}
           screenBrush={false}
           plainColor={null}
           toolbarAlways
@@ -188,5 +188,55 @@ describe("the shortcuts button", () => {
     vi.spyOn(window, "matchMedia").mockImplementation((query: string) => ({ ...matchMedia(query), matches: query === TOUCH_ONLY_QUERY }))
     render(<Page editorFirst />)
     expect(screen.queryByRole("button", { name: "Keyboard shortcuts" })).toBeNull()
+  })
+})
+
+// With the pointer resting on the editor (hover gives it the keys), the keys pressed in the Layers
+// popover, which is portaled outside the editor, reached the editor too: an arrow on one of its
+// buttons stepped through the staged candidates, and Escape (closing the popover) discarded one.
+describe("keys in a popup the editor opened", () => {
+  const index = () => useCanvasStaging.getState().sessions[DOC]?.index
+
+  async function openLayers() {
+    stage()
+    const { container } = render(<Page editorFirst withMask />)
+    fireEvent.pointerMove(container.querySelector("[data-slot=image-editor]")!)
+    fireEvent.click(screen.getByRole("button", { name: "Layers and view" }))
+    return screen.findByRole("dialog", { name: "Layers and view" })
+  }
+
+  it("stay with the popup", async () => {
+    const popup = await openLayers()
+    const slider = popup.querySelector<HTMLInputElement>('input[type="range"]')!
+    expect(slider).toHaveAttribute("aria-label", "Opacity")
+    slider.focus()
+    fireEvent.keyDown(slider, { key: "ArrowRight", code: "ArrowRight" })
+    expect(index()).toBe(0)
+    const hide = within(popup).getByRole("button", { name: "Hide Mask" })
+    hide.focus()
+    fireEvent.keyDown(hide, { key: "ArrowRight", code: "ArrowRight" })
+    expect(index()).toBe(0)
+    fireEvent.keyDown(hide, { key: "Escape", code: "Escape" })
+    expect(candidates()).toBe(2)
+  })
+
+  it("reach the editor from the dialog that holds it (maximised)", () => {
+    stage()
+    render(
+      <div role="dialog" aria-label="Image editor" tabIndex={-1}>
+        <Page editorFirst />
+      </div>,
+    )
+    const dialog = screen.getByRole("dialog", { name: "Image editor" })
+    fireEvent.pointerMove(dialog.querySelector("[data-slot=image-editor]")!)
+    dialog.focus()
+    fireEvent.keyDown(dialog, { key: "ArrowRight", code: "ArrowRight" })
+    expect(index()).toBe(1)
+  })
+
+  it("still reach the editor from elsewhere", async () => {
+    await openLayers()
+    fireEvent.keyDown(document.body, { key: "ArrowRight", code: "ArrowRight" })
+    expect(index()).toBe(1)
   })
 })
