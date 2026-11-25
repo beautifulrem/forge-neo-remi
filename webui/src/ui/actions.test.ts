@@ -2,6 +2,7 @@ import * as sonner from "sonner"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
+import { i18n } from "@/i18n"
 import { applyAdvicePatch, CONFLICTS_ACTION, runAction, splitResponse } from "./actions"
 import { createFormStore } from "./form-store"
 import type { AdviceItem } from "./schema"
@@ -30,6 +31,14 @@ describe("splitResponse", () => {
     const message = { text: "Saved template: {{name}}", params: { name: "mine" } }
     expect(splitResponse("x", { __toast__: { level: "success", message } }).toast).toEqual({ level: "success", message })
     expect(splitResponse("x", { __toast__: { message: { text: 3 } } }).toast).toBeUndefined()
+  })
+
+  it("takes the parts of a merged toast (remi.ui.merge_patches), or none when one is no message", () => {
+    const parts = ["Done.", { text: "Saved template: {{name}}", params: { name: "mine" } }]
+    const toast = { level: "success", message: "Done.; Saved template: mine", parts }
+    expect(splitResponse("x", { __toast__: toast }).toast).toEqual({ level: "success", message: "Done.; Saved template: mine", parts })
+    expect(splitResponse("x", { __toast__: { ...toast, parts: ["Done.", 3] } }).toast).toEqual({ level: "success", message: "Done.; Saved template: mine" })
+    expect(splitResponse("x", { __toast__: { ...toast, parts: "Done." } }).toast).toEqual({ level: "success", message: "Done.; Saved template: mine" })
   })
 
   it("tolerates empty and malformed responses", () => {
@@ -126,6 +135,35 @@ describe("action patches a lock keeps", () => {
     await applyAdvicePatch({ store, tab: "txt2img" }, { code: "turbo", severity: "warning", message: "Use 8 steps", patch: { "core.steps": { value: 8 } } })
     expect(store.getState().values.core?.steps).toBe(20)
     expect(info).toHaveBeenCalledExactlyOnceWith("Overridden by a lock: Steps", { id: "locks:locked-action" })
+  })
+})
+
+// A merged toast's English message no catalog has: each part is translated on its own
+describe("a merged action toast", () => {
+  afterEach(async () => {
+    vi.restoreAllMocks()
+    await i18n.changeLanguage("en")
+  })
+
+  it("shows each part in the UI language", async () => {
+    i18n.addResource("zh-CN", "server", "Preset applied", "已应用预设")
+    i18n.addResource("zh-CN", "server", "Steps clamped to {{maximum}}", "步数已限制为 {{maximum}}")
+    const success = vi.spyOn(sonner.toast, "success").mockImplementation((() => "") as never)
+    const store = createFormStore("merged-toast", { persistDrafts: false })
+    const toast = {
+      level: "success",
+      message: "Preset applied; Steps clamped to 80",
+      parts: ["Preset applied", { text: "Steps clamped to {{maximum}}", params: { maximum: "80" } }],
+    }
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ __toast__: toast }))
+    await i18n.changeLanguage("zh-CN")
+    await runAction({ store, tab: "txt2img" }, "core", "__preset__")
+    expect(success).toHaveBeenLastCalledWith("已应用预设 · 步数已限制为 80", undefined)
+
+    // in English (and for parts no catalog has) each part is its English text
+    await i18n.changeLanguage("en")
+    await runAction({ store, tab: "txt2img" }, "core", "__preset__")
+    expect(success).toHaveBeenLastCalledWith("Preset applied · Steps clamped to 80", undefined)
   })
 })
 

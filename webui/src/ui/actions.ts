@@ -12,7 +12,7 @@ import { showToast } from "@/lib/toast"
 import { splitRef } from "./conditions"
 import type { FormStore } from "./form-store"
 import { lockNote } from "./locks"
-import { isMessage, messageText } from "./messages"
+import { isMessage, toastText } from "./messages"
 import type { AdviceItem, AdviceSeverity, ModelCapabilitySummary } from "./schema"
 
 const TOAST_LEVELS = new Set(["info", "success", "warning", "error"])
@@ -50,6 +50,11 @@ function parseAdviceList(raw: unknown): AdviceItem[] | undefined {
   return items
 }
 
+/** A merged toast's parts (`remi.ui.merge_patches`): texts and messages only, else none (its English message shows). */
+function parseToastParts(raw: unknown): ActionToast["parts"] {
+  return Array.isArray(raw) && raw.length > 0 && raw.every((part) => typeof part === "string" || isMessage(part)) ? (raw as ActionToast["parts"]) : undefined
+}
+
 function parseCapabilities(raw: unknown): ModelCapabilitySummary | undefined {
   if (!isRecord(raw) || typeof raw.preset !== "string" || !Array.isArray(raw.capabilities)) return undefined
   return raw as unknown as ModelCapabilitySummary
@@ -63,7 +68,8 @@ export function splitResponse(owner: string, response: ActionResponse | unknown)
     if (key === "__toast__") {
       if (isRecord(entry) && (typeof entry.message === "string" || isMessage(entry.message))) {
         const level = TOAST_LEVELS.has(entry.level as string) ? (entry.level as ActionToast["level"]) : undefined
-        out.toast = { level, message: entry.message }
+        const parts = parseToastParts(entry.parts)
+        out.toast = { level, message: entry.message, ...(parts ? { parts } : {}) }
       }
     } else if (key === "__outputs__") {
       if (isRecord(entry)) out.outputs = entry
@@ -157,7 +163,7 @@ export function applyResponse(store: FormStore, owner: string, split: SplitRespo
   if (split.advice !== undefined) state.setAdvice(split.advice)
   if (split.capabilities !== undefined) state.setCapabilities(split.capabilities)
   const note = quietLocks ? undefined : lockNote(state.index, kept)
-  if (split.toast) showToast(split.toast.level, messageText(i18n, split.toast.message), note)
+  if (split.toast) showToast(split.toast.level, toastText(i18n, split.toast), note)
   if (split.settings) {
     // Stored by the server already: update the cached values, never write them back.
     const settings = split.settings

@@ -112,7 +112,9 @@ receives `(self, ctx, values: dict)` (the script's current values; `ctx.core`
 is the generation form, `ctx.scripts` the other scripts' values) and returns a patch:
 `{param: {"value"?, "choices"?, "visible"?, "enabled"?, "label"?, "info"?,
 "minimum"?, "maximum"?, "step"?}}` (another owner's param as `"owner.param"`),
-optionally with `{"__toast__": {"level", "message"}}`,
+optionally with `{"__toast__": {"level", "message"}}` (plus `parts` when
+`ui.merge_patches` merged several: each one's message, translated one by one,
+schema-format.md §5),
 `{"__outputs__": {name: value}}` and `{"__settings__": {setting: value}}`
 (settings the action already changed on the server; the client only
 refreshes its copy).

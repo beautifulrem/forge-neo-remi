@@ -102,13 +102,47 @@ def test_toasts_take_translatable_messages():
     toast = ui.toast(ui.message("Saved template: {{name}}", name="mine"), "success")
     assert toast == {"__toast__": {"level": "success", "message": {"text": "Saved template: {{name}}", "params": {"name": "mine"}}}}
     merged = ui.merge_patches(ui.toast("Done."), toast)
-    assert merged["__toast__"] == {"level": "success", "message": "Done.; Saved template: mine"}
+    assert merged["__toast__"]["message"] == "Done.; Saved template: mine"
     with pytest.raises(ui.SchemaError):
         ui.toast({"text": 3})
     # a Sentence goes as its template and values; one without values is its text
     reason = ui.Sentence("The pose's {{key}} must be a list", key="people")
     assert ui.toast(reason, "error") == {"__toast__": {"level": "error", "message": {"text": "The pose's {{key}} must be a list", "params": {"key": "people"}}}}
     assert ui.toast(ui.Sentence("The pose list is empty"), "error") == {"__toast__": {"level": "error", "message": "The pose list is empty"}}
+
+
+def test_a_merged_toast_keeps_each_part_for_the_ui_to_translate():
+    """``merge_patches`` joined the toasts into one English string, which no catalog has, so a
+    merged toast stayed English though each part was a catalog key or a sentence. The English
+    ``message`` stays (remi.ui v1), and ``parts`` lists each toast's own message for the UI."""
+
+    saved = ui.toast(ui.message("Saved template: {{name}}", name="mine"), "success")
+    clamped = ui.toast(ui.Sentence("steps clamped to {{maximum}}", maximum=80), "warning")
+    merged = ui.merge_patches(ui.toast("Done."), saved)
+    assert merged["__toast__"] == {
+        "level": "success",
+        "message": "Done.; Saved template: mine",
+        "parts": ["Done.", {"text": "Saved template: {{name}}", "params": {"name": "mine"}}],
+    }
+    # merged again, or three at once: one flat list in order, the last level
+    again = ui.merge_patches(merged, clamped)
+    assert again["__toast__"] == {
+        "level": "warning",
+        "message": "Done.; Saved template: mine; steps clamped to 80",
+        "parts": ["Done.", {"text": "Saved template: {{name}}", "params": {"name": "mine"}}, {"text": "steps clamped to {{maximum}}", "params": {"maximum": "80"}}],
+    }
+    assert ui.merge_patches(ui.toast("Done."), saved, clamped) == again
+    # one toast is left as it is
+    assert ui.merge_patches({"a": {"value": 1}}, saved) == {"a": {"value": 1}, **saved}
+    # a hand-made patch whose message is a Sentence keeps its template as its part
+    raw = ui.merge_patches({"__toast__": {"message": ui.Sentence("{{count}} files saved", count=3)}}, ui.toast("Done."))
+    assert raw["__toast__"]["parts"] == [{"text": "{{count}} files saved", "params": {"count": "3"}}, "Done."]
+    assert raw["__toast__"]["message"] == "3 files saved; Done."
+    # an action may return a merged toast; parts that are no messages are refused
+    assert ui.check_patch(again)["__toast__"] == again["__toast__"]
+    for parts in ("Done.", [3], [{"text": 3}]):
+        with pytest.raises(ui.SchemaError):
+            ui.check_patch({"__toast__": {"message": "Done.", "parts": parts}})
 
 
 def test_jsonable():

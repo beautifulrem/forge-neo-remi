@@ -316,6 +316,12 @@ def check_patch(patch: Mapping[str, Any]) -> Patch:
                 raise SchemaError(f"{key} takes an object")
             if key == "__toast__" and entry.get("level", "info") not in TOAST_LEVELS:
                 raise SchemaError(f"toast level is one of {TOAST_LEVELS}")
+            if key == "__toast__" and "parts" in entry:
+                parts = entry["parts"]
+                if not isinstance(parts, list) or not all(isinstance(part, str | Mapping) for part in parts):
+                    raise SchemaError("toast parts are a list of texts and messages")
+                result[key] = {**entry, "parts": [part if isinstance(part, str) else message_of(part) for part in parts]}
+                continue
             if key == "__refresh__":
                 keys = entry.get("keys")
                 if not isinstance(keys, list | tuple) or not all(isinstance(k, str) and k for k in keys):
@@ -332,15 +338,32 @@ def check_patch(patch: Mapping[str, Any]) -> Patch:
     return result
 
 
+def toast_parts(entry: Mapping[str, Any]) -> list[str | dict]:
+    """The messages a toast is made of: its ``parts`` when it was merged from several, else its
+    one ``message`` (a :class:`Sentence` as its template and values, as :func:`toast` sends it)."""
+
+    if isinstance(entry.get("parts"), list):
+        return list(entry["parts"])
+    value = entry.get("message", "")
+    if isinstance(value, Sentence) and value.params:
+        return [message(value.template, **value.params)]
+    if isinstance(value, Mapping):
+        return [message_of(value)]
+    return [str(value)]
+
+
 def merge_patches(*patches: Mapping[str, Any]) -> Patch:
-    """Later patches win per param property; toasts concatenate."""
+    """Later patches win per param property; toasts concatenate: the English ``message``
+    joins them with "; " and ``parts`` lists each one's message (a catalog key or a
+    :func:`message`), which the client translates one by one (schema-format.md §5)."""
 
     merged: dict[str, Any] = {}
     for patch in patches:
         for key, entry in patch.items():
             if key == "__toast__" and key in merged:
                 previous = merged[key]
-                merged[key] = {"level": entry.get("level", previous.get("level", "info")), "message": f"{message_english(previous['message'])}; {message_english(entry['message'])}"}
+                parts = [*toast_parts(previous), *toast_parts(entry)]
+                merged[key] = {"level": entry.get("level", previous.get("level", "info")), "message": "; ".join(message_english(part) for part in parts), "parts": parts}
             elif key == "__advice__":
                 existing = list(merged.get(key) or [])
                 seen_codes = {item.get("code") for item in existing if isinstance(item, Mapping) and item.get("code")}

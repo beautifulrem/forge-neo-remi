@@ -139,8 +139,14 @@ export type ParamPatch = {
 
 export type ToastLevel = "info" | "success" | "warning" | "error"
 
-/** `message`: a text, or a `{ text, params }` message (`remi.ui.message`) translated with its placeholders filled. */
-export type ActionToast = { level?: ToastLevel; message: string | { text: string; params?: Record<string, unknown> } }
+type ToastMessage = string | { text: string; params?: Record<string, unknown> }
+
+/**
+ * `message`: a text, or a `{ text, params }` message (`remi.ui.message`) translated with its placeholders filled.
+ * `parts`: a toast merged from several (`remi.ui.merge_patches`) lists each one's message; `message` is then their
+ * English text joined, which no catalog has, and the parts are what is translated.
+ */
+export type ActionToast = { level?: ToastLevel; message: ToastMessage; parts?: ToastMessage[] }
 
 /** Reserved keys of an action response (schema-format.md §5). */
 export type ActionReserved = {

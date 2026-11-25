@@ -32,6 +32,19 @@ export function messageText(i18n: Pick<I18n, "t" | "exists" | "language">, value
 }
 
 /**
+ * An action toast's text in `language`: a toast merged from several (`parts`, `remi.ui.merge_patches`) is
+ * each part translated and joined by " · ", as several rejected values are (its `message`, the English
+ * parts joined, is a key no catalog has); any other toast is its `message`.
+ */
+export function toastText(
+  i18n: Pick<I18n, "t" | "exists" | "language">,
+  toast: { message: string | Message; parts?: readonly (string | Message)[] },
+  language = i18n.language,
+): string {
+  return toast.parts?.length ? toast.parts.map((part) => messageText(i18n, part, language)).join(" · ") : messageText(i18n, toast.message, language)
+}
+
+/**
  * A sentence the server filled in, in `language`: its `template` translated and filled with
  * `params` (a list param's catalog names each translated, joined the language's way; a param
  * that is a sentence of its own, sent with `<name>.template` and `<name>.<param>` beside it,

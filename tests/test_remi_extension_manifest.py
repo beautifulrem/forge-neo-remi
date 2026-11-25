@@ -436,7 +436,7 @@ def test_semver_manifest_and_actions_edge_cases(tmp_path):
         {"__toast__": {"level": "info", "message": "one"}, "__advice__": [{"code": "c1", "message": "m1"}], "x": {"value": 1}},
         {"__toast__": {"level": "warning", "message": "two"}, "__advice__": [{"code": "c1", "message": "dup"}, {"code": "c2", "message": "m2"}], "x": {"enabled": False}},
     )
-    assert merged["__toast__"] == {"level": "warning", "message": "one; two"}
+    assert merged["__toast__"] == {"level": "warning", "message": "one; two", "parts": ["one", "two"]}
     assert [a["code"] for a in merged["__advice__"]] == ["c1", "c2"]
     assert merged["x"] == {"value": 1, "enabled": False}
 

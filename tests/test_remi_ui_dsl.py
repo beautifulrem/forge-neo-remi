@@ -324,7 +324,7 @@ class TestActions:
 
     def test_merge_patches(self):
         merged = ui.merge_patches({"a": {"value": 1}, "__toast__": {"level": "info", "message": "x"}}, {"a": {"enabled": False}, "__toast__": {"level": "warning", "message": "y"}})
-        assert merged == {"a": {"value": 1, "enabled": False}, "__toast__": {"level": "warning", "message": "x; y"}}
+        assert merged == {"a": {"value": 1, "enabled": False}, "__toast__": {"level": "warning", "message": "x; y", "parts": ["x", "y"]}}
 
 
 def test_refresh_patch_names_rescanned_lists():

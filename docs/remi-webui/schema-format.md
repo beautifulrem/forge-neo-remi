@@ -324,7 +324,8 @@ returns a patch:
   "<param>": {"value"?, "choices"?, "visible"?, "enabled"?, "label"?, "info"?,
               "hint"?, "minimum"?, "maximum"?, "step"?},
   "<other_owner>.<param>": {...},          // patch another owner (e.g. "core.width")
-  "__toast__": {"level": "info" | "success" | "warning" | "error", "message": str | {"text": str, "params"?: {...}}},  // a message (ui.message) is translated, then its {{name}} placeholders filled
+  "__toast__": {"level": "info" | "success" | "warning" | "error", "message": str | {"text": str, "params"?: {...}},  // a message (ui.message) is translated, then its {{name}} placeholders filled
+                "parts"?: [str | {"text": str, "params"?: {...}}, ...]},                                              // a merged toast: each toast's own message
   "__outputs__": {"<output name>": value},
   "__settings__": {"<setting>": value},    // settings the action already changed on the server
   "__refresh__": {"keys": ["<list>", ...]} // server lists the action rescanned ("models", "upscalers", ...)
@@ -336,6 +337,18 @@ a string value of a `text` output when a catalog has them verbatim, and a
 message object `{"text": str, "params"?: object}` (`remi.ui.message`) of a
 `text` output, whose `text` is the English catalog key with `{{name}}`
 placeholders filled from `params` after translation.
+
+A toast merged from several (`remi.ui.merge_patches`, which an action uses to
+combine the patches of the steps it ran) keeps one toast, the last one's
+`level` and, as before, the English `message`: each toast's English text joined
+with `"; "`. That joined text is a key no catalog has, so the toast also lists
+`parts`, each toast's own message in order (a catalog key, or a message object;
+a `Sentence` is sent as its template and values, as `ui.toast` sends it),
+flattened when a merged toast is merged again. A client translates each part
+and joins them its own way (the SPA: `" · "`, as it joins several rejected
+values; `ui/messages.ts` `toastText`); a client that does not read `parts`
+shows the English `message`. A single toast has no `parts`. The key is
+additive: remi.ui v1 patches without it are unchanged.
 
 `visible`/`enabled` set in a patch override the static node state until the
 next patch or schema reload; they are combined with `visible_if`/`enabled_if`
