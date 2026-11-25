@@ -126,7 +126,7 @@ python tools/upstream_forks.py budget    # enforce FORKED <= 6, verify §1.2 pin
 When Remi forks another upstream file, add its row here and its path to
 `FORKED` in `tools/upstream_forks.py` in the same commit (guardrail: `FORKED <= 6`,
 enforced by `tools/upstream_forks.py budget`; see
-[upstream-pr-candidates.md](upstream-pr-candidates.md) for the `DIVERGED` 32 → ≤ 20
+[upstream-pr-candidates.md](upstream-pr-candidates.md) for the `DIVERGED` → ≤ 20
 upstream PR roadmap).
 
 ### 1.2 Upstream bugs Remi fixes (divergences)
