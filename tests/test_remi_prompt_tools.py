@@ -536,6 +536,25 @@ def test_a_legacy_database_in_a_folder_with_uri_characters_is_read(store, tmp_pa
     assert store.import_tag_frequency(legacy) == 5
 
 
+@pytest.fixture
+def shanghai_time(monkeypatch):
+    """The process's local time zone is UTC+8 for the test."""
+    monkeypatch.setenv("TZ", "Asia/Shanghai")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
+def test_a_tag_import_reads_its_times_as_utc(store, tmp_path, shanghai_time):
+    legacy = tmp_path / "tag_frequency.db"
+    with closing(sqlite3.connect(legacy)) as db, db:  # TagComplete stores CURRENT_TIMESTAMP, which is UTC
+        db.execute("CREATE TABLE tag_frequency (name TEXT, type INT, count_pos INT, count_neg INT, last_used TIMESTAMP)")
+        db.execute("INSERT INTO tag_frequency VALUES ('long_hair', 1, 7, 1, '2026-01-01 00:00:00')")
+    assert store.import_tag_frequency(legacy) == 1
+    assert store._db.execute("SELECT last_used FROM usage WHERE name = 'long_hair'").fetchone()[0] == 1767225600
+
+
 def test_legacy_import_is_all_or_nothing(store, tmp_path, monkeypatch):
     storage = tmp_path / "storage"
     storage.mkdir()

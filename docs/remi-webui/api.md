@@ -66,6 +66,13 @@ Contents: [Conventions](#conventions) · [Authentication](#authentication) ·
   `/extensions/config-states` and `/prompt-tools/collections`.
 - **Ids.** Jobs, uploads and output files have opaque string ids. Files are
   only ever served by id (`/api/v2/files/{id}`), never by path.
+- **Times.** Answers give instants in UTC with their offset
+  (`2026-01-01T00:00:00+00:00`). A time sent without an offset (the gallery's
+  `since` and `until`, an import's dates) is read as UTC, not as the server's
+  own zone; the SPA sends its local midnight as UTC (`...Z`). The sysinfo
+  report is named by the UTC time and says so (`sysinfo-2026-01-01-00-00-UTC.json`).
+  Output files and gallery zips are named by the server's local time, as the
+  save settings have always named images.
 
 ## Authentication
 

@@ -4,6 +4,7 @@ and cached translations. One SQLite connection behind a lock (WAL)."""
 
 from __future__ import annotations
 
+import calendar
 import json
 import os
 import re
@@ -617,7 +618,8 @@ class PromptToolsStore:
                 except (TypeError, ValueError):
                     continue
                 try:
-                    when = time.mktime(time.strptime(str(last_used)[:19], "%Y-%m-%d %H:%M:%S")) if last_used else time.time()
+                    # TagComplete's CURRENT_TIMESTAMP is UTC
+                    when = calendar.timegm(time.strptime(str(last_used)[:19], "%Y-%m-%d %H:%M:%S")) if last_used else time.time()
                 except (ValueError, OverflowError):
                     when = time.time()
                 db.execute(

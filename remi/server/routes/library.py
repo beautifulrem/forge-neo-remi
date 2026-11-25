@@ -4,7 +4,7 @@ deleted, shown in its folder) and PNG Info (all metadata of an image)."""
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -112,9 +112,11 @@ def _instant(value: str | None, name: str) -> float | None:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as error:
         raise HTTPException(status_code=422, detail=f"{name}: not an ISO date or time") from error
+    # a time without an offset is UTC, as everywhere in the API (not the server's own zone)
+    return (parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)).timestamp()
 
 
 @router.get("/gallery", response_model=m.Page[GalleryItem], summary="Outputs for the gallery, filtered and sorted")

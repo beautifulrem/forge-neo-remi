@@ -300,6 +300,17 @@ def test_reveal_is_guarded(library, server, monkeypatch):
     assert len(opened) == 1
 
 
+def test_a_since_or_until_without_an_offset_is_utc(monkeypatch):
+    monkeypatch.setenv("TZ", "Asia/Shanghai")
+    time.tzset()
+    try:
+        assert routes._instant("2026-01-01T00:00", "since") == routes._instant("2026-01-01T00:00:00Z", "since") == 1767225600
+        assert routes._instant("2026-01-01T08:00+08:00", "until") == 1767225600
+    finally:
+        monkeypatch.undo()
+        time.tzset()
+
+
 def test_local_clients_are_loopback_only():
     request = lambda host: SimpleNamespace(client=SimpleNamespace(host=host))  # noqa: E731
     assert routes._local(request("127.0.0.1")) and routes._local(request("::1"))
@@ -412,7 +423,6 @@ def test_totals_leave_out_a_whole_missing_output_folder(server, webui, tmp_path)
 
 def ids_of(page):
     return [item["id"] for item in page["items"]]
-
 
 
 def _plans(index, query):

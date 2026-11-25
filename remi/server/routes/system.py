@@ -165,7 +165,7 @@ def profile_startup() -> Any:
 def _sysinfo_text(attachment: bool) -> PlainTextResponse:
     from modules import sysinfo as info
 
-    filename = f"sysinfo-{datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d-%H-%M')}.json"
+    filename = f"sysinfo-{datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d-%H-%M')}-UTC.json"
     try:
         text = info.get()
     except UnicodeEncodeError:

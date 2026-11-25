@@ -634,6 +634,14 @@ def test_sysinfo_check(env):
     assert env.client.post("/api/v2/sysinfo/check", json={"text": valid.replace('"x": 1', '"x": 2')}).json() == {"valid": False}
 
 
+def test_the_sysinfo_download_says_its_name_is_utc(env, monkeypatch):
+    from modules import sysinfo
+
+    monkeypatch.setattr(sysinfo, "get", lambda: "{}")
+    disposition = env.client.get("/internal/sysinfo-download").headers["Content-Disposition"]
+    assert disposition.startswith('attachment; filename="sysinfo-') and disposition.endswith('-UTC.json"')
+
+
 def test_options_validate_applies_nothing(env, webui):
     before = webui.opts.data.get("jpeg_quality")
     assert env.client.post("/api/v2/options/validate", json={"jpeg_quality": 50}).json()["ok"] is True
