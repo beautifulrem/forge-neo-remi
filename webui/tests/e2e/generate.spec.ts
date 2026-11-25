@@ -1,5 +1,5 @@
 /** Generate page against the mock backend. */
-import { expect, type Page, test } from "@playwright/test"
+import { expect, type Locator, type Page, test } from "@playwright/test"
 
 const mod = process.platform === "darwin" ? "Meta" : "Control"
 
@@ -284,6 +284,39 @@ test.describe("generate", () => {
     }
     await viewer.getByRole("button", { name: "More actions" }).click()
     await expect(page.getByRole("menuitem", { name: "Copy generation parameters" })).toBeVisible()
+  })
+
+  test("the prompt upsampler's footer stacks full-width buttons on a phone @phone", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await open(page)
+    await setPrompt(page, "orange cat")
+    const openDialog = async () => {
+      await page.getByRole("button", { name: "Upsample prompt (PUP)" }).click()
+      const dialog = page.getByRole("dialog", { name: "Upsample prompt (PUP)" })
+      await expect(dialog).toBeVisible()
+      return dialog
+    }
+    /** The footer's buttons, top to bottom: one column of equal widths across the footer. */
+    const expectStacked = async (dialog: Locator, names: string[]) => {
+      const footer = dialog.locator("[data-slot=dialog-footer]")
+      const boxes = []
+      for (const name of names) boxes.push((await footer.getByRole("button", { name, exact: true }).boundingBox())!)
+      const width = (await footer.boundingBox())!.width
+      for (const [index, box] of boxes.entries()) {
+        expect(Math.abs(box.width - boxes[0]!.width), names[index]).toBeLessThanOrEqual(1)
+        expect(box.width, names[index]).toBeGreaterThan(width * 0.8)
+        if (index > 0) expect(box.y, names[index]).toBeGreaterThanOrEqual(boxes[index - 1]!.y + boxes[index - 1]!.height)
+      }
+    }
+    let dialog = await openDialog()
+    await dialog.getByRole("button", { name: "Upsample", exact: true }).click()
+    await expect(dialog.getByRole("button", { name: "Apply", exact: true })).toBeEnabled({ timeout: 15_000 })
+    // the main action on top, as every dialog footer stacks on a phone
+    await expectStacked(dialog, ["Apply", "Close"])
+    await dialog.getByRole("button", { name: "Apply", exact: true }).click()
+    await expect(dialog).toBeHidden()
+    dialog = await openDialog()
+    await expectStacked(dialog, ["Close", "Revert"])
   })
 
   test("a touch-only tablet shows no keyboard hints, even where a wide screen has room for them @phone", async ({ page }) => {

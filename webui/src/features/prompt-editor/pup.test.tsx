@@ -12,6 +12,7 @@ import { tabOwners } from "@/ui/tab"
 import { diffPromptTokens } from "./diff"
 import { collectFormReferenceIds, detectPupFamily, formatAspectRatio, PUP_FAMILY_LABELS } from "./pup"
 import { PupTrigger } from "./PupTrigger"
+import PupUpsamplerDialog from "./PupUpsamplerDialog"
 
 describe("diffPromptTokens", () => {
   it("computes minimal additions and deletions preserving exact text", () => {
@@ -180,4 +181,41 @@ describe("PupTrigger & lazy PupUpsamplerDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Upsample" }))
     expect(await screen.findByText("The service failed: local GGUF PUP execution failed: out of memory")).toBeVisible()
   }, 20_000)
+
+  // On a phone the footer's own row of Close and Apply (and the Revert beside it) kept DialogFooter from
+  // stacking its buttons full width: each group is a column below sm, as the footer is.
+  describe("footer on a phone", () => {
+    function renderDialog(previousValue: string | null) {
+      const store = createFormStore(`pup-footer-${previousValue ?? "none"}`, { persistDrafts: false })
+      store.getState().load(tabOwners(tabSchema("txt2img")))
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      client.setQueryData(keys.app, bootstrapWith({ forge_preset: "flux3", sd_model_checkpoint: "flux3-klein.safetensors" }))
+      render(
+        <QueryClientProvider client={client}>
+          <FormProvider formId="txt2img" store={store}>
+            <PupUpsamplerDialog open onOpenChange={() => {}} value="orange cat" previousValue={previousValue} onApply={() => {}} onRevert={() => {}} />
+          </FormProvider>
+        </QueryClientProvider>,
+      )
+      const footer = screen.getByRole("dialog").querySelector<HTMLElement>("[data-slot=dialog-footer]")!
+      const group = (slot: string) => footer.querySelector<HTMLElement>(`[data-slot=${slot}]`)!
+      const classes = (slot: string) => group(slot).className.split(/\s+/)
+      return { footer, group, classes }
+    }
+
+    it("stacks Close and Revert as full-width rows below sm", () => {
+      const { footer, group, classes } = renderDialog("orange cat, older")
+      expect(group("pup-footer-end")).toContainElement(within(footer).getByRole("button", { name: "Close" }))
+      expect(classes("pup-footer-end")).toEqual(expect.arrayContaining(["flex", "flex-col-reverse", "sm:flex-row"]))
+      expect(classes("pup-footer-end")).not.toContain("items-center")
+      expect(group("pup-footer-start")).toContainElement(within(footer).getByRole("button", { name: "Revert" }))
+      expect(classes("pup-footer-start")).toEqual(expect.arrayContaining(["flex", "flex-col", "sm:flex-row"]))
+    })
+
+    it("leaves no empty row for Revert when there is nothing to revert", () => {
+      const { group, classes } = renderDialog(null)
+      expect(group("pup-footer-start")).toBeEmptyDOMElement()
+      expect(classes("pup-footer-start")).toContain("max-sm:hidden")
+    })
+  })
 })

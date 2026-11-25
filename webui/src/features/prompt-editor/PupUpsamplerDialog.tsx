@@ -346,8 +346,10 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
           ) : null}
         </div>
 
+        {/* On a phone DialogFooter stacks full-width buttons, the main one on top (column-reverse); its two
+            groups stack the same way instead of keeping a row of their own, and an empty start group takes no row. */}
         <DialogFooter className="gap-2 sm:justify-between">
-          <div>
+          <div data-slot="pup-footer-start" className={cn("flex flex-col sm:flex-row", previousValue === null && "max-sm:hidden")}>
             {previousValue !== null ? (
               <Button type="button" variant="outline" size="sm" onClick={revertPrompt} disabled={disabled}>
                 <RotateCcw aria-hidden />
@@ -355,7 +357,7 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
               </Button>
             ) : null}
           </div>
-          <div className="flex items-center gap-2">
+          <div data-slot="pup-footer-end" className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
             <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
               {t("Close")}
             </Button>
