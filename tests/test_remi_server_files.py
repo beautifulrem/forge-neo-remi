@@ -415,6 +415,66 @@ def test_one_output_under_two_spellings_is_one_record(tmp_path):
         store.close()
 
 
+def test_two_spellings_registered_at_once_make_one_record(tmp_path, monkeypatch):
+    """The lookup and the insert were two steps: a job saving one spelling while the
+    folder scan (or the worker process, with a store of its own) indexed the other
+    each found nothing and inserted a row of its own."""
+
+    import threading
+
+    if not _ignores_case(tmp_path):
+        pytest.skip("this volume tells letter case apart")
+    folder = tmp_path / "Saved"
+    folder.mkdir()
+    (folder / "0001.png").write_bytes(png())
+    job_store, worker_store = FileStore(tmp_path / "data"), FileStore(tmp_path / "data")
+    paused, go = threading.Event(), threading.Event()
+    insert = job_store._insert
+
+    def slow_insert(record, *args):  # between the job's lookup and its insert
+        paused.set()
+        go.wait(0.5)
+        return insert(record, *args)
+
+    monkeypatch.setattr(job_store, "_insert", slow_insert)
+    found = {}
+    job = threading.Thread(target=lambda: found.setdefault("job", job_store.register_output(folder / "0001.png", job_id="job1")))
+    try:
+        job.start()
+        assert paused.wait(5)
+        found["scan"] = worker_store.register_output(tmp_path / "saved" / "0001.png")
+        go.set()
+        job.join(5)
+        assert found["job"].id == found["scan"].id
+        assert worker_store._db.execute("SELECT count(*) FROM files WHERE kind = 'output'").fetchone() == (1,)
+    finally:
+        go.set()
+        job.join(5)
+        job_store.close()
+        worker_store.close()
+
+
+def test_an_insert_that_fails_is_retried_not_returned_as_a_record(tmp_path, monkeypatch):
+    import sqlite3
+
+    (tmp_path / "1.png").write_bytes(png())
+    store = FileStore(tmp_path / "data")
+    insert, failures = store._insert, []
+
+    def fail_once(record, *args):
+        if not failures:
+            failures.append(record.id)
+            raise sqlite3.IntegrityError("UNIQUE constraint failed: files.id")
+        return insert(record, *args)
+
+    monkeypatch.setattr(store, "_insert", fail_once)
+    try:
+        record = store.register_output(tmp_path / "1.png", job_id="job1")
+        assert failures and store.get(record.id) is not None
+    finally:
+        store.close()
+
+
 def test_two_files_that_differ_only_in_case_stay_two_records(tmp_path):
     if _ignores_case(tmp_path):
         pytest.skip("this volume ignores letter case")

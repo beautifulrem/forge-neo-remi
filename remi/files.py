@@ -502,23 +502,44 @@ class FileStore:
             infotext = utf8_text(infotext[:MAX_INFOTEXT_CHARS])
         path = os.path.realpath(path)
         stale = self._removed_as(path)
-        with self._lock:
-            self._db.executemany("DELETE FROM removed WHERE path = ?", [(removed,) for removed in stale])
+        # A first look, so that the file is read (stat, type, size) before the transaction
         existing = self._output_at(path)
-        if existing is not None and job_id and existing.job_id not in (None, job_id):
-            # Another job's output: this job wrote over it (a fixed file name, "Override"). A record
-            # of its own, so the old job's file id neither shows nor deletes this image
-            self._forget_row(existing)
-            existing = None
-        if existing is None:
-            record = self._new_output(path, job_id, tab, infotext, width, height, created)
+        record = None if existing is not None and not _overwritten(existing, job_id) else self._new_output(path, job_id, tab, infotext, width, height, created)
+        # The lookup and the insert in one write transaction: a job saving one spelling of a
+        # file while the folder scan (or the worker process, with a store of its own) indexes
+        # another each found nothing and inserted a row of its own
+        with self._transaction():
+            self._db.executemany("DELETE FROM removed WHERE path = ?", [(removed,) for removed in stale])
+            existing = self._output_at(path)
+            if existing is not None and _overwritten(existing, job_id):
+                # Another job's output: this job wrote over it (a fixed file name, "Override"). A record
+                # of its own, so the old job's file id neither shows nor deletes this image
+                self._forget_row(existing)
+                existing = None
+            if existing is None:
+                record = record or self._new_output(path, job_id, tab, infotext, width, height, created)
+                try:
+                    return self._insert(record)
+                except sqlite3.IntegrityError:  # its path or its id is taken: the row that has the path, or a new id
+                    existing = self._output_at(path)
+                    if existing is None:
+                        return self._insert(dataclasses.replace(record, id=secrets.token_urlsafe(16)))
+            return self._claim(existing, job_id, tab, infotext, width, height, created) if job_id and existing.job_id is None else existing
+
+    @contextlib.contextmanager
+    def _transaction(self) -> Iterator[None]:
+        """A write transaction under the lock: no other connection (the worker
+        process's store, the gallery) writes between its reads and its writes."""
+
+        with self._lock:
+            self._db.execute("BEGIN IMMEDIATE")
             try:
-                return self._insert(record)
-            except sqlite3.IntegrityError:  # registered concurrently (a folder scan)
-                existing = self._output_at(path)
-                if existing is None:
-                    return record
-        return self._claim(existing, job_id, tab, infotext, width, height, created) if job_id and existing.job_id is None else existing
+                yield
+            except BaseException:
+                if self._db.in_transaction:
+                    self._db.execute("ROLLBACK")
+                raise
+            self._db.execute("COMMIT")
 
     def _forget_row(self, record: FileRecord) -> None:
         """Drop an output's record (and its gallery row and thumbnails), keeping the file."""
@@ -744,6 +765,12 @@ def _image_size(path: str | os.PathLike, *, max_pixels: int | None = None) -> tu
         # never sent to the client
         log.debug("not a readable image: %s", error)
         raise FileError("not a readable image", 415) from error
+
+
+def _overwritten(record: FileRecord, job_id: str | None) -> bool:
+    """``record`` is another job's output that the job ``job_id`` wrote over."""
+
+    return bool(job_id) and record.job_id not in (None, job_id)
 
 
 def _same_file(a: str, b: str) -> bool:
