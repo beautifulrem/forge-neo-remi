@@ -129,4 +129,25 @@ describe("RGBA 4-backdrop & CompareDialog UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Pure white" }))
     expect(document.querySelector('[data-backdrop="white"]')).toBeInTheDocument()
   })
+
+  it("wraps model and file names between their parts, not at any letter", async () => {
+    const info = (model: string) => `a cat\nSteps: 28, Seed: 1, Model: ${model}, ADetailer model: face_yolov8n.pt`
+    render(
+      <QueryClientProvider client={queryClient}>
+        <CompareDialog
+          images={[
+            { id: "a1", name: "a.png", width: 832, height: 1216, infotext: info("anima-v1.safetensors") },
+            { id: "b1", name: "b.png", width: 832, height: 1216, infotext: info("sdxl_base.safetensors") },
+          ]}
+          onOpenChange={() => {}}
+        />
+      </QueryClientProvider>,
+    )
+    const cell = await screen.findByText("anima-v1.safetensors")
+    // a soft break after each separator; a part wider than the column alone breaks inside
+    expect(cell.innerHTML).toBe("anima-v1.<wbr>safetensors")
+    expect(screen.getByText("sdxl_base.safetensors").innerHTML).toBe("sdxl_<wbr>base.<wbr>safetensors")
+    expect(cell.className).not.toMatch(/break-all/)
+    expect(cell.className).toMatch(/\[overflow-wrap:anywhere\]/)
+  })
 })

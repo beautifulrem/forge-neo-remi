@@ -5,7 +5,7 @@
  */
 import { useQuery } from "@tanstack/react-query"
 import { ArrowRightLeft, ChevronDown, ClipboardPaste, Loader2 } from "@/components/icons"
-import { useState } from "react"
+import { Fragment, type ReactNode, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import type { FormTab } from "@/api/types"
@@ -75,6 +75,23 @@ function TokenDiffRow({ title, diff }: { title: string; diff: TokenDiff }) {
       ) : null}
     </div>
   )
+}
+
+/**
+ * A value with a soft break after each separator of a name (`.`, `_`, `/`, `\`): in the narrow
+ * columns of a phone a model or file name wraps between its parts ("anima-v1." / "safetensors"),
+ * and inside a part (`overflow-wrap: anywhere`) only when that part alone is wider than the column.
+ */
+function nameBreaks(value: string): ReactNode {
+  return value
+    .split(/(?<=[._/\\])/)
+    .filter(Boolean)
+    .map((part, index) => (
+      <Fragment key={index}>
+        {index > 0 ? <wbr /> : null}
+        {part}
+      </Fragment>
+    ))
 }
 
 export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
@@ -213,11 +230,11 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
                         {coreRows.map((row) => (
                           <tr key={row.key}>
                             <td className="px-2.5 py-1 font-sans font-medium text-muted-foreground">{row.key}</td>
-                            <td className={cn("px-2.5 py-1 break-all", row.changed && row.a && "bg-diff-del-bg/60 text-diff-del")}>
-                              {row.a ?? "—"}
+                            <td className={cn("px-2.5 py-1 [overflow-wrap:anywhere]", row.changed && row.a && "bg-diff-del-bg/60 text-diff-del")}>
+                              {row.a ? nameBreaks(row.a) : "—"}
                             </td>
-                            <td className={cn("px-2.5 py-1 break-all", row.changed && row.b && "bg-diff-add-bg/60 font-medium text-diff-add")}>
-                              {row.b ?? "—"}
+                            <td className={cn("px-2.5 py-1 [overflow-wrap:anywhere]", row.changed && row.b && "bg-diff-add-bg/60 font-medium text-diff-add")}>
+                              {row.b ? nameBreaks(row.b) : "—"}
                             </td>
                           </tr>
                         ))}

@@ -1295,7 +1295,9 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
   removes the selection, Esc clears it. Selection (`selection.ts`, pure:
   toggle, Shift ranges from the anchor, pruned when items leave the list)
   shows a floating bar: download as zip (`/gallery/zip`), star / unstar
-  (optimistic), compare (exactly two: `CompareDialog`, the slider), remove
+  (optimistic), compare (exactly two: `CompareDialog`, the slider, and the
+  parameter table, whose values wrap after a name's separators `.` `_` `/`
+  and inside a part only when it alone is wider than the column), remove
   (confirm; "also delete the files" is opt-in). The viewer is the shared
   lightbox with an `aside`: file facts, star, PNG Info, show in folder
   (`/gallery/{id}/reveal`, refused for remote browsers), delete, and the
