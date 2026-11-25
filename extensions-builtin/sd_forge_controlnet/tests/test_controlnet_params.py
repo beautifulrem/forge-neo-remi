@@ -350,6 +350,45 @@ def test_slider_values_stay_inside_the_preprocessor_sliders(cn, registry):
     assert normalize({"module": "unknown", "processor_res": 4096}, False)["processor_res"] == 4096  # refused when it runs (_check)
 
 
+def test_detect_keeps_its_values_inside_the_preprocessor_sliders(cn, registry):
+    """``POST /controlnet/detect`` passed its resolution and thresholds on as sent
+    (``controlnet_processor_res: 100000`` resized to it): they are clamped as a unit's are.
+    A module it does not know was a KeyError (500) instead of its own 422."""
+    import base64
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from lib_controlnet.api import controlnet_api
+
+    from modules_forge.supported_preprocessor import Preprocessor, PreprocessorParameter
+
+    seen = []
+
+    class Recorder(Preprocessor):
+        def __init__(self):
+            super().__init__()
+            self.name = "detect_test"
+            self.slider_resolution = PreprocessorParameter(label="Resolution", value=512, minimum=128, maximum=2048, step=8, visible=True)
+            self.slider_1 = PreprocessorParameter(label="Low Threshold", value=100, minimum=1, maximum=255, step=1, visible=True)
+            self.slider_2 = PreprocessorParameter(visible=False)
+
+        def __call__(self, image, resolution, slider_1=None, slider_2=None, **kwargs):
+            seen.append((resolution, slider_1, slider_2))
+            return image
+
+    registry.supported_preprocessors["detect_test"] = Recorder()
+    app = FastAPI()
+    controlnet_api(None, app)
+    image = base64.b64encode(png(Image.new("RGB", (8, 8)))).decode()
+    body = {"controlnet_module": "detect_test", "controlnet_input_images": [image], "controlnet_processor_res": 100000, "controlnet_threshold_a": 1e9, "controlnet_threshold_b": 1e9}
+    with TestClient(app) as client:
+        assert client.post("/controlnet/detect", json=body).status_code == 200
+        assert client.post("/controlnet/detect", json={**body, "controlnet_processor_res": 3, "controlnet_threshold_a": 0.5}).status_code == 200
+        assert client.post("/controlnet/detect", json={**body, "controlnet_processor_res": -1}).status_code == 200  # unset: the preprocessor's default
+        assert client.post("/controlnet/detect", json={**body, "controlnet_module": "no_such_module"}).status_code == 422
+    assert seen == [(2048, 255, 1e9), (128, 1, 1e9), (-1, 255, 1e9)]
+
+
 def test_processing_args_are_what_the_legacy_controls_built(cn, registry, files):
     """The same settings and pictures, once as the Gradio unit group passed
     them (``UiControlNetUnit(*unit_args)``, the canvases' RGBA arrays) and

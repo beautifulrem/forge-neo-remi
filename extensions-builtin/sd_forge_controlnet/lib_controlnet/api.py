@@ -78,9 +78,16 @@ def controlnet_api(_, app: FastAPI):
         controlnet_threshold_a: float = Body(64, title="Controlnet Threshold a"),
         controlnet_threshold_b: float = Body(64, title="Controlnet Threshold b"),
     ):
-        processor_module = get_preprocessor(controlnet_module)
+        try:
+            processor_module = get_preprocessor(controlnet_module)
+        except KeyError:  # Remi: an unknown module is this 422, not a KeyError (500)
+            processor_module = None
         if processor_module is None:
             raise HTTPException(status_code=422, detail="Module not available")
+        # Remi: inside the preprocessor's sliders, as a unit's values are
+        from .unit_param import in_sliders
+
+        controlnet_processor_res, controlnet_threshold_a, controlnet_threshold_b = in_sliders(processor_module, controlnet_processor_res, controlnet_threshold_a, controlnet_threshold_b)
 
         if len(controlnet_input_images) == 0:
             raise HTTPException(status_code=422, detail="No image selected")

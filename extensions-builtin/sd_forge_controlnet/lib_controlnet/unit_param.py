@@ -198,10 +198,15 @@ def normalize(value: Any, is_img2img: bool) -> dict[str, Any]:
         result["guidance_start"], result["guidance_end"] = result["guidance_end"], result["guidance_start"]
     preprocessor = global_state.supported_preprocessors.get(result["module"])
     if preprocessor is not None:
-        result["processor_res"] = _in_slider(result["processor_res"], preprocessor.slider_resolution)
-        result["threshold_a"] = _in_slider(result["threshold_a"], preprocessor.slider_1)
-        result["threshold_b"] = _in_slider(result["threshold_b"], preprocessor.slider_2)
+        result["processor_res"], result["threshold_a"], result["threshold_b"] = in_sliders(preprocessor, result["processor_res"], result["threshold_a"], result["threshold_b"])
     return result
+
+
+def in_sliders(preprocessor, processor_res: int | float, threshold_a: int | float, threshold_b: int | float) -> tuple[int | float, int | float, int | float]:
+    """A resolution and two thresholds clamped to ``preprocessor``'s sliders (a unit's, and
+    what ``POST /controlnet/detect`` passes on)."""
+
+    return _in_slider(processor_res, preprocessor.slider_resolution), _in_slider(threshold_a, preprocessor.slider_1), _in_slider(threshold_b, preprocessor.slider_2)
 
 
 def _in_slider(value: int | float, parameter) -> int | float:
