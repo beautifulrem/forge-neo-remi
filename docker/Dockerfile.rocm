@@ -36,9 +36,10 @@ RUN pnpm run build
 
 FROM ubuntu:22.04
 
-# The ROCm build of PyTorch (see https://download.pytorch.org/whl/)
+# The ROCm build of PyTorch (see https://download.pytorch.org/whl/): the versions the launcher
+# installs on Linux (modules/launch_utils.default_torch_command), built for that ROCm index
 ARG TORCH_INDEX=rocm7.2
-ARG TORCH_PACKAGES="torch torchvision"
+ARG TORCH_PACKAGES="torch==2.14.0+rocm7.2 torchvision==0.29.0+rocm7.2"
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \

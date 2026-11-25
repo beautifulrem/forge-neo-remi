@@ -42,7 +42,9 @@ and `TORCH_PACKAGES` (the `+cuXY` builds): the base image's CUDA must be the
 one the PyTorch wheels are built for. The ROCm recipe
 uses `ubuntu:22.04` as its base and takes `TORCH_INDEX` (default `rocm7.2`, an
 index of <https://download.pytorch.org/whl/>) and `TORCH_PACKAGES` (default
-`torch torchvision`) instead of the CUDA arguments.
+`torch==2.14.0+rocm7.2 torchvision==0.29.0+rocm7.2`: the launcher's versions,
+built for that index) instead of the CUDA arguments. Changing `TORCH_INDEX`
+needs the matching `+rocmX.Y` builds in `TORCH_PACKAGES`.
 
 ## Run
 
@@ -119,6 +121,6 @@ entrypoint creates the `models/` subfolders, `output/` and `extensions/` in
 | --- | --- |
 | Base | `nvidia/cuda:13.0.0-runtime-ubuntu22.04` (ROCm: `ubuntu:22.04`) |
 | Python | `3.13` via **uv** |
-| PyTorch | the launcher's Linux build (`torch==2.14.0+cu130`); ROCm: the `rocm7.2` wheels |
+| PyTorch | the launcher's Linux build (`torch==2.14.0+cu130`); ROCm: the same versions as `rocm7.2` wheels (`torch==2.14.0+rocm7.2`) |
 | User | `remi` (UID 99 / GID 100) |
 | Port | 7860 |

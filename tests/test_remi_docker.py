@@ -343,6 +343,56 @@ def test_the_rocm_recipe_is_the_same_image_with_rocm_pytorch():
 
 
 
+TORCH_FAMILY = ("torch", "torchvision", "torchaudio")
+TORCH_PIN = re.compile(r"(?P<name>torch|torchvision|torchaudio)==(?P<version>\d+\.\d+\.\d+)\+(?P<build>[a-z]+[\d.]+)")
+
+
+def torch_requirements(recipe: str) -> list[str]:
+    """The PyTorch packages (torch, torchvision, torchaudio) every ``pip install`` of the recipe
+    names, with the ``ARG`` defaults it uses filled in."""
+
+    defaults = {rest.split("=", 1)[0]: rest.split("=", 1)[1].strip('"') for keyword, rest in instructions(recipe) if keyword == "ARG" and "=" in rest}
+    found = []
+    for keyword, rest in instructions(recipe):
+        if keyword != "RUN" or "pip install" not in rest:
+            continue
+        expanded = re.sub(r"\$\{(\w+)\}|\$(\w+)", lambda match: defaults.get(match[1] or match[2], match[0]), rest)
+        for token in shlex.split(expanded):
+            if re.split(r"[=<>!~\[;]", token, maxsplit=1)[0].lower() in TORCH_FAMILY:
+                found.append(token)
+    return found
+
+
+def test_the_pytorch_reader_sees_every_unpinned_spelling():
+    for recipe in ("RUN pip install torch torchvision", "ARG P=torch\nRUN uv pip install ${P} -r requirements.txt", "RUN pip install torch>=2.14 && pip install torchaudio"):
+        assert [token for token in torch_requirements(recipe) if not TORCH_PIN.fullmatch(token)], recipe
+    assert torch_requirements('ARG P="torch==2.14.0+cu130"\nRUN uv pip install ${P} --index-url "${URL}"') == ["torch==2.14.0+cu130"]
+    assert torch_requirements("RUN uv pip install -r requirements.txt && python launch.py --skip-torch-cuda-test") == []
+
+
+@pytest.mark.parametrize("path", sorted(DOCKER.glob("Dockerfile*")), ids=lambda path: path.name)
+def test_every_image_pins_its_pytorch_build(path):
+    """docker/Dockerfile.rocm installed ``torch torchvision`` unpinned: each build took whatever
+    the ROCm index offered that day, unlike the CUDA image and the launcher. Every recipe names
+    the exact version and build of each PyTorch package it installs."""
+
+    requirements = torch_requirements(path.read_text(encoding="utf-8"))
+    assert {re.split(r"[=<>!~\[;]", token, maxsplit=1)[0] for token in requirements} >= {"torch", "torchvision"}, requirements
+    assert [token for token in requirements if not TORCH_PIN.fullmatch(token)] == []
+
+
+def test_the_rocm_image_pins_the_launchers_pytorch_as_rocm_builds():
+    """The same torch and torchvision versions as the CUDA image (the launcher's Linux build),
+    in the build of the ROCm index the recipe installs from."""
+
+    def pins(recipe: str) -> dict[str, tuple[str, str]]:
+        return {match["name"]: (match["version"], match["build"]) for match in map(TORCH_PIN.fullmatch, torch_requirements(recipe)) if match}
+
+    cuda, rocm = pins(DOCKERFILE), pins(ROCM_DOCKERFILE)
+    assert {name: version for name, (version, _build) in rocm.items()} == {name: version for name, (version, _build) in cuda.items()}
+    assert {build for _version, build in rocm.values()} == {arg_default("TORCH_INDEX", ROCM_DOCKERFILE)}
+
+
 def test_uv_comes_from_a_pinned_digest():
     """A tag alone can be moved; the digest pins the exact uv binary copied into the image."""
 
