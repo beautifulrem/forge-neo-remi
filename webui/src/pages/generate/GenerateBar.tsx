@@ -22,8 +22,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
 import { Kbd } from "@/components/ui/kbd"
+import { NumberField } from "@/components/ui/number-field"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useLabelFits } from "@/lib/use-label-fits"
 import { cn } from "@/lib/utils"
@@ -45,7 +45,8 @@ function useQueuePosition(jobId: string | null): number | null {
 
 function RepeatPopover({ tab, disabled }: { tab: GenerateTab; disabled?: boolean }) {
   const { t } = useTranslation()
-  const [runs, setRuns] = useState(4)
+  // the field's own number while typing (null when cleared); clamped when it starts
+  const [runs, setRuns] = useState<number | null>(4)
   const [open, setOpen] = useState(false)
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -57,7 +58,8 @@ function RepeatPopover({ tab, disabled }: { tab: GenerateTab; disabled?: boolean
           className="flex flex-col gap-2"
           onSubmit={(event) => {
             event.preventDefault()
-            dispatchRun(tab, { type: "generate", runs })
+            if (runs === null) return
+            dispatchRun(tab, { type: "generate", runs: Math.max(2, Math.min(MAX_RUNS, Math.round(runs))) })
             setOpen(false)
           }}
         >
@@ -66,16 +68,8 @@ function RepeatPopover({ tab, disabled }: { tab: GenerateTab; disabled?: boolean
           </label>
           <p className="text-xs text-muted-foreground">{t("Each run starts when the previous one has finished and uses the form as it is then.")}</p>
           <div className="flex gap-1.5">
-            <Input
-              id={`${tab}-repeat`}
-              type="number"
-              min={2}
-              max={MAX_RUNS}
-              value={runs}
-              onChange={(event) => setRuns(Math.max(1, Math.min(MAX_RUNS, Math.round(Number(event.target.value) || 1))))}
-              className="h-8 tabular-nums"
-            />
-            <Button type="submit" size="sm">
+            <NumberField id={`${tab}-repeat`} min={2} max={MAX_RUNS} step={1} value={runs} onValueChange={setRuns} className="flex-1" />
+            <Button type="submit" size="sm" disabled={runs === null}>
               {t("Start", { context: "runs" })}
             </Button>
           </div>
