@@ -1671,5 +1671,7 @@
   "Move {{stage}} earlier": "将{{stage}}前移",
   "Move {{stage}} later": "将{{stage}}后移",
   "Stage {{n}}: {{name}}": "阶段 {{n}}：{{name}}",
-  "Cycle RGBA backdrop": "切换 RGBA 底板"
+  "Cycle RGBA backdrop": "切换 RGBA 底板",
+  "A board with this name already exists.": "已有同名的看板。",
+  "A collection with this name already exists.": "已有同名的收藏夹。"
 }

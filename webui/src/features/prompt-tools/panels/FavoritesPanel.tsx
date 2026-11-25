@@ -30,7 +30,7 @@ import { appendText, type PanelProps } from "./helpers"
 import { PanelHeader, SearchBox } from "./panel"
 import { LoadFailed } from "@/components/LoadFailed"
 import { useLoadFailure } from "@/api/load-failure"
-import { failureText } from "@/features/errors/error-text"
+import { failureText, type StatusTexts } from "@/features/errors/error-text"
 
 /** Every collection, the unsorted favorites, or a collection id. */
 type Filter = string
@@ -127,13 +127,13 @@ export default function FavoritesPanel({ value, setValue, kind, disabled, close 
     await client.invalidateQueries({ queryKey: toolKeys.collections })
   }
 
-  const attempt = async (action: () => Promise<unknown>, success?: string) => {
+  const attempt = async (action: () => Promise<unknown>, success?: string, texts?: StatusTexts) => {
     try {
       await action()
       await refresh()
       if (success) toast.success(success)
     } catch (error) {
-      toast.error(t("Could not update the favorites"), { description: failureText(error) })
+      toast.error(t("Could not update the favorites"), { description: failureText(error, texts) })
     }
   }
 
@@ -209,12 +209,17 @@ export default function FavoritesPanel({ value, setValue, kind, disabled, close 
               onSave={(name) => {
                 if (!name) return
                 setCollectionForm(null)
-                if (collectionForm === "rename" && current?.id) void attempt(() => promptToolsApi.collections.rename(current.id!, name))
+                const taken = { 409: t("A collection with this name already exists.") }
+                if (collectionForm === "rename" && current?.id) void attempt(() => promptToolsApi.collections.rename(current.id!, name), undefined, taken)
                 else
-                  void attempt(async () => {
-                    const created = await promptToolsApi.collections.create(name)
-                    if (created.id) setFilter(created.id)
-                  })
+                  void attempt(
+                    async () => {
+                      const created = await promptToolsApi.collections.create(name)
+                      if (created.id) setFilter(created.id)
+                    },
+                    undefined,
+                    taken,
+                  )
               }}
             />
           ) : confirmDelete && current ? (

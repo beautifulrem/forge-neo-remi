@@ -86,7 +86,7 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
       setView({ boardId: board.id })
       toast.success(t("Board created"))
     },
-    onError: (error) => toast.error(t("Could not create board"), { description: errorText(error) }),
+    onError: (error) => toast.error(t("Could not create board"), { description: errorText(error, { 409: t("A board with this name already exists.") }) }),
   })
 
   const rename = useMutation({
@@ -96,7 +96,7 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
       setRenaming(null)
       toast.success(t("Board renamed"))
     },
-    onError: (error) => toast.error(t("Could not rename board"), { description: errorText(error) }),
+    onError: (error) => toast.error(t("Could not rename board"), { description: errorText(error, { 409: t("A board with this name already exists.") }) }),
   })
 
   const remove = useMutation({
@@ -396,7 +396,7 @@ export function AssignBoardPopover({ fileIds, activeBoardId, trigger, tone = "de
       setOpen(false)
       toast.success(t("Added {{count}} images to “{{name}}”", { count: fileIds.length, name: board.name }))
     },
-    onError: (error) => toast.error(t("Could not create board"), { description: errorText(error) }),
+    onError: (error) => toast.error(t("Could not create board"), { description: errorText(error, { 409: t("A board with this name already exists.") }) }),
   })
 
   const activeBoard = activeBoardId ? boards.find((b) => b.id === activeBoardId) ?? null : null

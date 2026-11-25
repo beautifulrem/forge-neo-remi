@@ -1,5 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { toast } from "sonner"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { queryClient } from "@/api/queries"
 import { AssignBoardPopover, BoardsBar } from "./BoardsBar"
@@ -100,6 +101,27 @@ describe("Boards bar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create board" }))
     expect(await screen.findByRole("tab", { name: /Night/ })).toHaveAttribute("aria-selected", "true")
     expect(useGalleryView.getState().boardId).toBe("b2")
+  })
+
+  // A name already taken is a 409, which read "It changed meanwhile; refresh and try again."
+  it("says a board name is taken", async () => {
+    const board = { id: "b1", name: "Portraits", description: "", item_count: 0, cover_file_id: null, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" }
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
+      init?.method === "POST"
+        ? new Response(JSON.stringify({ detail: "a board named 'Portraits' already exists" }), { status: 409 })
+        : new Response(JSON.stringify([board]), { status: 200 }),
+    )
+    const error = vi.spyOn(toast, "error").mockReturnValue(0)
+    render(
+      <QueryClientProvider client={queryClient}>
+        <BoardsBar activeItems={[]} />
+      </QueryClientProvider>,
+    )
+    await screen.findByRole("tab", { name: /Portraits/ })
+    fireEvent.click(screen.getByRole("button", { name: "New board" }))
+    fireEvent.change(await screen.findByPlaceholderText("Board name"), { target: { value: "Portraits" } })
+    fireEvent.click(screen.getByRole("button", { name: "Create board" }))
+    await waitFor(() => expect(error).toHaveBeenCalledWith("Could not create board", { description: "A board with this name already exists." }))
   })
 
   it("keeps a board that exists", async () => {

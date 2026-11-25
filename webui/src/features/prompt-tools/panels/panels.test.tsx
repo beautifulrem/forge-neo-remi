@@ -126,6 +126,19 @@ describe("favorites", () => {
     await waitFor(() => expect(imported).toHaveBeenCalledWith(data))
   }, 20_000)
 
+  // A name already taken is a 409, which read "It changed meanwhile; refresh and try again."
+  it("says a collection name is taken", async () => {
+    const { toast } = await import("sonner")
+    const error = vi.spyOn(toast, "error")
+    setup()
+    vi.spyOn(promptToolsApi.collections, "create").mockRejectedValue(new ApiError(409, "a collection with this name exists"))
+    await screen.findByText("first prompt")
+    fireEvent.click(screen.getByRole("button", { name: "New collection" }))
+    fireEvent.change(await screen.findByRole("textbox", { name: "New collection" }), { target: { value: "Faces" } })
+    fireEvent.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() => expect(error).toHaveBeenLastCalledWith("Could not update the favorites", { description: "A collection with this name already exists." }))
+  }, 20_000)
+
   it("tells a file that is not a favorites export from an import the server refused", async () => {
     const { toast } = await import("sonner")
     const error = vi.spyOn(toast, "error")
