@@ -117,6 +117,10 @@ VOLUME ["/home/remi/data"]
 HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=15 \
     CMD curl -fsS http://localhost:7860/internal/ping || exit 1
 
+# The launcher runs as PID 1 and handles SIGINT only (it exits at once, as on Ctrl+C);
+# PID 1 ignores a SIGTERM it has no handler for, so docker stop would wait for its timeout
+STOPSIGNAL SIGINT
+
 ENTRYPOINT ["/home/remi/app/docker/entrypoint.sh"]
 
 # endregion

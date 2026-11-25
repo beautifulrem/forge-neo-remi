@@ -166,6 +166,17 @@ def test_the_readme_names_the_data_folder_variable():
     assert "REMI_DATA_DIR=/home/remi/data" in DOCKERFILE and '--data-dir "$REMI_DATA_DIR"' in ENTRYPOINT
 
 
+def test_docker_stop_sends_the_signal_the_launcher_handles():
+    """The entrypoint execs the launcher as PID 1, which serves in-process and handles SIGINT only
+    (modules/initialize_util.py: it exits at once, as Ctrl+C does). The kernel ignores a signal
+    without a handler for PID 1, so the default SIGTERM of ``docker stop`` did nothing and the
+    container was killed after the full timeout."""
+
+    assert "exec python /home/remi/app/launch.py" in ENTRYPOINT
+    for recipe in (DOCKERFILE, ROCM_DOCKERFILE):
+        assert ("STOPSIGNAL", "SIGINT") in instructions(recipe)
+
+
 def test_the_entrypoint_runs_from_a_windows_checkout():
     """Git for Windows checks text files out with CRLF (core.autocrlf), and the repository has no
     .gitattributes: "#!/bin/bash\\r" is no interpreter, so the image strips the CRs itself."""
@@ -311,7 +322,7 @@ def test_the_rocm_recipe_is_the_same_image_with_rocm_pytorch():
     assert 'uv pip install ${TORCH_PACKAGES} --index-url "${TORCH_INDEX_URL}"' in runs
     assert "uv pip install -r requirements.txt" in runs
     # everything but the base image and PyTorch is the NVIDIA recipe's
-    same = ("COPY", "VOLUME", "EXPOSE", "HEALTHCHECK", "ENTRYPOINT", "WORKDIR", "USER", "LABEL")
+    same = ("COPY", "VOLUME", "EXPOSE", "HEALTHCHECK", "ENTRYPOINT", "WORKDIR", "USER", "LABEL", "STOPSIGNAL")
     assert [i for i in rocm if i[0] in same] == [i for i in instructions() if i[0] in same]
     for keyword in ("NODE_VERSION", "PNPM_VERSION"):
         assert arg_default(keyword, ROCM_DOCKERFILE) == arg_default(keyword)
