@@ -94,4 +94,21 @@ describe("extras runs", () => {
     finishExtras({ jobId: "other", outputs: [] })
     expect(useExtrasRuns.getState().results).toEqual([])
   })
+
+  // sessionStorage edited by hand or by another app: an object where text or a number belongs
+  // reached React as a child and took the Extras page down, on every reload of the tab
+  it("drops stored runs the page cannot show", async () => {
+    const run = { jobId: "j", outputs: [{ id: "o", kind: "image", width: 512, height: 512, infotext: "Steps: 2" }], source: null, info: null, at: 1 }
+    const bad = [
+      { ...run, jobId: "error", error: { detail: "x" } },
+      { ...run, jobId: "size", outputs: [{ id: "o", kind: "image", width: { a: 1 }, height: 5 }] },
+      { ...run, jobId: "fraction", outputs: [{ id: "o", kind: "image", width: 1.5 }] },
+      { ...run, jobId: "infotext", outputs: [{ id: "o", kind: "image", infotext: { a: 1 } }] },
+      { ...run, jobId: "role", outputs: [{ id: "o", kind: "image", role: ["x"] }] },
+    ]
+    sessionStorage.setItem("remi-extras-runs", JSON.stringify({ state: { results: [run, ...bad, { ...run, jobId: "plain", error: "failed", outputs: [{ id: "o", kind: "image" }] }], jobs: [], sources: {} }, version: 1 }))
+    await useExtrasRuns.persist.rehydrate()
+    expect(useExtrasRuns.getState().results.map((result) => result.jobId)).toEqual(["j", "plain"])
+    sessionStorage.clear()
+  })
 })

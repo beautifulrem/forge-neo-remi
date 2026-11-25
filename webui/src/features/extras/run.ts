@@ -68,8 +68,26 @@ function isResult(value: unknown): value is ExtrasResult {
     typeof value.at === "number" &&
     isText(value.source) &&
     isText(value.info) &&
+    isText(value.error) &&
     Array.isArray(value.outputs) &&
-    value.outputs.every((output) => isRecord(output) && typeof output.id === "string" && typeof output.kind === "string")
+    value.outputs.every(isOutput)
+  )
+}
+
+/** A size in pixels, or none stored. */
+const isPixels = (value: unknown) => value === null || value === undefined || (typeof value === "number" && Number.isInteger(value) && value >= 0)
+
+/** A stored output: every field the page renders or passes on is of its kind (an object as a React child crashed the page). */
+function isOutput(value: unknown): value is JobOutput {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.kind === "string" &&
+    isPixels(value.width) &&
+    isPixels(value.height) &&
+    isText(value.infotext) &&
+    isText(value.role) &&
+    (value.missing === null || value.missing === undefined || typeof value.missing === "boolean")
   )
 }
 
