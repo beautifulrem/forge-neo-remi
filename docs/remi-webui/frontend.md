@@ -15,7 +15,7 @@ Run in `webui/`:
 | command | what it does |
 |---|---|
 | `pnpm dev` | Vite dev server; proxies `/api` (incl. WS), `/sdapi`, `/files` to `REMI_BACKEND` (default `http://127.0.0.1:7860`) |
-| `pnpm dev:mock` | No backend: `VITE_MOCK=1`, API answered in the browser from fixtures, jobs simulated with live previews |
+| `pnpm dev:mock` | No backend: `vite --mode mock` (`.env.mock` sets `VITE_MOCK=1`; `VITE_MOCK=1` in the environment does the same in any mode), API answered in the browser from fixtures, jobs simulated with live previews |
 | `pnpm build` | `tsc -b` then the production build into `webui/dist` (served by the Python server) |
 | `pnpm preview` | serves the built `webui/dist` (Vite preview, port 4173) with the same proxies as `pnpm dev`: the production bundle against a running server |
 | `pnpm typecheck` | type-check only |
@@ -1549,8 +1549,9 @@ older server) nothing is shown.
 
 ## Mock mode
 
-`pnpm dev:mock` (or `VITE_MOCK=1`): `api/mock/server.ts` answers every
-`/api/v2` call from `api/mock/fixtures.ts`; `api/mock/socket.ts` replaces the
+`pnpm dev:mock` (`--mode mock`, or `VITE_MOCK=1` in the environment):
+`api/mock/server.ts` answers every `/api/v2` call from
+`api/mock/fixtures.ts`; `api/mock/socket.ts` replaces the
 WebSocket and the simulated worker emits `job.*` events and real WebP
 preview frames; a dev-server plugin serves generated SVG artwork for
 `/api/v2/files|thumbs/mock-*` and an empty `user.css` (the bootstrap fixture

@@ -6,7 +6,7 @@ Remi WebUI. The Python server serves the build output from `webui/dist`.
 ```sh
 pnpm install
 pnpm dev          # proxies /api to REMI_BACKEND (default http://127.0.0.1:7860)
-pnpm dev:mock     # no backend: fixtures + simulated jobs (VITE_MOCK=1)
+pnpm dev:mock     # no backend: fixtures + simulated jobs (--mode mock: .env.mock sets VITE_MOCK=1)
 pnpm build        # type-check + production build into dist/
 pnpm test         # vitest (jsdom)
 pnpm lint         # oxlint

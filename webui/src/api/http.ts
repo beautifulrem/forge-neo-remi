@@ -21,7 +21,7 @@ export const ROOT = (typeof window === "undefined" ? "" : (window.__REMI_ROOT__ 
 /** Path prefix of every API request (also the WebSocket's). */
 export const API_BASE = `${ROOT}/api/v2`
 
-/** Set at build time: `VITE_MOCK=1 pnpm dev` serves fixtures instead of the server. */
+/** Set at build time: `pnpm dev:mock` (`.env.mock`) or `VITE_MOCK=1 vite` serves fixtures instead of the server. */
 export const MOCK = import.meta.env.VITE_MOCK === "1"
 
 export class ApiError extends Error {

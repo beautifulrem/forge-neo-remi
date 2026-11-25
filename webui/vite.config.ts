@@ -15,7 +15,8 @@ import { collectNotices, cssImportedPackages, devNotices, formatNotices, runtime
 const backend = process.env.REMI_BACKEND ?? "http://127.0.0.1:7860"
 
 /**
- * Mock mode (VITE_MOCK=1): the API is answered in the browser (src/api/mock);
+ * Mock mode (`pnpm dev:mock`: `--mode mock`, whose .env.mock sets VITE_MOCK=1; or VITE_MOCK=1 in
+ * the environment): the API is answered in the browser (src/api/mock);
  * this plugin only serves what the page requests directly: placeholder
  * artwork for /files and /thumbs ids (<img> tags) and an empty user.css
  * (the bootstrap fixture lists one, so the app links it).
