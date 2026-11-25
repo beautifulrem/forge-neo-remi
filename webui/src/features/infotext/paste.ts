@@ -5,10 +5,8 @@
  * edited params' `on_change` actions and conflict locks run once afterwards.
  */
 import type { InfotextParsed, ParamValues } from "@/api/types"
-import { i18n } from "@/i18n"
 import { type ActionContext, CONFLICTS_ACTION, runAction } from "@/ui/actions"
 import type { FormIndex } from "@/ui/form-index"
-import { messageText } from "@/ui/messages"
 
 export type PasteEntry = { owner: string; values: ParamValues }
 
@@ -67,7 +65,7 @@ export function pastePlan(index: FormIndex, parsed: Pick<InfotextParsed, "core" 
 export type PasteResult = {
   /** The values written. */
   count: number
-  /** `"owner.param"` refs a lock kept as they were (a toggle's `locks`), left out of `count`. */
+  /** `"owner.param"` refs a lock kept from changing (a toggle's `locks`; `lockNote` names them), left out of `count`. */
   locked: string[]
 }
 
@@ -101,12 +99,3 @@ export function applyPaste(ctx: ActionContext, entries: readonly PasteEntry[]): 
   return { count, locked }
 }
 
-/** `"owner.param"` refs as the form labels them, in `language`, joined its way (a ref without a label as it is). */
-export function lockedLabels(index: FormIndex, refs: readonly string[], language = i18n.language): string {
-  const labels = refs.map((ref) => {
-    const dot = ref.indexOf(".")
-    const label = index.inputs.get(ref.slice(0, dot))?.get(ref.slice(dot + 1))?.label
-    return label ? messageText(i18n, label, language) : ref
-  })
-  return new Intl.ListFormat(language, { type: "conjunction" }).format(labels)
-}

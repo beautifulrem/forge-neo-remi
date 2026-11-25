@@ -76,12 +76,18 @@ export type FormActions = {
     },
   ) => void
   setValue: (owner: string, name: string, value: unknown) => void
-  /** A programmatic write (paste, send-to, widgets): locked params are skipped. Returns their names. */
+  /**
+   * A programmatic write (paste, send-to, widgets): locked params are skipped. Returns the names a
+   * lock kept from changing (a locked param given the value it has is not one).
+   */
   setValues: (owner: string, values: OwnerValues) => string[]
   /** Resets the given names (all of the owner's when omitted) to their defaults. */
   reset: (owner: string, names?: readonly string[]) => void
-  /** Applies param patches `[owner, name, patch]` from an action (locked params keep their value). */
-  applyPatches: (patches: readonly [string, string, ParamPatch][]) => void
+  /**
+   * Applies param patches `[owner, name, patch]` from an action (locked params keep their value).
+   * Returns the `"owner.param"` refs a lock kept from changing.
+   */
+  applyPatches: (patches: readonly [string, string, ParamPatch][]) => string[]
   setOutputs: (owner: string, outputs: Record<string, unknown>) => void
   setCapabilities: (capabilities: ModelCapabilitySummary | null) => void
   setAdvice: (advice: readonly AdviceItem[]) => void
@@ -232,7 +238,7 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
       let skipped: string[] = []
       set((s) => {
         const locked = lockedNames(s.locks, s.values, owner)
-        skipped = Object.keys(partial).filter((name) => locked.has(name))
+        skipped = Object.keys(partial).filter((name) => locked.has(name) && !jsonEqual(partial[name], s.values[owner]?.[name]))
         const kept = skipped.length === 0 ? partial : Object.fromEntries(Object.entries(partial).filter(([name]) => !locked.has(name)))
         return {
           values: { ...s.values, [owner]: { ...s.values[owner], ...kept } },
@@ -253,6 +259,7 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
     },
 
     applyPatches(patches) {
+      const kept: string[] = []
       set((s) => {
         const values = { ...s.values }
         const overrides = { ...s.overrides }
@@ -267,6 +274,8 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
           if ("value" in patch && !isLocked(owner, name)) {
             values[owner] = { ...values[owner], [name]: value }
             errors = withoutErrors(errors, owner, [name])
+          } else if ("value" in patch && !jsonEqual(value, s.values[owner]?.[name]) && !kept.includes(`${owner}.${name}`)) {
+            kept.push(`${owner}.${name}`)
           }
           if (Object.keys(display).length > 0) {
             overrides[owner] = { ...overrides[owner], [name]: { ...overrides[owner]?.[name], ...display } }
@@ -274,6 +283,7 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
         }
         return { values, overrides, errors }
       })
+      return kept
     },
 
     setErrors(list) {

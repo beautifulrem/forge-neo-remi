@@ -27,9 +27,10 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { errorText } from "@/features/errors/error-text"
-import { lockedLabels } from "@/features/infotext/paste"
+import { noteLines } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import { getFormStore } from "@/ui/form-store"
+import { lockNote } from "@/ui/locks"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import { applyRecipeApi, createRecipeApi, deleteRecipeApi, exportRecipesApi, importRecipesApi, recipesQuery, refreshRecipes } from "./api"
 import { CATEGORY_LABELS } from "@/features/library/labels"
@@ -145,12 +146,11 @@ export function RecipeManager() {
       const inForm = (ref: string) => index.inputs.get(ref.slice(0, ref.indexOf(".")))?.has(ref.slice(ref.indexOf(".") + 1)) ?? false
       const resolved = conflictOverrides(res).filter((ref) => inForm(ref) && !applied.locked.includes(ref))
       const overridden = [...applied.locked, ...resolved]
-      return { recipe, count: Math.max(0, applied.count - resolved.length), warnings, overridden: overridden.length > 0 ? lockedLabels(index, overridden) : null }
+      return { recipe, count: Math.max(0, applied.count - resolved.length), warnings, overridden: lockNote(index, overridden) }
     },
     onSuccess: ({ recipe, count, warnings, overridden }) => {
-      const notes = [...warnings, ...(overridden ? [t("Overridden by a lock: {{names}}", { names: overridden })] : [])]
       toast.success(t("Recipe “{{name}}” applied ({{count}} params)", { name: recipe.name, count }), {
-        description: notes.length > 0 ? notes.join("\n") : undefined,
+        description: noteLines(...warnings, overridden),
       })
     },
     onError: (error) => toast.error(t("Could not apply recipe"), { description: errorText(error) }),

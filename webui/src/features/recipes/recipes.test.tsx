@@ -162,8 +162,8 @@ describe("Recipes capture and manager UI", () => {
     const { toast } = await import("sonner")
     const success = vi.spyOn(toast, "success")
     const store = getFormStore("txt2img")
-    // a toggle that locks the width (`locks: "core.width"`) is on
-    store.setState((s) => ({ locks: [{ owner: "keep", name: "size", target: ["core", "width"] }], values: { ...s.values, keep: { size: true } } }))
+    // a toggle that locks the width (`locks: "core.width"`) is on, over a width the recipe changes
+    store.setState((s) => ({ locks: [{ owner: "keep", name: "size", target: ["core", "width"] }], values: { ...s.values, core: { ...s.values.core, width: 768 }, keep: { size: true } } }))
     const width = store.getState().values.core?.width
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : (input as Request).url

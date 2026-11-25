@@ -373,6 +373,20 @@ describe("editing a queued job in its form", () => {
     expect(useQueueEdit.getState().sessions.txt2img).toBeUndefined()
   })
 
+  it("names the job's values a lock kept, opened to edit or to reuse", async () => {
+    const { toast } = await import("sonner")
+    const success = vi.spyOn(toast, "success")
+    const store = getFormStore("txt2img")
+    // a toggle that locks the prompt (`locks: "core.prompt"`) is on, over a prompt of the user's own
+    store.setState((s) => ({ locks: [{ owner: "keep", name: "prompt", target: ["core", "prompt"] }], values: { ...s.values, core: { ...s.values.core, prompt: "my prompt" }, keep: { prompt: true } } }))
+    mockFetch({ "GET /jobs/j1": [200, detail], "GET /jobs/j2": [200, { ...detail, id: "j2", status: "completed" }] })
+    await openJob("j1")
+    expect(success).toHaveBeenLastCalledWith("Editing queued job #12", expect.objectContaining({ description: "Overridden by a lock: Prompt" }))
+    await openJob("j2")
+    expect(success).toHaveBeenLastCalledWith("Parameters applied: 1", expect.objectContaining({ description: "Overridden by a lock: Prompt" }))
+    expect(store.getState().values.core?.prompt).toBe("my prompt")
+  })
+
   it("opens a finished job without starting an edit", async () => {
     mockFetch({ "GET /jobs/j2": [200, { ...detail, id: "j2", status: "completed" }] })
     await openJob("j2")

@@ -42,11 +42,17 @@ describe("finding inputs by infotext key", () => {
 
 describe("using a result's parameters", () => {
   it("pastes them into the form and reports how many were applied", async () => {
-    sent.mockResolvedValue(5)
+    sent.mockResolvedValue({ count: 5, locked: [] })
     applyParameters("img2img", "a cat\nSteps: 12")
     expect(sent).toHaveBeenCalledWith("img2img", { infotext: "a cat\nSteps: 12" }, {})
     expect(loading).toHaveBeenCalledWith("Reading parameters…")
     await vi.waitFor(() => expect(success).toHaveBeenCalledWith("Parameters applied: 5", { id: "toast-1" }))
+  })
+
+  it("names the values a lock kept", async () => {
+    sent.mockResolvedValue({ count: 4, locked: ["core.width"] })
+    applyParameters("txt2img", "a cat\nSize: 640x640")
+    await vi.waitFor(() => expect(success).toHaveBeenCalledWith("Parameters applied: 4", { id: "toast-1", description: "Overridden by a lock: Width" }))
   })
 
   it("replaces the progress toast with the reason when they cannot be read", async () => {
@@ -61,11 +67,17 @@ describe("using a result's parameters", () => {
 
 describe("sending a result", () => {
   it("names the target in the progress and result toasts", async () => {
-    sent.mockResolvedValue(3)
+    sent.mockResolvedValue({ count: 3, locked: [] })
     sendWithFeedback("inpaint", { fileId: "f1" })
     expect(sent).toHaveBeenCalledWith("inpaint", { fileId: "f1" })
     expect(loading).toHaveBeenCalledWith("Sending to Inpaint…")
     await vi.waitFor(() => expect(success).toHaveBeenCalledWith("Sent to Inpaint", { id: "toast-1" }))
+  })
+
+  it("names the values a lock kept from the sent parameters", async () => {
+    sent.mockResolvedValue({ count: 3, locked: ["core.width", "sampler.steps"] })
+    sendWithFeedback("txt2img", { fileId: "f1", infotext: "a cat\nSteps: 9, Size: 640x640" })
+    await vi.waitFor(() => expect(success).toHaveBeenCalledWith("Sent to txt2img", { id: "toast-1", description: "Overridden by a lock: Width and Sampling steps" }))
   })
 
   it("reports a failed send with its reason", async () => {

@@ -2,9 +2,12 @@ import { QueryClientProvider } from "@tanstack/react-query"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
+import { tabSchema } from "@/api/mock/fixtures"
 import { queryClient } from "@/api/queries"
 import type { GalleryItem } from "@/api/types"
 import type { ResultItem } from "@/features/gallery/session-store"
+import { getFormStore } from "@/ui/form-store"
+import { tabOwners } from "@/ui/tab"
 import { Lightbox } from "@/features/lightbox/Lightbox"
 import { type Board } from "./boards-api"
 import { BoardsBar } from "./BoardsBar"
@@ -118,8 +121,15 @@ describe("Gallery Boards, Lineage & Lightbox RGBA 4-backdrop", () => {
       layout_hash: "h",
       schema_version: 1,
     })
+    // the img2img form keeps its prompt with a lock: the toast names it
+    const { toast } = await import("sonner")
+    const success = vi.spyOn(toast, "success")
+    const store = getFormStore("img2img")
+    store.getState().load(tabOwners(tabSchema("img2img")))
+    store.setState((s) => ({ locks: [{ owner: "keep", name: "prompt", target: ["core", "prompt"] }], values: { ...s.values, keep: { prompt: true } } }))
     fireEvent.click(screen.getByRole("button", { name: "Load source job" }))
     await waitFor(() => expect(getJob).toHaveBeenCalledWith("job-77"))
+    await waitFor(() => expect(success).toHaveBeenCalledWith("Source job loaded into img2img", { description: "Overridden by a lock: Prompt" }))
   })
 
   it("toggles all 4 RGBA backdrops in Lightbox via picker and B shortcut", () => {

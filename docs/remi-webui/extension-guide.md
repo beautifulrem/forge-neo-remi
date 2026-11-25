@@ -244,8 +244,8 @@ Keyword arguments every input takes:
 
 `Toggle(locks="owner.param")` protects another param from programmatic
 writes (paste, "Send to", reused jobs, presets, action patches) while the
-toggle is on (pasting parameters and applying a recipe name the values it
-kept); `sd-lock-img2img-steps` is the whole extension:
+toggle is on (each of them names the values it kept from changing, under
+"Overridden by a lock"); `sd-lock-img2img-steps` is the whole extension:
 `ui.Toggle("lock", False, label=..., locks="sampler.steps")`.
 
 **Validation.** The server checks every value of every job before it is

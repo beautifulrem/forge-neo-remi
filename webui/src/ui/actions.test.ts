@@ -1,6 +1,6 @@
 import * as sonner from "sonner"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { runAction, splitResponse } from "./actions"
+import { applyAdvicePatch, runAction, splitResponse } from "./actions"
 import { createFormStore } from "./form-store"
 
 describe("splitResponse", () => {
@@ -67,6 +67,48 @@ describe("splitResponse", () => {
       },
     ])
     expect(split.capabilities?.preset).toBe("qwen21")
+  })
+})
+
+describe("action patches a lock keeps", () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  function lockedForm() {
+    const store = createFormStore("locked-action", { persistDrafts: false })
+    store.getState().load([
+      { owner: "core", layout: { type: "slider", name: "steps", label: "Steps", minimum: 1, maximum: 150, step: 1 }, defaults: { steps: 20 } },
+      { owner: "pin", layout: { type: "toggle", name: "on", label: "Pin steps", locks: "core.steps" }, defaults: { on: true } },
+    ])
+    return store
+  }
+
+  it("names them in the action's toast, or in a toast of their own", async () => {
+    const info = vi.spyOn(sonner.toast, "info").mockImplementation((() => "") as never)
+    const success = vi.spyOn(sonner.toast, "success").mockImplementation((() => "") as never)
+    const store = lockedForm()
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ steps: { value: 8 }, __toast__: { level: "success", message: "Preset applied" } }))
+    await runAction({ store, tab: "txt2img" }, "core", "__preset__")
+    expect(store.getState().values.core?.steps).toBe(20)
+    expect(success).toHaveBeenCalledWith("Preset applied", { description: "Overridden by a lock: Steps" })
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ steps: { value: 8 } }))
+    await runAction({ store, tab: "txt2img" }, "core", "turbo")
+    expect(info).toHaveBeenCalledWith("Overridden by a lock: Steps", undefined)
+
+    // a patch that leaves the locked value as it is says nothing
+    info.mockClear()
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ steps: { value: 20, enabled: true } }))
+    await runAction({ store, tab: "txt2img" }, "core", "__conflicts__")
+    expect(info).not.toHaveBeenCalled()
+  })
+
+  it("names them for a one-click advice fix", async () => {
+    const info = vi.spyOn(sonner.toast, "info").mockImplementation((() => "") as never)
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({}))
+    const store = lockedForm()
+    await applyAdvicePatch({ store, tab: "txt2img" }, { code: "turbo", severity: "warning", message: "Use 8 steps", patch: { "core.steps": { value: 8 } } })
+    expect(store.getState().values.core?.steps).toBe(20)
+    expect(info).toHaveBeenCalledWith("Overridden by a lock: Steps", undefined)
   })
 })
 

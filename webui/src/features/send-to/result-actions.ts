@@ -8,7 +8,9 @@ import { runChangeEffects } from "@/ui/actions"
 import type { FormIndex } from "@/ui/form-index"
 import { getFormStore } from "@/ui/form-store"
 import { infotextValue } from "@/ui/infotext"
-import { type SendItem, type SendTarget, sendTo, sendToReference } from "./send-to"
+import { lockNote } from "@/ui/locks"
+import type { PasteResult } from "@/features/infotext/paste"
+import { formOf, type SendItem, type SendTarget, sendTo, sendToReference } from "./send-to"
 import { failureText } from "@/features/errors/error-text"
 
 /** The `[owner, name]` of the input that reads infotext key `key` ("Seed" → the seed script's `seed`). */
@@ -38,11 +40,17 @@ const TARGET_LABEL: Record<SendTarget, string> = {
   extras: "Extras",
 }
 
+/** The values a lock kept from a send, as a toast description (none: nothing to add). */
+function lockDescription(target: SendTarget, { locked }: PasteResult): { description?: string } {
+  const note = lockNote(getFormStore(formOf(target)).getState().index, locked)
+  return note ? { description: note } : {}
+}
+
 /** Pastes a result's parameters (all of them, seed and size included) into form `tab`. */
 export function applyParameters(tab: SendTarget, infotext: string) {
   const id = toast.loading(t("Reading parameters…"))
   sendTo(tab, { infotext }, {})
-    .then((count) => toast.success(t("Parameters applied: {{count}}", { count }), { id }))
+    .then((result) => toast.success(t("Parameters applied: {{count}}", { count: result.count }), { id, ...lockDescription(tab, result) }))
     .catch((error: unknown) =>
       toast.error(t("Could not read the parameters"), { id, description: failureText(error) }),
     )
@@ -53,7 +61,7 @@ export function sendWithFeedback(target: SendTarget, item: SendItem) {
   const where = t(TARGET_LABEL[target])
   const id = toast.loading(t("Sending to {{target}}…", { target: where }))
   sendTo(target, item)
-    .then(() => toast.success(t("Sent to {{target}}", { target: where }), { id }))
+    .then((result) => toast.success(t("Sent to {{target}}", { target: where }), { id, ...lockDescription(target, result) }))
     .catch((error: unknown) =>
       toast.error(t("Could not send to {{target}}", { target: where }), { id, description: failureText(error) }),
     )

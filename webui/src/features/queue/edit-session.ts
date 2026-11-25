@@ -13,10 +13,11 @@ import { keys, queryClient } from "@/api/queries"
 import type { FormTab, JobDetail, ParamValues, TabSchema } from "@/api/types"
 import { navigate } from "@/app/router"
 import type { PasteEntry } from "@/features/infotext/paste"
-import { deliver } from "@/features/send-to/send-to"
+import { deliverPaste } from "@/features/send-to/send-to"
 import { errorText, toastInvalid } from "@/features/errors/error-text"
 import { t } from "@/i18n"
 import { getFormStore } from "@/ui/form-store"
+import { lockNote } from "@/ui/locks"
 import { flushPendingWrites } from "@/ui/pending-writes"
 import { jobRequest, missingInputs } from "@/ui/tab"
 
@@ -50,8 +51,9 @@ export async function openJob(jobId: string): Promise<void> {
       else delete sessions[job.tab]
       return { sessions }
     })
-    const count = await deliver(job.tab, jobEntries(job))
-    toast.success(editing ? t("Editing queued job #{{seq}}", { seq: job.seq }) : t("Parameters applied: {{count}}", { count }), { id })
+    const { count, locked } = await deliverPaste(job.tab, jobEntries(job))
+    const note = lockNote(getFormStore(job.tab).getState().index, locked)
+    toast.success(editing ? t("Editing queued job #{{seq}}", { seq: job.seq }) : t("Parameters applied: {{count}}", { count }), { id, ...(note ? { description: note } : {}) })
   } catch (error) {
     toast.error(t("Could not open the job"), { id, description: message(error) })
   }

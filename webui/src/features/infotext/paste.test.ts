@@ -5,7 +5,7 @@ import { buildIndex } from "@/ui/form-index"
 import { createFormStore } from "@/ui/form-store"
 import { tabOwners } from "@/ui/tab"
 import { splitInfotext } from "./display"
-import { applyPaste, lockedLabels, pastePlan, planEntries } from "./paste"
+import { applyPaste, pastePlan, planEntries } from "./paste"
 
 function loadedStore() {
   const schema = tabSchema("txt2img")
@@ -81,13 +81,6 @@ describe("applyPaste", () => {
     expect(store.getState().values.core).toMatchObject({ width: before, prompt: "a cat" })
     // width's on_change (hr_resolution) does not run for a value that did not change
     expect(run.mock.calls.map(([, owner, action]) => [owner, action])).not.toContainEqual(["core", "hr_resolution"])
-  })
-})
-
-describe("lockedLabels", () => {
-  it("names locked params by their labels, joined the language's way", () => {
-    const index = buildIndex(tabOwners(tabSchema("txt2img")))
-    expect(lockedLabels(index, ["core.cfg_scale", "sampler.steps", "gone.x"], "en")).toBe("CFG Scale, Sampling steps, and gone.x")
   })
 })
 

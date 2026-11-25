@@ -117,9 +117,10 @@ export function sendFilter(): PasteFilter {
 /**
  * Sends a result to a form: its image (output file ids are valid image
  * inputs) and, for the generation forms, its parameters (`send_seed` /
- * `send_size` / `send_cfg` respected).
+ * `send_size` / `send_cfg` respected). Resolves with the params set and the
+ * ones a lock kept (`deliverPaste`).
  */
-export async function sendTo(target: SendTarget, item: SendItem, filter: PasteFilter = sendFilter()): Promise<number> {
+export async function sendTo(target: SendTarget, item: SendItem, filter: PasteFilter = sendFilter()): Promise<PasteResult> {
   const tab = formOf(target)
   const parsed = item.infotext && tab !== "extras" ? await api.parseInfotext(item.infotext, tab).catch(() => null) : null
   const entries = parsed ? parsedEntries(parsed) : []
@@ -128,7 +129,7 @@ export async function sendTo(target: SendTarget, item: SendItem, filter: PasteFi
     entries.push(image)
     describeFile(item.fileId, item)
   }
-  return deliver(tab, entries, filter)
+  return deliverPaste(tab, entries, filter)
 }
 
 export type ReferenceTarget = {

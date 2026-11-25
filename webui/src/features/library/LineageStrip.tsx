@@ -14,8 +14,10 @@ import type { FormTab, GalleryItem } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { errorText } from "@/features/errors/error-text"
 import { parsedEntries } from "@/features/infotext/paste"
-import { deliver } from "@/features/send-to/send-to"
+import { deliverPaste } from "@/features/send-to/send-to"
 import { cn } from "@/lib/utils"
+import { getFormStore } from "@/ui/form-store"
+import { lockNote } from "@/ui/locks"
 import { type LineageNode, lineageQuery } from "./boards-api"
 import { openInPngInfo } from "./queries"
 
@@ -90,9 +92,10 @@ export function LineageStrip({ item, onSelectImage, onClose }: LineageStripProps
         core: (detail.core ?? {}) as Record<string, unknown>,
         scripts: (detail.scripts ?? {}) as Record<string, Record<string, unknown>>,
       })
-      await deliver(tab, entries, {})
+      const { locked } = await deliverPaste(tab, entries, {})
       onClose()
-      toast.success(t("Source job loaded into {{tab}}", { tab }))
+      const note = lockNote(getFormStore(tab).getState().index, locked)
+      toast.success(t("Source job loaded into {{tab}}", { tab }), note ? { description: note } : undefined)
     } catch (error) {
       toast.error(t("Could not load source job"), { description: errorText(error) })
     } finally {

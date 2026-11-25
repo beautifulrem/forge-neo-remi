@@ -42,6 +42,17 @@ describe("form store", () => {
     store.getState().setValue("pin", "steps", true)
     expect(store.getState().setValues("core", { steps: 40, prompt: "a dog" })).toEqual(["steps"])
     expect(store.getState().values.core).toMatchObject({ steps: 30, prompt: "a dog" })
+    // the value it already has: nothing was kept from changing
+    expect(store.getState().setValues("core", { steps: 30 })).toEqual([])
+    expect(
+      store.getState().applyPatches([
+        ["core", "steps", { value: 50, maximum: 200 }],
+        ["core", "prompt", { value: "a fox" }],
+        ["pin", "steps", { enabled: false }],
+      ]),
+    ).toEqual(["core.steps"])
+    expect(store.getState().applyPatches([["core", "steps", { value: 30 }]])).toEqual([])
+    expect(store.getState().values.core).toMatchObject({ steps: 30, prompt: "a fox" })
   })
 
   it("loads defaults per owner, including section enable toggles", () => {

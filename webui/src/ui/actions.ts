@@ -11,6 +11,7 @@ import { i18n, t } from "@/i18n"
 import { showToast } from "@/lib/toast"
 import { splitRef } from "./conditions"
 import type { FormStore } from "./form-store"
+import { lockNote } from "./locks"
 import { isMessage, messageText } from "./messages"
 import type { AdviceItem, AdviceSeverity, ModelCapabilitySummary } from "./schema"
 
@@ -148,11 +149,14 @@ export async function runAction(
 
 export function applyResponse(store: FormStore, owner: string, split: SplitResponse) {
   const state = store.getState()
-  if (split.params.length > 0) state.applyPatches(split.params)
+  const kept = split.params.length > 0 ? state.applyPatches(split.params) : []
   if (split.outputs) state.setOutputs(owner, split.outputs)
   if (split.advice !== undefined) state.setAdvice(split.advice)
   if (split.capabilities !== undefined) state.setCapabilities(split.capabilities)
-  if (split.toast) showToast(split.toast.level, messageText(i18n, split.toast.message))
+  // the values a lock kept: under the action's own toast, or in one of their own
+  const note = lockNote(state.index, kept)
+  if (split.toast) showToast(split.toast.level, messageText(i18n, split.toast.message), note)
+  else if (note) showToast("info", note)
   if (split.settings) {
     // Stored by the server already: update the cached values, never write them back.
     const settings = split.settings
@@ -173,7 +177,8 @@ export async function applyAdvicePatch(ctx: ActionContext, item: AdviceItem): Pr
   const split = splitResponse("core", rest)
   const changedByOwner = new Map<string, string[]>()
   if (split.params.length > 0) {
-    ctx.store.getState().applyPatches(split.params)
+    const note = lockNote(ctx.store.getState().index, ctx.store.getState().applyPatches(split.params))
+    if (note) showToast("info", note)
     for (const [owner, name] of split.params) {
       const list = changedByOwner.get(owner) ?? []
       if (!list.includes(name)) list.push(name)

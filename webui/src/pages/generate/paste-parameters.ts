@@ -4,8 +4,9 @@ import { toast } from "sonner"
 import { api } from "@/api/endpoints"
 import { sentenceParams } from "@/api/http"
 import type { FormTab, InfotextParsed } from "@/api/types"
-import { applyPaste, lockedLabels, pastePlan } from "@/features/infotext/paste"
+import { applyPaste, pastePlan } from "@/features/infotext/paste"
 import { useForm } from "@/ui/hooks"
+import { lockNote } from "@/ui/locks"
 import { failureText, validationMessage } from "@/features/errors/error-text"
 
 /**
@@ -22,7 +23,8 @@ export function usePasteParameters() {
   const apply = (parsed: InfotextParsed, id: string | number) => {
     const { count, locked } = applyPaste({ store, tab }, pastePlan(store.getState().index, parsed).entries)
     // values a toggle's lock kept as they were
-    const kept = locked.length > 0 ? { description: t("Overridden by a lock: {{names}}", { names: lockedLabels(store.getState().index, locked) }) } : {}
+    const note = lockNote(store.getState().index, locked)
+    const kept = note ? { description: note } : {}
     if (count === 0) toast.info(t("No parameters to apply"), { id, ...kept })
     else toast.success(t("Parameters applied: {{count}}", { count }), { id, ...kept })
     const problems = parsed.problems ?? []
