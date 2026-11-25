@@ -430,9 +430,9 @@ generated interfaces (sources: Linear's
   `components/ui/toggle.tsx` (`PRESSED_TINT_CLASS`, which a button acting as
   a toggle wears as well); a near-black tone alone does not show a lone
   toggle's state, and neither does a variant swapped once pressed (a filled
-  button). A button whose label says what it does next (Pause / Resume) is
-  an action, not a toggle: it takes no `aria-pressed`
-  (`lib/design-guards.test.ts` checks both). A light theme's hover keeps the 15 % wash: a deeper one
+  button; `lib/design-guards.test.ts` checks for hand-written tints and
+  such swaps). The queue's Pause / Resume, whose label says what it does
+  next, is an action without `aria-pressed`. A light theme's hover keeps the 15 % wash: a deeper one
   takes some accents' labels under 4.5:1.
   Truncated names and URLs carry their full text in a `title`. A form column (the generate parameters, an
   extension page, the JSON Builder's side column, the Extensions list) is an inspector, not a
