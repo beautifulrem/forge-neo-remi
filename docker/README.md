@@ -14,9 +14,16 @@ not include it).
 From the repository root (the build context must be the whole checkout):
 
 ```bash
-docker build -f docker/Dockerfile -t remi-webui .            # NVIDIA
-docker build -f docker/Dockerfile.rocm -t remi-webui-rocm .  # AMD (ROCm)
+# NVIDIA
+docker build --build-arg REMI_REVISION="$(git rev-parse HEAD)" -f docker/Dockerfile -t remi-webui .
+# AMD (ROCm)
+docker build --build-arg REMI_REVISION="$(git rev-parse HEAD)" -f docker/Dockerfile.rocm -t remi-webui-rocm .
 ```
+
+`REMI_REVISION` records the commit in the image's
+`org.opencontainers.image.revision` label (`unknown` without it: the build
+context has no `.git`); `docker inspect --format
+'{{index .Config.Labels "org.opencontainers.image.revision"}}' remi-webui` reads it.
 
 - Stage `webui` builds the web interface (`webui/dist`) with Node.js and
   `pnpm install --frozen-lockfile && pnpm build`.

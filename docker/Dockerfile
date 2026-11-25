@@ -100,6 +100,12 @@ RUN python launch.py --exit --skip-torch-cuda-test --data-dir /tmp/remi-build \
 # a Windows checkout has CRLF line endings (core.autocrlf); bash then finds no interpreter
 RUN sed -i 's/\r$//' docker/entrypoint.sh && chmod +x docker/entrypoint.sh
 
+# The commit this image runs (the build context has no .git):
+#   docker build --build-arg REMI_REVISION="$(git rev-parse HEAD)" ...
+# declared after the last RUN, so a new commit rebuilds none of the layers above
+ARG REMI_REVISION=unknown
+LABEL org.opencontainers.image.revision=$REMI_REVISION
+
 EXPOSE 7860
 
 # config.json, styles.csv, user.css, remi-data/ (queue, history, prompt tools),

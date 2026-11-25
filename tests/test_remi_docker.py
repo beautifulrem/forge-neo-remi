@@ -178,9 +178,15 @@ def test_the_build_context_leaves_out_data_and_build_output():
         assert pattern in IGNORE, pattern
 
 
+def docker_builds(text: str) -> list[str]:
+    """The ``docker build`` commands in ``text``, continuation lines joined, without their comment."""
+
+    return [line.split(" #", 1)[0].strip() for line in re.sub(r"\\\n", " ", text).splitlines() if line.lstrip().startswith("docker build")]
+
+
 def test_the_readme_describes_this_image():
     assert "Forge - Neo" not in README and "git clone" not in README
-    assert "docker build -f docker/Dockerfile -t remi-webui ." in README
+    assert any(build.endswith("-f docker/Dockerfile -t remi-webui .") for build in docker_builds(README))
     assert "--data-dir" in README
 
 
@@ -196,6 +202,26 @@ def test_the_docs_name_the_variables_the_entrypoint_reads():
         assert f"`{name}`" in README, name
     for guide in ("usage.md", "usage.zh-CN.md"):
         assert "`REMI_DATA_DIR`" in (ROOT / "docs" / "remi-webui" / guide).read_text(encoding="utf-8"), guide
+
+
+def test_the_image_records_the_commit_it_was_built_from():
+    """The build context leaves .git out, so the image cannot tell which commit it runs: the
+    documented builds pass it as REMI_REVISION, which becomes the OCI revision label. The ARG
+    comes after the last RUN, so a new commit does not rebuild the PyTorch and requirements layers."""
+
+    for recipe in (DOCKERFILE, ROCM_DOCKERFILE):
+        steps = instructions(recipe)
+        assert arg_default("REMI_REVISION", recipe) == "unknown"
+        assert ("LABEL", "org.opencontainers.image.revision=$REMI_REVISION") in steps
+        last_run = max(index for index, (keyword, _rest) in enumerate(steps) if keyword == "RUN")
+        assert steps.index(("ARG", "REMI_REVISION=unknown")) > last_run
+    usage = (ROOT / "docs" / "remi-webui" / "usage.md").read_text(encoding="utf-8")
+    usage_zh = (ROOT / "docs" / "remi-webui" / "usage.zh-CN.md").read_text(encoding="utf-8")
+    for text in (README, usage, usage_zh):
+        builds = docker_builds(text)
+        assert builds
+        for build in builds:
+            assert '--build-arg REMI_REVISION="$(git rev-parse HEAD)"' in build, build
 
 
 def readme_paragraph(start: str) -> str:
@@ -255,13 +281,13 @@ def test_the_rocm_recipe_is_the_same_image_with_rocm_pytorch():
     assert 'uv pip install ${TORCH_PACKAGES} --index-url "${TORCH_INDEX_URL}"' in runs
     assert "uv pip install -r requirements.txt" in runs
     # everything but the base image and PyTorch is the NVIDIA recipe's
-    same = ("COPY", "VOLUME", "EXPOSE", "HEALTHCHECK", "ENTRYPOINT", "WORKDIR", "USER")
+    same = ("COPY", "VOLUME", "EXPOSE", "HEALTHCHECK", "ENTRYPOINT", "WORKDIR", "USER", "LABEL")
     assert [i for i in rocm if i[0] in same] == [i for i in instructions() if i[0] in same]
     for keyword in ("NODE_VERSION", "PNPM_VERSION"):
         assert arg_default(keyword, ROCM_DOCKERFILE) == arg_default(keyword)
     assert "python launch.py --exit --skip-torch-cuda-test --data-dir /tmp/remi-build" in runs
     assert "REMI_SKIP_WEBUI_BUILD=1" in ROCM_DOCKERFILE and "REMI_DATA_DIR=/home/remi/data" in ROCM_DOCKERFILE
-    assert "docker build -f docker/Dockerfile.rocm -t remi-webui-rocm ." in README
+    assert any(build.endswith("-f docker/Dockerfile.rocm -t remi-webui-rocm .") for build in docker_builds(README))
 
 
 

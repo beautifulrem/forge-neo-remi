@@ -152,14 +152,14 @@ export COMMANDLINE_ARGS="--uv"
 `docker/Dockerfile` 用当前检出的代码构建镜像（构建上下文是仓库根目录）：网页界面在 Node.js 阶段构建，服务器镜像包含 Python 3.13、启动器使用的 PyTorch 版本和 `requirements.txt`，不含 Gradio。全部用户数据放在同一个卷 `/home/remi/data` 中：镜像把 `REMI_DATA_DIR` 设为这个路径，入口脚本再把它作为 `--data-dir` 传给启动器（`launch.py` 本身不读取 `REMI_DATA_DIR`）。详见 [docker/README.md](../../docker/README.md)。
 
 ```bash
-docker build -f docker/Dockerfile -t remi-webui .
+docker build --build-arg REMI_REVISION="$(git rev-parse HEAD)" -f docker/Dockerfile -t remi-webui .
 docker run --gpus all -p 127.0.0.1:7860:7860 -v remi-data:/home/remi/data remi-webui
 ```
 
 AMD GPU 使用 `docker/Dockerfile.rocm`，流程相同，只是换成 ROCm 版 PyTorch：
 
 ```bash
-docker build -f docker/Dockerfile.rocm -t remi-webui-rocm .
+docker build --build-arg REMI_REVISION="$(git rev-parse HEAD)" -f docker/Dockerfile.rocm -t remi-webui-rocm .
 docker run --device /dev/kfd --device /dev/dri --group-add video -p 127.0.0.1:7860:7860 -v remi-data:/home/remi/data remi-webui-rocm
 ```
 
