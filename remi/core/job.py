@@ -19,13 +19,17 @@ class JobContext:
     name as ``image.filename``); ``extra`` carries anything the caller wants
     the processing object to see (set as attributes on ``p``); ``on_begin``
     runs right after ``shared.state.begin()`` (the queue re-applies an
-    interrupt or skip that arrived before the job started)."""
+    interrupt or skip that arrived before the job started); ``interrupted``
+    tells the caller afterwards whether ``shared.state`` was interrupted while
+    the job ran (also past the queue: ``/sdapi/v1/interrupt``), since the
+    flag itself is cleared when the job ends."""
 
     id_task: str = ""
     user: str | None = None
     resolve_upload: UploadResolver | None = None
     extra: dict[str, Any] = field(default_factory=dict)
     on_begin: Callable[[], None] | None = None
+    interrupted: bool = False
 
     def context(self) -> Context:
         return Context(resolve_upload=self.resolve_upload)
@@ -48,6 +52,7 @@ def job_state(job: JobContext) -> Iterator[None]:
             job.on_begin()
         yield
     finally:
+        job.interrupted = job.interrupted or bool(shared.state.interrupted)
         progress.finish_task(id_task)
         shared.state.end()
         shared.state.skipped = False

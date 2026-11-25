@@ -100,6 +100,7 @@ class StubExecutor:
         images = [Image.new("RGB", (16, 8), (index * 40 % 256, 128, 64)) for index in range(self.count)]
         infotexts = [f"{prompt}\nSteps: 1, Seed: {index}" for index in range(self.count)]
         state.job_count = 0
+        ctx.interrupted = bool(state.interrupted)  # as remi.core.job_state tells the queue
         return JobResult(images=images, infotexts=infotexts, info=infotexts[0] if infotexts else None)
 
 

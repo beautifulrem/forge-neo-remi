@@ -978,9 +978,13 @@ def test_entry_points_set_up_the_job_state(webui, job_runtime, monkeypatch):
 
     monkeypatch.setattr(processing, "process_images", fake_process)
     job_runtime.interrupted = job_runtime.skipped = True  # left over from an earlier job
-    txt2img.run_txt2img({"prompt": "cat"}, {}, JobContext(id_task="task(remi-1)"))
+    job = JobContext(id_task="task(remi-1)")
+    txt2img.run_txt2img({"prompt": "cat"}, {}, job)
     assert seen == {"interrupted": False, "job": "task(remi-1)", "task": "task(remi-1)"}
     assert not job_runtime.interrupted and not job_runtime.skipped and progress.current_task is None
+    # the interrupt is cleared from the state but kept for the queue, which records the job as interrupted
+    # (/sdapi/v1/interrupt flips the state only)
+    assert job.interrupted
     assert "task(remi-1)" in progress.finished_tasks
 
 
