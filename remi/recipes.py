@@ -415,6 +415,21 @@ def _active_model_capabilities() -> set[str] | None:
     return None
 
 
+def _reads_as(layout: Any, param: str, draft: Any, value: Any) -> bool:
+    """Whether the form's ``draft`` value already is ``value`` as the conflict
+    rules read it (coerced: ``"true"`` is ``True``); a draft the param refuses is not."""
+
+    from remi.ui import Context, ParamError
+
+    node = layout.by_name.get(param) if layout is not None else None
+    if node is None:
+        return draft == value
+    try:
+        return node.coerce(draft, Context()) == value
+    except ParamError:
+        return False
+
+
 def apply_recipe(
     recipe: Recipe,
     *,
@@ -450,9 +465,10 @@ def apply_recipe(
     conflicts: dict[str, Any] = {}
     if check_conflicts and effective_tab in ("txt2img", "img2img"):
         try:
-            from remi.core.conflicts import conflict_patch
+            from remi.core.conflicts import _layouts, conflict_patch
 
-            derived = conflict_patch(effective_tab, {**merged_scripts, "core": merged_core})
+            layouts = _layouts(effective_tab)
+            derived = conflict_patch(effective_tab, {**merged_scripts, "core": merged_core}, layouts=layouts)
             if isinstance(derived, Mapping):
                 conflicts = dict(derived)
                 # The conflict patch is the rules' whole state (every group member, every role,
@@ -468,7 +484,7 @@ def apply_recipe(
                         continue
                     owner, param = key.split(".", 1)
                     values = merged_core if owner == "core" else merged_scripts.get(owner)
-                    if values is None or param not in values or values[param] == entry["value"]:
+                    if values is None or param not in values or _reads_as(layouts.get(owner), param, values[param], entry["value"]):
                         continue
                     patch[key] = {"value": entry["value"]}
                     values[param] = entry["value"]

@@ -652,6 +652,16 @@ def test_applying_a_recipe_patches_its_own_values_and_what_the_conflicts_change(
     assert set(patch) <= {"core.enable_hr", "pid.enable"}
     assert applied["core"]["enable_hr"] is True
 
+    # a draft value in another spelling ("true" for True) is the value the rules read: no change
+    drafted = {**form_scripts, "pid": {"enable": "true"}}
+    applied = apply_recipe(unrelated, tab="txt2img", core=form_core, scripts=drafted, active_capabilities=[])
+    assert {key for key in applied["patch"] if not key.startswith("__")} == {"core.hr_scale"}
+    assert applied["scripts"]["pid"] == {"enable": "true"}
+    # one the rules really change still joins the patch (PiD and Hires. fix exclude each other)
+    pid = Recipe(id="r3", name="pid", tab="txt2img", scripts_patch={"pid": {"enable": True}})
+    applied = apply_recipe(pid, tab="txt2img", core={**form_core, "enable_hr": "true"}, scripts={**form_scripts, "pid": {"enable": False}}, active_capabilities=[])
+    assert applied["patch"]["pid.enable"] == {"value": True} and applied["patch"]["core.enable_hr"] == {"value": False}
+
 
 def test_role_rules_and_exclusive_groups_agree(webui, monkeypatch):
     """A role rule that switches a group member off frees its group: one entry
