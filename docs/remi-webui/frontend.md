@@ -1464,8 +1464,9 @@ older server) nothing is shown.
   without plural forms (`Saved: {{count}}`). A count followed by a noun
   (`{{count}} steps`) gets its English singular in `en.json` as
   `"{{count}} steps_one": "{{count}} step"`;
-  the key itself is the plural; `zh-CN.json` needs no plural forms. `locales.test.ts`
-  fails on a `{{count}} <plural noun>` key without its `_one` form.
+  the key itself is the plural (en.json holds only `_one` forms); `zh-CN.json`
+  needs no plural forms. `locales.test.ts` fails on a `{{count}} <plural noun>`
+  key without its `_one` form and on any other form in en.json.
 - Schema strings are passed to `t()` as-is (`t(node.label)`); `markdown` and
   `html` node text and a setting's HTML comment are looked up whole (key = the
   exact source text; the catalogs translate them keeping the Markdown or

@@ -122,6 +122,12 @@ describe("en chrome catalog", () => {
     }
   })
 
+  // frontend.md: the key is the plural, en.json holds the singular (`_one`); an `_other` entry
+  // turns that around for one key and leaves the reader of the source with the singular
+  it("keys English plurals by the plural, with only `_one` forms in en.json", () => {
+    expect(Object.keys(en).filter((key) => !key.endsWith("_one"))).toEqual([])
+  })
+
   it("gives a count followed by a plural noun its singular form", () => {
     // Without "{{count}} steps_one" a one-step recipe reads "1 steps". These counts are never 1.
     const neverOne = new Set(["A zip holds at most {{count}} images: the first {{count}} selected are packed.", "Show all {{count}} tags"])

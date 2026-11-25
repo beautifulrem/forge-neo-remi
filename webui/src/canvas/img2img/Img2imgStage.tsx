@@ -107,7 +107,7 @@ export function Img2imgStage({ result, actions, leading, trailing, className }: 
       batch.map((item) => ({ fileId: item.fileId, width: item.width, height: item.height, infotext: item.infotext })),
     )
     setView("source")
-    toast.success(t("Staged {{count}} candidate on canvas", { count: batch.length }))
+    toast.success(t("Staged {{count}} candidates on canvas", { count: batch.length }))
   }
 
   return (

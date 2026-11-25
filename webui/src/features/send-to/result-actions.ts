@@ -68,7 +68,7 @@ export function sendToReferenceWithFeedback(items: readonly SendItem[], preferre
       } else if (result.added === 0) {
         toast.info(t("All selected images are already in Reference Images ({{total}} total)", { total: result.total }))
       } else {
-        toast.success(t("Added {{count}} image to Reference Images ({{total}} total)", { count: result.added, total: result.total }))
+        toast.success(t("Added {{count}} images to Reference Images ({{total}} total)", { count: result.added, total: result.total }))
       }
     })
     .catch((error: unknown) => {
