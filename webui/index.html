@@ -23,9 +23,13 @@
         // Theme: ?__theme=… in the URL, else the user's pick, else the server's --theme, else dark.
         var s = (typeof p.state === "object" && p.state) || {}
         var d = document.documentElement
-        var themes = { light: 1, dark: 1, system: 1 }
+        // a list, not an object's keys: "constructor" and the rest of Object.prototype are not themes
+        var themes = ["light", "dark", "system"]
+        var known = function (theme) {
+          return themes.indexOf(theme) >= 0
+        }
         var q = new URLSearchParams(location.search).get("__theme")
-        var t = themes[q] ? q : themes[s.theme] && s.themeChosen !== false ? s.theme : themes[window.__REMI_THEME__] ? window.__REMI_THEME__ : "dark"
+        var t = known(q) ? q : known(s.theme) && s.themeChosen !== false ? s.theme : known(window.__REMI_THEME__) ? window.__REMI_THEME__ : "dark"
         var dark = t === "light" ? false : t === "system" ? matchMedia("(prefers-color-scheme: dark)").matches : true
         d.classList.toggle("dark", dark)
         document.querySelector('meta[name="theme-color"]').content = dark ? "#0f1113" : "#f6f4f0"

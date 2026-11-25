@@ -189,6 +189,40 @@ describe("theme in effect", () => {
     }
   })
 
+  // The themes were looked up on a plain object: "constructor" (any Object.prototype name) in the
+  // URL, the stored state or the server's --theme counted as a theme and the sources after it were
+  // skipped (the page painted dark).
+  it("the first-paint script takes from each source only a theme it knows", async () => {
+    const { readFileSync } = await import("node:fs")
+    const script = /<script>([\s\S]*?)<\/script>/.exec(readFileSync("index.html", "utf8"))![1]!
+    expect(JSON.parse(/var themes = (\[[^\]]*\])/.exec(script)?.[1] ?? "null")).toEqual(["light", "dark", "system"])
+    // every source goes through the list (the server's own "constructor" painted dark either way)
+    expect(script).not.toMatch(/themes\[/)
+
+    const root = document.documentElement
+    const meta = document.head.appendChild(Object.assign(document.createElement("meta"), { name: "theme-color" }))
+    const paint = (search: string, stored: object | null, server: string | null) => {
+      window.history.replaceState(null, "", `/${search}`)
+      if (stored) localStorage.setItem("remi-appearance", JSON.stringify({ state: stored, version: 3 }))
+      else localStorage.removeItem("remi-appearance")
+      window.__REMI_THEME__ = server
+      root.classList.add("dark")
+      new Function(script)()
+      return root.classList.contains("dark") ? "dark" : "light"
+    }
+    try {
+      expect(paint("?__theme=constructor", { theme: "light", themeChosen: true }, null), "the URL's").toBe("light")
+      expect(paint("", { theme: "constructor", themeChosen: true }, "light"), "the stored one").toBe("light")
+      expect(paint("?__theme=toString", null, "light"), "the URL's, then the server's").toBe("light")
+      expect(paint("?__theme=light", null, "constructor"), "a known one").toBe("light")
+    } finally {
+      meta.remove()
+      root.classList.remove("dark")
+      localStorage.removeItem("remi-appearance")
+      window.__REMI_THEME__ = undefined
+    }
+  })
+
   // A stored density or accent went into the page's data attributes as it was: "x;y" matched no
   // accent rule and the page painted without one until the app replaced it.
   it("the first-paint script applies only a known stored density and accent", async () => {
