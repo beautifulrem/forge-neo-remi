@@ -22,6 +22,16 @@ describe("LicensesView", () => {
     expect(screen.getByRole("link", { name: /Web interface libraries/ })).toHaveAttribute("href", "/THIRD-PARTY-NOTICES.txt")
   })
 
+  it("gives the one-line notices link a 40 px tall target, like the Show license toggles", () => {
+    vi.spyOn(api.system, "licenses").mockReturnValue(new Promise(() => {}))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <LicensesView />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByRole("link", { name: /Web interface libraries/ })).toHaveClass("relative", "after:absolute", "after:-inset-y-2.5")
+  })
+
   it("says the list did not load in the UI language, with a Retry", async () => {
     const licenses = vi.spyOn(api.system, "licenses").mockRejectedValueOnce(new ApiError(404, "boom", { detail: "boom" }))
     licenses.mockResolvedValueOnce({ groups: [{ title: "", items: [{ id: "a", name: "Some library" }] }] } as never)

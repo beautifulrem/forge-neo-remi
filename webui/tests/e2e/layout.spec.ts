@@ -813,6 +813,33 @@ test("the weights in memory refresh is a 40 px target", async ({ page }) => {
   expect(box.reached).toEqual([])
 })
 
+// On a phone the licences page's one-line links (the notices link, each Show license) are 20 px of
+// text: each takes taps on an invisible box at least 40 px tall that reaches no other control.
+test("the licences page's small links are 40 px tall targets on a phone", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto("/#/settings?view=licenses")
+  const main = page.getByRole("main")
+  await expect(main.getByRole("button", { name: "Show license" }).first()).toBeVisible()
+  const targets = [main.getByRole("link", { name: /Web interface libraries/ }), main.getByRole("button", { name: "Show license" }).first()]
+  for (const target of targets) {
+    const box = await target.evaluate((element) => {
+      const rect = element.getBoundingClientRect()
+      const after = getComputedStyle(element, "::after")
+      const box = { left: rect.left + parseFloat(after.left), top: rect.top + parseFloat(after.top), right: rect.right - parseFloat(after.right), bottom: rect.bottom - parseFloat(after.bottom) }
+      const reached = [...document.querySelectorAll("button, input, select, textarea, a, [tabindex]:not([tabindex='-1'])")]
+        .filter((other) => other !== element && !other.contains(element) && !element.contains(other))
+        .filter((other) => {
+          const r = other.getBoundingClientRect()
+          return r.width > 0 && r.left < box.right - 0.5 && r.right > box.left + 0.5 && r.top < box.bottom - 0.5 && r.bottom > box.top + 0.5
+        })
+        .map((other) => other.getAttribute("aria-label") ?? other.textContent?.slice(0, 30))
+      return { name: element.textContent, height: Math.round(box.bottom - box.top), reached }
+    })
+    expect(box.height, `${box.name}: its target`).toBeGreaterThanOrEqual(40)
+    expect(box.reached, `${box.name}: controls under its target`).toEqual([])
+  }
+})
+
 // A section's enable switch has a wide after: box; it reached 4 px into the section's title, so a tap at
 // the title's end flipped the switch instead of opening the section.
 test("an enable switch's target stops short of the section title", async ({ page }) => {
