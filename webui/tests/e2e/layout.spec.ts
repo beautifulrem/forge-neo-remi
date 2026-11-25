@@ -788,6 +788,22 @@ for (const [width, height] of [
   })
 }
 
+// A section's enable switch has a wide after: box; it reached 4 px into the section's title, so a tap at
+// the title's end flipped the switch instead of opening the section.
+test("an enable switch's target stops short of the section title", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await openGenerate(page)
+  const toggle = page.getByRole("switch", { name: "Enable Hires. fix", exact: true })
+  await expect(toggle).toBeVisible()
+  const overlap = await toggle.evaluate((element) => {
+    const rect = element.getBoundingClientRect()
+    const left = rect.left + parseFloat(getComputedStyle(element, "::after").left)
+    const title = element.closest("section")!.querySelector("button[aria-expanded]")!.getBoundingClientRect()
+    return title.right - left
+  })
+  expect(overlap, "px of the title under the switch's target").toBeLessThanOrEqual(0.5)
+})
+
 // Tabbing down the rail in a short window parked a link flush against the scroller's edge, under
 // the fade, with the bottom of its focus ring cut off.
 test("the rail keeps a focused link out of its faded edges", async ({ page }) => {

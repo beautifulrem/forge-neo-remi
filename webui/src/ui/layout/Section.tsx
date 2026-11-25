@@ -29,6 +29,8 @@ function EnableSwitch({ node, title, onEnabled }: { node: ToggleNode; title: str
       aria-label={t("Enable {{title}}", { title })}
       aria-invalid={param.error ? true : undefined}
       title={param.error}
+      // the row's gap plus this margin hold the switch's 12 px after: box off the title before it
+      className="ml-1"
     />
   )
 }

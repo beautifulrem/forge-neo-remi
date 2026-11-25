@@ -340,6 +340,23 @@ describe("layout and display nodes", () => {
     expect(trigger).toHaveAttribute("aria-expanded", "false")
   })
 
+  it("keeps the enable switch's hit box off the section title", () => {
+    one(
+      {
+        type: "section",
+        title: "Hires fix",
+        enable: { type: "toggle", name: "enable_hr", label: "Hires fix" },
+        children: [{ type: "slider", name: "scale", label: "Scale", minimum: 1, maximum: 4, step: 0.5 }],
+      },
+      { enable_hr: false, scale: 2 },
+    )
+    // The switch's after: box reaches 12 px (-inset-x-3) to its left: the row's 8 px gap plus 4 px
+    // of margin keep that room, so a tap at the title's end opens the section, not the switch.
+    const toggle = screen.getByRole("switch", { name: "Enable Hires fix" })
+    expect(toggle).toHaveClass("after:-inset-x-3", "ml-1")
+    expect(toggle.parentElement).toHaveClass("gap-2")
+  })
+
   it("group, row, column, separator, markdown, html", () => {
     renderSchema(
       schemaOf({
