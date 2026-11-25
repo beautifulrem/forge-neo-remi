@@ -67,6 +67,17 @@ def check_preset(preset: Any) -> str:
     return preset
 
 
+def check_anima_preset(label: str) -> str:
+    """``label`` when it names an Anima preset, else :class:`ValidationError`
+    (:func:`anima_preset_patch` itself falls back to the safe preset)."""
+
+    from modules.anima_presets import PRESETS, SAFE_BASE_AESTHETIC_LABEL
+
+    if label != SAFE_BASE_AESTHETIC_LABEL and label not in PRESETS:
+        raise ValidationError([ParamError(Sentence("unknown Anima preset {{label}}", label=repr(label)), owner="core", param="label")])
+    return label
+
+
 def forge_preset_patch(tab: str, preset: str | None = None, opts: Any = None) -> Patch:
     """What the UI preset ``preset`` (``sd``, ``xl``, ``anima``, ...; default:
     the current one) sets on ``tab``'s form, relative to the core owner.

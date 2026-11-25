@@ -527,6 +527,14 @@ def test_core_actions(webui):
             ui.call_action(core_actions, action, ctx, values)
     with pytest.raises(ui.ValidationError):
         ui.call_action(core_actions, "__preset__", ctx, {})
+    # an unknown Anima preset is refused, not replaced by the safe default
+    with pytest.raises(ui.ValidationError) as caught:
+        ui.call_action(core_actions, "__preset__", ui.ActionContext(tab="txt2img", extra={"label": "No such preset"}), {})
+    [error] = caught.value.to_json()["errors"]
+    assert (error["owner"], error["param"], error["template"]) == ("core", "label", "unknown Anima preset {{label}}")
+    from modules.anima_presets import SAFE_BASE_AESTHETIC_LABEL
+
+    assert ui.call_action(core_actions, "__preset__", ui.ActionContext(tab="txt2img", extra={"label": SAFE_BASE_AESTHETIC_LABEL}), {})
 
 
 # endregion
