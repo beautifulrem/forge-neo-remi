@@ -31,9 +31,9 @@ both along, on loopback, and never loads a model:
    differences and Restore), the right-to-left layout of the shipped locale, the viewer's
    horizontal-wheel and gamepad navigation over the gallery, and the confirmation before
    leaving with unsaved settings.
-5. Stops the server, removes the backups it made (``config_states/`` is in the repository
-   folder; backups made before the run are left alone) and prints one row per check; exit
-   1 when a check failed, 2 when the server could not be started.
+5. Stops the server and prints one row per check (the backups it made are in its own data
+   folder under ``--out``, ``config_states/``); exit 1 when a check failed, 2 when the server
+   could not be started.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import smoke_real
-from smoke_real import ROOT, Report, Server
+from smoke_real import Report, Server
 
 AR_CATALOG = {
     "txt2img": "نص إلى صورة",
@@ -340,8 +340,6 @@ def main() -> int:
     data_dir.mkdir()
     seed_outputs(data_dir)
     fixture = GitFixture(options.out / "git")
-    states_dir = ROOT / "config_states"
-    states_before = set(os.listdir(states_dir)) if states_dir.is_dir() else set()
 
     report = Report()
     print(f"git fixture at {fixture.base}; server on port {options.port} (log {options.out / 'server.log'})", flush=True)
@@ -363,11 +361,6 @@ def main() -> int:
     finally:
         server.stop()
         fixture.close()
-        made = sorted(set(os.listdir(states_dir)) - states_before) if states_dir.is_dir() else []
-        for name in made:
-            (states_dir / name).unlink(missing_ok=True)
-        if made:
-            print(f"removed the {len(made)} backups this run made from {states_dir}", flush=True)
 
     if options.report:
         document = report.document(options.python, smoke_real.gradio_modules_in(options.python), features=False)
