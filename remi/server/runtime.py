@@ -10,11 +10,11 @@ and script files that fail to import are left out; bootstrap lists them in
 from __future__ import annotations
 
 import logging
-import os
 import warnings
 from typing import Any
 
 from remi.setting_values import setting
+from remi.ui.manifest import not_ported as not_ported
 
 log = logging.getLogger(__name__)
 
@@ -93,37 +93,6 @@ def initialize_runners() -> None:
     postproc = scripts.scripts_postproc
     if postproc is not None:
         assign_args(postproc)
-
-
-def _extension_of(path: str | None) -> str | None:
-    from remi.ui.manifest import extension_of
-
-    return extension_of(path)
-
-
-def not_ported() -> list[dict[str, Any]]:
-    """What could not be loaded: script files that failed to import, scripts
-    and Extras operations left out by their runner (no ``params()``, or it
-    failed), with the reason."""
-
-    from modules import scripts
-
-    found: list[dict[str, Any]] = []
-    for scriptfile, reason in getattr(scripts, "scripts_not_loaded", []):
-        found.append({"kind": "script", "id": scriptfile.filename, "title": scriptfile.filename, "extension": _extension_of(scriptfile.path), "status": "disabled", "reason": reason})
-    for tab, runner in (("txt2img", scripts.scripts_txt2img), ("img2img", scripts.scripts_img2img)):
-        for script, reason in getattr(runner, "disabled_scripts", None) or []:
-            found.append({"kind": "script", "id": getattr(script, "script_id", "") or "", "title": _title(script), "tab": tab, "extension": _extension_of(script.filename), "status": "disabled", "reason": reason})
-    for operation, reason in getattr(scripts.scripts_postproc, "disabled_scripts", None) or []:
-        found.append({"kind": "extras", "id": "", "title": operation.name or type(operation).__name__, "tab": "extras", "extension": _extension_of(operation.filename), "status": "disabled", "reason": reason})
-    return found
-
-
-def _title(script: Any) -> str:
-    try:
-        return str(script.title())
-    except Exception:
-        return os.path.basename(script.filename or "script")
 
 
 # region Model selection

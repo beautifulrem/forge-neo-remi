@@ -220,11 +220,13 @@ def test_the_extension_of_a_script_file(tmp_path, monkeypatch):
     (user / "my-ext" / "scripts").mkdir(parents=True)
     monkeypatch.setattr(paths_internal, "extensions_builtin_dir", str(builtin))
     monkeypatch.setattr(paths_internal, "extensions_dir", str(user))
-    assert runtime._extension_of(str(builtin / "sd_forge_lora" / "scripts" / "lora.py")) == "sd_forge_lora"
-    assert runtime._extension_of(str(user / "my-ext" / "scripts" / "x.py")) == "my-ext"
-    assert runtime._extension_of(str(tmp_path / "scripts" / "loopback.py")) is None
-    assert runtime._extension_of(str(tmp_path / "extensions-builtin-other" / "a.py")) is None  # a prefix is not a parent
-    assert runtime._extension_of(None) is None and runtime._extension_of("") is None
+    from remi.ui.manifest import extension_of
+
+    assert extension_of(str(builtin / "sd_forge_lora" / "scripts" / "lora.py")) == "sd_forge_lora"
+    assert extension_of(str(user / "my-ext" / "scripts" / "x.py")) == "my-ext"
+    assert extension_of(str(tmp_path / "scripts" / "loopback.py")) is None
+    assert extension_of(str(tmp_path / "extensions-builtin-other" / "a.py")) is None  # a prefix is not a parent
+    assert extension_of(None) is None and extension_of("") is None
 
 
 def test_scripts_whose_title_fails_are_listed_by_file_name():
@@ -234,11 +236,13 @@ def test_scripts_whose_title_fails_are_listed_by_file_name():
         def title(self):
             raise RuntimeError("no title")
 
-    assert runtime._title(Broken()) == "broken.py"
-    assert runtime._title(SimpleNamespace(title=lambda: 42)) == "42"
+    from remi.ui.manifest import _script_title
+
+    assert _script_title(Broken()) == "broken.py"
+    assert _script_title(SimpleNamespace(title=lambda: 42)) == "42"
     nameless = Broken()
     nameless.filename = None
-    assert runtime._title(nameless) == "script"
+    assert _script_title(nameless) == "script"
 
 
 def test_extras_operations_without_params_are_listed(webui, monkeypatch):

@@ -20,11 +20,12 @@ from remi.files import DEFAULT_MAX_UPLOAD, FileStore
 from remi.jobs import ChainRunner, ChainStore, JobQueue, JobStore, run_job, run_on_main_thread
 from remi.networks import NetworkIndex
 from remi.realtime import EventBus, PreviewEncoder, ProgressMonitor
+from remi.setting_values import OUTPUT_DIR_OPTIONS as OUTPUT_DIR_OPTIONS
+from remi.setting_values import output_dirs as output_dirs
 from remi.worker import RuntimeBridge, WorkerPool, create_default_pool
 
 log = logging.getLogger(__name__)
 
-OUTPUT_DIR_OPTIONS = ("outdir_samples", "outdir_txt2img_samples", "outdir_img2img_samples", "outdir_extras_samples", "outdir_hires_samples", "outdir_grids", "outdir_txt2img_grids", "outdir_img2img_grids", "outdir_save")
 
 
 @dataclass
@@ -213,14 +214,6 @@ class Services:
                 log.info("Indexed %d output image(s)", added)
         except Exception:
             log.exception("indexing outputs")
-
-
-def output_dirs() -> list[str]:
-    """The output folders that are set (a value of another kind reads as unset)."""
-
-    from remi.setting_values import setting
-
-    return [path for name in OUTPUT_DIR_OPTIONS if (path := setting(name, ""))]
 
 
 def worker_options_from_cmd_opts(cmd_opts: Any = None) -> tuple[bool, str | None, bool]:

@@ -947,7 +947,7 @@ def restore_config_state(state_id: str, what: str = "extensions") -> dict[str, A
 def _disabled_scripts_by_extension() -> dict[str, list[dict[str, Any]]]:
     by_ext: dict[str, list[dict[str, Any]]] = {}
     try:
-        from remi.server.runtime import not_ported
+        from remi.ui.manifest import not_ported
 
         entries = not_ported()
     except Exception:

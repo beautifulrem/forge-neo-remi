@@ -334,6 +334,32 @@ def extension_of_owner(owner: Any) -> str | None:
     return extension_of(path)
 
 
+
+def not_ported() -> list[dict[str, Any]]:
+    """What could not be loaded: script files that failed to import, scripts
+    and Extras operations left out by their runner (no ``params()``, or it
+    failed), with the reason and the extension they come from (bootstrap's
+    ``not_ported``, Extensions → Diagnostics)."""
+
+    from modules import scripts
+
+    found: list[dict[str, Any]] = []
+    for scriptfile, reason in getattr(scripts, "scripts_not_loaded", []):
+        found.append({"kind": "script", "id": scriptfile.filename, "title": scriptfile.filename, "extension": extension_of(scriptfile.path), "status": "disabled", "reason": reason})
+    for tab, runner in (("txt2img", scripts.scripts_txt2img), ("img2img", scripts.scripts_img2img)):
+        for script, reason in getattr(runner, "disabled_scripts", None) or []:
+            found.append({"kind": "script", "id": getattr(script, "script_id", "") or "", "title": _script_title(script), "tab": tab, "extension": extension_of(script.filename), "status": "disabled", "reason": reason})
+    for operation, reason in getattr(scripts.scripts_postproc, "disabled_scripts", None) or []:
+        found.append({"kind": "extras", "id": "", "title": operation.name or type(operation).__name__, "tab": "extras", "extension": extension_of(operation.filename), "status": "disabled", "reason": reason})
+    return found
+
+
+def _script_title(script: Any) -> str:
+    try:
+        return str(script.title())
+    except Exception:
+        return os.path.basename(script.filename or "script")
+
 __all__ = [
     "MANIFEST_FILENAME",
     "DiagnosticsCollector",
@@ -343,5 +369,6 @@ __all__ = [
     "ManifestValidationResult",
     "diagnostics",
     "load_manifest",
+    "not_ported",
     "validate_manifest_dict",
 ]

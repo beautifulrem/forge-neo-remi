@@ -214,3 +214,13 @@ def repair(opts: Any) -> list[str]:
 def _short(value: Any) -> Any:
     text = repr(value)
     return value if len(text) <= 80 else text[:77] + "..."
+
+
+OUTPUT_DIR_OPTIONS = ("outdir_samples", "outdir_txt2img_samples", "outdir_img2img_samples", "outdir_extras_samples", "outdir_hires_samples", "outdir_grids", "outdir_txt2img_grids", "outdir_img2img_grids", "outdir_save")
+"""the settings that name an output folder (Settings → Paths for saving)"""
+
+
+def output_dirs() -> list[str]:
+    """The output folders that are set (a value of another kind reads as unset)."""
+
+    return [path for name in OUTPUT_DIR_OPTIONS if (path := setting(name, ""))]

@@ -74,6 +74,48 @@ def test_extension_and_layer_code_does_not_import_the_server():
     assert found == [], f"import remi.server outside the server (use ctx.files / remi.ui): {found}"
 
 
+def _absolute_imports(source: str, module: str, is_package: bool) -> list[tuple[int, str]]:
+    """``(line, module)`` of every import in ``source`` (the code of ``module``), relative ones
+    resolved, with ``from X import name`` also read as ``X.name``."""
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", SyntaxWarning)
+        tree = ast.parse(source)
+    package = module if is_package else module.rpartition(".")[0]
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found += [(node.lineno, alias.name) for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if node.level:
+                parts = package.split(".")
+                parent = ".".join(parts[: len(parts) - node.level + 1])
+                base = f"{parent}.{base}" if base else parent
+            found += [(node.lineno, base)] + [(node.lineno, f"{base}.{alias.name}") for alias in node.names]
+    return found
+
+
+def test_remi_below_the_server_does_not_import_it():
+    """architecture.md "Layers": remi/server sits on top of remi/jobs, remi/worker, remi.ui, …
+    Nothing else under remi/ imports it, not even inside a function."""
+
+    found = []
+    for relative, path in _python_files("remi"):
+        if relative.startswith("remi/server/"):
+            continue
+        module = relative.removesuffix(".py").removesuffix("/__init__").replace("/", ".")
+        imports = _absolute_imports(path.read_text(encoding="utf-8"), module, path.name == "__init__.py")
+        found += sorted({f"{relative}:{line}" for line, name in imports if _is_server(name)})
+    assert found == [], f"remi.server imported below the server: {found}"
+
+
+def test_the_layer_check_resolves_relative_imports():
+    assert (1, "remi.server.services") in _absolute_imports("from ..server import services", "remi.jobs.importers", False)
+    assert (1, "remi.server") in _absolute_imports("from .server import x", "remi", True)
+    assert (1, "remi.server.runtime.not_ported") in _absolute_imports("from remi.server.runtime import not_ported", "remi.x", False)
+
+
 def test_extension_and_layer_code_does_not_reach_the_server_services():
     found = []
     for relative, path in _python_files(*CLIENT_CODE):

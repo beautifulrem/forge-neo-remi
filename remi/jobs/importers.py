@@ -727,7 +727,7 @@ def output_roots() -> list[str]:
     """The configured output folders (real paths): the only places an
     import indexes images from."""
 
-    from remi.server.services import output_dirs
+    from remi.setting_values import output_dirs
 
     return [os.path.realpath(path) for path in output_dirs()]
 
