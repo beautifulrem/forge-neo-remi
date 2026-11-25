@@ -60,6 +60,35 @@ describe("deferred node views", { timeout: 30_000 }, () => {
     expect(container.querySelector("[data-part=drop-zone]")).toBeNull()
   })
 
+  // A tabs node held a 96 px block while its code loaded, where the strip (32 px) over the selected
+  // tab's content is often twice that (Extras: the source image under its four tabs): the strip's
+  // stand-in is as tall as the strip, and the selected tab's content renders under it as it will.
+  it("stand in for tabs with the strip over the selected tab's content", async () => {
+    const tabs = (bind?: string) => ({
+      type: "tabs" as const,
+      ...(bind ? { bind } : {}),
+      children: [
+        { type: "tab" as const, title: "First", value: "A", children: [{ type: "toggle" as const, name: "alpha", label: "Alpha" }] },
+        { type: "tab" as const, title: "Second", value: "B", children: [{ type: "toggle" as const, name: "beta", label: "Beta" }] },
+      ],
+    })
+    const mode = { type: "choice" as const, name: "mode", label: "Mode", hidden: true, choices: [{ value: "A", label: "A" }, { value: "B", label: "B" }] }
+    const bound = renderNode({ type: "column", children: [mode, tabs("mode")] }, { mode: "B", alpha: false, beta: true })
+    const strip = bound.container.querySelector("[data-part=tab-strip]")!
+    expect(strip.className.split(/\s+/)).toContain("h-8")
+    expect(screen.getByRole("switch", { name: "Beta" })).toBeChecked()
+    expect(screen.queryByRole("switch", { name: "Alpha" })).toBeNull()
+    expect(bound.container.querySelector(".h-24")).toBeNull()
+    bound.unmount()
+    // unbound: the first tab until another is picked
+    const { container } = renderNode(tabs(), { alpha: false, beta: true })
+    expect(screen.getByRole("switch", { name: "Alpha" })).toBeInTheDocument()
+    expect(screen.queryByRole("switch", { name: "Beta" })).toBeNull()
+    expect(await screen.findByRole("tablist", {}, slow)).toBeInTheDocument()
+    expect(container.querySelector("[data-part=tab-strip]")).toBeNull()
+    expect(screen.getByRole("switch", { name: "Alpha" })).toBeInTheDocument()
+  })
+
   it("keeps the eagerly rendered kinds synchronous", () => {
     renderNode({ type: "toggle", name: "on", label: "Enable thing" }, { on: false })
     expect(screen.getByRole("switch", { name: "Enable thing" })).toBeInTheDocument()

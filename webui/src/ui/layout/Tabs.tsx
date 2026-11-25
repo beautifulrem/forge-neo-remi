@@ -7,20 +7,7 @@ import { tabsKey } from "../form-index"
 import { useCondition, useForm, useFormState, useOwner, useParam } from "../hooks"
 import { RenderChildren } from "../Renderer"
 import type { InputNode, TabNode, TabsNode } from "../schema"
-
-/** Tab ids: the bound choice value, else the tab's index. */
-function tabId(tab: TabNode, index: number, bound: boolean): string | number {
-  return bound && tab.value !== undefined && tab.value !== null ? tab.value : String(index)
-}
-
-/** Which tabs pass their `visible_if`, as a stable string of 0/1 per tab. */
-function useVisibleTabs(node: TabsNode): boolean[] {
-  const owner = useOwner()
-  const mask = useFormState((s) =>
-    node.children.map((tab) => (evaluate(tab.visible_if, owner, (o, n) => s.values[o]?.[n]) ? "1" : "0")).join(""),
-  )
-  return [...mask].map((bit) => bit === "1")
-}
+import { tabId, unboundSelection, useVisibleTabs } from "./tab-selection"
 
 /** Which tabs pass their `enabled_if` (same encoding as `useVisibleTabs`). */
 function useEnabledTabs(node: TabsNode): boolean[] {
@@ -102,7 +89,7 @@ function UnboundTabs({ node }: { node: TabsNode }) {
   const key = tabsKey(owner, node)
   const selected = useFormState((s) => s.tabs[key] ?? "0")
   const visible = useVisibleTabs(node)
-  const value = visible[Number(selected)] ? selected : String(Math.max(0, visible.indexOf(true)))
+  const value = unboundSelection(selected, visible)
   const { t } = useTranslation()
   return <TabStrip node={node} bound={false} label={t("Tabs")} value={value} onValueChange={(v) => store.getState().setTab(key, String(v))} />
 }

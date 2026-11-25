@@ -14,7 +14,11 @@ import { useImageRole } from "@/canvas/form/image-role"
 import { Skeleton } from "@/components/ui/skeleton"
 import { retryableLazy } from "@/lib/retryable-lazy"
 import { cn } from "@/lib/utils"
-import type { ImageNode } from "./schema"
+import { EnabledProvider } from "./context"
+import { useCondition } from "./hooks"
+import { useSelectedTab } from "./layout/tab-selection"
+import { RenderChildren } from "./Renderer"
+import type { ImageNode, TabNode, TabsNode } from "./schema"
 
 // oxlint-disable-next-line typescript/no-explicit-any -- each view receives its own node variant
 type View = ComponentType<{ node: any }>
@@ -92,7 +96,37 @@ export const ImageListInput = deferred(() => import("./inputs/Image").then((m) =
 export const Color = deferred(() => import("./inputs/Color").then((m) => m.Color), "h-9 w-full rounded-md")
 export const FileInput = deferred(() => import("./inputs/File").then((m) => m.FileInput), "h-9 w-full rounded-md")
 export const JsonInput = deferred(() => import("./inputs/Json").then((m) => m.JsonInput), "h-20 w-full rounded-md")
-export const TabsView = deferred(() => import("./layout/Tabs").then((m) => m.TabsView), "h-24 w-full rounded-lg")
+/** A tab's content as `TabPanel` lays it out (`TabsContent`'s text size, a column, `enabled_if`). */
+function TabContent({ tab }: { tab: TabNode }) {
+  const enabled = useCondition(tab.enabled_if)
+  return (
+    <div className="flex flex-col gap-3 text-sm">
+      <EnabledProvider enabled={enabled}>
+        <RenderChildren nodes={tab.children} />
+      </EnabledProvider>
+    </div>
+  )
+}
+
+/**
+ * Tabs while the strip's code loads: a stand-in as tall as the strip (an h-8 tab list, or the select it
+ * becomes) over the selected tab's content, rendered as it will be; nothing when no tab shows.
+ */
+function TabsPlaceholder({ node }: { node: TabsNode }) {
+  const tab = useSelectedTab(node)
+  if (!tab) return null
+  return (
+    <div className="flex flex-col gap-3">
+      <Skeleton data-part="tab-strip" className="h-8 w-full max-w-72 rounded-lg" aria-hidden />
+      <TabContent tab={tab} />
+    </div>
+  )
+}
+
+export const TabsView = deferred(
+  () => import("./layout/Tabs").then((m) => m.TabsView),
+  (node: TabsNode) => <TabsPlaceholder node={node} />,
+)
 export const GalleryView = deferred(() => import("./layout/Outputs").then((m) => m.GalleryView), "h-40 w-full rounded-lg")
 // An output that has nothing yet: its label over the "No output yet" line, each a line of the same
 // text size (as tall in either density), or nothing at all without a label

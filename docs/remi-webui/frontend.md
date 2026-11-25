@@ -1780,7 +1780,9 @@ Keeping a first view small:
   "No output yet" line, each a line of the same text size (nothing for an
   output without a label); an image upload field's is its label line over the
   empty drop zone (`ImageFieldSkeleton`), and a layer painted on an editor
-  (which renders nothing there) has none.
+  (which renders nothing there) has none. Tabs stand in as a strip-high bar
+  over the selected tab's content, rendered as it will be
+  (`layout/tab-selection.ts` picks the tab for both).
 - Dialogs and surfaces that open on demand (img2img's source panel and
   stage, the networks item dialogs, the lightbox, the style editor) are
   `retryableLazy()` and mounted on first use.

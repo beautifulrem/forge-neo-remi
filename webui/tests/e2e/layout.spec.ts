@@ -165,6 +165,30 @@ test.describe("hints and warnings", () => {
   })
 })
 
+test.describe("a deferred view's placeholder", () => {
+  // A tabs node's placeholder was a 96 px block, where img2img's resize tabs (their strip over the
+  // width and height sliders) are taller: what came after them jumped when the code arrived.
+  test("a tabs placeholder is as tall as the tabs", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 })
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    await page.route("**/src/ui/layout/Tabs.tsx*", async (route) => {
+      await held
+      await route.continue()
+    })
+    await page.goto("/#/img2img")
+    const main = page.getByRole("main")
+    await expect(main.locator("[data-part=tab-strip]").first()).toBeVisible()
+    const next = main.getByRole("textbox", { name: "CFG Scale", exact: true })
+    await expect(next).toBeVisible()
+    const before = (await next.boundingBox())!.y
+    release()
+    await expect(main.getByRole("tab", { name: "Resize to" })).toBeVisible()
+    await expect(main.locator("[data-part=tab-strip]")).toHaveCount(0)
+    expect(Math.abs((await next.boundingBox())!.y - before)).toBeLessThan(1)
+  })
+})
+
 test.describe("schema rows on extension pages", () => {
   const actions = ["Build prompt", "Send to txt2img Prompt", "Replace txt2img Prompt", "Clear all fields"]
 
