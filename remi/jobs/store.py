@@ -542,8 +542,9 @@ class JobStore:
             return self._db.execute("UPDATE jobs SET status = ?, finished = ?, error = ? WHERE status = ?", (INTERRUPTED, time.time(), SERVER_STOPPED, RUNNING)).rowcount
 
     def referenced_strings(self) -> set[str]:
-        """Every string value in the queued jobs' parameters (upload ids the
-        queue still needs)."""
+        """Every string value in the queued jobs' parameters, the unfinished
+        pipelines' stages and the saved pipeline templates (upload ids still
+        needed)."""
 
         found: set[str] = set()
 
@@ -565,8 +566,9 @@ class JobStore:
             rows = self._db.execute(
                 "SELECT sr.core, sr.scripts, sr.config, sr.output_file_ids FROM stage_runs sr JOIN chains c ON c.id = sr.chain_id WHERE c.status IN ('queued', 'running', 'paused')"
             ).fetchall()
-        for core_s, scripts_s, config_s, outputs_s in rows:
-            for raw in (core_s, scripts_s, config_s, outputs_s):
+            rows += self._db.execute("SELECT stages FROM chain_templates").fetchall()
+        for row in rows:
+            for raw in row:
                 try:
                     walk(json.loads(raw))
                 except Exception:

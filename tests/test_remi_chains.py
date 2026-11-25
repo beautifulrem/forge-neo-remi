@@ -401,3 +401,25 @@ def test_the_chain_tables_have_one_schema(tmp_path):
     finally:
         standalone.close()
         jobs.close()
+
+
+def test_an_upload_a_saved_template_uses_is_not_pruned(tmp_path):
+    """Templates saved through the API live in the jobs database: the uploads
+    their stages name (a refine stage's mask, say) stay with them."""
+
+    import io
+
+    files = FileStore(tmp_path / "files")
+    jobs = JobStore(tmp_path / "jobs.db")
+    chains = ChainStore(jobs)
+    try:
+        buffer = io.BytesIO()
+        Image.new("RGB", (4, 4), (1, 2, 3)).save(buffer, format="PNG")
+        upload = files.add_upload_bytes(buffer.getvalue())
+        chains.create_template("masked", [StageSpec(kind="refine", core={"mask": upload.id})])
+        files._db.execute("UPDATE files SET created = ?", (time.time() - 30 * 86400,))
+        files.prune_uploads(86400, keep=jobs.referenced_strings())
+        assert files.get(upload.id) is not None
+    finally:
+        files.close()
+        jobs.close()

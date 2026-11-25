@@ -498,7 +498,9 @@ client has a bounded event queue and one preview slot.
   `call_queue.queue_lock` / `modules_forge.main_thread`, or isolated workers),
   progress monitor and preview encoder.
   Housekeeping (at start, then hourly) prunes uploads and unsaved outputs
-  older than `remi_upload_retention_days` and indexes the output folders.
+  older than `remi_upload_retention_days` (but those that queued jobs,
+  unfinished pipelines and saved pipeline templates name) and indexes the
+  output folders.
 - Pipelines (`remi/jobs/chains.py`): each generation stage is a queued job
   (`meta.chain_id`, `meta.stage_index`); the queue's completion hook moves
   the chain on. Every way a stage job ends reaches it: a queued job that is
