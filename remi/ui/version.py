@@ -1,14 +1,26 @@
-"""Public ``remi.ui`` API version and SemVer compatibility checker.
+"""Public ``remi.ui`` API version, the Remi version, and SemVer compatibility checks.
 
 Extension authors declare ``"api_version"`` (e.g. ``"1.0"``, ``"^1.0"``,
-``">=1.0,<2.0"``) in ``remi-extension.json`` so Remi can validate compatibility
-explicitly at load time and surface actionable diagnostics.
+``">=1.0,<2.0"``) and optionally ``"min_remi_version"`` in ``remi-extension.json``
+so Remi can validate compatibility explicitly at load time and surface
+actionable diagnostics.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+
+from remi.ui.sentence import Sentence
+
+REMI_VERSION = "1.0.0"
+"""The running Remi WebUI's own version, which a manifest's ``min_remi_version``
+is compared with (extension-guide.md). It is Remi's, not Forge Neo's (bootstrap
+``version``, ``modules_forge.forge_version``, follows upstream) and not the
+extension API's: :data:`REMI_API_VERSION` stays 1.0 while the API grows, so an
+extension that needs something a later build added (``ui.Sentence``, a widget)
+says so with ``min_remi_version``. Raise the minor version with a change an
+extension may come to rely on, the patch version for fixes."""
 
 REMI_API_VERSION = "1.0"
 """Current public ``remi.ui`` extension API version. It stays 1.0 while the
@@ -54,7 +66,17 @@ def parse_semver(text: str) -> SemVer:
     )
 
 
+def _prerelease_key(prerelease: str) -> tuple[tuple[int, int | str], ...]:
+    """SemVer precedence of a prerelease: identifier by identifier, numbers as numbers and
+    below words (``rc.9`` < ``rc.10``, ``9`` < ``alpha``); a shorter run of equal identifiers
+    comes first (``alpha`` < ``alpha.1``)."""
+
+    return tuple((0, int(part)) if part.isdigit() else (1, part) for part in prerelease.split("."))
+
+
 def _compare(left: SemVer, right: SemVer) -> int:
+    """SemVer precedence (build metadata is not part of a parsed version)."""
+
     if left.core_tuple() != right.core_tuple():
         return -1 if left.core_tuple() < right.core_tuple() else 1
     if left.prerelease == right.prerelease:
@@ -63,7 +85,15 @@ def _compare(left: SemVer, right: SemVer) -> int:
         return 1  # release > prerelease
     if not right.prerelease:
         return -1
-    return -1 if left.prerelease < right.prerelease else 1
+    return -1 if _prerelease_key(left.prerelease) < _prerelease_key(right.prerelease) else 1
+
+
+def compare_versions(left: str, right: str) -> int:
+    """``-1``, ``0`` or ``1`` as version ``left`` comes before, equals or follows ``right``
+    by SemVer precedence (``"1.10"`` follows ``"1.9"``; ``"1.0"`` is ``"1.0.0"``). Raises
+    ``ValueError`` for a string that is no version."""
+
+    return _compare(parse_semver(left), parse_semver(right))
 
 
 def _matches_clause(current: SemVer, clause: str) -> bool:
@@ -164,15 +194,33 @@ def check_api_compatibility(required_range: str | None, current: str = REMI_API_
         False,
         current,
         spec,
-        f"requires remi.ui API {spec}, but runtime provides {current}",
+        Sentence("requires remi.ui API {{required}}, but runtime provides {{current}}", required=spec, current=current),
     )
+
+
+def check_remi_version(minimum: str | None, current: str = REMI_VERSION) -> CompatibilityResult:
+    """Whether the running Remi (``current``) is ``minimum`` or newer, compared as versions.
+    The reason a newer Remi is needed is a :class:`Sentence` naming both (the UI translates it)."""
+
+    if minimum is None or not str(minimum).strip():
+        return CompatibilityResult(True, current, None, None)
+    required = str(minimum).strip()
+    try:
+        if compare_versions(current, required) >= 0:
+            return CompatibilityResult(True, current, required, None)
+    except ValueError as error:
+        return CompatibilityResult(False, current, required, str(error))
+    return CompatibilityResult(False, current, required, Sentence("requires Remi {{required}} or newer; this is Remi {{running}}", required=required, running=current))
 
 
 __all__ = [
     "REMI_API_VERSION",
     "REMI_MIN_SUPPORTED_API_VERSION",
+    "REMI_VERSION",
     "CompatibilityResult",
     "SemVer",
     "check_api_compatibility",
+    "check_remi_version",
+    "compare_versions",
     "parse_semver",
 ]

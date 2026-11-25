@@ -2923,9 +2923,16 @@ export interface components {
             manifest?: components["schemas"]["ExtensionManifestModel"] | null;
             /**
              * Manifest Errors
+             * @description why the manifest is invalid or incompatible, in English
              * @default []
              */
             manifest_errors: string[];
+            /**
+             * Manifest Error Details
+             * @description manifest_errors in the same order, each with its catalog key and values when it is a sentence
+             * @default []
+             */
+            manifest_error_details: components["schemas"]["ManifestErrorDetail"][];
             /**
              * Manifest Warnings
              * @default []
@@ -3908,6 +3915,21 @@ export interface components {
              * @enum {string}
              */
             kind: "changed" | "added" | "removed";
+        };
+        /**
+         * ManifestErrorDetail
+         * @description A manifest error in English, with the catalog key and values the UI translates (an
+         *     extension that needs a newer Remi or another remi.ui API).
+         */
+        ManifestErrorDetail: {
+            /** Message */
+            message: string;
+            /** Template */
+            template?: string | null;
+            /** Params */
+            params?: {
+                [key: string]: string | string[];
+            } | null;
         };
         /** MetadataEntry */
         MetadataEntry: {

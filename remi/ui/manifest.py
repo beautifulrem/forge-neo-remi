@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-from remi.ui.version import REMI_API_VERSION, check_api_compatibility, parse_semver
+from remi.ui.version import REMI_API_VERSION, REMI_VERSION, check_api_compatibility, check_remi_version, parse_semver
 
 MANIFEST_FILENAME = "remi-extension.json"
 ManifestStatus = Literal["valid", "missing", "invalid", "incompatible"]
@@ -99,10 +99,14 @@ def validate_manifest_dict(
     known_widgets: Iterable[str] | None = None,
     known_capabilities: Iterable[str] | None = None,
     api_version: str = REMI_API_VERSION,
+    remi_version: str = REMI_VERSION,
 ) -> ManifestValidationResult:
     """Validate a parsed ``remi-extension.json`` mapping. Required widgets and
     capabilities missing from ``known_widgets`` / ``known_capabilities`` (when
-    given) are warnings."""
+    given) are warnings. An ``api_version`` range the running API (``api_version``)
+    is outside of, or a ``min_remi_version`` newer than the running Remi
+    (``remi_version``), makes the manifest ``incompatible``: reported, the
+    extension still loads."""
 
     if not isinstance(data, Mapping):
         return ManifestValidationResult(None, "invalid", ("manifest root must be a JSON object",), (), False)
@@ -160,6 +164,7 @@ def validate_manifest_dict(
         return ManifestValidationResult(None, "invalid", tuple(errors), tuple(warnings), False)
 
     compat = check_api_compatibility(api_req, current=api_version)
+    remi_compat = check_remi_version(min_remi_version, current=remi_version)
     manifest = ExtensionManifest(
         name=name,
         version=version,
@@ -172,14 +177,9 @@ def validate_manifest_dict(
         description=description,
         author=author,
     )
-    if not compat.compatible:
-        return ManifestValidationResult(
-            manifest,
-            "incompatible",
-            (compat.reason or f"incompatible api_version {api_req!r}",),
-            tuple(warnings),
-            False,
-        )
+    incompatible = [result.reason or f"incompatible {name} {result.required!r}" for name, result in (("api_version", compat), ("min_remi_version", remi_compat)) if not result.compatible]
+    if incompatible:
+        return ManifestValidationResult(manifest, "incompatible", tuple(incompatible), tuple(warnings), False)
     return ManifestValidationResult(manifest, "valid", (), tuple(warnings), True)
 
 
@@ -189,6 +189,7 @@ def load_manifest(
     known_widgets: Iterable[str] | None = None,
     known_capabilities: Iterable[str] | None = None,
     api_version: str = REMI_API_VERSION,
+    remi_version: str = REMI_VERSION,
 ) -> ManifestValidationResult:
     """Read and validate ``<extension_dir>/remi-extension.json`` if present."""
 
@@ -199,7 +200,7 @@ def load_manifest(
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
         return ManifestValidationResult(None, "invalid", (f"cannot parse {MANIFEST_FILENAME}: {error}",), (), False)
-    return validate_manifest_dict(raw, known_widgets=known_widgets, known_capabilities=known_capabilities, api_version=api_version)
+    return validate_manifest_dict(raw, known_widgets=known_widgets, known_capabilities=known_capabilities, api_version=api_version, remi_version=remi_version)
 
 
 @dataclass

@@ -1138,5 +1138,7 @@
   "board name must be at most {{maximum}} characters": "看板名称不能超过 {{maximum}} 个字符",
   "a collection needs a name": "收藏夹需要名称",
   "a collection name must be at most {{maximum}} characters": "收藏夹名称不能超过 {{maximum}} 个字符",
-  "the prompt upsampling was interrupted": "提示词扩写已中止"
+  "the prompt upsampling was interrupted": "提示词扩写已中止",
+  "requires Remi {{required}} or newer; this is Remi {{running}}": "需要 Remi {{required}} 或更新版本；当前为 Remi {{running}}",
+  "requires remi.ui API {{required}}, but runtime provides {{current}}": "需要 remi.ui API {{required}}，但当前运行的是 {{current}}"
 }

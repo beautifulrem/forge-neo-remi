@@ -1697,7 +1697,9 @@ older server) nothing is shown.
   translated, a list param's catalog names each translated and joined the
   language's way (`Intl.ListFormat`), other values as the server wrote
   them. Text the server only passes on stays as it is in every language: a
-  job's own exception, extension diagnostics, a worker's state, what an
+  job's own exception, extension diagnostics (but a manifest error that comes
+  with its template, such as an extension that needs a newer Remi, is
+  translated: `manifest_error_details`), a worker's state, what an
   extension's own `validate` or paste function raised, git output. A field's
   validation messages are stored as the server sent them
   (`FormState.errors`, a list per param, never empty) and translated where

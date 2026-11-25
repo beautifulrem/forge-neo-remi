@@ -9843,6 +9843,16 @@
             },
             "type": "array",
             "title": "Manifest Errors",
+            "description": "why the manifest is invalid or incompatible, in English",
+            "default": []
+          },
+          "manifest_error_details": {
+            "items": {
+              "$ref": "#/components/schemas/ManifestErrorDetail"
+            },
+            "type": "array",
+            "title": "Manifest Error Details",
+            "description": "manifest_errors in the same order, each with its catalog key and values when it is a sentence",
             "default": []
           },
           "manifest_warnings": {
@@ -12405,6 +12415,55 @@
           "kind"
         ],
         "title": "LoraDiff"
+      },
+      "ManifestErrorDetail": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "ManifestErrorDetail",
+        "description": "A manifest error in English, with the catalog key and values the UI translates (an\nextension that needs a newer Remi or another remi.ui API)."
       },
       "MetadataEntry": {
         "properties": {

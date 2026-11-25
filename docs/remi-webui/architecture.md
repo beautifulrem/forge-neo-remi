@@ -135,7 +135,9 @@ or wait at once, each in a worker thread of the server, and more answer 503.
 **Extension API v1 & Manifest (`remi/ui/version.py`, `remi/ui/manifest.py`, `remi/testing.py`).**
 `REMI_API_VERSION = "1.0"` establishes the public SemVer contract for `remi.ui`.
 Extensions may ship `remi-extension.json` declaring `api_version` (SemVer range
-validated via `check_api_compatibility`), `min_remi_version`, `requires_capabilities`,
+validated via `check_api_compatibility`), `min_remi_version` (compared with Remi's own
+`REMI_VERSION`, `check_remi_version`; a newer one makes the manifest `incompatible`,
+reported in the diagnostics with `manifest_error_details`, the extension still loads), `requires_capabilities`,
 `requires_widgets`, and metadata. `remi.testing.verify_extension_contract()` /
 `assert_extension_contract()` provides a public contract verifier checking zero
 Gradio / `remi.server` imports, manifest validity, JSON-serializable `params()`

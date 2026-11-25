@@ -57,12 +57,13 @@ from remi.ui.nodes import (
 )
 from remi.ui.schema import SCHEMA_VERSION, jsonable, to_schema
 from remi.ui.sentence import Sentence
-from remi.ui.version import REMI_API_VERSION, REMI_MIN_SUPPORTED_API_VERSION, CompatibilityResult, SemVer, check_api_compatibility, parse_semver
+from remi.ui.version import REMI_API_VERSION, REMI_MIN_SUPPORTED_API_VERSION, REMI_VERSION, CompatibilityResult, SemVer, check_api_compatibility, check_remi_version, compare_versions, parse_semver
 
 __all__ = [
     "MANIFEST_FILENAME",
     "REMI_API_VERSION",
     "REMI_MIN_SUPPORTED_API_VERSION",
+    "REMI_VERSION",
     "SCHEMA_VERSION",
     "ActionContext",
     "ActionFiles",
@@ -117,6 +118,8 @@ __all__ = [
     "call_action_isolated",
     "check_api_compatibility",
     "check_patch",
+    "check_remi_version",
+    "compare_versions",
     "conditions",
     "diagnostics",
     "evaluate",

@@ -1064,6 +1064,7 @@ def diagnostics_report(
     from remi.ui.manifest import diagnostics as collector
     from remi.ui.manifest import load_manifest
     from remi.ui.schema import SCHEMA_VERSION
+    from remi.ui.sentence import sentence_fields
     from remi.ui.version import REMI_API_VERSION
 
     exts = list(extensions_list) if extensions_list is not None else all_extensions()
@@ -1127,6 +1128,7 @@ def diagnostics_report(
                 "manifest_status": mres.status,
                 "manifest": mres.manifest.to_dict() if mres.manifest is not None else None,
                 "manifest_errors": list(mres.errors),
+                "manifest_error_details": [{"message": str(error), **sentence_fields(error)} for error in mres.errors],
                 "manifest_warnings": list(mres.warnings),
                 "disabled_scripts": disabled_scripts,
             }

@@ -401,6 +401,15 @@ class DisabledScriptInfo(Model):
     reason: str | None = None
 
 
+class ManifestErrorDetail(Model):
+    """A manifest error in English, with the catalog key and values the UI translates (an
+    extension that needs a newer Remi or another remi.ui API)."""
+
+    message: str
+    template: str | None = None
+    params: dict[str, str | list[str]] | None = None
+
+
 class ExtensionDiagnosticItem(Model):
     name: str
     enabled: bool
@@ -415,7 +424,8 @@ class ExtensionDiagnosticItem(Model):
     last_error_at: str | None = None
     manifest_status: Literal["valid", "missing", "invalid", "incompatible"]
     manifest: ExtensionManifestModel | None = None
-    manifest_errors: list[str] = []
+    manifest_errors: list[str] = Field(default=[], description="why the manifest is invalid or incompatible, in English")
+    manifest_error_details: list[ManifestErrorDetail] = Field(default=[], description="manifest_errors in the same order, each with its catalog key and values when it is a sentence")
     manifest_warnings: list[str] = []
     disabled_scripts: list[DisabledScriptInfo] = []
 

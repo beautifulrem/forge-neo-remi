@@ -77,6 +77,17 @@ display health/metadata in the Extensions → Diagnostics view:
 
 - `api_version` (required when the file is present): SemVer version or range
   (`"1.0"`, `"^1.0"`, `">=1.0,<2.0"`), checked by `remi.ui.version.check_api_compatibility`.
+- `min_remi_version` (optional): the oldest Remi the extension runs on. It is
+  compared with `remi.ui.version.REMI_VERSION`, the running Remi's own version
+  (`"1.0.0"` now; not Forge Neo's version, which bootstrap's `version` shows,
+  and not `REMI_API_VERSION`), by SemVer precedence (`"1.10"` is newer than
+  `"1.9"`, a release newer than its prereleases; `"1.1"` is `"1.1.0"`). On an
+  older Remi the manifest is `incompatible`, and Extensions → Diagnostics says
+  which Remi it needs and which one runs, in the UI language. As with an
+  `api_version` outside the running API, the extension is still loaded: Remi
+  reports the mismatch, it does not refuse the extension. Use it for something
+  a later build added that `api_version` cannot say, since the API stays 1.0
+  while it grows (`ui.Sentence` came in a later 1.0 build).
 - `requires_capabilities` / `requires_widgets`: optional lists of capability
   tags and custom widget names. Extensions → Diagnostics warns about a capability
   that no model exposes; widgets are only checked by

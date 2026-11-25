@@ -5,6 +5,7 @@
 import { queryOptions } from "@tanstack/react-query"
 import { queryClient } from "@/api/queries"
 import { workbenchRequest } from "@/features/pipelines/workbench-http"
+import type { SentenceParams } from "@/ui/schema"
 
 export type ExtensionManifest = {
   api_version?: string | null
@@ -31,7 +32,10 @@ export type ExtensionDiagnosticItem = {
   last_error_at?: string | null
   manifest_status: "valid" | "missing" | "incompatible" | "invalid"
   manifest?: ExtensionManifest | null
+  /** Why the manifest is invalid or incompatible, in English. */
   manifest_errors?: string[]
+  /** `manifest_errors` in the same order, a sentence with its catalog key and values (a newer Remi needed). */
+  manifest_error_details?: { message: string; template?: string | null; params?: SentenceParams | null }[]
   manifest_warnings?: string[]
   disabled_scripts?: { name?: string; reason?: string }[]
   disabled_reason?: string | null

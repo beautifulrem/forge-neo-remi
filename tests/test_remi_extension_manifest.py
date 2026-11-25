@@ -4,6 +4,7 @@ public ``remi.testing.verify_extension_contract``."""
 
 from __future__ import annotations
 
+import itertools
 import json
 import time
 from types import SimpleNamespace
@@ -83,6 +84,76 @@ def test_manifest_loading_and_validation(tmp_path):
     # Invalid homepage & missing api_version
     invalid = ui.validate_manifest_dict({"homepage": "ftp://bad.example"})
     assert invalid.status == "invalid" and len(invalid.errors) == 2
+
+
+REMI_TOO_OLD = "requires Remi {{required}} or newer; this is Remi {{running}}"
+API_MISMATCH = "requires remi.ui API {{required}}, but runtime provides {{current}}"
+
+
+def test_an_extension_that_needs_a_newer_remi_is_incompatible(tmp_path):
+    """``min_remi_version`` was only checked for its format, so an extension that needs a newer
+    Remi loaded as valid. It is compared with the running Remi (``REMI_VERSION``) as versions,
+    not strings, and reported as incompatible, with both versions in a sentence the UI translates."""
+
+    from pathlib import Path
+
+    assert ui.REMI_VERSION == "1.0.0"
+    # the guide's example and older requirements stay valid
+    for minimum in ("1.0.0", "1.0", "1", "v1.0.0", "0.9.12", "1.0.0-rc.1"):
+        assert ui.validate_manifest_dict({"api_version": "^1.0", "min_remi_version": minimum}).status == "valid", minimum
+    newer = ui.validate_manifest_dict({"api_version": "^1.0", "min_remi_version": "1.1"})
+    assert newer.status == "incompatible" and newer.compatible is False
+    assert newer.manifest is not None and newer.manifest.min_remi_version == "1.1"
+    (error,) = newer.errors
+    assert error == "requires Remi 1.1 or newer; this is Remi 1.0.0"
+    assert error.template == REMI_TOO_OLD and error.params == {"required": "1.1", "running": "1.0.0"}
+
+    def runs(minimum, running):
+        return ui.validate_manifest_dict({"api_version": "^1.0", "min_remi_version": minimum}, remi_version=running).compatible
+
+    # versions, not strings: 1.10 is newer than 1.9, a release than its prereleases, rc.10 than rc.9
+    assert runs("1.9.0", "1.10.0") and not runs("1.10.0", "1.9.0")
+    assert runs("2.0.0-rc.1", "2.0.0") and not runs("2.0.0", "2.0.0-rc.1")
+    assert runs("2.0.0-rc.9", "2.0.0-rc.10") and not runs("2.0.0-rc.10", "2.0.0-rc.9")
+    # SemVer's own order: alpha < alpha.1 < alpha.beta < beta < beta.2 < beta.11 < rc.1, numbers below words
+    order = ["1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta", "1.0.0-beta", "1.0.0-beta.2", "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0"]
+    for older, later in itertools.pairwise(order):
+        assert runs(older, later) and not runs(later, older), (older, later)
+    assert runs("1.0.0-9", "1.0.0-alpha") and not runs("1.0.0-alpha", "1.0.0-9")
+    # build metadata does not count
+    assert runs("1.0.0+build.5", "1.0.0")
+
+    # an api_version mismatch is reported beside it, each a sentence
+    both = ui.validate_manifest_dict({"api_version": ">=2.0", "min_remi_version": "3.0"})
+    assert both.status == "incompatible" and [e.template for e in both.errors] == [API_MISMATCH, REMI_TOO_OLD]
+    assert both.errors[0] == "requires remi.ui API >=2.0, but runtime provides 1.0"
+
+    # read from the extension folder, as the diagnostics and the contract check do
+    (tmp_path / ui.MANIFEST_FILENAME).write_text(json.dumps({"api_version": "1.0", "min_remi_version": "99.0.0"}), encoding="utf-8")
+    assert ui.load_manifest(tmp_path).status == "incompatible"
+    assert ui.load_manifest(tmp_path, remi_version="99.1.0").status == "valid"
+
+    catalog = json.loads((Path(__file__).resolve().parents[1] / "localizations" / "zh_CN.json").read_text(encoding="utf-8"))
+    assert catalog.get(REMI_TOO_OLD) and catalog.get(API_MISMATCH)
+
+
+def test_the_diagnostics_list_why_a_manifest_is_incompatible_with_its_template(tmp_path, monkeypatch):
+    """``manifest_errors`` are English; ``manifest_error_details`` gives each with its template and
+    values, so Extensions → Diagnostics shows why in the UI language. The extension still loads:
+    it is reported, as one with an incompatible ``api_version`` is."""
+
+    ext = tmp_path / "ext_new"
+    ext.mkdir()
+    (ext / ui.MANIFEST_FILENAME).write_text(json.dumps({"api_version": "1.0", "min_remi_version": "9.0"}), encoding="utf-8")
+    item = SimpleNamespace(name="ext_new", enabled=True, is_builtin=False, path=str(ext))
+    monkeypatch.setattr(extensions_admin, "all_extensions", lambda: [item])
+    ui.diagnostics.reset()
+    with webui_state(), server_app(tmp_path) as server:
+        (row,) = server.client.get("/api/v2/extensions/diagnostics").json()["items"]
+    assert row["manifest_status"] == "incompatible" and row["health"] == "error" and row["enabled"] is True
+    assert row["manifest"]["min_remi_version"] == "9.0"
+    assert row["manifest_errors"] == ["requires Remi 9.0 or newer; this is Remi 1.0.0"]
+    assert row["manifest_error_details"] == [{"message": "requires Remi 9.0 or newer; this is Remi 1.0.0", "template": REMI_TOO_OLD, "params": {"required": "9.0", "running": "1.0.0"}}]
 
 
 def test_action_timeout_and_error_isolation():

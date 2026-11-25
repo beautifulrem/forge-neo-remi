@@ -17,8 +17,10 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { errorText } from "@/features/errors/error-text"
+import { i18n } from "@/i18n"
 import { cn } from "@/lib/utils"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
+import { sentenceText } from "@/ui/messages"
 import {
   type ExtensionDiagnosticItem,
   extensionDiagnosticsQuery,
@@ -70,12 +72,21 @@ function HealthIndicator({ health }: { health: ExtensionDiagnosticItem["health"]
   )
 }
 
+/**
+ * Why a manifest is invalid or incompatible, in `language`: a sentence the server sent with its
+ * template (an extension that needs a newer Remi) translated, other errors as the server wrote them.
+ */
+function manifestReason(item: ExtensionDiagnosticItem, language: string): string {
+  const details: NonNullable<ExtensionDiagnosticItem["manifest_error_details"]> = item.manifest_error_details ?? (item.manifest_errors ?? []).map((message) => ({ message }))
+  return details.map((detail) => sentenceText(i18n, detail.message, detail.template, detail.params, language)).join(" · ")
+}
+
 /** The filters in the address (`#/extensions?tab=diagnostics&filter=issues&q=lora`). */
 const DIAGNOSTICS_PARAMS = { q: "", filter: "all" }
 const DIAG_FILTERS: readonly string[] = ["all", "issues", "manifest", "disabled"]
 
 export function DiagnosticsView() {
-  const { t } = useTranslation()
+  const { t, i18n: { language } } = useTranslation()
   const [params, setParams] = useRouteParams(DIAGNOSTICS_PARAMS)
   const [search, setSearch] = useRouteSearch(params.q, (q) => setParams({ q }))
   const filter = (DIAG_FILTERS.includes(params.filter) ? params.filter : "all") as DiagFilter
@@ -374,6 +385,7 @@ export function DiagnosticsView() {
                     ? t("Incompatible")
                     : "—"
               const caps = item.manifest?.requires_capabilities ?? []
+              const reason = manifestReason(item, language)
 
               return (
                 <li key={item.name} className="py-2.5">
@@ -429,6 +441,12 @@ export function DiagnosticsView() {
                   {disabledReason ? (
                     <p className="mt-1.5 border-l-2 border-border pl-2.5 text-xs text-muted-foreground">
                       <span className="font-medium text-foreground/85">{t("Disabled reason")}:</span> {disabledReason}
+                    </p>
+                  ) : null}
+
+                  {reason ? (
+                    <p className="mt-1.5 border-l-2 border-destructive/70 pl-2.5 text-xs text-destructive">
+                      <span className="font-medium">{t("Manifest")}:</span> {reason}
                     </p>
                   ) : null}
 
