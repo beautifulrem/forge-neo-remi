@@ -763,6 +763,14 @@ def test_sdapi_options_checks_the_model_selection_as_the_settings_page_does(webu
                 assert picks == [] and shared.opts.data.get("jpeg_quality") != 66
             assert client.post("/sdapi/v1/options", json={"forge_unet_storage_dtype": "Automatic", "forge_additional_modules": []}).status_code == 200
             assert sorted(picks) == [("forge_additional_modules", []), ("forge_unet_storage_dtype", "Automatic")]
+            # a Windows path names the module as the check reads it (its file name): on a POSIX server
+            # os.path.basename kept the whole path, matched nothing and emptied the selection
+            from remi import networks
+
+            picks.clear()
+            monkeypatch.setattr(networks, "module_files", lambda kind: [("ae.safetensors", "/m/VAE/ae.safetensors", "/m/VAE")] if kind == "vae" else [])
+            assert client.post("/sdapi/v1/options", json={"forge_additional_modules": ["C:\\SD\\models\\VAE\\ae.safetensors"]}).status_code == 200
+            assert picks == [("forge_additional_modules", ["ae.safetensors"])]
             # posted back as GET answered, a stored pick no longer offered (a dtype of another Forge, a
             # module file since removed) passes as it did: only a changed pick is checked
             picks.clear()
