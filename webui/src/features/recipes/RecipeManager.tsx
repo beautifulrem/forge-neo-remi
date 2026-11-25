@@ -261,7 +261,8 @@ export function RecipeManager() {
         <div className="flex min-h-8 items-center justify-between">
           <h2 className={panelTitleClass(0)}>
             {t("Cross-model parameter recipes")}
-            {!list.isPending ? <span className="ml-2 font-mono text-xs font-normal text-muted-foreground tabular-nums">{recipes.length}</span> : null}
+            {/* not after a failed load: "0" would say the library is empty */}
+            {list.data ? <span className="ml-2 font-mono text-xs font-normal text-muted-foreground tabular-nums">{recipes.length}</span> : null}
           </h2>
         </div>
 

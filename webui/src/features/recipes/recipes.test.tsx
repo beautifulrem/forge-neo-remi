@@ -81,6 +81,18 @@ describe("Recipes capture and manager UI", () => {
     expect(screen.getByText("Qwen Turbo 8-step")).toBeInTheDocument()
   })
 
+  it("shows no count when the recipes could not load", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ detail: "nope" }), { status: 404, headers: { "Content-Type": "application/json" } }))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument()
+    // "0" would say the library is empty: nothing is known
+    expect(screen.getByRole("heading", { name: /^Cross-model parameter recipes/ })).toHaveTextContent(/^Cross-model parameter recipes$/)
+  })
+
   it("lists recipes, filters by search, and applies a recipe to the form", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : (input as Request).url
