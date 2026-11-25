@@ -280,12 +280,13 @@ imperatively).
   opts out with `max-h-none`), and the command dialog no taller than the
   room below its top, its list shrinking; a popover, like the menus and
   selects, takes the room beside its trigger (`--available-height`) and
-  scrolls inside; a menu or popover gives the focus
+  scrolls inside (up and down only); a menu or popover gives the focus
   back to its trigger only while nothing else has taken it (a dialog one of
-  its items opened keeps it, `final-focus.ts`); a field in a popup takes the
-  focus through the popup's `initialFocus`, never `autoFocus` (the popup
-  would give the focus back to that field on close); `number-field.tsx` is
-  ours.
+  its items opened keeps it, `final-focus.ts`); a field focused as its popup
+  opens takes the focus through the popup's `initialFocus`, never `autoFocus`
+  (the popup would give the focus back to that field on close; a field that
+  appears later in an open popup, an inline rename, may use `autoFocus`);
+  `number-field.tsx` is ours.
 
 ### Visual rules
 
