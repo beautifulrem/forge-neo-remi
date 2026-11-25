@@ -47,6 +47,23 @@ describe("errorText", () => {
     expect(errorText(frozen, { 422: "Their own sentence." })).toBe("Their own sentence.")
   })
 
+  // A metadata edit refused because the sidecar next to the model cannot be read: the sentence
+  // names the file (a template with its values), in the UI language.
+  it("gives a refused value's sentence with the values it names", async () => {
+    const template = "the metadata file {{file}} cannot be read; saving would replace it, so fix or remove it first"
+    const sent = { owner: null, param: "user_metadata", message: template.replace("{{file}}", "watercolor.json"), template, params: { file: "watercolor.json" } }
+    const refused = new ApiError(422, "HTTP 422", { errors: [sent] })
+    expect(failureText(refused)).toBe("the metadata file watercolor.json cannot be read; saving would replace it, so fix or remove it first")
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", template, "无法读取元数据文件 {{file}}；保存会覆盖它，请先修复或删除该文件")
+    await i18n.changeLanguage("zh-CN")
+    try {
+      expect(failureText(refused)).toBe("无法读取元数据文件 watercolor.json；保存会覆盖它，请先修复或删除该文件")
+    } finally {
+      await i18n.changeLanguage("en")
+    }
+  })
+
   it("falls back on the status class for other codes", () => {
     expect(errorText(failed(500))).toBe("The server ran into an error (500).")
     expect(errorText(failed(502))).toBe("The server ran into an error (502).")
