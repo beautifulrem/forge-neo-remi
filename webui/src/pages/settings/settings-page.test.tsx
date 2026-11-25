@@ -118,6 +118,24 @@ describe("settings page", { timeout: 20_000 }, () => {
     expect(screen.getByText("Unsaved changes: 1")).toBeInTheDocument()
   })
 
+  // A popover is a role="dialog" too: Ctrl+S in a setting's search select did nothing.
+  it("applies with Ctrl+S from inside a popover", async () => {
+    renderPage()
+    const search = await screen.findByRole("searchbox", { name: "Search settings" }, { timeout: 8000 })
+    fireEvent.change(search, { target: { value: "samples_save" } })
+    const toggle = await screen.findByRole("switch", { name: "Automatically save every generated image" }, { timeout: 8000 })
+    const before = toggle.getAttribute("aria-checked") === "true"
+    fireEvent.click(toggle)
+    expect(await screen.findByText("Unsaved changes: 1")).toBeInTheDocument()
+    fireEvent.change(search, { target: { value: "sd_t2i_sampler" } })
+    fireEvent.click(await screen.findByRole("combobox", { name: "txt2img Sampler" }, { timeout: 8000 }))
+    const popup = await screen.findByRole("dialog", { name: "txt2img Sampler" })
+    await act(async () => {
+      fireEvent.keyDown(within(popup).getByRole("combobox"), { key: "s", ctrlKey: true })
+    })
+    await waitFor(() => expect(patch).toHaveBeenCalledWith({ samples_save: !before }))
+  })
+
   it("scrolls the current section into the nav's view", async () => {
     const scrolled: Element[] = []
     const original = Element.prototype.scrollIntoView

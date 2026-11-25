@@ -75,7 +75,20 @@ const NONE: ReadonlySet<string> = new Set()
 /** Settings pages mounted (StrictMode mounts twice): the "not applied yet" toast waits for the last to go. */
 let mountedPages = 0
 
-/** Ctrl/Cmd+S applies (not from a dialog over the page); "/" focuses the search (outside text fields). */
+/**
+ * A modal dialog is open over the page (an import being reviewed, a
+ * confirmation, the sections sheet). Popovers and search selects are
+ * `role="dialog"` too, but sit in a positioner (`role="presentation"`) and
+ * leave the page usable; the Networks drawer says `aria-modal="false"`.
+ */
+function modalOpen(): boolean {
+  for (const element of document.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"]')) {
+    if (!element.hidden && element.getAttribute("aria-modal") !== "false" && !element.closest('[role="presentation"]')) return true
+  }
+  return false
+}
+
+/** Ctrl/Cmd+S applies (not while a modal dialog is open); "/" focuses the search (outside text fields). */
 function useShortcuts(onApply: () => void, search: React.RefObject<HTMLInputElement | null>) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -83,7 +96,7 @@ function useShortcuts(onApply: () => void, search: React.RefObject<HTMLInputElem
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "s") {
         event.preventDefault()
         // a dialog over the page (an import being reviewed) is not the page's edits being confirmed
-        if (!target?.closest?.("[role=dialog], [role=alertdialog]")) onApply()
+        if (!modalOpen()) onApply()
         return
       }
       const typing = target?.closest("input, textarea, select, [contenteditable=true], .cm-editor")
