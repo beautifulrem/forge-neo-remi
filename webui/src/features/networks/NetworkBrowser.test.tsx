@@ -273,6 +273,18 @@ describe("network browser: windows, filters, errors", { timeout: 60_000 }, () =>
     await within(await listbox()).findAllByRole("option", {}, slow)
   })
 
+  // The kinds row kept a loading skeleton for good when the kinds failed, beside the error.
+  it("shows no loading skeleton once the network kinds failed", async () => {
+    seedBootstrap()
+    mockApi({ fail: (call) => call.path === "/networks" })
+    layout(1200, 800)
+    renderBrowser()
+    const alert = await screen.findByRole("alert", {}, slow)
+    expect(alert).toHaveTextContent("Could not load the network kinds")
+    expect(within(alert).getByRole("button", { name: "Retry" })).toBeInTheDocument()
+    expect(document.querySelector("[data-slot=skeleton]")).toBeNull()
+  })
+
   it("keeps the cards on screen when refreshing the list fails, with a Retry", async () => {
     seedBootstrap()
     let broken = false

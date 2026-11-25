@@ -471,8 +471,11 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
                 ))}
               </FitTabsList>
             </Tabs>
-          ) : (
+          ) : kinds.isPending ? (
             <Skeleton className="h-8 w-64" />
+          ) : (
+            // the kinds failed: the results below say so, with a Retry; the row keeps its height
+            <div aria-hidden className="h-8 min-w-0 flex-1" />
           )}
           {tabsEnd}
         </div>
