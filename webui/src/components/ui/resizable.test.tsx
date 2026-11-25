@@ -108,6 +108,29 @@ describe("resizable panels", () => {
     expect(result.current.current!.getSize()).toEqual({ asPercentage: 30, inPixels: 300 })
   })
 
+  // A collapsed pane is out of sight but its controls stayed in the Tab order and the accessibility
+  // tree: hiding the parameters left 30 of the first 40 Tab stops on controls no one could see
+  it("takes a collapsed panel out of the Tab order, and the focus inside it to its separator", () => {
+    const { result } = renderHook(() => usePanelRef())
+    render(
+      <ResizablePanelGroup orientation="horizontal">
+        <ResizablePanel id="a" panelRef={result.current} defaultSize="30" minSize={200} collapsible collapsedSize={0}>
+          <button type="button">Inside</button>
+        </ResizablePanel>
+        <ResizableHandle aria-label="Resize A" />
+        <ResizablePanel id="b">B</ResizablePanel>
+      </ResizablePanelGroup>,
+    )
+    const panel = document.getElementById("a")!
+    expect(panel).not.toHaveAttribute("inert")
+    screen.getByRole("button", { name: "Inside" }).focus()
+    act(() => result.current.current!.collapse())
+    expect(panel).toHaveAttribute("inert")
+    expect(screen.getByRole("separator", { name: "Resize A" })).toHaveFocus()
+    act(() => result.current.current!.expand())
+    expect(panel).not.toHaveAttribute("inert")
+  })
+
   it("starts from a kept layout when it names the same panels", () => {
     render(
       <ResizablePanelGroup defaultLayout={{ a: 40, b: 60 }}>

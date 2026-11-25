@@ -437,11 +437,23 @@ function ResizablePanel({ id, defaultSize, minSize, maxSize, collapsible = false
   React.useImperativeHandle(panelRef, () => group.panelHandle(id))
   // until the group has measured itself the panel takes its default share (no layout jump on the first paint)
   const size = group.layout?.[id] ?? (typeof defaultSize === "string" ? Number.parseFloat(defaultSize) : 1)
+  // collapsed to nothing, its controls leave the Tab order and the accessibility tree with it
+  const hidden = size < 0.01
+  const element = React.useRef<HTMLDivElement>(null)
+  React.useLayoutEffect(() => {
+    const panel = element.current
+    if (!hidden || !panel?.contains(document.activeElement)) return
+    // the focus was inside (a control in the pane collapsed it): to the pane's separator, not the page
+    const separator = panel.parentElement?.querySelector<HTMLElement>(`[role=separator][aria-controls="${CSS.escape(id)}"]`)
+    separator?.focus()
+  }, [hidden, id])
   return (
     <div
+      ref={element}
       id={id}
       data-slot="resizable-panel"
       data-panel=""
+      inert={hidden || undefined}
       style={{ ...style, flexBasis: 0, flexGrow: size, flexShrink: 1, overflow: "hidden" }}
       {...props}
     >

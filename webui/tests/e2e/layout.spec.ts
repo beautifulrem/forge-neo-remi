@@ -74,12 +74,18 @@ test.describe("generate panes", () => {
     await expect.poll(sizes).toEqual([0, initial[0]! + initial[1]!, initial[2]])
     // the run controls move onto the stage while the parameters are hidden
     await expect(generate.first()).toBeVisible()
+    // the hidden pane's controls are out of the Tab order and the accessibility tree (inert): its
+    // Generate button takes no focus
+    await expect(page.locator("#params")).toHaveAttribute("inert")
+    const focusable = await page.locator("#params button").first().evaluate((button: HTMLElement) => (button.focus(), document.activeElement === button))
+    expect(focusable).toBe(false)
     await page.getByRole("button", { name: "Show parameters" }).click()
     await expect.poll(sizes).toEqual(initial)
     await expect(generate).toHaveCount(0)
 
     await page.getByRole("button", { name: "Hide history" }).click()
     await expect.poll(sizes).toEqual([initial[0], initial[1]! + initial[2]!, 0])
+    await expect(page.locator("#history")).toHaveAttribute("inert")
     await page.getByRole("button", { name: "Show history" }).click()
     await expect.poll(sizes).toEqual(initial)
   })
