@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react"
+import { toast } from "sonner"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { FormProvider, OwnerProvider } from "@/ui/context"
@@ -32,7 +33,7 @@ function layout(): Node {
   return { type: "group", children }
 }
 
-function setup({ disabled = false, conflictParams = [] as string[] } = {}): FormStore {
+function setup({ disabled = false, conflictParams = [] as string[], locked = [] as string[] } = {}): FormStore {
   const store = createFormStore(`region-boxes-${Math.random()}`, { persistDrafts: false })
   const defaults: OwnerDefaults = { region_editor: null }
   DEFAULTS.forEach((region, index) => {
@@ -42,6 +43,8 @@ function setup({ disabled = false, conflictParams = [] as string[] } = {}): Form
     [
       { owner: "core", layout: null, defaults: { width: 1216, height: 832 } },
       { owner: OWNER, layout: layout(), defaults },
+      // a toggle on, keeping each `locked` param of the regions
+      ...locked.map((name) => ({ owner: `pin_${name}`, layout: { type: "toggle" as const, name: "on", label: `Keep ${name}`, locks: `${OWNER}.${name}` }, defaults: { on: true } })),
     ],
     { conflictParams },
   )
@@ -186,6 +189,21 @@ describe("region-boxes", { timeout: 20_000 }, () => {
       fireEvent.click(screen.getByRole("checkbox", { name: "Region 3 active" }))
     })
     expect(values(store).region3_active).toBe(true)
+  })
+
+  it("leaves what a lock keeps and names it", async () => {
+    const info = vi.spyOn(toast, "info").mockImplementation((() => "") as never)
+    const store = setup({ locked: ["region2_x", "region3_active"] })
+    fireEvent.keyDown(region(2), { key: "ArrowLeft" })
+    expect(values(store).region2_x).toBe(0.5)
+    await Promise.resolve()
+    expect(info).toHaveBeenLastCalledWith("Overridden by a lock: x", expect.anything())
+    await act(async () => {
+      fireEvent.click(screen.getByRole("checkbox", { name: "Region 3 active" }))
+    })
+    expect(values(store).region3_active).toBe(false)
+    expect(info).toHaveBeenLastCalledWith("Overridden by a lock: Active", expect.anything())
+    expect(info).toHaveBeenCalledTimes(2)
   })
 
   it("follows the sliders: the params are the source of truth", () => {

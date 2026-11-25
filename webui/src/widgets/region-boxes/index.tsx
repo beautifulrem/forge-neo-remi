@@ -93,8 +93,8 @@ export default function RegionBoxes({ props, disabled, id, label }: WidgetProps<
   }
 
   const setActive = (region: Region, active: boolean) => {
-    store.getState().setValue(owner, `${region.prefix}_active`, active)
-    effects([`${region.prefix}_active`])
+    const name = `${region.prefix}_active`
+    if (store.getState().setValues(owner, { [name]: active }).length === 0) effects([name])
   }
 
   const applyLayout = (boxes: readonly Box[]) => {
