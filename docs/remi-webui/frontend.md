@@ -513,7 +513,10 @@ generated interfaces (sources: Linear's
   0.8 rem (compact controls), `text-sm`, 0.9375 rem (section and pane
   titles), `text-xl` (the page title); no other arbitrary sizes. (Written as
   `text-[…rem]`, not theme names: `cn` would take an unknown `text-*` name
-  for a colour and drop it beside one.) Size and weight, then colour; muted text keeps
+  for a colour and drop it beside one.) The one relative size is inline code
+  in prose (`ui/rich-text.tsx`, `0.85em`): mono drawn a step smaller than the
+  text around it, whatever that text's size (`lib/design-guards.test.ts`
+  holds every other size to the scale). Size and weight, then colour; muted text keeps
   the surface's hue. Sentence case everywhere: no all-caps labels, no eyebrow
   labels above headings, no numbered markers unless the content is a
   sequence. Mono is for strings a person copies (keys, hashes, code), not for
