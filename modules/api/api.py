@@ -692,7 +692,7 @@ class Api:
         from remi.ui import ParamError
 
         for key in ("forge_additional_modules", "forge_unet_storage_dtype"):  # checked as PATCH /api/v2/options checks them
-            if picks.get(key) is not None:
+            if picks.get(key) is not None and picks[key] != shared.opts.data.get(key):  # posted back unchanged: as before
                 try:
                     model_selection.check_value(key, picks[key])
                 except ParamError as error:

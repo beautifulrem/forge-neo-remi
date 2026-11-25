@@ -763,6 +763,15 @@ def test_sdapi_options_checks_the_model_selection_as_the_settings_page_does(webu
                 assert picks == [] and shared.opts.data.get("jpeg_quality") != 66
             assert client.post("/sdapi/v1/options", json={"forge_unet_storage_dtype": "Automatic", "forge_additional_modules": []}).status_code == 200
             assert sorted(picks) == [("forge_additional_modules", []), ("forge_unet_storage_dtype", "Automatic")]
+            # posted back as GET answered, a stored pick no longer offered (a dtype of another Forge, a
+            # module file since removed) passes as it did: only a changed pick is checked
+            picks.clear()
+            monkeypatch.setitem(shared.opts.data, "forge_unet_storage_dtype", "bnb-nf4")
+            monkeypatch.setitem(shared.opts.data, "forge_additional_modules", ["/gone/VAE/missing.safetensors"])
+            body = {"forge_unet_storage_dtype": "bnb-nf4", "forge_additional_modules": ["/gone/VAE/missing.safetensors"], "jpeg_quality": 67}
+            response = client.post("/sdapi/v1/options", json=body)
+            assert response.status_code == 200, response.text
+            assert shared.opts.data["jpeg_quality"] == 67 and len(picks) == 2
     finally:
         services.close()
 
