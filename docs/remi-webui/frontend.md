@@ -1363,7 +1363,8 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
 - **Queue** (`pages/queue`, `features/queue`, `#/queue?view=pipelines|recipes`,
   plus the history's `status form starred q` and the recipes' `recipes
   family`): two columns on wide screens
-  (queue | history), tabs below 64 rem. The running card (live preview frames
+  (queue | history), tabs below 64 rem (`section=history` keeps the History
+  tab). The running card (live preview frames
   of the running job, step / batch / ETA, skip, interrupt), "Up next" in run
   order from `GET /queue/items` (`queue.changed` keeps it current) and the
   history. Queued jobs: drag the grip (pointer) or move it from the keyboard
