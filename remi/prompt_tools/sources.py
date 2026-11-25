@@ -10,6 +10,7 @@ import logging
 import os
 import threading
 import time
+from collections import OrderedDict
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -151,19 +152,48 @@ def scan_wildcards(roots: Sequence[str], excluded: Iterable[str] = (), *, yaml_c
     return sorted(found.values(), key=lambda wildcard: wildcard.name.lower())
 
 
+_VALUES_CACHED_FILES = 64
+_values_cache: OrderedDict[str, tuple[tuple[int, int], tuple[str, ...]]] = OrderedDict()
+"""path → ((mtime_ns, size), values) of the wildcard files read last"""
+_values_lock = threading.Lock()
+
+
 def wildcard_values(wildcard: Wildcard) -> list[str]:
-    """A wildcard's values: non-empty, non-comment lines (YAML: its list)."""
+    """A wildcard's values: non-empty, non-comment lines, at most
+    :data:`MAX_WILDCARD_VALUES` (YAML: its list). A file is read again only
+    when it changed (each keystroke of a value completion asks)."""
 
     if wildcard.values is not None:
         return list(wildcard.values)
     if not wildcard.path:
         return []
     try:
-        with open(wildcard.path, encoding="utf8", errors="replace") as file:
-            lines = [line.strip() for line in file]
+        stat = os.stat(wildcard.path)
     except OSError:
         return []
-    return [line for line in lines if line and not line.startswith("#")][:MAX_WILDCARD_VALUES]
+    identity = (stat.st_mtime_ns, stat.st_size)
+    with _values_lock:
+        cached = _values_cache.get(wildcard.path)
+        if cached is not None and cached[0] == identity:
+            _values_cache.move_to_end(wildcard.path)
+            return list(cached[1])
+    values: list[str] = []
+    try:
+        with open(wildcard.path, encoding="utf8", errors="replace") as file:
+            for line in file:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    values.append(line)
+                    if len(values) >= MAX_WILDCARD_VALUES:
+                        break
+    except OSError:
+        return []
+    with _values_lock:
+        _values_cache[wildcard.path] = (identity, tuple(values))
+        _values_cache.move_to_end(wildcard.path)
+        while len(_values_cache) > _VALUES_CACHED_FILES:
+            _values_cache.popitem(last=False)
+    return values
 
 
 class WildcardCache:

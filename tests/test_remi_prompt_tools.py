@@ -259,6 +259,28 @@ def test_wildcards_nested_yaml_and_values(tmp_path):
     assert wildcard_values(found[2]) == ["oil", "watercolor"]
 
 
+def test_wildcard_values_are_read_once_until_the_file_changes(tmp_path, monkeypatch):
+    """Each completion of a wildcard's values asked for the whole file again."""
+
+    from remi.prompt_tools import sources
+
+    path = tmp_path / "animals.txt"
+    path.write_text("cat\ndog\n", encoding="utf8")
+    wildcard = sources.Wildcard("animals", path=str(path))
+    opened = []
+
+    def counting_open(file, *args, **kwargs):
+        opened.append(file)
+        return open(file, *args, **kwargs)
+
+    monkeypatch.setattr(sources, "open", counting_open, raising=False)
+    first = wildcard_values(wildcard)
+    first.append("changed by the caller")
+    assert wildcard_values(wildcard) == ["cat", "dog"] and len(opened) == 1
+    path.write_text("cat\ndog\nfox\n", encoding="utf8")
+    assert wildcard_values(wildcard) == ["cat", "dog", "fox"] and len(opened) == 2
+
+
 def test_wildcard_scan_survives_symlink_loops_and_reuses_yaml(tmp_path, monkeypatch):
     from remi.prompt_tools import sources
 
