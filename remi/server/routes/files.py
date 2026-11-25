@@ -165,6 +165,7 @@ def list_outputs(services: ServicesDep, cursor: str | None = None, q: str | None
 def delete_output(file_id: str, services: ServicesDep, delete_file: bool = False) -> Response:
     _output(services, file_id)
     gallery_for(services.files).delete([file_id], delete_files=delete_file)  # its star, board entries and lineage too
+    services.bus.publish("outputs.changed", ids=[file_id])
     return Response(status_code=204)
 
 

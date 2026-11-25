@@ -324,7 +324,18 @@ def test_outputs_are_paged_and_searchable(server, tmp_path):
     assert server.client.get("/api/v2/outputs", params={"q": "_"}).json()["total"] == 1
     assert server.client.get("/api/v2/outputs", params={"cursor": "!!bad!!"}).status_code == 200
 
+    seen = []
+
+    class Recorder:
+        def send_event(self, event):
+            seen.append(event)
+
+        def send_frame(self, frame):
+            pass
+
+    server.services.bus.subscribe(Recorder())
     assert server.client.delete(f"/api/v2/outputs/{ids[1]}").status_code == 204
+    assert [event for event in seen if event["type"] == "outputs.changed"] == [{"type": "outputs.changed", "ids": [ids[1]]}]
     assert (folder / "1.png").exists() and server.client.get("/api/v2/outputs").json()["total"] == 3
     assert server.client.delete(f"/api/v2/outputs/{ids[2]}", params={"delete_file": True}).status_code == 204
     assert not (folder / "2.png").exists()
