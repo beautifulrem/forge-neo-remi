@@ -8,6 +8,7 @@ from __future__ import annotations
 import sys
 import threading
 import types
+from dataclasses import replace
 from types import SimpleNamespace
 
 import numpy as np
@@ -60,7 +61,8 @@ def test_generation_tabs_call_their_named_entry_point(stub_module, tab, module, 
     stub_module(module, **{entry: run})
     job, ctx = make_job(tab), JobContext(id_task="task-1")
     result = runner.run_job(job, ctx)
-    assert calls == [(job.core, job.scripts, ctx)]
+    # the context the tab gets carries the comments dict p takes on (job warnings keep each note's template)
+    assert calls == [(job.core, job.scripts, replace(ctx, extra={"comments": {}}))]
     assert result.images == [first, second]
     assert result.infotexts == ["fox\nSteps: 20, Seed: 7", "fox\nSteps: 20, Seed: 8"]
     assert result.info == "fox\nSteps: 20, Seed: 7" and result.files == []
