@@ -7,7 +7,8 @@ import { useTranslation } from "react-i18next"
 import { useClientOption } from "@/api/app-options"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Kbd, KbdGroup } from "@/components/ui/kbd"
-import { formatShortcut, isMac } from "./commands"
+import { isMac } from "@/lib/platform"
+import { formatShortcut } from "./commands"
 import { useShortcutsHelp } from "./shortcuts-help"
 
 type Entry = {
@@ -48,7 +49,7 @@ const SHORTCUT_GROUPS: { group: string; entries: Entry[] }[] = [
     entries: [
       { label: "More / less attention", keys: ["Mod+↑", "Mod+↓"] },
       { label: "Move the tag left / right", keys: ["Alt+←", "Alt+→"] },
-      { label: "Undo / redo", keys: ["Mod+Z", isMac ? "Mod+Shift+Z" : "Mod+Y"] },
+      { label: "Undo / redo", keys: ["Mod+Z", isMac() ? "Mod+Shift+Z" : "Mod+Y"] },
       { label: "Accept a suggestion", keys: ["Tab", "Enter"] },
     ],
   },

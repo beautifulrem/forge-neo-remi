@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest"
-import { isPaletteKey } from "./commands"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { isMac } from "@/lib/platform"
+import { formatShortcut, isPaletteKey } from "./commands"
 
 const key = (init: Partial<KeyboardEvent>) => ({ key: "k", metaKey: false, ctrlKey: false, altKey: false, defaultPrevented: false, ...init })
 
@@ -18,5 +19,25 @@ describe("the command palette shortcut", () => {
     expect(isPaletteKey(key({ metaKey: true, defaultPrevented: true }), true)).toBe(false)
     expect(isPaletteKey(key({ metaKey: true, altKey: true }), true)).toBe(false)
     expect(isPaletteKey(key({ metaKey: true, key: "j" }), true)).toBe(false)
+  })
+})
+
+// The notifications region was labelled "Alt+T" on a Mac too (App.tsx), and the canvas and the app
+// each had their own Mac test.
+describe("shortcut labels", () => {
+  afterEach(() => vi.restoreAllMocks())
+  const platform = (value: string) => vi.spyOn(navigator, "platform", "get").mockReturnValue(value)
+
+  it("spell the keys of the platform they are shown on, read when shown", () => {
+    platform("MacIntel")
+    expect(isMac()).toBe(true)
+    expect(formatShortcut("Alt+T")).toBe("⌥T")
+    expect(formatShortcut("Mod+Shift+Enter")).toBe("⌘⇧Enter")
+    platform("iPad")
+    expect(isMac()).toBe(true)
+    platform("Win32")
+    expect(isMac()).toBe(false)
+    expect(formatShortcut("Alt+T")).toBe("Alt+T")
+    expect(formatShortcut("Mod+K")).toBe("Ctrl+K")
   })
 })

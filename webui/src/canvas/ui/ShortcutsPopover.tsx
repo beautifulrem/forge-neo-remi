@@ -4,7 +4,8 @@ import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Kbd, KbdGroup } from "@/components/ui/kbd"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { isMac, shortcutList } from "../core/shortcuts"
+import { isMac } from "@/lib/platform"
+import { shortcutList } from "../core/shortcuts"
 import { Hint } from "./controls"
 
 const GROUPS = ["Tools", "Brush", "Edit", "View"] as const

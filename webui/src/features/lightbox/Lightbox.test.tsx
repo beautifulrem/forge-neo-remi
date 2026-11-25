@@ -82,6 +82,17 @@ describe("lightbox", () => {
     expect(zoomText()).not.toBe("100%")
   })
 
+  // T with Shift or Caps Lock did nothing (only "t" was mapped), unlike S and B
+  it("toggles the tile preview with T in either case", () => {
+    const { dialog } = renderViewer()
+    const tile = screen.getByRole("button", { name: "Tile preview" })
+    expect(tile).toHaveAttribute("aria-pressed", "false")
+    fireEvent.keyDown(dialog, { key: "T", shiftKey: true })
+    expect(tile).toHaveAttribute("aria-pressed", "true")
+    fireEvent.keyDown(dialog, { key: "t" })
+    expect(tile).toHaveAttribute("aria-pressed", "false")
+  })
+
   it("zooms with + / − and resets with 1", () => {
     const { dialog } = renderViewer()
     expect(zoomText()).toContain("100%")

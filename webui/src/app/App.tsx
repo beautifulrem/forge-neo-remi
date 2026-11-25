@@ -13,7 +13,7 @@ import { ServerControlHost } from "@/features/server-control/ServerControlHost"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { activateLocale, browserLocale, useLocale } from "@/i18n"
 import { useAppearance, useApplyAppearance } from "@/lib/theme"
-import { type Command, isPaletteKey, useCommands, useRegisterCommands } from "./commands"
+import { type Command, formatShortcut, isPaletteKey, useCommands, useRegisterCommands } from "./commands"
 import { Header } from "./Header"
 import { availableLocales } from "./locales"
 import { MotionRoot } from "./MotionRoot"
@@ -91,7 +91,7 @@ function AppToaster() {
       closeButton
       richColors={false}
       // sonner's own labels are English ("Notifications alt+T", "Close toast"); Alt+T is its default hotkey
-      customAriaLabel={t("Notifications ({{shortcut}})", { shortcut: "Alt+T" })}
+      customAriaLabel={t("Notifications ({{shortcut}})", { shortcut: formatShortcut("Alt+T") })}
       closeButtonAriaLabel={t("Close notification")}
     />
   )

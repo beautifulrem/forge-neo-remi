@@ -126,6 +126,7 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
       "0": () => setView({ scale: fitted, x: 0, y: 0 }),
       "1": () => setView({ scale: 1, x: 0, y: 0 }),
       t: () => setTiled((v) => !v),
+      T: () => setTiled((v) => !v),
       b: () => setBackdrop((v) => nextBackdrop(v)),
       B: () => setBackdrop((v) => nextBackdrop(v)),
     }
