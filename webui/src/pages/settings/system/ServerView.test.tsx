@@ -79,7 +79,7 @@ describe("ServerView", () => {
   // "Finished: 1 checkpoints hashed"
   it("counts one hashed checkpoint in the singular", async () => {
     vi.spyOn(api.system, "status").mockResolvedValue(STATUS as never)
-    renderView({ running: false, done: 1, total: 1, failed: [], current: [], finished_at: "2026-11-26T00:00:00Z", threads: 1 })
+    renderView({ running: false, done: 1, total: 1, failed: [], current: [], finished_at: "2026-11-26T00:00:00Z" })
     expect(await screen.findByText("Finished: 1 checkpoint hashed")).toBeInTheDocument()
   })
 })

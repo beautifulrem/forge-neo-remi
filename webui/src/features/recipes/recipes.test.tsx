@@ -342,7 +342,7 @@ describe("Recipes capture and manager UI", () => {
   it("counts one imported recipe in the singular", async () => {
     const { toast } = await import("sonner")
     const success = vi.spyOn(toast, "success")
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
       if (init?.method === "POST") return Response.json({ added: 1, updated: 0, skipped: 0, items: [SAMPLE_RECIPE] })
       return Response.json({ items: [SAMPLE_RECIPE], total: 1 })
     })
