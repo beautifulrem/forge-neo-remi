@@ -191,7 +191,9 @@ def normalize(value: Any, is_img2img: bool) -> dict[str, Any]:
         try:
             result[key] = coerce_field(key, raw)
         except ui.ParamError as error:
-            raise ui.ParamError(f"{key}: {error}") from None
+            # the field's own message goes along as a sentence of its own, for the UI to translate
+            reason = error.message if isinstance(error.message, ui.Sentence) else ui.Sentence(error.message)
+            raise ui.ParamError(ui.Sentence("{{field}}: {{reason}}", field=key, reason=reason)) from None
     if result["guidance_start"] > result["guidance_end"]:
         result["guidance_start"], result["guidance_end"] = result["guidance_end"], result["guidance_start"]
     preprocessor = global_state.supported_preprocessors.get(result["module"])

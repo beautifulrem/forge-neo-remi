@@ -214,7 +214,10 @@ values that are not an object).
 `message` is English. A message that names the value comes with its catalog
 key: `template` with `{{name}}` placeholders and the `params` that fill them
 (`remi.ui.Sentence`; a param that is a list holds catalog names, which the
-client translates one by one); the client translates `template` and fills it.
+client translates one by one; a param that is a sentence of its own, such as
+why a field of an object was refused in `{{field}}: {{reason}}`, is its English
+text with its template and params beside it as `reason.template` and
+`reason.<name>`); the client translates `template` and fills it.
 Any other message is a catalog key itself, except text the server only passes
 on: what a param's own `validate` or a setting's own code raised, and an
 extension's paste function failing (`paste function failed: {{error}}` keeps

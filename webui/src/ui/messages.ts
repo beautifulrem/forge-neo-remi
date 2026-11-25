@@ -33,9 +33,10 @@ export function messageText(i18n: Pick<I18n, "t" | "exists" | "language">, value
 
 /**
  * A sentence the server filled in, in `language`: its `template` translated and filled with
- * `params` (a list param's catalog names each translated, joined the language's way); the
- * server's English `text` where the catalogs lack the template (English itself); without a
- * template, `text` by its exact key.
+ * `params` (a list param's catalog names each translated, joined the language's way; a param
+ * that is a sentence of its own, sent with `<name>.template` and `<name>.<param>` beside it,
+ * translated the same way); the server's English `text` where the catalogs lack the template
+ * (English itself); without a template, `text` by its exact key.
  */
 export function sentenceText(
   i18n: Pick<I18n, "t" | "exists" | "language">,
@@ -46,6 +47,18 @@ export function sentenceText(
 ): string {
   if (!template || !params || !i18n.exists(template, { lng: language })) return messageText(i18n, text, language)
   const list = new Intl.ListFormat(language, { type: "conjunction" })
-  const values = Object.fromEntries(Object.entries(params).map(([name, value]) => [name, typeof value === "string" ? value : list.format(value.map((item) => messageText(i18n, item, language)))]))
+  const values: Record<string, string> = {}
+  for (const [name, value] of Object.entries(params)) {
+    if (name.includes(".")) continue // a part of a sentence param, read with it
+    const nested = params[`${name}.template`]
+    if (typeof value === "string" && typeof nested === "string") values[name] = sentenceText(i18n, value, nested, innerParams(params, `${name}.`), language)
+    else values[name] = typeof value === "string" ? value : list.format(value.map((item) => messageText(i18n, item, language)))
+  }
   return messageText(i18n, { text: template, params: values }, language)
+}
+
+/** The params of the sentence param whose names start with `prefix`, without it (its template left out). */
+function innerParams(params: SentenceParams, prefix: string): SentenceParams | null {
+  const inner = Object.fromEntries(Object.entries(params).flatMap(([name, value]) => (name.startsWith(prefix) && name !== `${prefix}template` ? [[name.slice(prefix.length), value]] : [])))
+  return Object.keys(inner).length ? inner : null
 }

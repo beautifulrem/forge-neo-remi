@@ -362,6 +362,28 @@ def test_a_sentence_survives_copy_and_pickle(make):
         assert again.template == sentence.template and again.params == sentence.params
 
 
+def test_a_sentence_in_a_sentence_keeps_its_template_for_the_ui():
+    """A message that names where a value was refused (a field of an object) and why: the
+    reason is a sentence of its own, which reached the UI as English text inside the outer
+    one. Its template and params go along under the param's name (``reason.template``,
+    ``reason.<name>``), all of them strings as any param."""
+    import pickle
+
+    from remi.ui.sentence import sentence_fields
+
+    reason = ui.Sentence("expected a number, got {{value}}", value="'heavy'")
+    sentence = ui.Sentence("{{field}}: {{reason}}", field="weight", reason=reason)
+    assert sentence == "weight: expected a number, got 'heavy'"
+    assert sentence_fields(sentence) == {
+        "template": "{{field}}: {{reason}}",
+        "params": {"field": "weight", "reason": "expected a number, got 'heavy'", "reason.template": "expected a number, got {{value}}", "reason.value": "'heavy'"},
+    }
+    plain = ui.Sentence("{{field}}: {{reason}}", field="pose", reason=ui.Sentence("a pose is an OpenPose JSON object"))
+    assert sentence_fields(plain)["params"] == {"field": "pose", "reason": "a pose is an OpenPose JSON object", "reason.template": "a pose is an OpenPose JSON object"}
+    again = pickle.loads(pickle.dumps(sentence))
+    assert sentence_fields(again) == sentence_fields(sentence)
+
+
 def test_a_json_validator_refusing_with_a_sentence_keeps_its_template():
     """``Json(validate=)`` may raise ``ValueError(Sentence(...))``; it was turned into a
     ``ParamError(str(error))`` and reached the UI as English text without its template."""

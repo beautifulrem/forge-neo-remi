@@ -18,15 +18,18 @@ class Sentence(str):
     apply.
 
     A param is text the server does not translate (a value, a model or file
-    name), or a list of names the catalogs have (capability labels): the UI
+    name), a list of names the catalogs have (capability labels): the UI
     translates each and joins them its own way; the English joins them with
-    ", "."""
+    ", ", or a sentence of its own (why a field of an object was refused),
+    which the UI translates from its template and params."""
 
     template: str
     params: dict[str, str | list[str]]
 
     def __new__(cls, template: str, /, **params: Any) -> Sentence:
-        values: dict[str, str | list[str]] = {name: [str(item) for item in value] if isinstance(value, (list, tuple)) else str(value) for name, value in params.items()}
+        values: dict[str, str | list[str]] = {
+            name: [str(item) for item in value] if isinstance(value, (list, tuple)) else value if isinstance(value, Sentence) else str(value) for name, value in params.items()
+        }
         english = {name: ", ".join(value) if isinstance(value, list) else value for name, value in values.items()}
         sentence = super().__new__(cls, _PLACEHOLDER.sub(lambda match: english[match.group(1)], template))
         sentence.template = template
@@ -44,5 +47,23 @@ def sentence_fields(text: Any, prefix: str = "") -> dict[str, Any]:
     params, else ``{}``: what a JSON object adds next to the English text."""
 
     if isinstance(text, Sentence) and text.params:
-        return {f"{prefix}template": text.template, f"{prefix}params": {name: list(value) if isinstance(value, list) else value for name, value in text.params.items()}}
+        return {f"{prefix}template": text.template, f"{prefix}params": _json_params(text.params)}
     return {}
+
+
+def _json_params(params: dict[str, str | list[str]], prefix: str = "") -> dict[str, str | list[str]]:
+    """Params as JSON. A sentence param is its English text, with its template and params
+    beside it under its name (``reason.template``, ``reason.value``): still all strings, and
+    no ``{{placeholder}}`` can be named so (a name with a dot is not a word)."""
+
+    result: dict[str, str | list[str]] = {}
+    for name, value in params.items():
+        if isinstance(value, list):
+            result[prefix + name] = list(value)
+        elif isinstance(value, Sentence):
+            result[prefix + name] = str(value)
+            result[f"{prefix}{name}.template"] = value.template
+            result.update(_json_params(value.params, f"{prefix}{name}."))
+        else:
+            result[prefix + name] = value
+    return result

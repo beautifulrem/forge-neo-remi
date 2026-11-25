@@ -38,6 +38,17 @@ describe("sentenceText", () => {
     expect(sentenceText(i18n, "Unknown 7 things", "Unknown {{count}} things", { count: "7" })).toBe("Unknown 7 things")
   })
 
+  it("translates a sentence a param holds, from its template and params under the param's name", async () => {
+    await i18n.changeLanguage("zh-CN")
+    i18n.addResource("zh-CN", "server", "{{field}}: {{reason}}", "{{field}}：{{reason}}")
+    i18n.addResource("zh-CN", "server", "expected a number, got {{value}}", "应为数字，收到 {{value}}")
+    i18n.addResource("zh-CN", "server", "a pose is an OpenPose JSON object", "姿势须为 OpenPose JSON 对象")
+    const number = { field: "weight", reason: "expected a number, got 'heavy'", "reason.template": "expected a number, got {{value}}", "reason.value": "'heavy'" }
+    expect(sentenceText(i18n, "weight: expected a number, got 'heavy'", "{{field}}: {{reason}}", number)).toBe("weight：应为数字，收到 'heavy'")
+    const pose = { field: "pose", reason: "a pose is an OpenPose JSON object", "reason.template": "a pose is an OpenPose JSON object" }
+    expect(sentenceText(i18n, "pose: a pose is an OpenPose JSON object", "{{field}}: {{reason}}", pose)).toBe("pose：姿势须为 OpenPose JSON 对象")
+  })
+
   it("finds a sentence without values by its exact key and leaves other text alone", async () => {
     await i18n.changeLanguage("zh-CN")
     expect(sentenceText(i18n, "a choice is required")).toBe("需要选择一项")

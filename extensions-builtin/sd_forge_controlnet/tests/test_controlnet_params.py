@@ -318,6 +318,21 @@ def test_the_unit_value_is_normalized(cn):
             normalize(bad, False)
 
 
+def test_a_refused_field_keeps_its_reason_for_the_ui(cn):
+    """A field's error was made ``f"{key}: {error}"``: English text the UI could not translate."""
+    from lib_controlnet.unit_param import normalize
+
+    from remi import ui
+
+    for bad, reason in (({"weight": "heavy"}, "expected a number, got {{value}}"), ({"pose": "x"}, "a pose is an OpenPose JSON object")):
+        with pytest.raises(ui.ParamError) as caught:
+            normalize(bad, False)
+        error = caught.value.to_json()
+        field = next(iter(bad))
+        assert error["template"] == "{{field}}: {{reason}}" and error["params"]["field"] == field
+        assert error["params"]["reason.template"] == reason and error["message"].startswith(f"{field}: ")
+
+
 def test_slider_values_stay_inside_the_preprocessor_sliders(cn, registry):
     """The resolution and thresholds were only floored at -1 (unset): an API unit could send
     ``processor_res: 1e308`` to a preprocessor that resizes to it. They are clamped to the

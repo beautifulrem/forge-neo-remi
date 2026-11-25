@@ -403,7 +403,6 @@ FREE_TEXT_REJECTIONS = {
     ("remi/ui/nodes.py", "reason"): "a param's own `validate` raised: the extension's text, or its Sentence",
     ("extensions-builtin/sd_forge_controlnet/lib_controlnet/unit_actions.py", "message"): "the parameter of `bad_input`, the helper its callers use",
     ("extensions-builtin/sd_forge_controlnet/lib_controlnet/unit_param.py", "str(error)"): "the infotext parser's own error",
-    ("extensions-builtin/sd_forge_controlnet/lib_controlnet/unit_param.py", 'f"{key}: {error}"'): "a unit field's name before that field's own message",
 }
 EXTENSION_REJECTIONS = {
     "extensions-builtin/sd_forge_controlnet/lib_controlnet": "extensions-builtin/sd_forge_controlnet",
