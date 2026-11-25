@@ -764,7 +764,8 @@ def test_where_completion_runs_follows_the_old_settings(server, webui, monkeypat
     for key, value in (("tac_activeIn_txt2img", False), ("tac_activeIn_img2img", False), ("tac_activeIn_thirdParty", False), ("tac_delayTime", 5000), ("tac_alias_onlyShowAlias", True)):
         monkeypatch.setitem(webui.opts.data, key, value)
     config = tags()
-    assert (config["txt2img"], config["img2img"], config["third_party"], config["delay"], config["only_alias"]) == (False, False, False, 1000, True)
+    # the delay within its slider (0 to 500 ms)
+    assert (config["txt2img"], config["img2img"], config["third_party"], config["delay"], config["only_alias"]) == (False, False, False, 500, True)
 
     # the checkpoint list: names with or without extension, or hashes
     monkeypatch.setitem(webui.opts.data, "sd_model_checkpoint", "anime/animagine.safetensors [1a2b3c4d5e]")

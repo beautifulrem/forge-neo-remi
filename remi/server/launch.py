@@ -216,9 +216,9 @@ class ServerThread:
 def cleanup_temp_dir() -> None:
     """``clean_temp_dir_at_start``: delete PNGs left in ``opts.temp_dir``."""
 
-    from modules import shared
+    from remi.setting_values import setting
 
-    temp_dir = shared.opts.temp_dir
+    temp_dir = setting("temp_dir")  # read before the start repairs the settings: a string, else the default
     if not temp_dir or not os.path.isdir(temp_dir):
         return
     for root, _dirs, files in os.walk(temp_dir, topdown=False):
@@ -230,9 +230,10 @@ def cleanup_temp_dir() -> None:
 def serve(*, webui: bool, startup_timer: Any = None) -> None:
     """The server loop of ``webui.py`` (runs on its own thread)."""
 
-    from modules import extension_route_guard, initialize, script_callbacks, shared, timer
+    from modules import extension_route_guard, initialize, script_callbacks, timer
     from modules.shared_cmd_options import cmd_opts
     from remi.server import create_app, default_services, runtime
+    from remi.setting_values import setting
 
     startup_timer = startup_timer or timer.startup_timer
     services = default_services()
@@ -253,7 +254,7 @@ def serve(*, webui: bool, startup_timer: Any = None) -> None:
 
     holding = contextlib.ExitStack()  # the queue is held from a reload until the new app serves
     while True:
-        if shared.opts.clean_temp_dir_at_start:
+        if setting("clean_temp_dir_at_start"):
             cleanup_temp_dir()
             startup_timer.record("cleanup temp dir")
 

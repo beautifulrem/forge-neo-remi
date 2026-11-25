@@ -188,7 +188,7 @@ class Services:
         from remi.server.settings import option
 
         try:
-            days = float(_positive(option("remi_upload_retention_days", 7), 7))
+            days = _positive(option("remi_upload_retention_days", 7), 7)
             referenced = self.store.referenced_strings()
             removed = self.files.prune_uploads(days * 86400, keep=referenced)
             if removed:
@@ -251,19 +251,27 @@ _default_lock = threading.Lock()
 
 
 def _positive(value: Any, default: float) -> float:
-    """A size or a span: a number above zero, else ``default`` (an upload limit of 0 refused every upload)."""
+    """A size or a span: a finite number above zero, else ``default`` (an
+    upload limit of 0 refused every upload). A registered setting is already
+    within its slider here; this covers a reader without the registration."""
 
     return value if type(value) in (int, float) and math.isfinite(value) and value > 0 else default
 
 
+def _within(value: float, limits: tuple[float, float]) -> float:
+    return float(min(max(value, limits[0]), limits[1]))
+
+
 def configured_upload_limit() -> int:
     """The setting "Largest upload" in bytes. Read on every request (the body
-    limit): a value of the wrong kind, or none above zero, reads as the
-    default rather than failing or refusing them all."""
+    limit): a value of the wrong kind reads as the default rather than failing
+    them all, and a number as the nearest within the slider's range, 1 to 2048
+    MB (``0`` or ``1e-9`` made a limit of 0 bytes that refused every upload,
+    ``1e303`` overflowed into bytes)."""
 
-    from remi.server.settings import option
+    from remi.server.settings import UPLOAD_MB, option
 
-    return int(_positive(option("remi_upload_max_mb", 64), 64) * 1024 * 1024)
+    return int(_within(_positive(option("remi_upload_max_mb", 64), 64), UPLOAD_MB) * 1024 * 1024)
 
 
 def default_services(factory: Callable[[Path], Services] | None = None) -> Services:

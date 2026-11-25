@@ -26,7 +26,7 @@ from remi.ui.types import Patch
 def _positive(value: Any) -> bool:
     try:
         return float(value) > 0
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return False
 
 
@@ -72,10 +72,16 @@ def forge_preset_patch(tab: str, preset: str | None = None, opts: Any = None) ->
     it to the core defaults and the Sampler script's defaults follow it."""
 
     from modules_forge.presets import is_video, use_distill, use_shift
+    from remi.setting_values import bounds, fit
 
     opts = _opts(opts)
     preset = preset or current_preset(opts)
-    get = lambda name, default: getattr(opts, name, default)  # noqa: E731
+
+    def get(name: str, default: Any) -> Any:
+        # a value of the preset's kind within its slider (10**400 steps failed every tab's schema)
+        info = getattr(opts, "data_labels", {}).get(name)
+        return fit(default, getattr(opts, name, default), bounds(info) if info is not None else None)
+
     prefix = "t2i" if tab == "txt2img" else "i2i"
     patch: Patch = {}
 

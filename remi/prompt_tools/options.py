@@ -92,16 +92,19 @@ TOOL_OPTION_KEYS = tuple(key for key in DEFAULTS if key.startswith("prompt_tools
 def option(name: str, default: Any = None) -> Any:
     """A setting's value (its default here when unset or unregistered)."""
 
-    from remi.setting_values import fit
+    from remi.setting_values import bounds, fit
 
     fallback = DEFAULTS.get(name, default)
     try:
         from modules import shared
 
         value = getattr(shared.opts, name, fallback)
+        info = shared.opts.data_labels.get(name)
     except Exception:
         return fallback
-    return fit(fallback, value)  # a value of another kind (an /sdapi/v1/options write): the default
+    # a value of another kind (an /sdapi/v1/options write): the default; a number within its slider
+    # (1e303 history entries overflowed SQLite's LIMIT)
+    return fit(fallback, value, bounds(info) if info is not None else None)
 
 
 def _files(directory: Callable[[], str | None], suffix: str) -> list[str]:

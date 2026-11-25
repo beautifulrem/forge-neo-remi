@@ -311,10 +311,10 @@ class PreviewEncoder(_Loop):
         """monotonic time before which no further frame goes out (the fps throttle)"""
 
     def interval(self) -> float:
-        try:
-            fps = float(getattr(self.opts(), "live_preview_fps", DEFAULT_PREVIEW_FPS) or DEFAULT_PREVIEW_FPS)
-        except (TypeError, ValueError):
-            fps = DEFAULT_PREVIEW_FPS
+        from remi.setting_values import fit
+
+        # a number of its kind (not NaN, which turned the throttle off, nor 10**400), else the default
+        fps = float(fit(float(DEFAULT_PREVIEW_FPS), getattr(self.opts(), "live_preview_fps", None)) or DEFAULT_PREVIEW_FPS)
         return 1.0 / min(max(fps, 0.5), 30.0)
 
     def notify(self) -> None:

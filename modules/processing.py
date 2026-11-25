@@ -42,7 +42,9 @@ setup_logger(logger)
 def sRound(val: int | float) -> int:
     """The nearest multiple of the resolution step (``res_step``)."""
 
-    step = int(getattr(opts, "res_step", 64) or 64)
+    from remi.core.forms import resolution_step  # a step above zero whatever the setting holds
+
+    step = resolution_step()
     return math.floor(val / step + 0.5) * step
 
 opt_C = 4

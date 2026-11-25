@@ -188,8 +188,10 @@ def test_default_services_read_the_upload_limit_setting(monkeypatch, tmp_path):
     try:
         assert services.root == tmp_path / "remi-data"
         assert services.files.max_upload_bytes == 64 * 1024 * 1024
-        limit["remi_upload_max_mb"] = 0.5  # a live setting: read on every upload
-        assert services.files.max_upload_bytes == 512 * 1024
+        limit["remi_upload_max_mb"] = 2  # a live setting: read on every upload
+        assert services.files.max_upload_bytes == 2 * 1024 * 1024
+        limit["remi_upload_max_mb"] = 0.5  # within the slider's range (1 to 2048 MB)
+        assert services.files.max_upload_bytes == 1024 * 1024
     finally:
         services.close()
 
