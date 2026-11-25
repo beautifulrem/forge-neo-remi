@@ -20,15 +20,46 @@ const sources = import.meta.glob<string>(["../**/*.{ts,tsx}", "!../**/*.test.*",
 /** Files whose English label constants are translated at render time. */
 const INDIRECT = /(app\/(routes|App|AppearanceMenu|Header)\.tsx|pages\/.*\.tsx?|canvas\/.*\.tsx?|components\/PagePlaceholder\.tsx)$/
 
-/** Constant maps whose values are translated at render, `t(NAMES[key])`, wherever they are defined. */
-const translatedMaps = new Set(Object.values(sources).flatMap((source) => [...source.matchAll(/\bt\(\s*([A-Z][A-Z0-9_]*)\[/g)].map((m) => m[1]!)))
+/**
+ * Constant maps whose values are translated at render, wherever they are defined: `t(NAMES[key])`,
+ * or one field of their entries, `t(STAGES[kind].label)` (name → the field, "" for the values).
+ */
+const translatedMaps = new Map<string, Set<string>>()
+for (const source of Object.values(sources)) {
+  for (const m of source.matchAll(/\bt\(\s*([A-Z][A-Z0-9_]*)\[[^\]]*\]!?(?:\.(\w+))?/g)) {
+    const fields = translatedMaps.get(m[1]!) ?? new Set<string>()
+    fields.add(m[2] ?? "")
+    translatedMaps.set(m[1]!, fields)
+  }
+}
 
-/** The English values of the translated maps a file defines (`const NAMES: Record<…, string> = { … }`). */
+/** The literal after `=` at `start`: up to its matching bracket. */
+function literalAt(source: string, start: number): string {
+  let depth = 0
+  for (let i = start; i < source.length; i++) {
+    const c = source[i]
+    if (c === '"') {
+      i = source.indexOf('"', i + 1) // labels hold no escaped quotes
+      continue
+    }
+    if (c === "{" || c === "[") depth++
+    else if (c === "}" || c === "]") depth--
+    if (depth === 0) return source.slice(start, i + 1)
+  }
+  return ""
+}
+
+/** The English labels of the translated maps a file defines (`const NAMES: Record<…, string> = { … }`). */
 function mapLabels(source: string): string[] {
   const labels: string[] = []
-  for (const m of source.matchAll(/\bconst ([A-Z][A-Z0-9_]*)\b[^=\n]*=\s*\{([^{}]*)\}/g)) {
-    if (!translatedMaps.has(m[1]!)) continue
-    for (const value of m[2]!.matchAll(/:\s*"((?:[^"\\]|\\.)+)"/g)) labels.push(value[1]!)
+  for (const m of source.matchAll(/\bconst ([A-Z][A-Z0-9_]*)\b[^=\n]*=\s*(?=[{[])/g)) {
+    const fields = translatedMaps.get(m[1]!)
+    if (!fields) continue
+    const literal = literalAt(source, m.index + m[0].length)
+    for (const field of fields) {
+      const value = field ? new RegExp(`\\b${field}:\\s*"((?:[^"\\\\]|\\\\.)+)"`, "g") : /:\s*"((?:[^"\\]|\\.)+)"/g
+      for (const label of literal.matchAll(value)) labels.push(label[1]!)
+    }
   }
   return labels
 }
