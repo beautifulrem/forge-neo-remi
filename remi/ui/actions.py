@@ -121,11 +121,25 @@ def call_action(owner: Any, name: str, ctx: ActionContext, values: Mapping[str, 
 
 
 def _answered(error: BaseException) -> bool:
-    """An error the server answers as the request's fault (a 4xx: a rejected
-    upload, an ``HTTPException(422)``), not as the extension's."""
+    """An error Remi answers as the request's fault (a 4xx), not as the
+    extension's: an ``HTTPException``, a rejected upload (``FileError``), a
+    queue operation that cannot be done (``JobError``). A status on any other
+    error is someone else's: an action whose call to a remote service got a 401
+    or a 429 back (``urllib``'s ``HTTPError.status``, an SDK's
+    ``status_code``) has failed."""
 
-    status = getattr(error, "status", None) or getattr(error, "status_code", None)
-    return isinstance(status, int) and 400 <= status < 500
+    from starlette.exceptions import HTTPException
+
+    from remi.files import FileError
+    from remi.jobs import JobError  # imported here: the job queue imports remi.ui
+
+    if isinstance(error, HTTPException):
+        status = error.status_code
+    elif isinstance(error, (FileError, JobError)):
+        status = error.status
+    else:
+        return False
+    return 400 <= status < 500
 
 
 def call_action_isolated(
@@ -140,9 +154,9 @@ def call_action_isolated(
 ) -> Patch:
     """Run ``owner``'s action ``name`` with timeout and error isolation.
 
-    Client input errors (:class:`ValidationError`, or any error carrying a 4xx
-    ``status``/``status_code``) and missing actions (:class:`KeyError`)
-    propagate normally. Runtime failures and timeouts are
+    Client input errors (:class:`ValidationError`, or one of Remi's own errors
+    with a 4xx status: see ``_answered``) and missing actions
+    (:class:`KeyError`) propagate normally. Runtime failures and timeouts are
     recorded in :data:`remi.ui.manifest.diagnostics` and, when
     ``return_toast=True``, turned into a safe error toast patch so a buggy
     extension action never crashes the rest of the page or server.

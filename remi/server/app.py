@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import HTTPConnection
 from starlette.types import Scope
 
@@ -104,11 +105,14 @@ def handle_exception(request: Request, error: Exception) -> JSONResponse:
     """Unhandled errors as JSON. A server error (5xx) answers only a generic
     message and a correlation id; the exception, its message and any body it
     carries (a ``ResponseValidationError`` holds the whole response) go to
-    the server log under that id, never to the client. An exception that
-    carries a 4xx ``status_code`` is a client error: its ``detail`` is
-    meant for the client and is kept."""
+    the server log under that id, never to the client. An ``HTTPException``
+    that reaches this handler (raised where Starlette's own handler does not
+    run, as ``BodyTooLarge`` from a body read) keeps its status, and a 4xx
+    keeps its ``detail``: it is meant for the client. A status on any other
+    exception is not Remi's answer: a remote service's 401 that an extension
+    let escape is a server error, not a refused session."""
 
-    status = getattr(error, "status_code", None)
+    status = error.status_code if isinstance(error, StarletteHTTPException) else None
     status = status if isinstance(status, int) and 400 <= status < 600 else 500
     if status < 500:
         detail = getattr(error, "detail", None)

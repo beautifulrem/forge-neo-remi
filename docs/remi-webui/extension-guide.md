@@ -385,8 +385,11 @@ def refresh_models(self, ctx: ui.ActionContext, values: dict) -> dict:
   hook that raised during a job (the job goes on without it and lists it in its
   warnings) count against the extension's folder in `remi.ui.manifest.diagnostics`,
   shown in **Extensions → Diagnostics** (`GET /api/v2/extensions/diagnostics`).
-  An error the request caused (a `ValidationError`, an error with a 4xx
-  `status`) does not count.
+  An error the request caused does not count: a `ValidationError`, or a 4xx
+  `HTTPException`, `FileError` or `JobError`. A status on any other error
+  (a remote service's 401 or 429 seen through `urllib` or an SDK) is the
+  action's failure: it counts, and the request still answers 500 or a toast,
+  never the remote status.
 - An exception becomes an error answer (500, shown as an error toast);
   raise `remi.ui.ValidationError([ui.ParamError(message, param=..., owner=...)])`
   for per-field messages (422). The message is a catalog key your

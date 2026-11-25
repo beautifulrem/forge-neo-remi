@@ -231,8 +231,10 @@ An unhandled exception answers `500 {"error": "Internal Server Error",
 "detail": "Internal server error (id …); …", "id": "…"}`: no exception text,
 no request or response body (a `ResponseValidationError` carries the whole
 response), no paths. The exception and traceback are logged with the same
-id. Exceptions that carry a 4xx `status_code` keep their `detail`, which is
-meant for the client.
+id. An `HTTPException` keeps its status, and a 4xx keeps its `detail`, which is
+meant for the client. A status on any other exception is ignored: an SDK's
+`AuthenticationError` (`status_code` 401) that an extension lets escape is a
+500, not a 401 that would show the sign-in form.
 
 A request that fails its model is a 422, logged at debug level without a
 traceback, so no client (the public login form included) can flood the log.

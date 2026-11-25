@@ -163,6 +163,56 @@ def test_an_extension_action_that_fails_counts_against_its_extension(server, web
         ui.diagnostics.reset("page-ext")
 
 
+def test_a_remote_service_refusing_an_extension_action_is_the_extensions_failure(server, webui, tmp_path, monkeypatch):
+    """An action that calls a remote service and gets a 401 or a 429 back has
+    failed; the request to Remi was fine. The remote status rides on the error
+    (``urllib``'s ``HTTPError.status``, an SDK's ``status_code``), but it is not
+    Remi's answer: the failure is recorded, and a 401 from Remi would put the
+    sign-in form over the app."""
+    import urllib.error
+
+    from fastapi.testclient import TestClient
+
+    from modules import paths_internal, scripts
+    from remi import ui
+
+    builtin = tmp_path / "extensions-builtin"
+    monkeypatch.setattr(paths_internal, "extensions_builtin_dir", str(builtin))
+    monkeypatch.setattr(paths_internal, "extensions_dir", str(tmp_path / "extensions"))
+
+    class RemoteRefused(Exception):
+        status_code = 401
+
+    class Caller:
+        filename = str(builtin / "remote-ext" / "scripts" / "caller.py")
+
+        @ui.action("denied", timeout=5)
+        def denied(self, ctx, values):
+            raise RemoteRefused("invalid API key")
+
+        @ui.action("limited", timeout=5)
+        def limited(self, ctx, values):
+            raise urllib.error.HTTPError("https://api.example/v1", 429, "Too Many Requests", None, None)
+
+        @ui.action("denied_without_limit")
+        def denied_without_limit(self, ctx, values):
+            raise RemoteRefused("invalid API key")
+
+    monkeypatch.setitem(scripts.scripts_txt2img.by_id, "caller", Caller())
+    ui.diagnostics.reset("remote-ext")
+    client = TestClient(server.app, base_url=str(server.client.base_url), raise_server_exceptions=False)
+
+    def run(action):
+        return client.post(f"/api/v2/actions/caller/{action}", json={"tab": "txt2img", "values": {}})
+
+    assert run("denied").json()["__toast__"]["level"] == "error"
+    assert run("limited").json()["__toast__"]["level"] == "error"
+    assert run("denied_without_limit").status_code == 500
+    record = ui.diagnostics.get("remote-ext")
+    assert record is not None and record.action_errors == 3
+    ui.diagnostics.reset("remote-ext")
+
+
 def test_conflicts_by_action_and_by_rules_route(server):
     body = {"tab": "txt2img", "core": {"enable_hr": True}, "scripts": {}, "selected": "core.enable_hr"}
     derived = server.client.post("/api/v2/rules/derive", json=body)
