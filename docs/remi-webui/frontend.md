@@ -898,7 +898,11 @@ mode's schema is prefetched).
   them). They are driven by WebSocket job events, not timers or animation
   frames, so they keep going with the tab in the background. Submits in flight are a
   counter (an Interrupt cancels every one of them when it answers; a second
-  Ctrl/Cmd+Enter while one is pending queues nothing). Jobs in flight are
+  Ctrl/Cmd+Enter while one is pending queues nothing). Every submit carries a
+  fresh `Idempotency-Key` (api.md); a second Generate press within 400 ms
+  (`DOUBLE_PRESS_MS`) of one that has no answer yet is a double click and is
+  sent with the first press's key, so the server queues one job and answers
+  both (the repeated answer adds nothing); later presses queue another job. Jobs in flight are
   kept in `sessionStorage` (`remi-run:<tab>`: `{jobs, forever, repeatLeft}`,
   written from the run state), which a reload keeps and other tabs do not
   share, so a tab opened meanwhile never takes a running loop over. A

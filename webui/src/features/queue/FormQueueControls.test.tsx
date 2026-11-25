@@ -38,7 +38,7 @@ describe("Add to queue", { timeout: 20_000 }, () => {
     fetch.spy.mockImplementationOnce(async (input) => {
       await answered
       const request = input as Request
-      fetch.requests.push({ method: request.method, path: new URL(request.url).pathname, query: new URLSearchParams(), body: await request.json(), contentType: null })
+      fetch.requests.push({ method: request.method, path: new URL(request.url).pathname, query: new URLSearchParams(), body: await request.json(), contentType: null, headers: request.headers })
       return new Response(JSON.stringify({ job_id: "j9", job_ids: ["j9"], seq: 9 }), { status: 201, headers: { "Content-Type": "application/json" } })
     })
     queryClient.setQueryData(keys.queueItems, [{}, {}])

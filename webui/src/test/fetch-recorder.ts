@@ -10,6 +10,7 @@ export type RecordedRequest = {
   /** The parsed JSON body, the `FormData` text of a multipart body, else `undefined`. */
   body: unknown
   contentType: string | null
+  headers: Headers
 }
 
 type Answer = { status?: number; body?: unknown } | undefined
@@ -26,7 +27,7 @@ export function recordFetch(answer: (request: RecordedRequest) => Answer = () =>
     const contentType = request.headers.get("Content-Type")
     const text = request.body ? await request.clone().text() : ""
     const body = text && contentType?.includes("json") ? (JSON.parse(text) as unknown) : text || undefined
-    const recorded = { method: request.method, path: url.pathname, query: url.searchParams, body, contentType }
+    const recorded = { method: request.method, path: url.pathname, query: url.searchParams, body, contentType, headers: request.headers }
     requests.push(recorded)
     const { status = 200, body: payload = {} } = answer(recorded) ?? {}
     return new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json" } })

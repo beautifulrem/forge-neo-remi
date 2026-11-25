@@ -46,6 +46,26 @@ describe("run controller", () => {
     expect(sessionStorage.getItem(persistKey("txt2img"))).toBeNull()
   })
 
+  it("sends a double click's two requests with one key, and a press after the answer with its own", async () => {
+    const create = vi.spyOn(api.jobs, "create").mockResolvedValue(created("j1"))
+    const now = vi.spyOn(Date, "now").mockReturnValue(10_000)
+    dispatchRun("txt2img", { type: "generate" })
+    now.mockReturnValue(10_250)
+    dispatchRun("txt2img", { type: "generate" })
+    await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(2))
+    const [first, second] = create.mock.calls.map((call) => call[1])
+    expect(first).toMatch(/^[\w-]{16,}$/)
+    expect(second).toBe(first)
+    await vi.waitFor(() => expect(useRuns.getState().runs.txt2img.pending).toBe(0))
+    expect(useRuns.getState().runs.txt2img.jobs).toEqual(["j1"])
+
+    create.mockResolvedValue(created("j2"))
+    now.mockReturnValue(10_300) // within 400 ms, but the first press has its answer: another job
+    dispatchRun("txt2img", { type: "generate" })
+    await vi.waitFor(() => expect(useRuns.getState().runs.txt2img.jobs).toEqual(["j1", "j2"]))
+    expect(create.mock.calls[2]![1]).not.toBe(first)
+  })
+
   it("does not send a job whose required inputs are empty: marks them and says why", async () => {
     queryClient.setQueryData(keys.schema("img2img"), tabSchema("img2img"))
     const { getFormStore } = await import("@/ui/form-store")

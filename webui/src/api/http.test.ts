@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { api } from "./endpoints"
-import { ApiError, apiUrl, RequestError, validationErrors } from "./http"
+import { ApiError, apiUrl, idempotencyKey, RequestError, validationErrors } from "./http"
 
 const reply = (body: unknown, status: number) =>
   vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }))
@@ -70,16 +70,30 @@ describe("generated client requests", () => {
   // A failed fetch reached the page error view and the inline boundary as the browser's English
   // ("Failed to fetch"): they could not tell it from a bug. It is marked where it happens.
   it("marks a request that got no answer, and lets the caller's own abort through", async () => {
+    // (a job submission would be sent again first: endpoints.test.ts)
+    const status = () => api.queue.status().catch((e: unknown) => e)
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"))
-    const offline = await submit()
+    const offline = await status()
     expect(offline).toBeInstanceOf(RequestError)
     expect(offline).toBeInstanceOf(TypeError)
 
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("<html>proxy error</html>", { status: 200, headers: { "Content-Type": "application/json" } }))
-    expect(await submit()).toBeInstanceOf(RequestError)
+    expect(await status()).toBeInstanceOf(RequestError)
 
     const abort = new DOMException("The operation was aborted.", "AbortError")
     vi.spyOn(globalThis, "fetch").mockRejectedValue(abort)
-    expect(await submit()).toBe(abort)
+    expect(await status()).toBe(abort)
+  })
+})
+
+describe("idempotency keys", () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it("are random, also where crypto.randomUUID is missing (plain HTTP to another machine)", () => {
+    expect(idempotencyKey()).not.toBe(idempotencyKey())
+    vi.stubGlobal("crypto", { getRandomValues: crypto.getRandomValues.bind(crypto) })
+    const key = idempotencyKey()
+    expect(key).toMatch(/^[0-9a-f]{32}$/)
+    expect(idempotencyKey()).not.toBe(key)
   })
 })

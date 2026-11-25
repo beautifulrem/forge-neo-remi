@@ -304,6 +304,101 @@ def test_repeat_queues_copies(server):
     assert server.services.store.count(COMPLETED) == 3
 
 
+def post_keyed(server, key, prompt="a cat", **extra):
+    return server.client.post("/api/v2/jobs", json={"tab": "txt2img", "core": {"prompt": prompt}, "scripts": {}, **extra}, headers={"Idempotency-Key": key})
+
+
+def test_a_repeated_idempotency_key_answers_the_first_submission_again(server):
+    """A double click or a retry after a lost answer sends the same key: one job, the same answer."""
+
+    server.services.queue.set_paused(True)
+    first = post_keyed(server, "press-1", repeat=2)
+    again = post_keyed(server, "press-1", "edited meanwhile", repeat=2)
+    assert first.status_code == again.status_code == 201
+    assert again.json() == first.json() and len(first.json()["job_ids"]) == 2
+    assert server.services.store.count(QUEUED) == 2
+    other = post_keyed(server, "press-2")
+    assert other.status_code == 201 and other.json()["job_id"] not in first.json()["job_ids"]
+    assert submit(server)["job_id"] != submit(server)["job_id"]  # no key: every request queues
+    assert server.services.store.count(QUEUED) == 5
+
+
+def test_a_rejected_submission_is_not_remembered_under_its_key(server):
+    bad = server.client.post("/api/v2/jobs", json={"tab": "txt2img", "core": {"width": "wide"}}, headers={"Idempotency-Key": "k"})
+    assert bad.status_code == 422
+    assert post_keyed(server, "k").status_code == 201
+    assert server.client.get("/api/v2/jobs").json()["total"] == 1
+
+
+def test_an_idempotency_key_is_at_most_255_characters(server):
+    assert post_keyed(server, "x" * 256).status_code == 422
+    assert server.client.get("/api/v2/jobs").json()["total"] == 0
+
+
+def test_the_same_key_sent_twice_at_once_queues_one_job(webui, tmp_path):
+    from remi.jobs import Submission
+
+    entered, release = threading.Event(), threading.Event()
+    calls = []
+
+    def validate(tab, core, scripts):
+        calls.append(tab)
+        if len(calls) == 1:
+            entered.set()
+            assert release.wait(5)
+
+    with server_app(tmp_path, validate=validate) as server:
+        queue = server.services.queue
+        queue.set_paused(True)
+        answers = []
+        first = threading.Thread(target=lambda: answers.append(queue.submit(Submission("txt2img", {}, {}), key="k")))
+        first.start()
+        assert entered.wait(5)
+        second = threading.Thread(target=lambda: answers.append(queue.submit(Submission("txt2img", {}, {}), key="k")))
+        second.start()
+        time.sleep(0.05)  # the second submission now waits for the first
+        release.set()
+        first.join(5)
+        second.join(5)
+        first_ids, second_ids = ([job.id for job in jobs] for jobs in answers)
+        assert first_ids == second_ids
+        assert server.services.store.count(QUEUED) == 1 and len(calls) == 1
+
+
+def test_idempotency_keys_belong_to_their_user_and_expire(server):
+    from remi.jobs import Submission
+    from remi.jobs.queue import RecentSubmissions
+
+    now = [1000.0]
+    queue = server.services.queue
+    queue.recent = RecentSubmissions(ttl=600, limit=3, clock=lambda: now[0])
+    queue.set_paused(True)
+    submission = Submission("txt2img", {}, {})
+    ann = queue.submit(submission, user="ann", key="k")
+    assert queue.submit(submission, user="ann", key="k") == ann
+    bob = queue.submit(submission, user="bob", key="k")
+    assert bob[0].id != ann[0].id
+    now[0] += 601
+    assert queue.submit(submission, user="ann", key="k")[0].id != ann[0].id
+    assert server.services.store.count(QUEUED) == 3
+
+
+def test_the_remembered_keys_are_bounded_oldest_first(server):
+    from remi.jobs import Submission
+    from remi.jobs.queue import RecentSubmissions
+
+    queue = server.services.queue
+    queue.recent = RecentSubmissions(ttl=600, limit=2)
+    queue.set_paused(True)
+    submission = Submission("txt2img", {}, {})
+    first = queue.submit(submission, key="a")
+    second = queue.submit(submission, key="b")
+    queue.submit(submission, key="c")  # "a" is forgotten
+    assert queue.submit(submission, key="b") == second
+    assert queue.submit(submission, key="a")[0].id != first[0].id
+    assert server.services.store.count(QUEUED) == 4
+
+
 # endregion
 
 # region Ordering, pause, priority

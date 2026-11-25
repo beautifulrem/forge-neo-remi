@@ -774,6 +774,28 @@
       "post": {
         "summary": "Queue a generation (validated first)",
         "operationId": "create_job_api_v2_jobs_post",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "a fresh value per submission (a UUID): the same key sent again within 10 minutes queues nothing and answers the first submission's jobs (a double click, a retry after a lost answer)",
+              "title": "Idempotency-Key"
+            },
+            "description": "a fresh value per submission (a UUID): the same key sent again within 10 minutes queues nothing and answers the first submission's jobs (a double click, a retry after a lost answer)"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {

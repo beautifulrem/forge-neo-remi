@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, Header, Query, Response
 
 from remi.files import FileStore
 from remi.jobs import Job, Submission
@@ -78,8 +78,21 @@ def with_missing_outputs(items: list[dict[str, Any]], files: FileStore) -> list[
 
 
 @router.post("/jobs", response_model=m.JobCreated, status_code=201, responses={422: {"model": m.ValidationErrorBody}}, summary="Queue a generation (validated first)")
-def create_job(body: m.JobRequest, services: ServicesDep, user: UserDep) -> dict[str, Any]:
-    jobs = services.queue.submit(Submission(body.tab, body.core, body.scripts, priority=body.priority, repeat=body.repeat, forever=body.forever, upscale_from=body.upscale_from), user=user)
+def create_job(
+    body: m.JobRequest,
+    services: ServicesDep,
+    user: UserDep,
+    idempotency_key: Annotated[
+        str | None,
+        Header(
+            min_length=1,
+            max_length=255,
+            description="a fresh value per submission (a UUID): the same key sent again within 10 minutes queues nothing and answers the first submission's jobs (a double click, a retry after a lost answer)",
+        ),
+    ] = None,
+) -> dict[str, Any]:
+    submission = Submission(body.tab, body.core, body.scripts, priority=body.priority, repeat=body.repeat, forever=body.forever, upscale_from=body.upscale_from)
+    jobs = services.queue.submit(submission, user=user, key=idempotency_key)
     return {"job_id": jobs[0].id, "job_ids": [job.id for job in jobs], "seq": jobs[0].seq}
 
 

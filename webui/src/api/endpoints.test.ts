@@ -165,6 +165,9 @@ const CASES: Record<string, Case> = {
   "system.hashCheckpoints": { call: () => api.system.hashCheckpoints(4), method: "POST", path: "/api/v2/models/hashes", body: { threads: 4 } },
 }
 
+const request = { tab: "txt2img" as const, core: {}, scripts: {} }
+const created = { job_id: "j1", job_ids: ["j1"], seq: 1 }
+
 describe("api endpoints", () => {
   afterEach(() => vi.restoreAllMocks())
 
@@ -218,6 +221,43 @@ describe("api endpoints", () => {
     expect(api.userAssetUrl("bg #1.png")).toBe("/api/v2/user-assets/bg%20%231.png")
     expect(api.system.sysinfoDownloadUrl()).toBe("/internal/sysinfo-download")
     expect(fetch.requests).toEqual([])
+  })
+
+  it("sends each job submission with a fresh Idempotency-Key, or the one given", async () => {
+    const fetch = recordFetch(() => ({ status: 201, body: created }))
+    await api.jobs.create(request)
+    await api.jobs.create(request)
+    await api.jobs.create(request, "press-1")
+    const keys = fetch.requests.map((sent) => sent.headers.get("Idempotency-Key"))
+    expect(keys[0]).toMatch(/^[\w-]{16,}$/)
+    expect(keys[1]).toMatch(/^[\w-]{16,}$/)
+    expect(keys[1]).not.toBe(keys[0])
+    expect(keys[2]).toBe("press-1")
+  })
+
+  it("sends a job submission that got no answer once more, with the same key", async () => {
+    vi.useFakeTimers()
+    try {
+      const fetch = recordFetch(() => ({ status: 201, body: created }))
+      const answer = fetch.spy.getMockImplementation()!
+      fetch.spy.mockImplementationOnce(async (input, init) => {
+        await answer(input, init) // recorded: the server may have queued it, the answer was lost
+        throw new TypeError("Failed to fetch")
+      })
+      const sent = expect(api.jobs.create(request)).resolves.toEqual(created)
+      await vi.runAllTimersAsync()
+      await sent
+      expect(fetch.requests).toHaveLength(2)
+      expect(fetch.requests[1]!.headers.get("Idempotency-Key")).toBe(fetch.requests[0]!.headers.get("Idempotency-Key"))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("does not send a refused job submission again", async () => {
+    const fetch = recordFetch(() => ({ status: 422, body: { errors: [{ owner: "core", param: "width", message: "too wide" }] } }))
+    await expect(api.jobs.create(request)).rejects.toBeInstanceOf(ApiError)
+    expect(fetch.requests).toHaveLength(1)
   })
 
   it("rejects with the server's status and message", async () => {

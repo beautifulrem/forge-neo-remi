@@ -19,7 +19,7 @@ import { missingLoras, networkRoutes } from "./networks"
 import { libraryRoutes } from "./library"
 import { workbenchRoutes } from "./workbench"
 
-type Handler = (match: RegExpExecArray, body: unknown, url: URL) => unknown | Promise<unknown>
+type Handler = (match: RegExpExecArray, body: unknown, url: URL, headers: Headers) => unknown | Promise<unknown>
 
 /** Thrown by a handler to answer with an error status and JSON body. */
 export class MockHttpError extends Error {
@@ -516,6 +516,9 @@ function enqueueAll(request: JobRequest) {
   return { job_id: created[0]!.id, job_ids: created.map((job) => job.id), seq: created[0]!.seq }
 }
 
+/** The answers of keyed submissions (`Idempotency-Key`), as the server keeps them (the newest 100). */
+const keyedAnswers = new Map<string, ReturnType<typeof enqueueAll>>()
+
 // ---------------------------------------------------------------- prompt tools
 
 /** A rough CLIP-like count: words and punctuation, extra networks and BREAK excluded. */
@@ -677,11 +680,19 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
   [
     "POST",
     /^\/jobs$/,
-    (_m, body) => {
+    (_m, body, _url, headers) => {
+      const key = headers.get("Idempotency-Key")
+      const known = key ? keyedAnswers.get(key) : undefined
+      if (known) return known
       const request = body as JobRequest
       const errors = validateJob(request)
       if (errors.length > 0) throw new MockHttpError(422, { errors })
-      return enqueueAll(request)
+      const answer = enqueueAll(request)
+      if (key) {
+        keyedAnswers.set(key, answer)
+        if (keyedAnswers.size > 100) keyedAnswers.delete(keyedAnswers.keys().next().value!)
+      }
+      return answer
     },
   ],
   [
@@ -891,7 +902,7 @@ export async function handleMockRequest(request: Request): Promise<Response> {
     const type = request.headers.get("Content-Type") ?? ""
     const body = type.includes("application/json") ? await request.json() : type.includes("multipart") ? await request.formData() : undefined
     try {
-      return json(await handler(match, body, url))
+      return json(await handler(match, body, url, request.headers))
     } catch (error) {
       if (error instanceof MockHttpError) return json(error.body, error.status)
       return json({ detail: error instanceof Error ? error.message : String(error) }, 500)

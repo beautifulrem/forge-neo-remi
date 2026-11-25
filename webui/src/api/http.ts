@@ -78,6 +78,15 @@ export async function request(input: RequestInfo | URL, init?: RequestInit): Pro
   }
 }
 
+/**
+ * A fresh `Idempotency-Key` for a submission (`POST /jobs`): random, also on a page served over plain
+ * HTTP to another machine, where `crypto.randomUUID` does not exist (it needs a secure context).
+ */
+export function idempotencyKey(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID()
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("")
+}
+
 export type Query = Record<string, string | number | boolean | null | undefined>
 
 /** An API URL for `<img>`, `<a>` and `<audio>` (`path` is relative to /api/v2). */

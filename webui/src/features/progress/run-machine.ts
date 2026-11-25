@@ -4,6 +4,9 @@
  * feeds it user input and WebSocket job events and performs the effects.
  *
  * - Generate queues a job; pressing it again while one runs queues another.
+ *   A second press within `DOUBLE_PRESS_MS` of one whose submit has not
+ *   answered yet is a double click: it is sent with the first press's
+ *   `Idempotency-Key`, so the server queues one job and answers both.
  * - Ctrl/Cmd+Enter while this form's job runs interrupts it and, unless the
  *   setting `ctrl_enter_interrupt` is on, generates again once it has ended.
  * - Interrupt stops the running job, cancels this form's queued jobs and
@@ -30,17 +33,28 @@ export type RunState = {
   restart: boolean
   /** In-flight submits to cancel when they answer (interrupted while they were pending). */
   dropPending: number
+  /** The last Generate press with a key: a press soon after it, while it has no answer, reuses its key. */
+  press: Press | null
 }
+
+/** A Generate press: its submit's `Idempotency-Key`, when it was pressed and whether its answer came. */
+export type Press = { key: string; at: number; answered: boolean }
+
+/** A second Generate press this soon (ms) after a pending one is a double click, not another job. */
+export const DOUBLE_PRESS_MS = 400
 
 export type JobOutcome = "completed" | "failed" | "interrupted"
 
 export type RunEvent =
-  /** `runs` > 1: generate that many times in a row. */
-  | { type: "generate"; runs?: number }
+  /**
+   * `runs` > 1: generate that many times in a row. `key` (a fresh `Idempotency-Key`) and `at`
+   * (`Date.now()`) let a double click be told from a second press (the controller sets them).
+   */
+  | { type: "generate"; runs?: number; key?: string; at?: number }
   | { type: "shortcut" }
-  /** A `POST /jobs` answer: the jobs it queued (several with `repeat`). */
-  | { type: "submitted"; jobIds: readonly string[] }
-  | { type: "rejected" }
+  /** A `POST /jobs` answer: the jobs it queued (several with `repeat`); `key` is the one it was sent with. */
+  | { type: "submitted"; jobIds: readonly string[]; key?: string }
+  | { type: "rejected"; key?: string }
   | { type: "started"; jobId: string }
   | { type: "finished"; jobId: string; outcome: JobOutcome }
   | { type: "interrupt" }
@@ -63,7 +77,8 @@ export type RunEvent =
 export type UpscaleSource = { fileId: string; key: string }
 
 export type RunEffect =
-  | { type: "submit"; upscale?: UpscaleSource }
+  /** `key`: the `Idempotency-Key` to send (a fresh one when absent). */
+  | { type: "submit"; upscale?: UpscaleSource; key?: string }
   | { type: "interrupt"; jobId: string }
   | { type: "skip"; jobId: string }
   /** Remove a queued (not yet started) job. */
@@ -83,6 +98,7 @@ export const IDLE: RunState = {
   repeatLeft: 0,
   restart: false,
   dropPending: 0,
+  press: null,
 }
 
 export function phaseOf(s: RunState): RunPhase {
@@ -100,6 +116,16 @@ type Result = [RunState, RunEffect[]]
 
 function submit(s: RunState): Result {
   return [{ ...s, pending: s.pending + 1 }, [{ type: "submit" }]]
+}
+
+/** A Generate press: a double click reuses the pending press's key, another press starts its own. */
+function press(s: RunState, key: string | undefined, at: number | undefined): Result {
+  if (key === undefined || at === undefined) return submit(s)
+  const last = s.press
+  if (last && !last.answered && at - last.at >= 0 && at - last.at < DOUBLE_PRESS_MS) {
+    return [{ ...s, pending: s.pending + 1 }, [{ type: "submit", key: last.key }]]
+  }
+  return [{ ...s, pending: s.pending + 1, press: { key, at, answered: false } }, [{ type: "submit", key }]]
 }
 
 function interrupt(s: RunState): Result {
@@ -137,7 +163,7 @@ export function reduce(s: RunState, event: RunEvent, options: RunOptions): Resul
   switch (event.type) {
     case "generate": {
       const runs = Math.max(1, Math.floor(event.runs ?? 1))
-      return submit(runs > 1 ? { ...s, repeatLeft: runs - 1 } : s)
+      return press(runs > 1 ? { ...s, repeatLeft: runs - 1 } : s, event.key, event.at)
     }
     case "shortcut": {
       // A second press while the first submit is in flight must not queue a duplicate.
@@ -147,12 +173,17 @@ export function reduce(s: RunState, event: RunEvent, options: RunOptions): Resul
     }
     case "submitted": {
       const pending = Math.max(0, s.pending - 1)
+      const ours = s.press !== null && event.key !== undefined && s.press.key === event.key
+      // the other request of a double click: the same jobs, already taken (and maybe ended) with the first answer
+      const again = ours && s.press!.answered
+      const answered = ours && !again ? { ...s.press!, answered: true } : s.press
       if (s.dropPending > 0) {
-        const effects = event.jobIds.map<RunEffect>((jobId) => ({ type: "cancel", jobId }))
-        return settle({ ...s, pending, dropPending: s.dropPending - 1 }, "interrupted", effects)
+        const effects = again ? [] : event.jobIds.map<RunEffect>((jobId) => ({ type: "cancel", jobId }))
+        return settle({ ...s, pending, press: answered, dropPending: s.dropPending - 1 }, "interrupted", effects)
       }
+      if (again) return [{ ...s, pending }, []]
       const added = event.jobIds.filter((id) => !s.jobs.includes(id))
-      return [{ ...s, pending, jobs: added.length > 0 ? [...s.jobs, ...added] : s.jobs }, []]
+      return [{ ...s, pending, press: answered, jobs: added.length > 0 ? [...s.jobs, ...added] : s.jobs }, []]
     }
     case "rejected": {
       const next = { ...s, pending: Math.max(0, s.pending - 1), dropPending: Math.max(0, s.dropPending - 1) }

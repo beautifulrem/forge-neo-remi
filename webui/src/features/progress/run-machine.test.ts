@@ -60,6 +60,84 @@ describe("run machine", () => {
     expect(state).toEqual(IDLE)
   })
 
+  describe("a double click on Generate", () => {
+    const keyOf = (effects: RunEffect[]) => effects.filter((e) => e.type === "submit").map((e) => e.key)
+
+    it("sends the second press within 400 ms of a pending one with the first's key: the server queues one job", () => {
+      const { state, effects, phase } = run([
+        { type: "generate", key: "k1", at: 1000 },
+        { type: "generate", key: "k2", at: 1300 },
+        { type: "submitted", key: "k1", jobIds: ["a"] },
+        { type: "submitted", key: "k1", jobIds: ["a"] },
+      ])
+      expect(keyOf(effects)).toEqual(["k1", "k1"])
+      expect(state).toMatchObject({ jobs: ["a"], pending: 0 })
+      expect(phase).toBe("queued")
+    })
+
+    it("keeps deliberate presses: a later one, or one after the answer, queues another job", () => {
+      expect(keyOf(run([{ type: "generate", key: "k1", at: 1000 }, { type: "generate", key: "k2", at: 1400 }]).effects)).toEqual(["k1", "k2"])
+      const answered = run([{ type: "generate", key: "k1", at: 1000 }, { type: "submitted", key: "k1", jobIds: ["a"] }, { type: "generate", key: "k2", at: 1100 }])
+      expect(keyOf(answered.effects)).toEqual(["k1", "k2"])
+    })
+
+    it("compares with the first press, not the one before", () => {
+      const { effects } = run([
+        { type: "generate", key: "k1", at: 1000 },
+        { type: "generate", key: "k2", at: 1300 },
+        { type: "generate", key: "k3", at: 1600 },
+      ])
+      expect(keyOf(effects)).toEqual(["k1", "k1", "k3"])
+    })
+
+    it("a repeated answer after the job ended does not bring it back", () => {
+      const { state, phase } = run([
+        { type: "generate", key: "k1", at: 1000 },
+        { type: "generate", key: "k2", at: 1100 },
+        { type: "submitted", key: "k1", jobIds: ["a"] },
+        { type: "started", jobId: "a" },
+        { type: "finished", jobId: "a", outcome: "completed" },
+        { type: "submitted", key: "k1", jobIds: ["a"] },
+      ])
+      expect(state).toMatchObject({ jobs: [], pending: 0 })
+      expect(phase).toBe("idle")
+    })
+
+    it("an interrupt while both are pending cancels the job once", () => {
+      const { state, effects } = run([
+        { type: "generate", key: "k1", at: 1000 },
+        { type: "generate", key: "k2", at: 1100 },
+        { type: "interrupt" },
+        { type: "submitted", key: "k1", jobIds: ["a"] },
+        { type: "submitted", key: "k1", jobIds: ["a"] },
+      ])
+      expect(effects.filter((e) => e.type === "cancel")).toEqual([{ type: "cancel", jobId: "a" }])
+      expect(state).toMatchObject({ jobs: [], pending: 0, dropPending: 0 })
+    })
+
+    it("a rejected first request leaves the second, same-key one to answer", () => {
+      const { state } = run([
+        { type: "generate", key: "k1", at: 1000 },
+        { type: "generate", key: "k2", at: 1100 },
+        { type: "rejected", key: "k1" },
+        { type: "submitted", key: "k1", jobIds: ["a"] },
+      ])
+      expect(state).toMatchObject({ jobs: ["a"], pending: 0 })
+    })
+
+    it("never reuses a press's key for the loops' own submits", () => {
+      const { effects } = run([
+        { type: "forever", on: true },
+        { type: "submitted", jobIds: ["a"] },
+        { type: "generate", key: "k1", at: 1000 },
+        { type: "submitted", key: "k1", jobIds: ["b"] },
+        { type: "finished", jobId: "a", outcome: "completed" },
+        { type: "finished", jobId: "b", outcome: "completed" },
+      ])
+      expect(keyOf(effects)).toEqual([undefined, "k1", undefined])
+    })
+  })
+
   it("rejected submits end forever and repeats", () => {
     const { state, phase } = run([{ type: "forever", on: true }, { type: "rejected" }])
     expect(phase).toBe("idle")

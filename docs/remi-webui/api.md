@@ -216,6 +216,16 @@ POST /api/v2/jobs   {"tab", "core", "scripts", "priority"?, "repeat"?, "forever"
   `txt2img_upscale_same_seed` takes the seeds from the image's parameters.
   Retries keep it. An unknown id, a non-image or another tab is a 422 on
   `upscale_from`.
+- `Idempotency-Key` (optional request header, 1–255 characters): a fresh value
+  per submission, e.g. a UUID. The same key sent again by the same user within
+  10 minutes queues nothing and answers `201` with the first submission's
+  `job_id` / `job_ids` / `seq`, whatever its body (a repeat that arrives while
+  the first is still being checked waits for it). Send a request that got no
+  answer again with its key, and it is queued at most once. A refused (422)
+  submission is not remembered, and a restart forgets the keys. The SPA sends
+  one with every submission, resends one that got no answer once, and sends a
+  double click on Generate (a second press within 400 ms, before the first is
+  answered) with the first press's key.
 
 A job's `status` is `queued`, `running`, `completed`, `interrupted` (stopped,
 results kept), `cancelled` or `failed`. `GET /api/v2/jobs/{id}` returns it

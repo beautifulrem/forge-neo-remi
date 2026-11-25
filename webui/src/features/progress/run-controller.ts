@@ -9,7 +9,7 @@ import { toast } from "sonner"
 import { create } from "zustand"
 import { clientOption } from "@/api/app-options"
 import { api } from "@/api/endpoints"
-import { validationErrors } from "@/api/http"
+import { idempotencyKey, validationErrors } from "@/api/http"
 import { useProgress } from "@/api/progress"
 import { keys, queryClient } from "@/api/queries"
 import type { FormTab, TabSchema } from "@/api/types"
@@ -73,6 +73,8 @@ export function persistedRun(tab: GenerateTab): PersistedRun {
 export const persistedJobs = (tab: GenerateTab): string[] => persistedRun(tab).jobs
 
 export function dispatchRun(tab: GenerateTab, event: RunEvent) {
+  // a press gets its key and time here: the machine tells a double click from a second press by them
+  if (event.type === "generate" && event.key === undefined) event = { ...event, key: idempotencyKey(), at: Date.now() }
   const before = useRuns.getState().runs[tab]
   const [after, effects] = reduce(before, event, { interruptOnly: clientOption("ctrl_enter_interrupt") })
   if (after !== before) {
@@ -85,7 +87,7 @@ export function dispatchRun(tab: GenerateTab, event: RunEvent) {
 function perform(tab: GenerateTab, effect: RunEffect) {
   switch (effect.type) {
     case "submit":
-      void submit(tab, effect.upscale)
+      void submit(tab, effect.key ?? idempotencyKey(), effect.upscale)
       return
     case "interrupt":
       void api.jobs.interrupt(effect.jobId).catch(() => {})
@@ -99,11 +101,12 @@ function perform(tab: GenerateTab, effect: RunEffect) {
   }
 }
 
-async function submit(tab: GenerateTab, upscale?: UpscaleSource) {
+/** Queues the form's job; `key` is its `Idempotency-Key` (a double click sends one key twice: one job). */
+async function submit(tab: GenerateTab, key: string, upscale?: UpscaleSource) {
   const store = getFormStore(tab)
   const schema = queryClient.getQueryData<TabSchema>(keys.schema(tab))
   if (!schema) {
-    dispatchRun(tab, { type: "rejected" })
+    dispatchRun(tab, { type: "rejected", key })
     return
   }
   try {
@@ -115,10 +118,10 @@ async function submit(tab: GenerateTab, upscale?: UpscaleSource) {
       // the server would reject it: mark the fields without sending a request that must fail
       store.getState().setErrors(missing)
       toastInvalid(missing)
-      dispatchRun(tab, { type: "rejected" })
+      dispatchRun(tab, { type: "rejected", key })
       return
     }
-    const created = await api.jobs.create(upscale ? { ...request, upscale_from: upscale.fileId } : request)
+    const created = await api.jobs.create(upscale ? { ...request, upscale_from: upscale.fileId } : request, key)
     store.getState().clearErrors()
     const jobIds = created.job_ids?.length ? created.job_ids : [created.job_id]
     if (upscale) {
@@ -126,7 +129,7 @@ async function submit(tab: GenerateTab, upscale?: UpscaleSource) {
       for (const jobId of jobIds) noteUpscale(jobId, placement)
     }
     for (const jobId of jobIds) useProgress.getState().track(jobId, tab)
-    dispatchRun(tab, { type: "submitted", jobIds })
+    dispatchRun(tab, { type: "submitted", jobIds, key })
     for (const jobId of jobIds) replayEarly(tab, jobId)
   } catch (error) {
     const errors = validationErrors(error)
@@ -136,7 +139,7 @@ async function submit(tab: GenerateTab, upscale?: UpscaleSource) {
     } else {
       toast.error(t("Could not queue the job"), { description: errorText(error) })
     }
-    dispatchRun(tab, { type: "rejected" })
+    dispatchRun(tab, { type: "rejected", key })
   }
 }
 

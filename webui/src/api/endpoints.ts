@@ -4,7 +4,7 @@
  * against the server at compile time. Callers import `api` and never build
  * URLs themselves.
  */
-import { apiUrl, client, ROOT, unwrap } from "./http"
+import { apiUrl, client, idempotencyKey, RequestError, ROOT, unwrap } from "./http"
 import type {
   ActionRequest,
   ActionResponse,
@@ -25,6 +25,26 @@ import type {
 } from "./types"
 
 const enc = encodeURIComponent
+
+/** Before a job submission that got no answer is sent again (with its key: the server queues it once). */
+export const RESUBMIT_DELAY_MS = 1000
+
+/**
+ * `POST /jobs` with an `Idempotency-Key`: a request that got no answer (the connection dropped, a
+ * proxy's error page) may still have queued the job, so it is sent once more with the same key,
+ * which the server answers with the jobs it queued the first time.
+ */
+async function createJob(body: JobRequest, key: string) {
+  const send = () =>
+    unwrap(client.POST("/api/v2/jobs", { params: { header: { "idempotency-key": key } }, body: { priority: 0, repeat: 1, forever: false, ...body } }))
+  try {
+    return await send()
+  } catch (error) {
+    if (!(error instanceof RequestError)) throw error
+    await new Promise((resolve) => setTimeout(resolve, RESUBMIT_DELAY_MS))
+    return send()
+  }
+}
 
 export const api = {
   app: (signal?: AbortSignal) => unwrap(client.GET("/api/v2/app", { signal })) as Promise<Bootstrap>,
@@ -50,7 +70,8 @@ export const api = {
     unwrap(client.POST("/api/v2/actions/{owner}/{action}", { params: { path: { owner, action } }, body })) as Promise<ActionResponse>,
 
   jobs: {
-    create: (body: JobRequest) => unwrap(client.POST("/api/v2/jobs", { body: { priority: 0, repeat: 1, forever: false, ...body } })),
+    /** `key`: the submission's `Idempotency-Key` (a fresh one by default; a double click sends one twice). */
+    create: (body: JobRequest, key: string = idempotencyKey()) => createJob(body, key),
     list: (query: JobsQuery = {}, signal?: AbortSignal) => unwrap(client.GET("/api/v2/jobs", { params: { query }, signal })),
     /** One job (404 once it was removed from the history). */
     get: (id: string, signal?: AbortSignal) => unwrap(client.GET("/api/v2/jobs/{job_id}", { params: { path: { job_id: id } }, signal })),

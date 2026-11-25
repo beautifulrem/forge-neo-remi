@@ -22,6 +22,7 @@ import re
 import sys
 import threading
 import time
+from collections import OrderedDict
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, replace
 from typing import Any
@@ -107,6 +108,35 @@ def script_errors(sink: list[dict[str, Any]]) -> Iterator[None]:
         yield
     finally:
         errors.report = original
+
+
+class RecentSubmissions:
+    """The jobs each recent keyed submission queued (``Idempotency-Key``):
+    ``(user, key)`` → its jobs, for ``ttl`` seconds and at most ``limit``
+    entries (the oldest are forgotten first). In memory: a restart forgets them."""
+
+    def __init__(self, *, ttl: float = 600.0, limit: int = 1000, clock: Callable[[], float] = time.monotonic) -> None:
+        self.ttl, self.limit, self.clock = ttl, limit, clock
+        self._answers: OrderedDict[tuple[str | None, str], tuple[float, list[Job]]] = OrderedDict()
+
+    def _expire(self) -> None:
+        now = self.clock()
+        while self._answers:
+            key, (recorded, _jobs) = next(iter(self._answers.items()))
+            if now - recorded < self.ttl:
+                break
+            del self._answers[key]
+
+    def get(self, user: str | None, key: str) -> list[Job] | None:
+        self._expire()
+        entry = self._answers.get((user, key))
+        return entry[1] if entry is not None else None
+
+    def put(self, user: str | None, key: str, jobs: list[Job]) -> None:
+        self._expire()
+        self._answers[(user, key)] = (self.clock(), jobs)
+        while len(self._answers) > self.limit:
+            self._answers.popitem(last=False)
 
 
 class JobError(ValueError):
@@ -265,6 +295,10 @@ class JobQueue:
         self._completion_hooks: list[Callable[[Job], None]] = []
         self._start_hooks: list[Callable[[Job], None]] = []
         self._busy_checks: list[Callable[[], bool]] = []
+        self.recent = RecentSubmissions()
+        """keyed submissions and their jobs (``submit(key=...)``)"""
+        self._keyed = threading.Lock()
+        """held across a keyed submission: a second one with the same key waits, then finds the answer"""
 
     def add_start_hook(self, callback: Callable[[Job], None]) -> Callable[[], None]:
         """Register a callback invoked when a job starts, on the worker thread
@@ -430,10 +464,25 @@ class JobQueue:
 
     # region Submission and control
 
-    def submit(self, submission: Submission, *, user: str | None = None) -> list[Job]:
+    def submit(self, submission: Submission, *, user: str | None = None, key: str | None = None) -> list[Job]:
         """Validate and queue (``repeat`` copies); raises
-        ``remi.ui.ValidationError`` or :class:`JobError`."""
+        ``remi.ui.ValidationError`` or :class:`JobError`. A submission with a
+        ``key`` (``Idempotency-Key``) that ``user`` sent within the last minutes
+        queues nothing and answers the jobs the first one queued, whatever its
+        values (a double click, a retry after a lost answer). A refused
+        submission is not remembered."""
 
+        if key is None:
+            return self._submit(submission, user=user)
+        # its own lock, not ``_cv``: the worker claims jobs under ``_cv`` while this one validates
+        with self._keyed:
+            jobs = self.recent.get(user, key)
+            if jobs is None:
+                jobs = self._submit(submission, user=user)
+                self.recent.put(user, key, jobs)
+            return jobs
+
+    def _submit(self, submission: Submission, *, user: str | None) -> list[Job]:
         from remi.ui import ParamError, Sentence, ValidationError
         from remi.ui.schema import SCHEMA_VERSION
 

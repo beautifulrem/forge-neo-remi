@@ -6566,7 +6566,10 @@ export interface operations {
     create_job_api_v2_jobs_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description a fresh value per submission (a UUID): the same key sent again within 10 minutes queues nothing and answers the first submission's jobs (a double click, a retry after a lost answer) */
+                "idempotency-key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
