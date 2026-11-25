@@ -7,7 +7,7 @@ import os
 import threading
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Header, Request, Response
 
 from remi.server import i18n
 from remi.server import models as m
@@ -219,7 +219,10 @@ def _action_target(owner: str, tab: str | None) -> Any:
     try:
         runner = runner_for(tab)
     except KeyError as error:
-        raise HTTPException(status_code=422, detail=error.args[0] if error.args else "unknown tab") from error  # str() would quote it
+        from remi import ui
+        from remi.core.forms import TABS
+
+        raise ui.ValidationError([ui.ParamError(ui.Sentence("tab is one of {{tabs}}", tabs=", ".join(TABS)), param="tab")]) from error
     if runner is None:
         from modules import scripts
         from remi.core.extras import assign_args
@@ -452,13 +455,14 @@ def list_styles() -> list[dict[str, Any]]:
     return _styles()
 
 
-@router.put("/styles/{name}", response_model=m.PromptStyle, summary="Create or replace a style")
+@router.put("/styles/{name}", response_model=m.PromptStyle, responses={422: {"model": m.ValidationErrorBody}}, summary="Create or replace a style")
 def save_style(name: str, body: m.StyleBody, services: ServicesDep) -> dict[str, Any]:
     from modules import shared, styles
+    from remi import ui
 
     name = name.strip()
     if not name or name == "None":
-        raise HTTPException(status_code=422, detail="a style needs a name")
+        raise ui.ValidationError([ui.ParamError("a style needs a name", param="name")])
     database = shared.prompt_styles
     with STYLES_LOCK:
         existing = database.styles.get(name)

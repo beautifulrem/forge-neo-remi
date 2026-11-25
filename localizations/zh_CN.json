@@ -1047,5 +1047,6 @@
   "VGL field '{{field}}' must be a JSON array.": "VGL 字段“{{field}}”必须是 JSON 数组。",
   "VGL objects[{{index}}] must be a JSON object.": "VGL objects[{{index}}] 必须是 JSON 对象。",
   "VGL objects[{{index}}] needs a non-empty 'description'.": "VGL objects[{{index}}] 需要非空的“description”。",
-  "VGL field '{{field}}' must be a JSON object.": "VGL 字段“{{field}}”必须是 JSON 对象。"
+  "VGL field '{{field}}' must be a JSON object.": "VGL 字段“{{field}}”必须是 JSON 对象。",
+  "a style needs a name": "样式需要名称"
 }

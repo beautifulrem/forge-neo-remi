@@ -73,8 +73,10 @@ def test_core_actions(server):
     assert bad.status_code == 422 and bad.json()["errors"]
     assert server.client.post("/api/v2/actions/core/nope", json={"values": {}}).status_code == 404
     assert server.client.post("/api/v2/actions/nobody/x", json={"tab": "txt2img", "values": {}}).status_code == 404
-    unknown = server.client.post("/api/v2/actions/nobody/x", json={"tab": "bogus", "values": {}})
-    assert unknown.status_code == 422 and unknown.json()["detail"].startswith("unknown tab 'bogus'")
+    # an unknown tab is a rejected value like any other (translatable, on "tab")
+    tab = server.client.post("/api/v2/actions/nobody/x", json={"tab": "video", "values": {}})
+    assert tab.status_code == 422
+    assert tab.json() == {"errors": [{"owner": None, "param": "tab", "message": "tab is one of txt2img, img2img, extras", "template": "tab is one of {{tabs}}", "params": {"tabs": "txt2img, img2img, extras"}}]}
 
 
 def test_an_extension_action_that_fails_counts_against_its_extension(server, webui, tmp_path, monkeypatch):
@@ -592,7 +594,9 @@ def test_styles_crud(server, webui, tmp_path, monkeypatch):
     assert applied == {"prompt": "cat, dark", "negative_prompt": "bright"}
     assert server.client.delete("/api/v2/styles/Moody").status_code == 204
     assert server.client.delete("/api/v2/styles/Moody").status_code == 404
-    assert server.client.put("/api/v2/styles/%20", json={}).status_code == 422
+    unnamed = server.client.put("/api/v2/styles/%20", json={})
+    assert unnamed.status_code == 422
+    assert unnamed.json() == {"errors": [{"owner": None, "param": "name", "message": "a style needs a name"}]}
     assert server.client.put("/api/v2/styles/Moody", json={"prompt": "x"}).status_code == 200
     assert server.client.delete("/api/v2/styles/%20Moody%20").status_code == 204  # trimmed like PUT
 
