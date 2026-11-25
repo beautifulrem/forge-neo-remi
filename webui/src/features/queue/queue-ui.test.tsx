@@ -376,6 +376,7 @@ describe("editing a queued job in its form", () => {
   it("names the job's values a lock kept, opened to edit or to reuse", async () => {
     const { toast } = await import("sonner")
     const success = vi.spyOn(toast, "success")
+    const info = vi.spyOn(toast, "info")
     const store = getFormStore("txt2img")
     // a toggle that locks the prompt (`locks: "core.prompt"`) is on, over a prompt of the user's own
     store.setState((s) => ({ locks: [{ owner: "keep", name: "prompt", target: ["core", "prompt"] }], values: { ...s.values, core: { ...s.values.core, prompt: "my prompt" }, keep: { prompt: true } } }))
@@ -385,7 +386,6 @@ describe("editing a queued job in its form", () => {
     await openJob("j2")
     expect(success).toHaveBeenLastCalledWith("Parameters applied: 1", expect.objectContaining({ description: "Overridden by a lock: Prompt" }))
     // named in the paste's toast only
-    const info = vi.spyOn(toast, "info")
     await Promise.resolve()
     expect(info).not.toHaveBeenCalled()
     expect(store.getState().values.core?.prompt).toBe("my prompt")
