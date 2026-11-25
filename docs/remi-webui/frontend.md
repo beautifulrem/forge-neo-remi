@@ -978,6 +978,9 @@ mode's schema is prefetched).
   source image clears the layers drawn over the old one (image params whose
   `source` names it: `sketch`, `mask`).
   Pasted values run each `on_change` once and one `__conflicts__` pass.
+  The paste toast names the pasted params the form does not have
+  (`PastePlan.skipped`, "Not in this form: …", core ones bare) under the
+  values a lock kept.
 - **Model bar** (`features/model-bar`, the header's `ModelQuickBar`): UI
   preset (`__forge_preset__` on the form on screen, then all schemas
   refresh), checkpoint (searchable, architecture and size), VAE / text

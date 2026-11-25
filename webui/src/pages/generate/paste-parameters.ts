@@ -8,6 +8,11 @@ import { applyPaste, pastePlan } from "@/features/infotext/paste"
 import { useForm } from "@/ui/hooks"
 import { lockNote } from "@/ui/locks"
 import { failureText, validationMessage } from "@/features/errors/error-text"
+import { noteLines } from "@/lib/toast"
+
+/** Params of other forms or scripts (`"owner.param"`), core ones bare as in the server's patches. */
+const refNames = (refs: readonly string[], language: string) =>
+  new Intl.ListFormat(language, { type: "conjunction" }).format(refs.map((ref) => (ref.startsWith("core.") ? ref.slice("core.".length) : ref)))
 
 /**
  * Parameters into the form: `text` is parsed by the server for this form
@@ -16,14 +21,18 @@ import { failureText, validationMessage } from "@/features/errors/error-text"
  * nothing (formats it does not parse).
  */
 export function usePasteParameters() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { store, formId } = useForm()
   const tab = formId as FormTab
 
   const apply = (parsed: InfotextParsed, id: string | number) => {
-    const { count, locked } = applyPaste({ store, tab }, pastePlan(store.getState().index, parsed).entries)
-    // values a toggle's lock kept as they were
-    const note = lockNote(store.getState().index, locked)
+    const plan = pastePlan(store.getState().index, parsed)
+    const { count, locked } = applyPaste({ store, tab }, plan.entries)
+    // values a toggle's lock kept as they were, then the pasted params this form does not have
+    const note = noteLines(
+      lockNote(store.getState().index, locked, i18n.language),
+      plan.skipped.length > 0 && t("Not in this form: {{names}}", { names: refNames(plan.skipped, i18n.language) }),
+    )
     const kept = note ? { description: note } : {}
     if (count === 0) toast.info(t("No parameters to apply"), { id, ...kept })
     else toast.success(t("Parameters applied: {{count}}", { count }), { id, ...kept })

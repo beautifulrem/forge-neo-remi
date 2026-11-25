@@ -1691,5 +1691,6 @@
   "Candidates": "候选图",
   "Preview source": "预览图来源",
   "Offline": "离线",
-  "Overridden by a lock: {{names}}": "被锁定覆盖：{{names}}"
+  "Overridden by a lock: {{names}}": "被锁定覆盖：{{names}}",
+  "Not in this form: {{names}}": "此表单中没有：{{names}}"
 }

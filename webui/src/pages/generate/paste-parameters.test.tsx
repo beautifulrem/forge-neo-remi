@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   api: { parseInfotext: vi.fn(), upload: vi.fn(), imageInfo: vi.fn() },
   readImageParameters: vi.fn(),
   applyPaste: vi.fn(),
-  pastePlan: vi.fn(() => ({ entries: ["planned"] })),
+  pastePlan: vi.fn((): { entries: string[]; skipped: string[] } => ({ entries: ["planned"], skipped: [] })),
   toast: { loading: vi.fn(() => "toast-1"), info: vi.fn(), success: vi.fn(), warning: vi.fn(), error: vi.fn() },
 }))
 vi.mock("@/api/endpoints", () => ({ api: mocks.api }))
@@ -55,6 +55,23 @@ describe("usePasteParameters", () => {
     mocks.api.parseInfotext.mockResolvedValue(parsed())
     await hook().fromText("a fox\nSteps: 20, Size: 64x64")
     expect(mocks.toast.success).toHaveBeenCalledWith("Parameters applied: 1", { id: "toast-1", description: "Overridden by a lock: core.width and sampler.steps" })
+  })
+
+  it("names the pasted parameters this form does not have, core ones bare", async () => {
+    mocks.pastePlan.mockReturnValueOnce({ entries: ["planned"], skipped: ["core.enable_hr", "adetailer.ad_model"] })
+    mocks.applyPaste.mockReturnValue({ count: 2, locked: ["core.width"] })
+    mocks.api.parseInfotext.mockResolvedValue(parsed())
+    await hook().fromText("a fox\nHires upscale: 2, ADetailer model: face_yolov8n.pt")
+    expect(mocks.toast.success).toHaveBeenCalledWith("Parameters applied: 2", {
+      id: "toast-1",
+      description: "Overridden by a lock: core.width\nNot in this form: enable_hr and adetailer.ad_model",
+    })
+
+    // nothing applied: the note says why
+    mocks.pastePlan.mockReturnValueOnce({ entries: [], skipped: ["core.enable_hr"] })
+    mocks.applyPaste.mockReturnValue({ count: 0, locked: [] })
+    await hook().fromText("Hires upscale: 2")
+    expect(mocks.toast.info).toHaveBeenCalledWith("No parameters to apply", { id: "toast-1", description: "Not in this form: enable_hr" })
   })
 
   it("lists a skipped value's message in the UI language, by its template where it names the value", async () => {
