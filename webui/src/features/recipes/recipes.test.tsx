@@ -65,6 +65,25 @@ describe("Recipes capture and manager UI", () => {
     expect(getFormStore("img2img").getState().revision).toBe(1)
   })
 
+  // Loading the schema re-derives the conflict locks with a server action; the capture read the
+  // form before that action's patch was written.
+  it("waits for the conflicts a first load derives before reading the form", async () => {
+    const schema = tabSchema("img2img")
+    const owners = tabOwners(schema)
+    const defaults = (owner: string) => owners.find((spec) => spec.owner === owner)!.defaults
+    getFormStore("img2img").setState({ revision: 0, values: { core: { ...defaults("core") }, sampler: { ...defaults("sampler"), sampler_name: "LCM" } } })
+    const calls: string[] = []
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      calls.push(new URL(url, "http://x").pathname)
+      const body = url.includes("/actions/core/__conflicts__") ? { "sampler.scheduler": { value: "SGM Uniform" } } : schema
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } })
+    })
+    const captured = await captureTabOverrides("img2img")
+    expect(calls.some((path) => path.endsWith("/actions/core/__conflicts__"))).toBe(true)
+    expect(captured.scripts_patch.sampler).toEqual({ sampler_name: "LCM", scheduler: "SGM Uniform" })
+  })
+
   it("keeps the recipes when a refetch fails", async () => {
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ items: [SAMPLE_RECIPE], total: 1 }), { status: 200, headers: { "Content-Type": "application/json" } }))
     render(

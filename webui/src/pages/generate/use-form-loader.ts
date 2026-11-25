@@ -41,6 +41,14 @@ export function carryOver(before: Snapshot, after: Snapshot): Record<string, Own
   return out
 }
 
+/** What each store's last load still waits for: the conflict locks it re-derives on the server. */
+const settling = new WeakMap<FormStore, Promise<void>>()
+
+/** Resolves once the values the last `loadSchema` of `store` asked the server for are written. */
+export function schemaSettled(store: FormStore): Promise<void> {
+  return settling.get(store) ?? Promise.resolve()
+}
+
 export function loadSchema(store: FormStore, schema: TabSchema) {
   const before = store.getState()
   const snapshot: Snapshot | null = before.revision > 0 ? { values: before.values, defaults: before.defaults, index: before.index } : null
@@ -54,9 +62,8 @@ export function loadSchema(store: FormStore, schema: TabSchema) {
   }
   // Patch locks are not persisted: re-derive them when the form holds a non-default conflict param.
   const state = store.getState()
-  if ((schema.conflict_params ?? []).some((ref) => isModified(state, ...splitRef(ref, "core")))) {
-    void runAction({ store, tab: schema.tab }, "core", CONFLICTS_ACTION)
-  }
+  const conflicts = (schema.conflict_params ?? []).some((ref) => isModified(state, ...splitRef(ref, "core")))
+  settling.set(store, conflicts ? runAction({ store, tab: schema.tab }, "core", CONFLICTS_ACTION).then(() => undefined) : Promise.resolve())
 }
 
 /** The schema each store was last loaded with. */

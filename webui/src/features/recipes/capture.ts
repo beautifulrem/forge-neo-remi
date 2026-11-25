@@ -8,7 +8,7 @@ import type { FormTab, ParamValues } from "@/api/types"
 import { i18n, t } from "@/i18n"
 import type { PasteEntry, PasteResult } from "@/features/infotext/paste"
 import { deliver } from "@/features/send-to/send-to"
-import { ensureSchemaLoaded } from "@/pages/generate/use-form-loader"
+import { ensureSchemaLoaded, schemaSettled } from "@/pages/generate/use-form-loader"
 import { jsonEqual } from "@/ui/conditions"
 import { getFormStore } from "@/ui/form-store"
 import { isPersisted } from "@/ui/values"
@@ -51,10 +51,14 @@ export function captureFormOverrides(tab: FormTab): CapturedOverrides {
   return { core_patch, scripts_patch, count }
 }
 
-/** `captureFormOverrides` for a form that may not be open: loads its schema into the store first. */
+/**
+ * `captureFormOverrides` for a form that may not be open: loads its schema into the store first,
+ * and waits for the conflict locks a load derives on the server (their patch is part of the form).
+ */
 export async function captureTabOverrides(tab: FormTab): Promise<CapturedOverrides> {
   const store = getFormStore(tab)
   if (store.getState().revision === 0) ensureSchemaLoaded(store, await queryClient.ensureQueryData(schemaQuery(tab)))
+  await schemaSettled(store)
   return captureFormOverrides(tab)
 }
 

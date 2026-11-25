@@ -1,9 +1,12 @@
 import { QueryClientProvider } from "@tanstack/react-query"
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { tabSchema } from "@/api/mock/fixtures"
 import { queryClient } from "@/api/queries"
 import { i18n } from "@/i18n"
 import zhCN from "@/locales/zh-CN.json"
+import { getFormStore } from "@/ui/form-store"
+import { tabOwners } from "@/ui/tab"
 import { computeStageHashes, defaultStage, firstExecuteStage, planPipelineCache } from "./cache-hash"
 import { usePipelineDraft } from "./draft-store"
 import { PipelineBuilder } from "./PipelineBuilder"
@@ -275,6 +278,36 @@ describe("PipelineBuilder UI", () => {
     // last now: its "later" button is disabled, so the focus goes to the other one
     expect(screen.getByRole("button", { name: "Move Base Generate later" })).toBeDisabled()
     expect(screen.getByRole("button", { name: "Move Base Generate earlier" })).toHaveFocus()
+  })
+  // The form is read after an await (its schema, its conflicts): the result was written to the
+  // stage at the index the button had, which is another stage once the stages were moved meanwhile.
+  it("gives a pulled form to the stage that asked for it when the stages moved meanwhile", async () => {
+    const schema = tabSchema("txt2img")
+    const defaults = tabOwners(schema).find((spec) => spec.owner === "core")!.defaults
+    getFormStore("txt2img").setState({ revision: 0, values: { core: { ...defaults, cfg_scale: 3.5 } } })
+    const pending: { send?: () => void } = {}
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (!url.includes("/schema")) return new Response(JSON.stringify([]), { status: 200 })
+      return new Promise<Response>((resolve) => {
+        pending.send = () => resolve(new Response(JSON.stringify(schema), { status: 200, headers: { "Content-Type": "application/json" } }))
+      })
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PipelineBuilder />
+      </QueryClientProvider>,
+    )
+    const generate = screen.getAllByRole("listitem").find((item) => item.dataset.stageIndex === "0")!
+    fireEvent.click(within(generate).getByRole("button", { name: "Pull from form" }))
+    fireEvent.click(screen.getByRole("button", { name: "Move Base Generate later" }))
+    await waitFor(() => expect(pending.send).toBeDefined())
+    act(() => pending.send!())
+
+    const stage = (kind: string) => usePipelineDraft.getState().stages.find((s) => s.kind === kind)!
+    await waitFor(() => expect(stage("generate").core?.cfg_scale).toBe(3.5))
+    expect(stage("refine").tab).toBe("img2img")
+    expect(stage("refine").core?.cfg_scale).toBeUndefined()
   })
 })
 

@@ -282,14 +282,18 @@ export function PipelineBuilder() {
     const stage = stages[index]
     if (!stage) return
     const tab = stage.tab ?? STAGE_META[stage.kind].defaultTab ?? "txt2img"
+    // the form is read after an await: by then the stage may sit elsewhere (moved) or be gone
+    const key = stageKey(stage)
     captureTabOverrides(tab).then(
       (captured) => {
-        updateStage(index, (prev) => ({
-          ...prev,
-          tab,
-          core: { ...prev.core, ...captured.core_patch },
-          scripts: { ...prev.scripts, ...captured.scripts_patch },
-        }))
+        if (!usePipelineDraft.getState().stages.some((s) => stageKey(s) === key)) return
+        setStages((prev) =>
+          prev.map((s) =>
+            stageKey(s) === key
+              ? keepStageKey(s, { ...s, tab, core: { ...s.core, ...captured.core_patch }, scripts: { ...s.scripts, ...captured.scripts_patch } })
+              : s,
+          ),
+        )
         toast.success(t("Pulled overrides from {{tab}}", { tab: t(CATEGORY_LABELS[tab]) }))
       },
       (error: unknown) => toast.error(t("Could not read the form"), { description: failureText(error) }),

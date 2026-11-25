@@ -33,7 +33,8 @@ export const usePipelineDraft = create<PipelineDraft>()((set) => ({
 /**
  * A key for each stage of the draft that stays with it through moves (a stage is the plain object
  * the API takes, with no id of its own): the builder keys its cards by it, so a moved card keeps
- * its DOM and its focus.
+ * its DOM and its focus, and a result that arrives after an await (a form read into a stage) finds
+ * its stage by it.
  */
 const stageKeys = new WeakMap<StageSpec, number>()
 let lastKey = 0
