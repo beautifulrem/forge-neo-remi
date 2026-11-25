@@ -16,10 +16,13 @@ import importlib
 import importlib.util
 import logging
 import os
+import queue
 import subprocess
 import sys
 import threading
 import time
+import weakref
+from collections import deque
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -43,6 +46,73 @@ log = logging.getLogger(__name__)
 DEFAULT_MAX_RESTARTS = 5
 DEFAULT_STARTUP_TIMEOUT = 15.0
 DEFAULT_JOB_TIMEOUT = 3600.0
+STDERR_TAIL_BYTES = 64 * 1024
+"""how much of a worker's stderr is kept for the crash message"""
+
+
+class _Pipes:
+    """A worker process's output, read by two threads from the start: its
+    stdout lines into :attr:`lines` (``None`` at the end), the end of its
+    stderr into a bounded buffer. A pipe nobody reads fills up and blocks
+    the child (a chatty library at startup never answered the ping), and a
+    queue lets the supervisor wait for a line with a timeout."""
+
+    def __init__(self, proc: Any) -> None:
+        self.lines: queue.Queue[bytes | None] = queue.Queue()
+        self._stderr: deque[bytes] = deque()
+        self._stderr_size = 0
+        self._threads = [
+            threading.Thread(target=self._read_lines, args=(proc.stdout,), name=f"worker-stdout-{proc.pid}", daemon=True),
+            threading.Thread(target=self._read_stderr, args=(proc.stderr,), name=f"worker-stderr-{proc.pid}", daemon=True),
+        ]
+        for thread in self._threads:
+            thread.start()
+
+    def _read_lines(self, stream: Any) -> None:
+        try:
+            if stream is not None:
+                for line in iter(stream.readline, b""):
+                    self.lines.put(line)
+        except (OSError, ValueError):  # closed
+            pass
+        finally:
+            self.lines.put(None)
+
+    def _read_stderr(self, stream: Any) -> None:
+        with contextlib.suppress(OSError, ValueError):
+            while stream is not None and (chunk := stream.read1(8192)):
+                self._stderr.append(chunk)
+                self._stderr_size += len(chunk)
+                while self._stderr_size - len(self._stderr[0]) >= STDERR_TAIL_BYTES:
+                    self._stderr_size -= len(self._stderr.popleft())
+
+    def stderr_tail(self, limit: int) -> str:
+        """The last ``limit`` characters the process wrote to stderr (after
+        waiting a moment for what a process that just ended wrote last)."""
+
+        self._threads[1].join(timeout=1.0)
+        return b"".join(tuple(self._stderr)).decode("utf-8", errors="replace")[-limit:]
+
+    def join(self, timeout: float) -> bool:
+        """Wait for both readers to reach the end; whether they did."""
+
+        for thread in self._threads:
+            thread.join(timeout)
+        return not any(thread.is_alive() for thread in self._threads)
+
+
+_PIPES: weakref.WeakKeyDictionary[Any, _Pipes] = weakref.WeakKeyDictionary()
+_PIPES_LOCK = threading.Lock()
+
+
+def _pipes(proc: Any) -> _Pipes:
+    """The output readers of ``proc``, started on first use."""
+
+    with _PIPES_LOCK:
+        pipes = _PIPES.get(proc)
+        if pipes is None:
+            pipes = _PIPES[proc] = _Pipes(proc)
+        return pipes
 
 
 class SubprocessWorker:
@@ -72,7 +142,8 @@ class SubprocessWorker:
         self.startup_timeout = float(startup_timeout)
 
         self._lock = threading.RLock()
-        self._exec_lock = threading.Lock()
+        self._exec_lock = threading.RLock()
+        """one job at a time; :meth:`restart` takes it to start the new process (re-entered by the crash path)"""
         self._proc: subprocess.Popen[bytes] | None = None
         self._state: WorkerState = "stopped"
         self._started_at: float = 0.0
@@ -124,13 +195,15 @@ class SubprocessWorker:
             )
             self._proc = proc
             self._started_at = time.time()
+            _pipes(proc)  # read from the start: a child writing to an unread pipe blocks
         # Wait for initial capabilities/heartbeat handshake
         try:
             self._handshake(proc)
-        except Exception:
-            self._terminate_proc(proc)
+        except BaseException:
+            self._terminate_proc(proc, timeout=0.2)  # it did not answer: no grace period
             with self._lock:
-                self._proc = None
+                if self._proc is proc:
+                    self._proc = None
                 self._state = "error"
             raise
 
@@ -138,15 +211,21 @@ class SubprocessWorker:
         assert proc.stdin is not None and proc.stdout is not None
         proc.stdin.write(encode_message(WorkerMessage("ping", {"worker_id": self.worker_id})))
         proc.stdin.flush()
+        lines = _pipes(proc).lines
         deadline = time.monotonic() + self.startup_timeout
-        while time.monotonic() < deadline:
-            line = proc.stdout.readline()
-            if not line:
+        while True:
+            remaining = deadline - time.monotonic()
+            try:
+                if remaining <= 0:
+                    raise queue.Empty
+                line = lines.get(timeout=remaining)
+            except queue.Empty:
+                raise TimeoutError(f"worker {self.worker_id} did not answer startup ping within {self.startup_timeout}s") from None
+            if line is None:
+                with contextlib.suppress(subprocess.TimeoutExpired):
+                    proc.wait(timeout=1.0)
                 rc = proc.poll()
-                stderr_text = ""
-                if proc.stderr is not None:
-                    with contextlib.suppress(Exception):
-                        stderr_text = proc.stderr.read().decode("utf-8", errors="replace")[-500:]
+                stderr_text = _pipes(proc).stderr_tail(500)
                 raise RuntimeError(f"worker {self.worker_id} exited during startup (code={rc}): {stderr_text}")
             msg = decode_message(line)
             if msg.type == "capabilities":
@@ -161,7 +240,6 @@ class SubprocessWorker:
                     self._state = "idle"
                     self._last_heartbeat = time.time()
                 return
-        raise TimeoutError(f"worker {self.worker_id} did not answer startup ping within {self.startup_timeout}s")
 
     @staticmethod
     def _terminate_proc(proc: subprocess.Popen[bytes] | None, timeout: float = 3.0) -> None:
@@ -185,7 +263,12 @@ class SubprocessWorker:
                         proc.kill()
                     with contextlib.suppress(Exception):
                         proc.wait(timeout=2.0)
-        for pipe in (proc.stdin, proc.stdout, proc.stderr):
+        with _PIPES_LOCK:
+            pipes = _PIPES.pop(proc, None)
+        # the readers reach the end once the process is gone; a pipe is not closed under a reader still
+        # blocked on it (a grandchild holding it open), which would block the close as well
+        readers_done = pipes is None or pipes.join(timeout=2.0)
+        for pipe in (proc.stdin, proc.stdout, proc.stderr) if readers_done else (proc.stdin,):
             if pipe is not None and not pipe.closed:
                 with contextlib.suppress(Exception):
                     pipe.close()
@@ -199,6 +282,11 @@ class SubprocessWorker:
         self._terminate_proc(proc, timeout=timeout)
 
     def restart(self) -> WorkerHeartbeat:
+        """Replace the process. A job running in the old one ends as a
+        failure (its process is stopped first, so a hung job cannot hold up
+        the restart); the new process starts once that job's crash handling
+        is done, so the two never race over which process is the worker's."""
+
         with self._lock:
             self._state = "restarting"
             proc = self._proc
@@ -206,9 +294,10 @@ class SubprocessWorker:
             self._current_job_id = None
             self._restarts += 1
         self._terminate_proc(proc, timeout=2.0)
-        if self.restart_backoff_s > 0:
-            time.sleep(self.restart_backoff_s)
-        self.start()
+        with self._exec_lock:
+            if self.restart_backoff_s > 0:
+                time.sleep(self.restart_backoff_s)
+            self.start()
         return self.status()
 
     def is_alive(self) -> bool:
@@ -266,17 +355,20 @@ class SubprocessWorker:
                 self.start()
             with self._lock:
                 proc = self._proc
-                assert proc is not None and proc.stdin is not None and proc.stdout is not None
+                if proc is None or proc.stdin is None:  # stopped meanwhile (a restart, stop())
+                    return self._handle_crash(envelope.job_id, None, proc, detail="the worker process was stopped")
                 self._state = "busy"
                 self._current_job_id = envelope.job_id
+            lines = _pipes(proc).lines
             try:
                 proc.stdin.write(encode_message(WorkerMessage("run_job", envelope.to_dict())))
                 proc.stdin.flush()
                 while True:
-                    line = proc.stdout.readline()
-                    if not line:
-                        rc = proc.poll()
-                        return self._handle_crash(envelope.job_id, rc, proc)
+                    line = lines.get()
+                    if line is None:
+                        with contextlib.suppress(subprocess.TimeoutExpired):
+                            proc.wait(timeout=1.0)
+                        return self._handle_crash(envelope.job_id, proc.poll(), proc)
                     msg = decode_message(line)
                     now = time.time()
                     with self._lock:
@@ -313,12 +405,12 @@ class SubprocessWorker:
 
     def _handle_crash(self, job_id: str, returncode: int | None, proc: subprocess.Popen[bytes] | None, *, detail: str | None = None) -> WorkerResult:
         stderr_hint = ""
-        if proc is not None and proc.stderr is not None:
-            with contextlib.suppress(Exception):
-                stderr_hint = proc.stderr.read().decode("utf-8", errors="replace").strip()[-300:]
+        if proc is not None:
+            stderr_hint = _pipes(proc).stderr_tail(2000).strip()[-300:]
         self._terminate_proc(proc, timeout=1.0)
         with self._lock:
-            self._proc = None
+            if self._proc is proc:
+                self._proc = None
             self._current_job_id = None
             self._jobs_failed += 1
             self._state = "error"

@@ -3,7 +3,9 @@ crash recovery, Multi-GPU WorkerPool scheduling, MLX sidecar adapter, and worker
 
 from __future__ import annotations
 
+import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -141,6 +143,81 @@ def test_subprocess_worker_real_ipc_and_crash_recovery(tmp_path):
     finally:
         worker.stop()
         assert worker.status().state == "stopped"
+
+
+# A child speaking the protocol by hand: noisy on stderr first, then it answers the ping
+CHATTY_CHILD = """
+import json, sys
+sys.stderr.buffer.write(b"x" * 262144)
+sys.stderr.flush()
+for line in sys.stdin:
+    message = json.loads(line)
+    if message["type"] == "ping":
+        print(json.dumps({"protocol_version": 1, "type": "pong", "payload": {}}), flush=True)
+    elif message["type"] == "shutdown":
+        break
+"""
+
+
+def test_a_worker_that_writes_a_lot_to_stderr_still_starts():
+    # stderr was a pipe nobody read before the process died: a child writing more than the
+    # pipe holds blocked, never answered the ping, and start() waited forever
+    worker = SubprocessWorker(worker_id="w-chatty", command=[sys.executable, "-c", CHATTY_CHILD], auto_restart=False, startup_timeout=10.0)
+    starter = threading.Thread(target=worker.start, daemon=True)
+    try:
+        starter.start()
+        starter.join(timeout=12)
+        assert not starter.is_alive() and worker.status().state == "idle"
+    finally:
+        worker.stop()
+        starter.join(timeout=10)
+
+
+def test_a_worker_that_never_answers_times_out_on_time():
+    # the deadline was only checked between lines: a silent child kept start() in readline
+    worker = SubprocessWorker(worker_id="w-silent", command=[sys.executable, "-c", "import time; time.sleep(6)"], auto_restart=False, startup_timeout=1.0)
+    began = time.monotonic()
+    try:
+        with pytest.raises(TimeoutError):
+            worker.start()
+        assert time.monotonic() - began < worker.startup_timeout + 1
+        assert worker.status().state == "error"
+    finally:
+        worker.stop()
+
+
+def test_a_restart_during_a_job_ends_the_job_and_leaves_one_worker(tmp_path):
+    handler_file = tmp_path / "slow_handler.py"
+    handler_file.write_text(
+        "import time\n"
+        "from remi.worker.protocol import WorkerResult\n\n"
+        "def handle(envelope, emit_progress, emit_preview, cancel_event):\n"
+        "    if envelope.core.get('hang'):\n"
+        "        time.sleep(60)\n"
+        "    return WorkerResult(job_id=envelope.job_id, status='completed')\n",
+        encoding="utf-8",
+    )
+    worker = SubprocessWorker(worker_id="w-restart", handler_import=f"{handler_file}:handle", auto_restart=False, restart_backoff_s=0.0, startup_timeout=10.0)
+    worker.start()
+    # the job's crash handling lands after the restart started the new process (it used to forget that process)
+    started = threading.Event()
+    start, crashed = worker.start, worker._handle_crash
+    worker.start = lambda: (start(), started.set())[0]
+    worker._handle_crash = lambda *args, **kwargs: (started.wait(timeout=2), crashed(*args, **kwargs))[1]
+    results = []
+    try:
+        job = threading.Thread(target=lambda: results.append(worker.execute(JobEnvelope(job_id="hung", seq=1, tab="txt2img", core={"hang": True}))), daemon=True)
+        job.start()
+        deadline = time.monotonic() + 10
+        while worker.status().current_job_id != "hung" and time.monotonic() < deadline:
+            time.sleep(0.02)
+        restarted = worker.restart()  # the user's way out of a hung job (POST /workers/{id}/restart)
+        job.join(timeout=10)
+        assert not job.is_alive() and results[0].status == "failed"
+        assert restarted.state == "idle" and restarted.pid is not None and worker.status().pid == restarted.pid
+        assert worker.execute(JobEnvelope(job_id="next", seq=2, tab="txt2img", core={})).status == "completed"
+    finally:
+        worker.stop()
 
 
 def test_multi_gpu_worker_pool_affinity_and_concurrent_dispatch():
