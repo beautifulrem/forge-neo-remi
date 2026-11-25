@@ -15,7 +15,7 @@ import sqlite3
 import threading
 import time
 import weakref
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -123,6 +123,17 @@ def _clean_tab(tab: Any) -> str:
     if not isinstance(tab, str) or tab not in VALID_TABS:
         raise RecipeError(f"tab must be one of {', '.join(VALID_TABS)}")
     return tab
+
+
+def _clean_family(family: Any) -> str | None:
+    if family is None:
+        return None
+    if not isinstance(family, str):
+        raise RecipeError("model_family must be a string")
+    cleaned = family.strip()
+    if len(cleaned) > 100:
+        raise RecipeError("model_family must be at most 100 characters")
+    return cleaned or None
 
 
 def _clean_str_list(values: Any, field_name: str) -> list[str]:
@@ -256,20 +267,20 @@ class RecipeStore:
         *,
         description: str = "",
         model_family: str | None = None,
-        capabilities: Iterable[str] = (),
+        capabilities: Sequence[str] = (),
         tab: str = "txt2img",
         core_patch: Mapping[str, Any] | None = None,
         scripts_patch: Mapping[str, Mapping[str, Any]] | None = None,
-        tags: Iterable[str] = (),
+        tags: Sequence[str] = (),
     ) -> Recipe:
         cleaned_name = _clean_name(name)
         cleaned_desc = str(description or "").strip()[:2000]
-        cleaned_family = model_family.strip() if isinstance(model_family, str) and model_family.strip() else None
-        cleaned_caps = _clean_str_list(list(capabilities), "capabilities")
+        cleaned_family = _clean_family(model_family)
+        cleaned_caps = _clean_str_list(capabilities, "capabilities")
         cleaned_tab = _clean_tab(tab)
         cleaned_core = _clean_core_patch(core_patch)
         cleaned_scripts = _clean_scripts_patch(scripts_patch)
-        cleaned_tags = _clean_str_list(list(tags), "tags")
+        cleaned_tags = _clean_str_list(tags, "tags")
         recipe_id = secrets.token_hex(8)
         now = time.time()
         with self._lock:
@@ -307,11 +318,7 @@ class RecipeStore:
             raise RecipeError(f"no recipe {recipe_id!r}", status=404)
         name = _clean_name(changes["name"]) if "name" in changes and changes["name"] is not None else existing.name
         description = str(changes["description"]).strip()[:2000] if "description" in changes and changes["description"] is not None else existing.description
-        if "model_family" in changes:
-            raw_family = changes["model_family"]
-            model_family = raw_family.strip() if isinstance(raw_family, str) and raw_family.strip() else None
-        else:
-            model_family = existing.model_family
+        model_family = _clean_family(changes["model_family"]) if "model_family" in changes else existing.model_family
         capabilities = _clean_str_list(changes["capabilities"], "capabilities") if "capabilities" in changes and changes["capabilities"] is not None else existing.capabilities
         tab = _clean_tab(changes["tab"]) if "tab" in changes and changes["tab"] is not None else existing.tab
         core_patch = _clean_core_patch(changes["core_patch"]) if "core_patch" in changes and changes["core_patch"] is not None else existing.core_patch

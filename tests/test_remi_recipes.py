@@ -250,3 +250,26 @@ def test_concurrent_partial_updates_keep_each_others_fields(tmp_path, monkeypatc
         second.join(5)
         final = store.get(recipe.id)
         assert final.core_patch == {"steps": 8} and final.tags == ["new"]
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [{"capabilities": "abc"}, {"capabilities": 5}, {"tags": "abc"}, {"model_family": "f" * 101}, {"model_family": 5}],
+)
+def test_an_import_with_a_malformed_field_is_refused(tmp_path, entry):
+    """The import takes raw JSON: a string is not a list of one-letter
+    capabilities, a number is not a server error, and the family has the
+    length limit the create route has."""
+
+    with webui_state(), server_app(tmp_path) as server:
+        answer = server.client.post("/api/v2/recipes/import", json={"recipes": [{"name": "ok"}, {"name": "bad", **entry}]})
+        assert answer.status_code == 422
+        assert server.client.get("/api/v2/recipes").json()["total"] == 0
+
+
+def test_an_update_checks_the_family_too(tmp_path):
+    with RecipeStore(tmp_path / "recipes.db") as store:
+        recipe = store.create("r", model_family="anima")
+        with pytest.raises(RecipeError):
+            store.update(recipe.id, {"model_family": "f" * 101})
+        assert store.update(recipe.id, {"model_family": "  "}).model_family is None
