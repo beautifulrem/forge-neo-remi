@@ -6,7 +6,8 @@
  * - Generate queues a job; pressing it again while one runs queues another.
  *   A second press within `DOUBLE_PRESS_MS` of one whose submit has not
  *   answered yet is a double click: it is sent with the first press's
- *   `Idempotency-Key`, so the server queues one job and answers both.
+ *   `Idempotency-Key`, so the server queues one job and answers both. The
+ *   press is one submit: its first answer settles it, the other is ignored.
  * - Ctrl/Cmd+Enter while this form's job runs interrupts it and, unless the
  *   setting `ctrl_enter_interrupt` is on, generates again once it has ended.
  * - Interrupt stops the running job, cancels this form's queued jobs and
@@ -23,7 +24,7 @@ export type RunState = {
   jobs: readonly string[]
   /** The job of `jobs` the worker is running. */
   running: string | null
-  /** `POST /jobs` requests in flight (Generate can be pressed again meanwhile). */
+  /** Submits in flight (Generate can be pressed again meanwhile); a double click is one. */
   pending: number
   interrupting: boolean
   forever: boolean
@@ -33,12 +34,15 @@ export type RunState = {
   restart: boolean
   /** In-flight submits to cancel when they answer (interrupted while they were pending). */
   dropPending: number
-  /** The last Generate press with a key: a press soon after it, while it has no answer, reuses its key. */
-  press: Press | null
+  /** Generate presses with requests in flight, the newest last: a press soon after the newest reuses its key. */
+  presses: readonly Press[]
 }
 
-/** A Generate press: its submit's `Idempotency-Key`, when it was pressed and whether its answer came. */
-export type Press = { key: string; at: number; answered: boolean }
+/**
+ * A Generate press: its submit's `Idempotency-Key`, when it was pressed, its requests in flight
+ * (2 for a double click) and whether one of them answered with its jobs.
+ */
+export type Press = { key: string; at: number; requests: number; answered: boolean }
 
 /** A second Generate press this soon (ms) after a pending one is a double click, not another job. */
 export const DOUBLE_PRESS_MS = 400
@@ -98,7 +102,7 @@ export const IDLE: RunState = {
   repeatLeft: 0,
   restart: false,
   dropPending: 0,
-  press: null,
+  presses: [],
 }
 
 export function phaseOf(s: RunState): RunPhase {
@@ -118,14 +122,31 @@ function submit(s: RunState): Result {
   return [{ ...s, pending: s.pending + 1 }, [{ type: "submit" }]]
 }
 
-/** A Generate press: a double click reuses the pending press's key, another press starts its own. */
+/** A Generate press: a double click sends the pending press again (its key), another press is a submit of its own. */
 function press(s: RunState, key: string | undefined, at: number | undefined): Result {
   if (key === undefined || at === undefined) return submit(s)
-  const last = s.press
+  const last = s.presses.at(-1)
   if (last && !last.answered && at - last.at >= 0 && at - last.at < DOUBLE_PRESS_MS) {
-    return [{ ...s, pending: s.pending + 1 }, [{ type: "submit", key: last.key }]]
+    const presses = [...s.presses.slice(0, -1), { ...last, requests: last.requests + 1 }]
+    return [{ ...s, presses }, [{ type: "submit", key: last.key }]]
   }
-  return [{ ...s, pending: s.pending + 1, press: { key, at, answered: false } }, [{ type: "submit", key }]]
+  return [{ ...s, pending: s.pending + 1, presses: [...s.presses, { key, at, requests: 1, answered: false }] }, [{ type: "submit", key }]]
+}
+
+/**
+ * One request of a press answered (`ok`: with its jobs): the press's other requests are left in
+ * flight. `first`: the answer settles the press (its first with jobs, or the last of a refused
+ * press); any other answer only counts down its requests.
+ */
+function answer(s: RunState, key: string | undefined, ok: boolean): { presses: readonly Press[]; first: boolean } {
+  const index = key === undefined ? -1 : s.presses.findIndex((p) => p.key === key)
+  if (index < 0) return { presses: s.presses, first: true } // a submit of its own (loops, upscale) or no key
+  const p = s.presses[index]!
+  const requests = p.requests - 1
+  const first = !p.answered && (ok || requests === 0)
+  const rest = s.presses.filter((_, i) => i !== index)
+  const presses = requests > 0 ? [...rest.slice(0, index), { ...p, requests, answered: p.answered || ok }, ...rest.slice(index)] : rest
+  return { presses, first }
 }
 
 function interrupt(s: RunState): Result {
@@ -172,21 +193,22 @@ export function reduce(s: RunState, event: RunEvent, options: RunOptions): Resul
       return [{ ...next, restart: !options.interruptOnly }, effects]
     }
     case "submitted": {
-      const pending = Math.max(0, s.pending - 1)
-      const ours = s.press !== null && event.key !== undefined && s.press.key === event.key
+      const { presses, first } = answer(s, event.key, true)
       // the other request of a double click: the same jobs, already taken (and maybe ended) with the first answer
-      const again = ours && s.press!.answered
-      const answered = ours && !again ? { ...s.press!, answered: true } : s.press
+      if (!first) return [{ ...s, presses }, []]
+      const pending = Math.max(0, s.pending - 1)
       if (s.dropPending > 0) {
-        const effects = again ? [] : event.jobIds.map<RunEffect>((jobId) => ({ type: "cancel", jobId }))
-        return settle({ ...s, pending, press: answered, dropPending: s.dropPending - 1 }, "interrupted", effects)
+        const effects = event.jobIds.map<RunEffect>((jobId) => ({ type: "cancel", jobId }))
+        return settle({ ...s, pending, presses, dropPending: s.dropPending - 1 }, "interrupted", effects)
       }
-      if (again) return [{ ...s, pending }, []]
       const added = event.jobIds.filter((id) => !s.jobs.includes(id))
-      return [{ ...s, pending, press: answered, jobs: added.length > 0 ? [...s.jobs, ...added] : s.jobs }, []]
+      return [{ ...s, pending, presses, jobs: added.length > 0 ? [...s.jobs, ...added] : s.jobs }, []]
     }
     case "rejected": {
-      const next = { ...s, pending: Math.max(0, s.pending - 1), dropPending: Math.max(0, s.dropPending - 1) }
+      const { presses, first } = answer(s, event.key, false)
+      // the press's other request may still queue its job
+      if (!first) return [{ ...s, presses }, []]
+      const next = { ...s, presses, pending: Math.max(0, s.pending - 1), dropPending: Math.max(0, s.dropPending - 1) }
       return [{ ...next, forever: false, repeatLeft: 0, restart: false }, []]
     }
     case "started":

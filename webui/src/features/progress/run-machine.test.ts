@@ -125,6 +125,30 @@ describe("run machine", () => {
       expect(state).toMatchObject({ jobs: ["a"], pending: 0 })
     })
 
+    it("a repeated answer after the job ended does not hold up the runs left", () => {
+      const { state, effects } = run([
+        { type: "generate", runs: 3, key: "k1", at: 1000 },
+        { type: "generate", runs: 3, key: "k2", at: 1100 },
+        { type: "submitted", key: "k1", jobIds: ["a"] },
+        { type: "started", jobId: "a" },
+        { type: "finished", jobId: "a", outcome: "completed" },
+        { type: "submitted", key: "k1", jobIds: ["a"] },
+      ])
+      expect(keyOf(effects)).toEqual(["k1", "k1", undefined])
+      expect(state).toMatchObject({ repeatLeft: 1, pending: 1, jobs: [], presses: [] })
+    })
+
+    it("a press refused by both of its requests is one rejection", () => {
+      const { state } = run([
+        { type: "generate", key: "k1", at: 1000 },
+        { type: "generate", key: "k2", at: 1100 },
+        { type: "generate", key: "k3", at: 2000 },
+        { type: "rejected", key: "k1" },
+        { type: "rejected", key: "k1" },
+      ])
+      expect(state).toMatchObject({ pending: 1, presses: [{ key: "k3", requests: 1, answered: false }] })
+    })
+
     it("never reuses a press's key for the loops' own submits", () => {
       const { effects } = run([
         { type: "forever", on: true },
