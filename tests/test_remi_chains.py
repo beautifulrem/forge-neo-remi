@@ -381,3 +381,23 @@ def test_chains_edge_cases_errors_disabled_stages_and_routes(tmp_path, monkeypat
         assert server.client.post(f"/api/v2/chains/{ch['id']}/pause").status_code == 200
         assert server.client.post(f"/api/v2/chains/{ch['id']}/rerun", json={"from_stage": 0}).status_code == 200
         assert server.services.queue.wait_idle(timeout=5)
+
+
+def test_the_chain_tables_have_one_schema(tmp_path):
+    """The chain tables live in the jobs database (the queue's store reads
+    them) or in a database of their own: both are made from one schema."""
+
+    from remi.jobs.store import CHAIN_SCHEMA
+
+    assert "chain_force" in CHAIN_SCHEMA
+
+    def tables(db):
+        return dict(db.execute("SELECT name, sql FROM sqlite_master WHERE name IN ('chains', 'stage_runs', 'stage_cache', 'chain_templates', 'chain_force') ORDER BY name").fetchall())
+
+    jobs = JobStore(tmp_path / "jobs.db")
+    shared, standalone = ChainStore(jobs), ChainStore(tmp_path / "chains.db")
+    try:
+        assert tables(shared._db) == tables(standalone._db) and len(tables(standalone._db)) == 5
+    finally:
+        standalone.close()
+        jobs.close()

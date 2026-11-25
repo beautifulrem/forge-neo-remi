@@ -35,7 +35,7 @@ from typing import Any
 
 from remi.files import FileStore, connect, decode_cursor, encode_cursor, transaction
 from remi.jobs.queue import JobError, JobQueue, Submission
-from remi.jobs.store import CANCELLED, COMPLETED, FAILED, INTERRUPTED, Job, JobStore
+from remi.jobs.store import CANCELLED, CHAIN_SCHEMA, COMPLETED, FAILED, INTERRUPTED, Job, JobStore
 from remi.realtime import EventBus
 
 log = logging.getLogger(__name__)
@@ -292,71 +292,6 @@ def template_json(template: ChainTemplate, iso: Callable[[float | None], str | N
     }
 
 
-_STANDALONE_SCHEMA = """
-CREATE TABLE IF NOT EXISTS chains (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL,
-    current_stage INTEGER NOT NULL DEFAULT 0,
-    priority INTEGER NOT NULL DEFAULT 0,
-    user TEXT,
-    model_fingerprint TEXT NOT NULL DEFAULT '',
-    error TEXT,
-    created REAL NOT NULL,
-    updated REAL NOT NULL,
-    started REAL,
-    finished REAL
-);
-CREATE INDEX IF NOT EXISTS chains_created ON chains(created DESC);
-CREATE TABLE IF NOT EXISTS stage_runs (
-    chain_id TEXT NOT NULL,
-    stage_index INTEGER NOT NULL,
-    kind TEXT NOT NULL,
-    name TEXT NOT NULL DEFAULT '',
-    enabled INTEGER NOT NULL DEFAULT 1,
-    tab TEXT NOT NULL,
-    core TEXT NOT NULL DEFAULT '{}',
-    scripts TEXT NOT NULL DEFAULT '{}',
-    config TEXT NOT NULL DEFAULT '{}',
-    status TEXT NOT NULL,
-    stage_hash TEXT,
-    cached INTEGER NOT NULL DEFAULT 0,
-    job_id TEXT,
-    output_file_ids TEXT NOT NULL DEFAULT '[]',
-    output_prompt TEXT,
-    infotext TEXT,
-    error TEXT,
-    started REAL,
-    finished REAL,
-    PRIMARY KEY (chain_id, stage_index)
-);
-CREATE INDEX IF NOT EXISTS stage_runs_job ON stage_runs(job_id);
-CREATE TABLE IF NOT EXISTS stage_cache (
-    stage_hash TEXT PRIMARY KEY,
-    kind TEXT NOT NULL,
-    output_file_ids TEXT NOT NULL DEFAULT '[]',
-    output_prompt TEXT,
-    infotext TEXT,
-    job_id TEXT,
-    created REAL NOT NULL
-);
-CREATE TABLE IF NOT EXISTS chain_templates (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
-    description TEXT NOT NULL DEFAULT '',
-    model_family TEXT,
-    stages TEXT NOT NULL DEFAULT '[]',
-    tags TEXT NOT NULL DEFAULT '[]',
-    created REAL NOT NULL,
-    updated REAL NOT NULL
-);
-CREATE TABLE IF NOT EXISTS chain_force (
-    chain_id TEXT PRIMARY KEY,
-    stages TEXT NOT NULL DEFAULT '[]'
-);
-"""
-
-
 class ChainStore:
     """SQLite persistence for :class:`JobChain`, :class:`StageRun`, stage cache and templates.
 
@@ -374,7 +309,7 @@ class ChainStore:
             self._db = connect(Path(target))
             self._owns_db = True
         with self._lock:
-            self._db.executescript(_STANDALONE_SCHEMA)
+            self._db.executescript(CHAIN_SCHEMA)
 
     def close(self) -> None:
         if self._owns_db:

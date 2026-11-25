@@ -103,6 +103,10 @@ CREATE TABLE IF NOT EXISTS imports (
     job_id TEXT NOT NULL,
     PRIMARY KEY (source, source_id)
 );
+"""
+# ``imports``: records an importer already brought in (importing twice is a no-op)
+
+CHAIN_SCHEMA = """
 CREATE TABLE IF NOT EXISTS chains (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL DEFAULT '',
@@ -160,8 +164,14 @@ CREATE TABLE IF NOT EXISTS chain_templates (
     created REAL NOT NULL,
     updated REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS chain_force (
+    chain_id TEXT PRIMARY KEY,
+    stages TEXT NOT NULL DEFAULT '[]'
+);
 """
-# ``imports``: records an importer already brought in (importing twice is a no-op)
+"""The pipeline tables (:mod:`remi.jobs.chains`): in the jobs database, where
+:meth:`JobStore.referenced_strings` reads them, or in a database of their own."""
+_SCHEMA += CHAIN_SCHEMA
 
 _ADDED_COLUMNS = {
     "starred": "INTEGER NOT NULL DEFAULT 0",
