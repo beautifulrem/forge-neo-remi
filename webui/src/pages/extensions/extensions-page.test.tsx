@@ -395,7 +395,9 @@ describe("available extensions", { timeout: 20_000 }, () => {
   it("counts a one-extension index in the singular", async () => {
     vi.spyOn(api.extensions, "index").mockResolvedValue(indexOf(1))
     renderPage("tab=available")
-    fireEvent.click(await screen.findByRole("button", { name: "Load index" }, { timeout: 8000 }))
+    const load = await screen.findByRole("button", { name: "Load index" }, { timeout: 8000 })
+    await waitFor(() => expect(load).toBeEnabled()) // once the extension list says access is on
+    fireEvent.click(load)
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/^0 of 1 extension$/), { timeout: 8000 })
   })
 
