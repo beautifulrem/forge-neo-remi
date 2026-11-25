@@ -635,3 +635,46 @@ def test_cancelling_a_pipeline_stops_its_local_upsample_stage(tmp_path):
         runner.close()
         files.close()
         jobs.close()
+
+
+def test_a_failed_upsample_stage_says_why_in_its_own_sentence(tmp_path, monkeypatch):
+    """A failed upsample stage stored "TranslationError: the model answered with an empty prompt",
+    and "PermissionError: ..." for a local model under --hide-ui-dir-config: with the class name
+    in front, no catalog had the text. The pipeline and the stage keep the sentence itself, a key
+    of the server catalogs, as the pipeline's other errors are plain sentences."""
+
+    import json
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from modules import shared
+    from remi.jobs import chains as chains_mod
+    from remi.prompt_tools.translate import TranslationError
+    from remi.ui import Sentence
+
+    catalog = json.loads((Path(__file__).resolve().parents[1] / "localizations" / "zh_CN.json").read_text(encoding="utf-8"))
+    monkeypatch.setattr(shared, "cmd_opts", SimpleNamespace(hide_ui_dir_config=True), raising=False)
+    files = FileStore(tmp_path / "files")
+    jobs = JobStore(tmp_path / "jobs.db")
+    bus = EventBus()
+    state = FakeState()
+    queue = JobQueue(jobs, files, bus, executor=lambda job, ctx: None, dispatch=run_inline, lock=threading.Lock(), validate=lambda *a: None, state=lambda: state, hash_layout=lambda tab: "h")
+
+    def upsampler(stage, upstream_prompt, upstream_outputs):
+        if stage.config.get("local_model_path"):
+            return chains_mod._default_upsampler(stage, upstream_prompt, upstream_outputs)
+        raise TranslationError(Sentence("the model answered with an empty prompt"))
+
+    runner = ChainRunner(ChainStore(jobs), queue, files, bus, upsampler=upsampler, model_fingerprint=lambda: "m")
+    try:
+        for config, sentence in (({}, "the model answered with an empty prompt"), ({"local_model_path": "/srv/qwen.gguf"}, "local_model_path is disabled under --hide-ui-dir-config")):
+            chain = runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "fox"}, config=config), StageSpec(kind="generate", core={"prompt": "fox"})])
+            assert runner.wait_idle(5)
+            done = runner.store.get_chain(chain.id)
+            assert done.status == "failed" and done.stages[1].job_id is None
+            assert done.error == done.stages[0].error == sentence
+            assert catalog.get(sentence)
+    finally:
+        runner.close()
+        files.close()
+        jobs.close()

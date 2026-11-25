@@ -530,7 +530,9 @@ client has a bounded event queue and one preview slot.
   stops it the same way (`cancel_chain` flips the queue's state, which is the
   stage's own while it holds the lock, and only then); one that
   asks the prompt tools' endpoint does not (and fails while the prompt tools
-  are off, as `/prompt-tools/upsample` answers 409 then). A stage's cache key covers its parameters, its upstream
+  are off, as `/prompt-tools/upsample` answers 409 then). A failed upsample
+  stage's `error` is the prompt tool's sentence, as the route answers it
+  (`detail`), never the exception's class name. A stage's cache key covers its parameters, its upstream
   stage's hash, images and prompt, and the server-side model fingerprint
   (checkpoint name and file identity, VAE and text encoders, clip skip and
   the other settings that change every image), read again when the job

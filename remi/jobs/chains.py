@@ -840,6 +840,8 @@ def _default_upsampler(stage: StageRun, upstream_prompt: str | None, upstream_ou
     base_prompt = str(stage.core.get("prompt") or upstream_prompt or "")
     if not base_prompt.strip():
         return base_prompt
+    from remi.prompt_tools.translate import TranslationError
+
     cfg = stage.config or {}
     local_model_path = cfg.get("local_model_path")
     if local_model_path:
@@ -847,9 +849,9 @@ def _default_upsampler(stage: StageRun, upstream_prompt: str | None, upstream_ou
 
         # the same guard as the upsample route: a client-given path is a server folder
         if getattr(getattr(shared, "cmd_opts", None), "hide_ui_dir_config", False):
-            raise PermissionError("local_model_path is disabled under --hide-ui-dir-config")
+            raise TranslationError(Sentence("local_model_path is disabled under --hide-ui-dir-config"), 403)
     else:
-        from remi.prompt_tools import TranslationError, registry
+        from remi.prompt_tools import registry
 
         # the endpoint is the prompt tools' provider: off with them, as the upsample route is
         if not registry.tools_enabled:
@@ -1367,7 +1369,7 @@ class ChainRunner:
         return updated_chain
 
     def _run_upsample(self, chain_id: str, stage: StageRun, stage_hash: str, started: float, upstream_prompt: str | None, upstream_outputs: list[str]) -> None:
-        from remi.prompt_tools.translate import GenerationInterrupted
+        from remi.prompt_tools.translate import GenerationInterrupted, TranslationError
 
         def run_local() -> str:
             # Interrupt flips the queue's state while this holds the lock: the local model stops on it
@@ -1396,6 +1398,9 @@ class ChainRunner:
                     result = self.upsampler(stage, upstream_prompt, upstream_outputs)
             except GenerationInterrupted as exc:
                 error, interrupted = str(exc), True
+            except TranslationError as exc:
+                # the sentence itself, as the pipeline's other errors: a key of the server catalogs
+                error = str(exc)
             except Exception as exc:
                 error = f"{type(exc).__name__}: {exc}"
             should_advance = False

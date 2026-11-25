@@ -1177,5 +1177,6 @@
   "local GGUF PUP requires 'llama-cpp-python' (or serve the GGUF via llama.cpp server and configure the OpenAI-compatible provider)": "本地 GGUF PUP 需要安装 llama-cpp-python（或用 llama.cpp server 提供该 GGUF 模型，并在设置中将翻译服务设为 OpenAI 兼容接口）",
   "local GGUF PUP execution failed: {{error}}": "本地 GGUF PUP 运行失败：{{error}}",
   "local Qwen3.5 PUP execution failed: {{error}}": "本地 Qwen3.5 PUP 运行失败：{{error}}",
-  "local Qwen3.5 PUP answered with an empty prompt": "本地 Qwen3.5 PUP 返回了空的提示词"
+  "local Qwen3.5 PUP answered with an empty prompt": "本地 Qwen3.5 PUP 返回了空的提示词",
+  "local_model_path is disabled under --hide-ui-dir-config": "已通过 --hide-ui-dir-config 禁用本地模型路径（local_model_path）"
 }
