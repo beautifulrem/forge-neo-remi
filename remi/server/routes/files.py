@@ -103,6 +103,13 @@ def _record(services: Any, file_id: str) -> FileRecord:
     return record
 
 
+def _output(services: Any, file_id: str) -> FileRecord:
+    record = _record(services, file_id)
+    if record.kind != "output":
+        raise not_found("no such output")
+    return record
+
+
 def _cache(record: FileRecord) -> str:
     return REVALIDATE if record.kind == "network" else FILE_CACHE
 
@@ -156,9 +163,7 @@ def list_outputs(services: ServicesDep, cursor: str | None = None, q: str | None
 
 @router.delete("/outputs/{file_id}", status_code=204, responses={404: {"model": m.Detail}}, summary="Remove an output from the gallery (`delete_file` also deletes it on disk)")
 def delete_output(file_id: str, services: ServicesDep, delete_file: bool = False) -> Response:
-    record = _record(services, file_id)
-    if record.kind != "output":
-        raise not_found("no such output")
+    _output(services, file_id)
     gallery_for(services.files).delete([file_id], delete_files=delete_file)  # its star, board entries and lineage too
     return Response(status_code=204)
 
@@ -168,7 +173,7 @@ def save_outputs(body: m.SaveRequest, services: ServicesDep) -> dict[str, Any]:
     from remi.server.gallery import GalleryError
     from remi.server.gallery import save_outputs as save
 
-    records = [_record(services, file_id) for file_id in dict.fromkeys(body.ids)]
+    records = [_output(services, file_id) for file_id in dict.fromkeys(body.ids)]
     try:
         result = save(records, make_zip=body.zip)
     except GalleryError as error:

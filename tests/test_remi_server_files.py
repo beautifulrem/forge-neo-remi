@@ -647,6 +647,17 @@ def test_gallery_save_writes_copies_a_log_and_a_zip(server, webui, tmp_path, mon
     assert server.client.post("/api/v2/outputs/save", json={"ids": ["missingmissing"]}).status_code == 404
 
 
+def test_gallery_save_copies_outputs_only(server, webui, tmp_path, monkeypatch):
+    from modules import shared
+
+    save_dir = tmp_path / "saved"
+    monkeypatch.setattr(shared.opts, "outdir_save", str(save_dir), raising=False)
+    uploaded = upload(server.client, png()).json()["id"]
+    response = server.client.post("/api/v2/outputs/save", json={"ids": [uploaded], "zip": False})
+    assert response.status_code == 404 and response.json()["detail"] == "no such output"
+    assert not save_dir.exists() or not any(save_dir.iterdir())
+
+
 # The Save folder setting can be cleared on the settings page: Save then answered 500 (no folder named "")
 def test_gallery_save_with_the_folder_cleared_uses_its_default(server, webui, tmp_path, monkeypatch):
     from modules import shared
