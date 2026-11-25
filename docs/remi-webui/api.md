@@ -33,8 +33,8 @@ Contents: [Conventions](#conventions) · [Authentication](#authentication) ·
   `/sd/api/v2/app`. With `--nowebui` the default port is 7861.
 - **JSON** everywhere except uploads (multipart) and files. No `NaN` or
   `Infinity` is accepted or produced, and no text UTF-8 cannot hold (an
-  unpaired surrogate such as `"\udc80"`, half of an emoji): an `/api/v2`
-  JSON body carrying one anywhere is refused with a 422 whose owner is
+  unpaired surrogate such as `"\udc80"`, half of an emoji): a JSON body
+  carrying one anywhere (`/api/v2`, and `/sdapi/v1` too) is refused with a 422 whose owner is
   `body` and whose `param` is the value's path (`patch.core.prompt`), before
   anything is stored; `PATCH /options` and `POST /options/validate` name
   each refused setting instead. A body may be at most twice the upload

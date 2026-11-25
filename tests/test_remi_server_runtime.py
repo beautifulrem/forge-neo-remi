@@ -546,6 +546,37 @@ def test_sdapi_is_mounted_on_the_same_app(webui_tmp):
         services.close()
 
 
+def test_sdapi_refuses_text_utf8_cannot_write(webui_tmp, monkeypatch):
+    """``/sdapi/v1/options`` stores what it is given and saves the settings: text with an
+    unpaired surrogate stopped ``Options.save`` half way and left config.json cut short
+    (the next start lost every setting). /sdapi bodies are checked as /api/v2's are."""
+    from fastapi.testclient import TestClient
+
+    from modules import shared
+    from remi.jobs import run_inline
+    from remi.server import Services, create_app
+    from remi.server.auth import Auth
+
+    config = webui_tmp / "config.json"
+    monkeypatch.setattr(shared, "config_filename", str(config))
+    monkeypatch.setitem(shared.opts.data, "samples_filename_pattern", shared.opts.data.get("samples_filename_pattern", ""))
+    shared.opts.save(str(config))
+    before = config.read_bytes()
+    services = Services.create(webui_tmp, dispatch=run_inline, realtime=False, housekeeping=False)
+    try:
+        app = create_app(services=services, auth=Auth(), sdapi=True, start_services=False)
+        with TestClient(app, base_url="http://127.0.0.1:7860", raise_server_exceptions=False) as client:
+            for body in (b'{"samples_filename_pattern": "x\\udc80"}', '{"samples_filename_pattern": "x\udc80"}'.encode("utf-8", "surrogatepass")):
+                response = client.post("/sdapi/v1/options", content=body, headers={"content-type": "application/json"})
+                assert response.status_code == 422, response.text
+                assert config.read_bytes() == before
+                assert shared.opts.data["samples_filename_pattern"] != "x\udc80"
+            assert client.post("/sdapi/v1/options", json={"samples_filename_pattern": "[seed]"}).status_code == 200
+            assert json.loads(config.read_text(encoding="utf-8"))["samples_filename_pattern"] == "[seed]"
+    finally:
+        services.close()
+
+
 def test_sdapi_infotext_fills_request_fields_and_script_args(webui_tmp):
     from modules.api import api, models
 

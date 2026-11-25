@@ -79,9 +79,9 @@ def json_safe(value: Any) -> Any:
 
 class TextSafeResponse(JSONResponse):
     """The API's JSON. Text with an unpaired surrogate ("\\udc80") cannot be
-    UTF-8: a setting written through ``/sdapi/v1/options`` (which checks
-    nothing) and read back by a tab's schema or the system info failed those
-    requests until the next start. Such text is written with JSON escapes."""
+    UTF-8: a setting an extension stored (``/sdapi/v1/options`` once did) and
+    read back by a tab's schema or the system info failed those requests until
+    the next start. Such text is written with JSON escapes."""
 
     def render(self, content: Any) -> bytes:
         try:
@@ -189,11 +189,13 @@ def _broken_text_at(value: Any) -> tuple[str, ...] | None:
 
 
 async def refuse_broken_text(connection: HTTPConnection) -> None:
-    """Every ``/api/v2`` JSON body: text UTF-8 cannot write is refused (422)
-    before a route keeps it. JSON can carry an unpaired surrogate (escaped,
-    "\\udc80", half of an emoji, or as raw bytes); UTF-8 cannot hold one, so a
-    value of any kind (a setting, a recipe's patch, a pipeline, a model's
-    metadata) failed in the middle of its write to a file or to SQLite.
+    """Every JSON body (``/api/v2``, ``/sdapi/v1``): text UTF-8 cannot write is
+    refused (422) before a route keeps it. JSON can carry an unpaired surrogate
+    (escaped, "\\udc80", half of an emoji, or as raw bytes); UTF-8 cannot hold
+    one, so a value of any kind (a setting, a recipe's patch, a pipeline, a
+    model's metadata) failed in the middle of its write to a file or to SQLite;
+    ``/sdapi/v1/options`` stored it and left config.json cut short, every
+    setting lost at the next start.
     Typed text fields refused it already (pydantic); this covers values of
     any kind. FastAPI reads a body as JSON without a content type, and with
     one in any case, and in any of the encodings JSON allows."""
@@ -276,6 +278,8 @@ def create_app(
         redoc_url=None,
         default_response_class=TextSafeResponse,
         exception_handlers={Exception: handle_exception, RequestValidationError: _request_validation_error, ValidationError: _validation_error, JobError: _job_error, FileError: _file_error},
+        # every route's JSON body, /sdapi's (added below) included
+        dependencies=[Depends(refuse_broken_text)],
     )
     app.state.services = services
     app.state.auth = auth
@@ -286,7 +290,7 @@ def create_app(
 
     from remi.server.routes import admin, boards, chains, core, extensions, files, jobs, library, networks, prompt_tools, queue_tools, recipes, system, workers
 
-    api = APIRouter(prefix=API_PREFIX, dependencies=[Depends(refuse_broken_text)])
+    api = APIRouter(prefix=API_PREFIX)
     for module in (core, jobs, files, networks, extensions, system, admin, queue_tools, library, boards, recipes, chains, workers, prompt_tools):
         api.include_router(module.router)
     app.include_router(api)

@@ -242,11 +242,12 @@ non-finite numbers as text, and `/api/v2` models refuse them as values.
 sets nothing (it was a `KeyError`, a 500).
 
 Text UTF-8 cannot hold (an unpaired surrogate, which JSON can escape) is
-refused with a 422 in any `/api/v2` JSON body (`refuse_broken_text`) and per
-setting in `/options`, before it reaches a file or SQLite: written, it failed
-half-way through the write (a truncated `config.json` the server could not
-start from). Responses write such text with JSON escapes rather than fail.
-`/sdapi/v1/options` is upstream's and does not check it.
+refused with a 422 in any JSON body, `/api/v2` and `/sdapi/v1` alike
+(`refuse_broken_text`, a dependency of the whole app), and per setting in
+`/options`, before it reaches a file or SQLite: written, it failed half-way
+through the write (a truncated `config.json` the server could not start
+from). Responses write such text with JSON escapes rather than fail (an
+extension can still store it).
 
 ### Secrets in logs
 
@@ -373,3 +374,4 @@ SPA.
 | 5 | A session cookie whose signature held non-ASCII characters answered 500 with a logged traceback before the login check, on every route | low | refused like a wrong signature |
 | 6 | `GET /api/v2/auth/status` checked HTTP Basic credentials without the login throttle (a public path) and answered who they log in as: unlimited password guessing again (2026-10 #4) | medium | public paths read the session cookie only; `/auth/status` checks Basic itself, counting failures and telling a throttled client nothing |
 | 7 | A request to a path open without a login (`/api/v2/auth/*`) could carry a body up to the full cap (128 MB by default), buffered and scanned before any login check (a 60 MB body took about 180 MB of memory) | low | 64 KB on those paths, enforced while the body streams in |
+| 8 | `POST /sdapi/v1/options` with text holding an unpaired surrogate stored it and saved the settings: the save stopped half-way and left `config.json` cut short (#2 for the A1111 API), every setting lost at the next start | high | `/sdapi/v1` JSON bodies are checked as `/api/v2`'s are (422, nothing stored) |
