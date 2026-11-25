@@ -105,7 +105,8 @@ export function FolderTree({ folders, total, selected, onSelect, className }: { 
             className={cn(
               "group/tree flex h-7 cursor-pointer items-center gap-1 rounded-md pr-2 text-muted-foreground outline-none select-none",
               "hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring",
-              "aria-selected:bg-accent aria-selected:font-medium aria-selected:text-foreground",
+              // a tone and an inset edge: the tone alone is too close to the rows around it (frontend.md)
+              "aria-selected:bg-accent aria-selected:font-medium aria-selected:text-foreground aria-selected:inset-ring aria-selected:inset-ring-muted-foreground",
             )}
             style={{ paddingLeft: `${0.25 + Math.max(0, row.depth - 1) * 0.875}rem` }}
           >

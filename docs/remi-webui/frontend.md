@@ -500,6 +500,10 @@ generated interfaces (sources: Linear's
   quiet surface, so the edge carries the state, at 6:1 or more against the
   track (a popover's page-tone track too) and the tone, with no new token
   (`tests/e2e/a11y.spec.ts`, "selected segments"; `lib/design-guards.test.ts`).
+  A selected row of a list with no track (the folder tree's, `FolderTree`)
+  takes the same edge with its `--accent` tone: the tone alone is 1.09:1 to
+  1.29:1 against the page or the popover around the tree, the edge 5.7:1 in
+  the light theme and 6.6:1 in the dark one, against both.
   A line tab strip keeps its underline alone. One depth cue per element, never an edge and
   a shadow together, and no one-sided edge: a field (input, select, number,
   the prompt editor, `FIELD_BUTTON_CLASS`) is a flat fill (`--field`) with

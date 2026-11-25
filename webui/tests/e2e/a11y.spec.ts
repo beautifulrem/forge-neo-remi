@@ -432,6 +432,31 @@ test.describe("selected segments", () => {
       expect(marks.filter((mark) => !("indicator" in mark) || (mark.indicator ?? 0) < 3)).toEqual([])
     })
   }
+
+  // The folder tree's selected row was the same kind of mark: --accent behind it, a step off the
+  // page or the popover around the tree, the only thing telling it from the other rows.
+  for (const theme of ["light", "dark"] satisfies Theme[]) {
+    test(`${theme}: the folder tree's selected row stands out by 3:1`, async ({ page }) => {
+      await presetStorage(page, { theme })
+      // the networks page shows the tree in a pane of its own
+      await openRoute(page, "networks")
+      const pane = page.getByRole("complementary", { name: "Folders" }).getByRole("tree", { name: "Folders" })
+      await expect(pane.getByRole("treeitem", { selected: true })).toBeVisible()
+      const marks = [await selectedSegment(pane)]
+      // the networks drawer shows it in a popover
+      await page.evaluate(() => (location.hash = "#/txt2img"))
+      await expect(page.getByRole("textbox", { name: "Prompt", exact: true })).toBeVisible()
+      await page.locator("body").press("Alt+N")
+      const drawer = page.getByRole("dialog", { name: "Networks" })
+      await expect(drawer.getByRole("option").first()).toBeVisible()
+      await drawer.getByRole("button", { name: "Folders" }).click()
+      const popover = page.getByRole("dialog", { name: "Folders" }).getByRole("tree", { name: "Folders" })
+      await expect(popover.getByRole("treeitem", { selected: true })).toBeVisible()
+      marks.push(await selectedSegment(popover))
+      expect(marks.every((mark) => mark.selected)).toBe(true)
+      expect(marks.filter((mark) => !("indicator" in mark) || (mark.indicator ?? 0) < 3)).toEqual([])
+    })
+  }
 })
 
 // A bar pinned over a scroller (the run bar, the apply bars, the send bar) covered the control Tab

@@ -289,15 +289,15 @@ describe("selected segments", () => {
     // frontend.md: a segmented control's or tab strip's selected segment is its tone (--card, --accent
     // in the dark theme) and an inset 1 px edge in --muted-foreground. The tone alone is 1.18:1
     // against the --muted track in the light theme and 1.10:1 in the dark one; a state indicator
-    // needs 3:1 (WCAG 1.4.11).
+    // needs 3:1 (WCAG 1.4.11). So is the folder tree's selected row (--accent, 1.09:1 to 1.29:1).
     const segments = files.flatMap(({ file, source }) =>
       (source.match(/"[^"\n]*"|'[^'\n]*'|`[^`]*`/g) ?? []).flatMap((literal) => {
-        const state = /(?:^|\s)dark:(data-checked|data-active|aria-selected):bg-accent(?:\s|$)/.exec(literal.slice(1, -1))?.[1]
+        const state = /(?:^|\s)(?:dark:)?(data-checked|data-active|aria-selected):bg-accent(?:\s|$)/.exec(literal.slice(1, -1))?.[1]
         return state ? [{ file, state, classes: literal.slice(1, -1).split(/\s+/) }] : []
       }),
     )
     expect(segments.map(({ file }) => file).sort()).toEqual(
-      expect.arrayContaining(["canvas/img2img/Img2imgStage.tsx", "canvas/img2img/SourcePanel.tsx", "components/Segmented.tsx", "components/ui/tabs.tsx"]),
+      expect.arrayContaining(["canvas/img2img/Img2imgStage.tsx", "canvas/img2img/SourcePanel.tsx", "components/Segmented.tsx", "components/ui/tabs.tsx", "features/networks/FolderTree.tsx"]),
     )
     const bare = segments.filter(({ state, classes }) => !classes.includes(`${state}:inset-ring`) || !classes.includes(`${state}:inset-ring-muted-foreground`))
     expect(bare.map(({ file }) => file)).toEqual([])
