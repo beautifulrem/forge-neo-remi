@@ -1058,7 +1058,7 @@ test.describe("no sideways scrolling", () => {
         ),
       )
       .toEqual([])
-
+  })
 
   // The phone's "Insert into" row (its label and two segmented controls) was 400 px wide in English.
   test("the insert targets fit a phone's row", async ({ page }) => {
