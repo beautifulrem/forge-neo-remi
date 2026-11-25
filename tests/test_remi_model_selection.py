@@ -3,9 +3,11 @@ POST /sdapi/v1/options) does not reach the running job: it keeps the model it
 started with across its batches and hires/refiner switches, the settings show
 the pick at once, and the next job loads it."""
 
+import contextlib
 import re
 import threading
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -234,6 +236,119 @@ def test_sdapi_refuses_a_frozen_model_pick_with_the_other_bad_values(applied, mo
     assert re.search(r"frozen|disabled", refused.value.detail)
     assert shared.opts.data["samples_format"] == "png" and shared.opts.data["sd_model_checkpoint"] == "first.safetensors"
     assert model_selection.held() == {} and applied == []
+
+
+@contextlib.contextmanager
+def options_client(root):
+    """A client of both settings routes (``POST /sdapi/v1/options``, ``PATCH /api/v2/options``)
+    and the ``options.changed`` events they announce."""
+    from fastapi.testclient import TestClient
+
+    from remi.jobs import run_inline
+    from remi.server import Services, create_app
+    from remi.server.auth import Auth
+
+    services = Services.create(root, dispatch=run_inline, realtime=False, housekeeping=False)
+    events: list[dict] = []
+    unsubscribe = services.bus.subscribe(SimpleNamespace(send_event=events.append, send_frame=lambda frame: None, wants_frames=lambda: False))
+    try:
+        app = create_app(services=services, auth=Auth(), sdapi=True, start_services=False)
+        with TestClient(app, base_url="http://127.0.0.1:7860", raise_server_exceptions=False) as client:
+
+            def send(route, body):
+                return client.post("/sdapi/v1/options", json=body) if route == "sdapi" else client.patch("/api/v2/options", json=body)
+
+            yield SimpleNamespace(send=send, changed=lambda: [key for event in events if event["type"] == "options.changed" for key in event["keys"]])
+    finally:
+        unsubscribe()
+        services.close()
+
+
+MODULES = {"vae.safetensors": "/models/VAE/vae.safetensors", "te.safetensors": "/models/text_encoder/te.safetensors"}
+
+
+@pytest.fixture
+def model_files(monkeypatch, tmp_path):
+    """Checkpoints and modules the WebUI knows, the model manager's own functions with its
+    reload of the loading parameters recorded, and the "sd" UI preset."""
+    from modules import sd_models, shared
+    from modules_forge import main_entry
+    from remi import networks
+
+    infos = {name: object() for name in ("first.safetensors", "second.safetensors")}
+    monkeypatch.setattr(sd_models, "get_closet_checkpoint_match", lambda name: infos.get(name))
+    monkeypatch.setattr(sd_models, "checkpoint_aliases", infos)
+    monkeypatch.setattr(main_entry, "module_list", dict(MODULES))
+    monkeypatch.setattr(networks, "module_files", lambda kind: [(name, path, path.rpartition("/")[0]) for name, path in MODULES.items() if (kind == "vae") == ("VAE" in path)])
+    refreshed = []
+    monkeypatch.setattr(main_entry, "refresh_model_loading_parameters", lambda refresh=True, **kwargs: refreshed.append(refresh))
+    monkeypatch.setattr(model_selection, "_start_waiter", lambda: None)
+    monkeypatch.setattr(shared, "config_filename", str(tmp_path / "config.json"))
+    for key, value in (("forge_preset", "sd"), ("sd_model_checkpoint", "first.safetensors"), ("forge_additional_modules", [MODULES["vae.safetensors"]]), ("forge_unet_storage_dtype", "Automatic"), ("samples_format", "png")):
+        monkeypatch.setitem(shared.opts.data, key, value)
+    assert "forge_unet_storage_dtype_sd" in shared.opts.data_labels
+    return refreshed
+
+
+@pytest.mark.parametrize("route", ["sdapi", "patch"])
+def test_an_unchanged_model_pick_does_nothing(webui, model_files, monkeypatch, tmp_path, route):
+    """A pick equal to the stored one still went to the model manager while no generation ran:
+    dtype_change sets the dtype again, saves the settings, reloads the loading parameters and
+    says it changed, so posting back what the settings show saved and announced
+    ``options.changed`` for nothing. An unchanged pick (modules by name or path, in any order)
+    now does nothing, on either route."""
+    from modules import shared
+
+    saves = []
+    monkeypatch.setattr(shared.opts, "save", saves.append)
+    stored = {key: shared.opts.data[key] for key in model_selection.MODEL_OPTIONS}
+    bodies = [dict(stored), {**stored, "forge_additional_modules": ["vae.safetensors"]}]
+    with options_client(tmp_path / "data") as client:
+        for body in bodies:
+            response = client.send(route, body)
+            assert response.status_code == 200, (body, response.text)
+    assert client.changed() == [] and model_files == []
+    assert {key: shared.opts.data[key] for key in model_selection.MODEL_OPTIONS} == stored
+    assert len(saves) == (len(bodies) if route == "sdapi" else 0)  # upstream's set_config saves each request's settings, changed or not
+
+
+@pytest.mark.parametrize("route", ["sdapi", "patch"])
+@pytest.mark.parametrize(
+    ("key", "stored", "copy", "sent"),
+    [
+        ("forge_unet_storage_dtype", "float8-e4m3fn", "Automatic", "float8-e5m2"),
+        ("sd_model_checkpoint", "first.safetensors", "first.safetensors", "second.safetensors"),
+        ("forge_additional_modules", [MODULES["vae.safetensors"]], [MODULES["vae.safetensors"]], ["te.safetensors"]),
+    ],
+    ids=["dtype", "checkpoint", "modules"],
+)
+def test_a_pick_the_presets_frozen_copy_keeps_is_refused(webui, model_files, monkeypatch, tmp_path, route, key, stored, copy, sent):
+    """The model manager also writes a pick into the UI preset's own copy of it
+    (``forge_unet_storage_dtype_<preset>``, ...). With that copy frozen
+    (``--freeze-specific-settings``) and other than the pick, ``Options.set``'s assertion came
+    after the setting itself was set: a 500 on ``/sdapi/v1/options`` (the request's other
+    settings set and saved), a 422 with the assertion's text on ``PATCH /api/v2/options``, the
+    pick half applied either way; a dtype posted back unchanged did it too. A change is refused
+    naming the frozen copy (422, nothing set); an unchanged pick does nothing."""
+    from modules import shared
+
+    preset_copy = {"sd_model_checkpoint": "forge_checkpoint_sd", "forge_additional_modules": "forge_additional_modules_sd", "forge_unet_storage_dtype": "forge_unet_storage_dtype_sd"}[key]
+    monkeypatch.setitem(shared.opts.data, key, stored)
+    monkeypatch.setitem(shared.opts.data, preset_copy, copy)
+    monkeypatch.setattr(shared.cmd_opts, "freeze_specific_settings", preset_copy)
+    before = dict(shared.opts.data)
+    with options_client(tmp_path / "data") as client:
+        response = client.send(route, {key: stored})
+        assert response.status_code == 200, response.text
+        assert shared.opts.data == before and model_files == [] and client.changed() == []
+        response = client.send(route, {"samples_format": "webp", key: sent})
+        assert response.status_code == 422, response.text
+        if route == "sdapi":
+            assert f"settings.{preset_copy}: this setting is frozen" in response.json()["detail"], response.text
+        else:
+            assert [(error["param"], error["message"]) for error in response.json()["errors"]] == [(preset_copy, "this setting is frozen")]
+        assert shared.opts.data == before and model_files == [] and client.changed() == []
+        assert model_selection.held() == {}
 
 
 def test_held_picks_reach_the_model_manager_as_it_stores_them(webui, monkeypatch, tmp_path):

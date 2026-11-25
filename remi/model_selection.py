@@ -80,6 +80,9 @@ def check_value(key: str, value: Any, dtypes: Callable[[], list[str]] | None = N
 MODEL_OPTIONS = ("sd_model_checkpoint", "forge_additional_modules", "forge_unet_storage_dtype")
 """The options that select what ``forge_model_reload()`` loads."""
 
+PRESET_COPIES = {"sd_model_checkpoint": "forge_checkpoint_", "forge_additional_modules": "forge_additional_modules_", "forge_unet_storage_dtype": "forge_unet_storage_dtype_"}
+"""The prefix of the UI preset's own copy of each pick, which ``main_entry`` writes with it."""
+
 _held: dict[str, Any] = {}
 _guard = threading.Lock()
 _waiter: threading.Thread | None = None
@@ -97,18 +100,22 @@ def _main_entry() -> Any:
     return main_entry
 
 
-def _apply_now(key: str, value: Any) -> bool:
+def _preset() -> str | None:
+    """The UI preset whose own copy of a pick ``main_entry`` also writes, or None."""
+
     from modules import shared
     from remi.setting_values import setting
 
-    main_entry = _main_entry()
     # main_entry also stores the pick as the preset's own (forge_checkpoint_<preset>, ...), which only an
     # offered preset has: for another (a stored name --disable-preset removed, a value of another kind)
     # it set the global setting and then raised KeyError, half applied. None: the global setting alone
     preset = setting("forge_preset", "")
-    if f"forge_unet_storage_dtype_{preset}" not in shared.opts.data_labels:
-        preset = None
-    preset = cast(str, preset)  # modules_change and the others check it for None
+    return preset if f"forge_unet_storage_dtype_{preset}" in shared.opts.data_labels else None
+
+
+def _apply_now(key: str, value: Any) -> bool:
+    main_entry = _main_entry()
+    preset = cast(str, _preset())  # modules_change and the others check it for None
 
     if key == "sd_model_checkpoint":
         return main_entry.checkpoint_change(value, preset)
@@ -125,7 +132,7 @@ def _as_stored(key: str, value: Any) -> Any:
     """``value`` as ``shared.opts`` stores it once applied (module names become
     their sorted paths, as ``modules_change`` stores them)."""
 
-    if key != "forge_additional_modules":
+    if key != "forge_additional_modules" or not isinstance(value, list):
         return value
     import os
 
@@ -138,14 +145,26 @@ def _as_stored(key: str, value: Any) -> Any:
 def select(key: str, value: Any, apply: Callable[[str, Any], bool] | None = None) -> bool:
     """Select ``value`` for the model option ``key``; ``True`` when the
     selection the settings show changed (applied now, or held). A frozen
-    setting (``--freeze-settings*``) raises ``AssertionError``, as
+    setting (``--freeze-settings*``: the option, or the UI preset's copy of
+    it the model manager writes, see :func:`frozen_pick`) raises ``AssertionError``, as
     ``Options.set`` does, also when the pick would be held: the waiter's
     later apply failed there, only logged, after the request had answered
     as if it worked. The stored pick sent again (a client posting back what
     ``GET /sdapi/v1/options`` answered) is no change and passes; held, so is
-    the pick the settings show already (the stored one, or the one held)."""
+    the pick the settings show already (the stored one, or the one held).
+    Such a pick does nothing: the model manager would store the dtype again,
+    save, reload the loading parameters and write the UI preset's copy of it,
+    which a freeze may keep. Back to the stored pick, the held one is
+    dropped and nothing is applied."""
 
+    as_stored = _as_stored(key, value)
+    if any(_same_pick(pick, _shown(key)) for pick in (value, as_stored)):
+        return False  # the pick the settings show already (the stored one, or the one held)
     _check_not_frozen(key, value)
+    if any(_same_pick(pick, _stored(key)) for pick in (value, as_stored)):
+        with _guard:
+            _held.pop(key, None)  # the stored pick, which nothing has to apply
+        return True
     lock = _generation_lock()
     if lock.acquire(blocking=False):
         try:
@@ -154,10 +173,10 @@ def select(key: str, value: Any, apply: Callable[[str, Any], bool] | None = None
             return (apply or _apply_now)(key, value)
         finally:
             lock.release()
-    value = _as_stored(key, value)
+    value = as_stored
     with _guard:
         if _same_pick(value, _held[key] if key in _held else _stored(key)):
-            return False  # the pick the settings show already (the stored one, or the one held)
+            return False  # held meanwhile by another request
         _held[key] = value
         _start_waiter()
     log.info("Model selection %s=%r held until the running generation ends", key, value)
@@ -173,29 +192,47 @@ def _stored(key: str) -> Any:
     return shared.opts.data.get(key)
 
 
+def _shown(key: str) -> Any:
+    """The pick the settings show: the one held, else the stored one."""
+
+    with _guard:
+        return _held[key] if key in _held else _stored(key)
+
+
 def _same_pick(value: Any, shown: Any) -> bool:
     if isinstance(value, list) and isinstance(shown, list) and all(isinstance(item, str) for item in value + shown):
         return sorted(value) == sorted(shown)  # modules in another order (modules_change sorts them)
     return value == shown
 
 
-def frozen_pick(key: str, value: Any) -> str | None:
-    """Why the pick ``value`` for ``key`` may not be made (a frozen setting,
-    ``--freeze-settings*``), or None. The stored value sent again is no
-    change. ``/sdapi/v1/options`` refuses such a pick with the request's
-    other refused values (422) before anything is set."""
+def frozen_pick(key: str, value: Any) -> tuple[str, str] | None:
+    """The frozen setting (``--freeze-settings*``) that keeps the pick
+    ``value`` for ``key`` from being made, and why, or None: ``key`` itself,
+    or the UI preset's own copy of it, which ``main_entry`` writes with it
+    (``forge_unet_storage_dtype_<preset>``, ...) when it would change. The
+    stored value sent again is no change. Both settings routes refuse such a
+    pick with the request's other refused values (422) before anything is
+    set."""
     from modules import shared
     from remi.setting_values import frozen_reason
 
     if _same_pick(value, _stored(key)):  # unchanged: Options.set and the model manager leave it as it is
         return None
-    return frozen_reason(shared.opts, key, shared.cmd_opts)
+    found = None
+    if (reason := frozen_reason(shared.opts, key, shared.cmd_opts)) is not None:
+        found = key, reason
+    elif (preset := _preset()) is not None:
+        copy = PRESET_COPIES[key] + preset
+        if (reason := frozen_reason(shared.opts, copy, shared.cmd_opts)) is not None and not _same_pick(_as_stored(key, value), _stored(copy)):
+            found = copy, reason
+    if found is None or _same_pick(_as_stored(key, value), _stored(key)):  # modules named, not by path: the stored ones
+        return None
+    return found
 
 
 def _check_not_frozen(key: str, value: Any) -> None:
-    reason = frozen_pick(key, value)
-    if reason is not None:
-        raise AssertionError(f"not possible to set '{key}': {reason}")
+    if (found := frozen_pick(key, value)) is not None:
+        raise AssertionError(f"not possible to set '{found[0]}': {found[1]}")
 
 
 def held() -> dict[str, Any]:

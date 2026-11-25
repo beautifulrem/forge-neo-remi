@@ -693,8 +693,9 @@ class Api:
         req = dict(req)
         picks = {key: req.pop(key) for key in model_selection.MODEL_OPTIONS if key in req}
         problems: list[ParamError] = []
-        # a frozen one (--freeze-settings*): refused with the rest, not select's AssertionError (a 500 after the other settings were saved)
-        frozen = {key: reason for key, value in picks.items() if value is not None and (reason := model_selection.frozen_pick(key, value)) is not None}
+        # a frozen one (--freeze-settings*; or the UI preset's copy main_entry writes with it): refused with the rest, named, not
+        # select's AssertionError (a 500 after the other settings were saved)
+        frozen = {key: found for key, value in picks.items() if value is not None and (found := model_selection.frozen_pick(key, value)) is not None}
         # so is a changed setting a freeze or a hidden component keeps (Options.set's assertion, a 500 after the values before it
         # were set, or dropped with a 200); a help block and a restrict_api one stay ignored, as Options.set checks those first
         for key, value in list(req.items()):
@@ -704,8 +705,8 @@ class Api:
             if value == shared.opts.data.get(key, info.default):  # no change (one never stored: its default, as GET answers it)
                 del req[key]
             else:
-                frozen[key] = reason
-        problems += [ParamError(reason, owner="settings", param=key) for key, reason in frozen.items()]
+                frozen[key] = key, reason
+        problems += [ParamError(reason, owner="settings", param=name) for name, reason in frozen.values()]
         # posted back unchanged, as the other picks: a stored checkpoint whose file was removed passes, as upstream skips it
         if "sd_model_checkpoint" not in frozen and (name := picks.get("sd_model_checkpoint")) is not None and name != shared.opts.data.get("sd_model_checkpoint") and (not isinstance(name, str) or name not in sd_models.checkpoint_aliases):
             problems.append(ParamError(Sentence("unknown checkpoint {{value}}", value=repr(name)), owner="settings", param="sd_model_checkpoint"))  # A1111's exact names

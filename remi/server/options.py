@@ -26,6 +26,7 @@ def coerce_values(opts: Any, values: Any, cmd_opts: Any) -> dict[str, Any]:
     """The coerced values, or :class:`ValidationError` listing every
     rejected one (nothing is applied then)."""
 
+    from remi import model_selection
     from remi.setting_values import MAX_NESTING, encodable, nested_deeper
     from remi.ui import nodes
     from remi.ui.settings import setting_node
@@ -51,6 +52,12 @@ def coerce_values(opts: Any, values: Any, cmd_opts: Any) -> dict[str, Any]:
                 result[key] = _model_value(key, value)
             except ParamError as error:
                 problems.append(_error(key, error.message))
+                continue
+            # the UI preset's copy the model manager writes with the pick, when a freeze keeps it (its assertion came after
+            # the setting itself was set): refused, named
+            if (found := model_selection.frozen_pick(key, result[key])) is not None:
+                name, reason = found
+                problems.append(_error(name, reason))
             continue
         if key == "forge_preset":  # free text in the settings, but only an offered preset has its model settings
             from remi.core.presets import check_preset
