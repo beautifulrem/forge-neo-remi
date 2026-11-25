@@ -341,6 +341,27 @@ def test_a_data_folder_reached_through_a_symlink_still_owns_its_unsaved_outputs(
     store.close()
 
 
+def test_an_outputs_folder_moved_elsewhere_through_a_symlink_still_holds_unsaved_outputs(tmp_path):
+    """Outputs are stored under their real path: with ``outputs/`` a link to another disk,
+    their folder was never ``outputs_dir``, so they were never pruned and a gallery
+    removal kept the file and marked it removed."""
+
+    import time
+
+    (tmp_path / "elsewhere").mkdir()
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "outputs").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
+    store = FileStore(tmp_path / "data")
+    try:
+        old, removed = (store.save_output_image(Image.new("RGB", (8, 8)), None) for _ in range(2))
+        store._db.execute("UPDATE files SET created = ? WHERE id = ?", (time.time() - 7200, old.id))
+        assert store.prune_unsaved(3600) == 1 and not Path(old.path).exists()
+        assert store.delete(removed.id) and not Path(removed.path).exists()
+        assert store._db.execute("SELECT count(*) FROM removed").fetchone() == (0,)
+    finally:
+        store.close()
+
+
 def test_deleting_a_file_removes_its_thumbnails(tmp_path):
     store = FileStore(tmp_path)
     record = store.save_output_image(Image.new("RGB", (300, 300)), None)

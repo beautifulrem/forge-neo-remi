@@ -355,7 +355,7 @@ class FileStore:
                 return False
             self._db.execute("DELETE FROM files WHERE id = ?", (file_id,))
             path, kind, _ = row
-            remove = delete_file or kind == "upload" or Path(path).parent == self.outputs_dir
+            remove = delete_file or kind == "upload" or self._unsaved(path, self._outputs_real())
             if kind == "output" and not remove:
                 self._db.execute("INSERT OR IGNORE INTO removed (path) VALUES (?)", (path,))
             if kind == "upload":
@@ -488,7 +488,19 @@ class FileStore:
         cutoff = time.time() - max_age
         with self._lock:
             rows = self._db.execute("SELECT id, path FROM files WHERE kind = 'output' AND created < ?", (cutoff,)).fetchall()
-        return sum(1 for file_id, path in rows if file_id not in keep and Path(path).parent == self.outputs_dir and self.delete(file_id))
+        outputs = self._outputs_real()
+        return sum(1 for file_id, path in rows if file_id not in keep and self._unsaved(path, outputs) and self.delete(file_id))
+
+    def _outputs_real(self) -> str:
+        """The real path of ``outputs/`` (a link to another disk, say): outputs are stored under theirs."""
+
+        return os.path.realpath(self.outputs_dir)
+
+    def _unsaved(self, path: str, outputs: str) -> bool:
+        """The output at ``path`` is one the save path did not write (in ``outputs/``)."""
+
+        parent = Path(path).parent
+        return parent == self.outputs_dir or str(parent) == outputs
 
     # endregion
 
