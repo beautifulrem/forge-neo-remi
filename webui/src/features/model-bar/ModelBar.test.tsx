@@ -98,6 +98,14 @@ describe("model bar when the model list does not load", () => {
     expect(screen.getByRole("combobox", { name: "Checkpoint" })).toBeTruthy()
   })
 
+  it("keeps the current model in view and names the failure in the retry's title", async () => {
+    vi.spyOn(api, "models").mockRejectedValue(new ApiError(404, "boom")) // a 4xx is not retried
+    renderBar()
+    const retry = await screen.findByRole("button", { name: /Could not load the models/ })
+    expect(retry).toHaveAttribute("title", "Could not load the models · It is no longer there. · Retry")
+    expect(retry).toHaveTextContent("animagine-xl-4.0")
+  })
+
   it("shows the failure in the modules picker too, with a retry", async () => {
     vi.spyOn(api, "models").mockRejectedValue(new ApiError(404, "boom"))
     renderBar()

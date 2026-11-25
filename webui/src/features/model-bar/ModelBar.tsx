@@ -18,7 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { serverText } from "@/features/errors/error-text"
+import { errorText, serverText } from "@/features/errors/error-text"
 import { FIELD_BUTTON_CLASS } from "@/components/ui/select-styles"
 import { cn } from "@/lib/utils"
 import { currentRoute } from "@/app/router"
@@ -79,10 +79,18 @@ function CheckpointPicker({ className }: { className?: string }) {
         size="sm"
         className={cn(FIELD_BUTTON_CLASS, "min-w-0 justify-start gap-1.5 px-2.5 font-normal text-destructive", className)}
         onClick={() => void models.refetch()}
-        title={t("Retry")}
+        title={[t("Could not load the models"), errorText(models.error), t("Retry")].join(" · ")}
       >
         <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
-        <span className="truncate">{t("Could not load the models")}</span>
+        {/* the model in use stays in view: only the list of the others failed */}
+        {current ? (
+          <>
+            <span className="sr-only">{t("Could not load the models")}</span>
+            <span className="truncate text-foreground">{checkpointLabel(current)}</span>
+          </>
+        ) : (
+          <span className="truncate">{t("Could not load the models")}</span>
+        )}
         <span className="ms-auto shrink-0 text-muted-foreground">{t("Retry")}</span>
       </Button>
     )
