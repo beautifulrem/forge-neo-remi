@@ -169,12 +169,16 @@ Uploads and outputs reach an action through `ctx.files` (`ui.ActionFiles`,
 which the server fills with its file store): `image(id)`, `image_size(id)`,
 `get(id)`, `path(id)`, `store_image(image, name)` and `store_bytes(data,
 name)` (extension-guide.md "Files"). Scripts, pages and built-in extensions
-build on `remi.ui`, `remi.pages` and `remi.core` (the prompt tools' extensions
-also read their settings through `remi.prompt_tools.options`). None of them
-imports `remi.server` or reaches the server's services through `ctx.request`;
-outside `remi/` only the few listed WebUI glue modules (such as
-`modules/util.py`'s `open_folder`) do. `tests/test_remi_layers.py` enforces
-that.
+build on `remi.ui`, `remi.pages` and `remi.core`; Remi's own built-in
+extensions also use the Remi package they front (the prompt tools'
+extensions `remi.prompt_tools`, the LoRA extension `remi.networks`). None of
+them imports `remi.server`, and none reaches the server's services through
+`ctx.request` or `app.state.services`, except the two prompt tools
+extensions, which hand the app's services to `remi.prompt_tools.attach` in
+`on_app_started` (their history and tag data live with the server's file
+store). Outside `remi/` only the few listed WebUI glue modules (such as
+`modules/util.py`'s `open_folder`) import the server.
+`tests/test_remi_layers.py` enforces both lists.
 
 ### Scripts
 

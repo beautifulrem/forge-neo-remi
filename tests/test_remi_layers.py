@@ -19,7 +19,15 @@ SERVER_GLUE = {
     "modules/util.py": "A1111's util.open_folder, delegating to the server's checked open-folder",
 }
 
-SERVICES_RE = re.compile(r"\.state\.services\b|[\"']services[\"']\)")
+# `app.state.services`, and `getattr(app.state, "services")` with or without a default
+SERVICES_RE = re.compile(r"\.state\.services\b|[\"']services[\"']\s*[,)]")
+
+# Extension code that is handed the services, each with its reason (Remi's own prompt tools: their
+# history and tag data live with the server's file store)
+SERVICES_GLUE = {
+    "extensions-builtin/sd-webui-prompt-all-in-one-neo/scripts/prompt_tools.py": "hands the app's services to remi.prompt_tools.attach in on_app_started",
+    "extensions-builtin/sd-webui-tagcomplete-neo/scripts/tag_autocomplete.py": "hands the app's services to remi.prompt_tools.attach in on_app_started",
+}
 
 
 def _python_files(*roots: str):
@@ -74,7 +82,13 @@ def test_extension_and_layer_code_does_not_reach_the_server_services():
         except UnicodeDecodeError:
             continue
         found += [f"{relative}:{number}" for number, line in enumerate(source.splitlines(), 1) if SERVICES_RE.search(line)]
-    assert found == [], f"request.app.state.services outside the server (use ctx.files): {found}"
+    reached = {item.rsplit(":", 1)[0] for item in found}
+    assert reached == set(SERVICES_GLUE), f"request.app.state.services outside the server (use ctx.files): {[item for item in found if item.rsplit(':', 1)[0] not in SERVICES_GLUE]}; gone: {sorted(set(SERVICES_GLUE) - reached)}"
+
+
+def test_the_services_pattern_sees_every_spelling():
+    for line in ('services = request.app.state.services', 'getattr(app.state, "services")', 'getattr(app.state, "services", None)', "getattr(app.state, 'services' , None)"):
+        assert SERVICES_RE.search(line), line
 
 
 def test_only_the_listed_webui_glue_imports_the_server():
