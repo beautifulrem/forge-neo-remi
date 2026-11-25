@@ -121,6 +121,20 @@ def test_the_readme_describes_this_image():
     assert "--data-dir" in README
 
 
+def test_the_docs_name_the_variables_the_entrypoint_reads():
+    """The environment variables the entrypoint reads (not the ones it sets itself) are
+    documented: REMI_DATA_DIR in the usage guide too, as only the image reads it."""
+
+    referenced = set(re.findall(r"\$\{?([A-Z][A-Z0-9_]*)", ENTRYPOINT))
+    assigned = set(re.findall(r"^\s*(?:export\s+)?([A-Z][A-Z0-9_]*)=", ENTRYPOINT, flags=re.M)) | {"EXTRA_ARGS"}
+    read = referenced - assigned
+    assert {"COMMANDLINE_ARGS", "REMI_DATA_DIR"} <= read
+    for name in sorted(read):
+        assert f"`{name}`" in README, name
+    for guide in ("usage.md", "usage.zh-CN.md"):
+        assert "`REMI_DATA_DIR`" in (ROOT / "docs" / "remi-webui" / guide).read_text(encoding="utf-8"), guide
+
+
 def test_the_rocm_recipe_is_the_same_image_with_rocm_pytorch():
     """docker/Dockerfile.rocm (upstream 2900d594, translated): the same
     stages, data folder, launcher run and entrypoint; only the base image and

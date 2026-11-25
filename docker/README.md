@@ -46,7 +46,8 @@ docker run --device /dev/kfd --device /dev/dri --group-add video \
 
 Open `http://localhost:7860/`. Extra launch options go after the image name or
 in `COMMANDLINE_ARGS`; the container always adds `--listen` and
-`--data-dir /home/remi/data`. `-p 127.0.0.1:7860:7860` publishes the port on this
+`--data-dir "$REMI_DATA_DIR"` ([Data](#data)). `-p 127.0.0.1:7860:7860`
+publishes the port on this
 machine only, because the server inside listens on every interface and has no
 login until you add one. Before publishing it further (`-p 7860:7860`), read
 [Security and Remote Access](../docs/remi-webui/usage.md#security-and-remote-access)
@@ -63,7 +64,9 @@ terminate TLS at a reverse proxy, or run the container with `--no-healthcheck`.
 
 ## Data
 
-Everything the WebUI keeps is in the data folder, `/home/remi/data` (`--data-dir`):
+Everything the WebUI keeps is in the data folder, `REMI_DATA_DIR`
+(`/home/remi/data`, the image's volume), which the entrypoint passes to the
+launcher as `--data-dir`:
 
 | Path in the volume | Purpose |
 | --- | --- |
@@ -78,6 +81,12 @@ Bind subfolders separately when they live elsewhere, for example
 `-v /mnt/models:/home/remi/data/models`. The container runs as **UID 99** /
 **GID 100** (`nobody:users`, Unraid's default share permissions): bound host
 folders must be writable by it.
+
+To keep the data folder at another path in the container, set the variable
+rather than passing `--data-dir` (for example
+`-e REMI_DATA_DIR=/data -v /srv/remi:/data`): before it starts the WebUI, the
+entrypoint creates the `models/` subfolders, `output/` and `extensions/` in
+`$REMI_DATA_DIR`, which must therefore be writable by UID 99.
 
 ## Image Details
 

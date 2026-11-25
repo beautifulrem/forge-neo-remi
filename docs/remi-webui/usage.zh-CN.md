@@ -149,7 +149,7 @@ export COMMANDLINE_ARGS="--uv"
 
 ### Docker（NVIDIA 或 AMD GPU）
 
-`docker/Dockerfile` 用当前检出的代码构建镜像（构建上下文是仓库根目录）：网页界面在 Node.js 阶段构建，服务器镜像包含 Python 3.13、启动器使用的 PyTorch 版本和 `requirements.txt`，不含 Gradio。全部用户数据放在同一个卷 `/home/remi/data` 中。详见 [docker/README.md](../../docker/README.md)。
+`docker/Dockerfile` 用当前检出的代码构建镜像（构建上下文是仓库根目录）：网页界面在 Node.js 阶段构建，服务器镜像包含 Python 3.13、启动器使用的 PyTorch 版本和 `requirements.txt`，不含 Gradio。全部用户数据放在同一个卷 `/home/remi/data` 中：镜像把 `REMI_DATA_DIR` 设为这个路径，入口脚本再把它作为 `--data-dir` 传给启动器（`launch.py` 本身不读取 `REMI_DATA_DIR`）。详见 [docker/README.md](../../docker/README.md)。
 
 ```bash
 docker build -f docker/Dockerfile -t remi-webui .

@@ -149,7 +149,7 @@ Without Node.js on the machine:
 
 ### Docker (NVIDIA or AMD GPU)
 
-`docker/Dockerfile` builds an image of this checkout (the build context is the repository root): the web interface is built in a Node.js stage, the server image gets Python 3.13, the launcher's PyTorch build and `requirements.txt`, and no Gradio. Every piece of user data lives in one volume, `/home/remi/data`. See [docker/README.md](../../docker/README.md).
+`docker/Dockerfile` builds an image of this checkout (the build context is the repository root): the web interface is built in a Node.js stage, the server image gets Python 3.13, the launcher's PyTorch build and `requirements.txt`, and no Gradio. Every piece of user data lives in one volume, `/home/remi/data`: the image sets `REMI_DATA_DIR` to it, and its entrypoint passes the variable on as `--data-dir` (`launch.py` itself does not read `REMI_DATA_DIR`). See [docker/README.md](../../docker/README.md).
 
 ```bash
 docker build -f docker/Dockerfile -t remi-webui .
