@@ -338,8 +338,8 @@ export function PipelineBuilder() {
                 <DropdownMenuSeparator />
                 {/* its own submenu: a delete button inside a load item could not be reached from the keyboard */}
                 <DropdownMenuSub>
+                  {/* text only, like the templates above it: one menu is all text or all iconed */}
                   <DropdownMenuSubTrigger>
-                    <Trash2 aria-hidden />
                     {t("Delete template")}
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent className="min-w-48">

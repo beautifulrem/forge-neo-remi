@@ -329,5 +329,10 @@ describe("starter pipelines", () => {
     expect(await screen.findByRole("menuitem", { name: "My chain" })).toBeInTheDocument()
     expect(screen.getByRole("menuitem", { name: "Generate → Refine → Upscale" })).toBeInTheDocument()
     expect(screen.getByRole("menuitem", { name: "Generate → Upscale" })).toBeInTheDocument()
+    // the items of one menu are all text or all iconed: Delete template carried the only icon
+    const menu = screen.getByRole("menu")
+    expect(within(menu).getByRole("menuitem", { name: "Delete template" })).toBeInTheDocument()
+    // (a submenu's own chevron aside)
+    expect(menu.querySelectorAll("[role=menuitem] svg:not(.cn-rtl-flip)")).toHaveLength(0)
   })
 })
