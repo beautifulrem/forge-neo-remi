@@ -1,5 +1,5 @@
 /** Confirms removing images from the gallery, optionally deleting the files. */
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import {
   AlertDialog,
@@ -23,10 +23,12 @@ type DeleteDialogProps = {
 export function DeleteDialog({ ids, onCancel, onConfirm }: DeleteDialogProps) {
   const { t } = useTranslation()
   const [deleteFiles, setDeleteFiles] = useState(false)
+  // the dialog opens on Cancel: its first control is the box that makes the removal irreversible
+  const cancel = useRef<HTMLButtonElement>(null)
   const count = ids?.length ?? 0
   return (
     <AlertDialog open={ids !== null} onOpenChange={(open) => !open && onCancel()}>
-      <AlertDialogContent>
+      <AlertDialogContent initialFocus={cancel}>
         <AlertDialogHeader>
           <AlertDialogTitle>{count === 1 ? t("Remove this image?") : t("Remove {{count}} images?", { count })}</AlertDialogTitle>
           <AlertDialogDescription>
@@ -40,7 +42,7 @@ export function DeleteDialog({ ids, onCancel, onConfirm }: DeleteDialogProps) {
           {t("Also delete the files from disk")}
         </label>
         <AlertDialogFooter>
-          <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>
+          <AlertDialogCancel ref={cancel}>{t("Cancel")}</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={() => ids && onConfirm(ids, deleteFiles)}>
             {deleteFiles ? t("Delete files") : t("Remove")}
           </AlertDialogAction>
