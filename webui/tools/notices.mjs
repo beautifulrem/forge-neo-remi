@@ -3,7 +3,9 @@
  * license comments away, so the build ships each bundled package's name, version, license and
  * license text in one file next to index.html (vite.config.ts, `thirdPartyNotices()`).
  */
+import { realpathSync } from "node:fs"
 import { readdir, readFile } from "node:fs/promises"
+import { createRequire } from "node:module"
 import path from "node:path"
 
 /** The package folder a bundled module comes from, or null for the app's own code. */
@@ -11,6 +13,33 @@ export function packageRoot(id) {
   const file = id.replace(/^\0+/, "").split("?")[0].replaceAll("\\", "/")
   const match = /^(.*\/node_modules\/(?:@[^/]+\/)?[^/]+)\//.exec(file)
   return match ? match[1] : null
+}
+
+/**
+ * The package of code the bundler writes into the chunks itself, whose id names no folder: vite's
+ * preload helper and modulepreload polyfill (`\0vite/preload-helper.js`), rolldown's runtime
+ * (`\0rolldown/runtime.js`). Null for any other module.
+ */
+export function bundlerPackage(id) {
+  const name = id.replace(/^\0+/, "")
+  if (name.startsWith("vite/")) return "vite"
+  if (name.startsWith("rolldown/runtime")) return "rolldown"
+  return null
+}
+
+/** The folder of vite (in the app's `node_modules`) or of rolldown (a dependency of vite). */
+function bundlerRoot(name, modules) {
+  const vite = realpathSync(path.join(modules, "vite"))
+  return name === "vite" ? vite : packageRoot(createRequire(path.join(vite, "package.json")).resolve(name))
+}
+
+/**
+ * Vite's license file goes on with the licenses of the packages vite bundles into its own Node.js
+ * code; none of that reaches the app, only vite's helpers do.
+ */
+function ownLicense(text) {
+  const bundled = text.search(/^# Licenses of bundled dependencies$/m)
+  return bundled > 0 ? text.slice(0, bundled).trim() : text
 }
 
 /**
@@ -37,7 +66,8 @@ export function runtimeDependencies(manifest) {
   return Object.keys(manifest.dependencies ?? {})
 }
 
-const LICENSE_FILE = /^(?:licen[cs]e|copying|notice)(?:[.-].*)?$/i
+// THIRD-PARTY-LICENSE: rolldown's, the code its runtime derives from (rollup, esbuild)
+const LICENSE_FILE = /^(?:third-party-)?(?:licen[cs]e|copying|notice)(?:[.-].*)?$/i
 
 /**
  * Packages whose npm release leaves out the license file their repository has: its text, vendored
@@ -45,11 +75,17 @@ const LICENSE_FILE = /^(?:licen[cs]e|copying|notice)(?:[.-].*)?$/i
  */
 const VENDORED_LICENSES = { "react-remove-scroll-bar": "react-remove-scroll-bar.LICENSE.txt" }
 
-/** Name, version, license and license texts of each package the bundle uses, sorted by name. */
-export async function collectNotices(ids) {
+/**
+ * Name, version, license and license texts of each package the bundle uses, sorted by name.
+ * `modules`: the app's `node_modules`, where the bundler's own helpers are found (bundlerPackage).
+ */
+export async function collectNotices(ids, { modules } = {}) {
   const roots = new Set()
+  const bundlers = new Set()
   for (const id of ids) {
-    const root = packageRoot(id)
+    const bundler = modules ? bundlerPackage(id) : null
+    const root = bundler ? bundlerRoot(bundler, modules) : packageRoot(id)
+    if (bundler) bundlers.add(root)
     if (root) roots.add(root)
   }
   const packages = new Map()
@@ -64,7 +100,10 @@ export async function collectNotices(ids) {
     if (packages.has(key)) continue
     const files = (await readdir(root)).filter((name) => LICENSE_FILE.test(name)).sort()
     const texts = []
-    for (const name of files) texts.push((await readFile(path.join(root, name), "utf8")).trim())
+    for (const name of files) {
+      const text = (await readFile(path.join(root, name), "utf8")).trim()
+      texts.push(bundlers.has(root) ? ownLicense(text) : text)
+    }
     const vendored = VENDORED_LICENSES[manifest.name]
     if (texts.length === 0 && vendored) texts.push((await readFile(path.join(import.meta.dirname, vendored), "utf8")).trim())
     const license = typeof manifest.license === "string" ? manifest.license : (manifest.license?.type ?? "see the text below")

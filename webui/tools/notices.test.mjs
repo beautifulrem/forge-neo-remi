@@ -1,7 +1,7 @@
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 import { readdir, readFile } from "node:fs/promises"
-import { collectNotices, cssImportedPackages, formatNotices, packageRoot, runtimeDependencies, vendoredNotices } from "./notices.mjs"
+import { bundlerPackage, collectNotices, cssImportedPackages, formatNotices, packageRoot, runtimeDependencies, vendoredNotices } from "./notices.mjs"
 
 const modules = path.resolve(import.meta.dirname, "../node_modules")
 
@@ -31,6 +31,27 @@ describe("third-party notices", () => {
     const [notice] = await collectNotices([path.join(root, "dist/es2015/index.js")])
     expect(notice).toMatchObject({ name: "react-remove-scroll-bar", license: "MIT" })
     expect(notice.texts.join("\n")).toMatch(/Copyright \(c\) \d{4} Anton Korzunov[\s\S]*Permission is hereby granted/)
+  })
+
+  // vite's preload helper and modulepreload polyfill and rolldown's runtime are written into the
+  // chunks by the bundler: their ids name no package folder, and the notices listed neither
+  it("lists the bundler's own helpers under vite and rolldown, without vite's Node-side dependencies", async () => {
+    expect(bundlerPackage("\0vite/preload-helper.js")).toBe("vite")
+    expect(bundlerPackage("vite/modulepreload-polyfill.js")).toBe("vite")
+    expect(bundlerPackage("\0rolldown/runtime.js")).toBe("rolldown")
+    expect(bundlerPackage("/a/node_modules/vite/dist/client/client.mjs")).toBeNull()
+    expect(bundlerPackage("/a/src/main.tsx")).toBeNull()
+    const notices = await collectNotices(["\0vite/preload-helper.js", "\0vite/modulepreload-polyfill.js", "\0rolldown/runtime.js", "/app/src/main.tsx"], { modules })
+    expect(notices.map((pkg) => [pkg.name, pkg.license])).toEqual([
+      ["rolldown", "MIT"],
+      ["vite", "MIT"],
+    ])
+    const vite = notices[1].texts.join("\n")
+    expect(vite).toMatch(/Copyright \(c\) 2019-present, VoidZero Inc\. and Vite contributors/)
+    // the licenses of what vite bundles into its own Node.js code, none of which reaches the app
+    expect(vite).not.toMatch(/Licenses of bundled dependencies/)
+    // and the libraries its runtime derives from (esbuild's helpers)
+    expect(notices[0].texts.join("\n")).toMatch(/VoidZero Inc\. & Contributors[\s\S]*Copyright \(c\) 2020 Evan Wallace/)
   })
 
   it("finds the packages the stylesheets import, which never reach the bundle's module list", async () => {

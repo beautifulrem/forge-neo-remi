@@ -84,7 +84,8 @@ function precompress(): Plugin {
  * THIRD-PARTY-NOTICES.txt next to index.html: minification drops the dependencies' license
  * comments, so the build lists every package it ships (bundled code, stylesheets a CSS file
  * imports, fonts, the vendored API viewers, every runtime dependency, the copied shadcn/ui
- * components) with its license text (tools/notices.mjs). Settings → Licenses links to it.
+ * components, vite's and rolldown's helpers in the chunks) with its license text
+ * (tools/notices.mjs). Settings → Licenses links to it.
  */
 function thirdPartyNotices(): Plugin {
   return {
@@ -110,7 +111,7 @@ function thirdPartyNotices(): Plugin {
         if (!existsSync(manifest)) this.error(`THIRD-PARTY-NOTICES.txt: ${name} is not installed`)
         ids.add(manifest)
       }
-      const notices = await collectNotices(ids)
+      const notices = await collectNotices(ids, { modules })
       if (notices.length === 0) this.error("no bundled package found for THIRD-PARTY-NOTICES.txt")
       const all = [...notices, ...(await vendoredNotices())].sort((a, b) => a.name.localeCompare(b.name))
       this.emitFile({ type: "asset", fileName: "THIRD-PARTY-NOTICES.txt", source: formatNotices(all) })
