@@ -709,3 +709,17 @@ def test_an_images_exif_chunk_is_never_opened_as_a_file_name(webui, tmp_path):
             assert image.info.get("exif") == exif
             geninfo, _ = read_info_from_image(image)
         assert geninfo != "secret"
+
+
+def test_the_docs_name_every_header_value_sent():
+    """architecture.md said ``X-Robots-Tag: noindex``; every response carries ``noindex, nofollow``."""
+
+    from pathlib import Path
+
+    from remi.server.auth import BASE_HEADERS
+
+    docs = Path(__file__).resolve().parents[1] / "docs" / "remi-webui"
+    for name in ("architecture.md", "security.md"):
+        text = " ".join((docs / name).read_text(encoding="utf-8").split()).lower()
+        for header, value in BASE_HEADERS:
+            assert f"`{header.decode()}: {value.decode()}`" in text, (name, header, value)

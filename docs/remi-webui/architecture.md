@@ -530,7 +530,8 @@ client has a bounded event queue and one preview slot.
   `--api-no-auth-on-localhost`). Failed logins (form or Basic) are throttled
   per peer address (uvicorn's proxy headers only from `--forwarded-allow-ips`);
   cross-site subresource `GET`s are refused (fetch metadata); responses carry
-  `nosniff`, `Referrer-Policy` and `X-Robots-Tag: noindex`, HTML pages a hash-based CSP
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin` and
+  `X-Robots-Tag: noindex, nofollow`, HTML pages a hash-based CSP
   (`security.md`). Logging out revokes
   the session cookie (a denylist next to the secret); cookies are `Secure`
   with `--tls-*` or when the request is HTTPS (a TLS proxy);
