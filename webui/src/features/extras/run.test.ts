@@ -113,6 +113,17 @@ describe("extras runs", () => {
     expect(useExtrasRuns.getState().results[0]?.error).toBeTruthy()
   })
 
+  it("records a finished run when the session storage is full", () => {
+    useExtrasRuns.setState({ jobs: ["job-1"], sources: { "job-1": null } })
+    const write = Storage.prototype.setItem
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key: string, value: string) {
+      if (this === sessionStorage) throw new DOMException("The quota has been exceeded.", "QuotaExceededError")
+      write.call(this, key, value)
+    })
+    expect(() => finishExtras({ jobId: "job-1", outputs: [] })).not.toThrow()
+    expect(useExtrasRuns.getState().results.map((result) => result.jobId)).toEqual(["job-1"])
+  })
+
   it("ignores jobs it did not queue", () => {
     finishExtras({ jobId: "other", outputs: [] })
     expect(useExtrasRuns.getState().results).toEqual([])

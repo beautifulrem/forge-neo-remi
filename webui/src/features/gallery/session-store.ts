@@ -5,10 +5,10 @@
  * `useProgress` (the jobs this client queued) and by `restoreRuns`.
  */
 import { create } from "zustand"
-import { createJSONStorage, persist } from "zustand/middleware"
+import { persist } from "zustand/middleware"
 import { useProgress } from "@/api/progress"
 import type { FormTab, JobOutput } from "@/api/types"
-import { isRecord, isText, mergeTyped } from "@/lib/persist"
+import { bestEffortStorage, isRecord, isText, mergeTyped } from "@/lib/persist"
 
 export type ResultItem = {
   /** `${jobId}:${index}` */
@@ -107,7 +107,7 @@ export const useSession = create<SessionState>()(
     {
       name: "remi-session-results",
       version: 1,
-      storage: createJSONStorage(() => sessionStorage),
+      storage: bestEffortStorage(() => sessionStorage),
       partialize: (s) => ({ items: s.items, selected: s.selected }),
       merge: (persisted, current) => {
         const merged = mergeTyped(persisted, current)

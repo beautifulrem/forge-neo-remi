@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useProgress } from "@/api/progress"
 import { noteUpscale, useSession, wireSessionResults } from "./session-store"
 
@@ -53,5 +53,26 @@ describe("session results", () => {
     useProgress.getState().track("job-u", "txt2img")
     useProgress.getState().completed({ job_id: "job-u", seq: 9, tab: "txt2img", status: "completed", outputs: [image("u0")], infotext: "a cat" })
     expect(keys()).toEqual(["b:0", "a:0", "job-u:0"])
+  })
+})
+
+describe("session results with a full session storage", () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it("records the finished job and lets the rest of the completion run", () => {
+    const write = Storage.prototype.setItem
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key: string, value: string) {
+      if (this === sessionStorage) throw new DOMException("The quota has been exceeded.", "QuotaExceededError")
+      write.call(this, key, value)
+    })
+    wireSessionResults()
+    const later = vi.fn()
+    const unsubscribe = useProgress.subscribe(later)
+    useProgress.getState().track("job-q", "txt2img")
+    expect(() => useProgress.getState().completed({ job_id: "job-q", seq: 10, tab: "txt2img", status: "completed", outputs: [image("q0")] })).not.toThrow()
+    unsubscribe()
+    expect(keys()).toContain("job-q:0")
+    // the listeners after the session's still hear of the completion
+    expect(later).toHaveBeenCalled()
   })
 })

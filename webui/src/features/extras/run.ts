@@ -6,7 +6,7 @@
  */
 import { toast } from "sonner"
 import { create } from "zustand"
-import { createJSONStorage, persist } from "zustand/middleware"
+import { persist } from "zustand/middleware"
 import { api } from "@/api/endpoints"
 import { ApiError, fieldMessages, validationErrors } from "@/api/http"
 import { useProgress } from "@/api/progress"
@@ -18,7 +18,7 @@ import { t } from "@/i18n"
 import { getFormStore } from "@/ui/form-store"
 import type { FieldMessage } from "@/ui/schema"
 import { jobRequest, missingInputs } from "@/ui/tab"
-import { isRecord, isText, keepEntries, mergeTyped } from "@/lib/persist"
+import { bestEffortStorage, isRecord, isText, keepEntries, mergeTyped } from "@/lib/persist"
 
 export type ExtrasResult = {
   jobId: string
@@ -49,7 +49,7 @@ export const useExtrasRuns = create<ExtrasRunState>()(
   persist(() => ({ submitting: false, jobs: [], sources: {}, results: [], selected: null }) as ExtrasRunState, {
     name: "remi-extras-runs",
     version: 1,
-    storage: createJSONStorage(() => sessionStorage),
+    storage: bestEffortStorage(() => sessionStorage),
     partialize: ({ results, jobs, sources }) => ({ results, jobs, sources }),
     merge: (persisted, current) => {
       const merged = mergeTyped(persisted, current)

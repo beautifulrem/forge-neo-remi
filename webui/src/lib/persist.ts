@@ -12,6 +12,8 @@
  * inside lists or maps: a store whose lists or maps hold objects checks each
  * entry (`keepEntries`, a type guard on its items).
  */
+import { createJSONStorage } from "zustand/middleware"
+
 export const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value)
 
 /** A string, or nothing stored (an optional or nullable text field). */
@@ -49,4 +51,27 @@ export function mergeTyped<T extends object>(persisted: unknown, current: T, rul
     out[key] = Array.isArray(value) ? value.filter((item) => item !== null && item !== undefined) : value
   }
   return out as T
+}
+
+/**
+ * `createJSONStorage` over a storage whose writes may fail (a full quota, storage turned off):
+ * persist writes after every `set`, so a write that throws escaped from the action that set the
+ * state, and from the store's subscribers, cutting short the event that caused it (a finished
+ * job). A failed write keeps the state in memory only.
+ */
+export function bestEffortStorage<S>(getStorage: () => Storage) {
+  return createJSONStorage<S>(() => {
+    const storage = getStorage()
+    return {
+      getItem: (name) => storage.getItem(name),
+      setItem: (name, value) => {
+        try {
+          storage.setItem(name, value)
+        } catch {
+          // kept in memory for this page's life
+        }
+      },
+      removeItem: (name) => storage.removeItem(name),
+    }
+  })
 }
