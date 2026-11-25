@@ -133,11 +133,46 @@ def test_the_forms_under_hidden_directories_are_translated(catalog, monkeypatch)
     assert missing == []
 
 
-def _formatted_toasts() -> list[str]:
-    """``toast(...)`` calls in Remi's own Python whose text is formatted on the server
-    (an f-string, ``+``, ``%`` or ``.format``): no catalog can have that sentence."""
+def _formatted_toast_lines(tree: ast.Module) -> list[int]:
+    """Lines of ``tree`` with a toast whose text is formatted on the server
+    (an f-string, ``+``, ``%`` or ``.format``): ``toast(text)``, ``toast(message=text)``
+    or a ``{"__toast__": {"message": text}}`` literal, ``text`` written there or a name
+    the same function binds to such a text."""
 
-    import ast
+    def formatted(node: ast.AST) -> bool:
+        return isinstance(node, (ast.JoinedStr, ast.BinOp)) or (isinstance(node, ast.Call) and getattr(node.func, "attr", None) == "format")
+
+    def own_nodes(scope: ast.AST):  # a function's nodes, not those of the functions inside it
+        pending = list(ast.iter_child_nodes(scope))
+        while pending:
+            node = pending.pop()
+            yield node
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                pending.extend(ast.iter_child_nodes(node))
+
+    def entries(node: ast.AST, key: str) -> list[ast.AST]:
+        if not isinstance(node, ast.Dict):
+            return []
+        return [value for name, value in zip(node.keys, node.values, strict=True) if isinstance(name, ast.Constant) and name.value == key]
+
+    found = []
+    for scope in [tree, *(node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)))]:
+        nodes = list(own_nodes(scope))
+        bound = {target.id for node in nodes if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None and formatted(node.value) for target in getattr(node, "targets", [getattr(node, "target", None)]) if isinstance(target, ast.Name)}
+        for node in nodes:
+            if isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", None)) == "toast":
+                texts = [*node.args[:1], *(keyword.value for keyword in node.keywords if keyword.arg == "message")]
+            else:
+                texts = [text for toast in entries(node, "__toast__") for text in entries(toast, "message")]
+            texts += [text for value in texts for text in entries(value, "text")]  # a message dict
+            if any(formatted(text) or (isinstance(text, ast.Name) and text.id in bound) for text in texts):
+                found.append(node.lineno)
+    return sorted(found)
+
+
+def _formatted_toasts() -> list[str]:
+    """Toasts in Remi's own Python whose text is formatted on the server: no catalog
+    can have that sentence."""
 
     roots = [ROOT / "remi", *sorted((ROOT / "extensions-builtin").glob("*/")), ROOT / "scripts", ROOT / "modules" / "processing_scripts"]
     found = []
@@ -145,13 +180,7 @@ def _formatted_toasts() -> list[str]:
         for path in sorted(root.rglob("*.py")):
             if "tests" in path.relative_to(ROOT).parts:
                 continue
-            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-                if not (isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", None)) == "toast" and node.args):
-                    continue
-                text = node.args[0]
-                formatted = isinstance(text, (ast.JoinedStr, ast.BinOp)) or (isinstance(text, ast.Call) and getattr(text.func, "attr", None) == "format")
-                if formatted:
-                    found.append(f"{path.relative_to(ROOT)}:{node.lineno}")
+            found += [f"{path.relative_to(ROOT)}:{line}" for line in _formatted_toast_lines(ast.parse(path.read_text(encoding="utf-8")))]
     return found
 
 
@@ -160,6 +189,26 @@ def test_toasts_are_catalog_sentences():
     every language. A sentence with variable parts is a ``message(text, **params)``."""
 
     assert _formatted_toasts() == []
+
+
+@pytest.mark.parametrize(
+    ("source", "flagged"),
+    [
+        ('ui.toast(f"failed: {error}")', True),
+        ('toast("failed: " + str(error), "error")', True),
+        ('toast(message="failed: {}".format(error))', True),
+        ('{"__toast__": {"level": "error", "message": f"failed: {error}"}}', True),
+        ('{"__toast__": {"message": {"text": f"failed: {error}"}}}', True),
+        ('def act(ctx):\n    text = f"failed: {error}"\n    return ui.toast(text)', True),
+        ('def act(ctx):\n    text: str = "failed: %s" % error\n    return {"__toast__": {"message": text}}', True),
+        ('ui.toast("Saved")', False),
+        ('ui.toast(ui.message("{{name}} failed", name=name), "error")', False),
+        ('{"__toast__": {"message": "Saved"}}', False),
+        ('text = f"{a}"\ndef act(ctx):\n    text = "Saved"\n    return ui.toast(text)', False),
+    ],
+)
+def test_the_toast_guard_sees_every_way_to_send_a_toast(source, flagged):
+    assert bool(_formatted_toast_lines(ast.parse(source))) == flagged
 
 
 def test_the_action_failure_toasts_are_translated(catalog):
