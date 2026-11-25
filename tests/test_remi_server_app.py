@@ -177,6 +177,29 @@ def test_every_json_body_refuses_text_utf8_cannot_write(server):
         assert server.client.post("/api/v2/recipes", content='{"name": "' + name + '"}', headers=headers).status_code in (200, 201), name
 
 
+# JSON also carries such text as raw bytes (`json.loads` takes them), and FastAPI reads a body as JSON
+# without a content type or with one in any case: those reached recipes and pipelines (a 500)
+def test_broken_text_is_refused_however_the_body_is_sent(server):
+    body = b'{"name": "r", "core_patch": {"prompt": "x' + b"\xed\xb2\x80" + b'"}}'
+    for headers in ({"Content-Type": "application/json"}, {"Content-Type": "Application/JSON; charset=utf-8"}, {}):
+        response = server.client.post("/api/v2/recipes", content=body, headers=headers)
+        assert response.status_code == 422, (headers, response.text)
+        assert [error["param"] for error in response.json()["errors"]] == ["core_patch.prompt"]
+    # a broken key is named, next to text in another script
+    response = server.client.post("/api/v2/recipes", content='{"name": "r", "core_patch": {"提示\\udc80": "x"}}', headers={"Content-Type": "application/json"})
+    assert response.status_code == 422 and response.json()["errors"][0]["param"] == "core_patch.提示\\udc80"
+    # Hangul starts with the same byte as a raw surrogate, and is text
+    assert server.client.post("/api/v2/recipes", content='{"name": "한국어"}'.encode(), headers={"Content-Type": "application/json"}).status_code in (200, 201)
+
+
+# A body nested deeper than the JSON parser goes answered 500 with a traceback, before any login check
+def test_a_deeply_nested_body_is_not_a_server_error(server):
+    deep = b"[" * 100_000 + b'"\\udc80"' + b"]" * 100_000
+    headers = {"Content-Type": "application/json"}
+    assert server.client.request("GET", "/api/v2/auth/status", content=deep, headers=headers).status_code == 200
+    assert server.client.post("/api/v2/recipes", content=deep, headers=headers).status_code < 500
+
+
 def test_frozen_settings_are_refused_and_locked_in_the_schema(server, webui, monkeypatch):
     from modules import shared
 

@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import math
+import re
 import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -162,42 +163,54 @@ def _file_error(request: Request, error: FileError) -> JSONResponse:
 BROKEN_TEXT = "the text has a broken character (an unpaired surrogate)"
 # routes that check their values themselves and report each setting (remi/server/options.py)
 CHECKED_PER_SETTING = (f"{API_PREFIX}/options", f"{API_PREFIX}/options/validate")
+# An unpaired surrogate in a JSON body: escaped (\ud800 to \udfff) or as raw bytes, which `json.loads`
+# takes (0xED 0xA0-0xBF; Hangul is 0xED 0x80-0x9F)
+_MAYBE_BROKEN = re.compile(rb"\\u[dD][89a-fA-F]|\xed[\xa0-\xbf]")
 
 
-def _broken_text_at(value: Any, path: tuple[str, ...] = ()) -> tuple[str, ...] | None:
-    """Where in ``value`` the first text UTF-8 cannot write is, or None."""
+def _broken_text_at(value: Any) -> tuple[str, ...] | None:
+    """Where in ``value`` the first text UTF-8 cannot write is, or None
+    (without recursion: a body can be nested as deep as the parser goes)."""
 
-    if isinstance(value, str):
-        return None if encodable(value) else path
-    items = value.items() if isinstance(value, dict) else enumerate(value) if isinstance(value, list) else ()
-    for key, item in items:
-        if not encodable(key):
-            return (*path, str(key).encode("utf-8", "backslashreplace").decode("ascii"))
-        found = _broken_text_at(item, (*path, str(key)))
-        if found is not None:
-            return found
+    pending: list[tuple[Any, tuple[str, ...]]] = [(value, ())]
+    while pending:
+        item, path = pending.pop()
+        if isinstance(item, str):
+            if not encodable(item):
+                return path
+            continue
+        children = list(item.items()) if isinstance(item, dict) else list(enumerate(item)) if isinstance(item, list) else []
+        for key, _child in children:
+            if not encodable(key):
+                return (*path, str(key).encode("utf-8", "backslashreplace").decode("utf-8"))
+        pending.extend((child, (*path, str(key))) for key, child in reversed(children))
     return None
 
 
 async def refuse_broken_text(connection: HTTPConnection) -> None:
     """Every ``/api/v2`` JSON body: text UTF-8 cannot write is refused (422)
-    before a route keeps it. JSON can escape an unpaired surrogate
-    ("\\udc80", half of an emoji); UTF-8 cannot hold one, so a value of any
-    kind (a setting, a recipe's patch, a pipeline, a model's metadata) failed
-    in the middle of its write to a file or to SQLite. Typed text fields
-    refused it already (pydantic); this covers values of any kind."""
+    before a route keeps it. JSON can carry an unpaired surrogate (escaped,
+    "\\udc80", half of an emoji, or as raw bytes); UTF-8 cannot hold one, so a
+    value of any kind (a setting, a recipe's patch, a pipeline, a model's
+    metadata) failed in the middle of its write to a file or to SQLite.
+    Typed text fields refused it already (pydantic); this covers values of
+    any kind. FastAPI reads a body as JSON without a content type, and with
+    one in any case."""
 
-    if not isinstance(connection, Request) or "json" not in connection.headers.get("content-type", ""):
+    if not isinstance(connection, Request):
         return
+    kind = connection.headers.get("content-type", "").lower()
+    if kind and "json" not in kind:
+        return  # uploads and forms: their routes read text of their own
     if connection.scope["path"].endswith(CHECKED_PER_SETTING):
         return  # these name each refused setting for the settings page
     body = await connection.body()
-    if b"\\u" not in body:  # JSON writes such a character only as an escape
+    if not _MAYBE_BROKEN.search(body):
         return
     try:
         data = json.loads(body)
-    except ValueError:
-        return  # the route's own validation answers
+    except (ValueError, RecursionError):
+        return  # the route's own validation answers (a body nested too deep: 400)
     path = _broken_text_at(data)
     if path is not None:
         raise ValidationError([ParamError(BROKEN_TEXT, owner="body", param=".".join(path) or "body")])
