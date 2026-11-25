@@ -234,9 +234,10 @@ export default function PngInfoPage({ route }: { route: Route }) {
   return (
     <div className="h-full overflow-y-auto">
       <HeaderSlot>
-        <Button variant="ghost" size="sm" onClick={() => show(null)}>
+        {/* on a phone a 28 px icon square, its label read out (its only name) */}
+        <Button variant="ghost" size="sm" onClick={() => show(null)} className="max-sm:size-7 max-sm:px-0">
           <X aria-hidden />
-          <span className="hidden sm:inline">{t("Clear")}</span>
+          <span className="max-sm:sr-only">{t("Clear")}</span>
         </Button>
       </HeaderSlot>
       {/* one column below lg, as wide as the window whatever its longest line (a file name, the tabs) */}

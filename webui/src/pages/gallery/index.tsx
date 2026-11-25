@@ -156,9 +156,17 @@ export default function GalleryPage() {
 
   const header = (
     <HeaderSlot>
-      <Button variant="ghost" size="sm" onClick={() => void rescan()} disabled={refreshing} title={t("Scan output folders for new images")}>
+      {/* on a phone a 28 px icon square, its label read out */}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => void rescan()}
+        disabled={refreshing}
+        title={t("Scan output folders for new images")}
+        className="max-sm:size-7 max-sm:px-0"
+      >
         <RefreshCw className={refreshing ? "animate-spin" : undefined} aria-hidden />
-        <span className="hidden sm:inline">{t("Rescan")}</span>
+        <span className="max-sm:sr-only">{t("Rescan")}</span>
       </Button>
     </HeaderSlot>
   )

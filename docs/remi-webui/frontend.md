@@ -108,8 +108,9 @@ imperatively).
   the appearance menu: the networks button wherever its label is hidden
   (below `lg`), the quick settings button on a phone, its count of pinned
   settings waiting for `sm`, and on a phone a page's own button whose
-  label would leave its title a stub (the queue's Pause / Resume, its
-  label read out, `sr-only`). On a phone the header's controls sit 4 px
+  label has no room there (the queue's Pause / Resume, the gallery's
+  Rescan, PNG Info's Clear), its label read out (`sr-only`, never
+  `hidden`, which would leave the button without a name). On a phone the header's controls sit 4 px
   apart, and the hairline that sets the networks button apart from
   Generate's tabs is left out (its icon does that there).
 - **Command palette** (Ctrl/Cmd+K, `cmdk`, its own chunk loaded on first

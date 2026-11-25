@@ -2,6 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query"
 import { act, configure, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { queryClient } from "@/api/queries"
+import { useHeaderSlotTarget } from "@/app/header-slot-store"
 import type { GalleryItem } from "@/api/types"
 import { useGalleryView } from "@/features/library/filters"
 import { daysAgo } from "@/features/library/labels"
@@ -66,6 +67,24 @@ describe("gallery page", { timeout: 20_000 }, () => {
   afterEach(() => {
     vi.restoreAllMocks()
     queryClient.clear()
+  })
+
+  // On a phone the Rescan button showed its icon alone in a 36 px box beside the header's 28 px
+  // squares, named by its tooltip text: a 28 px square there, its label read out.
+  it("shows Rescan in the header as a 28 px icon square on a phone, its label read out", async () => {
+    mockServer([item(1)])
+    const header = document.createElement("div")
+    document.body.append(header)
+    act(() => useHeaderSlotTarget.getState().setElement(header))
+    try {
+      renderPage()
+      const rescan = await within(header).findByRole("button", { name: "Rescan" })
+      expect(rescan).toHaveClass("max-sm:size-7", "max-sm:px-0")
+      expect(within(rescan).getByText("Rescan")).toHaveClass("max-sm:sr-only")
+    } finally {
+      act(() => useHeaderSlotTarget.getState().setElement(null))
+      header.remove()
+    }
   })
 
   it("lays images out in justified rows at their aspect ratio", async () => {

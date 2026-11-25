@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { queryClient } from "@/api/queries"
+import { useHeaderSlotTarget } from "@/app/header-slot-store"
 import type { ImageMetadata } from "@/api/types"
 import { toast } from "sonner"
 import { groupEntries } from "@/features/pnginfo/group"
@@ -93,6 +94,26 @@ describe("PNG Info page", () => {
     fireEvent.click(screen.getByRole("tab", { name: /PNG chunks/ }))
     const chunks = await screen.findByRole("table", { name: "PNG chunks" })
     expect(within(chunks).getByText("× 3")).toBeInTheDocument()
+  })
+
+  // On a phone the Clear button showed its icon alone, its label display:none: a button with no
+  // name, in a 36 px box beside the header's 28 px squares. A 28 px square there, its label read out.
+  it("shows Clear in the header as a 28 px icon square on a phone, its label read out", async () => {
+    mockServer()
+    const header = document.createElement("div")
+    document.body.append(header)
+    act(() => useHeaderSlotTarget.getState().setElement(header))
+    try {
+      renderPage("file=abc")
+      const clear = await within(header).findByRole("button", { name: "Clear" })
+      expect(clear).toHaveClass("max-sm:size-7", "max-sm:px-0")
+      const label = within(clear).getByText("Clear")
+      expect(label).toHaveClass("max-sm:sr-only")
+      expect(label).not.toHaveClass("hidden")
+    } finally {
+      act(() => useHeaderSlotTarget.getState().setElement(null))
+      header.remove()
+    }
   })
 
   // The section tabs kept their state across images: an image without PNG chunks opened on its
