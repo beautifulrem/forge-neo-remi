@@ -314,6 +314,18 @@ def test_exposed_servers_accept_api_auth_credentials(monkeypatch):
     assert client.post("/ext/api").status_code == 401
 
 
+def test_refusals_answer_json_and_offer_basic_on_401(monkeypatch):
+    # like the WebUI's own refusals (remi.server.auth.refuse): API clients may log in with Basic
+    client = _exposed_app(monkeypatch, share=True, api_auth="bot:secret")
+    missing = client.post("/ext/api")
+    assert missing.status_code == 401 and missing.json() == {"detail": "Not authenticated"}
+    assert missing.headers["content-type"] == "application/json"
+    assert missing.headers["www-authenticate"] == 'Basic realm="Remi"'
+    cross = client.post("/ext/api", headers={"origin": "https://evil.example"})
+    assert cross.status_code == 403 and cross.json() == {"detail": "Cross-site request refused"}
+    assert "www-authenticate" not in cross.headers
+
+
 def test_api_auth_credentials_do_not_count_without_api_auth(monkeypatch):
     client = _exposed_app(monkeypatch, share=True)
     assert client.post("/ext/api", headers=_basic("user", "pw")).status_code == 401

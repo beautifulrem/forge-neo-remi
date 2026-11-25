@@ -87,8 +87,8 @@ without `--gradio-auth`). With logins configured:
 - The server renders no login page: a browser page load without a login
   gets the SPA shell with status 401, and the SPA signs in through the
   endpoints above. Other refused requests get JSON `{"detail": …}` (with
-  `WWW-Authenticate: Basic` for `/internal`, `/sdapi`, the docs, and page
-  loads when the SPA is not built).
+  `WWW-Authenticate: Basic` for `/internal`, `/sdapi`, extension routes, the
+  docs, and page loads when the SPA is not built).
 - `/sdapi/v1` (and extension routes under `/sdapi`) uses `--api-auth
   user:pass[,…]` (HTTP Basic, throttled the same way) when it is set; without
   it, the `--auth` login (session cookie or HTTP Basic) on any bind, since a

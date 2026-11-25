@@ -81,7 +81,8 @@ attackers who already have a login (they are administrators by design).
   whenever `--auth` / `--auth-file` is set, on any bind (session, Basic, or
   `--api-auth` credentials; local clients exempt only with
   `--api-no-auth-on-localhost`); under `--nowebui`, `--api-auth` whenever it
-  is set.
+  is set. Refusals answer JSON `{"detail": …}` like the API's, a 401 with
+  `WWW-Authenticate: Basic`, which these routes accept.
 
 ### Browser-based attacks (`modules/extension_route_guard.py`, `remi/server/auth.py`)
 

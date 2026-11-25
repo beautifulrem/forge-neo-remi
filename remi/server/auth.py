@@ -62,6 +62,9 @@ DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
 SDAPI_PREFIX = "/sdapi"
 """Host and cross-site checks; login: ``--api-auth``, else the WebUI login."""
 
+BASIC_CHALLENGE = {"WWW-Authenticate": 'Basic realm="Remi"'}
+"""The header of a 401 that offers HTTP Basic (API clients, browsers without the SPA)."""
+
 MAX_THROTTLED_CLIENTS = 4096
 MAX_FAILURES_PER_MINUTE = 10
 
@@ -512,7 +515,7 @@ async def refuse(scope: Scope, receive: Receive, send: Send, status: int, reason
     response = login_page(scope.get("root_path", "")) if page_load and login_page is not None else None
     if response is None:
         basic = status == 401 and (page_load or path.startswith(("/internal", SDAPI_PREFIX, *DOCS_PATHS)))
-        response = JSONResponse({"detail": reason}, status_code=status, headers={"WWW-Authenticate": 'Basic realm="Remi"'} if basic else None)
+        response = JSONResponse({"detail": reason}, status_code=status, headers=BASIC_CHALLENGE if basic else None)
     await response(scope, receive, send)
 
 

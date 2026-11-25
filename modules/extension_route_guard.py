@@ -289,8 +289,10 @@ def _api_auth_refusal(request) -> tuple[int, str] | None:
 
 def _wrap(app, routes, require_login: bool, accept_api_auth: bool = False, api_route: bool = False) -> int:
     from starlette.requests import HTTPConnection, Request
-    from starlette.responses import PlainTextResponse
+    from starlette.responses import JSONResponse
     from starlette.websockets import WebSocketClose
+
+    from remi.server.auth import BASIC_CHALLENGE
 
     wrapped = 0
     for route in routes:
@@ -304,7 +306,10 @@ def _wrap(app, routes, require_login: bool, accept_api_auth: bool = False, api_r
                 refused = refusal(app, Request(scope, receive), require_login, accept_api_auth, api_route)
                 if refused is not None:
                     status, reason = refused
-                    await PlainTextResponse(reason, status_code=status)(scope, receive, send)
+                    # as the WebUI's own refusals: JSON, and a 401 offers HTTP Basic, which
+                    # these routes accept (they are for API clients and extension pages)
+                    response = JSONResponse({"detail": reason}, status_code=status, headers=BASIC_CHALLENGE if status == 401 else None)
+                    await response(scope, receive, send)
                     return
             elif kind == "websocket":
                 refused = refusal(app, HTTPConnection(scope), require_login, accept_api_auth, api_route)
