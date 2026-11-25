@@ -92,6 +92,14 @@ describe("form store", () => {
       await Promise.resolve()
       expect(info).not.toHaveBeenCalled()
     })
+
+    it("keeps a whole group when a lock keeps part of it", () => {
+      const store = locked()
+      expect(store.getState().setValues("core", { steps: 40, sampler: "DDIM" }, { whole: true, quiet: true })).toEqual(["steps"])
+      expect(store.getState().values.core).toMatchObject({ steps: 20, sampler: "Euler" })
+      expect(store.getState().setValues("core", { steps: 20, sampler: "DDIM" }, { whole: true, quiet: true })).toEqual([])
+      expect(store.getState().values.core).toMatchObject({ steps: 20, sampler: "DDIM" })
+    })
   })
 
   it("loads defaults per owner, including section enable toggles", () => {

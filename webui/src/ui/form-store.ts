@@ -73,6 +73,11 @@ export type WriteOptions = {
    * names them in an info toast (`reportLocked`).
    */
   quiet?: boolean
+  /**
+   * The values only make sense together (an image and the layers painted over it, styled
+   * prompts and their emptied style list): when a lock keeps one of them, none is written.
+   */
+  whole?: boolean
 }
 
 export type FormActions = {
@@ -245,11 +250,12 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
       }))
     },
 
-    setValues(owner, partial, { quiet = false } = {}) {
+    setValues(owner, partial, { quiet = false, whole = false } = {}) {
       let skipped: string[] = []
       set((s) => {
         const locked = lockedNames(s.locks, s.values, owner)
         skipped = Object.keys(partial).filter((name) => locked.has(name) && !jsonEqual(partial[name], s.values[owner]?.[name]))
+        if (skipped.length > 0 && whole) return {}
         const kept = skipped.length === 0 ? partial : Object.fromEntries(Object.entries(partial).filter(([name]) => !locked.has(name)))
         return {
           values: { ...s.values, [owner]: { ...s.values[owner], ...kept } },
