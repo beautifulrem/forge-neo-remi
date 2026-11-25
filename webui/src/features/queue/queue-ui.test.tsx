@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { act, configure, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, configure, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { tabSchema } from "@/api/mock/fixtures"
 import { keys, queryClient } from "@/api/queries"
@@ -329,6 +329,30 @@ describe("import dialog", { timeout: 20_000 }, () => {
     renderWithClient(<ImportDialog open onOpenChange={() => {}} />)
     expect(await screen.findByRole("alert")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument()
+  })
+
+  // The focused Retry went with the failure when the sources arrived: the focus fell to the dialog.
+  it("gives the focus to the sources a retry brought", async () => {
+    let listed = false
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      if (!listed) return Response.json({ detail: "forbidden" }, { status: 403 })
+      await held
+      return Response.json([{ id: "agent-scheduler", label: "Agent Scheduler", available: true, count: 1, path: "/data/task_scheduler.sqlite3" }])
+    })
+    renderWithClient(<ImportDialog open onOpenChange={() => {}} />)
+    const retry = within(await screen.findByRole("alert")).getByRole("button", { name: "Retry" })
+    // the dialog has put its first focus inside (it may come after the failure)
+    await waitFor(() => expect(screen.getByRole("dialog").contains(document.activeElement)).toBe(true))
+    listed = true
+    act(() => retry.focus())
+    fireEvent.click(retry)
+    await waitFor(() => expect(retry).toHaveAttribute("aria-disabled", "true"))
+    expect(retry).toHaveFocus()
+    await act(async () => release())
+    const importButton = await screen.findByRole("button", { name: "Import" })
+    await waitFor(() => expect(importButton).toHaveFocus())
   })
 })
 

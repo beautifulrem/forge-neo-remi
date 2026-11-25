@@ -12,6 +12,7 @@ import { useClientOption } from "@/api/app-options"
 import { useLoadFailure } from "@/api/load-failure"
 import { useProgress } from "@/api/progress"
 import { modelsQuery } from "@/api/queries"
+import { useFocusAfterRetry } from "@/components/focus-after-retry"
 import { LoadFailed } from "@/components/LoadFailed"
 import { SearchSelect } from "@/components/SearchSelect"
 import { Button } from "@/components/ui/button"
@@ -75,15 +76,7 @@ function CheckpointPicker({ className }: { className?: string }) {
   const busy = write.isPending || loading !== null
   // A retry that brings the list replaces its button with the picker: the focus the button had
   // goes to the picker, not to the page (unless the user has moved it meanwhile).
-  const pickerId = useId()
-  const focusAfterRetry = useRef(false)
-  const loaded = models.data !== undefined
-  useEffect(() => {
-    if (!loaded || !focusAfterRetry.current) return
-    focusAfterRetry.current = false
-    const active = document.activeElement
-    if (!active || active === document.body || !active.isConnected) document.getElementById(pickerId)?.focus()
-  }, [loaded, pickerId])
+  const focusAfterRetry = useFocusAfterRetry<HTMLButtonElement>(failure?.retrying ?? false)
   // Once the list has failed it stays failed until a retry brings it (`useLoadFailure`), so the
   // button under the focus is not swapped for a loading picker.
   if (failure) {
@@ -91,16 +84,14 @@ function CheckpointPicker({ className }: { className?: string }) {
     const retrying = failure.retrying
     return (
       <Button
+        ref={focusAfterRetry}
         variant="ghost"
         size="sm"
         className={cn(FIELD_BUTTON_CLASS, "min-w-0 justify-start gap-1.5 px-2.5 font-normal text-destructive", className)}
         // disabled but focusable (aria-disabled): the button keeps the focus while the list loads
         disabled={retrying}
         focusableWhenDisabled
-        onClick={() => {
-          focusAfterRetry.current = true
-          void models.refetch()
-        }}
+        onClick={() => void models.refetch()}
         title={[t("Could not load the models"), errorText(failure.error), t("Retry")].join(" · ")}
       >
         {retrying ? <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden /> : <TriangleAlert className="size-3.5 shrink-0" aria-hidden />}
@@ -119,7 +110,6 @@ function CheckpointPicker({ className }: { className?: string }) {
   }
   return (
     <SearchSelect
-      id={pickerId}
       // the loading stage sits inside the pill, so a crowded header never cuts it off
       suffix={loading ? loadingText(t, loading, i18n.language) : null}
       aria-label={t("Checkpoint")}

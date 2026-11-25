@@ -34,6 +34,7 @@ import { queryClient } from "@/api/queries"
 import type { NetworkItem, NetworkKind } from "@/api/types"
 import { FadeStrip } from "@/components/FadeStrip"
 import { FitTabsList } from "@/components/FitTabsList"
+import { useFocusAfterRetry } from "@/components/focus-after-retry"
 import { LoadFailed } from "@/components/LoadFailed"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -228,8 +229,10 @@ function EmptyState({ filtered, kindTitle, onClear }: { filtered: boolean; kindT
 
 function ErrorState({ title, error, onRetry, retrying = false }: { title: string; error: unknown; onRetry: () => void; retrying?: boolean }) {
   const { t, i18n } = useTranslation()
+  // the cards a retry brought take the focus the failure had
+  const focusAfterRetry = useFocusAfterRetry<HTMLDivElement>(retrying)
   return (
-    <div className="flex h-full items-center justify-center p-6" role="alert" aria-busy={retrying || undefined}>
+    <div ref={focusAfterRetry} className="flex h-full items-center justify-center p-6" role="alert" aria-busy={retrying || undefined}>
       <Empty className="max-w-sm border-0">
         <EmptyHeader>
           <EmptyMedia variant="icon" className="text-destructive">

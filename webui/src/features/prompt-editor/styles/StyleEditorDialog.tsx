@@ -5,7 +5,7 @@
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { ClipboardCopy, Save, Trash2 } from "@/components/icons"
-import { Suspense, useId, useRef, useState } from "react"
+import { Suspense, useId, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
@@ -73,13 +73,6 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
     if (!open && !dirty) setEdited(null)
   }
 
-  // After a retry, the focus goes to the list it brought, not to the dialog the Retry button left.
-  const focusAfterRetry = useRef(false)
-  const fieldsShown = (fields: HTMLDivElement | null) => {
-    if (!fields || !focusAfterRetry.current) return
-    focusAfterRetry.current = false
-    fields.querySelector<HTMLElement>("[role=combobox]")?.focus()
-  }
 
   const select = (name: string) => {
     const style = styles.data?.find((s) => s.name === name)
@@ -124,10 +117,8 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
                 error={failure.error}
                 retrying={failure.retrying}
                 message={t("Could not load the styles")}
-                onRetry={() => {
-                  focusAfterRetry.current = true
-                  void styles.refetch()
-                }}
+                // the fields a retry brought take the focus (`LoadFailed`): the style select first
+                onRetry={() => void styles.refetch()}
                 className="py-0"
               />
             ) : !styles.data ? (
@@ -142,7 +133,7 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
                 ))}
               </div>
             ) : (
-              <div ref={fieldsShown} className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1.5">
                   <label id={`${id}-name`} className="text-[0.8rem] font-medium">
                     {t("Style", { context: "prompt" })}

@@ -96,6 +96,29 @@ describe("LicensesView", () => {
     expect(screen.queryByRole("alert")).toBeNull()
   })
 
+  // The Retry under the focus went with the failure when the list arrived: the focus fell to the page.
+  it("gives the focus to the list a retry brought", async () => {
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    const licenses = vi.spyOn(api.system, "licenses").mockRejectedValueOnce(new ApiError(404, "boom", { detail: "boom" }))
+    licenses.mockImplementationOnce(async () => {
+      await held
+      return { groups: [{ title: "", items: [{ id: "a", name: "Some library", url: "https://example.com/a" }] }] } as never
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <LicensesView />
+      </QueryClientProvider>,
+    )
+    const retry = within(await screen.findByRole("alert")).getByRole("button", { name: "Retry" })
+    act(() => retry.focus())
+    fireEvent.click(retry)
+    await waitFor(() => expect(retry).toHaveAttribute("aria-disabled", "true"))
+    await act(async () => release())
+    const link = await screen.findByRole("link", { name: "Some library" })
+    await waitFor(() => expect(link).toHaveFocus())
+  })
+
   it("says the list did not load in the UI language, with a Retry", async () => {
     const licenses = vi.spyOn(api.system, "licenses").mockRejectedValueOnce(new ApiError(404, "boom", { detail: "boom" }))
     licenses.mockResolvedValueOnce({ groups: [{ title: "", items: [{ id: "a", name: "Some library" }] }] } as never)

@@ -551,8 +551,14 @@ generated interfaces (sources: Linear's
   focused (`useLoadFailure` in `api/load-failure.ts`: a refetch of a query with
   no data goes back to "pending" and drops its error; a load that is no query,
   the image editor's picture or the recipe capture's read of a form, keeps its
-  error in its own state and marks it retrying instead of clearing it), and an
-  action's error is a plain destructive line by the action (`role="alert"`,
+  error in its own state and marks it retrying instead of clearing it). When
+  the retry brings the data, the focus the failure view held goes to what
+  took its place, its first tabbable element or else the nearest focusable
+  container (a dialog, `#main`), never to `<body>`; a focus the user moved
+  elsewhere stays (`useFocusAfterRetry` in `components/focus-after-retry.ts`,
+  built into `LoadFailed` and `RetryButton`; a Retry of its own puts its ref
+  on its view). The third, an
+  action's error, is a plain destructive line by the action (`role="alert"`,
   `text-sm text-destructive`, no tinted box; the settings import's skipped
   values too, read with the rest of its check in that check's polite live
   region, and a failed Extras run in its result area, not announced again:

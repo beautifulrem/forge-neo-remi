@@ -133,6 +133,43 @@ describe("queue page on a phone", () => {
     expect(within(panel).queryByRole("alert")).toBeNull()
   })
 
+  /** Opens the failed filter of the history, which fails; its retry will wait for `server.release`. */
+  async function failedHistory() {
+    const server = mockServer([], ["failed"])
+    navigate({ name: "queue", query: new URLSearchParams("section=history&status=failed") }, { replace: true })
+    renderPage()
+    const panel = screen.getByRole("tabpanel")
+    const alert = await within(panel).findByRole("alert")
+    server.failing.length = 0
+    server.held.push("failed")
+    return { server, panel, retry: within(alert).getByRole("button", { name: "Retry" }) }
+  }
+
+  // The Retry had the focus while it ran; when the history arrived it went with the failure, and
+  // the focus fell to the page.
+  it("gives the focus to the history a retry brought", async () => {
+    const { server, panel, retry } = await failedHistory()
+    act(() => retry.focus())
+    fireEvent.click(retry)
+    await waitFor(() => expect(retry).toHaveAttribute("aria-disabled", "true"))
+    expect(retry).toHaveFocus()
+    await act(async () => server.release())
+    const list = await within(panel).findByRole("list", { name: "Job history" })
+    await waitFor(() => expect(list.contains(document.activeElement)).toBe(true))
+  })
+
+  it("leaves the focus where it is when it was not on the failure", async () => {
+    const { server, retry } = await failedHistory()
+    fireEvent.click(retry)
+    await waitFor(() => expect(retry).toHaveAttribute("aria-disabled", "true"))
+    const tab = screen.getByRole("tab", { name: "History" })
+    act(() => tab.focus())
+    await act(async () => server.release())
+    await screen.findByText("a failed fox")
+    await act(() => new Promise((resolve) => setTimeout(resolve, 100)))
+    expect(tab).toHaveFocus()
+  })
+
   it("shows loading, not an old failure, when it opens while a failed history loads again", async () => {
     const server = mockServer([], ["failed"])
     navigate({ name: "queue", query: new URLSearchParams("section=history&status=failed") }, { replace: true })

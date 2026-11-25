@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { useFocusAfterRetry } from "@/components/focus-after-retry"
 import { LoadFailed } from "@/components/LoadFailed"
 import { useLoadFailure } from "@/api/load-failure"
 import { errorText } from "@/features/errors/error-text"
@@ -53,6 +54,8 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
   const setView = view.set
   const boardsList = useQuery(boardsQuery)
   const boardsFailure = useLoadFailure(boardsList)
+  // the boards a retry brought take the focus its button had
+  const focusAfterRetry = useFocusAfterRetry<HTMLButtonElement>(boardsFailure?.retrying ?? false)
   const boards = boardsList.data ?? []
   const facets = useQuery({ ...galleryFacetsQuery, enabled: count !== undefined })
 
@@ -169,6 +172,7 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
         })}
         {boardsFailure ? (
           <button
+            ref={focusAfterRetry}
             type="button"
             title={errorText(boardsFailure.error, {}, i18n.language)}
             // while the retry runs: busy but focusable, so the focus stays on it

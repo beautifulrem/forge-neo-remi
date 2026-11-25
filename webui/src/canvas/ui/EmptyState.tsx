@@ -2,6 +2,7 @@
 import { ImageOff, ImagePlus, Loader2, RotateCw, Square } from "@/components/icons"
 import { useId, useRef } from "react"
 import { useTranslation } from "react-i18next"
+import { useFocusAfterRetry } from "@/components/focus-after-retry"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { Size } from "../core/geometry"
@@ -27,8 +28,10 @@ type EmptyStateProps = {
  */
 function LoadFailed({ retrying = false, onRetry }: { retrying?: boolean; onRetry?: () => void }) {
   const { t } = useTranslation()
+  // the picture a retry brought takes the focus the failure had
+  const focusAfterRetry = useFocusAfterRetry<HTMLDivElement>(retrying)
   return (
-    <div role="alert" aria-busy={retrying || undefined} className="flex flex-col items-center gap-2 text-center">
+    <div ref={focusAfterRetry} role="alert" aria-busy={retrying || undefined} className="flex flex-col items-center gap-2 text-center">
       <span className="grid size-10 place-items-center rounded-full bg-destructive/10 text-destructive">
         <ImageOff className="size-5" aria-hidden />
       </span>
