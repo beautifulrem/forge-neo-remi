@@ -86,7 +86,7 @@ describe("keyboard shortcuts dialog", () => {
       ["Process", "Ctrl+Enter"],
       ["Add to queue", "Ctrl+Shift+Enter"],
       ["Interrupt", "Esc"],
-    ]) expect(extras.getByText(label).nextElementSibling?.textContent).toBe(key)
+    ] as const) expect(extras.getByText(label).nextElementSibling?.textContent).toBe(key)
   })
 
   // the gallery's select all, clear and remove keys (pages/gallery) were listed nowhere in the app
@@ -97,6 +97,6 @@ describe("keyboard shortcuts dialog", () => {
       ["Select all images", "Ctrl+A"],
       ["Clear selection", "Esc"],
       ["Remove the selected images", "Delete"],
-    ]) expect(gallery.getByText(label).nextElementSibling?.textContent).toBe(key)
+    ] as const) expect(gallery.getByText(label).nextElementSibling?.textContent).toBe(key)
   })
 })
