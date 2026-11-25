@@ -171,6 +171,8 @@ test.describe("the header on a phone with a quick setting pinned", () => {
 
       // a page without tabs of its own in the header keeps its title, whole
       await page.evaluate(() => (location.hash = "#/gallery"))
+      // the title changes with the address; Generate's tabs leave once the gallery's chunk is in
+      await expect(header.locator("[data-page-tabs]")).toHaveCount(0)
       const galleryTitle = header.getByRole("heading", { level: 1, name: gallery })
       await expect(galleryTitle).toBeVisible()
       expect(await galleryTitle.evaluate((element) => element.scrollWidth <= element.clientWidth + 0.5), "the gallery's title is cut").toBe(true)
