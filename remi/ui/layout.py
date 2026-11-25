@@ -163,14 +163,18 @@ class ScriptLayout:
     def args_for(self, coerced: Mapping[str, Any], ctx: Context | None = None, *, given: Mapping[str, Any] | None = None) -> list[Any]:
         """The positional processing arguments for already coerced values
         (:meth:`coerce`'s result). ``given`` are the values the request sent;
-        the others are defaults (see :meth:`default_arg`)."""
+        the others are defaults (see :meth:`default_arg`). A ``submit=False``
+        param is processed with its default whatever the request sent: its
+        value is for actions only."""
 
         ctx = ensure_context(ctx)
         errors: list[ParamError] = []
         args: list[Any] = []
         for node in self.inputs:
             try:
-                if given is not None and node.name not in given:
+                if not node.submit:
+                    args.append(self.default_arg(node, node.resolve_default(ctx), ctx))
+                elif given is not None and node.name not in given:
                     args.append(self.default_arg(node, coerced[node.name], ctx))
                 else:
                     args.append(node.to_arg(coerced[node.name], ctx))

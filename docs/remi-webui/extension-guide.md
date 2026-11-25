@@ -239,7 +239,7 @@ Keyword arguments every input takes:
 | `width` | inside a `Row`: `"auto"`, `"fill"` or a 1–12 column span |
 | `hidden=True` | submitted, never rendered (e.g. a choice bound to a tab strip) |
 | `persist=False` | not kept in browser drafts: every page load starts from the default |
-| `submit=False` | held by the form for actions only; jobs never carry it, processing gets the default |
+| `submit=False` | held by the form for actions only; jobs never carry it, processing gets the default (even when an API client sends a value) |
 | `arg=False` | a tool input (e.g. a calculator's fields): rendered and handed to actions, but not a processing argument at all — not in `process()`'s positional arguments, not in `param_order`, never submitted; no `infotext`, `paste` or `preset` |
 
 `Toggle(locks="owner.param")` protects another param from programmatic

@@ -20,8 +20,13 @@ def test_persist_and_submit_are_exported_only_when_off():
 def test_unsubmitted_params_take_their_defaults():
     layout = ui.ScriptLayout(ui.Group(ui.Toggle("on", True), ui.Text("notes", lambda: "saved", submit=False, persist=False)))
     assert layout.values_to_args({"on": False}) == [False, "saved"]
-    # Still a param: actions and API clients may send it
-    assert layout.values_to_args({"notes": "x"}) == [True, "x"]
+    # An API client may send it: checked like any value and handed to actions,
+    # but processing still gets the default, as for the SPA, which never sends it
+    assert layout.coerce({"notes": "x"})["notes"] == "x"
+    assert layout.values_to_args({"notes": "x"}) == [True, "saved"]
+    assert layout.args_for(layout.coerce({"on": False, "notes": "x"})) == [False, "saved"]
+    with pytest.raises(ui.ValidationError):
+        layout.values_to_args({"notes": ["x"]})
 
 
 def test_tool_inputs_are_not_arguments():
