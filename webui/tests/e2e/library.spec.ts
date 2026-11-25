@@ -51,7 +51,7 @@ test.describe("gallery", () => {
   test("filters by search and opens the viewer with the parameters beside the image", async ({ page }) => {
     const grid = await openGallery(page)
     await page.getByRole("searchbox", { name: "Search the gallery" }).fill("lighthouse")
-    await expect(page.getByText(/images match/)).toBeVisible()
+    await expect(page.getByText(/\d+ of \d+ match/)).toBeVisible()
     await expect(grid.getByRole("button", { name: /^lighthouse at dusk/ }).first()).toBeVisible()
     await expect(grid.getByRole("button", { name: /^a red fox/ })).toHaveCount(0)
 

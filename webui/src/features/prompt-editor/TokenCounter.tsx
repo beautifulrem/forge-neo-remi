@@ -21,7 +21,7 @@ export function TokenCounter(props: TokenCounterProps) {
   const max = data?.max_length
   const known = typeof tokens === "number" && typeof max === "number"
   const description = known
-    ? t("{{tokens}} tokens; the prompt is split into chunks of 75", { tokens })
+    ? t("{{count}} tokens; the prompt is split into chunks of 75", { count: tokens })
     : isError
       ? t("Could not count tokens")
       : t("Tokens are counted once a model is loaded")

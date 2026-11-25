@@ -241,3 +241,29 @@ describe("zh-CN chrome vs server catalogs", () => {
   })
 })
 
+
+/** Counts before a plural noun that are never one, each with why. */
+const NEVER_ONE: Record<string, string> = {
+  "Show all {{count}} tags": "shown only when a model has more tags than the card lists",
+  "A zip holds at most {{count}} images: the first {{count}} selected are packed.": "the count is the zip's limit",
+}
+/** Words ending in s after a placeholder that are verbs, not plural nouns. */
+const VERBS = new Set(["is", "was", "has", "needs"])
+
+describe("English plurals", () => {
+  // "{{tokens}} tokens" read "1 tokens", and "{{count}} of {{total}} images match" "1 of 1 images
+  // match": a number before a plural noun is `count`, with an `_one` form in en.json.
+  it("give a counted noun a singular form", () => {
+    const wrong: string[] = []
+    for (const key of Object.keys(zh)) {
+      if (/_(?:one|other)$/.test(key) || key in NEVER_ONE) continue
+      for (const [, name, word] of key.matchAll(/\{\{(\w+)\}\} ([a-z]+s)\b/g)) {
+        if (VERBS.has(word!)) continue
+        if (name !== "count") wrong.push(`${key}: {{${name}}} is not a count`)
+        else if (!(`${key}_one` in en)) wrong.push(`${key}: no _one form in en.json`)
+      }
+    }
+    expect(wrong).toEqual([])
+    expect(Object.keys(NEVER_ONE).filter((key) => !(key in zh))).toEqual([])
+  })
+})

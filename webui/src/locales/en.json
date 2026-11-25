@@ -35,5 +35,6 @@
   "Delete files_one": "Delete file",
   "Imported {{count}} recipes ({{updated}} updated)_one": "Imported {{count}} recipe ({{updated}} updated)",
   "Finished: {{count}} checkpoints hashed_one": "Finished: {{count}} checkpoint hashed",
-  "{{shown}} of {{count}} extensions_one": "{{shown}} of {{count}} extension"
+  "{{shown}} of {{count}} extensions_one": "{{shown}} of {{count}} extension",
+  "{{count}} tokens; the prompt is split into chunks of 75_one": "{{count}} token; the prompt is split into chunks of 75"
 }

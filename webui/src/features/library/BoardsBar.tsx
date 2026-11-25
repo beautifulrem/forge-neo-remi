@@ -185,7 +185,7 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
                 {total === null || total === undefined
                   ? t("Loading…")
                   : filtered > 0
-                    ? t("{{count}} of {{total}} images match", { count: total, total: facets.data?.total ?? total })
+                    ? t("{{count}} of {{total}} match", { count: total, total: facets.data?.total ?? total })
                     : t("Images: {{count}}", { count: total })}
                 {total != null && count < total ? <span className="hidden lg:inline">· {t("{{count}} loaded", { count })}</span> : null}
               </>
