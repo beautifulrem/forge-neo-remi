@@ -241,4 +241,42 @@ describe("settings navigation while loading", () => {
     rerender(<SettingsNav sections={[]} {...props} />)
     expect(screen.getByText("No matching sections")).toBeVisible()
   })
+
+  // The sections that arrived pushed the System views under a short placeholder off the nav's
+  // bottom: showing every setting, the placeholder is a window tall, as the sections will be, so
+  // the System views start out of sight. Filtered, how many sections come is not known.
+  it("fills the nav with section rows while every setting loads", async () => {
+    const { SettingsNav } = await import("./SettingsNav")
+    const props = { view: "settings" as const, activeSection: null, unsaved: new Map<string, number>(), onSection: () => {}, onView: () => {} }
+    const { rerender } = render(<SettingsNav sections={[]} loading filtering={false} {...props} />)
+    const placeholder = () => screen.getByRole("status")
+    expect(placeholder().className.split(/\s+/)).toEqual(expect.arrayContaining(["h-dvh", "overflow-hidden"]))
+    // category titles over rows as tall as the sections' (one 0.8rem line in py-1.5)
+    expect(placeholder().querySelectorAll("[data-part=category]").length).toBeGreaterThan(1)
+    for (const row of placeholder().querySelectorAll("[data-part=section]")) expect(row.className.split(/\s+/)).toEqual(expect.arrayContaining(["py-1.5", "text-[0.8rem]"]))
+    rerender(<SettingsNav sections={[]} loading filtering {...props} />)
+    expect(placeholder().className.split(/\s+/)).not.toContain("h-dvh")
+    expect(placeholder().querySelectorAll("[data-part=category]")).toHaveLength(1)
+  })
+
+  // On a system view the placeholder put the current view out of sight, and the nav scrolled it back
+  // once the sections came: it is scrolled to while they load, and again as they arrive.
+  it("keeps the current system view in sight while the sections load and when they arrive", async () => {
+    const { SettingsNav } = await import("./SettingsNav")
+    const scrolled: string[] = []
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this.textContent ?? "")
+    }
+    try {
+      const props = { view: "licenses" as const, activeSection: null, filtering: false, unsaved: new Map<string, number>(), onSection: () => {}, onView: () => {} }
+      const { rerender } = render(<SettingsNav sections={[]} loading {...props} />)
+      expect(scrolled).toEqual(["Licenses"])
+      const sections = filterSettings(buildSettingsIndex(contract), { query: "", mode: "all", values: contract.values, saved: contract.values, defaults: contract.defaults, translate: (s) => s })
+      rerender(<SettingsNav sections={sections} {...props} />)
+      expect(scrolled).toEqual(["Licenses", "Licenses"])
+    } finally {
+      Element.prototype.scrollIntoView = original
+    }
+  })
 })

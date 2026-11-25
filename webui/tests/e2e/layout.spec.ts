@@ -1772,3 +1772,51 @@ test.describe("the server view while its status loads", () => {
     expect(Math.abs(after - before), "the panel's buttons moved").toBeLessThanOrEqual(0.5)
   })
 })
+
+// A cold load of the settings: while `/options` loaded, the section nav held a title and eight rows
+// with the System views under them, and the sections that came pushed those off the bottom of the
+// nav (a layout shift of 0.024 at 1440×900, 0.047 at 1024×600; none on a phone, where the nav is in
+// a closed sheet); on a system view the nav then scrolled the current one back into sight. Showing
+// every setting, the nav's placeholder fills it as its sections will, and the current system view is
+// in sight while they load and as they arrive.
+test.describe("a cold load of the settings", () => {
+  for (const [route, width, height] of [
+    ["settings", 1440, 900],
+    ["settings", 1024, 600],
+    ["settings", 390, 844],
+    ["settings?view=licenses", 1024, 600],
+  ] as const) {
+    test(`shifts the layout by less than 0.05, and nothing on the page, at ${width}×${height} on #/${route}`, async ({ page }) => {
+      await page.setViewportSize({ width, height })
+      await injectFaults(page, [{ path: "^/options$", delay: 1500 }])
+      await page.addInitScript(() => {
+        const record = window as unknown as { layoutShift: number; pageShifts: string[] }
+        record.layoutShift = 0
+        record.pageShifts = []
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries() as (PerformanceEntry & { value: number; hadRecentInput: boolean; sources: { node: Node | null }[] })[]) {
+            if (entry.hadRecentInput) continue
+            record.layoutShift += entry.value
+            // the shell's header and rail settle on every page; the settings page is in `main`
+            for (const { node } of entry.sources) {
+              const element = node instanceof Element ? node : (node?.parentElement ?? null)
+              if (element?.closest("main")) record.pageShifts.push(`${entry.value.toFixed(4)} ${element.tagName.toLowerCase()}.${element.className} "${element.textContent?.slice(0, 40)}"`)
+            }
+          }
+        }).observe({ type: "layout-shift", buffered: true })
+      })
+      await page.goto(`/#/${route}`)
+      const sections = page.getByRole("main").getByRole("navigation", { name: "Settings sections" })
+      await expect(page.getByRole("main").locator("[aria-busy=true]").first()).toBeVisible()
+      if (route === "settings") await expect(page.locator("[data-settings-scroller]")).toBeVisible({ timeout: 10_000 })
+      else await expect(sections.getByRole("button", { name: "Saving Images/Grids" })).toBeAttached({ timeout: 10_000 })
+      await page.waitForTimeout(500)
+      const { layoutShift, pageShifts } = await page.evaluate(() => {
+        const record = window as unknown as { layoutShift: number; pageShifts: string[] }
+        return { layoutShift: record.layoutShift, pageShifts: record.pageShifts }
+      })
+      expect(pageShifts, "shifts on the settings page").toEqual([])
+      expect(layoutShift).toBeLessThan(0.05)
+    })
+  }
+})

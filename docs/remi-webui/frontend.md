@@ -1357,6 +1357,17 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
   server answers it with the direct dependencies' notices).
   `tools/dump_settings.py` writes the real schema to
   `api/mock/contract/settings.json` (tests and mock mode).
+  While `GET /options` loads, the section nav holds rows the size of its
+  sections (`SectionsPlaceholder`: category titles over rows of one
+  0.8rem line). Showing every setting, a window of them: there are always
+  more sections than a window holds, so the System views under them start
+  out of sight, where the sections will push them, instead of being pushed
+  off the nav as they arrive (filtered, how many come is not known: one
+  group). On a system view the current one is scrolled into sight while
+  the sections load, and again before the frame they arrive in is drawn.
+  A cold load with `/options` held back shifts the layout by less than
+  0.05, and nothing on the page itself ("a cold load of the settings" in
+  `tests/e2e/layout.spec.ts`).
 - **Former Settings tabs and actions** (decisions):
   - *Defaults* (the `ui-config.json` editor) is not carried over: Remi forms
     never read `ui-config.json`; their starting values are the schema
