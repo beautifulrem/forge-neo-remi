@@ -15,7 +15,7 @@ import { act, formLabel, jobTitle } from "./queries"
 
 /** `loading`: the queue state has not arrived yet (a placeholder, not "Nothing is running"). */
 export function RunningCard({ paused, queued, loading = false }: { paused: boolean; queued: number; loading?: boolean }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const running = useProgress((s) => s.running)
   const livePreviews = useClientOption("live_previews_enable")
   const preview = useWs((s) => (running && s.preview && (running.seq === undefined || s.preview.jobSeq === running.seq) ? s.preview.url : null))
@@ -76,11 +76,11 @@ export function RunningCard({ paused, queued, loading = false }: { paused: boole
             <Badge variant="secondary">{t("Running")}</Badge>
             {job ? (
               <span className="text-xs text-muted-foreground">
-                #{job.seq} · {formLabel(job.tab)}
+                #{job.seq} · {formLabel(job.tab, i18n.language)}
               </span>
             ) : null}
           </div>
-          <p title={job ? jobTitle(job) : undefined} className="line-clamp-2 text-sm break-words">{job ? jobTitle(job) : t("Untitled job")}</p>
+          <p title={job ? jobTitle(job, i18n.language) : undefined} className="line-clamp-2 text-sm break-words">{job ? jobTitle(job, i18n.language) : t("Untitled job")}</p>
           <div className="mt-auto flex flex-col gap-1">
             <Progress value={fraction * 100} aria-label={t("Generation progress")} className="h-1.5" />
             <p className="flex flex-wrap gap-x-2 text-xs text-muted-foreground tabular-nums">

@@ -1,4 +1,4 @@
-import { t } from "@/i18n"
+import { i18n, t } from "@/i18n"
 
 /**
  * Tag category colours per tag list family (the categories of danbooru,
@@ -65,30 +65,30 @@ const NAMES: Record<string, Record<number, string>> = {
   derpibooru: { 0: "General", 1: "Official content", 3: "Species", 4: "OC", 5: "Rating", 6: "Body type", 7: "Character", 8: "Origin", 9: "Error", 10: "Spoiler", 11: "Fan content" },
 }
 
-const LABELS: Record<string, () => string> = {
-  General: () => t("General"),
-  Artist: () => t("Artist"),
-  Copyright: () => t("Copyright"),
-  Character: () => t("Character"),
-  Meta: () => t("Meta"),
-  Species: () => t("Species"),
-  Invalid: () => t("Invalid"),
-  Lore: () => t("Lore"),
-  "Official content": () => t("Official content"),
-  OC: () => t("OC"),
-  Rating: () => t("Rating"),
-  "Body type": () => t("Body type"),
-  Origin: () => t("Origin"),
-  Error: () => t("Error"),
-  Spoiler: () => t("Spoiler"),
-  "Fan content": () => t("Fan content"),
+const LABELS: Record<string, (lng: string) => string> = {
+  General: (lng) => t("General", { lng }),
+  Artist: (lng) => t("Artist", { lng }),
+  Copyright: (lng) => t("Copyright", { lng }),
+  Character: (lng) => t("Character", { lng }),
+  Meta: (lng) => t("Meta", { lng }),
+  Species: (lng) => t("Species", { lng }),
+  Invalid: (lng) => t("Invalid", { lng }),
+  Lore: (lng) => t("Lore", { lng }),
+  "Official content": (lng) => t("Official content", { lng }),
+  OC: (lng) => t("OC", { lng }),
+  Rating: (lng) => t("Rating", { lng }),
+  "Body type": (lng) => t("Body type", { lng }),
+  Origin: (lng) => t("Origin", { lng }),
+  Error: (lng) => t("Error", { lng }),
+  Spoiler: (lng) => t("Spoiler", { lng }),
+  "Fan content": (lng) => t("Fan content", { lng }),
 }
 
-/** The (translated) name of a category, or null. */
-export function categoryName(source: string, category: number | null | undefined): string | null {
+/** The (translated) name of a category, or null. `language`: the render's, when a render shows it. */
+export function categoryName(source: string, category: number | null | undefined, language = i18n.language): string | null {
   if (category === null || category === undefined) return null
   const name = (NAMES[source] ?? NAMES.danbooru!)[category]
-  return name ? (LABELS[name]?.() ?? name) : null
+  return name ? (LABELS[name]?.(language) ?? name) : null
 }
 
 /** Post counts as "6.0M", "12k", "950". */

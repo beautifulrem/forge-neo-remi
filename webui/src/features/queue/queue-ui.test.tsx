@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { configure, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, configure, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { tabSchema } from "@/api/mock/fixtures"
 import { keys, queryClient } from "@/api/queries"
@@ -186,6 +186,23 @@ describe("history list", () => {
       expect(rows[1]).toHaveTextContent("RuntimeError: shape mismatch") // the job's own exception, as it is
     } finally {
       await i18n.changeLanguage("en")
+    }
+  })
+
+  it("follows a language switch in the form name and the duration", async () => {
+    // the React Compiler memoizes a row on what it reads: a label made with the global language stayed English
+    mockFetch({})
+    const { i18n } = await import("@/i18n")
+    i18n.addResourceBundle("zh-CN", "chrome", { img2img: "图生图", "{{seconds}} s": "{{seconds}} 秒" }, true, true)
+    const done: Job = { ...jobOf("lang", "completed"), seq: 8, tab: "img2img", started_at: "2026-01-01T00:00:00Z", finished_at: "2026-01-01T00:00:12Z" }
+    renderWithClient(<HistoryList jobs={[done]} total={1} hasMore={false} loadingMore={false} onLoadMore={() => {}} onView={() => {}} />)
+    expect(screen.getByRole("listitem")).toHaveTextContent("img2img")
+    try {
+      await act(() => i18n.changeLanguage("zh-CN"))
+      expect(screen.getByRole("listitem")).toHaveTextContent("图生图")
+      expect(screen.getByRole("listitem")).toHaveTextContent("12 秒")
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
     }
   })
 

@@ -5,7 +5,7 @@
  */
 import { queryClient, schemaQuery } from "@/api/queries"
 import type { FormTab, ParamValues } from "@/api/types"
-import { t } from "@/i18n"
+import { i18n, t } from "@/i18n"
 import type { PasteEntry } from "@/features/infotext/paste"
 import { deliver } from "@/features/send-to/send-to"
 import { ensureSchemaLoaded } from "@/pages/generate/use-form-loader"
@@ -67,16 +67,16 @@ export function countRecipeParams(recipe: Pick<Recipe, "core_patch" | "scripts_p
   return total
 }
 
-/** Builds a concise summary of key parameter chips (`steps`, `cfg_scale`, `sampler_name`, etc.), in the UI language. */
-export function recipeHighlights(recipe: Pick<Recipe, "core_patch" | "scripts_patch">): string[] {
+/** Builds a concise summary of key parameter chips (`steps`, `cfg_scale`, `sampler_name`, etc.), in the render's language. */
+export function recipeHighlights(recipe: Pick<Recipe, "core_patch" | "scripts_patch">, language = i18n.language): string[] {
   const chips: string[] = []
   const core = recipe.core_patch ?? {}
   const sampler = recipe.scripts_patch?.sampler ?? {}
   if (sampler.sampler_name) chips.push(String(sampler.sampler_name))
-  if (sampler.steps !== undefined) chips.push(t("{{count}} steps", { count: Number(sampler.steps) }))
+  if (sampler.steps !== undefined) chips.push(t("{{count}} steps", { count: Number(sampler.steps), lng: language }))
   if (core.cfg_scale !== undefined) chips.push(`CFG ${String(core.cfg_scale)}`)
   if (core.width && core.height) chips.push(`${String(core.width)}×${String(core.height)}`)
-  if (core.denoising_strength !== undefined) chips.push(t("denoise {{value}}", { value: String(core.denoising_strength) }))
+  if (core.denoising_strength !== undefined) chips.push(t("denoise {{value}}", { value: String(core.denoising_strength), lng: language }))
   const extraScripts = Object.keys(recipe.scripts_patch ?? {}).filter((key) => key !== "sampler" && key !== "seed")
   for (const name of extraScripts.slice(0, 2)) chips.push(name)
   return chips

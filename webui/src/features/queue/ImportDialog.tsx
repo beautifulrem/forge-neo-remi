@@ -33,7 +33,7 @@ const OUTCOMES: Record<ImportItem["outcome"], { label: string; variant: "seconda
 }
 
 function Report({ report }: { report: ImportReport }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const counts: [string, number][] = [
     [t("Queued"), report.queued],
     [t("History"), report.history],
@@ -69,7 +69,7 @@ function Report({ report }: { report: ImportReport }) {
               {item.notes.length > 0 ? (
                 <ul className="list-disc pl-5 text-xs text-muted-foreground">
                   {item.notes.map((note, index) => (
-                    <li key={index}>{noteText(note)}</li>
+                    <li key={index}>{noteText(note, i18n.language)}</li>
                   ))}
                 </ul>
               ) : null}

@@ -292,11 +292,11 @@ export function PendingList({ jobs }: { jobs: readonly Job[] }) {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm" title={job.summary ?? undefined}>
-                    {jobTitle(job)}
+                    {jobTitle(job, i18n.language)}
                   </p>
                   <p className="flex items-center gap-x-1.5 truncate text-xs text-muted-foreground tabular-nums">
                     <span>#{job.seq}</span>
-                    <span>{formLabel(job.tab)}</span>
+                    <span>{formLabel(job.tab, i18n.language)}</span>
                     <span>{Number.isNaN(created.getTime()) ? "" : created.toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" })}</span>
                     {job.forever ? <span>· {t("Generate forever")}</span> : null}
                     {job.source ? <span>· {t("Imported")}</span> : null}

@@ -94,7 +94,7 @@ function HistoryRow({ job, onView }: { job: Job; onView: (job: Job, index: numbe
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center gap-2">
           <p className="min-w-0 flex-1 truncate text-sm" title={job.summary ?? undefined}>
-            {jobTitle(job)}
+            {jobTitle(job, i18n.language)}
           </p>
           <span className={cn("inline-flex shrink-0 items-center gap-1 text-xs font-medium", status.tone)}>
             <Icon className="size-3.5" aria-hidden />
@@ -103,9 +103,9 @@ function HistoryRow({ job, onView }: { job: Job; onView: (job: Job, index: numbe
         </div>
         <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground tabular-nums">
           <span>#{job.seq}</span>
-          <span>{formLabel(job.tab)}</span>
+          <span>{formLabel(job.tab, i18n.language)}</span>
           <span>{Number.isNaN(created.getTime()) ? job.created_at : created.toLocaleString(i18n.language, { dateStyle: "short", timeStyle: "short" })}</span>
-          {duration !== null ? <span>· {formatDuration(duration)}</span> : null}
+          {duration !== null ? <span>· {formatDuration(duration, i18n.language)}</span> : null}
           {images.length > 1 ? <span>· {t("Images: {{count}}", { count: images.length })}</span> : null}
           {job.source ? (
             <Badge variant="outline" className="h-4 px-1 text-[0.625rem]">
@@ -123,7 +123,7 @@ function HistoryRow({ job, onView }: { job: Job; onView: (job: Job, index: numbe
             {job.warnings.map((warning, index) => (
               <li key={index} className="flex items-start gap-1">
                 <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
-                <span className="min-w-0">{noteText(warning)}</span>
+                <span className="min-w-0">{noteText(warning, i18n.language)}</span>
               </li>
             ))}
           </ul>
@@ -137,7 +137,7 @@ function HistoryRow({ job, onView }: { job: Job; onView: (job: Job, index: numbe
             {notesOpen ? (
               <ul className="mt-1 list-disc pl-5 text-muted-foreground">
                 {job.notes.map((note, index) => (
-                  <li key={index}>{noteText(note)}</li>
+                  <li key={index}>{noteText(note, i18n.language)}</li>
                 ))}
               </ul>
             ) : null}

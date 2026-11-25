@@ -55,7 +55,7 @@ export function useWsBridge() {
         settle()
         // warnings: script steps that failed, and what the processing noted (a LoRA not found, a feature skipped)
         if (e.job_id in useProgress.getState().owned && e.warnings?.length)
-          toast.warning(t("Finished with warnings"), { description: e.warnings.map(noteText).join("\n") })
+          toast.warning(t("Finished with warnings"), { description: e.warnings.map((warning) => noteText(warning)).join("\n") })
         progress.completed(e)
         useWs.getState().clearPreview()
         void queryClient.invalidateQueries({ queryKey: keys.jobs })

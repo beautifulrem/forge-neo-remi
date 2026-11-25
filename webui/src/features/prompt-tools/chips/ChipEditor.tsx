@@ -27,7 +27,7 @@ const STEP = 0.05
 const round = (value: number) => Math.round(value * 100) / 100
 
 export function ChipEditor({ doc, index, info, translation, config, setValue, close }: ChipEditorProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const client = useQueryClient()
   const textId = useId()
   const chip = doc.chips[index]
@@ -62,7 +62,7 @@ export function ChipEditor({ doc, index, info, translation, config, setValue, cl
   const applyText = () => {
     if (text.trim() !== chip.text) setValue(setChipText(doc, index, text))
   }
-  const category = categoryName(config.tags.source, info?.category)
+  const category = categoryName(config.tags.source, info?.category, i18n.language)
 
   const favorite = async () => {
     try {

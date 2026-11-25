@@ -52,7 +52,7 @@ function downloadJson(filename: string, data: unknown) {
 const RECIPE_PARAMS = { recipes: "", family: "" }
 
 export function RecipeManager() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [params, setParams] = useRouteParams(RECIPE_PARAMS)
   const [search, setSearch] = useRouteSearch(params.recipes, (recipes) => setParams({ recipes }))
   const family = params.family
@@ -294,7 +294,7 @@ export function RecipeManager() {
         ) : (
           <ul className="divide-y divide-border/70">
             {recipes.map((recipe) => {
-              const highlights = recipeHighlights(recipe)
+              const highlights = recipeHighlights(recipe, i18n.language)
               const paramCount = countRecipeParams(recipe)
               const metaParts = [recipe.model_family, t(CATEGORY_LABELS[recipe.tab]), t("{{count}} params", { count: paramCount })].filter(Boolean)
               const detailParts = [...highlights, ...recipe.capabilities, ...recipe.tags.map((tag) => `#${tag}`)]
