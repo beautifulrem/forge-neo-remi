@@ -62,7 +62,7 @@ export function createQuickForm(write: Writer = (values) => api.patchOptions(val
       saved = previous
       const reverted = Object.fromEntries(Object.keys(changes).map((key) => [key, previous[key]]))
       loading = true
-      store.getState().setValues(QUICK_OWNER, reverted)
+      store.getState().setValues(QUICK_OWNER, reverted, { quiet: true })
       loading = false
       const errors = validationErrors(error)
       if (errors) store.getState().setErrors(errors.map((e) => ({ ...e, owner: QUICK_OWNER })))
@@ -96,7 +96,7 @@ export function createQuickForm(write: Writer = (values) => api.patchOptions(val
       const defaults = { ...schema.values, ...schema.defaults }
       store.getState().load([{ owner: QUICK_OWNER, layout, defaults: Object.fromEntries(nodes.map((node) => [node.name, defaults[node.name] ?? node.default ?? null])) }])
       const values = Object.fromEntries(nodes.map((node) => [node.name, Object.hasOwn(pending, node.name) && !jsonEqual(pending[node.name], saved[node.name]) ? pending[node.name] : schema.values[node.name]]))
-      store.getState().setValues(QUICK_OWNER, values)
+      store.getState().setValues(QUICK_OWNER, values, { quiet: true })
       loading = false
       saved = { ...saved, ...Object.fromEntries(nodes.map((node) => [node.name, schema.values[node.name]])) }
     },

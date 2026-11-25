@@ -4,9 +4,12 @@
  * pasted parameters, "Send to", reused jobs, carried-over defaults;
  * `applyPatches`: presets and action patches); user edits (`setValue`) and
  * resets still apply. Display parts of a patch (choices, enabled, …) apply.
- * Both writes return what a lock kept from changing, and every path that
- * reports a write names it with `lockNote` ("Overridden by a lock: …").
+ * Both writes return what a lock kept from changing and name it in a toast of
+ * its own (`reportLocked`); a caller that names it in its own toast
+ * (`lockNote`, "Overridden by a lock: …") or fills values automatically
+ * (defaults on load, a sync) writes with `{ quiet: true }`.
  */
+import { toast } from "sonner"
 import { i18n, t } from "@/i18n"
 import { splitRef } from "./conditions"
 import type { FormIndex } from "./form-index"
@@ -45,6 +48,34 @@ export function lockedLabels(index: FormIndex, refs: readonly string[], language
 /** "Overridden by a lock: …" for the values a lock kept (`refs`, "owner.param"); undefined when none was. */
 export function lockNote(index: FormIndex, refs: readonly string[], language = i18n.language): string | undefined {
   return refs.length > 0 ? t("Overridden by a lock: {{names}}", { names: lockedLabels(index, refs, language), lng: language }) : undefined
+}
+
+const pendingNotes = new Map<string, { index: FormIndex; refs: Set<string> }>()
+
+function flushNotes() {
+  const notes = [...pendingNotes]
+  pendingNotes.clear()
+  for (const [formId, { index, refs }] of notes) {
+    const note = lockNote(index, [...refs])
+    if (note) toast.info(note, { id: `locks:${formId}` })
+  }
+}
+
+/**
+ * Names the values a lock kept from a write to form `formId` (`refs`, "owner.param") in an info
+ * toast of their own. The writes of one task share it, and a later write replaces it (one toast
+ * id per form: a drag writes on every move).
+ */
+export function reportLocked(formId: string, index: FormIndex, refs: readonly string[]): void {
+  if (refs.length === 0) return
+  const entry = pendingNotes.get(formId)
+  if (entry) {
+    entry.index = index
+    for (const ref of refs) entry.refs.add(ref)
+    return
+  }
+  if (pendingNotes.size === 0) queueMicrotask(flushNotes)
+  pendingNotes.set(formId, { index, refs: new Set(refs) })
 }
 
 /** Names of `owner` that are locked now (their lock toggle is on). */

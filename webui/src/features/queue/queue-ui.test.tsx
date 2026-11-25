@@ -384,6 +384,10 @@ describe("editing a queued job in its form", () => {
     expect(success).toHaveBeenLastCalledWith("Editing queued job #12", expect.objectContaining({ description: "Overridden by a lock: Prompt" }))
     await openJob("j2")
     expect(success).toHaveBeenLastCalledWith("Parameters applied: 1", expect.objectContaining({ description: "Overridden by a lock: Prompt" }))
+    // named in the paste's toast only
+    const info = vi.spyOn(toast, "info")
+    await Promise.resolve()
+    expect(info).not.toHaveBeenCalled()
     expect(store.getState().values.core?.prompt).toBe("my prompt")
   })
 

@@ -35,6 +35,19 @@ describe("useSetSize", () => {
     expect(effects.runChangeEffects).toHaveBeenCalledWith({ store, tab: "txt2img" }, "core", ["width", "height"])
   })
 
+  it("names the size a lock kept", async () => {
+    const { toast } = await import("sonner")
+    const info = vi.spyOn(toast, "info").mockImplementation((() => "") as never)
+    store.setState((s) => ({ locks: [{ owner: "keep", name: "size", target: ["core", "width"] }], values: { ...s.values, keep: { size: true } } }))
+    const before = size().width
+    const { result } = renderHook(() => useSetSize(), { wrapper })
+    result.current({ width: 640, height: 640 })
+    await Promise.resolve()
+    expect(size()).toEqual({ width: before, height: 640 })
+    expect(info).toHaveBeenCalledExactlyOnceWith("Overridden by a lock: Width", { id: "locks:size-hooks-test" })
+    info.mockRestore()
+  })
+
   it("clamps to the sliders' bounds, an action's override first", () => {
     const { result } = renderHook(() => useSetSize(), { wrapper })
     result.current({ width: 10, height: 99_999 })

@@ -93,10 +93,12 @@ describe("action patches a lock keeps", () => {
     await runAction({ store, tab: "txt2img" }, "core", "__preset__")
     expect(store.getState().values.core?.steps).toBe(20)
     expect(success).toHaveBeenCalledWith("Preset applied", { description: "Overridden by a lock: Steps" })
+    await Promise.resolve()
+    expect(info).not.toHaveBeenCalled() // named once, in the action's toast
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ steps: { value: 8 } }))
     await runAction({ store, tab: "txt2img" }, "core", "turbo")
-    expect(info).toHaveBeenCalledWith("Overridden by a lock: Steps", undefined)
+    expect(info).toHaveBeenCalledExactlyOnceWith("Overridden by a lock: Steps", { id: "locks:locked-action" })
 
     // a patch that leaves the locked value as it is says nothing
     info.mockClear()
@@ -123,7 +125,7 @@ describe("action patches a lock keeps", () => {
     const store = lockedForm()
     await applyAdvicePatch({ store, tab: "txt2img" }, { code: "turbo", severity: "warning", message: "Use 8 steps", patch: { "core.steps": { value: 8 } } })
     expect(store.getState().values.core?.steps).toBe(20)
-    expect(info).toHaveBeenCalledWith("Overridden by a lock: Steps", undefined)
+    expect(info).toHaveBeenCalledExactlyOnceWith("Overridden by a lock: Steps", { id: "locks:locked-action" })
   })
 })
 

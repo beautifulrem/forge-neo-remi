@@ -58,7 +58,8 @@ export function loadSchema(store: FormStore, schema: TabSchema) {
     advice: schema.advice ?? [],
   })
   if (snapshot) {
-    for (const [owner, values] of Object.entries(carryOver(snapshot, store.getState()))) store.getState().setValues(owner, values)
+    // defaults nobody asked for: a lock keeps its value without a word
+    for (const [owner, values] of Object.entries(carryOver(snapshot, store.getState()))) store.getState().setValues(owner, values, { quiet: true })
   }
   // Patch locks are not persisted: re-derive them when the form holds a non-default conflict param.
   const state = store.getState()

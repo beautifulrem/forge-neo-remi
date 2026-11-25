@@ -1,5 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest"
+import { toast } from "sonner"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { tabSchema } from "@/api/mock/fixtures"
 import { getFormStore } from "@/ui/form-store"
+import { tabOwners } from "@/ui/tab"
 import { planInsertion, readPrompts, writePrompts } from "./prompt-target"
 
 const options = { negativeAllowed: true, target: "positive" as const, separator: " " }
@@ -34,6 +37,18 @@ describe("inserting cards into prompts", () => {
 
   it("ignores cards without text", () => {
     expect(planInsertion({ positive: "", negative: "" }, { prompt: "  ", negative_prompt: null }, options)).toBeNull()
+  })
+
+  it("names the prompt a lock kept from a card's text", async () => {
+    const info = vi.spyOn(toast, "info").mockImplementation((() => "") as never)
+    const store = getFormStore("img2img")
+    store.getState().load(tabOwners(tabSchema("img2img")))
+    store.setState((s) => ({ locks: [{ owner: "keep", name: "prompt", target: ["core", "prompt"] }], values: { ...s.values, core: { ...s.values.core, prompt: "mine" }, keep: { prompt: true } } }))
+    writePrompts("img2img", { positive: "mine, <lora:moss:1>" })
+    await Promise.resolve()
+    expect(info).toHaveBeenCalledExactlyOnceWith("Overridden by a lock: Prompt", { id: "locks:img2img" })
+    expect(readPrompts("img2img").positive).toBe("mine")
+    vi.restoreAllMocks()
   })
 
   it("reads and writes the form's core prompts, also before its schema loaded", () => {

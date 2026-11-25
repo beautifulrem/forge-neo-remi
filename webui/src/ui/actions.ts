@@ -151,14 +151,13 @@ export async function runAction(
 /** Applies an action's answer; the values a lock kept are named unless `quietLocks`. */
 export function applyResponse(store: FormStore, owner: string, split: SplitResponse, { quietLocks = false } = {}) {
   const state = store.getState()
-  const kept = split.params.length > 0 ? state.applyPatches(split.params) : []
+  // the values a lock kept: under the action's own toast, else in one of their own (the write's)
+  const kept = split.params.length > 0 ? state.applyPatches(split.params, { quiet: quietLocks || split.toast !== undefined }) : []
   if (split.outputs) state.setOutputs(owner, split.outputs)
   if (split.advice !== undefined) state.setAdvice(split.advice)
   if (split.capabilities !== undefined) state.setCapabilities(split.capabilities)
-  // the values a lock kept: under the action's own toast, or in one of their own
   const note = quietLocks ? undefined : lockNote(state.index, kept)
   if (split.toast) showToast(split.toast.level, messageText(i18n, split.toast.message), note)
-  else if (note) showToast("info", note)
   if (split.settings) {
     // Stored by the server already: update the cached values, never write them back.
     const settings = split.settings
@@ -186,8 +185,7 @@ export async function applyAdvicePatch(ctx: ActionContext, item: AdviceItem): Pr
   }
   const changedByOwner = new Map<string, string[]>()
   if (split.params.length > 0) {
-    const note = lockNote(ctx.store.getState().index, ctx.store.getState().applyPatches(split.params))
-    if (note) showToast("info", note)
+    ctx.store.getState().applyPatches(split.params)
     for (const [owner, name] of split.params) {
       const list = changedByOwner.get(owner) ?? []
       if (!list.includes(name)) list.push(name)

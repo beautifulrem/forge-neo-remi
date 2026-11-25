@@ -80,7 +80,8 @@ export function applyPaste(ctx: ActionContext, entries: readonly PasteEntry[]): 
   const locked: string[] = []
   const actions: [owner: string, action: string][] = []
   for (const { owner, values } of entries) {
-    const skipped = new Set(state.setValues(owner, values))
+    // the caller's toast names what a lock kept (`deliver`, the paste toast)
+    const skipped = new Set(state.setValues(owner, values, { quiet: true }))
     const nodes = state.index.inputs.get(owner)
     for (const name of Object.keys(values)) {
       if (skipped.has(name)) {

@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest"
+import { toast } from "sonner"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { tabSchema } from "@/api/mock/fixtures"
 import { anyModified, createFormStore, draftKey, isModified } from "./form-store"
 import type { OwnerSpec } from "./form-index"
@@ -53,6 +54,44 @@ describe("form store", () => {
     ).toEqual(["core.steps"])
     expect(store.getState().applyPatches([["core", "steps", { value: 30 }]])).toEqual([])
     expect(store.getState().values.core).toMatchObject({ steps: 30, prompt: "a fox" })
+  })
+
+  // the form's own helpers (size presets, styles, a card into the prompt, …) have no toast of their own
+  describe("what a lock kept from a write", () => {
+    afterEach(() => vi.restoreAllMocks())
+
+    const locked = () => {
+      const store = createFormStore("t-lock-notes", { persistDrafts: false })
+      store.getState().load([
+        ...owners,
+        { owner: "pin", layout: { type: "toggle", name: "steps", label: "Pin steps", locks: "core.steps" }, defaults: { steps: true } },
+        { owner: "keep", layout: { type: "toggle", name: "prompt", label: "Keep prompt", locks: "core.prompt" }, defaults: { prompt: true } },
+      ])
+      return store
+    }
+
+    it("is named in a toast of its own, once for the writes of one task", async () => {
+      const info = vi.spyOn(toast, "info").mockImplementation((() => "") as never)
+      const store = locked()
+      store.getState().setValues("core", { steps: 40, sampler: "DDIM" })
+      store.getState().applyPatches([["core", "prompt", { value: "a dog" }]])
+      expect(info).not.toHaveBeenCalled()
+      await Promise.resolve()
+      // one id per form: a later write (a drag writes on every move) replaces the toast
+      expect(info).toHaveBeenCalledExactlyOnceWith("Overridden by a lock: Steps and Prompt", { id: "locks:t-lock-notes" })
+      expect(store.getState().values.core).toMatchObject({ steps: 20, sampler: "DDIM", prompt: "" })
+    })
+
+    it("is left to a caller that names it in its own toast, or to an automatic fill (quiet)", async () => {
+      const info = vi.spyOn(toast, "info").mockImplementation((() => "") as never)
+      const store = locked()
+      expect(store.getState().setValues("core", { steps: 40 }, { quiet: true })).toEqual(["steps"])
+      expect(store.getState().applyPatches([["core", "prompt", { value: "a dog" }]], { quiet: true })).toEqual(["core.prompt"])
+      // a write giving a locked param the value it has kept nothing
+      store.getState().setValues("core", { steps: 20 })
+      await Promise.resolve()
+      expect(info).not.toHaveBeenCalled()
+    })
   })
 
   it("loads defaults per owner, including section enable toggles", () => {

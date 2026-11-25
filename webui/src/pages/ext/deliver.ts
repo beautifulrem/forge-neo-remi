@@ -44,7 +44,7 @@ export function loadPage(schema: PageSchema): FormStore {
         .filter(([name, node]) => UPLOAD_KINDS.has(node.type) && values[owner]?.[name] != null)
         .map(([name]) => [name, values[owner]![name]]),
     )
-    if (Object.keys(uploads).length > 0) store.getState().setValues(owner, uploads)
+    if (Object.keys(uploads).length > 0) store.getState().setValues(owner, uploads, { quiet: true })
   }
   if (outputs[owner]) store.getState().setOutputs(owner, outputs[owner])
   return store

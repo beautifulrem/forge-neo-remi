@@ -16,7 +16,7 @@ import type { ParamPatch } from "@/api/types"
 import { keepEntries } from "@/lib/persist"
 import { jsonEqual } from "./conditions"
 import { buildIndex, defaultOf, type FormIndex, type OwnerSpec } from "./form-index"
-import { collectLocks, lockedNames, type ParamLock } from "./locks"
+import { collectLocks, lockedNames, type ParamLock, reportLocked } from "./locks"
 import type { AdviceItem, ChoiceOption, FieldMessage, ModelCapabilitySummary, ValidationError } from "./schema"
 import { isPersisted, restoreValue } from "./values"
 
@@ -65,6 +65,16 @@ export type FormState = {
   revision: number
 }
 
+/** How a programmatic write reports the values a lock kept from it. */
+export type WriteOptions = {
+  /**
+   * The caller names them in a toast of its own (`lockNote`), or the write fills values nobody
+   * asked for (defaults on load, a sync, a revert): no toast from the write. Every other write
+   * names them in an info toast (`reportLocked`).
+   */
+  quiet?: boolean
+}
+
 export type FormActions = {
   /** (Re)initialises from schema owners, keeping compatible draft values. */
   load: (
@@ -78,16 +88,17 @@ export type FormActions = {
   setValue: (owner: string, name: string, value: unknown) => void
   /**
    * A programmatic write (paste, send-to, widgets): locked params are skipped. Returns the names a
-   * lock kept from changing (a locked param given the value it has is not one).
+   * lock kept from changing (a locked param given the value it has is not one), which it names in
+   * a toast unless `quiet`.
    */
-  setValues: (owner: string, values: OwnerValues) => string[]
+  setValues: (owner: string, values: OwnerValues, options?: WriteOptions) => string[]
   /** Resets the given names (all of the owner's when omitted) to their defaults. */
   reset: (owner: string, names?: readonly string[]) => void
   /**
    * Applies param patches `[owner, name, patch]` from an action (locked params keep their value).
-   * Returns the `"owner.param"` refs a lock kept from changing.
+   * Returns the `"owner.param"` refs a lock kept from changing, named in a toast unless `quiet`.
    */
-  applyPatches: (patches: readonly [string, string, ParamPatch][]) => string[]
+  applyPatches: (patches: readonly [string, string, ParamPatch][], options?: WriteOptions) => string[]
   setOutputs: (owner: string, outputs: Record<string, unknown>) => void
   setCapabilities: (capabilities: ModelCapabilitySummary | null) => void
   setAdvice: (advice: readonly AdviceItem[]) => void
@@ -234,7 +245,7 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
       }))
     },
 
-    setValues(owner, partial) {
+    setValues(owner, partial, { quiet = false } = {}) {
       let skipped: string[] = []
       set((s) => {
         const locked = lockedNames(s.locks, s.values, owner)
@@ -245,6 +256,7 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
           errors: withoutErrors(s.errors, owner, Object.keys(kept)),
         }
       })
+      if (!quiet) reportLocked(formId, get().index, skipped.map((name) => `${owner}.${name}`))
       return skipped
     },
 
@@ -258,7 +270,7 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
       })
     },
 
-    applyPatches(patches) {
+    applyPatches(patches, { quiet = false } = {}) {
       const kept: string[] = []
       set((s) => {
         const values = { ...s.values }
@@ -283,6 +295,7 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
         }
         return { values, overrides, errors }
       })
+      if (!quiet) reportLocked(formId, get().index, kept)
       return kept
     },
 
