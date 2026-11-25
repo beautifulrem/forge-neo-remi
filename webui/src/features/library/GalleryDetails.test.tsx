@@ -66,6 +66,15 @@ describe("GalleryDetails", () => {
     expect(screen.getByText("No generation parameters")).toBeInTheDocument()
   })
 
+  // The Remove button turned Tailwind's red-300 on hover: a palette shade, not the destructive token.
+  // The viewer's backdrop is black in both themes, so the button reads the dark theme's tokens.
+  it("turns the Remove button the destructive colour of a dark surface on hover", () => {
+    renderDetails(ITEM)
+    const remove = screen.getByRole("button", { name: "Remove…" })
+    expect(remove).toHaveClass("dark", "hover:text-destructive")
+    expect(remove.className).not.toMatch(/red-\d/)
+  })
+
   it("stars and unstars", () => {
     renderDetails(ITEM)
     const star = screen.getByRole("button", { name: "Star" })

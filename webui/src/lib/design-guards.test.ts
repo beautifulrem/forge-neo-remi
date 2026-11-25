@@ -204,3 +204,14 @@ describe("toggle names", () => {
     expect(offenders).toEqual([])
   })
 })
+
+describe("colours", () => {
+  it("come from the tokens, not Tailwind's palette", () => {
+    // frontend.md: colours are tokens of index.css (white and black stay for the viewer's
+    // always-black backdrop); a palette shade ignores the theme and the accent.
+    const palette = occurrences(
+      /\b(?:text|bg|border|ring|outline|fill|stroke|from|via|to|decoration|caret|accent|divide|shadow)-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-\d{2,3}\b/g,
+    )
+    expect(palette).toEqual([])
+  })
+})
