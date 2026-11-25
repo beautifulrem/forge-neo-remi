@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import ipaddress
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from typing import Annotated, Any, TypeVar
 
@@ -38,18 +39,25 @@ def not_found(message: str = "Not Found") -> HTTPException:
     return HTTPException(status_code=404, detail=message)
 
 
-def behind_generation(services: Services, run: Callable[[], T]) -> T:
-    """``run`` on the main thread behind the running job (the GPU's turn).
-    The request waits in a worker thread meanwhile: past
-    :data:`~remi.server.services.GPU_REQUESTS` such requests, 503 instead."""
+@contextlib.contextmanager
+def gpu_slot(services: Services) -> Iterator[None]:
+    """One of the :data:`~remi.server.services.GPU_REQUESTS` slots of the
+    requests that wait for the GPU in a worker thread; 503 when none is free."""
 
     if not services.gpu_requests.acquire(blocking=False):
         raise HTTPException(status_code=503, detail="too many requests are waiting for the GPU; try again when the generation finishes")
     try:
-        with services.queue.lock:
-            return services.queue.dispatch(run)
+        yield
     finally:
         services.gpu_requests.release()
+
+
+def behind_generation(services: Services, run: Callable[[], T]) -> T:
+    """``run`` on the main thread behind the running job (the GPU's turn).
+    The request waits in a worker thread meanwhile, in a :func:`gpu_slot`."""
+
+    with gpu_slot(services), services.queue.lock:
+        return services.queue.dispatch(run)
 
 
 def opts() -> Any:

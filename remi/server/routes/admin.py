@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException
 
 from remi.server import models as m
 from remi.server.auth import LICENSE_TEXT_ORIGIN
-from remi.server.deps import ServicesDep, opts
+from remi.server.deps import ServicesDep, gpu_slot, opts
 from remi.setting_values import setting
 
 log = logging.getLogger(__name__)
@@ -79,13 +79,14 @@ def reload_model(services: ServicesDep, body: m.ModelReloadRequest | None = None
     model = model_selection.held().get("sd_model_checkpoint") or setting("sd_model_checkpoint", "", opts=opts()) or None
     force = bool(body and body.force)
 
-    services.bus.publish("model.loading", stage="loading", model=model)
-    try:
-        with services.queue.lock:
-            services.queue.dispatch(lambda: runtime.load_selected_model(force=force))
-    except Exception as error:
-        services.bus.publish("model.loaded", model=model, error=str(error) or type(error).__name__)
-        raise HTTPException(status_code=422, detail=f"the model was not loaded: {error}") from error
+    with gpu_slot(services):  # taken first: a refused request announces no load
+        services.bus.publish("model.loading", stage="loading", model=model)
+        try:
+            with services.queue.lock:
+                services.queue.dispatch(lambda: runtime.load_selected_model(force=force))
+        except Exception as error:
+            services.bus.publish("model.loaded", model=model, error=str(error) or type(error).__name__)
+            raise HTTPException(status_code=422, detail=f"the model was not loaded: {error}") from error
     services.bus.publish("model.loaded", model=model)
     return {"ok": True, "message": loaded_model()}
 

@@ -126,7 +126,8 @@ raising `ActionTimeoutError` and recording action errors/timeouts in
 (updated active `ModelCapabilitySummary` on preset switches). Buttons call
 actions, and `on_change` / `on_input` trigger them. Actions run outside the
 generation lock unless declared `gpu=True`, in which case they queue behind
-generation; at most four such requests (with a local prompt upsampler's) run
+generation; at most four such requests (with a local prompt upsampler's and
+the model unload and reload) run
 or wait at once, each in a worker thread of the server, and more answer 503.
 
 **Extension API v1 & Manifest (`remi/ui/version.py`, `remi/ui/manifest.py`, `remi/testing.py`).**

@@ -430,8 +430,7 @@ def refresh_models(services: ServicesDep) -> dict[str, Any]:
 def unload_model(services: ServicesDep) -> dict[str, Any]:
     from modules import sd_models
 
-    with services.queue.lock:
-        services.queue.dispatch(sd_models.unload_model_weights)
+    behind_generation(services, sd_models.unload_model_weights)
     return {"ok": True}
 
 

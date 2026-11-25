@@ -671,6 +671,35 @@ def test_model_reload_runs_behind_generation_and_reports(env, monkeypatch):
     assert [event["type"] for event in events if event["type"].startswith("model.")] == ["model.loading", "model.loaded"] * 2
 
 
+def test_model_unload_and_reload_count_against_the_gpu_waiting_limit(env, monkeypatch):
+    import modules.sd_models as sd_models
+    from remi.server import runtime
+
+    calls = []
+    monkeypatch.setattr(runtime, "load_selected_model", lambda force=False: calls.append(("load", force)))
+    monkeypatch.setattr(sd_models, "unload_model_weights", lambda: calls.append("unload"))
+    events = []
+    unsubscribe = env.server.services.bus.subscribe(SimpleNamespace(send_event=events.append, send_frame=lambda frame: None, wants_frames=lambda: False))
+    slots = env.server.services.gpu_requests
+    taken = 0
+    while slots.acquire(blocking=False):
+        taken += 1
+    try:
+        for path in ("/api/v2/models/reload", "/api/v2/models/unload"):
+            response = env.client.post(path)
+            assert response.status_code == 503 and "waiting for the GPU" in response.json()["detail"]
+        assert calls == [] and [event for event in events if event["type"].startswith("model.")] == []
+    finally:
+        for _ in range(taken):
+            slots.release()
+        unsubscribe()
+    assert env.client.post("/api/v2/models/reload").json()["ok"] is True
+    assert env.client.post("/api/v2/models/unload").json()["ok"] is True
+    assert calls == [("load", False), "unload"]
+    assert slots.acquire(blocking=False)  # both requests gave their slots back
+    slots.release()
+
+
 def test_loaded_models_lists_the_memory_manager(env, monkeypatch):
     import sys
 
