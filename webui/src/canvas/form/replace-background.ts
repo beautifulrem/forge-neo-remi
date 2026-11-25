@@ -31,7 +31,8 @@ export function writeValues({ store, formId, owner }: Pick<BackgroundTarget, "st
 /** Sets the background to `id` (null: removes it), clearing the painted layers; undoable when they had paint. */
 export async function replaceBackground(target: BackgroundTarget, id: string | null): Promise<void> {
   const { store, formId, owner, background, painted } = target
-  await flushPendingWrites(formId).catch(() => {})
+  // the layers' last strokes only: an upload replacing the image is a pending write itself
+  await flushPendingWrites(formId, { values: false }).catch(() => {})
   const current = store.getState().values[owner] ?? {}
   const old = current[background] ?? null
   if (old === id) return

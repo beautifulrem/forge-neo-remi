@@ -16,7 +16,7 @@ import { curateCore } from "@/pages/generate/curate"
 import { loadSchema } from "@/pages/generate/use-form-loader"
 import { FormProvider } from "@/ui/context"
 import { getFormStore } from "@/ui/form-store"
-import { registerPendingWrite } from "@/ui/pending-writes"
+import { flushPendingWrites, registerPendingWrite } from "@/ui/pending-writes"
 import { walk } from "@/ui/form-index"
 import type { TabSchema, TabsNode } from "@/ui/schema"
 import { pruneSource } from "./source-layout"
@@ -170,6 +170,25 @@ describe("img2img source panel (real schema)", { timeout: 30_000 }, () => {
       vi.unstubAllGlobals()
       rememberImageSize("out-unknown", null)
     }
+  })
+
+  // A source image still uploading was not part of a Generate pressed meanwhile: the job went
+  // without it. The upload, with the image it sets, is a pending write of the form.
+  it("holds up a submit while a source image uploads", async () => {
+    let answer!: (response: Response) => void
+    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise<Response>((resolve) => (answer = resolve)))
+    store().getState().setValues("core", { mode: "img2img", init_img: null })
+    renderPanel()
+    const row = screen.getByRole("button", { name: "Upload Source image" }).closest("div.rounded-lg")!
+    fireEvent.change(row.querySelector("input[type=file]")!, { target: { files: [new File([new Uint8Array([1])], "a.png", { type: "image/png" })] } })
+    let flushed = false
+    const flush = flushPendingWrites("img2img").then(() => (flushed = true))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+    expect(flushed).toBe(false)
+    answer(new Response(JSON.stringify({ id: "up-src", width: 8, height: 8 }), { headers: { "Content-Type": "application/json" } }))
+    await act(() => flush)
+    expect(core().init_img).toBe("up-src")
+    vi.restoreAllMocks()
   })
 
   it("shows the server's message for a missing mask", () => {

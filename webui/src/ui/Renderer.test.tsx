@@ -288,6 +288,54 @@ describe("input kinds", () => {
     vi.restoreAllMocks()
   })
 
+  // A file still uploading was not part of a submit pressed meanwhile, as an image was not.
+  it("a file upload is a pending write of its form until its value is set", async () => {
+    let answer!: (response: Response) => void
+    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise<Response>((resolve) => (answer = resolve)))
+    const store = one({ type: "file", name: "f", label: "Model" }, { f: null })
+    fireEvent.drop(screen.getByRole("button", { name: /^Model/ }), { dataTransfer: { files: [new File([new Uint8Array([1])], "m.safetensors")] } })
+    let flushed = false
+    const flush = flushPendingWrites("txt2img").then(() => (flushed = true))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+    expect(flushed).toBe(false)
+    answer(new Response(JSON.stringify({ id: "up-f" }), { headers: { "Content-Type": "application/json" } }))
+    await act(() => flush)
+    expect(core(store).f).toBe("up-f")
+    vi.restoreAllMocks()
+  })
+
+  // A schema button pressed while an image uploaded sent the form without it.
+  it("a button's action waits for an upload on its way", async () => {
+    let answer!: (response: Response) => void
+    const bodies: unknown[] = []
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const request = input as Request
+      if (new URL(request.url).pathname === "/api/v2/uploads") return new Promise<Response>((resolve) => (answer = resolve))
+      bodies.push(await request.json())
+      return new Response(JSON.stringify({}), { headers: { "Content-Type": "application/json" } })
+    })
+    renderSchema(
+      schemaOf(
+        {
+          type: "column",
+          children: [
+            { type: "image", name: "img", label: "Image" },
+            { type: "button", label: "Run", action: "run" },
+          ],
+        },
+        { img: null },
+      ),
+    )
+    fireEvent.drop(screen.getByRole("button", { name: "Image" }), { dataTransfer: { files: [new File([new Uint8Array([1])], "a.png", { type: "image/png" })] } })
+    fireEvent.click(screen.getByRole("button", { name: "Run" }))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+    expect(bodies).toEqual([])
+    answer(new Response(JSON.stringify({ id: "up-3", width: 8, height: 8 }), { headers: { "Content-Type": "application/json" } }))
+    await waitFor(() => expect(bodies).toHaveLength(1))
+    expect(bodies[0]).toMatchObject({ values: { img: "up-3" } })
+    vi.restoreAllMocks()
+  })
+
   it("json", () => {
     const store = one({ type: "json", name: "cfg", label: "Config" }, { cfg: { a: 1 } })
     const area = screen.getByLabelText("Config")

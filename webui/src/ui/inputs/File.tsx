@@ -2,9 +2,10 @@ import { FileUp, Loader2, X } from "@/components/icons"
 import { useId } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
-import { useParam } from "../hooks"
+import { useForm, useParam } from "../hooks"
 import { describedBy, hintRef, labelId } from "../a11y"
 import { Field } from "../Field"
+import { pendingWrite } from "../pending-writes"
 import type { FileNode } from "../schema"
 import { releaseUpload, useUploader, useUploadInfo } from "../uploads"
 import { DropZone } from "./DropZone"
@@ -16,17 +17,20 @@ export function FileInput({ node }: { node: FileNode }) {
   const hintId = `${id}-hint`
   const param = useParam<string | null>(node)
   const { upload, busy } = useUploader()
+  const { formId } = useForm()
   const value = typeof param.value === "string" ? param.value : null
   const label = t(param.label)
   const uploaded = useUploadInfo(value)
   const disabled = !param.enabled
 
-  const onFiles = async (files: File[]) => {
-    const [first] = await upload(files.slice(0, 1))
-    if (!first) return
-    param.setValue(first.id)
-    if (value) releaseUpload(value)
-  }
+  // a submit pressed while it uploads waits for the file
+  const onFiles = (files: File[]) =>
+    pendingWrite(formId, async () => {
+      const [first] = await upload(files.slice(0, 1))
+      if (!first) return
+      param.setValue(first.id)
+      if (value) releaseUpload(value)
+    })
 
   return (
     <Field

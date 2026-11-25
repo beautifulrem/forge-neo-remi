@@ -20,6 +20,7 @@ import { evaluate } from "@/ui/conditions"
 import { OwnerProvider } from "@/ui/context"
 import { useForm, useFormState, useParam } from "@/ui/hooks"
 import { RenderChildren, RenderNode } from "@/ui/Renderer"
+import { pendingWrite } from "@/ui/pending-writes"
 import type { InputNode, Node, SliderNode, TabsNode } from "@/ui/schema"
 import { imageFiles, releaseUpload, useUploader, useUploadInfo } from "@/ui/uploads"
 import type { EditorBinding } from "../core/modes"
@@ -213,6 +214,7 @@ function SourceImages({ binding }: { binding: EditorBinding }) {
   // One per row: uploading the mask does not mark the source as uploading.
   const source = useUploader()
   const mask = useUploader()
+  const { formId } = useForm()
   const image = useFormState((s) => (s.values.core?.[binding.background] as string | null | undefined) ?? null)
   const imageError = fieldErrorText(useFormState((s) => s.errors.core?.[binding.background]), i18n.language)
   const active = layers.active
@@ -220,10 +222,12 @@ function SourceImages({ binding }: { binding: EditorBinding }) {
   const layerError = fieldErrorText(useFormState((s) => (active ? s.errors.core?.[active.param] : undefined)), i18n.language)
   const setView = useStageView((s) => s.setView)
 
-  const uploadTo = async (uploader: ReturnType<typeof useUploader>, file: File, apply: (id: string, size: { width: number; height: number } | null) => void) => {
-    const [first] = await uploader.upload([file])
-    if (first) apply(first.id, first.width && first.height ? { width: first.width, height: first.height } : null)
-  }
+  // a Generate pressed while an image uploads waits for it, and for the value it sets
+  const uploadTo = (uploader: ReturnType<typeof useUploader>, file: File, apply: (id: string, size: { width: number; height: number } | null) => Promise<void> | void) =>
+    pendingWrite(formId, async () => {
+      const [first] = await uploader.upload([file])
+      if (first) await apply(first.id, first.width && first.height ? { width: first.width, height: first.height } : null)
+    })
 
   return (
     <div className="flex flex-col gap-1">
@@ -233,7 +237,7 @@ function SourceImages({ binding }: { binding: EditorBinding }) {
         error={imageError}
         emptyText={t("Drop an image here or on the stage")}
         busy={source.busy}
-        onFile={(file) => uploadTo(source, file, (id, size) => void setSourceImage(binding, id, size))}
+        onFile={(file) => uploadTo(source, file, (id, size) => setSourceImage(binding, id, size))}
         onRemove={() => void setSourceImage(binding, null)}
         extra={(size) => (
           <>

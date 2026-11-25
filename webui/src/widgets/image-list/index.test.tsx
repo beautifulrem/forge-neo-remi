@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { createFormStore, type FormStore } from "@/ui/form-store"
 import { TabForm } from "@/ui/SchemaForm"
 import type { TabSchema } from "@/ui/schema"
+import { flushPendingWrites } from "@/ui/pending-writes"
 import { detectAlphaFromBytes, markUploadAlpha } from "@/ui/uploads"
 import { widgetKeys } from "../_lib/i18n"
 import zh from "./locales/zh-CN.json"
@@ -170,6 +171,22 @@ describe("image-list widget", { timeout: 30_000 }, () => {
     await waitFor(() => expect(refs(store)).toEqual(["a", "held-2"]))
     await act(async () => held[0]!())
     await waitFor(() => expect(refs(store)).toEqual(["a", "held-2", "held-1"]))
+  })
+
+  // Images still uploading were not part of a submit pressed meanwhile.
+  it("holds up a submit until the images on their way are in the list", async () => {
+    const held = heldUploads()
+    const store = renderForm(["a"])
+    const zone = await screen.findByRole("button", { name: "Add images" }, LOAD)
+    fireEvent.change(zone.querySelector("input[type=file]") as HTMLInputElement, { target: { files: [image("1.png")] } })
+    await waitFor(() => expect(held).toHaveLength(1))
+    let flushed = false
+    const flush = flushPendingWrites("img2img").then(() => (flushed = true))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+    expect(flushed).toBe(false)
+    await act(async () => held[0]!())
+    await act(() => flush)
+    expect(refs(store)).toEqual(["a", "held-1"])
   })
 
   it("does not bring back an image removed while its replacement uploads", async () => {

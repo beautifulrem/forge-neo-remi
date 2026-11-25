@@ -17,6 +17,7 @@ import type { ActionExtra } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { jobErrorText } from "@/features/errors/error-text"
+import { runAction } from "@/ui/actions"
 import { useForm, useFormState, useOwner, useRunAction } from "@/ui/hooks"
 import { messageText } from "@/ui/messages"
 import type { WidgetProps } from "@/ui/widgets"
@@ -63,7 +64,8 @@ export default function TaskRunner({ props, disabled, id }: WidgetProps<null, Pr
     }
   }
 
-  const cancel = () => void run("__cancel__", { task } as unknown as ActionExtra)
+  // at once: a cancel does not wait for an upload on its way, as a run does
+  const cancel = () => void runAction(ctx, owner, "__cancel__", { task } as unknown as ActionExtra)
 
   const percent = status?.progress != null ? Math.round(status.progress * 100) : null
   const text = status?.text ? messageText(i18n, status.text, i18n.language) : status?.state === "queued" ? tw("Queued") : status?.state === "running" ? tw("Running…") : ""

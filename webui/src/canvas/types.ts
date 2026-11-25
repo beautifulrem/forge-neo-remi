@@ -23,8 +23,8 @@ export type ImageEditorProps = {
   pendingKey?: string
   /** Background image upload id. */
   image: string | null
-  /** The user uploaded, dropped, pasted, created or removed the background. */
-  onImageChange?: (image: { id: string; width: number; height: number } | null) => void
+  /** The user uploaded, dropped, pasted, created or removed the background (an upload waits for a returned promise). */
+  onImageChange?: (image: { id: string; width: number; height: number } | null) => void | Promise<unknown>
   /** Every layer the editor keeps (by param name), edited or not. */
   layers?: Record<string, EditorLayer>
   /** The layer the user edits now (a key of `layers`); null: view only. */

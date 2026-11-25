@@ -1041,7 +1041,13 @@ chunk, `preloadImageEditor()` fetches it early), the img2img integration
   (undo back to it; older ids may have been pruned by the server), and
   committed with `onLayerChange`. `pendingKey` registers the
   document with `ui/pending-writes`; the run controller flushes it before
-  `POST /jobs`, so the job carries what is on screen. Painting waits until
+  `POST /jobs`, so the job carries what is on screen. Every upload that sets
+  a form value (image, file and image-list fields, img2img's source rows, a
+  background dropped on the editor) is a `pendingWrite` of its form until
+  the value is set, and every submit (Generate, Process, saving a queued
+  job, an action button or widget) waits for them; replacing a background
+  inside such a write flushes the layers only (`values: false`), or it
+  would wait for itself. Painting waits until
   the document shows the value's image; an image that fails to load clears
   the document and shows an error with Retry. Replacing or removing the
   background flushes the layers first and, when painted layers are dropped

@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils"
 import { labelId } from "@/ui/a11y"
 import { useForm, useFormState, useOwner } from "@/ui/hooks"
 import { DropZone } from "@/ui/inputs/DropZone"
+import { pendingWrite } from "@/ui/pending-writes"
 import { imageFiles, releaseUpload, useUploader, useUploadInfo } from "@/ui/uploads"
 import type { WidgetProps } from "@/ui/widgets"
 import { registerWidgetCatalogs } from "../_lib/i18n"
@@ -100,12 +101,14 @@ export default function ImageListWidget({ value, onChange, props, disabled, id, 
     setSelection(nextSelection)
   }
 
-  const add = async (files: File[]) => {
-    const uploaded = await upload(imageFiles(files))
-    if (uploaded.length === 0) return
-    const base = latest()
-    commit([...base, ...uploaded.map((item) => item.id)], base.length + uploaded.length - 1)
-  }
+  // a submit pressed while images upload waits for them (each upload, with the list edit it makes)
+  const add = (files: File[]) =>
+    pendingWrite(formId, async () => {
+      const uploaded = await upload(imageFiles(files))
+      if (uploaded.length === 0) return
+      const base = latest()
+      commit([...base, ...uploaded.map((item) => item.id)], base.length + uploaded.length - 1)
+    })
 
   const move = (from: number, to: number) => {
     if (from < 0 || to < 0 || to >= ids.length || from === to) return
@@ -119,20 +122,22 @@ export default function ImageListWidget({ value, onChange, props, disabled, id, 
     releaseUpload(removed)
   }
 
-  const replace = async (files: File[]) => {
+  const replace = (files: File[]) => {
     const old = ids[selected]
-    if (old === undefined) return
-    const [uploaded] = await upload(imageFiles(files).slice(0, 1))
-    if (!uploaded) return
-    const base = latest()
-    // Find the replaced image again: it may have moved, or been removed meanwhile (then the upload is dropped)
-    const index = base[selected] === old ? selected : base.indexOf(old)
-    if (index < 0) {
-      releaseUpload(uploaded.id)
-      return
-    }
-    commit(replaceAt(base, index, uploaded.id), index)
-    releaseUpload(old)
+    if (old === undefined) return Promise.resolve()
+    return pendingWrite(formId, async () => {
+      const [uploaded] = await upload(imageFiles(files).slice(0, 1))
+      if (!uploaded) return
+      const base = latest()
+      // Find the replaced image again: it may have moved, or been removed meanwhile (then the upload is dropped)
+      const index = base[selected] === old ? selected : base.indexOf(old)
+      if (index < 0) {
+        releaseUpload(uploaded.id)
+        return
+      }
+      commit(replaceAt(base, index, uploaded.id), index)
+      releaseUpload(old)
+    })
   }
 
   const clear = () => {

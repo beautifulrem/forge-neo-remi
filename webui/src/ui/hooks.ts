@@ -2,11 +2,14 @@
 import { createContext, use, useEffect, useRef } from "react"
 import { useTranslation } from "react-i18next"
 import { useStore } from "zustand"
-import { fieldErrorText } from "@/features/errors/error-text"
+import { errorText, fieldErrorText } from "@/features/errors/error-text"
 import type { ActionExtra } from "@/api/types"
+import { t } from "@/i18n"
+import { showToast } from "@/lib/toast"
 import { runAction, runChangeEffects } from "./actions"
 import { evaluate } from "./conditions"
 import { type FormState, type FormStore, isModified, type Override } from "./form-store"
+import { flushPendingWrites, hasPendingWrites } from "./pending-writes"
 import type { Condition, InputNode } from "./schema"
 
 export type FormContextValue = {
@@ -42,11 +45,22 @@ export function useCondition(cond: Condition | null | undefined): boolean {
   return useFormState((s) => evaluate(cond, owner, (o, n) => s.values[o]?.[n]))
 }
 
-/** Runs an action of the current owner (or `owner`) and applies the patch. */
+/**
+ * Runs an action of the current owner (or `owner`) and applies the patch. A value still on its way
+ * (an upload, a layer's last strokes) is written first, so the action sees what the user sees; with
+ * none, the request goes at once.
+ */
 export function useRunAction() {
   const { store, formId } = useForm()
   const owner = useOwner()
-  return (action: string, extra?: ActionExtra, target = owner) => runAction({ store, tab: formId }, target, action, extra)
+  return (action: string, extra?: ActionExtra, target = owner) => {
+    const run = () => runAction({ store, tab: formId }, target, action, extra)
+    if (!hasPendingWrites(formId)) return run()
+    return flushPendingWrites(formId).then(run, (error: unknown) => {
+      showToast("error", t("Action failed"), errorText(error))
+      return null
+    })
+  }
 }
 
 const CONTINUOUS = new Set(["slider", "number", "text", "color", "json"])

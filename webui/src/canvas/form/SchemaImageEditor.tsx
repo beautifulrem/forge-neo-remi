@@ -89,7 +89,7 @@ export function SchemaImageEditor({ node }: { node: ImageNode }) {
           activeLayer={enabled ? (active?.name ?? null) : null}
           noUpload={!enabled}
           error={error}
-          onImageChange={(next) => void replaceBackground({ store, formId, owner, background: node.name, painted: layers.map((layer) => layer.name) }, next?.id ?? null)}
+          onImageChange={(next) => replaceBackground({ store, formId, owner, background: node.name, painted: layers.map((layer) => layer.name) }, next?.id ?? null)}
           onLayerChange={(key, id) => writeValues({ store, formId, owner }, { [key]: id })}
         />
       </div>

@@ -159,9 +159,7 @@ export function Img2imgStage({ result, actions, leading, trailing, className }: 
             className="min-h-64 flex-1"
             fill
             {...editor}
-            onImageChange={(image) => {
-              void setSourceImage(binding, image?.id ?? null, image)
-            }}
+            onImageChange={(image) => setSourceImage(binding, image?.id ?? null, image)}
             onLayerChange={(key, id) => setCoreValues({ [key]: id })}
             onUseImageSize={setSizeFromImage}
           />

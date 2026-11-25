@@ -15,6 +15,7 @@ import { failureText } from "@/features/errors/error-text"
 import { i18n } from "@/i18n"
 import { showToast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
+import { pendingWrite } from "@/ui/pending-writes"
 import { describeFile, imageFiles, previewUrlOf, uploadFile, useUploadInfo } from "@/ui/uploads"
 import type { LayerKind } from "../core/modes"
 import { getDocument, loadImage } from "../engine/registry"
@@ -123,21 +124,25 @@ export default function Editor(props: ImageEditorProps) {
     }
   }, [doc, ready, layerValues, t])
 
-  const uploadBackground = async (file: File) => {
-    setUploading((n) => n + 1)
-    try {
-      const info = await uploadFile(file)
-      const image = await loadImage(info.url ?? api.fileUrl(info.id))
-      const size = { width: image.naturalWidth, height: image.naturalHeight }
-      // The layers' last edits reach their values first, so the owner can offer to undo the replacement.
-      await doc.flush().catch(() => {})
-      doc.setBackground(image, size, info.id)
-      handlers.current.onImageChange?.({ id: info.id, ...size })
-    } catch (error) {
-      showToast("error", t("Upload failed"), errorText(error))
-    } finally {
-      setUploading((n) => n - 1)
+  const uploadBackground = (file: File) => {
+    const write = async () => {
+      setUploading((n) => n + 1)
+      try {
+        const info = await uploadFile(file)
+        const image = await loadImage(info.url ?? api.fileUrl(info.id))
+        const size = { width: image.naturalWidth, height: image.naturalHeight }
+        // The layers' last edits reach their values first, so the owner can offer to undo the replacement.
+        await doc.flush().catch(() => {})
+        doc.setBackground(image, size, info.id)
+        await handlers.current.onImageChange?.({ id: info.id, ...size })
+      } catch (error) {
+        showToast("error", t("Upload failed"), errorText(error))
+      } finally {
+        setUploading((n) => n - 1)
+      }
     }
+    // a submit of the form pressed while the image uploads waits for it and the value it sets
+    return props.pendingKey ? pendingWrite(props.pendingKey, write) : write()
   }
 
   const onFiles = (files: File[]) => {
