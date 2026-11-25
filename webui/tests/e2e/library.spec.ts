@@ -143,6 +143,27 @@ test.describe("gallery tiles on a touch screen", () => {
     await expect(bulk).toContainText("2 selected")
     await expect(tile.getByRole("checkbox")).toHaveAttribute("aria-checked", "true")
   })
+
+  // A touch screen with a keyboard: the viewer closed with Escape gives the tile keyboard focus, which
+  // shows its corner controls. A tap on the star moved the focus to the star, the controls went away
+  // between the finger landing and lifting, and the tap did nothing.
+  test("after Escape closes the viewer, one tap on the shown star stars the image @phone", async ({ page }) => {
+    const grid = await openGallery(page)
+    const tile = grid.getByRole("listitem").first()
+    await tile.getByRole("button").first().focus()
+    await page.keyboard.press("Enter")
+    const viewer = page.getByRole("dialog", { name: "Image viewer" })
+    await expect(viewer).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(viewer).toBeHidden()
+
+    const star = tile.getByRole("button", { name: /^(Star|Unstar)$/ })
+    const before = await star.getAttribute("aria-pressed")
+    const box = (await star.boundingBox())!
+    await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)
+    await expect(star).toHaveAttribute("aria-pressed", before === "true" ? "false" : "true")
+    await expect(viewer).toBeHidden()
+  })
 })
 
 test.describe("queue", () => {

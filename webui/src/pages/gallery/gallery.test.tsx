@@ -111,6 +111,19 @@ describe("gallery page", { timeout: 20_000 }, () => {
     expect(check.className.split(/\s+/).filter((name) => /(^|:)shadow/.test(name))).toEqual([])
   })
 
+  // With the keyboard's focus on a tile (the viewer closed with Escape) its corner controls show, and
+  // only that focus shows them. A tap on the star moved the focus to the star, which is not keyboard
+  // focus: the controls went away between the finger landing and lifting, and the tap did nothing.
+  it("keeps the focus where it is when a corner control is pressed", async () => {
+    mockServer([item(1)])
+    renderPage()
+    const star = await screen.findByRole("button", { name: "Star", hidden: true })
+    const check = screen.getByRole("checkbox", { name: "Select 00001.png", hidden: true })
+    // fireEvent returns false when the press's default (moving the focus) was prevented
+    expect(fireEvent.mouseDown(star)).toBe(false)
+    expect(fireEvent.mouseDown(check)).toBe(false)
+  })
+
   it("a click with a selection extends it; Escape clears it", async () => {
     mockServer([item(1), item(2), item(3)])
     renderPage()

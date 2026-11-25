@@ -23,7 +23,7 @@
  */
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual"
 import { Check, Star } from "@/components/icons"
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { type MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { TFunction } from "i18next"
 import { useTranslation } from "react-i18next"
 import { LoadMoreStatus } from "@/components/LoadMoreStatus"
@@ -122,6 +122,16 @@ type TileProps = {
   t: TFunction
 } & Pick<GalleryGridProps, "onActivate" | "onToggleSelect" | "onStar">
 
+/**
+ * A press on a tile's corner control leaves the focus where it is. Shown by the keyboard's focus on
+ * the tile (the viewer closed with Escape), the controls went away when a tap moved the focus to
+ * the control (a focus that is not keyboard focus), between the finger landing and lifting: the
+ * tap reached nothing. They are not tab stops either (`tabIndex={-1}`).
+ */
+function keepFocus(event: MouseEvent) {
+  event.preventDefault()
+}
+
 // Memoised: a scroll frame re-renders the grid, but only tiles whose props changed (new in the range) render.
 const Tile = memo(function Tile({ item, width, height, selected, selecting, index, total, current, onFocusTile, register, t, onActivate, onToggleSelect, onStar }: TileProps) {
   const name = label(item)
@@ -178,12 +188,14 @@ const Tile = memo(function Tile({ item, width, height, selected, selecting, inde
           tabIndex={-1}
           aria-checked={selected}
           aria-label={t("Select {{name}}", { name: item.name })}
+          onMouseDown={keepFocus}
           onClick={(event) => onToggleSelect(item, event)}
           className={cn(
             // 20 px circle centred on the 24 px star; the after: area makes it a 32 px target.
             // Hidden (opacity 0), the corner controls take no taps: a tap there opens the image.
             // Keyboard focus shows them (focus-visible), not any focus: a tap focuses the tile
-            // between the finger lifting and the click, which then went to neither control.
+            // between the finger lifting and the click, which then went to neither control. A press
+            // on one leaves the focus where it is (`keepFocus`).
             "pointer-events-none group-hover/tile:pointer-events-auto group-has-[:focus-visible]/tile:pointer-events-auto group-data-[shown]/overlay:pointer-events-auto relative m-0.5 grid size-5 place-items-center rounded-full border-2 border-white/90 after:absolute after:-inset-1.5 after:rounded-full text-primary-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring",
             selected ? "border-primary bg-primary" : "bg-black/20 hover:bg-black/40",
           )}
@@ -195,6 +207,7 @@ const Tile = memo(function Tile({ item, width, height, selected, selecting, inde
           tabIndex={-1}
           aria-pressed={item.starred}
           aria-label={item.starred ? t("Unstar") : t("Star")}
+          onMouseDown={keepFocus}
           onClick={() => onStar(item)}
           className="pointer-events-none group-hover/tile:pointer-events-auto group-has-[:focus-visible]/tile:pointer-events-auto group-data-[shown]/overlay:pointer-events-auto grid size-6 place-items-center rounded-full text-white outline-none hover:bg-black/30 focus-visible:ring-3 focus-visible:ring-ring"
         >
