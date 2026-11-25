@@ -279,7 +279,9 @@ imperatively).
   leaves the icon alone, the label read out (`sr-only`) and kept as `title`.
 - Motion: `tw-animate-css` + base-nova animations; a global
   `prefers-reduced-motion` rule neutralises animations and transitions.
-  Nothing that stays on screen while a job runs animates endlessly (no
+  What may move, how long, and the two exceptions (a collapsible's
+  height, colour and focus ring feedback) are in
+  [Visual rules](#visual-rules). Nothing that stays on screen while a job runs animates endlessly (no
   `animate-pulse` / `animate-spin` on running indicators): an infinite
   animation makes the compositor redraw at display rate for the whole job,
   which measurably slows sampling where the browser shares the GPU
@@ -430,7 +432,16 @@ generated interfaces (sources: Linear's
   the live preview (a blur over a surface that redraws every step costs
   sampling time).
   Motion moves `transform` and `opacity` only (a meter fills with
-  `scaleX`, not `width`), 120 to 250 ms. A lone small control (a badge's
+  `scaleX`, not `width`), 120 to 250 ms. Two exceptions keep to the same
+  range and are neutralised by the global reduced-motion rule like the
+  rest: a collapsible (a parameter section and group,
+  `ui/layout/Section.tsx` and `Group.tsx`, the vendored accordion)
+  animates its `height` over 200 ms, because its content's height is
+  not known ahead and a transform would not move what follows it; and
+  feedback that only repaints (hover, press, focus, selection) fades its
+  colour, its focus ring's box shadow or a filter (`transition-colors`,
+  `transition-[color,box-shadow]` and the like, at Tailwind's 150 ms
+  default). A lone small control (a badge's
   ×, the advice bar's buttons) keeps its look and gets
   an invisible `after:` hit box of at least 40 px; the box never reaches a
   neighbouring control, so packed toolbars are not given one (it would take
