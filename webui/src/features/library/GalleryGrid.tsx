@@ -74,6 +74,25 @@ function useWidth(element: HTMLElement | null): number {
   return width
 }
 
+/**
+ * The room a bar pinned over the grid's bottom edge takes (the selection bar):
+ * `usePinnedBar` sets it as the scroller's bottom scroll padding. The arrow
+ * keys scroll with the virtualizer, which reads no scroll padding, so it gets
+ * the room as its own.
+ */
+function usePinnedRoom(element: HTMLElement | null): number {
+  const [room, setRoom] = useState(0)
+  useEffect(() => {
+    if (!element) return
+    const update = () => setRoom(parseFloat(element.style.scrollPaddingBottom) || 0)
+    update()
+    const observer = new MutationObserver(update)
+    observer.observe(element, { attributes: true, attributeFilter: ["style"] })
+    return () => observer.disconnect()
+  }, [element])
+  return room
+}
+
 // Parsing an infotext per tile mount showed in fast scrolls: each item's label is computed once.
 const labels = new WeakMap<GalleryItem, string>()
 
@@ -196,6 +215,7 @@ export function GalleryGrid(props: GalleryGridProps) {
   const { items, layout, size, selected, hasMore, loadingMore, loadFailed = false, onLoadMore } = props
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
   const width = useWidth(scroller)
+  const barRoom = usePinnedRoom(scroller)
   const target = TILE_SIZES[size]
   // Recomputed when the items, width or layout change, not on every scroll frame.
   const aspects = useMemo(() => items.map((item) => aspectOf(item.width, item.height)), [items])
@@ -233,7 +253,9 @@ export function GalleryGrid(props: GalleryGridProps) {
     lanes: layout === "masonry" ? columns.count : 1,
     overscan: layout === "justified" ? 4 : 12,
     paddingStart: PADDING,
-    paddingEnd: PADDING,
+    // the last row scrolls clear of a pinned bar, and a tile the arrow keys reach stops above it
+    paddingEnd: PADDING + barRoom,
+    scrollPaddingEnd: barRoom,
     getItemKey,
     rangeExtractor,
   })
@@ -313,7 +335,7 @@ export function GalleryGrid(props: GalleryGridProps) {
   const tileProps = { onActivate: props.onActivate, onToggleSelect: props.onToggleSelect, onStar: props.onStar, selecting, total, onFocusTile: setActive, register, t }
 
   return (
-    <div ref={setScroller} className="h-full overflow-y-auto overscroll-contain" data-testid="gallery-scroller">
+    <div ref={setScroller} className="h-full overflow-y-auto overscroll-contain" data-gallery-scroller data-testid="gallery-scroller">
       <p id="gallery-grid-keys" className="sr-only">
         {t("Arrow keys move between images, Enter opens one, Space selects it, Shift+Space extends the selection, F stars it.")}
       </p>

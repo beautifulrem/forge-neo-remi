@@ -114,8 +114,12 @@ imperatively).
   (`lib/use-pinned-bar.ts`). It gives the scroller scroll padding as deep as
   the bar reaches in, so Tab and Shift+Tab stop a control clear of the bar
   instead of under it (WCAG 2.4.11). A bar laid over a scroller it is not
-  inside passes a function that finds it (the settings list). The e2e
-  check is "focus is not hidden under a pinned bar" in `a11y.spec.ts`.
+  inside passes a function that finds it (the settings list, the gallery's
+  selection bar). A virtualized list scrolls a row into view itself and reads
+  no scroll padding: the gallery grid takes the scroller's bottom scroll
+  padding as the virtualizer's `scrollPaddingEnd` (and adds it to
+  `paddingEnd`, so the last row can scroll clear). The e2e check is "focus is
+  not hidden under a pinned bar" in `a11y.spec.ts`.
 - **Page column**: Extensions and every extension page lay their content out
   in `PAGE_CONTAINER` (`components/page-container.ts`): one max width,
   padding and vertical rhythm.
@@ -1467,9 +1471,10 @@ older server) nothing is shown.
   given the render's language, `useTranslation().i18n.language`, or it stays
   in the old language after a switch. A store selector returns what the
   server sent (a param's error entries) and the render translates it, never
-  the selector (a selector re-runs only when the store changes). The failure
-  and job texts (`serverText`, `errorText`, `renderFailureText`) take no
-  language yet: a render that shows one keeps the language it was made in
+  the selector (a selector re-runs only when the store changes). A text the
+  server stored (`serverText`) and why a job failed (`jobErrorText`) take the
+  language too. The request failure texts (`errorText`, `renderFailureText`)
+  take none yet: a render that shows one keeps the language it was made in
   until its own values change.
 - `src/locales/zh-CN.json` must contain every chrome key:
   `locales/locales.test.ts` scans the sources and fails on a missing key or a

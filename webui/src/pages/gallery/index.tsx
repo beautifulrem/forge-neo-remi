@@ -32,9 +32,15 @@ import { GalleryToolbar } from "@/features/library/GalleryToolbar"
 import { asResult, downloadZip, galleryKeys, galleryListQuery, openInPngInfo, removeOutputs, starOutputs } from "@/features/library/queries"
 import { EMPTY_SELECTION, modeOf, ordered, prune, select, selectAll, type Selection } from "@/features/library/selection"
 import { sendToReferenceWithFeedback } from "@/features/send-to/result-actions"
+import { usePinnedBar } from "@/lib/use-pinned-bar"
 import { retryableLazy } from "@/lib/retryable-lazy"
 
 const Lightbox = retryableLazy(() => import("@/features/lightbox/Lightbox").then((m) => ({ default: m.Lightbox })))
+/** The selection bar floats over the grid's scroller, which is not its ancestor. */
+function gridScroller(bar: HTMLElement): HTMLElement | null {
+  return bar.parentElement?.querySelector<HTMLElement>("[data-gallery-scroller]") ?? null
+}
+
 const CompareDialog = retryableLazy(() => import("@/features/library/CompareDialog").then((m) => ({ default: m.CompareDialog })))
 
 function BulkBar(props: {
@@ -77,6 +83,7 @@ function BulkBar(props: {
 export default function GalleryPage() {
   const { t } = useTranslation()
   const view = useGalleryView()
+  const bulkBarRef = usePinnedBar("bottom", gridScroller)
   const query = galleryQuery(view)
   const list = useInfiniteQuery(galleryListQuery(query))
   const items = list.data?.pages.flatMap((page) => page.items) ?? []
@@ -219,7 +226,10 @@ export default function GalleryPage() {
       <div className="min-h-0 flex-1">{body}</div>
       {selection.ids.size > 0 ? (
         // a phone's bottom navigation keeps the home indicator's room below the page; from md the page reaches the screen's edge
-        <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-3 md:bottom-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]">
+        <div
+          ref={bulkBarRef}
+          className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-3 md:bottom-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]"
+        >
           <BulkBar
             count={selection.ids.size}
             selectedIds={selectedIds}

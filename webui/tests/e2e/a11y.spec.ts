@@ -342,6 +342,41 @@ test.describe("focus is not hidden under a pinned bar", () => {
       expect([...hidden]).toEqual([])
     })
   }
+
+  // The gallery's selection bar floats over the grid, which scrolls a tile into view itself (virtualized).
+  for (const [width, height] of [
+    [390, 844],
+    [1280, 720],
+  ] as const) {
+    test(`#/gallery selection bar at ${width}×${height}`, async ({ page }) => {
+      await page.setViewportSize({ width, height })
+      await openRoute(page, "gallery")
+      await page.waitForLoadState("networkidle")
+      await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" })
+      const tile = page.getByTestId("gallery-scroller").locator("[data-gallery-tile] button").first()
+      await tile.focus()
+      await page.keyboard.press("Space")
+      const bar = page.getByRole("toolbar", { name: "Selected images" })
+      await expect(bar).toBeVisible()
+      const hidden: string[] = []
+      for (let i = 0; i < 40; i++) {
+        await page.keyboard.press("ArrowDown")
+        const problem = await page.evaluate(() => {
+          const element = document.activeElement
+          const toolbar = document.querySelector('[role="toolbar"][aria-label="Selected images"]')
+          if (!element || !toolbar) return null
+          // the tile and its focus ring (3 px plus a 2 px offset) stop clear of the bar
+          const r = element.getBoundingClientRect()
+          const b = toolbar.getBoundingClientRect()
+          const ring = 5
+          const overlaps = r.left - ring < b.right && r.right + ring > b.left && r.top - ring < b.bottom && r.bottom + ring > b.top
+          return overlaps ? `${element.getAttribute("aria-label") ?? element.tagName} (${Math.round(r.bottom + ring - b.top)} px under)` : null
+        })
+        if (problem) hidden.push(problem)
+      }
+      expect(hidden).toEqual([])
+    })
+  }
 })
 
 test.describe("axe on a phone", () => {
