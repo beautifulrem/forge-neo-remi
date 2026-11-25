@@ -52,6 +52,21 @@ def fake_ext(name, *, path, builtin=False, remote="https://github.com/u/repo.git
     return ext
 
 
+def test_config_state_backups_live_in_the_data_folder(tmp_path):
+    """The extension backups (config_states/) were kept in the installation folder whatever
+    --data-dir said: outside the Docker volume, so a new container lost them."""
+
+    import sys
+
+    probe = "import json, sys; from modules import paths_internal as p; print(json.dumps([p.data_path, p.config_states_dir]))"
+    env = {key: value for key, value in os.environ.items() if key != "COMMANDLINE_ARGS"}
+    for argv, data in (([sys.executable, "-c", probe, "--data-dir", str(tmp_path / "data")], tmp_path / "data"), ([sys.executable, "-c", probe], ROOT)):
+        result = subprocess.run(argv, cwd=ROOT, env=env, capture_output=True, text=True, timeout=120)
+        assert result.returncode == 0, result.stderr
+        data_path, states = json.loads(result.stdout.strip().splitlines()[-1])
+        assert Path(data_path) == data and Path(states) == data / "config_states"
+
+
 # region Helpers
 
 
