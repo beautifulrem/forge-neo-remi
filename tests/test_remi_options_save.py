@@ -4,6 +4,7 @@ surrogate) stopped it half way, and the next start found a cut-short file and lo
 setting. Such a value is now left out of the file. ``modules/options.py`` is upstream's
 (upstream-absorption.md §1.2)."""
 
+import errno
 import json
 import os
 import sys
@@ -151,3 +152,91 @@ def test_a_value_held_for_the_run_is_saved_as_it_was_stored(tmp_path, monkeypatc
     opts.hold_for_run("remi_test_held", 1)  # a key the file did not have stays out of it
     opts.save(str(config))
     assert "remi_test_held" not in json.loads(config.read_text(encoding="utf8"))
+
+
+class _FullDisk:
+    """A file handle on a full disk: what it writes stops part way with ENOSPC."""
+
+    def __init__(self, handle):
+        self.handle = handle
+
+    def write(self, data):
+        self.handle.write(data[: len(data) // 2])
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    def __getattr__(self, name):
+        return getattr(self.handle, name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.handle.close()
+
+
+@pytest.mark.parametrize("linked", [False, True], ids=["file", "hard-linked"])
+def test_a_full_disk_leaves_the_file_as_it_was(tmp_path, monkeypatch, opts, linked):
+    """The new file next to it could not be written for lack of space, and the fallback wrote
+    the file in place: it truncated config.json, then ran out of space too, leaving it cut
+    short. A hard-linked file was written in place straight away. The save now fails before
+    the file is touched."""
+    from modules import options
+
+    config = tmp_path / "config.json"
+    opts.save(str(config))
+    if linked:
+        os.link(config, tmp_path / "other-name.json")
+    before = config.read_bytes()
+    real_open = open
+    monkeypatch.setattr(options, "open", lambda path, mode="r", *args, **kwargs: _FullDisk(real_open(path, mode, *args, **kwargs)) if "w" in mode or "x" in mode else real_open(path, mode, *args, **kwargs), raising=False)
+    monkeypatch.setitem(opts.data, "remi_test_value", "x" * 1000)
+    with pytest.raises(OSError) as error:
+        opts.save(str(config))
+    assert error.value.errno == errno.ENOSPC
+    assert config.read_bytes() == before
+    assert sorted(path.name for path in tmp_path.iterdir()) == sorted(["config.json", *(["other-name.json"] if linked else [])])
+
+
+def test_a_refused_swap_still_writes_the_file_in_place(tmp_path, monkeypatch, opts):
+    """A file bind-mounted on its own (or held open on Windows) refuses the swap: once the new
+    file showed the bytes fit, the file is written in place."""
+    config = tmp_path / "config.json"
+    opts.save(str(config))
+
+    def refused(source, destination):
+        raise OSError(errno.EBUSY, "Device or resource busy")
+
+    monkeypatch.setattr(os, "replace", refused)
+    monkeypatch.setitem(opts.data, "remi_test_value", "in place")
+    opts.save(str(config))
+    assert json.loads(config.read_text(encoding="utf-8"))["remi_test_value"] == "in place"
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["config.json"]
+
+
+def test_without_a_new_file_the_free_space_decides_before_the_file_is_written(tmp_path, monkeypatch, opts):
+    """A folder this process cannot create files in (the file itself writable): no new file can
+    show that the bytes fit, so the disk's free space must hold what the file grows by."""
+    import shutil
+    from types import SimpleNamespace
+
+    from modules import options
+
+    config = tmp_path / "config.json"
+    opts.save(str(config))
+    before = config.read_bytes()
+    real_open = open
+
+    def no_new_files(path, mode="r", *args, **kwargs):
+        if "x" in mode:
+            raise PermissionError(errno.EACCES, "Permission denied", path)
+        return real_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(options, "open", no_new_files, raising=False)
+    monkeypatch.setitem(opts.data, "remi_test_value", "x" * 1000)
+    monkeypatch.setattr(shutil, "disk_usage", lambda path: SimpleNamespace(total=10**9, used=10**9, free=10))
+    with pytest.raises(OSError) as error:
+        opts.save(str(config))
+    assert error.value.errno == errno.ENOSPC and config.read_bytes() == before
+    monkeypatch.setattr(shutil, "disk_usage", lambda path: SimpleNamespace(total=10**9, used=0, free=10**9))
+    opts.save(str(config))
+    assert json.loads(config.read_text(encoding="utf-8"))["remi_test_value"] == "x" * 1000

@@ -1,7 +1,9 @@
 import contextlib
+import errno
 import json
 import os
 import re
+import shutil
 import sys
 import time
 import uuid
@@ -140,25 +142,41 @@ def write_whole(filename, data: bytes):
     file (a new one would leave the other name behind), and a read-only one refuses the save as
     ``open(..., "w")`` did (the directory would have let a new file in). The new file gets the old
     one's owner and group; where it cannot (another user's file) the file is written in place, as
-    upstream did, rather than change hands. A new file a crash left behind is removed at the next
-    save."""
+    upstream did, rather than change hands. A file is written in place only once the new file next
+    to it showed the bytes fit (or, where none can be made, the disk's free space does): a full
+    disk fails the save before the file is truncated. A new file a crash left behind is removed at
+    the next save."""
     target = os.path.realpath(filename)
     _remove_stale_temporaries(target)
     try:
         status = os.stat(target)
     except OSError:
         status = None
-    if status is not None and (status.st_nlink > 1 or not os.access(target, os.W_OK)):
-        with open(target, "wb") as file:
+    if status is not None and not os.access(target, os.W_OK):
+        with open(target, "wb") as file:  # refused, before anything is written
             file.write(data)
         return
     mode = status.st_mode & 0o777 if status is not None else None
     temporary = f"{target}.{uuid.uuid4().hex}.tmp"
     try:
-        with open(temporary, "xb") as file:
+        handle = open(temporary, "xb")
+    except OSError as error:
+        if error.errno in _NO_SPACE:
+            raise
+        _write_in_place(target, data, status)  # no new file can go next to it (a folder it cannot write)
+        return
+    try:
+        with handle as file:
             file.write(data)
             file.flush()
             os.fsync(file.fileno())
+    except BaseException:  # out of space (in place it would run out too, after the truncation)
+        with contextlib.suppress(OSError):
+            os.remove(temporary)
+        raise
+    try:
+        if status is not None and status.st_nlink > 1:
+            raise OSError(errno.EMLINK, "a new file would leave the other names behind")
         if status is not None and hasattr(os, "chown"):
             created = os.stat(temporary)
             if (created.st_uid, created.st_gid) != (status.st_uid, status.st_gid):
@@ -169,8 +187,22 @@ def write_whole(filename, data: bytes):
     except OSError:
         with contextlib.suppress(OSError):
             os.remove(temporary)
-        with open(target, "wb") as file:
+        with open(target, "wb") as file:  # the new file held the bytes: they fit
             file.write(data)
+
+
+_NO_SPACE = {errno.ENOSPC, getattr(errno, "EDQUOT", errno.ENOSPC)}
+
+
+def _write_in_place(target: str, data: bytes, status) -> None:
+    """``data`` written over ``target`` when no new file could show that it fits: refused
+    without touching the file when the free space is short of what the file grows by."""
+
+    grows = len(data) - (status.st_size if status is not None else 0)
+    if grows > 0 and shutil.disk_usage(os.path.dirname(target) or ".").free < grows:
+        raise OSError(errno.ENOSPC, "No space left on device", target)
+    with open(target, "wb") as file:
+        file.write(data)
 
 
 _STALE_AFTER = 60.0
