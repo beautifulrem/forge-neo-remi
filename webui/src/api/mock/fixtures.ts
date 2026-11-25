@@ -881,6 +881,7 @@ export const serverCatalogZh: Record<string, string> = {
   // sentences the server fills in (remi.ui.Sentence): translated by their template
   "Requires {{capabilities}} (active model: {{model}})": "需要 {{capabilities}}（当前模型：{{model}}）",
   "Anima engine hooks": "Anima 引擎钩子",
+  "Active model lacks required capabilities: {{capabilities}}": "当前模型缺少所需能力：{{capabilities}}",
   "Qwen-Image-2.1 Turbo detected with steps={{steps}}, cfg={{cfg}}: the 8-step distilled Turbo checkpoint/LoRA works best at ~8 steps with CFG 1.0.":
     "检测到 Qwen-Image-2.1 Turbo，steps={{steps}}，cfg={{cfg}}：8 步蒸馏的 Turbo 模型或 LoRA 在约 8 步、CFG 1.0 时效果最好。",
   "Set Turbo (8 steps · CFG 1.0)": "设为 Turbo（8 步 · CFG 1.0）",

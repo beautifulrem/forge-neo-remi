@@ -127,7 +127,16 @@ describe("mock workbench routes", () => {
     expect(applied.status).toBe(200)
     expect(applied.data.core.cfg_scale).toBe(4.5)
     expect(applied.data.patch["sampler.steps"]).toEqual({ value: 32 })
-    expect(applied.data.warnings.length).toBeGreaterThan(0) // xl lacks anima_hooks
+    // xl lacks anima_hooks: warned as the server does (remi/recipes.py), by the capability's name
+    expect(applied.data.warnings).toEqual(["Active model lacks required capabilities: Anima engine hooks"])
+    expect(applied.data.warning_notes).toEqual([{ message: "Active model lacks required capabilities: {{capabilities}}", values: { capabilities: ["Anima engine hooks"] } }])
+
+    // the server runs the conflict rules for the generation forms only
+    const locks = { anima: { lock_steps: true, lock_cfg: true } }
+    const generate = await call("POST", `/recipes/${id}/apply`, { tab: "txt2img", core: {}, scripts: locks })
+    expect(generate.data.conflicts).toMatchObject({ "anima.lock_cfg": { value: false } })
+    const extras = await call("POST", `/recipes/${id}/apply`, { tab: "extras", core: {}, scripts: locks })
+    expect(extras.data.conflicts).toEqual({})
 
     const exported = await call("GET", "/recipes/export")
     expect(exported.status).toBe(200)

@@ -21,6 +21,20 @@ import { broadcast } from "./socket"
 
 export { mockAdviceFor, mockCapabilitiesForPreset, normalizeMockPreset }
 
+/** The capability names of backend/nn/model_capabilities.py (CAPABILITY_LABELS): catalog keys. */
+const CAPABILITY_LABELS: Record<string, string> = {
+  anima_hooks: "Anima engine hooks",
+  multi_reference: "Multi-reference conditioning",
+  rgba_output: "Native RGBA output",
+  control_blocks: "DiT Control Blocks",
+  structured_layout: "Structured Layout",
+  distilled_cfg1: "Distilled CFG 1",
+  prefix_kv_cache: "Prefix KV Cache",
+  per_block_compile: "Per-block torch.compile",
+  spectrum: "Spectrum forecasting",
+  video: "Video generation",
+}
+
 type Handler = (match: RegExpExecArray, body: unknown, url: URL) => unknown | Promise<unknown>
 type Values = Record<string, unknown>
 
@@ -693,7 +707,9 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
         mergedScripts[owner] = { ...(mergedScripts[owner] ?? {}), ...vals }
         for (const [key, value] of Object.entries(vals)) patch[`${owner}.${key}`] = { value }
       }
-      const conflicts = b.check_conflicts === false ? {} : conflictPatch(mergedCore, mergedScripts, undefined)
+      const tab = b.tab ?? recipe.tab
+      // as the server: the conflict rules belong to the generation forms
+      const conflicts = b.check_conflicts === false || (tab !== "txt2img" && tab !== "img2img") ? {} : conflictPatch(mergedCore, mergedScripts, undefined)
       // as the server (remi/recipes.py apply_recipe): the recipe's values stay as they are, and a
       // control joins the patch only when the conflict rules change its value in the merged form
       for (const [target, entry] of Object.entries(conflicts)) {
@@ -711,15 +727,19 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
       }
       const activeCaps = mockCapabilitiesForPreset(String(bootstrap.options.forge_preset ?? "xl")).capabilities
       const missingCaps = recipe.capabilities.filter((cap) => !activeCaps.includes(cap))
-      const warnings = missingCaps.length > 0 ? [`Active model lacks capabilities: ${missingCaps.join(", ")}`] : []
+      // as the server: the capabilities by name (catalog keys), English text and a note to translate
+      const labels = missingCaps.map((cap) => CAPABILITY_LABELS[cap] ?? cap)
+      const template = "Active model lacks required capabilities: {{capabilities}}"
+      const notes = labels.length > 0 ? [{ message: template, values: { capabilities: labels } }] : []
       return {
         recipe,
-        tab: b.tab ?? recipe.tab,
+        tab,
         patch,
         core: mergedCore,
         scripts: mergedScripts,
         conflicts,
-        warnings,
+        warnings: notes.map(() => template.replace("{{capabilities}}", labels.join(", "))),
+        warning_notes: notes,
       }
     },
   ],
