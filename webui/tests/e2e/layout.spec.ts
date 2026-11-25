@@ -592,6 +592,48 @@ test.describe("the canvas staging bar", () => {
   })
 })
 
+// With a keyboard (no touch screen) the image toolbar holds a shortcuts button too: in an editor
+// narrower than about 385 px its buttons spilled past its panel, over the history and zoom toolbar.
+// It scrolls instead; every button can be scrolled to and takes its own taps.
+test.describe("the editor's bottom toolbars in a narrow editor with a keyboard", () => {
+  for (const width of [390, 360]) {
+    test(`at ${width} px stay apart, the image toolbar scrolling`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 })
+      await openGenerate(page, "img2img")
+      const png = await page.evaluate(() => {
+        const canvas = document.createElement("canvas")
+        canvas.width = 640
+        canvas.height = 480
+        canvas.getContext("2d")!.fillRect(0, 0, 640, 480)
+        return canvas.toDataURL("image/png").split(",")[1]!
+      })
+      const chooser = page.waitForEvent("filechooser")
+      await page.getByRole("button", { name: "Add a source image" }).click()
+      await (await chooser).setFiles({ name: "source.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") })
+      await expect(page.getByRole("img", { name: /^Image editor/ })).toBeVisible()
+      const history = page.getByRole("toolbar", { name: "History and zoom" })
+      const image = page.getByRole("toolbar", { name: "Image", exact: true })
+      await expect(image.getByRole("button", { name: "Keyboard shortcuts" })).toBeAttached()
+      const editor = page.locator("#img2img-stage-source > *").first()
+      const [left, right, frame] = await Promise.all([history.boundingBox(), image.boundingBox(), editor.boundingBox()])
+      expect(left!.x + left!.width, "the toolbars overlap").toBeLessThanOrEqual(right!.x + 0.5)
+      expect(right!.x + right!.width, "the image toolbar leaves the editor").toBeLessThanOrEqual(frame!.x + frame!.width + 0.5)
+      expect(left!.x, "the history toolbar leaves the editor").toBeGreaterThanOrEqual(frame!.x - 0.5)
+      // each button, scrolled into the toolbar, is whole and takes its own taps
+      for (const button of await image.getByRole("button").all()) {
+        await button.scrollIntoViewIfNeeded()
+        const hit = await button.evaluate((element) => {
+          const box = element.getBoundingClientRect()
+          const bar = element.closest("[role=toolbar]")!.getBoundingClientRect()
+          const whole = box.left >= bar.left - 0.5 && box.right <= bar.right + 0.5
+          return whole && element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2))
+        })
+        expect(hit, (await button.getAttribute("aria-label")) ?? (await button.textContent()) ?? "a button").toBe(true)
+      }
+    })
+  }
+})
+
 test.describe("the img2img stage on a phone held sideways", () => {
   // The editor kept its 16rem floor in a column that had less room: it overflowed onto the history
   // strip, whose thumbnails then covered the editor's history and zoom controls.

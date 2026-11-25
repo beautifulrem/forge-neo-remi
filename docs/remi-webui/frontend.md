@@ -1099,7 +1099,12 @@ chunk, `preloadImageEditor()` fetches it early), the img2img integration
   the real diameter; brush sizes are image px, or screen px with
   `forge_canvas_consistent_brush`. Canvases follow `devicePixelRatio` (and
   moves between screens). `forge_canvas_plain(_color)` and
-  `forge_canvas_toolbar_always` are honoured.
+  `forge_canvas_toolbar_always` are honoured. The bottom row holds the
+  history and zoom toolbar (its zoom steps fold away below `@md`) and the
+  image toolbar; where both do not fit (an editor under about 385 px with
+  a keyboard, whose shortcuts button the image toolbar adds), the image
+  toolbar scrolls sideways with a fading edge, as the tool options do, and
+  the history and zoom one keeps its size.
 - **Candidates** (the staging bar): staged results wait for Accept or
   Discard, so their bar stays in view while the other overlays fade
   (`forge_canvas_toolbar_always` off). It keeps to one row: as the canvas

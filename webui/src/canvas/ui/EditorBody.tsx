@@ -30,6 +30,7 @@ import { createStore, useStore } from "zustand"
 import { api } from "@/api/endpoints"
 import { Button } from "@/components/ui/button"
 import { useAppearance } from "@/lib/theme"
+import { useScrollFade } from "@/lib/use-scroll-fade"
 import { useKeyboardHints } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { usePasteTarget } from "@/ui/paste-targets"
@@ -180,6 +181,9 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
   const hasImage = useDocValue(doc, (d) => d.hasImage)
   const width = useDocValue(doc, (d) => d.width)
   const height = useDocValue(doc, (d) => d.height)
+  // a narrow editor scrolls the image toolbar: fade the cut edge (it mounts with the image)
+  const imageBarRef = useRef<HTMLDivElement>(null)
+  const imageBarFade = useScrollFade(imageBarRef, hasImage)
   const activeKey = editor.noScribble ? null : (editor.activeLayer ?? null)
   // Undo and redo follow the layer on screen, never a hidden one of another mode.
   const canUndo = useDocValue(doc, (d) => Boolean(activeKey) && d.canUndo(activeKey))
@@ -799,7 +803,7 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
 
 
           <div className="absolute inset-x-2 bottom-2 flex items-end justify-between gap-2">
-            <div role="toolbar" aria-label={t("History and zoom")} data-toast-obstacle onKeyDown={toolbarKeys("horizontal")} className={cn(PANEL, "flex h-10 items-center gap-0.5 px-1")}>
+            <div role="toolbar" aria-label={t("History and zoom")} data-toast-obstacle onKeyDown={toolbarKeys("horizontal")} className={cn(PANEL, "flex h-10 shrink-0 items-center gap-0.5 px-1")}>
               {paintable ? (
                 <>
                   <IconButton label={t("Undo")} keys={[mod, "Z"]} onClick={() => run({ type: "undo" })} disabled={!canUndo}>
@@ -837,7 +841,16 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
               </IconButton>
             </div>
 
-            <div role="toolbar" aria-label={t("Image")} data-toast-obstacle onKeyDown={toolbarKeys("horizontal")} className={cn(PANEL, "flex h-10 min-w-0 items-center gap-0.5 px-1")}>
+            {/* narrower than both toolbars (about 385 px with a keyboard's shortcuts button), this one scrolls, as the tool options do */}
+            <div
+              ref={imageBarRef}
+              style={imageBarFade}
+              role="toolbar"
+              aria-label={t("Image")}
+              data-toast-obstacle
+              onKeyDown={toolbarKeys("horizontal")}
+              className={cn(PANEL, "flex h-10 min-w-0 scroll-px-1 items-center gap-0.5 overflow-x-auto px-1 [scrollbar-width:none]")}
+            >
               {pending ? (
                 <span role="status" className="flex items-center gap-1.5 px-1.5 text-xs text-muted-foreground">
                   <Loader2 className="size-3 animate-spin" aria-hidden />
