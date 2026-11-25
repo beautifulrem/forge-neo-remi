@@ -239,18 +239,53 @@ def read_safetensors_metadata(filename: str) -> dict[str, Any]:
     return dict(metadata) if isinstance(metadata, dict) else {}
 
 
+class SidecarUnreadable(Exception):
+    """The entry's ``<model>.json`` is there but is not a JSON object this can
+    read: what the user or another tool kept in it is not known, so an edit
+    must not replace it."""
+
+    def __init__(self, path: str, reason: str):
+        super().__init__(f"{path}: {reason}")
+        self.path = path
+        self.reason = reason
+
+
+def read_sidecar(entry: NetworkEntry) -> dict[str, Any]:
+    """The JSON sidecar ``<model>.json`` (sd_forge_lora's format; one another
+    tool wrote with a BOM too): {} when there is none or it is blank, and
+    :class:`SidecarUnreadable` when it is there but cannot be read."""
+
+    path = entry.base + ".json"
+    try:
+        with open(path, encoding="utf-8-sig") as file:
+            text = file.read()
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as error:  # ValueError: not UTF-8
+        raise SidecarUnreadable(path, str(error)) from error
+    if not text.strip():
+        return {}
+    try:
+        data = nm.loads(text)
+    except ValueError as error:
+        raise SidecarUnreadable(path, f"not JSON: {error}") from error
+    except RecursionError as error:
+        raise SidecarUnreadable(path, "nested too deeply to read") from error
+    if not isinstance(data, dict):
+        raise SidecarUnreadable(path, "not a JSON object")
+    return utf8_text(data)
+
+
 def read_user_metadata(entry: NetworkEntry) -> dict[str, Any]:
-    """The JSON sidecar ``<model>.json`` (sd_forge_lora's format); one another
-    tool wrote with a BOM too."""
+    """The sidecar's user metadata; an unreadable sidecar as none (a listing
+    does not fail on one: an edit refuses it, ``update_user_metadata``)."""
 
     if not entry.on_disk:
         return {}
     try:
-        with open(entry.base + ".json", encoding="utf-8-sig") as file:
-            data = nm.loads(file.read())
-    except (OSError, ValueError, RecursionError):  # nested past the parser: as unreadable, not a failed listing
+        return read_sidecar(entry)
+    except SidecarUnreadable:
         return {}
-    return utf8_text(data) if isinstance(data, dict) else {}
 
 
 @contextlib.contextmanager
@@ -1281,7 +1316,8 @@ class NetworkIndex:
         # The limit is on what the client sends: a larger sidecar another tool wrote stays editable
         if len(json.dumps(changes, indent=4, ensure_ascii=False).encode()) > USER_METADATA_LIMIT:
             raise ValueError("user metadata is too large")
-        data = {} if replace else read_user_metadata(entry)
+        # An unreadable sidecar is refused (SidecarUnreadable), not read as empty and overwritten; replace drops it on purpose
+        data = {} if replace else read_sidecar(entry)
         for key, value in changes.items():
             if value is None:
                 data.pop(key, None)

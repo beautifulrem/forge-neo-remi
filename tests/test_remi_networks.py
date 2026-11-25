@@ -335,6 +335,39 @@ def test_sidecars_other_tools_wrote_are_read_and_stay_editable(lora, lora_root):
     assert client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"mine": ["y" * 1000] * 70}}).status_code == 422
 
 
+UNREADABLE_SIDECAR = "the metadata file {{file}} cannot be read; saving would replace it, so fix or remove it first"
+
+
+@pytest.mark.parametrize(
+    "content",
+    [b"{'activation text': 'single quotes'}", b"[" * 100_000 + b"]" * 100_000, b'["a list"]', '{"notes": "utf-16"}'.encode("utf-16")],
+    ids=["not-json", "nested-too-deep", "not-an-object", "not-utf8"],
+)
+def test_an_edit_does_not_overwrite_a_sidecar_it_cannot_read(lora, lora_root, content):
+    """An unreadable sidecar read as empty, so the next edit replaced it with the new keys alone
+    and what the user or another tool kept there was gone."""
+
+    client = lora.client
+    sidecar = lora_root / "styles" / "watercolor.json"
+    sidecar.write_bytes(content)
+    response = client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"notes": "new"}})
+    assert response.status_code == 422
+    [error] = response.json()["errors"]
+    assert error["param"] == "user_metadata" and error["template"] == UNREADABLE_SIDECAR and error["params"] == {"file": "watercolor.json"}
+    assert sidecar.read_bytes() == content
+    # still listed (its user metadata empty), and replacing every key is the client's choice
+    assert "watercolor" in names(client.get("/api/v2/networks/lora"))
+    assert client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"notes": "new"}, "replace": True}).status_code == 200
+    assert json.loads(sidecar.read_text(encoding="utf-8")) == {"notes": "new"}
+
+
+def test_an_empty_sidecar_is_edited_like_a_missing_one(lora, lora_root):
+    sidecar = lora_root / "styles" / "watercolor.json"
+    sidecar.write_text(" \n", encoding="utf-8")
+    assert lora.client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"notes": "new"}}).status_code == 200
+    assert json.loads(sidecar.read_text(encoding="utf-8")) == {"notes": "new"}
+
+
 def test_bad_user_metadata_is_rejected(lora):
     response = lora.client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"preferred weight": "heavy"}})
     assert response.status_code == 422 and "preferred weight" in response.json()["detail"]

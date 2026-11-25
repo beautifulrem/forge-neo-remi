@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 
-from remi.networks import NetworkError, NetworkReadOnly
+from remi.networks import NetworkError, NetworkReadOnly, SidecarUnreadable
 from remi.server import models as m
 from remi.server import network_models as nm
 from remi.server.deps import ServicesDep, not_found, require_local_folders
@@ -94,10 +95,21 @@ def meta(kind: str, name: str, services: ServicesDep) -> dict[str, Any]:
     return _guard(lambda: services.networks.meta(kind, name))
 
 
-@router.patch("/networks/{kind}/{name:path}/meta", response_model=nm.NetworkMeta, responses={**WRITE_ERRORS, 422: {"model": m.Detail}}, summary="Edit the user metadata (the `<model>.json` sidecar)")
+@router.patch(
+    "/networks/{kind}/{name:path}/meta",
+    response_model=nm.NetworkMeta,
+    responses={**WRITE_ERRORS, 422: {"model": m.Detail | m.ValidationErrorBody, "description": "a value is wrong (`detail`), or the sidecar is there but cannot be read and `replace` is not set (`errors`)"}},
+    summary="Edit the user metadata (the `<model>.json` sidecar)",
+)
 def edit_meta(kind: str, name: str, body: nm.UserMetadataPatch, services: ServicesDep) -> dict[str, Any]:
+    from remi.ui import ParamError, Sentence, ValidationError
+
     try:
         result = _guard(lambda: services.networks.update_user_metadata(kind, name, body.user_metadata, replace=body.replace))
+    except SidecarUnreadable as error:
+        log.warning("not editing the metadata of %s/%s: %s", kind, name, error)
+        file = os.path.basename(error.path)
+        raise ValidationError([ParamError(Sentence("the metadata file {{file}} cannot be read; saving would replace it, so fix or remove it first", file=file), param="user_metadata")]) from error
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     services.bus.publish("networks.changed", kind=kind)

@@ -2486,14 +2486,22 @@
             }
           },
           "422": {
+            "description": "a value is wrong (`detail`), or the sidecar is there but cannot be read and `replace` is not set (`errors`)",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Detail"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Detail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
+                    }
+                  ],
+                  "title": "Response 422 Edit Meta Api V2 Networks  Kind   Name  Meta Patch"
                 }
               }
-            },
-            "description": "Unprocessable Content"
+            }
           }
         }
       }

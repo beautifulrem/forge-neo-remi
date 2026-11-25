@@ -7675,13 +7675,13 @@ export interface operations {
                     "application/json": components["schemas"]["Detail"];
                 };
             };
-            /** @description Unprocessable Content */
+            /** @description a value is wrong (`detail`), or the sidecar is there but cannot be read and `replace` is not set (`errors`) */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["ValidationErrorBody"];
                 };
             };
         };
