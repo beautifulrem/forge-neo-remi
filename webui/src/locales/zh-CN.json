@@ -1523,7 +1523,6 @@
   "Discard candidate": "丢弃此候选",
   "Discard all": "全部丢弃",
   "Accepted candidate as new base layer": "已将候选图采纳为新底图",
-  "Staged {{count}} candidates on canvas": "已在画布暂存 {{count}} 张候选图",
   "Queue & History": "队列与历史",
   "Pipelines": "多阶段管线",
   "Recipes": "参数配方",

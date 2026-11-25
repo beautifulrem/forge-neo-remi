@@ -80,9 +80,8 @@ describe("locale switching", () => {
   it("gives English counts their singular or plural form", () => {
     expect(i18n.t("Remove {{count}} images?", { count: 1 })).toBe("Remove 1 image?")
     expect(i18n.t("Remove {{count}} images?", { count: 3 })).toBe("Remove 3 images?")
-    expect(i18n.t("Staged {{count}} candidates on canvas", { count: 1 })).toBe("Staged 1 candidate on canvas")
-    expect(i18n.t("Staged {{count}} candidates on canvas", { count: 4 })).toBe("Staged 4 candidates on canvas")
     expect(i18n.t("Added {{count}} images to Reference Images ({{total}} total)", { count: 1, total: 3 })).toBe("Added 1 image to Reference Images (3 total)")
+    expect(i18n.t("Added {{count}} images to Reference Images ({{total}} total)", { count: 2, total: 3 })).toBe("Added 2 images to Reference Images (3 total)")
   })
 
   it("writes right-to-left languages right to left (<html dir>)", async () => {

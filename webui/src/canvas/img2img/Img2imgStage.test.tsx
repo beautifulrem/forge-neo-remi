@@ -1,6 +1,7 @@
 /** The img2img stage's own logic (view switch, keyboard, batch modes), its editor and bindings stubbed out. */
 import { fireEvent, render, screen } from "@testing-library/react"
 import { useState } from "react"
+import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useSession } from "@/features/gallery/session-store"
 import { useCanvasStaging } from "../state/staging"
@@ -134,6 +135,18 @@ describe("Img2imgStage", () => {
       const others = [...document.querySelectorAll("svg")].filter((svg) => !stage.contains(svg)).map((svg) => svg.innerHTML)
       expect(others.length).toBeGreaterThan(0)
       expect(others).not.toContain(glyph)
+    })
+
+    // A toast confirming the staging covered the canvas on a phone; the candidate bar, which takes the
+    // focus, already shows what happened.
+    it("stages the latest result on the canvas without a toast", () => {
+      const success = vi.spyOn(toast, "success")
+      renderStage()
+      fireEvent.click(screen.getByRole("tab", { name: "Result" }))
+      fireEvent.click(screen.getByRole("button", { name: "Stage latest result" }))
+      expect(useCanvasStaging.getState().sessions.img2img?.candidates.map((candidate) => candidate.fileId)).toEqual(["out-0", "out-1"])
+      expect(screen.getByRole("tab", { name: "Source" })).toHaveAttribute("aria-selected", "true")
+      expect(success).not.toHaveBeenCalled()
     })
   })
 

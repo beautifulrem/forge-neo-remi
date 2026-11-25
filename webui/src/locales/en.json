@@ -27,7 +27,6 @@
   "{{count}} updates available_one": "{{count}} update available",
   "{{count}} values are not valid here and are skipped:_one": "{{count}} value is not valid here and is skipped:",
   "{{count}} settings changes are not applied yet_one": "{{count}} settings change is not applied yet",
-  "Staged {{count}} candidates on canvas_one": "Staged {{count}} candidate on canvas",
   "Added {{count}} images to Reference Images ({{total}} total)_one": "Added {{count}} image to Reference Images ({{total}} total)",
   "{{count}} steps_one": "{{count}} step",
   "The images leave the gallery; their files stay in the output folder._one": "The image leaves the gallery; its file stays in the output folder.",

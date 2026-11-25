@@ -6,7 +6,6 @@
 import { ImageDown, Images, Layers, PencilRuler } from "@/components/icons"
 import { type ReactNode, useEffect } from "react"
 import { useTranslation } from "react-i18next"
-import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Toggle } from "@/components/ui/toggle"
 import { useSession } from "@/features/gallery/session-store"
@@ -106,8 +105,8 @@ export function Img2imgStage({ result, actions, leading, trailing, className }: 
       IMG2IMG,
       batch.map((item) => ({ fileId: item.fileId, width: item.width, height: item.height, infotext: item.infotext })),
     )
+    // no toast: on a phone it covered the canvas, and the candidate bar (with the focus) shows the result
     setView("source")
-    toast.success(t("Staged {{count}} candidates on canvas", { count: batch.length }))
   }
 
   return (
