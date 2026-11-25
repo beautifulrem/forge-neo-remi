@@ -1399,7 +1399,8 @@ class ChainRunner:
             except GenerationInterrupted as exc:
                 error, interrupted = str(exc), True
             except TranslationError as exc:
-                # the sentence itself, as the pipeline's other errors: a key of the server catalogs
+                # the sentence itself, as the pipeline's other errors: one without values is a key
+                # of the server catalogs; one with values (a service's own words) is its English
                 error = str(exc)
             except Exception as exc:
                 error = f"{type(exc).__name__}: {exc}"

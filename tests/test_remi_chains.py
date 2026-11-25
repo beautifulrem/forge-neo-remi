@@ -640,8 +640,9 @@ def test_cancelling_a_pipeline_stops_its_local_upsample_stage(tmp_path):
 def test_a_failed_upsample_stage_says_why_in_its_own_sentence(tmp_path, monkeypatch):
     """A failed upsample stage stored "TranslationError: the model answered with an empty prompt",
     and "PermissionError: ..." for a local model under --hide-ui-dir-config: with the class name
-    in front, no catalog had the text. The pipeline and the stage keep the sentence itself, a key
-    of the server catalogs, as the pipeline's other errors are plain sentences."""
+    in front, no catalog had the text. The pipeline and the stage keep the sentence itself, as the
+    pipeline's other errors are plain sentences: one without values is a key of the server
+    catalogs (one with values, a service's own words, is its English)."""
 
     import json
     from pathlib import Path
