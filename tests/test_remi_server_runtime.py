@@ -608,7 +608,9 @@ def build_tool_engines() -> dict[str, str]:
     from modules import launch_utils
 
     webui = launch_utils.WEBUI_DIR
-    lock = yaml.safe_load((webui / "pnpm-lock.yaml").read_text(encoding="utf-8"))
+    # pnpm writes the pnpm that package.json pins as a document of its own before the project's
+    documents = list(yaml.safe_load_all((webui / "pnpm-lock.yaml").read_text(encoding="utf-8")))
+    lock = next(document for document in documents if "devDependencies" in document["importers"]["."])
     assert json.loads((webui / "package.json").read_text(encoding="utf-8"))["scripts"]["build"] == "tsc -b && vite build"
     config = (webui / "vite.config.ts").read_text(encoding="utf-8")
     roots = {name for name in re.findall(r'from "([^"]+)"', config) if not name.startswith(("node:", "."))} | {"typescript"}
