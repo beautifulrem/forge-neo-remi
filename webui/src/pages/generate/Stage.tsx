@@ -13,6 +13,7 @@ import { api } from "@/api/endpoints"
 import { progressFraction, type RunningJob } from "@/api/progress"
 import { useWs } from "@/api/ws"
 import { Button } from "@/components/ui/button"
+import { useKeyboardHints } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { selectedItem, useSession } from "@/features/gallery/session-store"
 import { InfotextPanel } from "@/features/infotext/InfotextPanel"
@@ -62,6 +63,8 @@ function EmptyViewfinder({ tab, waiting }: { tab: GenerateTab; waiting: boolean 
   const rawHeight = useStore(store, (s) => s.values.core?.height)
   const metrics = viewfinderMetrics(rawWidth, rawHeight)
   const ratioValue = metrics.width / metrics.height
+  // a touch screen without a keyboard has no shortcut to press
+  const keyboard = useKeyboardHints()
 
   return (
     // a short stage (a phone held sideways) gives up the frame's room, never the next step's: the
@@ -98,7 +101,11 @@ function EmptyViewfinder({ tab, waiting }: { tab: GenerateTab; waiting: boolean 
           {metrics.width} × {metrics.height} · {metrics.ratio} · {metrics.megapixels}
         </p>
         <p className="text-xs text-balance text-muted-foreground">
-          {waiting ? t("Waiting for the first preview…") : t("Write a prompt, then press {{shortcut}} to generate", { shortcut: formatShortcut("Mod+Enter") })}
+          {waiting
+            ? t("Waiting for the first preview…")
+            : keyboard
+              ? t("Write a prompt, then press {{shortcut}} to generate", { shortcut: formatShortcut("Mod+Enter") })
+              : t("Write a prompt, then tap Generate")}
         </p>
       </div>
     </div>

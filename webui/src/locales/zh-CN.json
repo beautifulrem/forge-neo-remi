@@ -1699,5 +1699,6 @@
   "Unavailable": "不可用",
   "Ready": "就绪",
   "Crashed": "已崩溃",
-  "Translation not applied: the prompt changed meanwhile.": "未应用翻译：提示词在翻译期间已被修改。"
+  "Translation not applied: the prompt changed meanwhile.": "未应用翻译：提示词在翻译期间已被修改。",
+  "Write a prompt, then tap Generate": "写好提示词，轻点“生成”"
 }
