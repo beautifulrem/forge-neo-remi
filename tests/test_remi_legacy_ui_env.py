@@ -78,10 +78,10 @@ def test_pins_the_gradio_the_legacy_launcher_installed(derived):
     assert 8 <= major < 11
     # the pins come from the last launcher that installed Gradio; the next revision dropped them
     assert 'GRADIO_PACKAGE", "gradio==4.40.0 gradio_rangeslider==0.0.8"' in _show(recorder.GRADIO_LAUNCHER_REV, "modules/launch_utils.py")
-    child = subprocess.run(["git", "rev-list", "--parents", "-n", "1", "80cfa274"], cwd=REPO, capture_output=True, text=True)
+    child = subprocess.run(["git", "rev-list", "--parents", "-n", "1", "2242b2092"], cwd=REPO, capture_output=True, text=True)
     if child.returncode == 0:
         assert recorder.GRADIO_LAUNCHER_REV in child.stdout.split()[1:]
-        assert "GRADIO_PACKAGE" not in _show("80cfa274", "modules/launch_utils.py")
+        assert "GRADIO_PACKAGE" not in _show("2242b2092", "modules/launch_utils.py")
 
 
 def test_matches_the_legacy_revision_requirements(derived):

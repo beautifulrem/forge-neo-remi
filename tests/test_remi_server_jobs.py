@@ -811,7 +811,7 @@ LEGACY_QUEUE_SETTINGS = [
     "queue_completion_action",
 ]
 """every setting the Agent Scheduler registered before the port
-(``scripts/task_scheduler.py`` ``on_ui_settings`` at d5a71cad: 9 keys)"""
+(``scripts/task_scheduler.py`` ``on_ui_settings`` at d23761c08: 9 keys)"""
 
 
 def test_every_old_agent_scheduler_setting_is_kept_or_explained(webui):

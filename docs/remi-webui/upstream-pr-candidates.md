@@ -1,6 +1,6 @@
 # Upstream PR Roadmap & Code Bloat Audit
 
-> **Audit baseline:** `remi` `8b1b749e` vs Forge Neo `upstream/neo` merge base `5998fb39` (`2026-11-23`)
+> **Audit baseline:** `remi` `9a7e665ec` vs Forge Neo `upstream/neo` merge base `5998fb39` (`2026-11-23`)
 > **Governance tool:** `python tools/upstream_forks.py budget [--max-forked 6] [--target-diverged 20] [--json] [--verbose]`
 > **Policy reference:** [upstream-absorption.md](upstream-absorption.md) · [roadmap-2026-q4.zh-CN.md](../research/roadmap-2026-q4.zh-CN.md) (P1.4 Divergence Budget)
 
@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-1. **Divergence budget snapshot (`8b1b749e`):**
+1. **Divergence budget snapshot (`9a7e665ec`):**
    - `FORKED`: **6 / max 6** (hard guardrail enforced by `tools/upstream_forks.py budget`).
    - `DIVERGED`: **32 / target ≤ 20** (+12 over target). All 32 pinning test files declared in [upstream-absorption.md §1.2](upstream-absorption.md#12-upstream-bugs-remi-fixes-divergences) exist on disk and pass.
    - `upstream_crlf.txt`: **80** shared files preserving upstream CRLF line endings.
@@ -29,7 +29,7 @@
 
 | Wave | Scope | Files Dropped | Remaining `DIVERGED` | Upstream Prerequisite |
 | --- | --- | ---: | ---: | --- |
-| Baseline (`8b1b749e`) | Current registry (`tools/upstream_forks.py`) | — | **32** | — |
+| Baseline (`9a7e665ec`) | Current registry (`tools/upstream_forks.py`) | — | **32** | — |
 | **Wave 1 (Quick Wins)** | Security, MPS OOM crash, flow samplers/schedulers, tiny 1–17L pure fixes | **8** | **24** | None |
 | **Wave 2 (Standalone Runtime)** | ControlNet preprocessors/filter/cache, LLLite step window, ImageStitch, infotext/img2img/merger/refiner | **10** | **14** (target ≤ 20 achieved) | None |
 | **Wave 3 (Guaranteed Teardown)** | `Script.cleanup` (~12L hook in `modules/scripts.py` + `finally` in `processing.py`) → Radial + Refiner | **2** | **12** | 1 small `Script.cleanup` PR |

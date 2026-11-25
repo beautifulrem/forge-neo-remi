@@ -549,7 +549,7 @@ LEGACY_TAC_SETTINGS = [
     "tac_useWildcards", "tac_wildcardCompletionMode", "tac_wildcardExclusionList",
 ]
 """every setting the tag autocomplete extension registered before the port
-(``scripts/tag_autocomplete_helper.py`` at d5a71cad: 58 keys)"""
+(``scripts/tag_autocomplete_helper.py`` at d23761c08: 58 keys)"""
 
 
 def test_every_old_tag_autocomplete_setting_is_kept_or_explained():

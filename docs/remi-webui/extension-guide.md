@@ -753,7 +753,7 @@ What to test:
   `extensions-builtin/sd_forge_controlnet/tests/`.
 
   The recorder is the only tool that needs Gradio. Remi has none, so it
-  exports the last revision that still had the Gradio UI (`9c96c45e`, the
+  exports the last revision that still had the Gradio UI (`5d1e0f1dc`, the
   parent of the commit that removed it) to a temporary folder and builds the
   `ui()` there; the record uses this checkout's `describe()`, the format
   `assert_matches_snapshot` reads. Give it an interpreter with that era's
@@ -819,7 +819,7 @@ What to test:
 
   A script listed there records in its own format and context when given
   directly too (`record_legacy_ui.py extensions-builtin/sd-webui-detail-daemon/scripts/detail_daemon.py
-  --script-rev 80cfa274 --check`). A new port's fixture gets an entry
+  --script-rev 2242b2092 --check`). A new port's fixture gets an entry
   (`tests/test_remi_legacy_ui_fixtures.py` fails for a `legacy_ui_*.json`
   that has none).
 

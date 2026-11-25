@@ -39,9 +39,9 @@ from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 TABS = ("txt2img", "img2img")
-PRE_PORT = "80cfa274ff872a7f3dd0f93666268107c960ff1c"
-"""The parent of a7baa5ad, which ported the scripts, the extensions and the pages to ``params()``."""
-GRADIO_REV = "9c96c45ee561487d2c4baa6900a885d3a71affe5"
+PRE_PORT = "2242b209278441462ccf51b3b5f22120ea103676"
+"""The parent of 4ae0d3732, which ported the scripts, the extensions and the pages to ``params()``."""
+GRADIO_REV = "5d1e0f1dced47a727457810e560f4a52795dff99"
 """The last revision with the Gradio UI (``record_legacy_ui.LEGACY_REV``): ``modules/processing_scripts`` still had their ``ui()``."""
 
 WIRING_KEYS = ("exclusive", "visible_if", "enabled_if")

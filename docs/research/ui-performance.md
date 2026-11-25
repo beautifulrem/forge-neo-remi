@@ -68,7 +68,7 @@ were made reproducible from the repository.
 | Model | `anima-turbo-v1.1.safetensors` + `qwen_image_vae` + `qwen_3_06b_base`; Euler / Simple, CFG 1, Shift 3.5, seed 12345; live previews on (RGB method, every step, JPEG, 6 fps cap) |
 | Browser | Chromium 156.0.8078.4 (Playwright 1.64.0, new headless), 1920×1080, DPR 1 |
 | Tooling | Node 26.10.0, pnpm 12.6.0, Vite 8 production build (`webui/dist`) |
-| Old tree | git ref `remi` (`d5a71cad`) in a separate worktree, run with a Python that adds Gradio 4.40.0 to the same packages ([Recreating the environments](#recreating-the-environments)) |
+| Old tree | git ref `remi` (`d23761c08`) in a separate worktree, run with a Python that adds Gradio 4.40.0 to the same packages ([Recreating the environments](#recreating-the-environments)) |
 | 2026-10-19 runs | same machine (macOS 27.0.1), Python 3.13 venv without Gradio (torch 2.14.1), Chromium of Playwright 1.64 (headless); several other agent sessions ran builds and test suites alongside: load average 13–16 on the 10 cores, server startup 30–150 s instead of 8 s |
 | 2026-10-20 runs | same machine and venv (`.venv-remi`), the same headless Chromium, the server through `serve_traced.py` with `REMI_PERF_FAKE_SAMPLER=28` and the fixtures (no model loaded: the load, scrolling and preview scenarios need none); other agent sessions alongside: load average 8–12 during the scrolling runs, 15–80 during the preview and interleaved runs |
 | 2026-10-20 verify runs | same machine and venv; the real model (Anima Turbo, Euler / Simple, CFG 1, Shift 3.5, seed 12345, RGB JPEG previews every step) through `serve_traced.py` with `REMI_PERF_WS_ONLY=HeadlessChrome` on port 18431, the fixtures, the SPA of the verified tree; headless Chromium 156 (Playwright) and, for the headed scrolling run, the installed Google Chrome 155 on the real display (`--channel chrome`); no other agent work: load average 1.0–1.5 during the final interleaved, preview, load and scrolling runs (7–21 during the first, discarded interleaved runs) |
@@ -136,7 +136,7 @@ tools/perf/browser.mjs $B --only preview --steps 16 --jobs 2 --size 512x512`.
   launcher installed, `GRADIO_PACKAGE` in its `modules/launch_utils.py`):
 
   ```sh
-  git worktree add --detach ../remi-baseline d5a71cad   # git ref "remi"
+  git worktree add --detach ../remi-baseline d23761c08   # git ref "remi"
   export OLD_TREE=$PWD/../remi-baseline OLD_PY=$PWD/../remi-oldenv/bin/python
   uv venv --python 3.13 ../remi-oldenv
   # Gradio 4.40 with the old tree's pins of the packages it shares (newer huggingface-hub lacks HfFolder)
@@ -1235,7 +1235,7 @@ all on disk. The first runs below were made before that change, with network
 access; the flag skips only that download check. Rerun offline on
 2026-10-21 (verify stage, `startup.py --runs 5`, both trees with
 `--ad-no-huggingface` and `HF_HUB_OFFLINE=1`, the old tree an export of
-`d5a71cad` run by a Gradio 4.40 interpreter; load average 4–7 from other
+`d23761c08` run by a Gradio 4.40 interpreter; load average 4–7 from other
 sessions; raw `perf-data/2026-10-21/verify/startup.json`): no start hung,
 every start answered.
 

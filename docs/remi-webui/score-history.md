@@ -18,8 +18,8 @@ least 90.
 | 9 Security | 88 | 81 | 94 | 94 | **97** |
 | 10 Documentation and upstream absorption | 73 | 85 | 93 | 96 | **91** (rescored after doc fixes) |
 
-Round 5 was scored at commit `63614d3f`; dimensions 1 and 10 were rescored at
-`7d00df65` after the layering and documentation fixes.
+Round 5 was scored at commit `11921e767`; dimensions 1 and 10 were rescored at
+`8fee2e6f2` after the layering and documentation fixes.
 
 ## Remaining known deductions (round 5)
 

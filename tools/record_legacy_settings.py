@@ -32,7 +32,7 @@ import warnings
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-LEGACY_REV = "d5a71cad"
+LEGACY_REV = "d23761c08"
 SOURCES = ("extensions-builtin", "scripts", "modules/processing_scripts")
 OUT = ROOT / "tests" / "fixtures" / "legacy_ui" / "extension_settings.json"
 REGISTRATION_CALLS = {"add_option", "register_language_option"}

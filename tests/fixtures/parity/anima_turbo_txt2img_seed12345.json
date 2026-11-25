@@ -16,5 +16,5 @@
     "qwen_3_06b_base.safetensors",
     "qwen_image_vae.safetensors"
   ],
-  "note": "Pre-rewrite baseline (git ref remi, d5a71cad, Gradio UI) generated through /sdapi/v1/txt2img on Apple M4 / MPS; the rewrite must reproduce it pixel-identically."
+  "note": "Pre-rewrite baseline (git ref remi, d23761c08, Gradio UI) generated through /sdapi/v1/txt2img on Apple M4 / MPS; the rewrite must reproduce it pixel-identically."
 }

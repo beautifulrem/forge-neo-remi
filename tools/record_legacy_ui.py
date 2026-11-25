@@ -76,12 +76,12 @@ from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 TABS = ("txt2img", "img2img")
-LEGACY_REV = "9c96c45ee561487d2c4baa6900a885d3a71affe5"
+LEGACY_REV = "5d1e0f1dced47a727457810e560f4a52795dff99"
 """The last revision with the Gradio UI (``modules/ui*.py``, ``remi/ui/legacy.py``):
-the parent of 2b45c9b9, which removed it."""
-GRADIO_LAUNCHER_REV = "fa02febfe42a0df93ffb15e1d52781ce9fa1928e"
+the parent of e2a823f51, which removed it."""
+GRADIO_LAUNCHER_REV = "0721c8fcba4dd6a657cc40073360422c041ef64f"
 """The last revision whose launcher installed Gradio (``modules/launch_utils.py``,
-``GRADIO_PACKAGE``): the parent of 80cfa274, which stopped installing it. The
+``GRADIO_PACKAGE``): the parent of 2242b2092, which stopped installing it. The
 recorder's environment takes its Gradio pins from there."""
 LEGACY_ENV_PINS = {"pillow": "Pillow==10.4.0", "pillow-heif": "pillow-heif==0.22.0", "pillow-jxl-plugin": "pillow-jxl-plugin==1.3.8"}
 """Replace ``LEGACY_REV``'s Pillow pins (12.x, which that Gradio cannot be installed
@@ -89,7 +89,7 @@ next to: it requires ``pillow<11``): the last Pillow 10 and the last releases of
 the Pillow plugins the legacy ``modules/images.py`` imports that support it."""
 LEGACY_ENV_EXTRA = ("socksio==1.0.0",)
 """Added: httpx (Gradio's client) needs socksio when ALL_PROXY / HTTPS_PROXY is a socks5:// proxy."""
-SELF_TEST = ("extensions-builtin/sd_forge_spectrum/scripts/spectrum.py", "0cf62dd0e8431e3a48827e5d6f739aa96d5601ba")
+SELF_TEST = ("extensions-builtin/sd_forge_spectrum/scripts/spectrum.py", "a42831ffb9245507ef33b81d92742af9a818f411")
 """``--self-test``: a script and the revision before its port (the last commit of
 its Gradio ``ui()``), whose recording must equal its committed fixtures."""
 WIRING_KEYS = ("exclusive", "visible_if", "enabled_if")

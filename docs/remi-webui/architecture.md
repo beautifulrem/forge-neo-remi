@@ -713,7 +713,7 @@ colour, gallery height, …) were removed — frontend.md ("Gradio-era settings
 that were removed") lists each with the SPA control that replaces it;
 `tests/test_remi_option_consumers.py` fails when a setting has no reader (its `KEPT` list, empty today, would name
 any setting kept on purpose with its reason). The settings the built-in extensions and scripts registered
-before the rewrite (105, recorded from the revision the rewrite starts from, `d5a71cad`, by `tools/record_legacy_settings.py` into
+before the rewrite (105, recorded from the revision the rewrite starts from, `d23761c08`, by `tools/record_legacy_settings.py` into
 `tests/fixtures/legacy_ui/extension_settings.json`) are each still a setting after a real startup, or a row
 of the "Not carried over" table in the extension's README with its reason (and named in its Chinese README):
 `tests/test_remi_extension_settings.py`. The 27 not carried over are 17 of tagcomplete's (completion runs on
