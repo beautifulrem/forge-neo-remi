@@ -112,7 +112,10 @@ class ScriptPostprocessingUpscale(scripts_postprocessing.ScriptPostprocessing):
     def upscaler_scale(self, ctx, values):
         """With ``set_scale_by_when_changing_upscaler``, "Resize" follows the scale in the upscaler's name."""
 
-        scale = scale_from_name(values.get("upscaler_1_name")) if shared.opts.set_scale_by_when_changing_upscaler else None
+        name = values.get("upscaler_1_name")
+        if name is not None and not isinstance(name, str):  # an API client's value: refused like a submitted one
+            raise ui.ValidationError([ui.ParamError(ui.Sentence("expected text, got {{type}}", type=type(name).__name__), owner=ctx.owner or None, param="upscaler_1_name")])
+        scale = scale_from_name(name) if shared.opts.set_scale_by_when_changing_upscaler else None
         return {} if scale is None else {"upscale_by": ui.update(value=scale)}
 
     def _upscale(

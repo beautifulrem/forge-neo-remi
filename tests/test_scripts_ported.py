@@ -159,6 +159,24 @@ def test_upscale_tabs_actions_and_kwargs(webui, monkeypatch):
     assert ui.evaluate(layout.by_name["upscaler_2_name"].enabled_if, {"upscaler_2_visibility": 0.5}.get)
 
 
+def test_upscaler_scale_refuses_a_name_that_is_not_text(webui, monkeypatch):
+    """An API client's ``{"upscaler_1_name": 5}`` is a 422 naming the param, not a 500."""
+
+    from modules import shared
+
+    operation, _layout = operation_layout(load("postprocessing_upscale"), "ScriptPostprocessingUpscale")
+    monkeypatch.setattr(shared.opts, "set_scale_by_when_changing_upscaler", True, raising=False)
+    ctx = ui.ActionContext(tab="extras", owner="upscale")
+    for bad in (5, ["4x-UltraSharp"], {"name": "x"}):
+        with pytest.raises(ui.ValidationError) as refused:
+            ui.call_action(operation, "upscaler_scale", ctx, {"upscaler_1_name": bad})
+        [error] = refused.value.to_json()["errors"]
+        assert (error["owner"], error["param"], error["template"]) == ("upscale", "upscaler_1_name", "expected text, got {{type}}")
+    # None (no upscaler chosen) and a name without a scale change nothing
+    assert ui.call_action(operation, "upscaler_scale", ctx, {"upscaler_1_name": None}) == {}
+    assert ui.call_action(operation, "upscaler_scale", ctx, {}) == {}
+
+
 def test_extras_runner_passes_named_values(webui):
     """Extras operations receive keyword arguments named after their params."""
 
