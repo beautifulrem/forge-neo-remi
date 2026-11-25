@@ -105,6 +105,47 @@ def test_a_held_pick_applies_when_the_generation_ends_with_nothing_queued(applie
     assert model_selection.held() == {}
 
 
+def test_a_pick_the_settings_already_show_is_no_change_while_a_job_runs(applied, monkeypatch):
+    """Held while a generation runs, every pick counted as a change, so posting back the model
+    the settings show (a client sending what GET answered) announced options.changed for
+    nothing. The pick the settings show (the stored one, or the one already held) is none."""
+    from modules.call_queue import queue_lock
+
+    monkeypatch.setattr(model_selection, "_start_waiter", lambda: None)
+    with queue_lock:
+        assert model_selection.select("sd_model_checkpoint", "first.safetensors") is False  # the stored one
+        assert model_selection.held() == {}
+        assert model_selection.select("sd_model_checkpoint", "second.safetensors") is True
+        assert model_selection.select("sd_model_checkpoint", "second.safetensors") is False  # already held
+        assert model_selection.select("sd_model_checkpoint", "first.safetensors") is True  # back to the stored one
+    assert applied == []
+
+
+def test_sdapi_options_announce_no_change_for_the_model_shown(applied, monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from modules import sd_models
+    from modules.call_queue import queue_lock
+    from remi.jobs import run_inline
+    from remi.server import Services, create_app
+    from remi.server.auth import Auth
+
+    monkeypatch.setattr(model_selection, "_start_waiter", lambda: None)
+    monkeypatch.setattr(sd_models, "checkpoint_aliases", {"first.safetensors": object(), "second.safetensors": object()})
+    services = Services.create(tmp_path, dispatch=run_inline, realtime=False, housekeeping=False)
+    events: list[dict] = []
+    unsubscribe = services.bus.subscribe(type("R", (), {"send_event": lambda self, event: events.append(event), "send_frame": lambda self, frame: None})())
+    try:
+        app = create_app(services=services, auth=Auth(), sdapi=True, start_services=False)
+        with TestClient(app, base_url="http://127.0.0.1:7860") as client, queue_lock:
+            assert client.post("/sdapi/v1/options", json={"sd_model_checkpoint": "first.safetensors"}).status_code == 200
+            assert client.post("/sdapi/v1/options", json={"sd_model_checkpoint": "second.safetensors"}).status_code == 200
+    finally:
+        unsubscribe()
+        services.close()
+    assert [event["keys"] for event in events if event["type"] == "options.changed"] == [["sd_model_checkpoint"]]
+
+
 def test_other_settings_of_the_same_request_apply_at_once(applied, tmp_path, monkeypatch):
     from modules import shared
     from modules.call_queue import queue_lock

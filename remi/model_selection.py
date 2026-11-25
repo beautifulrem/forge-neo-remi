@@ -142,7 +142,8 @@ def select(key: str, value: Any, apply: Callable[[str, Any], bool] | None = None
     ``Options.set`` does, also when the pick would be held: the waiter's
     later apply failed there, only logged, after the request had answered
     as if it worked. The stored pick sent again (a client posting back what
-    ``GET /sdapi/v1/options`` answered) is no change and passes."""
+    ``GET /sdapi/v1/options`` answered) is no change and passes; held, so is
+    the pick the settings show already (the stored one, or the one held)."""
 
     _check_not_frozen(key, value)
     lock = _generation_lock()
@@ -155,10 +156,24 @@ def select(key: str, value: Any, apply: Callable[[str, Any], bool] | None = None
             lock.release()
     value = _as_stored(key, value)
     with _guard:
+        if _same_pick(value, _held[key] if key in _held else _stored(key)):
+            return False  # the pick the settings show already (the stored one, or the one held)
         _held[key] = value
         _start_waiter()
     log.info("Model selection %s=%r held until the running generation ends", key, value)
     return True
+
+
+def _stored(key: str) -> Any:
+    from modules import shared
+
+    return shared.opts.data.get(key)
+
+
+def _same_pick(value: Any, shown: Any) -> bool:
+    if isinstance(value, list) and isinstance(shown, list) and all(isinstance(item, str) for item in value + shown):
+        return sorted(value) == sorted(shown)  # modules in another order (modules_change sorts them)
+    return value == shown
 
 
 def frozen_pick(key: str, value: Any) -> str | None:
@@ -166,14 +181,10 @@ def frozen_pick(key: str, value: Any) -> str | None:
     ``--freeze-settings*``), or None. The stored value sent again is no
     change. ``/sdapi/v1/options`` refuses such a pick with the request's
     other refused values (422) before anything is set."""
-
     from modules import shared
     from remi.setting_values import frozen_reason
 
-    stored = shared.opts.data.get(key)
-    if isinstance(value, list) and isinstance(stored, list) and all(isinstance(item, str) for item in value + stored):
-        value, stored = sorted(value), sorted(stored)  # modules in another order (modules_change sorts them)
-    if value == stored:  # unchanged: Options.set and the model manager leave it as it is
+    if _same_pick(value, shared.opts.data.get(key)):  # unchanged: Options.set and the model manager leave it as it is
         return None
     return frozen_reason(shared.opts, key, shared.cmd_opts)
 
