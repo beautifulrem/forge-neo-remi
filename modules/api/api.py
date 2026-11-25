@@ -719,8 +719,7 @@ class Api:
             if value is not None and model_selection.select(key, value):  # applied now (and saved) when no generation runs
                 changed.append(key)
         # Remi: announced as PATCH /api/v2/options announces a change, or open pages keep the old values
-        services = getattr(self.app.state, "services", None)
-        if changed and services is not None:
+        if changed and (services := getattr(self.app.state, "services", None)) is not None:
             services.bus.publish("options.changed", keys=sorted(set(changed)))
 
     def get_cmd_flags(self):
