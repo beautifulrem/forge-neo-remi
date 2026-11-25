@@ -135,6 +135,7 @@ function BoxView({
 
   const field = (name: Field) => {
     const invalid = missing.has(`item:${item.id}:${name}`)
+    const value = name === "caption" ? item.caption : item.text
     return (
       <textarea
         aria-label={name === "caption" ? t("Box {{n}} caption", { n: index + 1 }) : t("Box {{n}} text", { n: index + 1 })}
@@ -144,11 +145,14 @@ function BoxView({
         tabIndex={-1}
         spellCheck={false}
         placeholder={name === "caption" ? t("Caption") : t("Text to render")}
-        value={name === "caption" ? item.caption : item.text}
+        value={value}
         onDoubleClick={() => onEditField({ kind: "item", id: item.id, field: name })}
         className={cn(
           "m-1.5 min-h-0 min-w-0 flex-1 resize-none overflow-hidden rounded-sm bg-background/50 px-1.5 py-0.5 leading-normal text-foreground outline-none placeholder:text-muted-foreground",
           "cursor-move text-[length:calc(0.875rem*var(--jb-text-scale))] select-none",
+          // a text area breaks a word that does not fit its line: the placeholder ("Caption") wraps
+          // between words only, and a box narrower than a word cuts it at its edge
+          !value && "wrap-normal",
           invalid && "ring-2 ring-destructive",
         )}
       />

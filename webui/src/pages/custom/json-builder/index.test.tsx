@@ -79,6 +79,19 @@ describe("JSON Builder page", () => {
     expect(canvas.className.split(" ")).toContain("min-h-[min(16rem,max(10rem,calc(100cqh-var(--pinned-bottom,0px)-var(--spacing)*4)))]")
   })
 
+
+  // A box narrower than its placeholder broke the word inside it ("Capti" / "on"): the placeholder
+  // wraps between words only; what the user wrote still breaks anywhere rather than overflow.
+  it("never breaks a placeholder word inside a box", () => {
+    renderPage()
+    const caption = () => within(screen.getByTestId("json-builder-canvas")).getByLabelText("Box 1 caption")
+    expect(caption()).toHaveAttribute("placeholder", "Caption")
+    expect(caption().className.split(/\s+/)).toContain("wrap-normal")
+    fireEvent.change(screen.getByLabelText("Caption of item 1"), { target: { value: "a lantern" } })
+    expect(caption()).toHaveValue("a lantern")
+    expect(caption().className.split(/\s+/)).not.toContain("wrap-normal")
+  })
+
   it("marks the empty fields instead of sending", () => {
     const load = getFormStore("txt2img").getState()
     load.load(tabOwners(tabSchema("txt2img")))
