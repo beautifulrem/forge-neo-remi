@@ -457,6 +457,9 @@ def test_every_refused_request_is_a_catalog_sentence(catalog):
         "no translation provider is configured",
         "too much text to translate at once",
         "reference_images[{{index}}] is too large ({{width}}×{{height}})",
+        # an upsample whose reference image is gone (404) or whose local model path is hidden (403)
+        "no reference image {{id}}",
+        "local_model_path is disabled under --hide-ui-dir-config",
         # a service that failed (502): what Remi saw, the service's own words as a value
         "translation service unreachable: {{error}}",
         "translation service answered {{status}}: {{answer}}",

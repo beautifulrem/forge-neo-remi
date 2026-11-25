@@ -982,7 +982,8 @@ def test_a_prompt_tool_says_why_it_cannot_run_in_a_sentence_the_ui_translates(se
     its English detail alone, which the UI could only say by the status ("The text is too long."
     for an image that was too large): it is a refused request with the sentence's template and
     values. So is a service that failed (502), what Remi saw ("unreachable", "an empty prompt"),
-    whose own words are one of the values: the UI showed that sentence in English."""
+    whose own words are one of the values: the UI showed that sentence in English; and so is a
+    reference image that is gone (404)."""
 
     import base64
     import io
@@ -998,6 +999,7 @@ def test_a_prompt_tool_says_why_it_cannot_run_in_a_sentence_the_ui_translates(se
         assert response.json() == {"detail": response.json()["detail"], "template": template, "params": params}
 
     refused(server.client.post(f"{api}/translate", json={"texts": ["长发"]}), 409, "no translation provider is configured")
+    refused(server.client.post(f"{api}/upsample", json={"prompt": "a cat", "reference_file_ids": ["gone"]}), 404, "no reference image {{id}}", id="'gone'")
     refused(server.client.post(f"{api}/generate", json={"description": "a cat"}), 409, "writing prompts needs the OpenAI-compatible translation provider with its URL and model")
     monkeypatch.setitem(webui.opts.data, "prompt_tools_translation_provider", "dictionary")
     refused(server.client.post(f"{api}/translate", json={"texts": ["a" * 10_001, "b" * 10_000]}), 413, "too much text to translate at once")
@@ -1057,7 +1059,9 @@ def test_upsample_loads_a_local_model_path_only_without_hide_ui_dir_config(serve
     body = {"prompt": "a cat", "local_model_path": "/srv/models/qwen.gguf"}
     monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", True)
     refused = server.client.post("/api/v2/prompt-tools/upsample", json=body)
-    assert refused.status_code == 403 and "--hide-ui-dir-config" in refused.json()["detail"] and calls == []
+    # a refused request with its sentence, as a pipeline's upsample stage says it
+    sentence = "local_model_path is disabled under --hide-ui-dir-config"
+    assert refused.status_code == 403 and refused.json() == {"detail": sentence, "template": sentence, "params": {}} and calls == []
     assert server.client.post("/api/v2/prompt-tools/upsample", json={"prompt": "a cat"}).json()["prompt"] == "a cat, detailed"
     monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", False)
     assert server.client.post("/api/v2/prompt-tools/upsample", json=body).json()["prompt"] == "a cat, detailed"

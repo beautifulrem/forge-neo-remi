@@ -225,6 +225,30 @@ describe("PupTrigger & lazy PupUpsamplerDialog", () => {
     }
   }, 20_000)
 
+  // A reference image deleted meanwhile read "It is no longer there.": the dialog names it in the
+  // user's words, as the server names it only by its id ("no reference image 'f1'").
+  it("says that a reference image is gone in the user's words", async () => {
+    const detail = "no reference image 'f1'"
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ detail, template: "no reference image {{id}}", params: { id: "'f1'" } }), { status: 404, headers: { "Content-Type": "application/json" } }),
+    )
+    const store = createFormStore("pup-ui-gone", { persistDrafts: false })
+    store.getState().load(tabOwners(tabSchema("txt2img")))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(keys.app, bootstrapWith({ forge_preset: "flux3", sd_model_checkpoint: "flux3-klein.safetensors" }))
+    render(
+      <QueryClientProvider client={client}>
+        <FormProvider formId="txt2img" store={store}>
+          <PupTrigger value="orange cat" setValue={vi.fn()} />
+        </FormProvider>
+      </QueryClientProvider>,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Upsample prompt (PUP)" }))
+    await screen.findByRole("dialog", {}, { timeout: 15_000 })
+    fireEvent.click(screen.getByRole("button", { name: "Upsample" }))
+    expect(await screen.findByText("The image is no longer there.")).toBeVisible()
+  }, 20_000)
+
   // On a phone the footer's own row of Close and Apply (and the Revert beside it) kept DialogFooter from
   // stacking its buttons full width: each group is a column below sm, as the footer is.
   describe("footer on a phone", () => {

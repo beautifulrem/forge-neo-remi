@@ -388,7 +388,7 @@ def upsample(body: PromptUpsampleRequest, tools: ToolsDep, services: ServicesDep
     for file_id in body.reference_file_ids:
         record = services.files.get(file_id)
         if record is None or not record.is_image:
-            raise HTTPException(status_code=404, detail=f"no reference image {file_id!r}")
+            raise Refused(Sentence("no reference image {{id}}", id=repr(file_id)), 404)
         resolved_refs.append(record.path)
     for item in body.reference_images:
         if not isinstance(item, str) or not item.startswith("data:image/"):
@@ -398,7 +398,7 @@ def upsample(body: PromptUpsampleRequest, tools: ToolsDep, services: ServicesDep
         from modules import shared
 
         if getattr(shared.cmd_opts, "hide_ui_dir_config", False):
-            raise HTTPException(status_code=403, detail="local_model_path is disabled under --hide-ui-dir-config")
+            raise Refused(Sentence("local_model_path is disabled under --hide-ui-dir-config"), 403)
     elif not pt.registry.tools_enabled:
         # the endpoint is the prompt tools' provider: off with them, as translating and writing are
         raise Refused(Sentence("the prompt tools are disabled"))

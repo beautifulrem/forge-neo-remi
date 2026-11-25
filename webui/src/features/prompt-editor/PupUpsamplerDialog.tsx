@@ -268,7 +268,8 @@ export default function PupUpsamplerDialog({ open, onOpenChange, value, previous
 
           {failed ? (
             <p role="alert" className="text-sm text-destructive">
-              {serviceFailureText(failed.error, {}, i18n.language)}
+              {/* a reference image deleted meanwhile: the server names it only by its id */}
+              {serviceFailureText(failed.error, { 404: t("The image is no longer there.") }, i18n.language)}
             </p>
           ) : null}
 

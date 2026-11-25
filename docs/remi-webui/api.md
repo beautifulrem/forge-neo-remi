@@ -339,6 +339,9 @@ A value a tool itself refuses (`/generate`: a blank description;
 `reference_images` entry, a `local_model_path` that does not exist) is listed
 as in any other 422 (`{"errors": [...]}`, `owner` null and `param` the
 request field), with the `template` and `params` that translate it.
+`/upsample` also answers 404 for a `reference_file_ids` entry that is not
+an image on the server and 403 for a `local_model_path` under
+`--hide-ui-dir-config`, each with its sentence's `template` and `params`.
 
 `/internal/ping` answers `{"instance"}` (an id that changes with every
 reload or restart), `/internal/progress` and `/internal/pending-tasks` keep
