@@ -868,8 +868,7 @@ test("the recipe capture dialog keeps its height while it reads a form, and when
     { path: "^/schema/txt2img$", delay: 1500 },
     { path: "^/schema/img2img$", status: 404 },
   ])
-  await openRoute(page, "queue")
-  await page.getByRole("tab", { name: "Recipes" }).click()
+  await openRoute(page, "queue?view=recipes")
   await page.getByRole("button", { name: "Capture from form" }).click()
   const dialog = page.getByRole("dialog")
   await expect(dialog).toBeVisible()
@@ -882,6 +881,31 @@ test("the recipe capture dialog keeps its height while it reads a form, and when
   const failed = (await dialog.boundingBox())!.height
   expect(Math.abs(read - reading), "found no changes").toBeLessThanOrEqual(1)
   expect(Math.abs(failed - reading), "failed").toBeLessThanOrEqual(1)
+})
+
+// At 390 the capture dialog's model family and tags fields shared a row and cut their placeholders.
+test("the recipe capture dialog's fields show their placeholders on a phone", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openRoute(page, "queue?view=recipes")
+  await page.getByRole("button", { name: "Capture from form" }).click()
+  const dialog = page.getByRole("dialog")
+  for (const name of ["Model family", "Tags (comma-separated)"]) {
+    const field = dialog.getByRole("textbox", { name })
+    await expect(field).toBeVisible()
+    const cut = await field.evaluate((input: HTMLInputElement) => {
+      const probe = document.createElement("span")
+      const style = getComputedStyle(input)
+      probe.style.font = style.font
+      probe.style.position = "absolute"
+      probe.style.whiteSpace = "pre"
+      probe.textContent = input.placeholder
+      document.body.append(probe)
+      const text = probe.getBoundingClientRect().width
+      probe.remove()
+      return text - (input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight))
+    })
+    expect(cut, `${name}: px of its placeholder cut off`).toBeLessThanOrEqual(0)
+  }
 })
 
 // A section's enable switch has a wide after: box; it reached 4 px into the section's title, so a tap at

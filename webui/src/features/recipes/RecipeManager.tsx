@@ -417,7 +417,8 @@ export function RecipeManager() {
               {t("Description")}
               <Input value={description} onChange={(event) => setDescription(event.target.value)} placeholder={t("Description")} className="h-8" />
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            {/* one column on a phone: side by side the fields cut their placeholders */}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <label className="flex flex-col gap-1 text-xs font-medium">
                 {t("Model family")}
                 <Input value={modelFamily} onChange={(event) => setModelFamily(event.target.value)} placeholder="anima / qwen21 / flux3" className="h-8" />

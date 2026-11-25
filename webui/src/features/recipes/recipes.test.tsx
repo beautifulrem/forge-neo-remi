@@ -232,6 +232,20 @@ describe("Recipes capture and manager UI", () => {
     expect(slot()).toHaveClass("h-28")
   })
 
+  it("stacks the model family and tags fields on a phone, where two columns cut their placeholders", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ items: [], total: 0 }), { status: 200, headers: { "Content-Type": "application/json" } }))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole("button", { name: "Capture from form" }))
+    const row = screen.getByRole("textbox", { name: "Model family" }).closest("label")!.parentElement!
+    expect(row).toContainElement(screen.getByRole("textbox", { name: "Tags (comma-separated)" }))
+    expect(row).toHaveClass("grid", "grid-cols-1", "sm:grid-cols-2")
+    expect(row).not.toHaveClass("grid-cols-2")
+  })
+
   it("names the export when it fails", async () => {
     const { toast } = await import("sonner")
     const error = vi.spyOn(toast, "error")
