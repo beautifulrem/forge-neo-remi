@@ -21,23 +21,23 @@ export type LayoutDraft = {
 function normalizeDraft(value: unknown): LayoutDraft {
   check(isObject(value), "Draft must be an object")
   const { width, height } = value
-  for (const [name, dim] of [
+  for (const [field, dim] of [
     ["width", width],
     ["height", height],
   ] as const) {
-    check(typeof dim === "number" && Number.isFinite(dim) && dim > 0, `${name} must be a positive number`)
+    check(typeof dim === "number" && Number.isFinite(dim) && dim > 0, "{{field}} must be a positive number", { field })
   }
 
   const summary = value.summary
-  check(isObject(summary), "summary must be an object")
-  check(typeof summary.caption === "string" && summary.caption.trim().length > 0, "summary.caption must be nonempty text")
+  check(isObject(summary), "{{location}} must be an object", { location: "summary" })
+  check(typeof summary.caption === "string" && summary.caption.trim().length > 0, "{{location}} must be nonempty text", { location: "summary.caption" })
   const canvas = summary.canvas === undefined ? "single" : summary.canvas
   check((CANVAS_TYPES as readonly unknown[]).includes(canvas), "summary.canvas must be single, multi_panel or collage")
   let meta: string[] = []
   if (summary.meta !== undefined) {
-    check(Array.isArray(summary.meta), "summary.meta must be an array")
+    check(Array.isArray(summary.meta), "{{location}} must be an array", { location: "summary.meta" })
     meta = summary.meta.map((entry: unknown, index) => {
-      check(typeof entry === "string" && entry.trim().length > 0, `summary.meta[${index}] must be nonempty text`)
+      check(typeof entry === "string" && entry.trim().length > 0, "{{location}} must be nonempty text", { location: `summary.meta[${index}]` })
       return entry
     })
   }
@@ -46,20 +46,21 @@ function normalizeDraft(value: unknown): LayoutDraft {
   check(Array.isArray(items) && items.length > 0, "items must be a nonempty array")
   const cleanItems = items.map((item: unknown, index) => {
     const location = `items[${index}]`
-    check(isObject(item), `${location} must be an object`)
-    check((LABELS as readonly unknown[]).includes(item.label), `${location}.label must be object, character or text`)
-    check(typeof item.caption === "string" && item.caption.trim().length > 0, `${location}.caption must be nonempty text`)
+    check(isObject(item), "{{location}} must be an object", { location })
+    check((LABELS as readonly unknown[]).includes(item.label), "{{location}} must be object, character or text", { location: `${location}.label` })
+    check(typeof item.caption === "string" && item.caption.trim().length > 0, "{{location}} must be nonempty text", { location: `${location}.caption` })
     const box = item.bbox
-    check(Array.isArray(box) && box.length === 4, `${location}.bbox must be [x1,y1,x2,y2]`)
+    check(Array.isArray(box) && box.length === 4, "{{location}} must be [x1,y1,x2,y2]", { location: `${location}.bbox` })
     check(
       box.every((v) => typeof v === "number" && Number.isFinite(v)),
-      `${location}.bbox must contain four finite numbers`,
+      "{{location}} must contain four finite numbers",
+      { location: `${location}.bbox` },
     )
     const bbox = box.slice() as Box
-    check(bbox[0] < bbox[2] && bbox[1] < bbox[3], `${location}.bbox must have positive width and height`)
+    check(bbox[0] < bbox[2] && bbox[1] < bbox[3], "{{location}} must have positive width and height", { location: `${location}.bbox` })
     const clean: LayoutDraft["items"][number] = { label: item.label as Label, caption: item.caption, bbox }
     if (item.label === "text") {
-      check(typeof item.text === "string" && item.text.trim().length > 0, `${location}.text must be nonempty text`)
+      check(typeof item.text === "string" && item.text.trim().length > 0, "{{location}} must be nonempty text", { location: `${location}.text` })
       clean.text = item.text
     }
     return clean
@@ -114,12 +115,13 @@ export function decompilePrompt(input: unknown, width: number, height: number): 
   const halfWidth = Math.floor(width / 2)
   const halfHeight = Math.floor(height / 2)
   const items = draft.items.map((item: unknown, index) => {
-    check(isObject(item), `items[${index}] must be an object`)
+    check(isObject(item), "{{location}} must be an object", { location: `items[${index}]` })
     const box = item.bbox
-    check(Array.isArray(box) && box.length === 4, `items[${index}].bbox must be [y1,x1,y2,x2]`)
+    check(Array.isArray(box) && box.length === 4, "{{location}} must be [y1,x1,y2,x2]", { location: `items[${index}].bbox` })
     check(
       box.every((v) => typeof v === "number" && Number.isFinite(v)),
-      `items[${index}].bbox must contain four finite numbers`,
+      "{{location}} must contain four finite numbers",
+      { location: `items[${index}].bbox` },
     )
     const [y1, x1, y2, x2] = box as [number, number, number, number]
     return { ...item, bbox: [x1 + halfWidth, y1 + halfHeight, x2 + halfWidth, y2 + halfHeight] }

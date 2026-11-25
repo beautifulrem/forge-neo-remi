@@ -139,12 +139,12 @@ export function buildVglDocument(state: DraftLike): VglDocument {
   for (let i = 0; i < state.items.length; i++) {
     const item = state.items[i]!
     const desc = flat(item.caption)
-    check(desc.length > 0, `Item ${i + 1} needs a caption`)
+    check(desc.length > 0, "Item {{n}} needs a caption", { n: i + 1 })
     const location = describeBoxLocation(item.bbox, state.width, state.height)
     const relative_size = describeRelativeSize(item.bbox, state.width, state.height)
     if (item.label === "text") {
       const wording = item.text.trim()
-      check(wording.length > 0, `Item ${i + 1} needs the text to render`)
+      check(wording.length > 0, "Item {{n}} needs the text to render", { n: i + 1 })
       textRender.push({ text: wording, description: desc, location })
       objects.push({
         description: `Text reading "${wording}", ${desc}`,
@@ -252,7 +252,7 @@ export function decompileVglPrompt(
 
   const items = objects.map((obj, index) => {
     const rawDesc = typeof obj.description === "string" ? flat(obj.description) : ""
-    check(rawDesc.length > 0, `Object ${index + 1} needs a description`)
+    check(rawDesc.length > 0, "Object {{n}} needs a description", { n: index + 1 })
     const location = typeof obj.location === "string" ? obj.location : undefined
     const size = typeof obj.relative_size === "string" ? obj.relative_size : undefined
     const relationship = typeof obj.relationship === "string" ? obj.relationship.toLowerCase() : ""

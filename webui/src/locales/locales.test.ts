@@ -3,10 +3,11 @@
  * docs/remi-webui/frontend.md asks them to be written: literal `t("…")`
  * calls, the values of constant maps translated at render (`t(NAMES[key])`),
  * plus `label:` / `group:` / `title=` / `description=` literals in the files
- * that pass English strings to `t()` indirectly.
+ * that pass English strings to `t()` indirectly, and the JSON Builder's messages.
  */
 import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import ts from "typescript"
 import { describe, expect, it } from "vitest"
 import en from "./en.json"
 import zh from "./zh-CN.json"
@@ -64,8 +65,48 @@ function mapLabels(source: string): string[] {
   return labels
 }
 
-function chromeKeys(): Set<string> {
+/**
+ * The JSON Builder's messages (`pages/custom/json-builder/`), translated where they are shown: the
+ * template of each `check(condition, "…", values)` and `new DraftError("…", values)`, and each
+ * `word("…")` value. `wrong` lists, as `file:line`, a message that is not a plain string (an
+ * English text built in place cannot be translated) or whose values do not fill its placeholders.
+ */
+function builderMessages(): { keys: Set<string>; wrong: string[] } {
   const keys = new Set<string>()
+  const wrong: string[] = []
+  for (const [path, source] of Object.entries(sources)) {
+    if (!path.includes("/pages/custom/json-builder/")) continue
+    const sf = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
+    const visit = (node: ts.Node) => {
+      if (ts.isFunctionDeclaration(node) && node.name?.text === "check") return // hands its message on
+      const called = ts.isCallExpression(node) || ts.isNewExpression(node) ? node : undefined
+      const name = called && ts.isIdentifier(called.expression) ? called.expression.text : ""
+      const args = called?.arguments ?? []
+      const where = () => `${path.replace(/^\.\.\//, "")}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}`
+      if ((name === "check" && ts.isCallExpression(node)) || (name === "DraftError" && ts.isNewExpression(node))) {
+        const [message, values] = name === "check" ? args.slice(1) : args
+        if (!message || !ts.isStringLiteral(message)) wrong.push(`${where()}: not a plain string`)
+        else {
+          keys.add(message.text)
+          const placeholders = [...message.text.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]!)
+          const given = values === undefined ? [] : ts.isObjectLiteralExpression(values) ? values.properties.map((p) => (p.name && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) ? p.name.text : "?")) : ["?"]
+          if ([...new Set(placeholders)].sort().join() !== given.sort().join()) wrong.push(`${where()}: "${message.text}" given {${given.join(", ")}}`)
+        }
+      }
+      if (name === "word" && ts.isCallExpression(node)) {
+        const [text] = args
+        if (text && ts.isStringLiteral(text)) keys.add(text.text)
+        else wrong.push(`${where()}: not a plain string`)
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sf)
+  }
+  return { keys, wrong }
+}
+
+function chromeKeys(): Set<string> {
+  const keys = new Set<string>(builderMessages().keys)
   for (const [path, source] of Object.entries(sources)) {
     // `t("…", { ns: … })` names a widget's own catalog (checked by the widget's tests), not chrome;
     // `t("…", { context: "x" })` is the key "…_x" (one English word, two meanings in Chinese).
@@ -98,6 +139,17 @@ describe("zh-CN chrome catalog", () => {
       const vars = (s: string) => [...s.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort()
       expect(vars(value), key).toEqual(vars(key))
     }
+  })
+})
+
+describe("JSON Builder messages", () => {
+  // They were English built in place (`${location} must be an object`), shown as they were in a
+  // Chinese UI: a refused draft or prompt to load, the prompt that cannot be built.
+  it("are catalog templates their values fill", () => {
+    const { keys, wrong } = builderMessages()
+    expect(keys).toContain("{{location}} must be an object") // the scan found them
+    expect(keys).toContain("Caption draft")
+    expect(wrong).toEqual([])
   })
 })
 
@@ -247,8 +299,8 @@ const NEVER_ONE: Record<string, string> = {
   "Show all {{count}} tags": "shown only when a model has more tags than the card lists",
   "A zip holds at most {{count}} images: the first {{count}} selected are packed.": "the count is the zip's limit",
 }
-/** Words ending in s after a placeholder that are verbs, not plural nouns. */
-const VERBS = new Set(["is", "was", "has", "needs"])
+/** Words ending in s after a placeholder that are not plural nouns: verbs, and a singular noun ("{{width}}x{{height}} canvas"). */
+const VERBS = new Set(["is", "was", "has", "needs", "exceeds", "canvas"])
 
 describe("English plurals", () => {
   // "{{tokens}} tokens" read "1 tokens", and "{{count}} of {{total}} images match" "1 of 1 images

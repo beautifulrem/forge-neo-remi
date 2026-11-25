@@ -62,12 +62,12 @@ export function flux3Rows(state: DraftLike): Flux3Row[] {
   const rows = new Map<number, Flux3Row>()
   for (const { item, index } of order) {
     const caption = flat(item.caption)
-    check(caption.length > 0, `Item ${index + 1} needs a caption`)
+    check(caption.length > 0, "Item {{n}} needs a caption", { n: index + 1 })
     const n = (counts[item.label] = (counts[item.label] ?? 0) + 1)
     let desc = caption
     if (item.label === "text") {
       const wording = item.text.replace(/\r?\n/g, "\\n").trim()
-      check(wording.length > 0, `Item ${index + 1} needs the text to render`)
+      check(wording.length > 0, "Item {{n}} needs the text to render", { n: index + 1 })
       desc = `Text reading "${wording}", ${caption}`
     }
     rows.set(index, { id: `${ID_NOUNS[item.label]}_${n}`, bbox: canvasBox(item.bbox, state.width, state.height), desc })
@@ -140,9 +140,9 @@ export function decompileFlux3Prompt(text: string, width: number, height: number
   const { caption, rows, extra } = splitFlux3Prompt(text)
   if (rows === null || rows.length === 0) throw new DraftError("Not a FLUX.3 layout prompt: no element table at the end")
   const items = rows.map((row, index) => {
-    check(isBoxRow(row), `Row ${index + 1} must have an id, a bbox and a desc`)
+    check(isBoxRow(row), "Row {{n}} must have an id, a bbox and a desc", { n: index + 1 })
     const [y1, x1, y2, x2] = row.bbox.map((v) => clampGrid(v)) as [number, number, number, number]
-    check(y1 < y2 && x1 < x2, `Row ${index + 1}: the box must have a positive size`)
+    check(y1 < y2 && x1 < x2, "Row {{n}}: the box must have a positive size", { n: index + 1 })
     const bbox: Box = [Math.round((x1 / CANVAS) * width), Math.round((y1 / CANVAS) * height), Math.round((x2 / CANVAS) * width), Math.round((y2 / CANVAS) * height)]
     const quoted = /^Text reading "((?:[^"\\]|\\.)*)",\s*/.exec(row.desc)
     if (/(^|_)Text_\d+$/.test(row.id) || quoted) {

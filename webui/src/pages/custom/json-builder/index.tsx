@@ -19,6 +19,7 @@ import { NumberField } from "@/components/ui/number-field"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Segmented } from "@/components/Segmented"
+import { failureText } from "@/features/errors/error-text"
 import { copyText } from "@/features/gallery/files"
 import { deliver } from "@/features/send-to/send-to"
 import { cn } from "@/lib/utils"
@@ -33,6 +34,7 @@ import { LayoutCanvas } from "./LayoutCanvas"
 import { sizeLimit } from "./size-limit"
 import { useBuilder } from "./store"
 import { decompileVglPrompt, isVglPrompt, VGL_LICENSE, VGL_STYLE_MEDIUMS } from "./vgl"
+import { draftErrorText } from "./draft-text"
 import { itemColor } from "./view"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import { retryableLazy } from "@/lib/retryable-lazy"
@@ -42,8 +44,6 @@ import { usePinnedBar } from "@/lib/use-pinned-bar"
 const FieldEditor = retryableLazy(() => import("./FieldEditor").then((m) => ({ default: m.FieldEditor })))
 
 const CANVAS_NAMES: Record<CanvasType, string> = { single: "Single", multi_panel: "Multi-panel", collage: "Collage" }
-
-const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
 function Section({ title, children, className, actions }: { title: string; children: React.ReactNode; className?: string; actions?: React.ReactNode }) {
   return (
@@ -135,7 +135,7 @@ function ResolutionSection() {
 }
 
 function LoadPromptDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const id = useId()
   const load = useBuilder((s) => s.load)
   const set = useBuilder((s) => s.set)
@@ -144,7 +144,8 @@ function LoadPromptDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
   const height = useBuilder((s) => s.height)
   const [text, setText] = useState("")
   const [size, setSize] = useState({ width: 1024, height: 1024 })
-  const [error, setError] = useState<string | null>(null)
+  // what was thrown, said at render in the language shown (`draftErrorText`)
+  const [error, setError] = useState<unknown>(null)
   const [wasOpen, setWasOpen] = useState(open)
   if (open !== wasOpen) {
     setWasOpen(open)
@@ -178,7 +179,7 @@ function LoadPromptDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
       onOpenChange(false)
       toast.success(t("Prompt loaded"))
     } catch (err) {
-      setError(message(err))
+      setError(err)
     }
   }
   // the text box takes the focus through the dialog (`initialFocus`): `autoFocus` made it the place
@@ -206,7 +207,7 @@ function LoadPromptDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
               ref={textRef}
               value={text}
               aria-invalid={error !== null || undefined}
-              aria-describedby={error ? `${id}-error` : undefined}
+              aria-describedby={error !== null ? `${id}-error` : undefined}
               onChange={(event) => {
                 setText(event.target.value)
                 setError(null)
@@ -218,9 +219,9 @@ function LoadPromptDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
               <SizeField id={`${id}-h`} label={t("Height")} value={size.height} onChange={(height) => setSize((s) => ({ ...s, height }))} />
             </div>
           </div>
-          {error ? (
+          {error !== null ? (
             <p id={`${id}-error`} role="alert" className="text-sm break-words text-destructive">
-              {error}
+              {draftErrorText(error, i18n.language)}
             </p>
           ) : null}
           <DialogFooter>
@@ -257,7 +258,7 @@ function FileSection() {
       load(decompilePrompt(await file.text(), Number.NaN, Number.NaN))
       toast.success(t("Layout loaded"))
     } catch (err) {
-      toast.error(t("Could not load {{name}}", { name: file.name }), { description: message(err) })
+      toast.error(t("Could not load {{name}}", { name: file.name }), { description: draftErrorText(err) })
     }
   }
 
@@ -287,7 +288,7 @@ function FileSection() {
       }
       toast.success(t("Prompt loaded from {{target}}", { target }))
     } catch (err) {
-      toast.error(t("Could not load the prompt of {{target}}", { target }), { description: message(err) })
+      toast.error(t("Could not load the prompt of {{target}}", { target }), { description: draftErrorText(err) })
     }
   }
 
@@ -641,7 +642,7 @@ export default function JsonBuilderPage(_props: CustomPageProps) {
     try {
       return finalPrompt(state)
     } catch (err) {
-      toast.error(t("Could not build the prompt"), { description: message(err) })
+      toast.error(t("Could not build the prompt"), { description: draftErrorText(err) })
       return null
     }
   }
@@ -661,7 +662,7 @@ export default function JsonBuilderPage(_props: CustomPageProps) {
         if (limit === null) toast.success(t("Sent to {{target}}", { target }), described)
         else toast.warning(t("Sent to {{target}}, but it accepts at most {{max}} px per side: change the size before generating", { target, max: limit }), described)
       })
-      .catch((err: unknown) => toast.error(t("Could not send to {{target}}", { target }), { description: message(err) }))
+      .catch((err: unknown) => toast.error(t("Could not send to {{target}}", { target }), { description: failureText(err) }))
   }
 
   const copy = () => {

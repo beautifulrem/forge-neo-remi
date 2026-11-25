@@ -13,12 +13,42 @@
  * output is byte for byte upstream's.
  */
 
-export class DraftError extends Error {
-  override name = "DraftError"
+/**
+ * A value of a builder message: data shown as it is (a path such as `items[2].bbox`, a number,
+ * field names as JSON) or, made with {@link word}, English the UI translates.
+ */
+export type DraftValue = string | number | { readonly word: string }
+export type DraftValues = Readonly<Record<string, DraftValue>>
+
+/** A value that is English words (a draft's name), not data: translated where the message is shown. */
+export const word = (text: string): DraftValue => ({ word: text })
+
+/** `template` with its `{{name}}` placeholders filled from `values` (in one pass: a value is never read again). */
+function fill(template: string, values: DraftValues): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (placeholder, name: string) => {
+    const value = values[name]
+    return value === undefined ? placeholder : typeof value === "object" ? value.word : String(value)
+  })
 }
 
-export function check(condition: unknown, message: string): asserts condition {
-  if (!condition) throw new DraftError(message)
+/**
+ * A draft or prompt the builder refuses. `message` is the English sentence (upstream's); the page
+ * says `template`, a catalog key, filled with `values` in the UI language (`./draft-text`).
+ */
+export class DraftError extends Error {
+  override name = "DraftError"
+  readonly template: string
+  readonly values: DraftValues
+
+  constructor(template: string, values: DraftValues = {}) {
+    super(fill(template, values))
+    this.template = template
+    this.values = values
+  }
+}
+
+export function check(condition: unknown, template: string, values?: DraftValues): asserts condition {
+  if (!condition) throw new DraftError(template, values)
 }
 
 type Json = Record<string, unknown>
@@ -29,21 +59,21 @@ export const isObject = (value: unknown): value is Json => value !== null && typ
 
 const has = (value: Json, key: string) => Object.prototype.hasOwnProperty.call(value, key)
 
-function fields(value: unknown, allowed: ReadonlySet<string>, required: ReadonlySet<string>, location: string): asserts value is Json {
-  check(isObject(value), `${location} must be an object`)
+function fields(value: unknown, allowed: ReadonlySet<string>, required: ReadonlySet<string>, location: DraftValue): asserts value is Json {
+  check(isObject(value), "{{location}} must be an object", { location })
   const keys = Object.keys(value)
   const unknown = keys.filter((key) => !allowed.has(key))
   const missing = [...required].filter((key) => !has(value, key))
-  check(unknown.length === 0, `${location}: unknown fields ${JSON.stringify(unknown.sort())}`)
-  check(missing.length === 0, `${location}: missing fields ${JSON.stringify(missing.sort())}`)
+  check(unknown.length === 0, "{{location}}: unknown fields {{fields}}", { location, fields: JSON.stringify(unknown.sort()) })
+  check(missing.length === 0, "{{location}}: missing fields {{fields}}", { location, fields: JSON.stringify(missing.sort()) })
 }
 
 function text(value: unknown, location: string): asserts value is string {
-  check(typeof value === "string" && value.trim().length > 0, `${location} must be nonempty text`)
+  check(typeof value === "string" && value.trim().length > 0, "{{location}} must be nonempty text", { location })
 }
 
 function strings(value: unknown, location: string): void {
-  check(Array.isArray(value), `${location} must be an array`)
+  check(Array.isArray(value), "{{location}} must be an array", { location })
   value.forEach((item, index) => text(item, `${location}[${index}]`))
 }
 
@@ -59,18 +89,19 @@ function pyRound9(value: number): number {
 }
 
 function centeredBox(box: unknown, width: number, height: number, location: string): number[] {
-  check(Array.isArray(box) && box.length === 4, `${location} must be [x1,y1,x2,y2]`)
+  check(Array.isArray(box) && box.length === 4, "{{location}} must be [x1,y1,x2,y2]", { location })
   check(
     box.every((v) => typeof v === "number" && Number.isFinite(v)),
-    `${location} must contain four finite numbers`,
+    "{{location}} must contain four finite numbers",
+    { location },
   )
   const [x1, y1, x2, y2] = box as [number, number, number, number]
-  check(x1 < x2 && y1 < y2, `${location} must have positive width and height`)
-  check(0 <= x1 && x1 < x2 && x2 <= width && 0 <= y1 && y1 < y2 && y2 <= height, `${location} exceeds the ${width}x${height} canvas`)
+  check(x1 < x2 && y1 < y2, "{{location}} must have positive width and height", { location })
+  check(0 <= x1 && x1 < x2 && x2 <= width && 0 <= y1 && y1 < y2 && y2 <= height, "{{location}} exceeds the {{width}}x{{height}} canvas", { location, width, height })
   const halfW = Math.floor(width / 2)
   const halfH = Math.floor(height / 2)
   const result = [Math.floor(pyRound9(y1)) - halfH, Math.floor(pyRound9(x1)) - halfW, Math.ceil(pyRound9(y2)) - halfH, Math.ceil(pyRound9(x2)) - halfW] as [number, number, number, number]
-  check(result[0] < result[2] && result[1] < result[3], `${location} is too small at export precision`)
+  check(result[0] < result[2] && result[1] < result[3], "{{location}} is too small at export precision", { location })
   return result
 }
 
@@ -108,7 +139,7 @@ export function parseUniqueJson(source: string): JsonValue {
         skipWhitespace()
         if (source[pos] !== '"') throw new DraftError("Invalid JSON")
         const key = parseString()
-        check(!keys.has(key), `Duplicate JSON key: ${key}`)
+        check(!keys.has(key), "Duplicate JSON key: {{name}}", { name: key })
         keys.add(key)
         skipWhitespace()
         check(source[pos++] === ":", "Invalid JSON")
@@ -150,7 +181,7 @@ export function parseUniqueJson(source: string): JsonValue {
     // Upstream's port also refuses true / false / null here (`Number("true")` is NaN); the
     // reference compiler parses them and the field checks refuse them: no valid draft has one.
     const literal = token === "true" || token === "false" || token === "null"
-    check(literal || Number.isFinite(Number(token)), `Invalid JSON number: ${token}`)
+    check(literal || Number.isFinite(Number(token)), "Invalid JSON number: {{token}}", { token })
     pos += token.length
   }
 
@@ -174,18 +205,18 @@ export function compilePrompt(input: unknown): string {
   check(isObject(draft), "Draft must be a JSON object")
 
   if (has(draft, "caption")) {
-    fields(draft, new Set(["caption"]), new Set(["caption"]), "Caption draft")
+    fields(draft, new Set(["caption"]), new Set(["caption"]), word("Caption draft"))
     text(draft.caption, "caption")
     return escapeParens(draft.caption)
   }
 
-  fields(draft, ROOT_FIELDS, ROOT_FIELDS, "Layout draft")
+  fields(draft, ROOT_FIELDS, ROOT_FIELDS, word("Layout draft"))
   const { width, height } = draft
-  for (const [name, value] of [
+  for (const [field, value] of [
     ["width", width],
     ["height", height],
   ] as const) {
-    check(Number.isInteger(value) && (value as number) > 0 && (value as number) % 16 === 0, `${name} must be a positive integer multiple of 16`)
+    check(Number.isInteger(value) && (value as number) > 0 && (value as number) % 16 === 0, "{{field}} must be a positive integer multiple of 16", { field })
   }
   const w = width as number
   const h = height as number
@@ -207,9 +238,9 @@ export function compilePrompt(input: unknown): string {
   const compiledItems = items.map((item: unknown, index) => {
     const location = `items[${index}]`
     fields(item, ITEM_FIELDS, ITEM_REQUIRED, location)
-    check((LABELS as readonly unknown[]).includes(item.label), `${location}.label must be object, character or text`)
+    check((LABELS as readonly unknown[]).includes(item.label), "{{location}} must be object, character or text", { location: `${location}.label` })
     text(item.caption, `${location}.caption`)
-    if (item.label === "text") check("text" in item, `${location}: text items require literal text`)
+    if (item.label === "text") check("text" in item, "{{location}}: text items require literal text", { location })
     if ("text" in item) text(item.text, `${location}.text`)
     for (const key of ["tags", "palette"]) {
       if (key in item) strings(item[key], `${location}.${key}`)

@@ -7,6 +7,8 @@ import { tabSchema } from "@/api/mock/fixtures"
 import type { PageInfo } from "@/api/types"
 import { navigate } from "@/app/router"
 import { type ResultItem, useSession } from "@/features/gallery/session-store"
+import { i18n } from "@/i18n"
+import zhCN from "@/locales/zh-CN.json"
 import { getFormStore } from "@/ui/form-store"
 import { tabOwners } from "@/ui/tab"
 import { toast } from "sonner"
@@ -172,6 +174,31 @@ describe("JSON Builder page", () => {
     ])
     expect([s.caption, s.extra]).toEqual(["A cat (orange) on a sofa", "<lora:x:1>"])
     expect(screen.getByLabelText("Caption of item 2")).toHaveValue("a neon sign")
+  })
+
+  // The builder's reasons were English whatever the UI language: "items[0].bbox must have positive
+  // width and height" in a Chinese dialog.
+  it("says why a draft is refused in the UI language, its path as written", async () => {
+    try {
+      const bad = { ...DRAFT, items: [{ ...DRAFT.items[0], bbox: [100, 200, 100, 700] }] }
+      renderPage()
+      fireEvent.click(screen.getByRole("button", { name: "Load prompt…" }))
+      const dialog = await screen.findByRole("dialog")
+      const box = within(dialog).getByRole("textbox", { name: "Compiled prompt or layout draft" })
+      fireEvent.change(box, { target: { value: JSON.stringify(bad) } })
+      fireEvent.click(within(dialog).getByRole("button", { name: "Load" }))
+      expect(within(dialog).getByRole("alert")).toHaveTextContent("items[0].bbox must have positive width and height")
+      // said in the language shown, also when it changes under the open dialog
+      i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+      await act(() => i18n.changeLanguage("zh-CN"))
+      expect(within(dialog).getByRole("alert")).toHaveTextContent("items[0].bbox 的宽度和高度必须为正数")
+      // a text that is not JSON: one sentence, not the browser's English reason
+      fireEvent.change(box, { target: { value: "{ not json" } })
+      fireEvent.click(within(dialog).getByRole("button", { name: zhCN["Load"] }))
+      expect(within(dialog).getByRole("alert")).toHaveTextContent("该文本不是有效的 JSON。")
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
   })
 
   it("loads a saved layout file", async () => {

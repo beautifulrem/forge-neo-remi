@@ -27,8 +27,6 @@ const ERROR_PROPERTIES = /^(error|cause|reason|failureReason)$|Error$/
 const ALLOWED: { file: string; read: string; reason: string }[] = [
   { file: "components/ui/field.tsx", read: "error?.message", reason: "shadcn's FieldError lists form-library validation messages the app wrote itself" },
   { file: "components/ui/field.tsx", read: "error.message", reason: "shadcn's FieldError lists form-library validation messages the app wrote itself" },
-  { file: "pages/custom/json-builder/index.tsx", read: "error.message", reason: "the builder's DraftError sentences, or the browser's reason the user's own JSON does not parse (recorded P3)" },
-  { file: "pages/custom/json-builder/index.tsx", read: "String(error)", reason: "as above: a non-Error thrown while parsing the user's own JSON" },
   { file: "ui/inputs/Json.tsx", read: "e.message", reason: "the browser's reason the user's own JSON does not parse, under the field (recorded P3)" },
   { file: "ui/inputs/Json.tsx", read: "String(e)", reason: "as above" },
   { file: "widgets/text-file/index.tsx", read: "error.message", reason: "the browser's reason a local file could not be read: no request is involved (recorded P3)" },

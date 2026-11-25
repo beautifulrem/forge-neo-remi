@@ -71,6 +71,13 @@ A visual editor for MOSS-Image's structured ("Layout") prompts:
   JSON goes back into "Extra". Upstream refused it as invalid JSON.
 - Errors say what is wrong (the dialog keeps the text and shows the message,
   file loads and sends show a toast); upstream only outlined the button red.
+  They are said in the UI language: a `DraftError` carries its English
+  message (upstream's) with the template and values it was made from
+  (`check(condition, "{{location}} must be an object", { location })`), and
+  the page translates the template at render (`draft-text.ts`), paths such
+  as `items[2].bbox` kept as written. A text that is not JSON gets one
+  sentence instead of the browser's English reason. `locales.test.ts` checks
+  that every message is a plain template its values fill, with a zh-CN entry.
 - The draft survives leaving the page and reloading (browser storage,
   `remi-json-builder`); upstream's lived in the tab until the page reloaded.
 - "Save JSON" downloads `layout.json` (the browser may ask where); upstream
@@ -86,8 +93,10 @@ A visual editor for MOSS-Image's structured ("Layout") prompts:
   `splitPrompt`), `draft.test.ts` (resolution, boxes, draft key order,
   missing fields, the sent prompt, load with unescaping and a stable prompt),
   `view.test.ts`, `store.test.ts` (items, sizes, stored-draft validation),
-  `index.test.tsx` (marking, send to txt2img, load prompt and file, drag,
-  resize, zoom, in-place editing, keyboard).
+  `draft-text.test.ts` (a refused draft in the UI language, values never
+  read again), `index.test.tsx` (marking, send to txt2img, load prompt and
+  file, a refusal said in Chinese, drag, resize, zoom, in-place editing,
+  keyboard).
 - pytest, `extensions-builtin/sd_forge_json_builder/tests/`: the page
   registration (widget, no params, tab settings, unload), no Gradio /
   JavaScript / CSS in the extension, the SPA view and icon exist, zh_CN title.

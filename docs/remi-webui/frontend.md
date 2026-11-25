@@ -1702,7 +1702,10 @@ older server) nothing is shown.
   validation messages are stored as the server sent them
   (`FormState.errors`, a list per param, never empty) and translated where
   they are shown (`fieldErrorText`, several joined by " · "), so a language
-  switch re-reads them.
+  switch re-reads them. A refusal the browser itself makes follows the same
+  form: the JSON Builder's `DraftError` keeps its template and values
+  beside the English (a path such as `items[2].bbox` is a value), and the
+  page translates it where it is shown (`draft-text.ts`).
 - **Text made outside `t` takes the language**: the React Compiler memoizes
   a render on the values the render itself reads, and a helper that reads the
   global `i18n` inside does not count. Text a render makes with such a helper
