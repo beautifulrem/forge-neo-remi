@@ -12,5 +12,8 @@ pnpm test         # vitest (jsdom)
 pnpm lint         # oxlint
 ```
 
+`pnpm test` needs Node.js 22.22.2+, 24.15+ or 26+ (what jsdom, Vitest and Babel
+all run on).
+
 Structure, conventions and how to add pages, widgets and translations:
 [docs/remi-webui/frontend.md](../docs/remi-webui/frontend.md).

@@ -20,7 +20,7 @@ Run in `webui/`:
 | `pnpm preview` | serves the built `webui/dist` (Vite preview, port 4173) with the same proxies as `pnpm dev`: the production bundle against a running server |
 | `pnpm typecheck` | type-check only |
 | `pnpm gen:api` | regenerates `src/api/gen/schema.d.ts` from `src/api/openapi.json` (`openapi-typescript`); run it after `$PYTHON tools/export_openapi.py` (from the repository root) whenever a server route or model changed; `gen/gen.test.ts` and the `contract:openapi` step of `tools/check.sh` fail while either is stale ([API layer](#api-layer-srcapi)) |
-| `pnpm test` / `pnpm test:watch` | Vitest |
+| `pnpm test` / `pnpm test:watch` | Vitest; needs Node.js 22.22.2+, 24.15+ or 26+ (what jsdom, Vitest and Babel all run on) |
 | `pnpm test:e2e` | Playwright against mock mode (`tests/e2e`; starts `vite` on port 5199, bypassing proxies for loopback) |
 | `pnpm lint` | oxlint (must be silent) |
 | `python3 tools/shadcn_fetch.py <names>` | add shadcn registry components with curl (Node cannot use the proxy) |
