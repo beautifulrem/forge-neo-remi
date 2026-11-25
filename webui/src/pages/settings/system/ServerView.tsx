@@ -231,15 +231,19 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-6 sm:px-6">
       <header>
         <h1 className="font-heading text-xl font-semibold tracking-tight">{t("Server and models")}</h1>
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-          <span>{status.data ? t("Version {{version}}", { version: status.data.version }) : " "}</span>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+          {/* a failure takes the version's place (-my-1: its Retry does not make the line taller), so the panels stay put */}
+          {status.isError && !status.data ? (
+            <LoadFailed error={status.error} message={t("Could not read the server status")} onRetry={() => void status.refetch()} className="-my-1 py-0" />
+          ) : (
+            <span>{status.data ? t("Version {{version}}", { version: status.data.version }) : " "}</span>
+          )}
           <a href={`${ROOT}/docs`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline-offset-4 hover:text-foreground hover:underline">
             <BookOpen className="size-3.5" aria-hidden />
             {t("API documentation")}
           </a>
-        </p>
+        </div>
       </header>
-      {status.isError && !status.data ? <LoadFailed error={status.error} message={t("Could not read the server status")} onRetry={() => void status.refetch()} className="py-0" /> : null}
 
       <Panel title="Reload UI" description="Reloads scripts and extensions and rebuilds the app in this process. Use it after enabling, installing or updating extensions, or after editing a script.">
         <Button onClick={() => requestServerCommand("reload")}>

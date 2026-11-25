@@ -1293,6 +1293,24 @@ test.describe("the selection bar on a phone held upright", () => {
 // Settings > Server: while the status loaded, the model's place beside "Model memory" held a short
 // skeleton; the model's name then took more room, the description beside it wrapped once more and
 // every panel below jumped (CLS 0.243 on each load in Chinese at 1440×900).
+// When the status failed, its error and Retry sat on a line of their own above the panels and
+// pushed them down 48 px; they take the version's place on the header line instead.
+test("the server view's status failure leaves the panels where they are", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const firstPanelTop = async () => {
+    const reload = page.getByRole("main").getByRole("button", { name: "Reload UI" })
+    await expect(reload).toBeVisible()
+    return (await reload.boundingBox())!.y
+  }
+  await page.goto("/#/settings?view=server")
+  await expect(page.getByText(/^Version /)).toBeVisible()
+  const loaded = await firstPanelTop()
+  await injectFaults(page, [{ path: "^/server/status$", status: 404 }])
+  await page.reload()
+  await expect(page.getByRole("alert").filter({ hasText: "Could not read the server status" })).toBeVisible()
+  expect(Math.abs((await firstPanelTop()) - loaded), "the panels moved").toBeLessThanOrEqual(0.5)
+})
+
 test.describe("the server view while its status loads", () => {
   test("keeps the panels below the model in place", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })

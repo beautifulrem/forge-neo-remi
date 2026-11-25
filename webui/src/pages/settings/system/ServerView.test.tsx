@@ -40,6 +40,10 @@ describe("ServerView", () => {
     renderView()
     const alert = await screen.findByRole("alert")
     expect(alert).toHaveTextContent("Could not read the server status")
+    // in the version's place on the header line, so the panels below stay where they were
+    expect(alert.closest("header")).not.toBeNull()
+    expect(alert).toHaveClass("-my-1")
+    expect(screen.queryByText(/^Version /)).toBeNull()
     expect(screen.queryByText("No model loaded")).toBeNull()
     expect(screen.queryByText("Not available")).toBeNull()
     expect(screen.queryByText(/webui\.sh/)).toBeNull()
