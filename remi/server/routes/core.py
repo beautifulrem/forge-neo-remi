@@ -10,7 +10,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, Response
 
 from remi.server import i18n
 from remi.server import models as m
-from remi.server.deps import ServicesDep, UserDep, is_local_client, not_found, opts, publish_options_changed
+from remi.server.deps import ServicesDep, UserDep, behind_generation, is_local_client, not_found, opts, publish_options_changed
 from remi.server.runtime import BUILTIN_TABS
 from remi.setting_values import setting
 
@@ -272,8 +272,7 @@ def run_action(owner: str, action: str, body: m.ActionRequest, request: Request,
         return ui.call_action_isolated(target, action, ctx, body.values, extension=extension, return_toast=False)
 
     if spec.gpu:
-        with services.queue.lock:
-            patch = services.queue.dispatch(call)
+        patch = behind_generation(services, call)
     else:
         patch = call()
     settings = patch.get("__settings__")

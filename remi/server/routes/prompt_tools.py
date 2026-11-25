@@ -11,7 +11,7 @@ from pydantic import Field
 
 from remi import prompt_tools as pt
 from remi.server import models as m
-from remi.server.deps import ServicesDep
+from remi.server.deps import ServicesDep, behind_generation
 
 router = APIRouter(prefix="/prompt-tools")
 
@@ -395,8 +395,7 @@ def upsample(body: PromptUpsampleRequest, tools: ToolsDep, services: ServicesDep
     try:
         if body.local_model_path:
             # a local model loads on the GPU: behind the running job, like a pipeline's upsample stage
-            with services.queue.lock:
-                result = services.queue.dispatch(run)
+            result = behind_generation(services, run)
         else:
             result = run()
     except pt.TranslationError as error:

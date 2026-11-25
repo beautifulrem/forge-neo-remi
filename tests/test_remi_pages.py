@@ -214,6 +214,32 @@ def test_a_gpu_action_with_a_timeout_runs_without_the_limit_and_keeps_its_isolat
     assert broken.status_code == 200 and broken.json()["__toast__"]["level"] == "error"
 
 
+def test_gpu_requests_past_the_waiting_limit_are_refused(server):
+    """Each GPU action waits for the generation in a worker thread of the
+    server; past a few, more are refused instead of taking every thread."""
+
+    class Handlers:
+        @ui.action("run", gpu=True)
+        def run(self, ctx, values):
+            return {"__outputs__": {"result": "ran"}}
+
+    pages.register(pages.Page("gpu", "GPU", params=ui.Text("a"), actions=Handlers()))
+    slots = server.services.gpu_requests
+    taken = 0
+    while slots.acquire(blocking=False):
+        taken += 1
+    try:
+        busy = server.client.post("/api/v2/actions/page:gpu/run", json={"tab": "page:gpu", "values": {}})
+        assert busy.status_code == 503 and taken >= 1
+    finally:
+        for _ in range(taken):
+            slots.release()
+    ran = server.client.post("/api/v2/actions/page:gpu/run", json={"tab": "page:gpu", "values": {}})
+    assert ran.status_code == 200 and ran.json() == {"__outputs__": {"result": "ran"}}
+    assert slots.acquire(blocking=False)  # the request gave its slot back
+    slots.release()
+
+
 def _poll(server, body, until):
     deadline = time.time() + 5
     while time.time() < deadline:

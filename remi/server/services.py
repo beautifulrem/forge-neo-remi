@@ -29,6 +29,12 @@ log = logging.getLogger(__name__)
 
 
 
+GPU_REQUESTS = 4
+"""Requests (GPU actions, a local prompt upsampler) that may run or wait behind the
+generation at once: each waits in one of the server's worker threads, which every
+plain route needs too; more are refused (503) instead."""
+
+
 @dataclass
 class Services:
     root: Path
@@ -50,6 +56,8 @@ class Services:
     _threads: list[Any] = field(default_factory=list)
     _started: bool = False
     _stop: threading.Event = field(default_factory=threading.Event)
+    gpu_requests: threading.BoundedSemaphore = field(default_factory=lambda: threading.BoundedSemaphore(GPU_REQUESTS), init=False)
+    """slots of the requests that run behind the generation (:func:`remi.server.deps.behind_generation`)"""
 
     HOUSEKEEPING_INTERVAL: ClassVar[float] = 3600
 

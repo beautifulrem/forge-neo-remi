@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import ipaddress
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, TypeVar
 
 from fastapi import Depends, HTTPException, Request
 
 from remi.server.services import Services
+
+T = TypeVar("T")
 
 
 def get_services(request: Request) -> Services:
@@ -33,6 +36,20 @@ def iso(timestamp: float | None) -> str | None:
 
 def not_found(message: str = "Not Found") -> HTTPException:
     return HTTPException(status_code=404, detail=message)
+
+
+def behind_generation(services: Services, run: Callable[[], T]) -> T:
+    """``run`` on the main thread behind the running job (the GPU's turn).
+    The request waits in a worker thread meanwhile: past
+    :data:`~remi.server.services.GPU_REQUESTS` such requests, 503 instead."""
+
+    if not services.gpu_requests.acquire(blocking=False):
+        raise HTTPException(status_code=503, detail="too many requests are waiting for the GPU; try again when the generation finishes")
+    try:
+        with services.queue.lock:
+            return services.queue.dispatch(run)
+    finally:
+        services.gpu_requests.release()
 
 
 def opts() -> Any:

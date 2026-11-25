@@ -380,6 +380,8 @@ def refresh_models(self, ctx: ui.ActionContext, values: dict) -> dict:
 - Actions run on a worker thread outside the generation lock. `gpu=True`
   runs it behind the running generation, holding the lock (needed when it
   touches the model or the GPU, e.g. ControlNet's preprocessor preview).
+  While a few such requests already run or wait, another answers 503
+  (the SPA says the server is busy).
 - **Timeout & error isolation:** `@ui.action("name", timeout=15.0)` sets an
   execution timeout in seconds; without one an action has no time limit, and a
   `gpu=True` action never has one (it keeps the generation lock until it ends,
