@@ -98,12 +98,23 @@ describe("retryableLazy", () => {
   })
 })
 
+/** A plain `lazy(` or `React.lazy(` call (not `retryableLazy(`, not another object's `.lazy(`). */
+const PLAIN_LAZY = /(?<![\w.])lazy\(|\bReact\.lazy\(/
+
 describe("lazy components in the app", () => {
+  // the lookbehind that skips `retryableLazy(` skipped `React.lazy(` too
+  it("finds React.lazy as well as an imported lazy", () => {
+    expect(PLAIN_LAZY.test("const Page = React.lazy(() => import(\"./page\"))")).toBe(true)
+    expect(PLAIN_LAZY.test("const Page = lazy(() => import(\"./page\"))")).toBe(true)
+    expect(PLAIN_LAZY.test("const Page = retryableLazy(() => import(\"./page\"))")).toBe(false)
+    expect(PLAIN_LAZY.test("const x = motion.lazy(load)")).toBe(false)
+  })
+
   it("are all retryable: a chunk that failed once loads again on Try again or back online", async () => {
     const { readFileSync, readdirSync } = await import("node:fs")
     const { join } = await import("node:path")
     const files = (readdirSync("src", { recursive: true }) as string[]).filter((file) => /\.tsx?$/.test(file) && !/\.test\.tsx?$/.test(file))
-    const plain = files.filter((file) => file !== join("lib", "retryable-lazy.ts") && /(?<![\w.])lazy\(/.test(readFileSync(join("src", file), "utf8")))
+    const plain = files.filter((file) => file !== join("lib", "retryable-lazy.ts") && PLAIN_LAZY.test(readFileSync(join("src", file), "utf8")))
     expect(plain).toEqual([])
   })
 })
