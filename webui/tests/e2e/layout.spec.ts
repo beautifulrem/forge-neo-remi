@@ -860,6 +860,30 @@ test("the licences page's small links are 40 px tall targets on a phone", async 
   }
 })
 
+// The recipe capture dialog changed height as it read a form (nothing), found no changes (a line) and
+// failed (a line and a button): its result has one slot of a fixed height.
+test("the recipe capture dialog keeps its height while it reads a form, and when that fails", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await injectFaults(page, [
+    { path: "^/schema/txt2img$", delay: 1500 },
+    { path: "^/schema/img2img$", status: 404 },
+  ])
+  await openRoute(page, "queue")
+  await page.getByRole("tab", { name: "Recipes" }).click()
+  await page.getByRole("button", { name: "Capture from form" }).click()
+  const dialog = page.getByRole("dialog")
+  await expect(dialog).toBeVisible()
+  await page.waitForTimeout(300) // the opening zoom
+  const reading = (await dialog.boundingBox())!.height
+  await expect(dialog.getByText(/No modified parameters found/)).toBeVisible({ timeout: 5000 })
+  const read = (await dialog.boundingBox())!.height
+  await dialog.getByRole("radio", { name: "img2img" }).click()
+  await expect(dialog.getByRole("alert")).toBeVisible()
+  const failed = (await dialog.boundingBox())!.height
+  expect(Math.abs(read - reading), "found no changes").toBeLessThanOrEqual(1)
+  expect(Math.abs(failed - reading), "failed").toBeLessThanOrEqual(1)
+})
+
 // A section's enable switch has a wide after: box; it reached 4 px into the section's title, so a tap at
 // the title's end flipped the switch instead of opening the section.
 test("an enable switch's target stops short of the section title", async ({ page }) => {

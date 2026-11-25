@@ -390,19 +390,24 @@ export function RecipeManager() {
               />
             </div>
 
-            {capture === null ? null : capture.error !== undefined ? (
-              <LoadFailed error={capture.error} onRetry={() => readForm(captureTab)} className="py-0" />
-            ) : captured.count === 0 ? (
-              <p className="rounded-md bg-background px-3 py-2 text-xs text-muted-foreground">
-                {t("No modified parameters found on {{tab}}.", { tab: t(CATEGORY_LABELS[captureTab]) })}
-              </p>
-            ) : (
-              <div className="-mx-1 max-h-28 overflow-y-auto px-1">
-                <pre className="rounded-md bg-background p-2 font-mono text-[0.6875rem] text-muted-foreground">
-                  {JSON.stringify({ core: captured.core_patch, scripts: captured.scripts_patch }, null, 2)}
-                </pre>
-              </div>
-            )}
+            {/* one slot of one height for reading the form, its result and a failure: the dialog does not jump */}
+            <div data-capture-result className="h-28">
+              {capture === null ? (
+                <div aria-hidden className="h-full rounded-md bg-background" />
+              ) : capture.error !== undefined ? (
+                <LoadFailed error={capture.error} onRetry={() => readForm(captureTab)} className="h-full justify-center rounded-md bg-background px-3 py-0" />
+              ) : captured.count === 0 ? (
+                <p className="flex h-full items-center justify-center rounded-md bg-background px-3 text-center text-xs text-muted-foreground">
+                  {t("No modified parameters found on {{tab}}.", { tab: t(CATEGORY_LABELS[captureTab]) })}
+                </p>
+              ) : (
+                <div className="-mx-1 h-full overflow-y-auto px-1">
+                  <pre className="min-h-full rounded-md bg-background p-2 font-mono text-[0.6875rem] text-muted-foreground">
+                    {JSON.stringify({ core: captured.core_patch, scripts: captured.scripts_patch }, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
 
             <label className="flex flex-col gap-1 text-xs font-medium">
               {t("Recipe name")}

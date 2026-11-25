@@ -216,6 +216,22 @@ describe("Recipes capture and manager UI", () => {
     expect(screen.getByRole("searchbox", { name: "Search recipes…" })).toHaveFocus()
   })
 
+  it("keeps the capture dialog's result in one fixed slot while it reads the form", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ items: [], total: 0 }), { status: 200, headers: { "Content-Type": "application/json" } }))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole("button", { name: "Capture from form" }))
+    // reading (the slot is there, empty), then read: the dialog keeps its height across them
+    const slot = () => screen.getByRole("dialog").querySelector("[data-capture-result]")
+    expect(slot()).toHaveClass("h-28")
+    // (what was read depends on the form: its changes, or a line saying there are none)
+    await waitFor(() => expect(slot()?.textContent).not.toBe(""), { timeout: 5_000 })
+    expect(slot()).toHaveClass("h-28")
+  })
+
   it("names the export when it fails", async () => {
     const { toast } = await import("sonner")
     const error = vi.spyOn(toast, "error")
