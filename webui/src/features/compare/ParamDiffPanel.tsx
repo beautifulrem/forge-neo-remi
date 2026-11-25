@@ -122,7 +122,9 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="border-t border-border pt-2">
-      <div className="flex flex-wrap items-center gap-2">
+      {/* planned rows: the actions follow the title or take a row of their own as one group; where even
+          that row is too narrow for the three (a phone), the toggle sits above the two apply buttons */}
+      <div className="@container/diffbar flex flex-wrap items-center gap-2">
         <CollapsibleTrigger className="flex h-7 items-center gap-1.5 rounded-sm px-1 text-xs font-semibold tracking-wide text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
           <ChevronDown className={cn("size-3.5 text-muted-foreground transition-transform duration-150", !open && "-rotate-90")} aria-hidden />
           <ArrowRightLeft className="size-3.5 text-muted-foreground" aria-hidden />
@@ -142,11 +144,11 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
         </CollapsibleTrigger>
 
         {open && diff && hasMetadata ? (
-          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          <div className="ml-auto flex items-center gap-1.5 @max-[24rem]/diffbar:grid @max-[24rem]/diffbar:w-full @max-[24rem]/diffbar:grid-cols-2">
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground @max-[24rem]/diffbar:col-span-2 @max-[24rem]/diffbar:justify-self-start"
               aria-pressed={onlyDiffs}
               onClick={() => setOnlyDiffs((v) => !v)}
             >
