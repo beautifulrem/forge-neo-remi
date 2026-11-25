@@ -29,9 +29,13 @@
         var dark = t === "light" ? false : t === "system" ? matchMedia("(prefers-color-scheme: dark)").matches : true
         d.classList.toggle("dark", dark)
         document.querySelector('meta[name="theme-color"]').content = dark ? "#0f1113" : "#f6f4f0"
-        if (s.density) d.dataset.density = s.density
+        // only the store's own values (DENSITIES, ACCENTS in src/lib/theme.ts): anything else keeps the defaults above
+        var densities = ["comfortable", "compact"]
+        var accents = ["blue", "iris", "teal", "green", "amber", "coral", "rose"]
+        if (densities.indexOf(s.density) >= 0) d.dataset.density = s.density
         // version 2's default iris became blue (the store's migrate)
-        if (s.accent) d.dataset.accent = s.accent === "iris" && (p.version || 0) < 3 ? "blue" : s.accent
+        var accent = s.accent === "iris" && (p.version || 0) < 3 ? "blue" : s.accent
+        if (accents.indexOf(accent) >= 0) d.dataset.accent = accent
       } catch (e) {}
     </script>
   </head>

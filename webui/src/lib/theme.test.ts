@@ -189,6 +189,38 @@ describe("theme in effect", () => {
     }
   })
 
+  // A stored density or accent went into the page's data attributes as it was: "x;y" matched no
+  // accent rule and the page painted without one until the app replaced it.
+  it("the first-paint script applies only a known stored density and accent", async () => {
+    const { readFileSync } = await import("node:fs")
+    const { ACCENTS, DENSITIES } = await import("./theme")
+    const script = /<script>([\s\S]*?)<\/script>/.exec(readFileSync("index.html", "utf8"))![1]!
+    const list = (name: string) => JSON.parse(new RegExp(`var ${name} = (\\[[^\\]]*\\])`).exec(script)?.[1] ?? "null") as unknown
+    expect(list("densities")).toEqual([...DENSITIES])
+    expect(list("accents")).toEqual([...ACCENTS])
+
+    const root = document.documentElement
+    const meta = document.head.appendChild(Object.assign(document.createElement("meta"), { name: "theme-color" }))
+    const paint = (state: object, version = 3) => {
+      root.dataset.density = "comfortable"
+      root.dataset.accent = "blue"
+      localStorage.setItem("remi-appearance", JSON.stringify({ state, version }))
+      new Function(script)()
+      return [root.dataset.density, root.dataset.accent]
+    }
+    try {
+      expect(paint({ density: "huge", accent: "x;y" })).toEqual(["comfortable", "blue"])
+      expect(paint({ density: "constructor", accent: "toString" })).toEqual(["comfortable", "blue"])
+      expect(paint({ density: "compact", accent: "teal" })).toEqual(["compact", "teal"])
+      // version 2's default iris became blue
+      expect(paint({ accent: "iris" }, 2)).toEqual(["comfortable", "blue"])
+      expect(paint({ accent: "iris" })).toEqual(["comfortable", "iris"])
+    } finally {
+      meta.remove()
+      localStorage.removeItem("remi-appearance")
+    }
+  })
+
   it("ignores an unknown server theme and an unreadable stored state", async () => {
     expect((await load({ server: "sepia" })).serverTheme()).toBeNull()
     localStorage.setItem("remi-appearance", "{not json")
