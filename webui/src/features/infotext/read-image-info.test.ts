@@ -128,6 +128,16 @@ describe("EXIF UserComment", () => {
     expect(readExifUserComment(tiffWithComment(concat(latin1("UNICODE\0"), Uint8Array.of(0xfe, 0xff), utf16be("猫耳")), true))).toBe("猫耳")
   })
 
+  // A writer that pads the comment to an even count, or cuts it short, leaves a lone byte: it is
+  // not half a character to show as U+FFFD
+  it("drops a lone last byte", () => {
+    for (const little of [true, false]) {
+      expect(readExifUserComment(tiffWithComment(concat(latin1("UNICODE\0"), utf16be(PARAMS), Uint8Array.of(0)), little))).toBe(PARAMS)
+      expect(readExifUserComment(tiffWithComment(concat(latin1("UNICODE\0"), utf16le(PARAMS), Uint8Array.of(0x20)), little))).toBe(PARAMS)
+      expect(readExifUserComment(tiffWithComment(concat(latin1("UNICODE\0"), Uint8Array.of(0xfe, 0xff), utf16be("猫耳"), Uint8Array.of(0)), little))).toBe("猫耳")
+    }
+  })
+
   it("reads a comment piexif wrote", async () => {
     const app1 = concat(Uint8Array.of(0xff, 0xe1, (PIEXIF_CJK.length + 2) >> 8, (PIEXIF_CJK.length + 2) & 0xff), PIEXIF_CJK)
     const jpeg = concat(Uint8Array.of(0xff, 0xd8), app1, Uint8Array.of(0xff, 0xda, 0, 2, 0xff, 0xd9))

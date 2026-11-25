@@ -87,7 +87,9 @@ export async function readPngText(bytes: Uint8Array, keys?: readonly string[]): 
  * block's own order (piexif writes "MM"). Guessing from the first character
  * read a prompt that starts with a CJK character or a curly quote backwards.
  */
-function decodeUtf16(body: Uint8Array, littleTiff: boolean): string {
+function decodeUtf16(whole: Uint8Array, littleTiff: boolean): string {
+  // a lone last byte (padding, a cut comment) is not half a character to show as U+FFFD
+  const body = whole.subarray(0, whole.length & ~1)
   if (body[0] === 0xfe && body[1] === 0xff) return new TextDecoder("utf-16be").decode(body.subarray(2))
   if (body[0] === 0xff && body[1] === 0xfe) return new TextDecoder("utf-16le").decode(body.subarray(2))
   let high = 0 // code units whose first byte alone is zero: big-endian Latin
