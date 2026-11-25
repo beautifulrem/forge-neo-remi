@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { create } from "zustand"
 import { api } from "@/api/endpoints"
+import { useRouteParams, useRouteSearch } from "@/app/route-params"
 import { queryClient } from "@/api/queries"
 import { Segmented } from "@/components/Segmented"
 import {
@@ -253,13 +254,17 @@ function UninstallDialog({ ext, onClose }: { ext: ExtensionInfo | null; onClose:
   )
 }
 
+/** The filter in the address (`#/extensions?q=lora`): a reload and Back keep it, like the other views'. */
+const INSTALLED_PARAMS = { q: "" }
+
 export function InstalledView() {
   const { t } = useTranslation()
   const list = useQuery(installedQuery)
   const staged = useStaged((s) => s.staged)
   const setStaged = useStaged((s) => s.set)
   const progress = useUpdateCheck((s) => s.progress)
-  const [query, setQuery] = useState("")
+  const [params, setParams] = useRouteParams(INSTALLED_PARAMS)
+  const [query, setQuery] = useRouteSearch(params.q, (q) => setParams({ q }))
   const [uninstalling, setUninstalling] = useState<ExtensionInfo | null>(null)
   const items = list.data?.items ?? []
   const access = list.data?.access ?? false

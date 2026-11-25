@@ -142,6 +142,18 @@ describe("extensions page", { timeout: 20_000 }, () => {
     expect(await screen.findByRole("switch", { name: "sd_forge_lora" })).toBeInTheDocument()
   })
 
+  // The filter was the view's own state: a reload or Back lost it (the other views keep theirs in the address)
+  it("keeps the filter in the address", async () => {
+    history.replaceState(null, "", "#/extensions?q=browser")
+    renderPage()
+    expect(await screen.findByRole("switch", { name: "browser" })).toBeInTheDocument()
+    expect(screen.getByRole("searchbox", { name: "Filter extensions" })).toHaveValue("browser")
+    expect(screen.queryByRole("switch", { name: "tagger" })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByRole("searchbox", { name: "Filter extensions" }), { target: { value: "tagger " } })
+    await waitFor(() => expect(location.hash).toBe("#/extensions?q=tagger"))
+    history.replaceState(null, "", "#/extensions")
+  })
+
   it("shows install errors in the user's language", async () => {
     vi.spyOn(api.extensions, "install").mockRejectedValue(
       new ApiError(409, "the folder sd-new already exists", { detail: "the folder sd-new already exists", template: "the folder {{name}} already exists", params: { name: "sd-new" } }),
