@@ -104,10 +104,19 @@ imperatively).
   `useRegisterCommands(source, commands)`; labels and groups are English and
   translated at render.
 - **Keyboard shortcuts** (`app/ShortcutsDialog.tsx`, lazy): every app-wide
-  shortcut in one dialog, opened with `?` outside text fields and dialogs
-  (`app/shortcuts-help.ts`; a handler that uses `?` itself — the image
+  shortcut in one dialog, opened with `?` outside text fields and modal
+  dialogs (`app/shortcuts-help.ts`; a handler that uses `?` itself — the image
   editor's list — prevents its default), the palette's "Keyboard shortcuts"
   and the appearance menu. Add a shortcut there when you add one.
+- **Page-wide keys and modals**: a key handled for the whole page (the
+  generate keys, the settings' Ctrl/Cmd+S, `?`) asks `modalOpen()`
+  (`lib/modal-open.ts`) whether a modal dialog has the keyboard, never a
+  selector of its own. A dialog, an alert dialog, a sheet and the sign-in
+  screen are modal; a popover or a search select's popup (a `role="dialog"`
+  in Base UI's positioner, `role="presentation"` with `data-side`), a menu,
+  a panel marked `aria-modal="false"` (the Networks drawer) and a dialog
+  fading out (`data-closed`) are not. Escape is another matter: an open
+  popover or menu takes it (`escapeIsFree` in `pages/generate/shortcuts.ts`).
 - **Toasts**: `sonner`; use `showToast(level, message)` from `lib/toast.ts`
   for server-provided levels, or `toast` directly. They sit bottom-right,
   lifted above any control pinned to the bottom edge under them
@@ -776,7 +785,8 @@ Rules the renderer implements:
   selection: CodeMirror calls `preventDefault`). The interrupt is decided
   after the event has run its course (`setTimeout`), so the image editor's
   Escape (discard a staged candidate) wins whichever of the two listened
-  first. Generate keys are ignored while a modal dialog is open.
+  first. Generate keys are ignored while a modal dialog is open, not while
+  a popover is (`lib/modal-open.ts`).
 - **Rows**: `width` 1–12 = share of 12 columns, `"fill"` = the rest,
   absent/`"auto"` = equal share, buttons hug content. Rows are CSS containers;
   under 30 rem spans and fills go full width (phones stack).

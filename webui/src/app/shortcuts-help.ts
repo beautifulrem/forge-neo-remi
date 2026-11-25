@@ -1,5 +1,6 @@
 /** Whether the keyboard shortcuts dialog is open, and the "?" key that opens it. */
 import { create } from "zustand"
+import { modalOpen } from "@/lib/modal-open"
 
 export const useShortcutsHelp = create<{ open: boolean; loaded: boolean; setOpen: (open: boolean) => void }>()((set) => ({
   open: false,
@@ -18,8 +19,8 @@ function isTyping(target: EventTarget | null): boolean {
  */
 export function onShortcutsKey(event: KeyboardEvent) {
   if (event.key !== "?" || event.ctrlKey || event.metaKey || event.altKey || event.repeat || isTyping(event.target)) return
-  // a modal dialog has the keyboard; a non-modal panel (the Networks drawer) does not
-  if (document.querySelector('[role="dialog"]:not([aria-modal="false"]), [role="alertdialog"]')) return
+  // a modal dialog has the keyboard; a popover or a non-modal panel (the Networks drawer) does not
+  if (modalOpen()) return
   setTimeout(() => {
     if (!event.defaultPrevented) useShortcutsHelp.getState().setOpen(true)
   })

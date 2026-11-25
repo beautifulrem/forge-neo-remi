@@ -25,6 +25,20 @@ describe("the ? shortcut", () => {
     expect(useShortcutsHelp.getState().open).toBe(true)
   })
 
+  it("opens the dialog while a popover is open", () => {
+    vi.useFakeTimers()
+    // a popover's popup is a role="dialog" in Base UI's positioner: it leaves the page usable
+    const positioner = document.body.appendChild(document.createElement("div"))
+    positioner.setAttribute("role", "presentation")
+    positioner.setAttribute("data-side", "bottom")
+    const popup = positioner.appendChild(document.createElement("div"))
+    popup.setAttribute("role", "dialog")
+    popup.setAttribute("data-open", "")
+    press(document.body)
+    vi.runAllTimers()
+    expect(useShortcutsHelp.getState().open).toBe(true)
+  })
+
   it("opens the dialog outside text fields and dialogs, unless a handler used the key", () => {
     vi.useFakeTimers()
     press(document.body)

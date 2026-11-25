@@ -32,6 +32,7 @@ import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "
 import { Kbd } from "@/components/ui/kbd"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
+import { modalOpen } from "@/lib/modal-open"
 import { useFittingPlaceholder } from "@/lib/use-fitting-placeholder"
 import { errorText } from "@/features/errors/error-text"
 import { requestServerCommand } from "@/features/server-control/server-control"
@@ -76,19 +77,6 @@ const NONE: ReadonlySet<string> = new Set()
 
 /** Settings pages mounted (StrictMode mounts twice): the "not applied yet" toast waits for the last to go. */
 let mountedPages = 0
-
-/**
- * A modal dialog is open over the page (an import being reviewed, a
- * confirmation, the sections sheet). Popovers and search selects are
- * `role="dialog"` too, but sit in a positioner (`role="presentation"`) and
- * leave the page usable; the Networks drawer says `aria-modal="false"`.
- */
-function modalOpen(): boolean {
-  for (const element of document.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"]')) {
-    if (!element.hidden && element.getAttribute("aria-modal") !== "false" && !element.closest('[role="presentation"]')) return true
-  }
-  return false
-}
 
 /** Ctrl/Cmd+S applies (not while a modal dialog is open); "/" focuses the search (outside text fields). */
 function useShortcuts(onApply: () => void, search: React.RefObject<HTMLInputElement | null>) {

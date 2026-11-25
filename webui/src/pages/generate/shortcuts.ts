@@ -6,11 +6,16 @@
  * popup, dialog, menu). In a prompt editor Escape interrupts as in A1111
  * once the editor has no use for it: CodeMirror consumes (preventDefault)
  * the Escape that closes a completion list or drops a selection.
+ *
+ * A modal dialog (style editor, viewer, confirmations) keeps the keys to
+ * itself (`lib/modal-open.ts`); a popover or a menu does not hold back
+ * Ctrl/Cmd+Enter or Alt+Enter, only Escape, which may be closing it.
  */
 import { useEffect, useRef } from "react"
 import { enqueueForm } from "@/features/queue/edit-session"
 import { dispatchRun, type GenerateTab, useRuns } from "@/features/progress/run-controller"
 import { isBusy } from "@/features/progress/run-machine"
+import { modalOpen } from "@/lib/modal-open"
 
 const TEXT_TARGETS = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .cm-editor'
 const OWN_ESCAPE = '[role="dialog"], [role="alertdialog"], [role="menu"], [data-slot$="-content"]'
@@ -18,10 +23,6 @@ const OWN_ESCAPE = '[role="dialog"], [role="alertdialog"], [role="menu"], [data-
 const PROMPT_TEXT = '[data-slot="prompt-editor"] .cm-editor'
 const IN_OVERLAY = '[role="dialog"], [role="alertdialog"], [role="menu"]'
 const OPEN_POPUP = '[data-open]:is([role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [data-side])'
-const OPEN_MODAL = '[data-open]:is([role="dialog"], [role="alertdialog"])'
-
-/** A modal dialog (style editor, viewer, confirmations) keeps the generate keys to itself. */
-const modalOpen = () => document.querySelector(OPEN_MODAL) !== null
 
 /** Whether Escape is free to interrupt generation (nothing else uses it). */
 export function escapeIsFree(event: KeyboardEvent): boolean {
