@@ -318,6 +318,23 @@ def test_the_unit_value_is_normalized(cn):
             normalize(bad, False)
 
 
+def test_slider_values_stay_inside_the_preprocessor_sliders(cn, registry):
+    """The resolution and thresholds were only floored at -1 (unset): an API unit could send
+    ``processor_res: 1e308`` to a preprocessor that resizes to it. They are clamped to the
+    unit's preprocessor's sliders, as a Slider clamps; -1 stays unset, and a slider the
+    preprocessor hides (it does not read it) keeps its value."""
+    from lib_controlnet.unit_param import normalize
+
+    canny = normalize({"module": "canny", "processor_res": 1e308, "threshold_a": 1e9, "threshold_b": -0.5}, False)
+    assert (canny["processor_res"], canny["threshold_a"], canny["threshold_b"]) == (2048, 256, -1)
+    low = normalize({"module": "canny", "processor_res": 3, "threshold_a": 0.5, "threshold_b": 300}, False)
+    assert (low["processor_res"], low["threshold_a"], low["threshold_b"]) == (128, 0.5, 256)
+    assert type(low["processor_res"]) is int
+    reference = normalize({"module": "reference_test", "processor_res": 4096, "threshold_a": 7, "threshold_b": 9}, False)
+    assert (reference["processor_res"], reference["threshold_a"], reference["threshold_b"]) == (4096, 1.0, 9)
+    assert normalize({"module": "unknown", "processor_res": 4096}, False)["processor_res"] == 4096  # refused when it runs (_check)
+
+
 def test_processing_args_are_what_the_legacy_controls_built(cn, registry, files):
     """The same settings and pictures, once as the Gradio unit group passed
     them (``UiControlNetUnit(*unit_args)``, the canvases' RGBA arrays) and
@@ -643,13 +660,13 @@ def test_preview_runs_the_preprocessor(cn, registry, files):
     picture = Image.new("RGB", (64, 48), "black")
     picture.paste((255, 255, 255), (16, 8, 48, 40))
     image = files.add_upload_bytes(png(picture), "in.png").id
-    values = {"unit_1": {"module": "canny", "image": image, "processor_res": 64, "threshold_a": 100, "threshold_b": 200}}
+    values = {"unit_1": {"module": "canny", "image": image, "processor_res": 128, "threshold_a": 100, "threshold_b": 200}}
     patch = call(script, "preview", values, files, unit=1)
     preview = patch["__outputs__"]["preview"]
     assert preview["unit"] == 1 and preview["pose"] is None
     edges = np.asarray(Image.open(files.get(preview["image"]).path))
     # Canny works at the preprocessor resolution (the short side), as before
-    assert edges.shape[:2] == (64, 85) and edges.max() == 255 and edges[0, 0].max() == 0
+    assert edges.shape[:2] == (128, 171) and edges.max() == 255 and edges[0, 0].max() == 0
 
     assert call(script, "preview", {"unit_0": {"module": "canny"}}, files, unit=0)["__toast__"]["level"] == "warning"
     assert call(script, "preview", {"unit_0": {"module": "nope", "image": image}}, files, unit=0)["__toast__"]["level"] == "error"

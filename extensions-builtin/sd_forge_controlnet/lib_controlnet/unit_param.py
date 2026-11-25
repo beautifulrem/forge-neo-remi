@@ -194,7 +194,25 @@ def normalize(value: Any, is_img2img: bool) -> dict[str, Any]:
             raise ui.ParamError(f"{key}: {error}") from None
     if result["guidance_start"] > result["guidance_end"]:
         result["guidance_start"], result["guidance_end"] = result["guidance_end"], result["guidance_start"]
+    preprocessor = global_state.supported_preprocessors.get(result["module"])
+    if preprocessor is not None:
+        result["processor_res"] = _in_slider(result["processor_res"], preprocessor.slider_resolution)
+        result["threshold_a"] = _in_slider(result["threshold_a"], preprocessor.slider_1)
+        result["threshold_b"] = _in_slider(result["threshold_b"], preprocessor.slider_2)
     return result
+
+
+def _in_slider(value: int | float, parameter) -> int | float:
+    """``value`` clamped to a preprocessor slider the widget shows (as a ``Slider``
+    clamps); -1 (unset: the preprocessor's default) and the value of a slider the
+    preprocessor hides (it does not read it) stay as they are."""
+
+    kwargs = parameter.slider_kwargs
+    low, high = kwargs.get("minimum"), kwargs.get("maximum")
+    if value == -1 or not kwargs.get("visible", False) or not all(isinstance(bound, (int, float)) and math.isfinite(bound) for bound in (low, high)) or low > high:
+        return value
+    clamped = min(max(value, low), high)
+    return math.floor(clamped + 0.5) if isinstance(value, int) else clamped
 
 
 def pasted_fields(text: str) -> dict[str, Any]:
