@@ -170,16 +170,23 @@ export function findReferenceTarget(index: FormIndex): ReferenceTarget | null {
 }
 
 export type AppendReferenceResult = {
+  /** The form the references went to (null: none was sent). */
+  tab: "txt2img" | "img2img" | null
   owner: string | null
+  /** References appended (none when a lock kept the list). */
   added: number
   total: number
+  /** `"owner.param"` refs a lock kept (the list, the enable switch): the caller's toast names them. */
+  locked: string[]
 }
+
+const NONE: AppendReferenceResult = { tab: null, owner: null, added: 0, total: 0, locked: [] }
 
 function applyReferences(tab: "txt2img" | "img2img", items: readonly SendItem[]): AppendReferenceResult {
   const store = getFormStore(tab)
   const state = store.getState()
   const target = findReferenceTarget(state.index)
-  if (!target) return { owner: null, added: 0, total: 0 }
+  if (!target) return { ...NONE, tab }
 
   const rawExisting = state.values[target.owner]?.[target.param]
   const existing = Array.isArray(rawExisting) ? rawExisting.filter((entry): entry is string => typeof entry === "string" && entry.length > 0) : []
@@ -201,15 +208,24 @@ function applyReferences(tab: "txt2img" | "img2img", items: readonly SendItem[])
     changed.push(target.enableParam)
   }
 
+  let kept: string[] = []
   if (changed.length > 0) {
-    state.setValues(target.owner, values)
+    kept = state.setValues(target.owner, values, { quiet: true })
     const reveal = state.index.reveal.get(target.owner)?.get(target.param)
     for (const key of reveal?.open ?? []) state.setOpen(key, true)
     for (const [key, value] of reveal?.tabs ?? []) state.setTab(key, value)
-    runChangeEffects({ store, tab }, target.owner, changed)
+    const written = changed.filter((name) => !kept.includes(name))
+    if (written.length > 0) runChangeEffects({ store, tab }, target.owner, written)
   }
 
-  return { owner: target.owner, added: incoming.length, total: nextList.length }
+  const listKept = kept.includes(target.param)
+  return {
+    tab,
+    owner: target.owner,
+    added: listKept ? 0 : incoming.length,
+    total: listKept ? existing.length : nextList.length,
+    locked: kept.map((name) => `${target.owner}.${name}`),
+  }
 }
 
 const pendingRefs = new Map<"txt2img" | "img2img", { unsubscribe: () => void; resolve: (res: AppendReferenceResult) => void }>()
@@ -223,7 +239,7 @@ export function sendToReference(items: readonly SendItem[], preferredTab?: "txt2
   const route = currentRoute()
   const tab: "txt2img" | "img2img" = preferredTab ?? (route.name === "generate" ? route.tab : "txt2img")
   const valid = items.filter((item) => Boolean(item.fileId))
-  if (valid.length === 0) return Promise.resolve({ owner: null, added: 0, total: 0 })
+  if (valid.length === 0) return Promise.resolve(NONE)
 
   const store = getFormStore(tab)
   const onScreen = routeKey(route) === routeKey(routeOf(tab))
@@ -237,7 +253,7 @@ export function sendToReference(items: readonly SendItem[], preferredTab?: "txt2
 
   const previous = pendingRefs.get(tab)
   previous?.unsubscribe()
-  previous?.resolve({ owner: null, added: 0, total: 0 })
+  previous?.resolve(NONE)
   return new Promise<AppendReferenceResult>((resolve) => {
     const unsubscribe = store.subscribe((s, prev) => {
       if (s.revision === prev.revision) return

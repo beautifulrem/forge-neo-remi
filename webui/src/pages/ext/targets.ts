@@ -7,8 +7,9 @@ import { useQueries, useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { bootstrapQuery, pageSchemaQuery } from "@/api/queries"
 import { t } from "@/i18n"
+import { lockNote } from "@/ui/locks"
 import type { PageSchema } from "@/ui/schema"
-import { sendToPage } from "./deliver"
+import { pageStore, sendToPage } from "./deliver"
 import { failureText } from "@/features/errors/error-text"
 
 export type PageSendTarget = { kind: "image"; param: string; label: string }
@@ -41,9 +42,12 @@ export function sendImageToPage({ pageId, target }: PageTarget, fileId: string):
   const where = t(target.label)
   const id = toast.loading(t("Sending to {{target}}…", { target: where }))
   return sendToPage(pageId, { [target.param]: fileId })
-    .then((count) => {
-      if (count > 0) toast.success(t("Sent to {{target}}", { target: where }), { id })
-      else toast.error(t("Could not send to {{target}}", { target: where }), { id })
+    .then(({ count, locked }) => {
+      // a value a lock kept: the reason nothing arrived
+      const note = lockNote(pageStore(pageId).getState().index, locked)
+      const options = { id, ...(note ? { description: note } : {}) }
+      if (count > 0) toast.success(t("Sent to {{target}}", { target: where }), options)
+      else toast.error(t("Could not send to {{target}}", { target: where }), options)
     })
     .catch((error: unknown) => {
       toast.error(t("Could not send to {{target}}", { target: where }), { id, description: failureText(error) })

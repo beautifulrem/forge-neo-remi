@@ -14,7 +14,7 @@ import zh from "./locales/zh-CN.json"
 import source from "./index.tsx?raw"
 import { appendText, openUrl, sendToPrompt } from "./send"
 
-vi.mock("@/pages/ext/deliver", () => ({ sendToPage: vi.fn(async () => 1) }))
+vi.mock("@/pages/ext/deliver", () => ({ sendToPage: vi.fn(async () => ({ count: 1, locked: [] as string[] })), pageStore: () => ({ getState: () => ({ index: { inputs: new Map() } }) }) }))
 
 const OWNER = "page:workshop"
 const NODE: CustomNode = { type: "custom", name: "send", label: "", widget: "send-button", props: {}, default: null }
@@ -110,6 +110,15 @@ describe("send-button widget", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send to JoyCaption" }))
     await waitFor(() => expect(sendToPage).toHaveBeenCalledWith("joycaption", { image: "up-1" }))
     expect(calls).toEqual([`/api/v2/actions/${OWNER}/download`])
+  })
+
+  it("names the value a lock kept on the page", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ image: { value: "up-1" } }), { headers: { "Content-Type": "application/json" } }))
+    vi.mocked(sendToPage).mockResolvedValueOnce({ count: 0, locked: ["page:joycaption.image"] })
+    const failure = vi.spyOn(toast, "error")
+    setup({ to: "page", page: "joycaption", param: "image", source: "image", action: "download", label: "Send to JoyCaption" })
+    fireEvent.click(screen.getByRole("button", { name: "Send to JoyCaption" }))
+    await waitFor(() => expect(failure).toHaveBeenCalledWith("Could not send the image", { description: "Overridden by a lock: page:joycaption.image" }))
   })
 
   it("sends nothing when the action fails (the source may hold an older image)", async () => {

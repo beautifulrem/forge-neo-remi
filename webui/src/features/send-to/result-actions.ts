@@ -71,12 +71,15 @@ export function sendWithFeedback(target: SendTarget, item: SendItem) {
 export function sendToReferenceWithFeedback(items: readonly SendItem[], preferredTab?: "txt2img" | "img2img") {
   sendToReference(items, preferredTab)
     .then((result) => {
+      // the values a lock kept (the list: nothing was added)
+      const note = result.tab ? lockNote(getFormStore(result.tab).getState().index, result.locked) : undefined
       if (!result.owner) {
         toast.warning(t("No ImageStitch reference slot found on this form"))
       } else if (result.added === 0) {
-        toast.info(t("All selected images are already in Reference Images ({{total}} total)", { total: result.total }))
+        if (note) toast.info(note)
+        else toast.info(t("All selected images are already in Reference Images ({{total}} total)", { total: result.total }))
       } else {
-        toast.success(t("Added {{count}} images to Reference Images ({{total}} total)", { count: result.added, total: result.total }))
+        toast.success(t("Added {{count}} images to Reference Images ({{total}} total)", { count: result.added, total: result.total }), note ? { description: note } : undefined)
       }
     })
     .catch((error: unknown) => {

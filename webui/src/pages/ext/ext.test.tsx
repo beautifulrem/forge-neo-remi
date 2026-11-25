@@ -1,5 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { keys, pageSchemaQuery, queryClient } from "@/api/queries"
 import { bootstrapWith } from "@/test/api-fixtures"
@@ -8,7 +9,7 @@ import { applyToPage, flushPending, loadedSchema, loadPage, PENDING_TIMEOUT_MS, 
 import ExtensionPage from "./index"
 import { PageView } from "./PageView"
 import { PageSendButtons } from "./send-targets"
-import { sendTargetsOf } from "./targets"
+import { sendImageToPage, sendTargetsOf } from "./targets"
 
 const schema = (id: string, extra: Record<string, unknown> = {}): PageSchema =>
   ({
@@ -59,7 +60,7 @@ describe("page deliveries", () => {
     expect(location.hash).toBe("#/ext/later")
     loadPage(schema("later"))
     flushPending("later")
-    await expect(sent).resolves.toBe(1)
+    await expect(sent).resolves.toEqual({ count: 1, locked: [] })
     expect(pageStore("later").getState().values["page:later"]?.image).toBe("up-2")
     await waitFor(() => expect(calls.map((call) => call.path)).toEqual(["/api/v2/actions/page:later/image_changed"]))
     expect(calls[0]!.body).toMatchObject({ tab: "page:later", values: { image: "up-2" } })
@@ -70,7 +71,7 @@ describe("page deliveries", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ detail: "no page" }), { status: 404, headers: { "Content-Type": "application/json" } }))
     const broken = sendToPage("broken", { image: "up-4" })
     await queryClient.prefetchQuery({ ...pageSchemaQuery("broken"), retry: false })
-    await expect(broken).resolves.toBe(0)
+    await expect(broken).resolves.toEqual({ count: 0, locked: [] })
 
     queryClient.setQueryData(keys.app, { ...bootstrapWith({}), pages: [] })
     const gone = sendToPage("gone", { image: "up-5" })
@@ -79,7 +80,7 @@ describe("page deliveries", () => {
         <ExtensionPage route={{ name: "page", id: "gone" }} />
       </QueryClientProvider>,
     )
-    await expect(gone).resolves.toBe(0)
+    await expect(gone).resolves.toEqual({ count: 0, locked: [] })
     expect(screen.getByText("Page not found")).toBeInTheDocument()
     queryClient.clear()
 
@@ -87,7 +88,7 @@ describe("page deliveries", () => {
     try {
       const slow = sendToPage("slow", { image: "up-6" })
       vi.advanceTimersByTime(PENDING_TIMEOUT_MS)
-      await expect(slow).resolves.toBe(0)
+      await expect(slow).resolves.toEqual({ count: 0, locked: [] })
     } finally {
       vi.useRealTimers()
     }
@@ -96,9 +97,27 @@ describe("page deliveries", () => {
   it("applies at once to a loaded page and shows it", async () => {
     answering()
     loadPage(schema("now"))
-    await expect(sendToPage("now", { image: "up-3" })).resolves.toBe(1)
+    await expect(sendToPage("now", { image: "up-3" })).resolves.toEqual({ count: 1, locked: [] })
     expect(location.hash).toBe("#/ext/now")
-    expect(applyToPage("now", { nope: 1 })).toBe(0)
+    expect(applyToPage("now", { nope: 1 })).toEqual({ count: 0, locked: [] })
+  })
+
+  it("names the values a lock kept on the page, in the send's own toast, and does not count them", async () => {
+    answering()
+    const info = vi.spyOn(toast, "info")
+    const failure = vi.spyOn(toast, "error")
+    const locked = schema("locked")
+    // a toggle of the page that locks its image (`locks: "image"`) is on
+    const layout = locked.layout as { children: unknown[] }
+    layout.children.push({ type: "toggle", name: "keep", label: "Keep the image", default: true, locks: "image" })
+    loadPage({ ...locked, defaults: { ...locked.defaults, keep: true } })
+    pageStore("locked").getState().setValue("page:locked", "image", "mine")
+    await expect(sendToPage("locked", { image: "up-7", caption: "a cat" })).resolves.toEqual({ count: 1, locked: ["page:locked.image"] })
+    await sendImageToPage({ pageId: "locked", target: { kind: "image", param: "image", label: "Captioner" } }, "up-8")
+    expect(failure).toHaveBeenCalledWith("Could not send to Captioner", expect.objectContaining({ description: "Overridden by a lock: Image" }))
+    expect(pageStore("locked").getState().values["page:locked"]?.image).toBe("mine")
+    await Promise.resolve()
+    expect(info).not.toHaveBeenCalled()
   })
 })
 
@@ -170,7 +189,7 @@ describe("extension page while the app cannot load", () => {
     queryClient.removeQueries({ queryKey: keys.app })
     queryClient.setQueryDefaults(keys.app, { retry: false })
     history.replaceState(null, "", "#/png-info")
-    let settled: number | null = null
+    let settled: { count: number } | null = null
     void sendToPage("after-restart", { caption: "a cat" }).then((applied) => (settled = applied))
     render(
       <QueryClientProvider client={queryClient}>

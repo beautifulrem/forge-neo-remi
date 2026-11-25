@@ -18,8 +18,9 @@ import { toast } from "sonner"
 import { useQuery } from "@tanstack/react-query"
 import { bootstrapQuery } from "@/api/queries"
 import { Button } from "@/components/ui/button"
-import { sendToPage } from "@/pages/ext/deliver"
+import { pageStore, sendToPage } from "@/pages/ext/deliver"
 import { useForm, useOwner, useRunAction } from "@/ui/hooks"
+import { lockNote } from "@/ui/locks"
 import type { WidgetProps } from "@/ui/widgets"
 import { registerWidgetCatalogs } from "../_lib/i18n"
 import { openUrl, sendToPrompt } from "./send"
@@ -78,8 +79,10 @@ export default function SendButton({ props, disabled, id }: WidgetProps<null, Pr
         toast.info(tw("No image to send"))
         return
       }
-      const count = await sendToPage(props.page, { [props.param]: image })
-      if (count === 0) toast.error(tw("Could not send the image"))
+      const { count, locked } = await sendToPage(props.page, { [props.param]: image })
+      // a value a lock kept on the page: the reason nothing arrived
+      const note = lockNote(pageStore(props.page).getState().index, locked)
+      if (count === 0) toast.error(tw("Could not send the image"), note ? { description: note } : undefined)
     } finally {
       setBusy(false)
     }

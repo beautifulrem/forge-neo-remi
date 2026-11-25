@@ -3,12 +3,15 @@
  * JoyCaption", a page's own send buttons). A page's form (`page:<id>`) keeps
  * its values across visits, so a loaded page takes them at once; one that
  * has not loaded its schema yet takes them right after its first load. A
- * send to a page that is missing or fails to load settles with 0.
+ * send to a page that is missing or fails to load settles with nothing set.
+ * A send resolves with the values set and the ones a lock kept, which the
+ * caller's toast names (`lockNote`).
  */
 import { hashKey } from "@tanstack/react-query"
 import { keys, queryClient } from "@/api/queries"
 import type { ParamValues } from "@/api/types"
 import { navigate, type Route } from "@/app/router"
+import type { PasteResult } from "@/features/infotext/paste"
 import { runChangeEffects } from "@/ui/actions"
 import { type FormStore, getFormStore } from "@/ui/form-store"
 import type { PageSchema } from "@/ui/schema"
@@ -52,42 +55,44 @@ export function loadPage(schema: PageSchema): FormStore {
 
 const UPLOAD_KINDS = new Set(["image", "image_list", "file"])
 
+const NOTHING: PasteResult = { count: 0, locked: [] }
+
 /** Sets the values the page declares (others are dropped) and runs their `on_change` actions. */
-export function applyToPage(id: string, values: ParamValues): number {
+export function applyToPage(id: string, values: ParamValues): PasteResult {
   const store = pageStore(id)
   const owner = pageOwner(id)
   const known = store.getState().index.inputs.get(owner)
   const accepted = Object.fromEntries(Object.entries(values).filter(([name]) => known?.has(name)))
-  const names = Object.keys(accepted)
-  if (names.length === 0) return 0
-  store.getState().setValues(owner, accepted)
-  runChangeEffects({ store, tab: owner }, owner, names)
-  return names.length
+  if (Object.keys(accepted).length === 0) return NOTHING
+  const kept = store.getState().setValues(owner, accepted, { quiet: true })
+  const names = Object.keys(accepted).filter((name) => !kept.includes(name))
+  if (names.length > 0) runChangeEffects({ store, tab: owner }, owner, names)
+  return { count: names.length, locked: kept.map((name) => `${owner}.${name}`) }
 }
 
-/** A send waiting for its page longer than this gives up (resolves 0). */
+/** A send waiting for its page longer than this gives up (resolves with nothing set). */
 export const PENDING_TIMEOUT_MS = 30_000
 
-type Pending = { values: ParamValues; resolve: (count: number) => void; stop: () => void }
+type Pending = { values: ParamValues; resolve: (result: PasteResult) => void; stop: () => void }
 const pending = new Map<string, Pending>()
 
-function settle(id: string, count: (entry: Pending) => number): void {
+function settle(id: string, apply: (entry: Pending) => PasteResult): void {
   const entry = pending.get(id)
   if (!entry) return
   pending.delete(id)
   entry.stop()
-  entry.resolve(count(entry))
+  entry.resolve(apply(entry))
 }
 
-/** Puts `values` into page `id` and shows it; resolves with the number of params set. */
-export function sendToPage(id: string, values: ParamValues): Promise<number> {
+/** Puts `values` into page `id` and shows it; resolves with the params set and the ones a lock kept. */
+export function sendToPage(id: string, values: ParamValues): Promise<PasteResult> {
   dropPending(id)
   if (loadedWith.has(pageStore(id))) {
-    const count = applyToPage(id, values)
+    const result = applyToPage(id, values)
     navigate(pageRoute(id))
-    return Promise.resolve(count)
+    return Promise.resolve(result)
   }
-  return new Promise<number>((resolve) => {
+  return new Promise<PasteResult>((resolve) => {
     // The page view loads the schema; a failed load ends the wait.
     const hash = hashKey(keys.page(id))
     const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
@@ -111,7 +116,7 @@ export function flushPending(id: string): void {
   settle(id, (entry) => applyToPage(id, entry.values))
 }
 
-/** Gives up a pending send to page `id` (missing, failed to load): it resolves with 0. */
+/** Gives up a pending send to page `id` (missing, failed to load): it resolves with nothing set. */
 export function dropPending(id: string): void {
-  settle(id, () => 0)
+  settle(id, () => NOTHING)
 }
