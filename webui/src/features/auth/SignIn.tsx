@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
 import { signInError } from "./session-actions"
+import { documentTitle } from "@/app/document-title"
 
 function SignInForm({ expired, onSignedIn }: { expired: boolean; onSignedIn: (user: string) => void }) {
   const { t } = useTranslation()
@@ -98,7 +99,7 @@ function SignInForm({ expired, onSignedIn }: { expired: boolean; onSignedIn: (us
 export function SignInScreen() {
   const { t } = useTranslation()
   useEffect(() => {
-    document.title = `${t("Sign in")} · Remi`
+    document.title = documentTitle(t("Sign in"))
   }, [t])
   return (
     <main className="grid min-h-dvh place-items-center bg-background p-4">

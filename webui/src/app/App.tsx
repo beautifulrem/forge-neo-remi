@@ -19,6 +19,7 @@ import { availableLocales } from "./locales"
 import { MotionRoot } from "./MotionRoot"
 import { BottomBar, NavRail } from "./NavRail"
 import { routeTitle } from "./route-title"
+import { documentTitle } from "./document-title"
 import { buildNav, type NavItem, pageFor } from "./routes"
 import { onShortcutsKey, useShortcutsHelp } from "./shortcuts-help"
 import { navigate, routeKey, useRoute } from "./router"
@@ -122,7 +123,7 @@ export function App() {
 
   const title = t(routeTitle(route, nav))
   useEffect(() => {
-    document.title = `${title} · Remi`
+    document.title = documentTitle(title)
   }, [title])
 
   const Page = pageFor(route)
