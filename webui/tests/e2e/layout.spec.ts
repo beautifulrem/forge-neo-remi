@@ -59,6 +59,43 @@ test.describe("layout at 1280×720", () => {
   }
 })
 
+// The word "Offline" beside the connection dot pushed the appearance menu past a 390 px window:
+// the header had a few pixels to spare there. The page title yields to it on a phone.
+test.describe("the header on a phone while offline", () => {
+  /** Puts the app's own connection store (the module URL it loaded) in the lost state. */
+  async function goOffline(page: Page) {
+    await page.evaluate(async () => {
+      const loaded = performance.getEntriesByType("resource").map((entry) => entry.name)
+      const path = loaded.find((name) => new URL(name).pathname.endsWith("/src/api/ws.ts"))
+      if (!path) throw new Error("the connection module is not loaded")
+      const { useWs } = (await import(/* @vite-ignore */ path)) as { useWs: { setState: (state: { status: string }) => void } }
+      useWs.setState({ status: "closed" })
+    })
+  }
+
+  for (const width of [390, 360]) {
+    for (const [locale, offline] of [
+      ["en", "Offline"],
+      ["zh-CN", "离线"],
+    ] as const) {
+      test(`fits at ${width} px (${locale})`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 800 })
+        await presetStorage(page, { locale })
+        // Generate holds the most in the header: the page title, both modes and the networks button
+        await page.goto("/#/txt2img")
+        await expect(page.getByRole("textbox", { name: /^(Prompt|提示词)$/ })).toBeVisible()
+        await goOffline(page)
+        const header = page.locator("header").first()
+        await expect(header.getByText(offline, { exact: true })).toBeVisible()
+        await expect.poll(() => headerProblems(page)).toEqual([])
+        expect(await header.evaluate((element) => element.scrollWidth <= element.clientWidth + 0.5), "the header overflows").toBe(true)
+        const word = await header.getByText(offline, { exact: true }).evaluate((element) => element.scrollWidth <= element.clientWidth + 0.5)
+        expect(word, "the word is cut").toBe(true)
+      })
+    }
+  }
+})
+
 test.describe("generate panes", () => {
   test.use({ viewport: { width: 1440, height: 900 } })
 

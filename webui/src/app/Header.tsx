@@ -45,7 +45,8 @@ export function ConnectionDot() {
         {label}
       </span>
       <Tooltip>
-        <TooltipTrigger render={<span aria-hidden className={cn("flex h-7 min-w-7 shrink-0 items-center justify-center gap-1.5 rounded-sm", lost && "px-1.5")} />}>
+        {/* the word fills the dot's own room first: a phone's header has no more */}
+        <TooltipTrigger render={<span aria-hidden className="flex h-7 min-w-7 shrink-0 items-center justify-center gap-1 rounded-sm" />}>
           <span
             className={cn(
               "size-1.5 shrink-0 rounded-full",
@@ -96,10 +97,13 @@ export function Header({ title, locales }: { title: string; locales: LocaleInfo[
     // Opaque, no backdrop-filter: only the page background is behind it, and its progress line
     // changes every step (a blur would be redrawn with it).
     <header className="relative flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-3 md:px-4">
-      <h1 className="shrink-0 truncate font-heading text-xl font-semibold tracking-[-0.02em]">{title}</h1>
-      {/* page controls keep their size; the model bar (checkpoint name) is what shrinks */}
+      {/* page controls keep their size; the model bar (checkpoint name) is what shrinks, and on a phone,
+          where it is hidden, the page title (the bottom bar names the page too) */}
+      <h1 title={title} className="min-w-0 truncate font-heading text-xl font-semibold tracking-[-0.02em] sm:shrink-0">
+        {title}
+      </h1>
       <div ref={setSlot} className="flex shrink-0 items-center gap-2" />
-      <div className="ml-auto flex min-w-0 items-center gap-1.5">
+      <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 sm:shrink">
         <div className="hidden min-w-0 sm:block">
           <ErrorBoundary fallback={null}>
             <Suspense fallback={<div aria-hidden className="h-7 w-[min(22rem,40vw)] rounded-sm bg-field" />}>

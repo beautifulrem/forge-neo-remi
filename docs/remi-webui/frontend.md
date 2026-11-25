@@ -218,7 +218,9 @@ imperatively).
     whisper-quiet borderless inline mono micro-tags.
   - **Single Status-Dot Rule**: `ConnectionDot` is the sole green LED in the
     header; a lost connection adds the word "Offline" beside it (a touch
-    screen cannot hover its tooltip). `WorkerHealthPill` (`GET /api/v2/workers`) stays a calm borderless
+    screen cannot hover its tooltip), in the dot's own 28 px room first; on a
+    phone the page title then yields to it (truncated, its full text as a
+    title), never the controls. `WorkerHealthPill` (`GET /api/v2/workers`) stays a calm borderless
     ghost monochrome readout (`CPU MPS` / `CUDA` / `1/2 GPU`) when healthy and
     only shows an amber/red indicator dot when a worker is degraded or failed.
   - **Live Darkroom Aspect-Ratio Viewfinder**: when the Generate stage has no
