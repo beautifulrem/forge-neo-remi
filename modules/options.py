@@ -187,6 +187,23 @@ def _remove_stale_temporaries(target: str) -> None:
                         os.remove(entry.path)
 
 
+_UNWRITABLE = (RecursionError, UnicodeEncodeError, TypeError, ValueError)
+
+
+def _encoded(data) -> bytes:
+    encoded = json.dumps(data, indent=4, ensure_ascii=False).encode("utf8")
+    json.loads(encoded)  # written only when the next start can read it back
+    return encoded
+
+
+def _writable(key, value) -> bool:
+    try:
+        _encoded({key: value})
+    except _UNWRITABLE:
+        return False
+    return True
+
+
 class Options:
     typemap = {int: float}
 
@@ -292,9 +309,14 @@ class Options:
 
         # Remi: encoded first, then swapped in whole. Dumped straight into the open file, a value json
         # cannot write (nested past the recursion limit, an unpaired surrogate) stopped it half way and
-        # left config.json cut short: every setting lost at the next start
-        data = json.dumps(self.data, indent=4, ensure_ascii=False).encode("utf8")
-        json.loads(data)  # written only when the next start can read it back
+        # left config.json cut short: every setting lost at the next start. Such a value (an extension's,
+        # past the API's checks) is left out with an error, or every later save would fail with it
+        try:
+            data = _encoded(self.data)
+        except _UNWRITABLE:
+            unwritable = {key for key, value in self.data.items() if not _writable(key, value)}
+            errors.report(f"Settings not saved, as JSON cannot write their values: {', '.join(sorted(map(str, unwritable)))}")
+            data = _encoded({key: value for key, value in self.data.items() if key not in unwritable})
         write_whole(filename, data)
 
     def same_type(self, x, y):

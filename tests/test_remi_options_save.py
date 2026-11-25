@@ -1,7 +1,8 @@
 """``Options.save`` writes ``config.json`` whole or not at all. It dumped straight into the
 open file: a value ``json`` cannot write (nested past the recursion limit, an unpaired
 surrogate) stopped it half way, and the next start found a cut-short file and lost every
-setting. ``modules/options.py`` is upstream's (upstream-absorption.md §1.2)."""
+setting. Such a value is now left out of the file. ``modules/options.py`` is upstream's
+(upstream-absorption.md §1.2)."""
 
 import json
 import os
@@ -26,15 +27,19 @@ def _deep(depth: int) -> list:
     return value
 
 
-@pytest.mark.parametrize("bad", [_deep(200_000), "x\udc80"], ids=["nested", "surrogate"])
-def test_a_value_json_cannot_write_leaves_the_file_as_it_was(tmp_path, monkeypatch, opts, bad):
+@pytest.mark.parametrize("bad", [_deep(200_000), "x\udc80", {"a set"}], ids=["nested", "surrogate", "set"])
+def test_a_value_json_cannot_write_is_left_out_with_an_error(tmp_path, monkeypatch, capsys, opts, bad):
+    """Such a value (put into ``opts.data`` by an extension, past the API's checks) refused every
+    later save until a restart: the other settings are saved, and the error names the setting."""
     config = tmp_path / "config.json"
     opts.save(str(config))
-    before = config.read_bytes()
+    before = json.loads(config.read_text(encoding="utf-8"))
     monkeypatch.setitem(opts.data, "remi_test_unwritable", bad)
-    with pytest.raises((RecursionError, UnicodeEncodeError)):
-        opts.save(str(config))
-    assert config.read_bytes() == before
+    monkeypatch.setitem(opts.data, "remi_test_value", "saved")
+    capsys.readouterr()
+    opts.save(str(config))
+    assert json.loads(config.read_text(encoding="utf-8")) == {**before, "remi_test_value": "saved"}
+    assert "remi_test_unwritable" in capsys.readouterr().err and opts.data["remi_test_unwritable"] is bad
     assert sorted(path.name for path in tmp_path.iterdir()) == ["config.json"]  # no temporary file left
 
 
