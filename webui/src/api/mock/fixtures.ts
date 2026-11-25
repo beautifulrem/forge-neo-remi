@@ -721,7 +721,7 @@ export const toolboxPage: PageSchema = {
           {
             type: "row",
             children: [
-              { type: "button", label: "Build prompt", action: "kit_build", variant: "primary" },
+              { type: "button", label: "Build prompt", action: "kit_build", variant: "secondary" },
               { type: "custom", name: "kit_send", widget: "send-button", label: "", persist: false, submit: false, props: { to: "prompt", source: "kit_prompt", label: "Send to txt2img Prompt" } },
               { type: "custom", name: "kit_replace", widget: "send-button", label: "", persist: false, submit: false, props: { to: "prompt", source: "kit_prompt", mode: "replace", label: "Replace txt2img Prompt" } },
               { type: "button", label: "Clear all fields", action: "kit_clear", variant: "danger" },

@@ -100,6 +100,13 @@ def test_schema_export(page):
     assert all(text[name]["prompt"] for name in ["consolidated", *CORE, *EXTRA, "grabbed"])  # tag completion
 
 
+def test_one_filled_button(page):
+    """A screen has one filled button: Build Prompt. The credential sections' Save was primary too
+    (twice), so the page showed three."""
+    filled = [node["label"] for node in _walk(page.schema()["layout"]) if node.get("type") == "button" and node.get("variant") == "primary"]
+    assert filled == ["Build Prompt"]
+
+
 def _walk(node):
     if isinstance(node, dict):
         yield node

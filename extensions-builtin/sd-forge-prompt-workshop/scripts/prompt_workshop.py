@@ -2186,7 +2186,8 @@ def _credentials_section(source_key: str, title: str, help_text: str):
                 ui.Text(f"{prefix}_user_id", lambda: _get_credentials(source_key)[1], label="User ID", persist=False, submit=False),
             ),
             ui.Row(
-                ui.Button("Save", f"save_{source_key}", "primary"),
+                # the page's one filled button is Build Prompt
+                ui.Button("Save", f"save_{source_key}", "secondary"),
                 ui.Button("Clear", f"clear_{source_key}", "danger"),
             ),
             ui.Output(f"{prefix}_status", kind="text"),
