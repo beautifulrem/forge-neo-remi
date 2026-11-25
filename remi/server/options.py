@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from remi.ui import Context, ParamError, ValidationError
+from remi.ui import Context, ParamError, Sentence, ValidationError
 
 MODEL_KEYS = ("sd_model_checkpoint", "forge_additional_modules", "forge_unet_storage_dtype")
 
@@ -105,7 +105,7 @@ def _model_value(key: str, value: Any) -> Any:
         from modules import sd_models
 
         if not isinstance(value, str) or sd_models.get_closet_checkpoint_match(value) is None:
-            raise ParamError(f"unknown checkpoint {value!r}")
+            raise ParamError(Sentence("unknown checkpoint {{value}}", value=repr(value)))
         return value
     if key == "forge_additional_modules":
         from remi.networks import module_files
@@ -116,12 +116,12 @@ def _model_value(key: str, value: Any) -> Any:
         names = [item.replace("\\", "/").rsplit("/", 1)[-1] for item in value]
         unknown = [name for name in names if name not in known]
         if unknown:
-            raise ParamError(f"unknown module(s): {', '.join(unknown)}")
+            raise ParamError(Sentence("unknown module(s): {{names}}", names=", ".join(unknown)))
         return names
     from remi.server.runtime import unet_dtypes
 
     if value not in unet_dtypes():
-        raise ParamError(f"unknown dtype {value!r}")
+        raise ParamError(Sentence("unknown dtype {{value}}", value=repr(value)))
     return value
 
 

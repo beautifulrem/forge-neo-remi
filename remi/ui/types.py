@@ -102,6 +102,9 @@ class AdviceItemSchema(TypedDict):
     message: str
     patch: dict[str, Any] | None
     action_label: NotRequired[str]
+    # a sentence with values in it: its catalog key (``{{name}}`` placeholders) and the values
+    template: NotRequired[str]
+    params: NotRequired[dict[str, str | list[str]]]
 
 
 class ModelCapabilitySchema(TypedDict, total=False):
@@ -144,6 +147,9 @@ class ScriptEntry(TypedDict):
     requires_capabilities: NotRequired[list[str]]
     applicable: NotRequired[bool]
     inapplicable_reason: NotRequired[str]
+    # the reason's catalog key and values (the reason is English)
+    inapplicable_template: NotRequired[str]
+    inapplicable_params: NotRequired[dict[str, str | list[str]]]
 
 
 class RequiredInput(TypedDict):

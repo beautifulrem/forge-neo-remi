@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from remi.ui.sentence import sentence_fields
+
 
 class SchemaError(ValueError):
     """A layout tree that cannot be exported or bound (duplicate names, bad
@@ -10,7 +12,8 @@ class SchemaError(ValueError):
 
 class ParamError(ValueError):
     """One rejected value. ``owner`` and ``param`` are filled in by the layout
-    that validated it."""
+    that validated it. ``message`` is a catalog key, or a :class:`Sentence`
+    when it names the value (its template and params go along for the UI)."""
 
     def __init__(self, message: str, *, param: str | None = None, owner: str | None = None):
         super().__init__(message)
@@ -19,7 +22,7 @@ class ParamError(ValueError):
         self.owner = owner
 
     def to_json(self) -> dict:
-        return {"owner": self.owner, "param": self.param, "message": self.message}
+        return {"owner": self.owner, "param": self.param, "message": str(self.message), **sentence_fields(self.message)}
 
     def __str__(self) -> str:
         where = ".".join(part for part in (self.owner, self.param) if part)

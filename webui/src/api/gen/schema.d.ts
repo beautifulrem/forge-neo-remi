@@ -2855,6 +2855,12 @@ export interface components {
             param?: string | null;
             /** Message */
             message: string;
+            /** Template */
+            template?: string | null;
+            /** Params */
+            params?: {
+                [key: string]: string | string[];
+            } | null;
         };
         /** ExtensionCheckRequest */
         ExtensionCheckRequest: {

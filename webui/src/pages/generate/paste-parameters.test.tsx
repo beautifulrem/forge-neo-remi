@@ -50,6 +50,24 @@ describe("usePasteParameters", () => {
     expect(mocks.toast.warning).not.toHaveBeenCalled()
   })
 
+  it("lists a skipped value's message in the UI language, by its template where it names the value", async () => {
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", "{{value}} is not one of the choices ({{choices}})", "{{value}} 不在可选项中（{{choices}}）")
+    i18n.addResource("zh-CN", "server", "an image is required", "需要一张图像")
+    const problems = [
+      { owner: "sampler", param: "sampler_name", message: "Euler X is not one of the choices (Euler, DPM++ 2M)", template: "{{value}} is not one of the choices ({{choices}})", params: { value: "Euler X", choices: "Euler, DPM++ 2M" } },
+      { owner: "core", param: "image", message: "an image is required" },
+    ]
+    mocks.api.parseInfotext.mockResolvedValue(parsed(problems as InfotextParsed["problems"]))
+    await i18n.changeLanguage("zh-CN")
+    try {
+      await hook().fromText("")
+    } finally {
+      await i18n.changeLanguage("en")
+    }
+    expect(mocks.toast.warning).toHaveBeenCalledWith("Some values were skipped", { description: "sampler_name: Euler X 不在可选项中（Euler, DPM++ 2M）\nimage: 需要一张图像" })
+  })
+
   it("says so when nothing applied, and lists up to four skipped values", async () => {
     mocks.applyPaste.mockReturnValue(0)
     const problems = [1, 2, 3, 4, 5].map((n) => ({ param: n % 2 ? `param${n}` : undefined, owner: n % 2 ? undefined : `script${n}`, message: `bad ${n}` }))

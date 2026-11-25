@@ -9,6 +9,7 @@ from remi.ui import conditions
 from remi.ui.context import Context, ensure_context
 from remi.ui.errors import ParamError, SchemaError, ValidationError
 from remi.ui.nodes import _NO_VALUE, Choice, Input, Node, Tabs
+from remi.ui.sentence import Sentence
 from remi.ui.types import NodeSchema
 
 UNKNOWN_POLICIES = ("error", "ignore")
@@ -149,7 +150,7 @@ class ScriptLayout:
         if values is None:
             return {}
         if not isinstance(values, Mapping) or not all(isinstance(key, str) for key in values):
-            raise ValidationError([ParamError(f"expected an object of named values, got {type(values).__name__}", owner=self.owner)])
+            raise ValidationError([ParamError(Sentence("expected an object of named values, got {{type}}", type=type(values).__name__), owner=self.owner)])
         return dict(values)
 
     def values_to_args(self, values: Mapping[str, Any] | None, ctx: Context | None = None, *, unknown: str = "error") -> list[Any]:
@@ -219,7 +220,7 @@ class ScriptLayout:
                 try:
                     raw = node.paste(params)
                 except Exception as error:  # an extension's paste function
-                    problems.append(ParamError(f"paste function failed: {error}", param=node.name, owner=self.owner))
+                    problems.append(ParamError(Sentence("paste function failed: {{error}}", error=error), param=node.name, owner=self.owner))
                     continue
             elif node.infotext:
                 raw = params.get(node.infotext)

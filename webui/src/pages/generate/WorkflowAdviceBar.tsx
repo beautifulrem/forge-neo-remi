@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import type { GenerateTab } from "@/features/progress/run-controller"
 import { cn } from "@/lib/utils"
 import { applyAdvicePatch } from "@/ui/actions"
+import { sentenceText } from "@/ui/messages"
 import { getFormStore } from "@/ui/form-store"
 import type { AdviceItem } from "@/ui/schema"
 import { failureText } from "@/features/errors/error-text"
@@ -24,7 +25,7 @@ function adviceKey(item: AdviceItem): string {
 }
 
 export function WorkflowAdviceBar({ tab }: { tab: GenerateTab }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const store = getFormStore(tab)
   const advice = useStore(store, (s) => s.advice)
   const dismissed = useStore(store, (s) => s.dismissedAdvice)
@@ -69,7 +70,7 @@ export function WorkflowAdviceBar({ tab }: { tab: GenerateTab }) {
             )}
           >
             <Icon className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-            <p className="min-w-0 flex-1 break-words">{t(item.message)}</p>
+            <p className="min-w-0 flex-1 break-words">{sentenceText(i18n, item.message, item.template, item.params, i18n.language)}</p>
             <div className="flex shrink-0 items-center gap-2">
               {item.patch ? (
                 <Button

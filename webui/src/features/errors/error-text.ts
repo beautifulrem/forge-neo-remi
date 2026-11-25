@@ -9,7 +9,8 @@
 import { toast } from "sonner"
 import { ApiError, RequestError, validationErrors } from "@/api/http"
 import { i18n, t } from "@/i18n"
-import type { ValidationError } from "@/ui/schema"
+import { sentenceText } from "@/ui/messages"
+import type { FieldMessage } from "@/ui/schema"
 
 export type StatusTexts = Partial<Record<number, string>>
 
@@ -72,16 +73,29 @@ export function renderFailureText(error: Error): string {
 }
 
 /**
- * Rejected values in the UI language: each distinct message translated with
- * the same key as the inline error under its field (the server's messages
- * are catalog keys, see `core.required`).
+ * A rejected value's message in the UI language: a catalog key (`core.required`, a setting's
+ * reason), or the template of one that names the value ("must be at most {{maximum}}, got
+ * {{value}}"). Text the server only passes on (a script's own exception) stays as it is.
  */
-export function validationText(errors: readonly ValidationError[]): string {
-  return [...new Set(errors.map((error) => t(error.message)))].join(" · ")
+export function validationMessage(error: FieldMessage, language = i18n.language): string {
+  return sentenceText(i18n, error.message, error.template, error.params, language)
+}
+
+/** Rejected values in the UI language: each distinct message once, as under its field. */
+export function validationText(errors: readonly FieldMessage[], language = i18n.language): string {
+  return [...new Set(errors.map((error) => validationMessage(error, language)))].join(" · ")
+}
+
+/**
+ * The messages under one field (none: undefined) in `language`, the one the render shows
+ * (`useTranslation().i18n.language`; see `messageText`).
+ */
+export function fieldErrorText(errors: readonly FieldMessage[] | undefined, language: string): string | undefined {
+  return errors?.length ? validationText(errors, language) : undefined
 }
 
 /** The "Some parameters are invalid" toast for rejected or missing values (the fields show them inline). */
-export function toastInvalid(errors: readonly ValidationError[]): void {
+export function toastInvalid(errors: readonly FieldMessage[]): void {
   toast.error(t("Some parameters are invalid"), { description: validationText(errors) })
 }
 

@@ -126,5 +126,6 @@
   "Flare color": "光晕颜色",
   "Ghost count": "鬼影数量",
   "JPEG Crush": "JPEG 压缩失真",
-  "Quality": "质量"
+  "Quality": "质量",
+  "this action needs the server's file store": "此动作需要服务器的文件存储"
 }

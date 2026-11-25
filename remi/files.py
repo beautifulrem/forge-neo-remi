@@ -385,12 +385,12 @@ class FileStore:
         """``remi.ui`` upload resolver: a PIL image for image inputs (with
         the original name as ``image.filename``), the path for ``File``."""
 
-        from remi.ui import ParamError
+        from remi.ui import ParamError, Sentence
         from remi.ui.nodes import File
 
         record = self.get(file_id)
         if record is None or record.kind not in ("upload", "output"):
-            raise ParamError(f"unknown upload {file_id!r}")
+            raise ParamError(Sentence("unknown upload {{id}}", id=repr(file_id)))
         if isinstance(node, File):
             return record.path
         if not record.is_image:
@@ -405,12 +405,12 @@ class FileStore:
     def check_upload(self, node: Any, file_id: str) -> str:
         """Upload resolver for validation only: the id, if it names a file."""
 
-        from remi.ui import ParamError
+        from remi.ui import ParamError, Sentence
         from remi.ui.nodes import File
 
         record = self.get(file_id)
         if record is None or record.kind not in ("upload", "output"):
-            raise ParamError(f"unknown upload {file_id!r}")
+            raise ParamError(Sentence("unknown upload {{id}}", id=repr(file_id)))
         if not isinstance(node, File) and not record.is_image:
             raise ParamError("the upload is not an image")
         return file_id

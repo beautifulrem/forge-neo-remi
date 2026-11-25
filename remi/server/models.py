@@ -31,6 +31,9 @@ class ErrorItem(Model):
     owner: str | None = None
     param: str | None = None
     message: str
+    # a message that names the value: its catalog key and values (the message is English)
+    template: str | None = None
+    params: dict[str, str | list[str]] | None = None
 
 
 class ValidationErrorBody(Model):

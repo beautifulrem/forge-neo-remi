@@ -215,14 +215,14 @@ describe("form store", () => {
       { owner: "sampler", param: "steps", message: "no such field here" },
     ])
     const s = store.getState()
-    expect(s.errors.core).toEqual({ deep: "too deep; really", top: "bad" })
-    expect(s.errors.sampler).toEqual({ steps: "no such field here" })
+    expect(s.errors.core).toEqual({ deep: [{ message: "too deep" }, { message: "really" }], top: [{ message: "bad" }] })
+    expect(s.errors.sampler).toEqual({ steps: [{ message: "no such field here" }] })
     // The section, the titled group and the second tab are opened.
     expect(s.open).toEqual({ "core::Hires": true, "core::More::group": true })
     expect(s.tabs).toEqual({ "core::tabs::A|B": "1" })
 
     store.getState().setValue("core", "top", "fixed")
-    expect(store.getState().errors.core).toEqual({ deep: "too deep; really" })
+    expect(store.getState().errors.core).toEqual({ deep: [{ message: "too deep" }, { message: "really" }] })
     store.getState().reset("core", ["deep"])
     expect(store.getState().errors.core).toEqual({})
     store.getState().clearErrors()

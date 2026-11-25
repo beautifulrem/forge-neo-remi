@@ -197,7 +197,8 @@ the two it lists, and the server answers it for all three.
 A rejected request answers with
 
 ```json
-{"errors": [{"owner": "core", "param": "width", "message": "expected a number, got 'abc'"}]}
+{"errors": [{"owner": "core", "param": "width", "message": "expected a number, got 'abc'",
+             "template": "expected a number, got {{value}}", "params": {"value": "'abc'"}}]}
 ```
 
 listing every rejected value (also the selected script's when core values are
@@ -206,6 +207,17 @@ UTF-8 cannot hold anywhere in the body (`param` is its path), or `null` when
 the body itself has the wrong shape (e.g. `"scripts"` is not an object); `param`
 is `null` for errors about a whole owner (an unknown script id, an owner's
 values that are not an object).
+
+`message` is English. A message that names the value comes with its catalog
+key: `template` with `{{name}}` placeholders and the `params` that fill them
+(`remi.ui.Sentence`; a param that is a list holds catalog names, which the
+client translates one by one); the client translates `template` and fills it.
+Any other message is a catalog key itself, except text the server only passes
+on: what a param's own `validate` or a setting's own code raised, and an
+extension's paste function failing (`paste function failed: {{error}}` keeps
+the error as it is). A script raises `ui.ParamError(ui.Sentence("must be at
+most {{maximum}}, got {{value}}", maximum=..., value=...))`, never an
+f-string.
 
 A script's values may also be a JSON array: its params in argument order
 (`args`); more values than params is an error.

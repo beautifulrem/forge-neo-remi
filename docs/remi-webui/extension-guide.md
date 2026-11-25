@@ -384,8 +384,11 @@ def refresh_models(self, ctx: ui.ActionContext, values: dict) -> dict:
   without crashing the form or queue.
 - An exception becomes an error answer (500, shown as an error toast);
   raise `remi.ui.ValidationError([ui.ParamError(message, param=..., owner=...)])`
-  for per-field messages (422). Prefer returning a warning toast for
-  expected problems.
+  for per-field messages (422). The message is a catalog key your
+  `localizations/` translate; one that names a value is a
+  `ui.Sentence("must be at most {{maximum}}", maximum=...)` (its template is the
+  key), never an f-string. Prefer returning a warning toast for expected
+  problems.
 
 Built-in examples: `sd_forge_multidiffusion` (`detect_size`: reads the
 img2img source image size through `ctx.files`), `sd_forge_controlnet`

@@ -77,6 +77,49 @@ describe("capability-aware ScriptsPanel", () => {
   })
 })
 
+describe("server sentences in the UI language", () => {
+  afterEach(async () => {
+    const { i18n } = await import("@/i18n")
+    await i18n.changeLanguage("en")
+  })
+
+  it("translates an advice chip and the reason a script does not apply by their templates", async () => {
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", "Requires {{capabilities}} (active model: {{model}})", "需要 {{capabilities}}（当前模型：{{model}}）")
+    i18n.addResource("zh-CN", "server", "Anima engine hooks", "Anima 引擎钩子")
+    i18n.addResource("zh-CN", "server", "Bria Fibo 2.0 supports at most {{max}} reference images; {{count}} are attached.", "Bria Fibo 2.0 最多支持 {{max}} 张参考图，当前附加了 {{count}} 张。")
+    await act(() => i18n.changeLanguage("zh-CN"))
+    const schema = makeSchemaWithCapabilities()
+    const anima = schema.scripts.find((script) => script.id === "anima_dave")!
+    anima.inapplicable_template = "Requires {{capabilities}} (active model: {{model}})"
+    anima.inapplicable_params = { capabilities: ["Anima engine hooks"], model: "Qwen-Image-2.1" }
+    const store = getFormStore("txt2img")
+    const advice: AdviceItem[] = [
+      {
+        code: "fibo.too_many_references",
+        severity: "warning",
+        message: "Bria Fibo 2.0 supports at most 2 reference images; 3 are attached.",
+        template: "Bria Fibo 2.0 supports at most {{max}} reference images; {{count}} are attached.",
+        params: { max: "2", count: "3" },
+      },
+    ]
+    store.getState().load(tabOwners(schema), { advice, capabilities: schema.capabilities })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <FormProvider formId="txt2img" store={store}>
+          <WorkflowAdviceBar tab="txt2img" />
+          <ScriptsPanel schema={schema} scriptChoice={null} />
+        </FormProvider>
+      </QueryClientProvider>,
+    )
+    expect(screen.getByText("Bria Fibo 2.0 最多支持 2 张参考图，当前附加了 3 张。")).toBeVisible()
+    const drawer = document.querySelector("[data-slot=inapplicable-scripts]") as HTMLElement
+    fireEvent.click(within(drawer).getAllByRole("button")[0]!)
+    expect(screen.getByText("需要 Anima 引擎钩子（当前模型：Qwen-Image-2.1）")).toBeVisible()
+  })
+})
+
 describe("WorkflowAdviceBar", () => {
   afterEach(() => {
     vi.restoreAllMocks()

@@ -5,9 +5,11 @@
  */
 import { useQuery } from "@tanstack/react-query"
 import { useMemo } from "react"
+import { useTranslation } from "react-i18next"
 import { useStore } from "zustand"
 import { clientOption } from "@/api/app-options"
 import { schemaQuery } from "@/api/queries"
+import { fieldErrorText } from "@/features/errors/error-text"
 import { getFormStore } from "@/ui/form-store"
 import type { SliderNode } from "@/ui/schema"
 import { editorBinding, type EditorBinding, modeLayers, type ModeLayers } from "../core/modes"
@@ -92,10 +94,12 @@ export function useImg2imgEditorProps(binding: EditorBinding | null, layers: Mod
   const store = getFormStore(IMG2IMG)
   const params = binding ? [binding.background, ...binding.layers.map((layer) => layer.param)] : []
   const valuesKey = useStore(store, (s) => params.map((name) => String(core(s, name) ?? "")).join("|"))
-  const errorsKey = useStore(store, (s) => {
+  const { i18n } = useTranslation()
+  const errorEntries = useStore(store, (s) => {
     const names = [binding?.background, layers.active?.param].filter(Boolean) as string[]
-    return names.map((name) => s.errors.core?.[name]).find(Boolean) ?? ""
+    return names.map((name) => s.errors.core?.[name]).find(Boolean)
   })
+  const errorsKey = fieldErrorText(errorEntries, i18n.language) ?? ""
   const width = useStore(store, (s) => Number(core(s, "width") ?? 0))
   const height = useStore(store, (s) => Number(core(s, "height") ?? 0))
   const resizeMode = useStore(store, (s) => core(s, "resize_mode") as string | number | undefined)

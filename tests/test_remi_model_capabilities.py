@@ -451,6 +451,11 @@ def test_scripts_schema_and_tab_schema_filter_by_capabilities_without_altering_s
         assert qwen_entries["anima_only_demo"]["requires_capabilities"] == ["anima_hooks"]
         assert qwen_entries["anima_only_demo"]["applicable"] is False
         assert "Anima engine hooks" in qwen_entries["anima_only_demo"]["inapplicable_reason"]
+        # the reason names the active model: the UI translates its template, each capability by its name
+        assert qwen_entries["anima_only_demo"]["inapplicable_template"] == "Requires {{capabilities}} (active model: {{model}})"
+        assert qwen_entries["anima_only_demo"]["inapplicable_params"]["capabilities"] == ["Anima engine hooks"]
+        turbo = next(item for item in qwen_schema["advice"] if item["code"] == "qwen21.turbo_mismatch")
+        assert "{{steps}}" in turbo["template"] and turbo["params"]["steps"] in turbo["message"]
         assert qwen_entries["universal_demo"]["requires_capabilities"] == []
         assert qwen_entries["universal_demo"]["applicable"] is True
         assert "inapplicable_reason" not in qwen_entries["universal_demo"]

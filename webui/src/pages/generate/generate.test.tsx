@@ -79,7 +79,7 @@ describe("generate page", () => {
     expect(await screen.findByText("must be at most 4")).toBeInTheDocument() // inside the (closed) Hires. fix section
     expect(screen.getByText("too many steps")).toBeInTheDocument()
     expect(screen.getByLabelText("Sampling steps", { selector: "input:not([type=range])" })).toHaveAttribute("aria-invalid", "true")
-    expect(getFormStore("txt2img").getState().errors.sampler).toEqual({ steps: "too many steps" })
+    expect(getFormStore("txt2img").getState().errors.sampler).toEqual({ steps: [{ message: "too many steps" }] })
     expect(useRuns.getState().runs.txt2img.pending).toBe(0)
   })
 

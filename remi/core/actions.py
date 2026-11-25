@@ -19,14 +19,14 @@ def _tab(ctx: ui.ActionContext) -> str:
 
     tab = ctx.tab or "txt2img"
     if tab not in TABS[:2]:
-        raise ui.ValidationError([ui.ParamError(f"core actions run on txt2img or img2img, not {tab!r}", owner="core")])
+        raise ui.ValidationError([ui.ParamError(ui.Sentence("core actions run on txt2img or img2img, not {{tab}}", tab=repr(tab)), owner="core")])
     return tab
 
 
 def _argument(ctx: ui.ActionContext, name: str) -> str:
     value = ctx.extra.get(name)
     if not isinstance(value, str) or not value:
-        raise ui.ValidationError([ui.ParamError(f"the action needs a {name!r} string", owner="core", param=name)])
+        raise ui.ValidationError([ui.ParamError(ui.Sentence("the action needs a {{name}} string", name=repr(name)), owner="core", param=name)])
     return value
 
 

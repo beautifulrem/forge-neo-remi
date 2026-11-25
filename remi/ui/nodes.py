@@ -18,6 +18,7 @@ from typing import Any, ClassVar, TypeAlias
 from remi.ui import conditions
 from remi.ui.context import Context
 from remi.ui.errors import ParamError, SchemaError
+from remi.ui.sentence import Sentence
 from remi.ui.types import ChoiceValue, NodeSchema
 
 NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -67,7 +68,7 @@ def to_number(value: Any) -> int | float:
     """A finite number from a JSON number or a numeric string."""
 
     if isinstance(value, bool):
-        raise ParamError(f"expected a number, got {value!r}")
+        raise ParamError(Sentence("expected a number, got {{value}}", value=repr(value)))
     if isinstance(value, str):
         text = value.strip()
         try:
@@ -76,11 +77,11 @@ def to_number(value: Any) -> int | float:
             try:
                 value = float(text)
             except ValueError:
-                raise ParamError(f"expected a number, got {value!r}") from None
+                raise ParamError(Sentence("expected a number, got {{value}}", value=repr(value))) from None
     elif not isinstance(value, (int, float)):
-        raise ParamError(f"expected a number, got {type(value).__name__}")
+        raise ParamError(Sentence("expected a number, got {{type}}", type=type(value).__name__))
     if isinstance(value, float) and not math.isfinite(value):
-        raise ParamError(f"expected a finite number, got {value!r}")
+        raise ParamError(Sentence("expected a finite number, got {{value}}", value=repr(value)))
     if isinstance(value, int) and abs(value) > sys.float_info.max:  # float(value) would raise OverflowError
         raise ParamError("expected a finite number, got an integer beyond the float range")
     return value
@@ -94,7 +95,7 @@ def check_finite_json(value: Any, path: str = "value") -> Any:
     """``value`` when it holds no NaN/Infinity anywhere (JSON numbers only)."""
 
     if isinstance(value, float) and not math.isfinite(value):
-        raise ParamError(f"{path} must be a finite number, got {value!r}")
+        raise ParamError(Sentence("{{path}} must be a finite number, got {{value}}", path=path, value=repr(value)))
     if isinstance(value, Mapping):
         for key, item in value.items():
             check_finite_json(item, f"{path}.{key}")
@@ -369,7 +370,7 @@ class Toggle(Input):
             return bool(value)
         if isinstance(value, str) and value.strip().lower() in ("true", "false"):
             return value.strip().lower() == "true"
-        raise ParamError(f"expected true or false, got {value!r}")
+        raise ParamError(Sentence("expected true or false, got {{value}}", value=repr(value)))
 
     def from_paste(self, raw: Any, ctx: Context) -> bool:
         # Infotext writes Python's str(bool); anything else that is present
@@ -430,9 +431,9 @@ class Number(Input):
     def coerce(self, value: Any, ctx: Context) -> int | float:
         number = to_number(value)
         if self.minimum is not None and number < self.minimum:
-            raise ParamError(f"must be at least {self.minimum}, got {number}")
+            raise ParamError(Sentence("must be at least {{minimum}}, got {{value}}", minimum=self.minimum, value=number))
         if self.maximum is not None and number > self.maximum:
-            raise ParamError(f"must be at most {self.maximum}, got {number}")
+            raise ParamError(Sentence("must be at most {{maximum}}, got {{value}}", maximum=self.maximum, value=number))
         if self.precision == 0:
             return _as_int(number)
         if self.precision is not None:
@@ -470,7 +471,7 @@ class Text(Input):
             return value
         if _is_number(value):
             return str(value)
-        raise ParamError(f"expected text, got {type(value).__name__}")
+        raise ParamError(Sentence("expected text, got {{type}}", type=type(value).__name__))
 
     def _input_schema(self, ctx: Context) -> dict[str, Any]:
         data: dict[str, Any] = {"lines": self.lines}
@@ -542,7 +543,7 @@ def match_choice(pairs: Sequence[tuple[str, Any]], value: Any, allow_custom: boo
     if allow_custom and isinstance(value, str):
         return value
     shown = ", ".join(repr(choice) for _label, choice in pairs[:8]) + (", ..." if len(pairs) > 8 else "")
-    raise ParamError(f"{value!r} is not one of the choices ({shown})" if pairs else f"{value!r}: there are no choices")
+    raise ParamError(Sentence("{{value}} is not one of the choices ({{choices}})", value=repr(value), choices=shown) if pairs else Sentence("{{value}}: there are no choices", value=repr(value)))
 
 
 class _ChoiceBase(Input):
@@ -592,7 +593,7 @@ class _ChoiceBase(Input):
         values = self.values(ctx)
         if _is_int(index) and 0 <= index < len(values):
             return values[index]
-        raise ParamError(f"choice index {index!r} is out of range")
+        raise ParamError(Sentence("choice index {{index}} is out of range", index=repr(index)))
 
     def _input_schema(self, ctx: Context) -> dict[str, Any]:
         choices = [{"value": value, "label": label} for label, value in self.resolve_choices(ctx)]
@@ -649,7 +650,7 @@ class MultiChoice(_ChoiceBase):
         if value is None:
             return []
         if isinstance(value, (str, bytes, Mapping)) or not isinstance(value, Iterable):
-            raise ParamError(f"expected a list, got {type(value).__name__}")
+            raise ParamError(Sentence("expected a list, got {{type}}", type=type(value).__name__))
         pairs = self.resolve_choices(ctx)
         return [match_choice(pairs, item, self.allow_custom, self.same) for item in value]
 
@@ -681,7 +682,7 @@ class MultiChoice(_ChoiceBase):
                 try:
                     raw = ast.literal_eval(text)
                 except (ValueError, SyntaxError):
-                    raise ParamError(f"cannot read a list from {raw!r}") from None
+                    raise ParamError(Sentence("cannot read a list from {{value}}", value=repr(raw))) from None
             else:
                 raw = [part.strip() for part in text.split(",") if part.strip()]
         return self.coerce(raw, ctx)
@@ -701,10 +702,10 @@ class Seed(Input):
         number = to_number(value)
         if isinstance(number, float):
             if not number.is_integer():
-                raise ParamError(f"a seed is a whole number, got {value!r}")
+                raise ParamError(Sentence("a seed is a whole number, got {{value}}", value=repr(value)))
             number = int(number)
         if not -1 <= number <= SEED_MAX:
-            raise ParamError(f"a seed is -1 (random) or between 0 and {SEED_MAX}, got {number}")
+            raise ParamError(Sentence("a seed is -1 (random) or between 0 and {{maximum}}, got {{value}}", maximum=SEED_MAX, value=number))
         return number
 
 
@@ -717,7 +718,7 @@ class Color(Input):
     def coerce(self, value: Any, ctx: Context) -> str:
         if isinstance(value, str) and COLOR_RE.fullmatch(value.strip()):
             return value.strip()
-        raise ParamError(f"expected a color like #rrggbb, got {value!r}")
+        raise ParamError(Sentence("expected a color like #rrggbb, got {{value}}", value=repr(value)))
 
 
 class _UploadInput(Input):
@@ -728,7 +729,7 @@ class _UploadInput(Input):
             return value
         if isinstance(value, str) and value:
             return value
-        raise ParamError(f"expected an upload id, got {type(value).__name__}")
+        raise ParamError(Sentence("expected an upload id, got {{type}}", type=type(value).__name__))
 
     def _resolve(self, value: Any, ctx: Context) -> Any:
         if isinstance(value, str) and ctx.resolve_upload is not None:
@@ -814,7 +815,7 @@ class ImageList(_UploadInput):
         if value is None:
             return []
         if isinstance(value, (str, bytes, Mapping)) or not isinstance(value, Iterable):
-            raise ParamError(f"expected a list of upload ids, got {type(value).__name__}")
+            raise ParamError(Sentence("expected a list of upload ids, got {{type}}", type=type(value).__name__))
         items = [self._check_item(item) for item in value]
         if any(item is None for item in items):
             raise ParamError("an image list cannot contain null")
@@ -838,7 +839,7 @@ class File(_UploadInput):
 
     def coerce(self, value: Any, ctx: Context) -> str | None:
         if value is not None and not (isinstance(value, str) and value):
-            raise ParamError(f"expected an upload id, got {type(value).__name__}")
+            raise ParamError(Sentence("expected an upload id, got {{type}}", type=type(value).__name__))
         return value
 
     def to_arg(self, value: Any, ctx: Context) -> Any:
@@ -918,7 +919,7 @@ class RangeSlider(Custom):
 
     def coerce(self, value: Any, ctx: Context) -> list[int | float]:
         if isinstance(value, (str, Mapping)) or not isinstance(value, Sequence) or len(value) != 2:
-            raise ParamError(f"expected [low, high], got {value!r}")
+            raise ParamError(Sentence("expected [low, high], got {{value}}", value=repr(value)))
         ends = sorted(min(max(to_number(item), self.minimum), self.maximum) for item in value)
         return [_as_int(end) if self.integer else float(end) for end in ends]
 

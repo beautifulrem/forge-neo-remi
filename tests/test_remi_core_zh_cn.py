@@ -67,6 +67,26 @@ def test_the_sentences_a_job_ends_with_are_collected(strings, catalog):
     assert all((catalog.get(text) or "").strip() for text in JOB_TEXTS)
 
 
+def test_the_model_advice_is_collected(strings, catalog):
+    """The advice bar above Generate and the reason a script does not apply:
+    the server formatted their sentences with the values in them, which the
+    UI could never translate. A ``Sentence`` keeps its template for it."""
+
+    from remi_core_strings import advice_strings
+
+    advice = advice_strings()
+    assert advice <= strings
+    assert {
+        "Anima-Turbo checkpoint with CFG {{cfg}} / {{steps}} steps: it is distilled for CFG 1 and 8-12 steps (see the Official Turbo preset); higher values over-cook it.",
+        "Requires {{capabilities}} (active model: {{model}})",
+        "Set Turbo (10 steps · CFG 1.0)",
+        "Z-Image: reference images are attached while Z-Image Omni/Edit reference mode is disabled.",
+    } <= advice
+    missing = sorted(text for text in advice if not (catalog.get(text) or "").strip())
+    assert missing == []
+    assert all(_placeholders(catalog[text]) == _placeholders(text) for text in advice)
+
+
 def test_the_callbacks_section_keeps_the_vae_explanation():
     """The Callbacks section's help once reused the key ``sd_vae_explanation``
     and replaced the VAE section's explanation."""
@@ -310,3 +330,63 @@ def test_extension_catalogs_agree_with_the_core_catalog(catalog):
         own = json.loads(path.read_text(encoding="utf-8"))
         conflicts |= {f"{path.parts[-3]}: {key}": (value, catalog[key]) for key, value in own.items() if key in catalog and catalog[key] != value}
     assert conflicts == {}
+
+
+# Messages of a rejected value that are no catalog key, each with why. The
+# rest are constants or ``Sentence`` templates the catalogs translate.
+FREE_TEXT_REJECTIONS = {
+    ("remi/core/forms.py", "message"): "a form's `required` message (REQUIRED_INPUTS, collected with the form)",
+    ("remi/server/options.py", "message"): "the parameter of `_error`, the helper its callers use",
+    ("remi/server/options.py", "reason"): "frozen_reason()'s sentences, in the SPA catalog (a locked setting's reason)",
+    ("remi/server/options.py", 'f"{type(error).__name__}: {error}"'): "a setting's own code raised: its exception, as it is",
+    ("remi/ui/nodes.py", "str(error)"): "a param's own `validate` raised: the extension's text",
+    ("extensions-builtin/sd_forge_controlnet/lib_controlnet/unit_actions.py", "message"): "the parameter of `bad_input`, the helper its callers use",
+    ("extensions-builtin/sd_forge_controlnet/lib_controlnet/unit_param.py", "str(error)"): "the infotext parser's own error",
+    ("extensions-builtin/sd_forge_controlnet/lib_controlnet/unit_param.py", 'f"{key}: {error}"'): "a unit field's name before that field's own message",
+}
+EXTENSION_REJECTIONS = {
+    "extensions-builtin/sd_forge_controlnet/lib_controlnet": "extensions-builtin/sd_forge_controlnet",
+    "extensions-builtin/sd-postprocess-suite": "extensions-builtin/sd-postprocess-suite",
+}
+
+
+def test_every_rejected_value_has_a_catalog_key(catalog):
+    """A field shows the server's message under it in the UI language: the
+    message is a catalog key, or a ``Sentence`` whose template is one (a
+    message formatted with the value, ``f"must be at most {maximum}"``, could
+    never be translated)."""
+
+    texts, unchecked = strings_module.param_error_messages(strings_module.PARAM_ERROR_SOURCES + tuple(EXTENSION_REJECTIONS))
+    assert sorted(set(unchecked) - set(FREE_TEXT_REJECTIONS)) == []
+    assert sorted(set(FREE_TEXT_REJECTIONS) - set(unchecked)) == []  # an entry that no longer applies
+    assert {"must be at most {{maximum}}, got {{value}}", "unknown upload {{id}}", "a choice is required", "upload a control image"} <= texts
+
+    spa = strings_module.spa_catalog()
+    core = strings_module.param_error_strings()
+    missing = sorted(text for text in core if not (catalog.get(text) or "").strip() and text not in spa)
+    assert missing == []
+    for folder, extension in EXTENSION_REJECTIONS.items():
+        own = json.loads((ROOT / extension / "localizations" / "zh_CN.json").read_text(encoding="utf-8"))
+        texts = strings_module.param_error_messages((folder,))[0]
+        assert sorted(text for text in texts if not (own.get(text) or catalog.get(text) or "").strip()) == [], extension
+        assert all(_placeholders(own.get(text) or catalog[text]) == _placeholders(text) for text in texts)
+    assert all(_placeholders(catalog.get(text) or spa[text]) == _placeholders(text) for text in core)
+
+
+def test_a_rejected_value_keeps_its_template():
+    """The JSON of a rejected value carries the catalog key and the values
+    next to the English message."""
+
+    from remi import ui
+
+    with pytest.raises(ui.ParamError) as caught:
+        ui.Number("steps", minimum=1, maximum=150).coerce(999, ui.Context())
+    assert caught.value.to_json() | {"owner": "core", "param": "steps"} == {
+        "owner": "core",
+        "param": "steps",
+        "message": "must be at most 150, got 999",
+        "template": "must be at most {{maximum}}, got {{value}}",
+        "params": {"maximum": "150", "value": "999"},
+    }
+    # a constant message is its own key
+    assert ui.ParamError("a choice is required").to_json() == {"owner": None, "param": None, "message": "a choice is required"}

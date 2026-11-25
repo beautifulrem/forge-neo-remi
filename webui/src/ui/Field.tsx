@@ -156,7 +156,7 @@ export function Field(props: FieldProps) {
   )
 }
 
-/** A server validation message under a control (server messages are not translated). */
+/** A server validation message under a control, already in the UI language (`fieldErrorText`). */
 export function FieldError({ id, message, className }: { id: string; message: string; className?: string }) {
   return (
     <p id={errorTextId(id)} className={cn("flex items-start gap-1 text-xs leading-snug font-medium text-destructive", className)}>

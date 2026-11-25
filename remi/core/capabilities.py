@@ -16,6 +16,7 @@ from backend.nn.model_capabilities import (
     ensure_ext_capabilities_loaded,
     normalize_preset_name,
 )
+from remi.ui.sentence import sentence_fields
 
 
 def _resolve_opts(opts: Any = None) -> Any:
@@ -108,7 +109,8 @@ def script_applicability(
         "applicable": applicable,
     }
     if not applicable and reason:
-        meta["inapplicable_reason"] = reason
+        meta["inapplicable_reason"] = str(reason)
+        meta.update(sentence_fields(reason, "inapplicable_"))  # the UI translates the template (the reason is English)
     return meta
 
 

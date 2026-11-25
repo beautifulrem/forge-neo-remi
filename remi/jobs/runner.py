@@ -82,7 +82,7 @@ def upscale_source(ctx: JobContext, file_id: str) -> Any:
     try:
         return ctx.resolve_upload(Image("upscale_from"), file_id)
     except ParamError as error:
-        raise ValidationError([ParamError(str(error), param="upscale_from")]) from None
+        raise ValidationError([ParamError(error.message, param="upscale_from")]) from None
 
 
 def _source_infotext(image: Any) -> str | None:

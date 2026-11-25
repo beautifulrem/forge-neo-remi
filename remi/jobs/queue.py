@@ -413,13 +413,13 @@ class JobQueue:
         """Validate and queue (``repeat`` copies); raises
         ``remi.ui.ValidationError`` or :class:`JobError`."""
 
-        from remi.ui import ParamError, ValidationError
+        from remi.ui import ParamError, Sentence, ValidationError
         from remi.ui.schema import SCHEMA_VERSION
 
         if submission.tab not in TABS:
-            raise ValidationError([ParamError(f"tab is one of {', '.join(TABS)}")])
+            raise ValidationError([ParamError(Sentence("tab is one of {{tabs}}", tabs=", ".join(TABS)))])
         if not 1 <= submission.repeat <= MAX_REPEAT:
-            raise ValidationError([ParamError(f"repeat is between 1 and {MAX_REPEAT}")])
+            raise ValidationError([ParamError(Sentence("repeat is between 1 and {{maximum}}", maximum=MAX_REPEAT))])
         self.validate(submission.tab, submission.core, submission.scripts)
         meta = dict(submission.meta) if submission.meta else None
         if submission.upscale_from is not None:
@@ -433,13 +433,13 @@ class JobQueue:
         return jobs
 
     def _check_upscale_source(self, tab: str, file_id: str) -> None:
-        from remi.ui import ParamError, ValidationError
+        from remi.ui import ParamError, Sentence, ValidationError
 
         if tab != "txt2img":
             raise ValidationError([ParamError("only txt2img jobs Hires. fix an existing image", param="upscale_from")])
         record = self.files.get(file_id)
         if record is None or record.kind not in ("upload", "output") or not record.is_image:
-            raise ValidationError([ParamError(f"unknown image {file_id!r}", param="upscale_from")])
+            raise ValidationError([ParamError(Sentence("unknown image {{id}}", id=repr(file_id)), param="upscale_from")])
 
     def retry(self, job_id: str, *, user: str | None = None) -> Job:
         job = self.get(job_id)

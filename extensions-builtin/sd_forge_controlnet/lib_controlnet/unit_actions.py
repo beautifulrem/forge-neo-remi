@@ -49,7 +49,7 @@ def bad_input(owner: str, message: str) -> ui.ValidationError:
 def unit_index(ctx: ui.ActionContext, count: int) -> int:
     index = ctx.extra.get("unit")
     if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < count:
-        raise bad_input(ctx.owner, f"unit must be an index below {count}, got {index!r}")
+        raise bad_input(ctx.owner, ui.Sentence("unit must be an index below {{limit}}, got {{index}}", limit=count, index=repr(index)))
     return index
 
 
@@ -150,7 +150,7 @@ def _number(ctx: ui.ActionContext, name: str) -> float:
     try:
         number = to_number(raw)
     except ui.ParamError:
-        raise bad_input(ctx.owner, f"{name}: expected a number, got {raw!r}") from None
+        raise bad_input(ctx.owner, ui.Sentence("{{name}}: expected a number, got {{value}}", name=name, value=repr(raw))) from None
     return min(max(number, control["minimum"]), control["maximum"])
 
 
@@ -159,7 +159,7 @@ def make_region_canvas(ctx: ui.ActionContext, index: int) -> dict[str, Any]:
 
     shape = ctx.extra.get("shape", "Rectangle")
     if shape not in region_canvas.SHAPES:
-        raise bad_input(ctx.owner, f"shape is one of {list(region_canvas.SHAPES)}")
+        raise bad_input(ctx.owner, ui.Sentence("shape is one of {{shapes}}", shapes=list(region_canvas.SHAPES)))
     width, height = core_size(ctx)
     subjects = math.floor(_number(ctx, "subjects") + 0.5)
     image = region_canvas.generate_canvas(width, height, subjects, _number(ctx, "randomize"), _number(ctx, "vertical"), shape)

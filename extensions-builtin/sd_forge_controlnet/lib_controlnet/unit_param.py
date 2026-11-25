@@ -122,7 +122,7 @@ def _boolean(value: Any) -> bool:
         return bool(value)
     if isinstance(value, str) and value.strip().lower() in ("true", "false"):
         return value.strip().lower() == "true"
-    raise ui.ParamError(f"expected true or false, got {value!r}")
+    raise ui.ParamError(ui.Sentence("expected true or false, got {{value}}", value=repr(value)))
 
 
 def _clamped(value: Any, low: float, high: float) -> float:
@@ -138,7 +138,7 @@ def _choice(enum, convert, value: Any) -> str:
     try:
         return convert(value).value
     except (ValueError, KeyError, IndexError, AssertionError, AttributeError, TypeError):
-        raise ui.ParamError(f"{value!r} is not one of the choices") from None
+        raise ui.ParamError(ui.Sentence("{{value}} is not one of the choices", value=repr(value))) from None
 
 
 def coerce_field(name: str, value: Any) -> Any:
@@ -148,7 +148,7 @@ def coerce_field(name: str, value: Any) -> Any:
         return _boolean(value)
     if name in TEXTS:
         if not isinstance(value, str):
-            raise ui.ParamError(f"expected text, got {type(value).__name__}")
+            raise ui.ParamError(ui.Sentence("expected text, got {{type}}", type=type(value).__name__))
         return value
     if name == "weight":
         return _clamped(value, 0.0, 2.0)
@@ -169,7 +169,7 @@ def coerce_field(name: str, value: Any) -> Any:
     if name in IMAGES:
         if value is None or (isinstance(value, str) and value):
             return value
-        raise ui.ParamError(f"expected an upload id, got {type(value).__name__}")
+        raise ui.ParamError(ui.Sentence("expected an upload id, got {{type}}", type=type(value).__name__))
     if name == "pose":
         if value is None or isinstance(value, (dict, list)):
             return value
@@ -182,7 +182,7 @@ def normalize(value: Any, is_img2img: bool) -> dict[str, Any]:
     the missing ones), unknown keys (and the paste marker) dropped."""
 
     if not isinstance(value, Mapping):
-        raise ui.ParamError(f"expected a ControlNet unit object, got {type(value).__name__}")
+        raise ui.ParamError(ui.Sentence("expected a ControlNet unit object, got {{type}}", type=type(value).__name__))
     check_finite_json(value)
     result = default_value(is_img2img)
     for key, raw in value.items():
@@ -393,7 +393,7 @@ class ControlNetUnitParam(ui.Custom):
 
     def from_paste(self, raw: Any, ctx: ui.Context) -> dict[str, Any]:
         if not isinstance(raw, str):
-            raise ui.ParamError(f"expected the unit's infotext entry, got {type(raw).__name__}")
+            raise ui.ParamError(ui.Sentence("expected the unit's infotext entry, got {{type}}", type=type(raw).__name__))
         return {PASTE_MARKER: True, **pasted_fields(raw)}
 
     def to_arg(self, value: dict[str, Any], ctx: ui.Context) -> ControlNetUnit:
@@ -451,11 +451,11 @@ class ControlNetUnitParam(ui.Custom):
         module = "None" if preview else value["module"]
         preprocessor = global_state.supported_preprocessors.get(module)
         if preprocessor is None:
-            raise ui.ParamError(f"unknown preprocessor {module!r}")
+            raise ui.ParamError(ui.Sentence("unknown preprocessor {{name}}", name=repr(module)))
         if not preprocessor.do_not_need_model:
             if value["model"] == "None":
                 raise ui.ParamError("select a ControlNet model")
             if value["model"] not in global_state.controlnet_filename_dict:
-                raise ui.ParamError(f"ControlNet model {value['model']!r} was not found (refresh the model list)")
+                raise ui.ParamError(ui.Sentence("ControlNet model {{model}} was not found (refresh the model list)", model=repr(value["model"])))
         if not self.is_img2img and not preview and not value["image"]:
             raise ui.ParamError("upload a control image")

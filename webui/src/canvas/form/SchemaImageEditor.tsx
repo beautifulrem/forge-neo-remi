@@ -15,17 +15,18 @@ import { Segmented } from "@/components/Segmented"
 import { evaluate } from "@/ui/conditions"
 import { Field } from "@/ui/Field"
 import { useForm, useFormState, useOwner, useParam } from "@/ui/hooks"
-import type { ImageNode } from "@/ui/schema"
+import { fieldErrorText } from "@/features/errors/error-text"
+import type { FieldMessage, ImageNode } from "@/ui/schema"
 import { ImageEditor } from "../ImageEditor"
 import type { EditorLayer, LayerKind } from "../types"
 import { layersOf } from "./image-role"
 import { replaceBackground, writeValues } from "./replace-background"
 
-type LayerInfo = { name: string; kind: LayerKind; label: string; value: string | null; visible: boolean; error: string | undefined }
+type LayerInfo = { name: string; kind: LayerKind; label: string; value: string | null; visible: boolean; errors: readonly FieldMessage[] | null }
 
 /** The image input of a background with layers: label and info, then the editor. */
 export function SchemaImageEditor({ node }: { node: ImageNode }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { formId, store } = useForm()
   const owner = useOwner()
   const fieldId = useId()
@@ -42,7 +43,7 @@ export function SchemaImageEditor({ node }: { node: ImageNode }) {
         const visible = !layer.hidden && override?.visible !== false && evaluate(layer.visible_if, owner, (o, n) => s.values[o]?.[n])
         const value = s.values[owner]?.[layer.name]
         const text = override && Object.hasOwn(override, "label") ? (override.label ?? "") : (layer.label ?? "")
-        return { name: layer.name, kind: layer.kind, label: text, value: typeof value === "string" ? value : null, visible, error: s.errors[owner]?.[layer.name] }
+        return { name: layer.name, kind: layer.kind, label: text, value: typeof value === "string" ? value : null, visible, errors: s.errors[owner]?.[layer.name] ?? null }
       }),
     ),
   )
@@ -54,7 +55,7 @@ export function SchemaImageEditor({ node }: { node: ImageNode }) {
 
   const editorLayers: Record<string, EditorLayer> = {}
   for (const layer of layers) editorLayers[layer.name] = { kind: layer.kind, value: layer.value, label: layerName(layer) }
-  const error = param.error ?? active?.error ?? null
+  const error = param.error ?? fieldErrorText(active?.errors ?? undefined, i18n.language) ?? null
 
   return (
     <Field

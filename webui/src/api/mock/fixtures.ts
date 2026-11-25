@@ -648,6 +648,8 @@ export function tabSchema(tab: "txt2img" | "img2img"): TabSchema {
           requires_capabilities: ["anima_hooks"],
           applicable: false,
           inapplicable_reason: `Requires Anima engine hooks (active model: ${capabilities.engine_label ?? capabilities.preset})`,
+          inapplicable_template: "Requires {{capabilities}} (active model: {{model}})",
+          inapplicable_params: { capabilities: ["Anima engine hooks"], model: capabilities.engine_label ?? capabilities.preset },
         }
       : { ...ANIMA, applicable: true },
     CONTROLNET,
@@ -876,4 +878,11 @@ export const serverCatalogZh: Record<string, string> = {
   "deleted from the queue": "已从队列中删除",
   "not replayable: its arguments do not map to the current parameters": "无法重放：其参数与当前参数对应不上",
   "the model was not loaded": "模型未能加载",
+  // sentences the server fills in (remi.ui.Sentence): translated by their template
+  "Requires {{capabilities}} (active model: {{model}})": "需要 {{capabilities}}（当前模型：{{model}}）",
+  "Anima engine hooks": "Anima 引擎钩子",
+  "Qwen-Image-2.1 Turbo detected with steps={{steps}}, cfg={{cfg}}: the 8-step distilled Turbo checkpoint/LoRA works best at ~8 steps with CFG 1.0.":
+    "检测到 Qwen-Image-2.1 Turbo，steps={{steps}}，cfg={{cfg}}：8 步蒸馏的 Turbo 模型或 LoRA 在约 8 步、CFG 1.0 时效果最好。",
+  "Set Turbo (8 steps · CFG 1.0)": "设为 Turbo（8 步 · CFG 1.0）",
+  "must be at most {{maximum}}, got {{value}}": "不能大于 {{maximum}}，当前为 {{value}}",
 }

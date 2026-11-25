@@ -19,6 +19,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from remi.ui.sentence import Sentence, sentence_fields
+
 import torch
 from torch import nn
 
@@ -42,6 +44,7 @@ class AdviceItem:
         }
         if self.action_label is not None:
             data["action_label"] = self.action_label
+        data.update(sentence_fields(self.message))
         return data
 
 
@@ -467,8 +470,7 @@ def _evaluate_anima_advice(
                     code="anima.turbo_mismatch",
                     severity="warning",
                     message=(
-                        f"Anima-Turbo checkpoint with CFG {cfg:g} / {int(steps)} steps: it is distilled for "
-                        "CFG 1 and 8-12 steps (see the Official Turbo preset); higher values over-cook it."
+                        Sentence("Anima-Turbo checkpoint with CFG {{cfg}} / {{steps}} steps: it is distilled for CFG 1 and 8-12 steps (see the Official Turbo preset); higher values over-cook it.", cfg=f"{cfg:g}", steps=int(steps))
                     ),
                     patch={"sampler.steps": {"value": 10}, "cfg_scale": {"value": 1.0}, "sampler.sampler_name": {"value": "Euler"}},
                     action_label="Set Turbo (10 steps · CFG 1.0)",
@@ -480,8 +482,7 @@ def _evaluate_anima_advice(
                     code="anima.base_low_steps",
                     severity="warning",
                     message=(
-                        f"Non-Turbo Anima checkpoint with CFG {cfg:g} / {int(steps)} steps: Base/Aesthetic need "
-                        "about 30-50 steps and CFG 4-5 (Turbo checkpoints are meant for these settings)."
+                        Sentence("Non-Turbo Anima checkpoint with CFG {{cfg}} / {{steps}} steps: Base/Aesthetic need about 30-50 steps and CFG 4-5 (Turbo checkpoints are meant for these settings).", cfg=f"{cfg:g}", steps=int(steps))
                     ),
                     patch={"sampler.steps": {"value": 36}, "cfg_scale": {"value": 4.5}},
                     action_label="Set Base (36 steps · CFG 4.5)",
@@ -512,8 +513,7 @@ def _evaluate_anima_advice(
                     code="anima.rgba_non_white_bg",
                     severity="warning",
                     message=(
-                        f"Anima RGBA (4-channel) VAE with a transparent img2img input and img2img_background_color={bg!r}: "
-                        "set img2img_background_color to #ffffff (white) to avoid dark-fringe alpha artifacts."
+                        Sentence("Anima RGBA (4-channel) VAE with a transparent img2img input and img2img_background_color={{color}}: set img2img_background_color to #ffffff (white) to avoid dark-fringe alpha artifacts.", color=repr(bg))
                     ),
                     patch={"__options__": {"img2img_background_color": "#ffffff"}},
                     action_label="Set White Background (#ffffff)",
@@ -528,8 +528,7 @@ def _evaluate_anima_advice(
                 code="anima.rgba_jpeg_format",
                 severity="warning",
                 message=(
-                    f"Anima RGBA transparent setup detected while samples_format={samples_format!r}: "
-                    "JPEG drops the alpha channel; switch the output format to PNG or WebP to keep transparency."
+                    Sentence("Anima RGBA transparent setup detected while samples_format={{format}}: JPEG drops the alpha channel; switch the output format to PNG or WebP to keep transparency.", format=repr(samples_format))
                 ),
                 patch={"__options__": {"samples_format": "png"}},
                 action_label="Switch Output to PNG",
@@ -605,8 +604,7 @@ def _evaluate_moss_advice(
                     code="moss.dmd_turbo_mismatch",
                     severity="warning",
                     message=(
-                        f"{variant} detected with steps={steps}, cfg={cfg}: distilled/Turbo variants "
-                        "typically work best at 4-16 steps and CFG 1.0 (with SLG automatically disabled at CFG 1)."
+                        Sentence("{{variant}} detected with steps={{steps}}, cfg={{cfg}}: distilled/Turbo variants typically work best at 4-16 steps and CFG 1.0 (with SLG automatically disabled at CFG 1).", variant=variant, steps=steps, cfg=cfg)
                     ),
                     patch={"sampler.steps": {"value": target_steps}, "cfg_scale": {"value": 1.0}},
                     action_label=f"Set {target_steps} steps · CFG 1.0",
@@ -692,8 +690,7 @@ def _evaluate_krea2_advice(
                     code="krea2.turbo_mismatch",
                     severity="warning",
                     message=(
-                        f"Krea-2-Turbo detected with steps={steps}, cfg={cfg}: Turbo is step-distilled and "
-                        "typically works best at ~8 steps with CFG 1.0."
+                        Sentence("Krea-2-Turbo detected with steps={{steps}}, cfg={{cfg}}: Turbo is step-distilled and typically works best at ~8 steps with CFG 1.0.", steps=steps, cfg=cfg)
                     ),
                     patch={"sampler.steps": {"value": 8}, "cfg_scale": {"value": 1.0}},
                     action_label="Set Turbo (8 steps · CFG 1.0)",
@@ -706,8 +703,7 @@ def _evaluate_krea2_advice(
                     code="krea2.raw_low_steps",
                     severity="warning",
                     message=(
-                        f"Krea-2-Raw detected with steps={steps}, cfg={cfg}: the undistilled Raw base typically "
-                        "needs ~28-52 steps and CFG 3.5-4.5 (or a Krea-2 Turbo LoRA for 8-step CFG 1.0)."
+                        Sentence("Krea-2-Raw detected with steps={{steps}}, cfg={{cfg}}: the undistilled Raw base typically needs ~28-52 steps and CFG 3.5-4.5 (or a Krea-2 Turbo LoRA for 8-step CFG 1.0).", steps=steps, cfg=cfg)
                     ),
                     patch={"sampler.steps": {"value": 32}, "cfg_scale": {"value": 4.0}},
                     action_label="Set Raw (32 steps · CFG 4.0)",
@@ -778,8 +774,7 @@ def _evaluate_flux3_advice(
                     code="flux3.distilled_cfg",
                     severity="warning",
                     message=(
-                        f"FLUX.3 Klein (step-distilled) with cfg={cfg}: the distilled flow-map model samples without classifier-free "
-                        "guidance; use CFG 1.0 (the negative prompt is then skipped) and about 16 steps."
+                        Sentence("FLUX.3 Klein (step-distilled) with cfg={{cfg}}: the distilled flow-map model samples without classifier-free guidance; use CFG 1.0 (the negative prompt is then skipped) and about 16 steps.", cfg=cfg)
                     ),
                     patch={"cfg_scale": {"value": 1.0}, "sampler.steps": {"value": 16}},
                     action_label="Set Distilled (16 steps · CFG 1.0)",
@@ -792,8 +787,7 @@ def _evaluate_flux3_advice(
                     code="flux3.base_low_steps",
                     severity="warning",
                     message=(
-                        f"FLUX.3 Klein Base with steps={steps}, cfg={cfg}: the undistilled base typically needs about 50 steps with "
-                        "CFG around 3.5 (use the distilled Klein checkpoint for 16-step CFG 1 sampling)."
+                        Sentence("FLUX.3 Klein Base with steps={{steps}}, cfg={{cfg}}: the undistilled base typically needs about 50 steps with CFG around 3.5 (use the distilled Klein checkpoint for 16-step CFG 1 sampling).", steps=steps, cfg=cfg)
                     ),
                     patch={"sampler.steps": {"value": 50}, "cfg_scale": {"value": 3.5}},
                     action_label="Set Base (50 steps · CFG 3.5)",
@@ -815,7 +809,7 @@ def _evaluate_flux3_advice(
             AdviceItem(
                 code="flux3.too_many_refs",
                 severity="warning",
-                message=f"FLUX.3 was trained with at most {FLUX3_MAX_REFERENCES} reference images; {ref_count} are attached.",
+                message=Sentence("FLUX.3 was trained with at most {{max}} reference images; {{count}} are attached.", max=FLUX3_MAX_REFERENCES, count=ref_count),
                 patch=None,
             )
         )
@@ -890,8 +884,7 @@ def _evaluate_qwen21_advice(
                     code="qwen21.turbo_mismatch",
                     severity="warning",
                     message=(
-                        f"Qwen-Image-2.1 Turbo detected with steps={steps}, cfg={cfg}: the 8-step distilled Turbo "
-                        "checkpoint/LoRA works best at ~8 steps with CFG 1.0."
+                        Sentence("Qwen-Image-2.1 Turbo detected with steps={{steps}}, cfg={{cfg}}: the 8-step distilled Turbo checkpoint/LoRA works best at ~8 steps with CFG 1.0.", steps=steps, cfg=cfg)
                     ),
                     patch={"sampler.steps": {"value": 8}, "cfg_scale": {"value": 1.0}},
                     action_label="Set Turbo (8 steps · CFG 1.0)",
@@ -904,8 +897,7 @@ def _evaluate_qwen21_advice(
                     code="qwen21.base_low_steps",
                     severity="warning",
                     message=(
-                        f"Qwen-Image-2.1 Base detected with steps={steps}, cfg={cfg}: the undistilled Base model typically "
-                        "needs ~32-40 steps and CFG 2.5-4.0 (use Qwen-Image-2.1-Turbo or a Turbo LoRA for 8-step CFG 1.0)."
+                        Sentence("Qwen-Image-2.1 Base detected with steps={{steps}}, cfg={{cfg}}: the undistilled Base model typically needs ~32-40 steps and CFG 2.5-4.0 (use Qwen-Image-2.1-Turbo or a Turbo LoRA for 8-step CFG 1.0).", steps=steps, cfg=cfg)
                     ),
                     patch={"sampler.steps": {"value": 32}, "cfg_scale": {"value": 2.5}},
                     action_label="Set Base (32 steps · CFG 2.5)",
@@ -927,7 +919,7 @@ def _evaluate_qwen21_advice(
             AdviceItem(
                 code="qwen21.too_many_refs",
                 severity="warning",
-                message=f"Qwen-Image-2.1 was trained with at most {QWEN21_MAX_REFERENCES} reference images; {ref_count} are attached.",
+                message=Sentence("Qwen-Image-2.1 was trained with at most {{max}} reference images; {{count}} are attached.", max=QWEN21_MAX_REFERENCES, count=ref_count),
                 patch=None,
             )
         )
@@ -939,8 +931,7 @@ def _evaluate_qwen21_advice(
                 code="qwen21.rgba_jpeg_format",
                 severity="warning",
                 message=(
-                    f"Qwen-Image-2.1 RGBA transparent prompt detected while samples_format={samples_format!r}: "
-                    "JPEG drops the alpha channel; switch the output format to PNG or WebP to keep transparency."
+                    Sentence("Qwen-Image-2.1 RGBA transparent prompt detected while samples_format={{format}}: JPEG drops the alpha channel; switch the output format to PNG or WebP to keep transparency.", format=repr(samples_format))
                 ),
                 patch={"__options__": {"samples_format": "png"}},
                 action_label="Switch Output to PNG",
@@ -1002,7 +993,7 @@ def collect_structured_advice(p, *, opts=None) -> list[AdviceItem]:
             items.extend(_call_advice_fn(cap.structured_advice, p, opts=opts))
         elif cap.workflow_advice is not None:
             for msg in _call_advice_fn(cap.workflow_advice, p, opts=opts):
-                items.append(AdviceItem(code=f"{cap.name}.advice", severity="warning", message=str(msg)))
+                items.append(AdviceItem(code=f"{cap.name}.advice", severity="warning", message=msg if isinstance(msg, str) else str(msg)))
     return items
 
 

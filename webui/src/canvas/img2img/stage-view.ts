@@ -71,7 +71,7 @@ export function useImg2imgStageView(params: readonly string[] = ["init_img"]): [
   useEffect(() => {
     const store = getFormStore("img2img")
     const names = key.split("|")
-    const check = (image: unknown, errors: Record<string, string> | undefined) => {
+    const check = (image: unknown, errors: Readonly<Record<string, unknown>> | undefined) => {
       if (seenImage !== undefined && image !== seenImage && image) useStageView.getState().setView("source")
       seenImage = image
       if (errors && names.some((name) => errors[name])) useStageView.getState().setView("source")

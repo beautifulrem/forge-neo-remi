@@ -11,14 +11,15 @@ import { api } from "@/api/endpoints"
 import { validationErrors } from "@/api/http"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { failureText } from "@/features/errors/error-text"
+import { failureText, validationMessage } from "@/features/errors/error-text"
+import type { FieldMessage } from "@/ui/schema"
 import { type ImportPlan, planImport } from "./settings-model"
 import { editorValues, stageValues, useSettingsEditor } from "./settings-store"
 
-type Checked = { plan: ImportPlan; rejected: Record<string, string> }
+type Checked = { plan: ImportPlan; rejected: Record<string, FieldMessage> }
 
 export function ImportDialog({ open, onOpenChange, onStaged }: { open: boolean; onOpenChange: (open: boolean) => void; onStaged: (count: number) => void }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const inputId = useId()
   const [checked, setChecked] = useState<Checked | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -35,14 +36,14 @@ export function ImportDialog({ open, onOpenChange, onStaged }: { open: boolean; 
       const { inputs } = useSettingsEditor.getState()
       const editable = new Set([...inputs].filter(([, node]) => node.enabled_if !== false && !node.locked).map(([key]) => key))
       const plan = planImport(await file.text(), editorValues(), editable)
-      const rejected: Record<string, string> = {}
+      const rejected: Record<string, FieldMessage> = {}
       if (Object.keys(plan.changes).length > 0) {
         try {
           await api.validateOptions(plan.changes)
         } catch (failure) {
           const errors = validationErrors(failure)
           if (!errors) throw failure
-          for (const item of errors) rejected[item.param] = item.message
+          for (const item of errors) rejected[item.param] = item
         }
       }
       setChecked({ plan, rejected })
@@ -108,7 +109,7 @@ export function ImportDialog({ open, onOpenChange, onStaged }: { open: boolean; 
                 <ul className="mt-1 max-h-32 overflow-y-auto text-xs">
                   {rejected.map(([key, message]) => (
                     <li key={key}>
-                      <code className="font-mono">{key}</code>: {message}
+                      <code className="font-mono">{key}</code>: {validationMessage(message, i18n.language)}
                     </li>
                   ))}
                 </ul>

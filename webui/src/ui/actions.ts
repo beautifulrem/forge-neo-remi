@@ -3,6 +3,7 @@
  * apply the returned patch (schema-format.md §5).
  */
 import { api } from "@/api/endpoints"
+import { sentenceParams } from "@/api/http"
 import { keys, queryClient } from "@/api/queries"
 import type { ActionExtra, ActionRequest, ActionResponse, ActionToast, Bootstrap, ParamPatch, ParamValues } from "@/api/types"
 import { errorText } from "@/features/errors/error-text"
@@ -41,7 +42,9 @@ function parseAdviceList(raw: unknown): AdviceItem[] | undefined {
     const severity: AdviceSeverity = ADVICE_SEVERITIES.has(entry.severity as AdviceSeverity) ? (entry.severity as AdviceSeverity) : "info"
     const patch = isRecord(entry.patch) ? (entry.patch as AdviceItem["patch"]) : null
     const action_label = typeof entry.action_label === "string" ? entry.action_label : null
-    items.push({ code: entry.code, severity, message: entry.message, patch, action_label })
+    const params = sentenceParams(entry.params)
+    const sentence = typeof entry.template === "string" && params ? { template: entry.template, params } : {}
+    items.push({ code: entry.code, severity, message: entry.message, patch, action_label, ...sentence })
   }
   return items
 }

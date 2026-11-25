@@ -97,7 +97,7 @@ describe("quick settings form", () => {
     form.load(schema, ["samples_save"])
     form.store.getState().setValue(QUICK_OWNER, "samples_save", false)
     await vi.waitFor(() => expect(form.store.getState().values[QUICK_OWNER]?.samples_save).toBe(true))
-    expect(form.store.getState().errors[QUICK_OWNER]).toEqual({ samples_save: "frozen" })
+    expect(form.store.getState().errors[QUICK_OWNER]).toEqual({ samples_save: [{ message: "frozen" }] })
     stop()
   })
 

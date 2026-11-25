@@ -65,7 +65,7 @@ export default function TaskRunner({ props, disabled, id }: WidgetProps<null, Pr
   const cancel = () => void run("__cancel__", { task } as unknown as ActionExtra)
 
   const percent = status?.progress != null ? Math.round(status.progress * 100) : null
-  const text = status?.text ? messageText(i18n, status.text) : status?.state === "queued" ? tw("Queued") : status?.state === "running" ? tw("Running…") : ""
+  const text = status?.text ? messageText(i18n, status.text, i18n.language) : status?.state === "queued" ? tw("Queued") : status?.state === "running" ? tw("Running…") : ""
   const label = props.label ? tw(props.label) : tw("Run")
   // Screen readers hear state changes only (the bar carries the percentage);
   // a failure is announced by its alert.

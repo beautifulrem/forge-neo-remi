@@ -56,6 +56,7 @@ from remi.ui.nodes import (
     without_model_hash,
 )
 from remi.ui.schema import SCHEMA_VERSION, jsonable, to_schema
+from remi.ui.sentence import Sentence
 from remi.ui.version import REMI_API_VERSION, REMI_MIN_SUPPORTED_API_VERSION, CompatibilityResult, SemVer, check_api_compatibility, parse_semver
 
 __all__ = [
@@ -98,6 +99,7 @@ __all__ = [
     "Section",
     "Seed",
     "SemVer",
+    "Sentence",
     "Separator",
     "Slider",
     "Slot",

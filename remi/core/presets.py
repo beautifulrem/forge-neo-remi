@@ -17,7 +17,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from remi.core import hints
-from remi.ui import Context, ParamError, ValidationError
+from remi.ui import Context, ParamError, Sentence, ValidationError
 from remi.ui.actions import message as catalog_message
 from remi.ui.nodes import _NO_VALUE
 from remi.ui.types import Patch
@@ -61,7 +61,7 @@ def check_preset(preset: Any) -> str:
 
     choices = ui_preset_choices()
     if not isinstance(preset, str) or preset not in choices:
-        raise ValidationError([ParamError(f"unknown UI preset {preset!r} (one of {', '.join(choices)})", owner="core", param="preset")])
+        raise ValidationError([ParamError(Sentence("unknown UI preset {{preset}} (one of {{choices}})", preset=repr(preset), choices=", ".join(choices)), owner="core", param="preset")])
     return preset
 
 

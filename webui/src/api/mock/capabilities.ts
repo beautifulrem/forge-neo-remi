@@ -386,7 +386,9 @@ export function mockAdviceFor(
       items.push({
         code: "qwen21.turbo_mismatch",
         severity: "warning",
-        message: "Qwen-Image-2.1 Turbo works best at 8 steps and CFG 1.0.",
+        message: `Qwen-Image-2.1 Turbo detected with steps=${steps}, cfg=${cfg}: the 8-step distilled Turbo checkpoint/LoRA works best at ~8 steps with CFG 1.0.`,
+        template: "Qwen-Image-2.1 Turbo detected with steps={{steps}}, cfg={{cfg}}: the 8-step distilled Turbo checkpoint/LoRA works best at ~8 steps with CFG 1.0.",
+        params: { steps: String(steps), cfg: String(cfg) },
         patch: { "sampler.steps": { value: 8 }, cfg_scale: { value: 1 } },
         action_label: "Set Turbo (8 steps · CFG 1.0)",
       })

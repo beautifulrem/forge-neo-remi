@@ -57,7 +57,7 @@ describe("extras runs", () => {
   it("marks rejected values on the form", async () => {
     mockFetch(() => [422, { errors: [{ owner: "core", param: "image", message: "an image is required" }] }])
     await runExtras()
-    expect(getFormStore("extras").getState().errors.core?.image).toBe("an image is required")
+    expect(getFormStore("extras").getState().errors.core?.image).toEqual([{ message: "an image is required" }])
     expect(useExtrasRuns.getState().jobs).toEqual([])
   })
 

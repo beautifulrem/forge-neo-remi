@@ -88,7 +88,7 @@ export function OutputView({ node }: { node: OutputNode }) {
         )
       break
     default: {
-      const text = value === undefined || value === null ? "" : isMessage(value) || typeof value === "string" ? messageText(i18n, value) : String(value)
+      const text = value === undefined || value === null ? "" : isMessage(value) || typeof value === "string" ? messageText(i18n, value, i18n.language) : String(value)
       body = text ? <TextOutput text={text} /> : null
     }
   }

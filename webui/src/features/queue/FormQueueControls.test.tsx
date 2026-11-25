@@ -58,7 +58,7 @@ describe("Add to queue", { timeout: 20_000 }, () => {
   it("marks the values the server rejects and explains other failures", async () => {
     recordFetch(() => ({ status: 422, body: { errors: [{ owner: "core", param: "prompt", message: "too long" }] } }))
     expect(await enqueueForm("txt2img")).toBeNull()
-    expect(getFormStore("txt2img").getState().errors.core?.prompt).toBe("too long")
+    expect(getFormStore("txt2img").getState().errors.core?.prompt).toEqual([{ message: "too long" }])
 
     vi.restoreAllMocks()
     const failure = vi.spyOn(toast, "error")

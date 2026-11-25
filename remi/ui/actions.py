@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from remi.ui.errors import ParamError, SchemaError, ValidationError
+from remi.ui.sentence import Sentence
 from remi.ui.types import Patch, PatchEntry
 
 log = logging.getLogger(__name__)
@@ -114,7 +115,7 @@ def call_action(owner: Any, name: str, ctx: ActionContext, values: Mapping[str, 
     if values is None:
         values = {}
     if not isinstance(values, Mapping):
-        raise ValidationError([ParamError(f"expected an object of named values, got {type(values).__name__}", owner=ctx.owner or None)])
+        raise ValidationError([ParamError(Sentence("expected an object of named values, got {{type}}", type=type(values).__name__), owner=ctx.owner or None)])
     bound = spec.func if inspect.ismodule(owner) else spec.func.__get__(owner, type(owner))
     return check_patch(bound(ctx, dict(values)) or {})
 
@@ -146,7 +147,7 @@ def call_action_isolated(
     if values is None:
         values = {}
     if not isinstance(values, Mapping):
-        raise ValidationError([ParamError(f"expected an object of named values, got {type(values).__name__}", owner=ctx.owner or None)])
+        raise ValidationError([ParamError(Sentence("expected an object of named values, got {{type}}", type=type(values).__name__), owner=ctx.owner or None)])
 
     effective_timeout = timeout if timeout is not None else spec.timeout
     diag_owner = extension or ctx.owner or type(owner).__name__

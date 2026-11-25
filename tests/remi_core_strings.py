@@ -181,10 +181,108 @@ def job_strings() -> set[str]:
     return set(JOB_TEXTS)
 
 
+# Model families' workflow advice (the bar above Generate) and why a script does not apply
+ADVICE_SOURCES = ("backend/nn",)
+
+
+def advice_strings() -> set[str]:
+    """The model advice and capability sentences: ``Sentence`` templates, the
+    constant ``message`` and ``action_label`` of an ``AdviceItem``, and the
+    constant sentences a ``*_workflow_advice`` function appends."""
+
+    found: set[str] = set()
+
+    def constant(node) -> str | None:
+        return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value.strip() else None
+
+    for folder in ADVICE_SOURCES:
+        for path in sorted((REPO / folder).rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and node.name.endswith("workflow_advice"):
+                    for call in ast.walk(node):
+                        if isinstance(call, ast.Call) and getattr(call.func, "attr", None) == "append" and call.args and (text := constant(call.args[0])):
+                            found.add(text)
+                if not isinstance(node, ast.Call):
+                    continue
+                name = node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id if isinstance(node.func, ast.Name) else None
+                if name == "Sentence" and node.args and (text := constant(node.args[0])):
+                    found.add(text)
+                elif name in ("AdviceItem", "advice_cls"):
+                    found.update(text for kw in node.keywords if kw.arg in ("message", "action_label") and (text := constant(kw.value)))
+    return found
+
+
+# Calls that make a rejected value's error, with the index of their message
+# argument: ParamError and the helpers that wrap one
+PARAM_ERROR_CALLS = {"ParamError": 0, "_error": 1, "bad_input": 1}
+# Remi's own sources that reject values (upstream-shared files are left as they are)
+PARAM_ERROR_SOURCES = ("remi",)
+
+
+def _call_name(node) -> str | None:
+    return node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id if isinstance(node.func, ast.Name) else None
+
+
+def _message_keys(arg, constants: dict[str, str]) -> list[str] | None:
+    """The catalog keys a message argument can be, or None when it is formatted text."""
+
+    if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+        return [arg.value]
+    if isinstance(arg, ast.Call) and _call_name(arg) == "Sentence" and arg.args and isinstance(arg.args[0], ast.Constant):
+        return [arg.args[0].value]
+    if isinstance(arg, ast.IfExp):
+        body, orelse = _message_keys(arg.body, constants), _message_keys(arg.orelse, constants)
+        return body + orelse if body is not None and orelse is not None else None
+    if isinstance(arg, ast.Name) and arg.id in constants:
+        return [constants[arg.id]]
+    if isinstance(arg, ast.Attribute) and arg.attr == "message":
+        return []
+    return None
+
+
+def param_error_messages(folders=PARAM_ERROR_SOURCES) -> tuple[set[str], list[tuple[str, str]]]:
+    """``(texts, unchecked)``: the catalog keys a rejected value's message can
+    be (a constant, a module constant, a ``Sentence`` template) and the calls
+    whose message is none of them, as ``(path, source)``. A message passed on
+    from a caught error (``error.message``) was checked where it was made."""
+
+    texts: set[str] = set()
+    unchecked: list[tuple[str, str]] = []
+    for folder in folders:
+        root = REPO / folder
+        for path in sorted([root] if root.is_file() else root.rglob("*.py")):
+            source = path.read_text(encoding="utf-8")
+            tree = ast.parse(source)
+            constants = {
+                target.id: node.value.value
+                for node in tree.body
+                if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
+                for target in node.targets
+                if isinstance(target, ast.Name)
+            }
+
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call) or (index := PARAM_ERROR_CALLS.get(_call_name(node))) is None or len(node.args) <= index:
+                    continue
+                found = _message_keys(node.args[index], constants)
+                if found is None:
+                    unchecked.append((path.relative_to(REPO).as_posix(), ast.get_source_segment(source, node.args[index]) or ""))
+                else:
+                    texts.update(found)
+    return texts, unchecked
+
+
+def param_error_strings() -> set[str]:
+    """The messages of the values the server rejects (shown under their field)."""
+
+    return param_error_messages()[0]
+
+
 def core_strings(opts) -> set[str]:
     """Everything the core catalog must translate (data names left out)."""
 
-    strings = form_strings() | settings_strings(opts) | message_strings() | job_strings()
+    strings = form_strings() | settings_strings(opts) | message_strings() | job_strings() | advice_strings() | param_error_strings()
     dynamic = _dynamic_names()
     return {text for text in strings if text not in dynamic and not _is_data(text)}
 

@@ -242,6 +242,7 @@ def ernie_workflow_advice(p, *, opts=None) -> list[str]:
         return []
 
     from backend.nn.dit_registry import _prompt_and_checkpoint_names
+    from remi.ui.sentence import Sentence
 
     ckpt_name, lora_names = _prompt_and_checkpoint_names(p)
     combined = " ".join([ckpt_name, *lora_names]).strip()
@@ -253,13 +254,11 @@ def ernie_workflow_advice(p, *, opts=None) -> list[str]:
     if is_turbo:
         if (isinstance(steps, (int, float)) and steps >= 16) or (isinstance(cfg, (int, float)) and cfg > 1.5):
             advice.append(
-                f"ERNIE-Image Turbo detected with steps={steps}, cfg={cfg}: the distilled Turbo variant "
-                "works best at ~8 steps with CFG 1.0."
+                Sentence("ERNIE-Image Turbo detected with steps={{steps}}, cfg={{cfg}}: the distilled Turbo variant works best at ~8 steps with CFG 1.0.", steps=steps, cfg=cfg)
             )
     elif isinstance(steps, (int, float)) and steps <= 12 and isinstance(cfg, (int, float)) and cfg <= 1.2:
         advice.append(
-            f"ERNIE-Image Base (8B Apache-2.0) detected with steps={steps}, cfg={cfg}: undistilled Base "
-            "typically needs ~28-50 steps with CFG 3.5-4.5."
+            Sentence("ERNIE-Image Base (8B Apache-2.0) detected with steps={{steps}}, cfg={{cfg}}: undistilled Base typically needs ~28-50 steps with CFG 3.5-4.5.", steps=steps, cfg=cfg)
         )
     return advice
 

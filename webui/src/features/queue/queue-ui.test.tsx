@@ -317,7 +317,7 @@ describe("editing a queued job in its form", () => {
     })
     await openJob("j1")
     expect(await saveEdit("txt2img")).toBe(false)
-    expect(getFormStore("txt2img").getState().errors.core?.prompt).toBe("too long")
+    expect(getFormStore("txt2img").getState().errors.core?.prompt).toEqual([{ message: "too long" }])
     expect(useQueueEdit.getState().sessions.txt2img).toBeDefined()
 
     vi.restoreAllMocks()

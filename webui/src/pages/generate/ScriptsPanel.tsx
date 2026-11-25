@@ -21,6 +21,7 @@ import { anyModified, type FormState } from "@/ui/form-store"
 import { useForm, useFormState } from "@/ui/hooks"
 import { PanelDepthContext, panelClass, panelTitleClass, usePanelDepth } from "@/ui/layout/panel"
 import { RenderLayout, RenderNode } from "@/ui/Renderer"
+import { sentenceText } from "@/ui/messages"
 import type { ChoiceNode, Node, ScriptSchema, TabSchema } from "@/ui/schema"
 
 function scriptNames(script: ScriptSchema): string[] {
@@ -93,7 +94,7 @@ function matches(script: ScriptSchema, query: string, translate: (s: string) => 
 }
 
 export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scriptChoice: ChoiceNode | null }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const id = useId()
   const { store, formId } = useForm()
   const slots = useFormState((s) => s.index.slots)
@@ -207,7 +208,9 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
                         key={script.id}
                         script={script}
                         reason={
-                          script.inapplicable_reason ??
+                          (script.inapplicable_reason
+                            ? sentenceText(i18n, script.inapplicable_reason, script.inapplicable_template, script.inapplicable_params, i18n.language)
+                            : null) ??
                           (script.requires_capabilities?.length
                             ? t("Requires: {{capabilities}}", { capabilities: script.requires_capabilities.join(", ") })
                             : null)

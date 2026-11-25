@@ -1,6 +1,8 @@
 /** Renderer contexts and hooks: which form/owner a node belongs to, and inherited enablement. */
 import { createContext, use, useEffect, useRef } from "react"
+import { useTranslation } from "react-i18next"
 import { useStore } from "zustand"
+import { fieldErrorText } from "@/features/errors/error-text"
 import type { ActionExtra } from "@/api/types"
 import { runAction, runChangeEffects } from "./actions"
 import { evaluate } from "./conditions"
@@ -66,7 +68,7 @@ export type ParamBinding<T> = {
   label: string
   info: string
   hint: string
-  /** Server validation message from the last rejected submit. */
+  /** Server validation message from the last rejected submit, in the UI language. */
   error: string | undefined
   /** Node enablement: inherited × enabled_if × patch override. */
   enabled: boolean
@@ -84,7 +86,8 @@ export function useParam<T = unknown>(node: InputNode): ParamBinding<T> {
   const defaultValue = useStore(store, (s) => s.defaults[owner]?.[node.name])
   const modified = useStore(store, (s) => isModified(s, owner, node.name))
   const override = useStore(store, (s) => s.overrides[owner]?.[node.name]) ?? EMPTY_OVERRIDE
-  const error = useStore(store, (s) => s.errors[owner]?.[node.name])
+  const errors = useStore(store, (s) => s.errors[owner]?.[node.name])
+  const { i18n } = useTranslation() // the message follows the UI language
   const conditionEnabled = useCondition(node.enabled_if)
   const enabled = inherited && conditionEnabled && override.enabled !== false
 
@@ -111,7 +114,7 @@ export function useParam<T = unknown>(node: InputNode): ParamBinding<T> {
     label: displayText(override, "label", node.label),
     info: displayText(override, "info", node.info),
     hint: displayText(override, "hint", node.hint),
-    error,
+    error: fieldErrorText(errors, i18n.language),
     enabled,
     setValue: (next) => {
       store.getState().setValue(owner, node.name, next)

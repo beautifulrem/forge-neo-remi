@@ -450,6 +450,29 @@ describe("layout and display nodes", () => {
     expect(screen.queryByText("required")).toBeNull()
   })
 
+  it("shows each validation message under its field in the UI language", async () => {
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", "a choice is required", "需要选择一项")
+    i18n.addResource("zh-CN", "server", "must be at most {{maximum}}, got {{value}}", "不能大于 {{maximum}}，当前为 {{value}}")
+    const store = one({ type: "text", name: "name", label: "Name" }, { name: "" })
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      act(() =>
+        store.getState().setErrors([
+          { owner: "core", param: "name", message: "a choice is required" },
+          { owner: "core", param: "name", message: "must be at most 150, got 999", template: "must be at most {{maximum}}, got {{value}}", params: { maximum: "150", value: "999" } },
+          { owner: "core", param: "name", message: "the script's own words" },
+        ]),
+      )
+      expect(screen.getByText("需要选择一项 · 不能大于 150，当前为 999 · the script's own words")).toBeInTheDocument()
+      // the message follows a language switch
+      await act(() => i18n.changeLanguage("en"))
+      expect(screen.getByText("a choice is required · must be at most 150, got 999 · the script's own words")).toBeInTheDocument()
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
+  })
+
   it("patches can clear info and label with null", () => {
     const store = one({ type: "text", name: "w", label: "Weight", info: "Static help." }, { w: "" })
     act(() => store.getState().applyPatches([["core", "w", { info: "Dynamic help." }]]))

@@ -347,6 +347,7 @@ def zimage_workflow_advice(p, *, opts=None) -> list[str]:
         return []
 
     from backend.nn.dit_registry import _prompt_and_checkpoint_names
+    from remi.ui.sentence import Sentence
 
     ckpt_name, lora_names = _prompt_and_checkpoint_names(p)
     combined = " ".join([ckpt_name, *lora_names]).strip()
@@ -359,14 +360,12 @@ def zimage_workflow_advice(p, *, opts=None) -> list[str]:
     if is_turbo:
         if (isinstance(steps, (int, float)) and steps >= 16) or (isinstance(cfg, (int, float)) and cfg > 1.5):
             advice.append(
-                f"Z-Image-Turbo detected with steps={steps}, cfg={cfg}: the 8-step distilled Turbo "
-                "variant works best at ~8 steps with CFG 1.0."
+                Sentence("Z-Image-Turbo detected with steps={{steps}}, cfg={{cfg}}: the 8-step distilled Turbo variant works best at ~8 steps with CFG 1.0.", steps=steps, cfg=cfg)
             )
     else:
         if isinstance(steps, (int, float)) and steps <= 10 and isinstance(cfg, (int, float)) and cfg <= 1.2:
             advice.append(
-                f"Z-Image Base detected with steps={steps}, cfg={cfg}: undistilled Z-Image Base typically "
-                "needs ~25-40 steps and CFG 3.5-5.0 (or use Z-Image-Turbo for 8-step CFG 1.0)."
+                Sentence("Z-Image Base detected with steps={{steps}}, cfg={{cfg}}: undistilled Z-Image Base typically needs ~25-40 steps and CFG 3.5-5.0 (or use Z-Image-Turbo for 8-step CFG 1.0).", steps=steps, cfg=cfg)
             )
 
     refs = [*(getattr(sd_model, "ref_latents", None) or ())]

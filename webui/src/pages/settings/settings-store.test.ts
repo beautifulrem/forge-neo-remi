@@ -93,11 +93,11 @@ describe("settings editor store", () => {
     expect(result.message).toBe("too high")
     // Both stay edits until the server's values arrive; the rejected one shows its message.
     expect(pendingChanges()).toEqual({ quality: 99, save: false })
-    expect(settingsForm.getState().errors[SETTINGS_OWNER]).toEqual({ quality: "too high" })
+    expect(settingsForm.getState().errors[SETTINGS_OWNER]).toEqual({ quality: [{ message: "too high" }] })
     // The server applied `save` (an onchange failure elsewhere): the refetched schema settles it.
     syncSchema(makeSchema({ quality: 90, save: false, previews: true }))
     expect(pendingChanges()).toEqual({ quality: 99 })
-    expect(settingsForm.getState().errors[SETTINGS_OWNER]).toEqual({ quality: "too high" })
+    expect(settingsForm.getState().errors[SETTINGS_OWNER]).toEqual({ quality: [{ message: "too high" }] })
   })
 
   it("keeps everything unsaved when the request fails outright", async () => {

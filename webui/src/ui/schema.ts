@@ -243,11 +243,20 @@ export type ModelCapabilitySummary = {
 
 export type AdviceSeverity = "info" | "warning" | "error"
 
+/**
+ * The catalog key of a sentence the server filled in (`remi.ui.Sentence`): `template` with
+ * `{{name}}` placeholders and the values that fill them; a list value holds catalog names.
+ */
+export type SentenceParams = Record<string, string | readonly string[]>
+
 /** Pre-submit workflow advice chip with an optional one-click parameter/option fix. */
 export type AdviceItem = {
   code: string
   severity: AdviceSeverity
+  /** English; translated by `template` when it has values in it. */
   message: string
+  template?: string
+  params?: SentenceParams
   /** Core-relative ParamPatch entries and/or `__options__` server option updates. */
   patch?: (Record<string, unknown> & { __options__?: Record<string, unknown> }) | null
   action_label?: string | null
@@ -267,8 +276,11 @@ export type ScriptSchema = {
   requires_capabilities?: string[]
   /** False when the active model lacks one or more `requires_capabilities`. */
   applicable?: boolean
-  /** Human-readable explanation shown when `applicable === false`. */
+  /** Human-readable explanation shown when `applicable === false` (English; see `inapplicable_template`). */
   inapplicable_reason?: string | null
+  /** The reason's catalog key and values (it names the active model). */
+  inapplicable_template?: string
+  inapplicable_params?: SentenceParams
 }
 
 /** A core input that must not be empty while `when` holds (schema-format.md §3). */
@@ -337,7 +349,9 @@ export type SettingsSchema = {
 }
 
 /** One rejected value of a request (§3); `owner` is `"core"`, a script id or `"settings"`. */
-export type ValidationError = { owner: string; param: string; message: string }
+/** A rejected value's message: English, with its catalog key when it names the value (schema-format.md §3). */
+export type FieldMessage = { message: string; template?: string; params?: SentenceParams }
+export type ValidationError = FieldMessage & { owner: string; param: string }
 
 /** Body of a rejected request (§3). */
 export type ValidationErrors = { errors: ValidationError[] }

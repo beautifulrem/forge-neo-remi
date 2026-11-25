@@ -4,7 +4,7 @@
  * Callers use the functions in `endpoints.ts`, never URLs.
  */
 import createClient from "openapi-fetch"
-import type { ValidationError } from "@/ui/schema"
+import type { SentenceParams, ValidationError } from "@/ui/schema"
 import type { paths } from "./gen/schema"
 import { sessionRefused } from "./session"
 
@@ -128,13 +128,27 @@ function isValidationError(value: unknown): value is ValidationError {
   return typeof owner === "string" && typeof param === "string" && typeof message === "string"
 }
 
+/** A sentence's values as the server sends them (`remi.ui.Sentence`): text, or a list of names. */
+export function sentenceParams(value: unknown): SentenceParams | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+  const entries = Object.entries(value)
+  const valid = entries.every(([, item]) => typeof item === "string" || (Array.isArray(item) && item.every((name) => typeof name === "string")))
+  return valid ? (Object.fromEntries(entries) as SentenceParams) : undefined
+}
+
+/** A rejected value with only the fields the client reads (a template only with its values). */
+function validationEntry({ owner, param, message, template, params }: ValidationError): ValidationError {
+  const values = sentenceParams(params)
+  return typeof template === "string" && values ? { owner, param, message, template, params: values } : { owner, param, message }
+}
+
 /** The rejected values of a `{"errors": [{owner, param, message}]}` body (schema-format.md §3), or null. */
 export function validationErrors(error: unknown): ValidationError[] | null {
   const payload = error instanceof ApiError ? error.detail : error
   if (!payload || typeof payload !== "object" || !("errors" in payload)) return null
   const errors = (payload as { errors: unknown }).errors
   if (!Array.isArray(errors)) return null
-  const valid = errors.filter(isValidationError)
+  const valid = errors.filter(isValidationError).map(validationEntry)
   return valid.length > 0 ? valid : null
 }
 

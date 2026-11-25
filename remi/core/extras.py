@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from remi.ui import Context, ParamError, ScriptLayout, ValidationError, jsonable
+from remi.ui import Context, ParamError, ScriptLayout, Sentence, ValidationError, jsonable
 from remi.ui.types import ScriptEntry
 
 
@@ -76,7 +76,7 @@ def postprocessing_args(runner: Any, values: Any, ctx: Context | None = None) ->
     if values is None:
         values = {}
     elif not isinstance(values, Mapping):
-        raise ValidationError([ParamError(f"scripts: expected an object of values by operation id, got {type(values).__name__}")])
+        raise ValidationError([ParamError(Sentence("scripts: expected an object of values by operation id, got {{type}}", type=type(values).__name__))])
     assigned = assign_args(runner)
     known = {layout.owner for _script, layout in assigned}
     problems: list = [ParamError("unknown postprocessing operation", owner=owner) for owner in values if owner not in known]

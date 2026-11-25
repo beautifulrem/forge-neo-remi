@@ -56,7 +56,7 @@ describe("run controller", () => {
     const { toast } = await import("sonner")
     const error = vi.spyOn(toast, "error")
     dispatchRun("img2img", { type: "generate" })
-    await vi.waitFor(() => expect(store.getState().errors.core?.init_img).toBe("an image is required"))
+    await vi.waitFor(() => expect(store.getState().errors.core?.init_img).toEqual([{ message: "an image is required" }]))
     expect(create).not.toHaveBeenCalled()
     expect(error).toHaveBeenCalledWith("Some parameters are invalid", { description: "an image is required" })
     expect(phaseOf(useRuns.getState().runs.img2img)).toBe("idle")

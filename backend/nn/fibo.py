@@ -686,6 +686,7 @@ def fibo_workflow_advice(p, *, opts=None) -> list[str]:
         return []
 
     from backend.nn.dit_registry import _prompt_and_checkpoint_names
+    from remi.ui.sentence import Sentence
 
     ckpt_name, lora_names = _prompt_and_checkpoint_names(p)
     combined = " ".join([ckpt_name, *lora_names]).strip()
@@ -697,13 +698,11 @@ def fibo_workflow_advice(p, *, opts=None) -> list[str]:
     if is_turbo:
         if (isinstance(steps, (int, float)) and steps > 8) or (isinstance(cfg, (int, float)) and cfg > 1.5):
             advice.append(
-                f"Bria Fibo 2.0 Edit Turbo detected with steps={steps}, cfg={cfg}: the 4-step Edit Turbo "
-                "variant works best at 4 steps with CFG 1.0."
+                Sentence("Bria Fibo 2.0 Edit Turbo detected with steps={{steps}}, cfg={{cfg}}: the 4-step Edit Turbo variant works best at 4 steps with CFG 1.0.", steps=steps, cfg=cfg)
             )
     elif isinstance(steps, (int, float)) and steps <= 8 and isinstance(cfg, (int, float)) and cfg <= 1.2:
         advice.append(
-            f"Bria Fibo 2.0 Dev detected with steps={steps}, cfg={cfg}: the undistilled 8.1B Dev checkpoint "
-            "typically needs ~28-50 steps and CFG 3.5-5.0."
+            Sentence("Bria Fibo 2.0 Dev detected with steps={{steps}}, cfg={{cfg}}: the undistilled 8.1B Dev checkpoint typically needs ~28-50 steps and CFG 3.5-5.0.", steps=steps, cfg=cfg)
         )
 
     prompt = getattr(p, "prompt", None)
@@ -713,13 +712,13 @@ def fibo_workflow_advice(p, *, opts=None) -> list[str]:
             advice.append("Bria Fibo 2.0: prompt begins with '{' but is not valid JSON; fix syntax or use the VGL JSON Builder.")
         else:
             for issue in validate_vgl_prompt(parsed):
-                advice.append(f"Bria Fibo 2.0 VGL: {issue}")
+                advice.append(Sentence("Bria Fibo 2.0 VGL: {{issue}}", issue=issue))
 
     refs = [*(getattr(sd_model, "ref_latents", None) or ())]
     if getattr(sd_model, "ini_latent", None) is not None:
         refs.append(sd_model.ini_latent)
     if len(refs) > FIBO_MAX_REFERENCES:
-        advice.append(f"Bria Fibo 2.0 supports at most {FIBO_MAX_REFERENCES} reference images; {len(refs)} are attached.")
+        advice.append(Sentence("Bria Fibo 2.0 supports at most {{max}} reference images; {{count}} are attached.", max=FIBO_MAX_REFERENCES, count=len(refs)))
 
     return advice
 

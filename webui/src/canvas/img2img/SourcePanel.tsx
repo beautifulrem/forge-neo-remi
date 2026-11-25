@@ -13,6 +13,7 @@ import { Brush, ImageIcon, ImageUp, Images, Palette, PaintbrushVertical, PencilR
 import { type CSSProperties, type ReactNode, useEffect, useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
+import { fieldErrorText } from "@/features/errors/error-text"
 import { cn } from "@/lib/utils"
 import { evaluate } from "@/ui/conditions"
 import { OwnerProvider } from "@/ui/context"
@@ -206,16 +207,16 @@ function showEditor(setView: (view: "source") => void) {
 }
 
 function SourceImages({ binding }: { binding: EditorBinding }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const layers = useModeLayers(binding)
   // One per row: uploading the mask does not mark the source as uploading.
   const source = useUploader()
   const mask = useUploader()
   const image = useFormState((s) => (s.values.core?.[binding.background] as string | null | undefined) ?? null)
-  const imageError = useFormState((s) => s.errors.core?.[binding.background])
+  const imageError = fieldErrorText(useFormState((s) => s.errors.core?.[binding.background]), i18n.language)
   const active = layers.active
   const layerValue = useFormState((s) => (active ? ((s.values.core?.[active.param] as string | null | undefined) ?? null) : null))
-  const layerError = useFormState((s) => (active ? s.errors.core?.[active.param] : undefined))
+  const layerError = fieldErrorText(useFormState((s) => (active ? s.errors.core?.[active.param] : undefined)), i18n.language)
   const setView = useStageView((s) => s.setView)
 
   const uploadTo = async (uploader: ReturnType<typeof useUploader>, file: File, apply: (id: string, size: { width: number; height: number } | null) => void) => {
@@ -275,7 +276,7 @@ function SourceImages({ binding }: { binding: EditorBinding }) {
         />
       ) : active ? (
         <p className={cn("flex items-center gap-1.5 px-1 text-xs", layerError ? "text-destructive" : "text-muted-foreground")} role={layerError ? "alert" : undefined}>
-          {layerError ? t(layerError) : active.kind === "mask" ? t("Paint the mask on the stage.") : t("Paint on the stage.")}
+          {layerError ? layerError : active.kind === "mask" ? t("Paint the mask on the stage.") : t("Paint on the stage.")}
           {layerError ? (
             <Button variant="link" size="xs" className="h-auto p-0" onClick={() => showEditor(setView)}>
               {t("Open the editor")}

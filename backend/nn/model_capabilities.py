@@ -23,6 +23,7 @@ from backend.nn.dit_registry import (
     capability_for_preset,
     get_dit_capability,
 )
+from remi.ui.sentence import Sentence
 
 # Human-readable names for declarative capability tokens (used in inapplicable reasons & UI)
 CAPABILITY_LABELS: dict[str, str] = {
@@ -545,8 +546,8 @@ def check_script_applicability(
     missing = [cap for cap in required if cap not in active]
     if not missing:
         return True, None
-    labels = ", ".join(CAPABILITY_LABELS.get(cap, cap) for cap in missing)
+    labels = [CAPABILITY_LABELS.get(cap, cap) for cap in missing]  # catalog names: the UI translates each
     active_desc = engine_label or preset
     if active_desc:
-        return False, f"Requires {labels} (active model: {active_desc})"
-    return False, f"Requires {labels}"
+        return False, Sentence("Requires {{capabilities}} (active model: {{model}})", capabilities=labels, model=active_desc)
+    return False, Sentence("Requires {{capabilities}}", capabilities=labels)

@@ -1409,6 +1409,34 @@ older server) nothing is shown.
   translated by its exact key; a job's own exception stays as it is. The
   model bar names the server's stage (`model.loading`, only ever "loading")
   with its own key.
+- **Server sentences**: what the server says comes in one of three forms.
+  A fixed sentence is a catalog key, looked up by its exact text
+  (`serverText`, `messageText` for a string). A sentence with values in it
+  carries its template: a message object `{text, params}` (toasts, text
+  outputs), a note `{message, values}` (a job's notes), an admin error's
+  `template`, or a `remi.ui.Sentence` (`template` and `params` beside the
+  English: model advice, why a script does not apply, a rejected value's
+  message), shown with `sentenceText` (`ui/messages.ts`): the template
+  translated, a list param's catalog names each translated and joined the
+  language's way (`Intl.ListFormat`), other values as the server wrote
+  them. Text the server only passes on stays as it is in every language: a
+  job's own exception, extension diagnostics, a worker's state, what an
+  extension's own `validate` or paste function raised, git output. A field's
+  validation messages are stored as the server sent them
+  (`FormState.errors`, a list per param, never empty) and translated where
+  they are shown (`fieldErrorText`, several joined by " · "), so a language
+  switch re-reads them.
+- **Text made outside `t` takes the language**: the React Compiler memoizes
+  a render on the values the render itself reads, and a helper that reads the
+  global `i18n` inside does not count. Text a render makes with such a helper
+  (`messageText`, `sentenceText`, `validationMessage`, `fieldErrorText`) is
+  given the render's language, `useTranslation().i18n.language`, or it stays
+  in the old language after a switch. A store selector returns what the
+  server sent (a param's error entries) and the render translates it, never
+  the selector (a selector re-runs only when the store changes). The failure
+  and job texts (`serverText`, `errorText`, `renderFailureText`) take no
+  language yet: a render that shows one keeps the language it was made in
+  until its own values change.
 - `src/locales/zh-CN.json` must contain every chrome key:
   `locales/locales.test.ts` scans the sources and fails on a missing key or a
   mismatched `{{placeholder}}`.

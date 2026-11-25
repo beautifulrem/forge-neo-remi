@@ -2,10 +2,11 @@
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
+import { sentenceParams } from "@/api/http"
 import type { FormTab, InfotextParsed } from "@/api/types"
 import { applyPaste, pastePlan } from "@/features/infotext/paste"
 import { useForm } from "@/ui/hooks"
-import { failureText } from "@/features/errors/error-text"
+import { failureText, validationMessage } from "@/features/errors/error-text"
 
 /**
  * Parameters into the form: `text` is parsed by the server for this form
@@ -24,7 +25,9 @@ export function usePasteParameters() {
     else toast.success(t("Parameters applied: {{count}}", { count }), { id })
     const problems = parsed.problems ?? []
     if (problems.length > 0) {
-      toast.warning(t("Some values were skipped"), { description: problems.slice(0, 4).map((p) => `${p.param ?? p.owner ?? ""}: ${p.message}`).join("\n") })
+      // each value's message in the UI language, by its template where it names the value
+      const text = (p: (typeof problems)[number]) => validationMessage({ message: p.message, template: p.template ?? undefined, params: sentenceParams(p.params) })
+      toast.warning(t("Some values were skipped"), { description: problems.slice(0, 4).map((p) => `${p.param ?? p.owner ?? ""}: ${text(p)}`).join("\n") })
     }
   }
   const fail = (id: string | number, error: unknown) =>

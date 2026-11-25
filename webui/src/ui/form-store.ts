@@ -17,7 +17,7 @@ import { keepEntries } from "@/lib/persist"
 import { jsonEqual } from "./conditions"
 import { buildIndex, defaultOf, type FormIndex, type OwnerSpec } from "./form-index"
 import { collectLocks, lockedNames, type ParamLock } from "./locks"
-import type { AdviceItem, ChoiceOption, ModelCapabilitySummary, ValidationError } from "./schema"
+import type { AdviceItem, ChoiceOption, FieldMessage, ModelCapabilitySummary, ValidationError } from "./schema"
 import { isPersisted, restoreValue } from "./values"
 
 export type OwnerValues = Record<string, unknown>
@@ -45,8 +45,11 @@ export type FormState = {
   open: Record<string, boolean>
   /** Selected tab of unbound `tabs` nodes, by key. */
   tabs: Record<string, string>
-  /** Server validation messages of the last rejected submit, by owner and param. */
-  errors: Record<string, Record<string, string>>
+  /**
+   * Server validation messages of the last rejected submit, by owner and param: each as the
+   * server sent it (never an empty list), translated where it is shown (`fieldErrorText`).
+   */
+  errors: Record<string, Record<string, readonly FieldMessage[]>>
   /** `"owner.param"` refs whose changes run `core.__conflicts__` (tab schemas). */
   conflictParams: ReadonlySet<string>
   /** Active model capability summary from the tab schema or preset action. */
@@ -105,7 +108,7 @@ const emptyIndex = (): FormIndex => ({ inputs: new Map(), slots: new Set(), reve
 function withoutErrors(errors: FormState["errors"], owner: string, names: Iterable<string>): FormState["errors"] {
   const current = errors[owner]
   if (!current) return errors
-  let next: Record<string, string> | undefined
+  let next: Record<string, readonly FieldMessage[]> | undefined
   for (const name of names) {
     if (!Object.hasOwn(current, name)) continue
     next ??= { ...current }
@@ -275,10 +278,10 @@ export function createFormStore(formId: string, { persistDrafts = true } = {}): 
         const errors: FormState["errors"] = {}
         const open = { ...s.open }
         const tabs = { ...s.tabs }
-        for (const { owner, param, message } of list) {
-          // Several messages for one param are joined.
-          const previous = errors[owner]?.[param]
-          errors[owner] = { ...errors[owner], [param]: previous ? `${previous}; ${message}` : message }
+        for (const { owner, param, message, template, params } of list) {
+          // a param can be rejected for several reasons
+          const entry: FieldMessage = template && params ? { message, template, params } : { message }
+          errors[owner] = { ...errors[owner], [param]: [...(errors[owner]?.[param] ?? []), entry] }
           const path = s.index.reveal.get(owner)?.get(param)
           for (const key of path?.open ?? []) open[key] = true
           for (const [key, value] of path?.tabs ?? []) tabs[key] = value

@@ -152,12 +152,16 @@ and pre-submit advice evaluation:
 - **Capability-driven script visibility:** `scripts.Script.requires_capabilities`
   (e.g. `("anima_hooks",)` on all 10 Anima-only built-ins) emits `requires_capabilities`,
   `applicable`, and `inapplicable_reason` per script in `scripts_schema()` so the
-  SPA folds inapplicable panels cleanly instead of rendering no-op controls.
+  SPA folds inapplicable panels cleanly instead of rendering no-op controls. The
+  reason names the active model, so it comes with its catalog key
+  (`inapplicable_template`, `inapplicable_params`: a `remi.ui.Sentence`).
 - **Structured pre-submit advice (`AdviceItem`):** `POST /api/v2/rules/derive`,
   `POST /api/v2/actions/core/__advice__`, and initial `GET /api/v2/schema/{tab}`
   return structured `AdviceItem(code, severity, message, patch, action_label)` items
   so the SPA renders one-click fix chips (form patches or `__options__` switches
   such as Turbo 8-step/CFG 1.0, Kromoss 8-step DMD2, or RGBA → PNG output).
+  A message with values in it (`steps={{steps}}`) is a `Sentence`: the item also
+  carries `template` and `params`, which the SPA translates.
 - **Unified `DiTControlPatch` (`backend/nn/dit_control_patch.py`):** abstracts
   `control_blocks.*` zero-gated ModelPatches for both `Qwen-Image-2.1-Fun-Controlnet-Union`
   (16 even layers, 64/129-ch structural + inpaint) and `Z-Image-Turbo-Fun-Controlnet-Union`
