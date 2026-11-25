@@ -3,15 +3,19 @@
  * error details are English (they are for logs and API clients), so the
  * pages show a sentence chosen by status code instead; callers pass their
  * own (already translated) sentence for the statuses that mean something
- * specific to them. A refused queue, pipeline or recipe operation says why
- * with the sentence its body carries (`template`, a catalog key, and
- * `params`): it comes before the caller's sentence for its status, except
- * for a 404, whose sentence names what is gone by its id ("no recipe 'r1'")
- * where the caller knows it in the user's words. A 422 that lists the
- * refused values says why: those messages are catalog keys
- * (`validationText`). A text shown by a render takes the render's language
- * (`useTranslation().i18n.language`): the React Compiler keeps a render's
- * text until the values it read change.
+ * specific to them. A request the server refused or failed with a sentence
+ * of its own says why with the sentence its body carries (`template`, a
+ * catalog key, and `params`, values it does not translate), such as a
+ * queue, pipeline or recipe operation, an extension, a model's metadata or
+ * preview, settings that are frozen, a prompt tool that cannot run, was
+ * given too much or whose service failed, or the prompt tools' store. It
+ * comes before the caller's sentence for its status, except for a 404,
+ * whose sentence names what is gone by its id ("no recipe 'r1'") where the
+ * caller knows it in the user's words; a body without a template is said by
+ * its status. A 422 that lists the refused values says why: those messages
+ * are catalog keys (`validationText`). A text shown by a render takes the
+ * render's language (`useTranslation().i18n.language`): the React Compiler
+ * keeps a render's text until the values it read change.
  */
 import { toast } from "sonner"
 import { ApiError, fieldMessages, RequestError, sentenceParams, validationErrors } from "@/api/http"
