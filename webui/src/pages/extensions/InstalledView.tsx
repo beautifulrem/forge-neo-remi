@@ -401,7 +401,26 @@ export function InstalledView() {
       ) : null}
 
       <Group title="Installed" count={user.length} defaultOpen filtering={terms.length > 0}>
-        {user.length > 0 ? user.map(row) : <li className="px-3 py-4 text-sm text-muted-foreground">{terms.length ? t("No extension matches.") : t("No extensions installed yet. Find some under Available.")}</li>}
+        {user.length > 0 ? (
+          user.map(row)
+        ) : terms.length ? (
+          <li className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-4 text-sm text-muted-foreground">
+            {t("No extension matches.")}
+            {/* the address too, at once: the field writes it only after a pause */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setQuery("")
+                setParams({ q: "" })
+              }}
+            >
+              {t("Clear filters")}
+            </Button>
+          </li>
+        ) : (
+          <li className="px-3 py-4 text-sm text-muted-foreground">{t("No extensions installed yet. Find some under Available.")}</li>
+        )}
       </Group>
       <Group title="Built-in" count={builtin.length} defaultOpen={false} filtering={terms.length > 0}>
         {builtin.map(row)}

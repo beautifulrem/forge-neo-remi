@@ -18,7 +18,7 @@ import { LoadFailed } from "@/components/LoadFailed"
 import { Segmented } from "@/components/Segmented"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Input } from "@/components/ui/input"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -88,7 +88,8 @@ function EntryRow({ entry, tags, access, installing, onInstall }: { entry: Index
   )
 }
 
-function IndexList({ items, tags, access }: { items: IndexEntry[]; tags: Record<string, string>; access: boolean }) {
+/** `onClearFilters`: back to a fresh tab's filters, offered when the user's own filters match nothing. */
+function IndexList({ items, tags, access, onClearFilters }: { items: IndexEntry[]; tags: Record<string, string>; access: boolean; onClearFilters?: () => void }) {
   // TanStack Virtual's virtualizer is a mutable object the React Compiler must not memoise.
   "use no memo"
   const { t } = useTranslation()
@@ -156,6 +157,13 @@ function IndexList({ items, tags, access }: { items: IndexEntry[]; tags: Record<
           <EmptyTitle>{t("Nothing matches")}</EmptyTitle>
           <EmptyDescription>{t("Change the search or the tag filters.")}</EmptyDescription>
         </EmptyHeader>
+        {onClearFilters ? (
+          <EmptyContent>
+            <Button variant="outline" size="sm" onClick={onClearFilters}>
+              {t("Clear filters")}
+            </Button>
+          </EmptyContent>
+        ) : null}
       </Empty>
     )
   }
@@ -187,6 +195,8 @@ function IndexList({ items, tags, access }: { items: IndexEntry[]; tags: Record<
 
 /** The filters in the address (`#/extensions?tab=available&q=lora&sort=stars&tags=ads`). */
 const AVAILABLE_PARAMS = { q: "", sort: "newest", recent: "1", tags: [...DEFAULT_HIDDEN_TAGS].sort().join(","), tagmode: "hide", match: "any" }
+/** What "Clear filters" resets besides the search. */
+const FILTER_KEYS = ["recent", "tags", "tagmode", "match"] as const
 
 /**
  * The index URL last loaded. Another tab and back remounts the view: it shows
@@ -225,6 +235,12 @@ export function AvailableView() {
   })
   const items = useMemo(() => (index.data ? filterIndex(index.data.items, { query, tags: tagSet, tagMode, match, sort, recentOnly }) : []), [index.data, query, tagSet, tagMode, match, sort, recentOnly])
   const allTags = index.data ? Object.keys(index.data.tags).sort() : []
+  // the filters a fresh tab starts with (the sort is an order, not a filter: it stays)
+  const filtered = query.trim() !== "" || FILTER_KEYS.some((key) => params[key] !== AVAILABLE_PARAMS[key])
+  const clearFilters = () => {
+    setQuery("")
+    setParams(Object.fromEntries(["q", ...FILTER_KEYS].map((key) => [key, undefined])))
+  }
 
   const load = () => {
     const next = (urlDraft ?? defaultUrl).trim()
@@ -346,7 +362,7 @@ export function AvailableView() {
               ))}
             </div>
           </div>
-          <IndexList items={items} tags={index.data.tags} access={access} />
+          <IndexList items={items} tags={index.data.tags} access={access} onClearFilters={filtered ? clearFilters : undefined} />
         </>
       )}
     </div>

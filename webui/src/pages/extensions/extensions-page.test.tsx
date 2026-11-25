@@ -77,6 +77,20 @@ describe("extensions page", { timeout: 20_000 }, () => {
     expect(within(menu).queryByRole("menuitem", { name: /Uninstall/ })).not.toBeInTheDocument()
   })
 
+  // A filter that matched nothing said so, with no way back but deleting the text: an empty state
+  // says what to do next.
+  it("clears a filter that matches nothing from the empty state", async () => {
+    window.history.replaceState(null, "", "/#/extensions?q=zzz")
+    renderPage("q=zzz")
+    expect(await screen.findByText("No extension matches.")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }))
+    expect(await screen.findByText("tagger")).toBeInTheDocument()
+    expect(screen.getByRole("searchbox", { name: "Filter extensions" })).toHaveValue("")
+    await act(() => new Promise((resolve) => setTimeout(resolve, 400))) // past the search field's pause
+    expect(screen.getByText("tagger")).toBeInTheDocument()
+    expect(location.hash).not.toContain("q=")
+  })
+
   it("stages switches and saves them as the disabled list", async () => {
     const configure = vi.spyOn(api.extensions, "configure").mockImplementation(async (body) => listing(items.map((e) => ({ ...e, enabled: !body.disabled?.includes(e.name) }))))
     renderPage()
@@ -309,6 +323,36 @@ describe("available extensions", { timeout: 20_000 }, () => {
     expect(screen.getByRole("button", { name: "Reload index" })).toBeInTheDocument()
     expect(index).toHaveBeenCalledTimes(1)
     expect(index).toHaveBeenCalledWith({ url: "https://example.org/other.json" }, expect.anything())
+  })
+
+
+  // Filters that matched nothing said "Nothing matches" with no way back but undoing each one.
+  it("clears the filters that match nothing back to a fresh tab's, keeping the sort", async () => {
+    vi.spyOn(api.extensions, "index").mockResolvedValue(indexOf(500))
+    const query = "tab=available&q=nothing-like-this&sort=stars&recent=0&tagmode=show"
+    window.history.replaceState(null, "", `/#/extensions?${query}`)
+    renderPage(query)
+    const load = await screen.findByRole("button", { name: "Load index" }, { timeout: 8000 })
+    await waitFor(() => expect(load).toBeEnabled()) // once the extension list says access is on
+    fireEvent.click(load)
+    expect(await screen.findByText("Nothing matches")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }))
+    expect(await screen.findByRole("list", { name: "Available extensions" })).toBeInTheDocument()
+    expect(screen.getByRole("status")).toHaveTextContent("490 of 500 extensions") // the 2025+ default is back
+    expect(screen.getByRole("searchbox", { name: "Search extensions" })).toHaveValue("")
+    expect(location.hash).toContain("sort=stars")
+    expect(location.hash).not.toMatch(/[?&](q|recent|tagmode)=/)
+  })
+
+  it("offers no clearing when the tab's own filters match nothing", async () => {
+    vi.spyOn(api.extensions, "index").mockResolvedValue({ ...indexOf(3), items: indexOf(3).items.map((item) => ({ ...item, tags: ["ads"] })) })
+    window.history.replaceState(null, "", "/#/extensions?tab=available")
+    renderPage("tab=available")
+    const load = await screen.findByRole("button", { name: "Load index" }, { timeout: 8000 })
+    await waitFor(() => expect(load).toBeEnabled()) // once the extension list says access is on
+    fireEvent.click(load)
+    expect(await screen.findByText("Nothing matches")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Clear filters" })).toBeNull()
   })
 
   // When the extension list failed, the tab showed a disabled, empty URL field and nothing else.
