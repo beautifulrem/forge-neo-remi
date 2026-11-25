@@ -25,7 +25,6 @@ import threading
 import time
 import weakref
 import zipfile
-from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -106,6 +105,8 @@ CREATE INDEX IF NOT EXISTS gallery_meta_starred ON gallery_meta(starred, file_id
 LINEAGE_RELATIONS = ("init_img", "mask", "upscale_from", "retry_of", "reference", "chain_stage")
 MAX_LINEAGE_DEPTH = 8
 MAX_LINEAGE_NODES = 128
+_IN_CHUNK = 500
+"""ids per ``IN (…)`` list (well under SQLite's variable limit)"""
 
 
 class BoardError(ValueError):
@@ -758,9 +759,13 @@ class GalleryIndex:
                     count += 1
         return count
 
-    def _file_node(
-        self,
+    _NODE_COLUMNS = "f.id, f.path, f.name, f.width, f.height, f.created, f.job_id, f.tab, g.model"
+    """a lineage node's file columns (``files f`` joined with ``gallery_meta g``)"""
+
+    @staticmethod
+    def _node(
         file_id: str,
+        row: tuple | None,
         *,
         relation: str,
         depth: int,
@@ -769,12 +774,9 @@ class GalleryIndex:
         chain_id: str | None = None,
         stage_index: int | None = None,
     ) -> dict[str, Any]:
-        with self._lock:
-            row = self._db.execute(
-                "SELECT f.id, f.path, f.name, f.width, f.height, f.created, f.job_id, f.tab, g.model FROM files f LEFT JOIN gallery_meta g ON g.file_id = f.id WHERE f.id = ?",
-                (file_id,),
-            ).fetchone()
-        if row is None:
+        """A lineage node from its file columns (:attr:`_NODE_COLUMNS`; None: no such file)."""
+
+        if row is None or row[0] is None:
             return {
                 "file_id": file_id,
                 "relation": relation,
@@ -807,26 +809,80 @@ class GalleryIndex:
             "exists": bool(path and os.path.isfile(path)),
         }
 
-    def _ensure_job_indexed(self, file_id: str, job_store: Any) -> None:
-        """Index the lineage of the job that made ``file_id`` unless its edges
-        are indexed already (a job that finished before lineage was indexed
-        is indexed on its first view; viewing never writes again)."""
+    def _edges(self, ids: list[str], *, up: bool) -> dict[str, list[tuple]]:
+        """The edges of ``ids`` in one query per chunk: ``{id: [(other id,
+        relation, job_id, chain_id, stage_index, *other's file columns)]}``,
+        each list oldest first. ``up``: their parents, else their children."""
 
-        if job_store is None:
-            return
-        with self._lock:
-            if self._db.execute("SELECT 1 FROM asset_lineage WHERE child_id = ? LIMIT 1", (file_id,)).fetchone() is not None:
-                return
-            row = self._db.execute("SELECT job_id FROM files WHERE id = ?", (file_id,)).fetchone()
-        job_id = row[0] if row else None
-        if not job_id:
-            return
-        job = job_store.get(job_id)
-        if job is not None:
-            out_ids = [o["id"] for o in (job.outputs or []) if isinstance(o, dict) and o.get("id")]
-            if file_id not in out_ids:
-                out_ids.append(file_id)
-            self.index_job_lineage(job, out_ids, job_store=job_store)
+        mine, other = ("child_id", "parent_id") if up else ("parent_id", "child_id")
+        found: dict[str, list[tuple]] = {}
+        for start in range(0, len(ids), _IN_CHUNK):
+            chunk = ids[start : start + _IN_CHUNK]
+            with self._lock:
+                rows = self._db.execute(
+                    f"SELECT a.{mine}, a.{other}, a.relation, a.job_id, a.chain_id, a.stage_index, a.created, {self._NODE_COLUMNS}"
+                    f" FROM asset_lineage a LEFT JOIN files f ON f.id = a.{other} LEFT JOIN gallery_meta g ON g.file_id = a.{other}"
+                    f" WHERE a.{mine} IN ({','.join('?' * len(chunk))})",
+                    chunk,
+                ).fetchall()
+            for row in sorted(rows, key=lambda row: row[6]):
+                found.setdefault(row[0], []).append((*row[1:6], *row[7:]))
+        return found
+
+    def _index_job_of(self, file_id: str, job_id: str | None, job_store: Any) -> int:
+        """Index the lineage of the job that made ``file_id``; the number of edges."""
+
+        job = job_store.get(job_id) if job_id and job_store is not None else None
+        if job is None:
+            return 0
+        out_ids = [o["id"] for o in (job.outputs or []) if isinstance(o, dict) and o.get("id")]
+        if file_id not in out_ids:
+            out_ids.append(file_id)
+        return self.index_job_lineage(job, out_ids, job_store=job_store)
+
+    def _walk(
+        self,
+        file_id: str,
+        job_id: str | None,
+        *,
+        up: bool,
+        job_store: Any,
+        iso: Callable[[float | None], str | None] | None,
+    ) -> tuple[list[dict[str, Any]], list[tuple]]:
+        """The ancestors (``up``) or descendants of ``file_id``, breadth first,
+        one level at a time, and ``file_id``'s own edges. Going up, a file
+        without edges whose job was never indexed (it finished before
+        lineage was) is indexed on the way; one with edges is not again, so
+        viewing writes nothing."""
+
+        found: list[dict[str, Any]] = []
+        visited = {file_id}
+        jobs = {file_id: job_id}
+        level = [file_id]
+        own: list[tuple] = []
+        depth = 0
+        while level and depth < MAX_LINEAGE_DEPTH and len(found) < MAX_LINEAGE_NODES:
+            edges = self._edges(level, up=up)
+            if up and job_store is not None:
+                unindexed = [node for node in level if node not in edges and jobs.get(node)]
+                if sum(self._index_job_of(node, jobs[node], job_store) for node in unindexed):
+                    edges.update(self._edges(unindexed, up=True))
+            if depth == 0:
+                own = edges.get(file_id, [])
+            following: list[str] = []
+            for node in level:
+                if len(found) >= MAX_LINEAGE_NODES:
+                    break
+                for other, relation, edge_job_id, chain_id, stage_index, *columns in edges.get(node, ()):
+                    if other in visited:
+                        continue
+                    visited.add(other)
+                    found.append(self._node(other, tuple(columns), relation=relation, depth=depth + 1, iso=iso, edge_job_id=edge_job_id, chain_id=chain_id, stage_index=stage_index))
+                    jobs[other] = columns[6]
+                    following.append(other)
+            level = following
+            depth += 1
+        return found, own
 
     def lineage_for(
         self,
@@ -835,63 +891,16 @@ class GalleryIndex:
         job_store: Any = None,
         iso: Callable[[float | None], str | None] | None = None,
     ) -> dict[str, Any]:
-        """Return ``{file_id, item, ancestors, siblings, descendants}`` for ``file_id``."""
+        """Return ``{file_id, item, ancestors, siblings, descendants}`` for
+        ``file_id``: a few queries per level of the walk, not per node."""
 
         self.sync()
-        self._ensure_job_indexed(file_id, job_store)
-
         with self._lock:
-            own_edge = self._db.execute(
-                "SELECT job_id, chain_id, stage_index FROM asset_lineage WHERE child_id = ? LIMIT 1",
-                (file_id,),
-            ).fetchone()
-        own_job_id = own_edge[0] if own_edge else None
-        own_chain_id = own_edge[1] if own_edge else None
-        own_stage_index = own_edge[2] if own_edge else None
-        item_node = self._file_node(file_id, relation="self", depth=0, iso=iso, edge_job_id=own_job_id, chain_id=own_chain_id, stage_index=own_stage_index)
-        if item_node["job_id"] is None and job_store is not None:
-            pass
-
-        # Ancestors BFS
-        ancestors: list[dict[str, Any]] = []
-        visited_up: set[str] = {file_id}
-        queue_up: deque[tuple[str, int]] = deque([(file_id, 0)])
-        while queue_up and len(ancestors) < MAX_LINEAGE_NODES:
-            current_id, depth = queue_up.popleft()
-            if depth >= MAX_LINEAGE_DEPTH:
-                continue
-            self._ensure_job_indexed(current_id, job_store)
-            with self._lock:
-                rows = self._db.execute(
-                    "SELECT parent_id, relation, job_id, chain_id, stage_index FROM asset_lineage WHERE child_id = ? ORDER BY created ASC",
-                    (current_id,),
-                ).fetchall()
-            for parent_id, relation, edge_job_id, chain_id, stage_index in rows:
-                if parent_id in visited_up:
-                    continue
-                visited_up.add(parent_id)
-                ancestors.append(self._file_node(parent_id, relation=relation, depth=depth + 1, iso=iso, edge_job_id=edge_job_id, chain_id=chain_id, stage_index=stage_index))
-                queue_up.append((parent_id, depth + 1))
-
-        # Descendants BFS
-        descendants: list[dict[str, Any]] = []
-        visited_down: set[str] = {file_id}
-        queue_down: deque[tuple[str, int]] = deque([(file_id, 0)])
-        while queue_down and len(descendants) < MAX_LINEAGE_NODES:
-            current_id, depth = queue_down.popleft()
-            if depth >= MAX_LINEAGE_DEPTH:
-                continue
-            with self._lock:
-                rows = self._db.execute(
-                    "SELECT child_id, relation, job_id, chain_id, stage_index FROM asset_lineage WHERE parent_id = ? ORDER BY created ASC",
-                    (current_id,),
-                ).fetchall()
-            for child_id, relation, edge_job_id, chain_id, stage_index in rows:
-                if child_id in visited_down:
-                    continue
-                visited_down.add(child_id)
-                descendants.append(self._file_node(child_id, relation=relation, depth=depth + 1, iso=iso, edge_job_id=edge_job_id, chain_id=chain_id, stage_index=stage_index))
-                queue_down.append((child_id, depth + 1))
+            row = self._db.execute(f"SELECT {self._NODE_COLUMNS} FROM files f LEFT JOIN gallery_meta g ON g.file_id = f.id WHERE f.id = ?", (file_id,)).fetchone()
+        ancestors, own_edges = self._walk(file_id, row[6] if row else None, up=True, job_store=job_store, iso=iso)
+        descendants, _ = self._walk(file_id, None, up=False, job_store=None, iso=iso)
+        own_job_id, own_chain_id, own_stage_index = own_edges[0][2:5] if own_edges else (None, None, None)
+        item_node = self._node(file_id, row, relation="self", depth=0, iso=iso, edge_job_id=own_job_id, chain_id=own_chain_id, stage_index=own_stage_index)
 
         # Siblings: same job_id or sharing an immediate parent
         siblings: list[dict[str, Any]] = []
@@ -900,26 +909,28 @@ class GalleryIndex:
         if effective_job_id:
             with self._lock:
                 same_job_rows = self._db.execute(
-                    "SELECT id FROM files WHERE job_id = ? AND kind = 'output' AND id != ? ORDER BY created ASC",
+                    f"SELECT {self._NODE_COLUMNS} FROM files f LEFT JOIN gallery_meta g ON g.file_id = f.id WHERE f.job_id = ? AND f.kind = 'output' AND f.id != ? ORDER BY f.created ASC",
                     (effective_job_id, file_id),
                 ).fetchall()
-            for (sib_id,) in same_job_rows:
-                if sib_id not in seen_siblings:
-                    seen_siblings.add(sib_id)
-                    siblings.append(self._file_node(sib_id, relation="same_job", depth=0, iso=iso, edge_job_id=effective_job_id))
-        with self._lock:
-            parent_ids = [row[0] for row in self._db.execute("SELECT DISTINCT parent_id FROM asset_lineage WHERE child_id = ?", (file_id,)).fetchall()]
-            if parent_ids:
-                sib_rows = self._db.execute(
-                    f"SELECT DISTINCT child_id, job_id, chain_id, stage_index FROM asset_lineage WHERE parent_id IN ({','.join('?' * len(parent_ids))}) AND child_id != ?",
-                    (*parent_ids, file_id),
+            for sibling in same_job_rows:
+                if sibling[0] not in seen_siblings:
+                    seen_siblings.add(sibling[0])
+                    siblings.append(self._node(sibling[0], sibling, relation="same_job", depth=0, iso=iso, edge_job_id=effective_job_id))
+        parent_ids = list(dict.fromkeys(edge[0] for edge in own_edges))
+        sib_rows: list[tuple] = []
+        for start in range(0, len(parent_ids), _IN_CHUNK):
+            chunk = parent_ids[start : start + _IN_CHUNK]
+            with self._lock:
+                sib_rows += self._db.execute(
+                    f"SELECT DISTINCT a.child_id, a.job_id, a.chain_id, a.stage_index, {self._NODE_COLUMNS}"
+                    " FROM asset_lineage a LEFT JOIN files f ON f.id = a.child_id LEFT JOIN gallery_meta g ON g.file_id = a.child_id"
+                    f" WHERE a.parent_id IN ({','.join('?' * len(chunk))}) AND a.child_id != ?",
+                    (*chunk, file_id),
                 ).fetchall()
-            else:
-                sib_rows = []
-        for sib_id, edge_job_id, chain_id, stage_index in sib_rows:
+        for sib_id, edge_job_id, chain_id, stage_index, *columns in sib_rows:
             if sib_id not in seen_siblings and len(siblings) < MAX_LINEAGE_NODES:
                 seen_siblings.add(sib_id)
-                siblings.append(self._file_node(sib_id, relation="same_parent", depth=0, iso=iso, edge_job_id=edge_job_id, chain_id=chain_id, stage_index=stage_index))
+                siblings.append(self._node(sib_id, tuple(columns), relation="same_parent", depth=0, iso=iso, edge_job_id=edge_job_id, chain_id=chain_id, stage_index=stage_index))
 
         return {
             "file_id": file_id,

@@ -315,3 +315,65 @@ def test_viewing_an_indexed_lineage_writes_nothing(tmp_path):
         index.close()
         job_store.close()
         files.close()
+
+
+def test_a_lineage_walk_reads_each_level_at_once(tmp_path):
+    files = FileStore(tmp_path / "files")
+    job_store = JobStore(tmp_path / "jobs.db")
+    index = GalleryIndex(files, folders=list)
+    try:
+
+        def run(tab, core, meta=None, *, colors, index_now=True):
+            job = job_store.add(tab, core, {}, meta=meta or {})
+            outputs = [_save_img(files, color, f"{core['prompt']}\nSteps: 20, Seed: {color[0]}", job_id=job.id, tab=tab) for color in colors]
+            job = job_store.finish(job.id, "completed", outputs=[{"id": output.id, "kind": "image"} for output in outputs])
+            if index_now:
+                index.index_job_lineage(job, [output.id for output in outputs], job_store=job_store)
+            return outputs
+
+        reference = files.add_upload_bytes(b"\x89PNG\r\n\x1a\n" + _png_bytes(), "ref.png")
+        [a1] = run("img2img", {"prompt": "a1", "init_img": reference.id}, colors=[(1, 1, 1)])
+        chain = [a1]
+        for step in range(2, 5):
+            [node] = run("img2img", {"prompt": f"a{step}", "init_img": chain[-1].id}, colors=[(step, step, step)], index_now=step != 3)
+            chain.append(node)
+        a5, a5_twin = run("img2img", {"prompt": "a5", "init_img": chain[-1].id, "mask": reference.id}, colors=[(5, 5, 5), (6, 6, 6)])
+        [cousin] = run("img2img", {"prompt": "cousin", "init_img": chain[-1].id}, colors=[(7, 7, 7)])
+        [d1] = run("img2img", {"prompt": "d1", "init_img": a5.id}, colors=[(8, 8, 8)])
+        [d2] = run("txt2img", {"prompt": "d2"}, {"upscale_from": d1.id}, colors=[(9, 9, 9)])
+
+        def shape(lineage):
+            return {key: [(node["file_id"], node["relation"], node["depth"], node["job_id"], node["exists"]) for node in lineage[key]] for key in ("ancestors", "siblings", "descendants")}
+
+        a2, a3, a4 = chain[1:]
+        first = index.lineage_for(a5.id, job_store=job_store)  # indexes a3, whose job was not indexed
+        expected = {
+            "ancestors": [
+                (a4.id, "init_img", 1, a4.job_id, True),
+                (reference.id, "mask", 1, a5.job_id, True),
+                (a3.id, "init_img", 2, a3.job_id, True),
+                (a2.id, "init_img", 3, a2.job_id, True),
+                (a1.id, "init_img", 4, a1.job_id, True),
+            ],
+            "descendants": [(d1.id, "init_img", 1, d1.job_id, True), (d2.id, "upscale_from", 2, d2.job_id, True)],
+        }
+        found = shape(first)
+        siblings = found.pop("siblings")
+        assert found == expected
+        # the same job's outputs first, then those sharing a parent (a4, or the reference a1 also used)
+        assert siblings[0] == (a5_twin.id, "same_job", 0, a5.job_id, True)
+        assert sorted(siblings[1:]) == sorted([(cousin.id, "same_parent", 0, cousin.job_id, True), (a1.id, "same_parent", 0, a1.job_id, True)])
+        assert first["item"]["file_id"] == a5.id and first["item"]["job_id"] == a5.job_id
+
+        statements: list[str] = []
+        index._db.set_trace_callback(statements.append)
+        again = index.lineage_for(a5.id, job_store=job_store)
+        index._db.set_trace_callback(None)
+        assert again == first
+        selects = [sql for sql in statements if sql.lstrip().upper().startswith("SELECT")]
+        depth = 4  # a5 → a4 → a3 → a2 → a1 (→ the reference upload)
+        assert len(selects) <= 2 * depth + 4, selects
+    finally:
+        index.close()
+        job_store.close()
+        files.close()
