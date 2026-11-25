@@ -58,6 +58,30 @@ def test_boards_crud_and_gallery_filter(tmp_path):
         files.close()
 
 
+def test_deleting_a_board_is_one_transaction(tmp_path):
+    """delete_board removed the board's items, then the board, each committed on its own: a
+    failure between them (a locked or full database) left an empty board behind."""
+    import sqlite3
+
+    import pytest
+
+    files = FileStore(tmp_path / "files")
+    index = GalleryIndex(files, folders=list)
+    try:
+        out = _save_img(files, (255, 0, 0), "red rose\nSteps: 20")
+        board = index.create_board("Kept")
+        assert index.add_to_board(board["id"], [out.id]) == 1
+        index._db.execute("CREATE TEMP TRIGGER refuse BEFORE DELETE ON boards BEGIN SELECT RAISE(ABORT, 'refused'); END")
+        with pytest.raises(sqlite3.IntegrityError):
+            index.delete_board(board["id"])
+        assert index.get_board(board["id"])["item_count"] == 1
+        index._db.execute("DROP TRIGGER refuse")
+        assert index.delete_board(board["id"]) is True and index.get_board(board["id"]) is None
+    finally:
+        index.close()
+        files.close()
+
+
 def test_asset_lineage_ancestors_siblings_descendants_and_cycles(tmp_path):
     files = FileStore(tmp_path / "files")
     job_store = JobStore(tmp_path / "jobs.db")

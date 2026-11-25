@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import contextlib
 import json
 import os
 import re
@@ -24,7 +25,7 @@ import time
 import weakref
 import zipfile
 from collections import deque
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -212,6 +213,20 @@ class GalleryIndex:
     def close(self) -> None:
         with self._lock:
             self._db.close()
+
+    @contextlib.contextmanager
+    def _transaction(self) -> Iterator[None]:
+        """Writes that land together or not at all (the connection autocommits otherwise)."""
+
+        with self._lock:
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                yield
+            except BaseException:
+                if self._db.in_transaction:  # some errors (a full disk) roll back on their own
+                    self._db.execute("ROLLBACK")
+                raise
+            self._db.execute("COMMIT")
 
     # region Index
 
@@ -623,7 +638,7 @@ class GalleryIndex:
         return board
 
     def delete_board(self, board_id: str) -> bool:
-        with self._lock:
+        with self._transaction():
             self._db.execute("DELETE FROM board_items WHERE board_id = ?", (board_id,))
             return self._db.execute("DELETE FROM boards WHERE id = ?", (board_id,)).rowcount > 0
 
