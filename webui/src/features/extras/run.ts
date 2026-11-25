@@ -16,6 +16,7 @@ import { onWsEvent } from "@/api/ws"
 import { errorText, toastInvalid } from "@/features/errors/error-text"
 import { t } from "@/i18n"
 import { getFormStore } from "@/ui/form-store"
+import { flushPendingWrites } from "@/ui/pending-writes"
 import type { FieldMessage } from "@/ui/schema"
 import { jobRequest, missingInputs } from "@/ui/tab"
 import { bestEffortStorage, isRecord, isText, keepEntries, mergeTyped } from "@/lib/persist"
@@ -108,15 +109,18 @@ export async function runExtras(): Promise<void> {
   const state = useExtrasRuns.getState()
   if (!schema || state.submitting) return
   const store = getFormStore("extras")
-  const body = jobRequest(store, schema)
-  const missing = missingInputs(schema, body)
-  if (missing.length > 0) {
-    store.getState().setErrors(missing)
-    toastInvalid(missing)
-    return
-  }
+  // submitting from the press: a second one while an upload lands queues nothing more
   useExtrasRuns.setState({ submitting: true })
   try {
+    // a source image still uploading goes into the job, instead of "an image is required"
+    await flushPendingWrites("extras")
+    const body = jobRequest(store, schema)
+    const missing = missingInputs(schema, body)
+    if (missing.length > 0) {
+      store.getState().setErrors(missing)
+      toastInvalid(missing)
+      return
+    }
     const created = await api.jobs.create(body)
     store.getState().clearErrors()
     const ids = created.job_ids?.length ? created.job_ids : [created.job_id]

@@ -6,6 +6,7 @@ import { tabSchema } from "@/api/mock/fixtures"
 import { createFormStore, type FormStore } from "./form-store"
 import { TabForm } from "./SchemaForm"
 import { preloadViews } from "./lazy-views"
+import { flushPendingWrites } from "./pending-writes"
 import type { Node, OwnerDefaults, ScriptSchema, TabSchema } from "./schema"
 
 // these forms show deferred node views (image, file, color, JSON, tabs, outputs): fetched up front,
@@ -268,6 +269,23 @@ describe("input kinds", () => {
     expect(new URL(request.url).pathname).toBe("/api/v2/uploads")
     expect(await screen.findByRole("button", { name: "Remove Image" })).toBeInTheDocument()
     expect(zone).toHaveAccessibleDescription("Replace image")
+  })
+
+  // An image still uploading was not part of a submit: Extras' Process, pressed meanwhile, said "an
+  // image is required". The upload, with the value it sets, is a pending write of its form.
+  it("an image upload is a pending write of its form until its value is set", async () => {
+    let answer!: (response: Response) => void
+    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise<Response>((resolve) => (answer = resolve)))
+    const store = one({ type: "image", name: "img", label: "Image" }, { img: null })
+    fireEvent.drop(screen.getByRole("button", { name: "Image" }), { dataTransfer: { files: [new File([new Uint8Array([1])], "a.png", { type: "image/png" })] } })
+    let flushed = false
+    const flush = flushPendingWrites("txt2img").then(() => (flushed = true))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+    expect(flushed).toBe(false)
+    answer(new Response(JSON.stringify({ id: "up-2", width: 8, height: 8 }), { headers: { "Content-Type": "application/json" } }))
+    await act(() => flush)
+    expect(core(store).img).toBe("up-2")
+    vi.restoreAllMocks()
   })
 
   it("json", () => {

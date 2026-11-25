@@ -16,6 +16,24 @@ export function registerPendingWrite(formId: string, flush: Flush): () => void {
   return () => void set.delete(flush)
 }
 
+/**
+ * Runs `write` (an upload and the value it sets) as a pending value of form `formId`, so a submit
+ * started meanwhile sends what it writes. A failed write does not fail the submit (it says so itself).
+ */
+export async function pendingWrite(formId: string, write: () => Promise<void>): Promise<void> {
+  const done = write()
+  const settled = done.then(
+    () => {},
+    () => {},
+  )
+  const unregister = registerPendingWrite(formId, () => settled)
+  try {
+    await done
+  } finally {
+    unregister()
+  }
+}
+
 /** Resolves when every pending value of the form is written (rejects if one fails). */
 export async function flushPendingWrites(formId: string): Promise<void> {
   const set = writers.get(formId)

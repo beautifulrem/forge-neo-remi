@@ -3,6 +3,7 @@ import { extrasSchema } from "@/api/mock/fixtures"
 import { useProgress } from "@/api/progress"
 import { keys, queryClient } from "@/api/queries"
 import { getFormStore } from "@/ui/form-store"
+import { registerPendingWrite } from "@/ui/pending-writes"
 import { tabOwners } from "@/ui/tab"
 import { finishExtras, interruptExtras, resetExtrasRuns, resyncExtras, runExtras, singleSource, useExtrasRuns, wireExtrasRuns } from "./run"
 
@@ -60,6 +61,30 @@ describe("extras runs", () => {
     await Promise.all([runExtras(), runExtras()])
     expect(calls.filter((call) => call.method === "POST")).toHaveLength(1)
     expect(useExtrasRuns.getState().jobs).toEqual(["x1"])
+  })
+
+
+  // Process pressed while the source image was still uploading said "an image is required": the
+  // run checked the form before the upload had set it.
+  it("waits for a value still being written (an upload) before it checks and sends the form", async () => {
+    const calls = mockFetch(() => [201, { job_id: "x2", job_ids: ["x2"], seq: 4 }])
+    let land!: () => void
+    const upload = new Promise<void>((resolve) => (land = resolve))
+    const unregister = registerPendingWrite("extras", () => upload)
+    try {
+      const first = runExtras()
+      const second = runExtras() // a second press while it waits queues nothing more
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      expect(calls).toEqual([])
+      getFormStore("extras").getState().setValue("core", "image", "up7")
+      land()
+      await Promise.all([first, second])
+    } finally {
+      unregister()
+    }
+    expect(calls.filter((call) => call.method === "POST" && call.path === "/jobs")).toHaveLength(1)
+    expect((calls[0]!.body as { core: { image: string } }).core.image).toBe("up7")
+    expect(getFormStore("extras").getState().errors.core?.image).toBeUndefined()
   })
 
   it("marks rejected values on the form", async () => {

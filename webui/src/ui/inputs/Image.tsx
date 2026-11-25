@@ -3,11 +3,12 @@ import { useId } from "react"
 import { useTranslation } from "react-i18next"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { useParam } from "../hooks"
+import { useForm, useParam } from "../hooks"
 import { describedBy, hintRef, labelId } from "../a11y"
 import { Field } from "../Field"
 import type { ImageListNode, ImageNode } from "../schema"
 import { usePasteTarget } from "../paste-targets"
+import { pendingWrite } from "../pending-writes"
 import { imageFiles, releaseUpload, useUploader, useUploadInfo } from "../uploads"
 import { DropZone } from "./DropZone"
 import { useImageRole } from "@/canvas/form/image-role"
@@ -54,16 +55,19 @@ function UploadImageInput({ node }: { node: ImageNode }) {
   const hintId = `${id}-hint`
   const param = useParam<string | null>(node)
   const { upload, busy } = useUploader()
+  const { formId } = useForm()
   const label = t(param.label)
   const value = typeof param.value === "string" ? param.value : null
   const disabled = !param.enabled
 
-  const onFiles = async (files: File[]) => {
-    const [first] = await upload(imageFiles(files))
-    if (!first) return
-    param.setValue(first.id)
-    if (value) releaseUpload(value)
-  }
+  // a submit pressed while it uploads (Extras' Process) waits for the image
+  const onFiles = (files: File[]) =>
+    pendingWrite(formId, async () => {
+      const [first] = await upload(imageFiles(files))
+      if (!first) return
+      param.setValue(first.id)
+      if (value) releaseUpload(value)
+    })
   // A paste with no image field hovered or focused goes to the first empty one on screen.
   usePasteTarget(!disabled, { element: () => document.getElementById(id), empty: () => !value, deliver: (files) => void onFiles(files) })
 
@@ -139,14 +143,17 @@ export function ImageListInput({ node }: { node: ImageListNode }) {
   const hintId = `${id}-hint`
   const param = useParam<string[]>(node)
   const { upload, busy } = useUploader()
+  const { formId } = useForm()
   const ids = Array.isArray(param.value) ? param.value : []
   const label = t(param.label)
   const disabled = !param.enabled
 
-  const onFiles = async (files: File[]) => {
-    const uploaded = await upload(imageFiles(files))
-    if (uploaded.length > 0) param.setValue([...ids, ...uploaded.map((u) => u.id)])
-  }
+  // a submit pressed while they upload (Extras' Process) waits for the images
+  const onFiles = (files: File[]) =>
+    pendingWrite(formId, async () => {
+      const uploaded = await upload(imageFiles(files))
+      if (uploaded.length > 0) param.setValue([...ids, ...uploaded.map((u) => u.id)])
+    })
   usePasteTarget(!disabled, { element: () => document.getElementById(id), empty: () => ids.length === 0, deliver: (files) => void onFiles(files) })
 
   return (
