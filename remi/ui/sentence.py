@@ -25,13 +25,18 @@ class Sentence(str):
     template: str
     params: dict[str, str | list[str]]
 
-    def __new__(cls, template: str, **params: Any) -> Sentence:
+    def __new__(cls, template: str, /, **params: Any) -> Sentence:
         values: dict[str, str | list[str]] = {name: [str(item) for item in value] if isinstance(value, (list, tuple)) else str(value) for name, value in params.items()}
         english = {name: ", ".join(value) if isinstance(value, list) else value for name, value in values.items()}
         sentence = super().__new__(cls, _PLACEHOLDER.sub(lambda match: english[match.group(1)], template))
         sentence.template = template
         sentence.params = values
         return sentence
+
+    def __getnewargs_ex__(self) -> tuple[tuple[str], dict[str, str | list[str]]]:
+        # copy and pickle rebuild a sentence from these: from its English text, a "{{word}}" a
+        # param put there was read as a placeholder of its own
+        return (self.template,), {name: list(value) if isinstance(value, list) else value for name, value in self.params.items()}
 
 
 def sentence_fields(text: Any, prefix: str = "") -> dict[str, Any]:

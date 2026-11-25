@@ -338,3 +338,25 @@ def test_refresh_patch_names_rescanned_lists():
     for bad in ({"keys": "upscalers"}, {"keys": [""]}, {"keys": [3]}, {}):
         with pytest.raises(SchemaError):
             check_patch({"__refresh__": bad})
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda: ui.Sentence("got {{value}}", value="{{word}}"),  # its English text holds a placeholder
+        lambda: ui.Sentence("{{template}} and {{cls}}", template="a", cls="b"),  # params named like __new__'s own
+        lambda: ui.Sentence("Requires {{names}}", names=["ControlNet", "{{x}}"]),
+        lambda: ui.Sentence("no params"),
+    ],
+    ids=["placeholder-in-text", "param-names", "list", "plain"],
+)
+def test_a_sentence_survives_copy_and_pickle(make):
+    """Copies and pickles (a worker process's results) rebuilt a sentence from its English text:
+    a ``{{word}}`` in it was looked up as a param (KeyError), and the template was lost."""
+    import copy
+    import pickle
+
+    sentence = make()
+    for again in (copy.copy(sentence), copy.deepcopy(sentence), pickle.loads(pickle.dumps(sentence))):
+        assert type(again) is ui.Sentence and again == sentence
+        assert again.template == sentence.template and again.params == sentence.params
