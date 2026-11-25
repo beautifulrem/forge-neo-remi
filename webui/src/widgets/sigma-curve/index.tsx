@@ -96,7 +96,8 @@ export default function SigmaCurve({ props, id, disabled }: WidgetProps<null, Pr
         <Curve state={selectedState} on={on} width={200} height={100} detailed label={describe(selected, selectedState)} />
         <figcaption className="pointer-events-none absolute top-1 left-2 text-xs font-medium text-muted-foreground tabular-nums">
           {selected.title}
-          {selectedState.mode !== "both" ? ` · ${selectedState.mode.toUpperCase()}` : ""}
+          {/* the choice's own word (sentence case), translated where Detail Daemon's catalog has it */}
+          {selectedState.mode !== "both" ? ` · ${tw(selectedState.mode)}` : ""}
         </figcaption>
         <span className="pointer-events-none absolute top-1 right-2 text-[0.625rem] text-muted-foreground">1</span>
         <span className="pointer-events-none absolute right-2 bottom-1 text-[0.625rem] text-muted-foreground">−1</span>
@@ -121,9 +122,13 @@ export default function SigmaCurve({ props, id, disabled }: WidgetProps<null, Pr
                   current ? "ring-1 ring-primary/70" : "hover:bg-accent",
                 )}
               >
-                <span className="text-[0.625rem] leading-none font-semibold text-muted-foreground">
+                {/* a translated mode ("负向（uncond）") is longer than the thumbnail: cut, whole in the title */}
+                <span
+                  title={state.mode !== "both" ? `${daemon.title} ${tw(state.mode)}` : undefined}
+                  className="truncate text-[0.625rem] leading-none font-semibold text-muted-foreground"
+                >
                   {daemon.title}
-                  {state.mode !== "both" ? ` ${state.mode.toUpperCase()}` : ""}
+                  {state.mode !== "both" ? ` ${tw(state.mode)}` : ""}
                 </span>
                 <span className="min-h-0 flex-1">
                   <Curve state={state} on={on} width={100} height={60} detailed={false} label="" />

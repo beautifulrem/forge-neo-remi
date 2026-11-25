@@ -59,6 +59,15 @@ describe("sigma-curve widget", () => {
     expect(curvePath([1, -1], 10, 4)).toBe("M0.00,0.00 L10.00,4.00")
   })
 
+  // The mode was written in capitals ("COND"): sentence case everywhere, so it shows as the choice
+  // does, translated where the extension's catalog has it.
+  it("names a daemon's mode as its choice does, never in capitals", () => {
+    setup({ d1_mode: "cond", d2_mode: "uncond" })
+    expect(screen.getByText(/· cond$/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Daemon II/ })).toHaveTextContent(/II uncond/)
+    expect(screen.queryByText(/COND/)).toBeNull()
+  })
+
   it("has a zh-CN translation for every chrome string", () => {
     const sources = import.meta.glob<string>(["./*.tsx", "./*.ts", "!./*.test.*"], { query: "?raw", import: "default", eager: true })
     const keys = Object.values(sources).flatMap(widgetKeys)
