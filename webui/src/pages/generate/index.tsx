@@ -17,6 +17,7 @@ import { type Route, routeHref } from "@/app/router"
 import { Button } from "@/components/ui/button"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup, useDefaultLayout, usePanelRef } from "@/components/ui/resizable"
 import { Skeleton } from "@/components/ui/skeleton"
+import { scrollBehavior } from "@/lib/motion"
 import { useIsDesktop, useMediaQuery } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { selectedItem, useSession } from "@/features/gallery/session-store"
@@ -254,8 +255,7 @@ function PhoneLayout({ tab, openViewer }: { tab: GenerateTab; openViewer: (key?:
   // The stage appearing above the form (the first Generate) is brought into view: the run is seen.
   useEffect(() => {
     if (showStage && !shown.current) {
-      const still = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches
-      stage.current?.scrollIntoView?.({ block: "start", behavior: still ? "auto" : "smooth" })
+      stage.current?.scrollIntoView?.({ block: "start", behavior: scrollBehavior() })
     }
     shown.current = showStage
   }, [showStage])

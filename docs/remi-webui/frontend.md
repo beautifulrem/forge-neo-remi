@@ -279,11 +279,15 @@ imperatively).
   leaves the icon alone, the label read out (`sr-only`) and kept as `title`.
 - Motion: `tw-animate-css` + base-nova animations; a global
   `prefers-reduced-motion` rule neutralises animations and transitions.
-  What may move, how long, and the two exceptions (a collapsible's
+  A scroll the app starts itself (`scrollIntoView`, `scrollTo`) takes its
+  `behavior` from `scrollBehavior()` (`lib/motion.ts`): a `behavior:
+  "smooth"` written out ignores that rule (`lib/motion.test.ts` fails on
+  one). What may move, how long, and the two exceptions (a collapsible's
   height, colour and focus ring feedback) are in
-  [Visual rules](#visual-rules). Nothing that stays on screen while a job runs animates endlessly (no
-  `animate-pulse` / `animate-spin` on running indicators): an infinite
-  animation makes the compositor redraw at display rate for the whole job,
+  [Visual rules](#visual-rules). Nothing that stays on screen while a job
+  runs animates endlessly (no `animate-pulse` / `animate-spin` on running
+  indicators): an infinite animation makes the compositor redraw at
+  display rate for the whole job,
   which measurably slows sampling where the browser shares the GPU
   (docs/research/ui-performance.md). Spinners are for short waits only.
   A generation step is one React commit and one drawn frame: while previews

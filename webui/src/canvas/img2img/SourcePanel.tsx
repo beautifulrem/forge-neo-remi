@@ -14,6 +14,7 @@ import { type CSSProperties, type ReactNode, useEffect, useId, useRef, useState 
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { fieldErrorText } from "@/features/errors/error-text"
+import { scrollBehavior } from "@/lib/motion"
 import { cn } from "@/lib/utils"
 import { evaluate } from "@/ui/conditions"
 import { OwnerProvider } from "@/ui/context"
@@ -203,7 +204,7 @@ function ImageRow({ label, id, error, emptyText, mask, onFile, onRemove, busy, e
 /** Shows the stage's editor, scrolled into view where the stage sits below the parameters (phones). */
 function showEditor(setView: (view: "source") => void) {
   setView("source")
-  requestAnimationFrame(() => document.getElementById("img2img-stage-source")?.scrollIntoView({ behavior: "smooth", block: "nearest" }))
+  requestAnimationFrame(() => document.getElementById("img2img-stage-source")?.scrollIntoView({ behavior: scrollBehavior(), block: "nearest" }))
 }
 
 function SourceImages({ binding }: { binding: EditorBinding }) {
