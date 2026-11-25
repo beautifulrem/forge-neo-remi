@@ -325,6 +325,8 @@ describe("mock workbench routes", () => {
     const pupAnima = await call("POST", "/prompt-tools/upsample", { prompt: "1girl, forest", model_family: "anima", instructions: "soft sunlight" })
     expect(pupAnima.data.prompt).toContain("soft sunlight")
 
-    expect((await call("POST", "/prompt-tools/upsample", { prompt: "   " })).status).toBe(422)
+    // a blank prompt is a refused value under its field, as the server lists it (not a detail)
+    const blank = await call("POST", "/prompt-tools/upsample", { prompt: "   " })
+    expect(blank).toEqual({ status: 422, data: { errors: [{ owner: null, param: "prompt", message: "describe the image first" }] } })
   })
 })

@@ -513,7 +513,8 @@ function buildAdoptPatch(rawParams: Record<string, string>) {
 
 function mockUpsampleResponse(body: Record<string, unknown>) {
   const rawPrompt = String(body.prompt ?? "")
-  if (!rawPrompt.trim()) throw new MockHttpError(422, { detail: "prompt must not be empty" })
+  // as the server refuses it: a value under its request field (`pup.upsample_prompt`)
+  if (!rawPrompt.trim()) throw new MockHttpError(422, { errors: [{ owner: null, param: "prompt", message: "describe the image first" }] })
   const reqFamily = String(body.model_family ?? "auto").toLowerCase()
   const family = reqFamily && reqFamily !== "auto" ? reqFamily : normalizeMockPreset(String(bootstrap.options.forge_preset ?? "flux3"))
   const refIds = Array.isArray(body.reference_file_ids) ? body.reference_file_ids.map(String) : []
