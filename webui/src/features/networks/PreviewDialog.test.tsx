@@ -82,6 +82,34 @@ describe("preview dialog", { timeout: 30_000 }, () => {
     await waitFor(() => expect(calls.find((call) => call.method === "PUT")?.body).toEqual({ file_id: "out-1-2" }))
   })
 
+  it("keeps the gallery's first page when the next one fails, with a retry for it", async () => {
+    mockServer()
+    const fetch = vi.mocked(globalThis.fetch)
+    const answer = fetch.getMockImplementation()!
+    let failNext = true
+    fetch.mockImplementation(async (input, init) => {
+      const url = new URL((input as Request).url)
+      if (url.searchParams.get("cursor") && failNext) {
+        // a client error: the query client does not retry it, so the test needs no backoff
+        return new Response(JSON.stringify({ detail: "gone" }), { status: 404, headers: { "Content-Type": "application/json" } })
+      }
+      return answer(input, init)
+    })
+    render(<Harness item={item("ink")} open />)
+    const group = await screen.findByRole("radiogroup", { name: "Image" })
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }))
+    const status = await screen.findByRole("alert")
+    expect(status).toHaveTextContent("Could not load more.")
+    // the first page stays
+    expect(within(group).getAllByRole("radio")).toHaveLength(3)
+    expect(screen.queryByText("Could not load the gallery")).toBeNull()
+
+    failNext = false
+    fireEvent.click(within(status).getByRole("button", { name: "Retry" }))
+    await waitFor(() => expect(within(group).getAllByRole("radio")).toHaveLength(6))
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
   it("starts fresh for every item", async () => {
     mockServer()
     useSession.setState({ items: [{ key: "j:0", fileId: "result-1", jobId: "j", tab: "txt2img", index: 0, infotext: null, createdAt: 1 }] })

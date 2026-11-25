@@ -13,6 +13,7 @@ import { toast } from "sonner"
 import { api } from "@/api/endpoints"
 import { queryClient } from "@/api/queries"
 import type { NetworkItem } from "@/api/types"
+import { LoadMoreStatus } from "@/components/LoadMoreStatus"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -159,12 +160,15 @@ export function PreviewDialog({ item, open, onOpenChange }: { item: NetworkItem 
                   <Skeleton key={i} className="aspect-square rounded-lg" />
                 ))}
               </div>
-            ) : gallery.isError ? (
+            ) : gallery.isError && !gallery.data ? (
               <LoadFailed error={gallery.error} message={t("Could not load the gallery")} onRetry={() => void gallery.refetch()} className="justify-center py-8" />
             ) : galleryIds.length ? (
               <div className="flex flex-col gap-3">
                 <Thumbs ids={galleryIds} selected={selected} onSelect={setSelected} label={t("Image")} />
-                {gallery.hasNextPage ? (
+                {gallery.isFetchNextPageError ? (
+                  // the pages shown stay; only the next one failed
+                  <LoadMoreStatus loading={false} failed onRetry={() => void gallery.fetchNextPage()} />
+                ) : gallery.hasNextPage ? (
                   <Button variant="outline" size="sm" className="self-center" disabled={gallery.isFetchingNextPage} onClick={() => void gallery.fetchNextPage()}>
                     {gallery.isFetchingNextPage ? <Loader2 className="animate-spin" aria-hidden /> : null}
                     {t("Load more")}
