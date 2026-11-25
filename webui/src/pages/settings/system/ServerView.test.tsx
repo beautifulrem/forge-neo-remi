@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
@@ -61,5 +61,18 @@ describe("ServerView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show the weights in memory" }))
     // 24 px and 8 px on each side; nothing else in its row takes taps
     expect(await screen.findByRole("button", { name: "Refresh" })).toHaveClass("size-6", "relative", "after:absolute", "after:-inset-2")
+  })
+
+  it("keeps the weights shown when refreshing them fails, and says the refresh failed", async () => {
+    vi.spyOn(api.system, "status").mockResolvedValue(STATUS as never)
+    const weights = vi.spyOn(api.system, "loadedModels").mockResolvedValueOnce({ items: [{ name: "anima.safetensors", memory_mb: 6144, device: "cuda:0" }] } as never)
+    weights.mockRejectedValueOnce(new ApiError(404, "boom", { detail: "boom" })) // a 4xx is not retried
+    renderView()
+    fireEvent.click(screen.getByRole("button", { name: "Show the weights in memory" }))
+    const table = await screen.findByRole("table", { name: "Weights in memory" })
+    expect(within(table).getByText("anima.safetensors")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }))
+    expect(await screen.findByRole("alert")).toBeInTheDocument()
+    expect(within(screen.getByRole("table", { name: "Weights in memory" })).getByText("anima.safetensors")).toBeInTheDocument()
   })
 })

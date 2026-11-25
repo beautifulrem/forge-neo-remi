@@ -88,11 +88,13 @@ function LoadedWeights() {
           <RefreshCw className={cn(loaded.isFetching && "animate-spin")} />
         </Button>
       </div>
+      {/* a failed refresh keeps the list it had: the error goes above it */}
       {loaded.isError ? (
         <p role="alert" className="px-1 text-xs text-destructive">
           {adminErrorMessage(loaded.error, t)}
         </p>
-      ) : !loaded.data ? (
+      ) : null}
+      {loaded.isError && !loaded.data ? null : !loaded.data ? (
         <Loader2 className="mx-auto size-4 animate-spin text-muted-foreground" aria-label={t("Loading…")} />
       ) : loaded.data.items.length === 0 ? (
         <p className="px-1 text-xs text-muted-foreground">{t("Nothing is loaded.")}</p>
