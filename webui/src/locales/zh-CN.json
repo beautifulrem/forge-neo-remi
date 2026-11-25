@@ -1568,8 +1568,6 @@
   "Pipeline cancelled": "管线已取消",
   "Add stage": "添加阶段",
   "Remove stage": "移除阶段",
-  "Move stage left": "前移阶段",
-  "Move stage right": "后移阶段",
   "Prompt Upsample": "提示词扩写",
   "Base Generate": "基础生成",
   "Refine / Inpaint": "局部精修 / 重绘",
@@ -1704,5 +1702,7 @@
   "{{field}}: {{message}}": "{{field}}：{{message}}",
   "Imported {{count}} recipes ({{updated}} updated)": "已导入 {{count}} 个配方（更新 {{updated}} 个）",
   "Finished: {{count}} checkpoints hashed": "已完成：计算了 {{count}} 个模型的哈希",
-  "{{shown}} of {{count}} extensions": "{{shown}} / {{count}} 个扩展"
+  "{{shown}} of {{count}} extensions": "{{shown}} / {{count}} 个扩展",
+  "Move {{stage}} earlier": "将{{stage}}前移",
+  "Move {{stage}} later": "将{{stage}}后移"
 }

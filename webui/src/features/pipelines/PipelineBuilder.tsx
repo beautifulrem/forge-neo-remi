@@ -62,7 +62,7 @@ import {
   storeChainRun,
 } from "./api"
 import { defaultStage, firstExecuteStage, planPipelineCache, STAGE_KINDS, STAGE_META, STARTER_PIPELINES } from "./cache-hash"
-import { usePipelineDraft } from "./draft-store"
+import { keepStageKey, stageKey, usePipelineDraft } from "./draft-store"
 import type { ChainPreviewStage, ChainStatus, ChainTemplate, JobChain, StageKind, StageSpec } from "./types"
 
 /** Recent runs' status (English keys, translated at render). */
@@ -238,11 +238,28 @@ export function PipelineBuilder() {
   })
 
   const updateStage = (index: number, updater: (prev: StageSpec) => StageSpec) => {
-    setStages((prev) => prev.map((stage, i) => (i === index ? updater(stage) : stage)))
+    setStages((prev) => prev.map((stage, i) => (i === index ? keepStageKey(stage, updater(stage)) : stage)))
   }
+
+  // The move button just used, to keep the focus on once its card has moved (the other one when
+  // the card reached the end and this one is disabled).
+  const trackRef = useRef<HTMLOListElement>(null)
+  const movedRef = useRef<{ key: number; direction: "earlier" | "later" } | null>(null)
+  useEffect(() => {
+    const moved = movedRef.current
+    movedRef.current = null
+    if (!moved) return
+    const card = trackRef.current?.querySelector(`[data-stage-key="${moved.key}"]`)
+    const buttons = [...(card?.querySelectorAll<HTMLButtonElement>("[data-move]") ?? [])]
+    const same = buttons.find((button) => button.dataset.move === moved.direction)
+    const target = same && !same.disabled ? same : buttons.find((button) => !button.disabled)
+    target?.focus()
+  }, [stages])
 
   const moveStage = (from: number, to: number) => {
     if (to < 0 || to >= stages.length) return
+    const stage = stages[from]
+    if (stage) movedRef.current = { key: stageKey(stage), direction: to < from ? "earlier" : "later" }
     setStages((prev) => {
       const next = [...prev]
       const [moved] = next.splice(from, 1)
@@ -430,7 +447,7 @@ export function PipelineBuilder() {
       </div>
 
       {/* Connected linear stage track */}
-      <ol className="grid grid-cols-1 gap-x-4 gap-y-5 lg:grid-cols-2 xl:flex xl:items-stretch xl:gap-0">
+      <ol ref={trackRef} className="grid grid-cols-1 gap-x-4 gap-y-5 lg:grid-cols-2 xl:flex xl:items-stretch xl:gap-0">
         {stages.map((stage, index) => {
           const planned = plan[index]!
           // the run's stage at this place only while this card still is that stage (not after a move or an edit)
@@ -441,9 +458,10 @@ export function PipelineBuilder() {
           const sampler = stage.scripts?.sampler ?? {}
 
           return (
-            <Fragment key={`${stage.kind}-${index}`}>
+            <Fragment key={stageKey(stage)}>
               <li
                 data-stage-index={index}
+                data-stage-key={stageKey(stage)}
                 data-cache-decision={planned.decision}
                 className={cn(
                   // an inspector panel, not a card: a hairline above, no box or fill
@@ -697,7 +715,8 @@ export function PipelineBuilder() {
                       size="icon-sm"
                       className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
                       disabled={index === 0}
-                      aria-label={t("Move stage left")}
+                      data-move="earlier"
+                      aria-label={t("Move {{stage}} earlier", { stage: t(STAGE_META[stage.kind].label) })}
                       onClick={() => moveStage(index, index - 1)}
                     >
                       <ArrowUp className="size-3.5" />
@@ -707,7 +726,8 @@ export function PipelineBuilder() {
                       size="icon-sm"
                       className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
                       disabled={index === stages.length - 1}
-                      aria-label={t("Move stage right")}
+                      data-move="later"
+                      aria-label={t("Move {{stage}} later", { stage: t(STAGE_META[stage.kind].label) })}
                       onClick={() => moveStage(index, index + 1)}
                     >
                       <ArrowDown className="size-3.5" />

@@ -254,6 +254,28 @@ describe("PipelineBuilder UI", () => {
     fireEvent.click(retry)
     expect(await screen.findByText("No pipeline runs yet")).toBeInTheDocument()
   })
+  // The cards were keyed by kind and place, so a moved stage was a new card: the focus fell to the
+  // page, and the arrows said "left" / "right" on a layout that is a column below xl.
+  it("keeps the focus on the moved stage's button and names the stage it moves", () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify([]), { status: 200 }))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PipelineBuilder />
+      </QueryClientProvider>,
+    )
+    const kinds = () => usePipelineDraft.getState().stages.map((stage) => stage.kind)
+    const later = screen.getByRole("button", { name: "Move Base Generate later" })
+    later.focus()
+    fireEvent.click(later)
+    expect(kinds()).toEqual(["refine", "generate", "finish"])
+    expect(screen.getByRole("button", { name: "Move Base Generate later" })).toHaveFocus()
+
+    fireEvent.click(screen.getByRole("button", { name: "Move Base Generate later" }))
+    expect(kinds()).toEqual(["refine", "finish", "generate"])
+    // last now: its "later" button is disabled, so the focus goes to the other one
+    expect(screen.getByRole("button", { name: "Move Base Generate later" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Move Base Generate earlier" })).toHaveFocus()
+  })
 })
 
 describe("starter pipelines", () => {
