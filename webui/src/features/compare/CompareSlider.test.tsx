@@ -27,3 +27,24 @@ describe("compare slider", () => {
     expect(screen.getByRole("slider")).toHaveAttribute("aria-valuenow", "10")
   })
 })
+
+describe("compare slider labels", () => {
+  // In a narrow frame (Extras held sideways, a portrait image 150 px tall) the two corner labels ran
+  // into each other: each keeps to its half, cut with its full text as a title.
+  it("keep each label to its half of the frame, with its text as a title", () => {
+    render(<CompareSlider before="/a.png" after="/b.png" beforeLabel="Source image" afterLabel="Processed result" aspect={0.5} />)
+    for (const text of ["Source image", "Processed result"]) {
+      const label = screen.getByText(text)
+      expect(label).toHaveAttribute("title", text)
+      expect(label.className.split(/\s+/)).toEqual(expect.arrayContaining(["max-w-[calc(50%-0.75rem)]", "truncate"]))
+    }
+  })
+
+  it("still drag the divider when pressed", () => {
+    render(<CompareSlider before="/a.png" after="/b.png" beforeLabel="Source" afterLabel="Result" aspect={2} />)
+    const frame = screen.getByRole("img", { name: "Source" }).parentElement!
+    vi.spyOn(frame, "getBoundingClientRect").mockReturnValue({ left: 0, width: 200, top: 0, height: 100, right: 200, bottom: 100, x: 0, y: 0, toJSON: () => ({}) })
+    fireEvent.pointerDown(screen.getByText("Source", { selector: "span" }), { clientX: 20, button: 0, pointerId: 1 })
+    expect(screen.getByRole("slider")).toHaveAttribute("aria-valuenow", "10")
+  })
+})

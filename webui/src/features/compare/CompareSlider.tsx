@@ -82,10 +82,12 @@ export function CompareSlider({ before, after, beforeLabel, afterLabel, aspect, 
         className="absolute inset-0 size-full object-contain"
         style={{ clipPath: `inset(0 0 0 ${percent})` }}
       />
-      <span className="pointer-events-none absolute top-2 left-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[0.6875rem] font-medium text-white">
+      {/* each label keeps to its half of the frame (a narrow one, a portrait image held sideways, ran them
+          together), its full text a title; it takes the pointer for that, and a press on it still drags (the frame's) */}
+      <span title={beforeLabel ?? t("Before")} className="absolute top-2 left-2 max-w-[calc(50%-0.75rem)] truncate rounded-md bg-black/55 px-1.5 py-0.5 text-[0.6875rem] font-medium text-white">
         {beforeLabel ?? t("Before")}
       </span>
-      <span className="pointer-events-none absolute top-2 right-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[0.6875rem] font-medium text-white">
+      <span title={afterLabel ?? t("After")} className="absolute top-2 right-2 max-w-[calc(50%-0.75rem)] truncate rounded-md bg-black/55 px-1.5 py-0.5 text-[0.6875rem] font-medium text-white">
         {afterLabel ?? t("After")}
       </span>
       <div aria-hidden className="pointer-events-none absolute inset-y-0 w-0.5 -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.25)]" style={{ left: percent }} />

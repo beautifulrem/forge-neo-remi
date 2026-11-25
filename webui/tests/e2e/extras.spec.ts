@@ -4,7 +4,7 @@
  * generated image sent to Extras; Hires. fix and Refiner values in a txt2img job and its infotext.
  */
 import { expect, type Page, test } from "@playwright/test"
-import { mod, openGenerate, openRoute, setPrompt, watchConsole } from "./helpers"
+import { mod, openGenerate, openRoute, presetStorage, setPrompt, watchConsole } from "./helpers"
 
 type MockModule = { handleMockRequest: (request: Request) => Promise<Response> }
 
@@ -335,6 +335,30 @@ test.describe("the result toolbar", () => {
     })
   }
 })
+
+// Held sideways (844×390) the comparison of a portrait image is a narrow frame, and its two corner
+// labels ("源图" / "结果") ran into each other: each keeps to its half, cut with a title.
+for (const locale of ["en", "zh-CN"]) {
+  test(`the comparison's labels keep apart in a narrow frame at 844×390 (${locale})`, async ({ page }) => {
+    await presetStorage(page, { locale })
+    await page.setViewportSize({ width: 844, height: 390 })
+    await openRoute(page, "extras")
+    const form = page.getByRole("form", { name: /^(Parameters|参数)$/ })
+    const chooser = page.waitForEvent("filechooser")
+    await form.getByRole("button", { name: /^(Source|源图)$/ }).first().click()
+    await (await chooser).setFiles({ name: "portrait.png", mimeType: "image/png", buffer: await makePng(page, 200, 400) })
+    await page.keyboard.press(`${mod}+Enter`)
+    const result = page.getByRole("region", { name: /^(Result|结果)$/ })
+    const divider = result.getByRole("slider")
+    await expect(divider).toBeVisible({ timeout: 15_000 })
+    const overlap = await divider.evaluate((slider) => {
+      const labels = [...slider.parentElement!.querySelectorAll(":scope > span[title]")].map((label) => label.getBoundingClientRect())
+      const [a, b] = labels
+      return labels.length === 2 && a!.right > b!.left && b!.right > a!.left && a!.bottom > b!.top && b!.bottom > a!.top
+    })
+    expect(overlap).toBe(false)
+  })
+}
 
 // The selected image of a run is marked by a layer over the thumbnail, which also covered the
 // focus ring drawn inside it: Tab landed on the selected thumbnail first, and nothing showed it.
