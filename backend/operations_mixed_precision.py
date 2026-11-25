@@ -40,12 +40,23 @@ _COMPILE_UNSAFE_LAYOUTS = {"TensorCoreConvRotW4A4Layout", "AsymW4A8Int8Layout"}
 
 _MPS_DEQUANT_CACHE_SAFETY_MARGIN = 512 * 1024 * 1024
 _MPS_DEQUANT_CACHE_MAX_BYTES = 2 * 1024 * 1024 * 1024
+_mps_cache_override_warned = False
+
+
+def _warn_mps_cache_override(value: str, consequence: str) -> None:
+    """Once per process: the budget is read for every cached weight."""
+    global _mps_cache_override_warned
+    if not _mps_cache_override_warned:
+        _mps_cache_override_warned = True
+        logger.warning("REMI_MPS_DEQUANT_CACHE_MB=%r %s", value, consequence)
 
 
 def _mps_dequant_cache_budget_bytes() -> int:
     """Safe byte budget for caching dequantized resident weights on Apple Silicon MPS.
 
-    Respects ``REMI_MPS_DEQUANT_CACHE_MB`` (``0`` disables caching). Otherwise
+    Respects ``REMI_MPS_DEQUANT_CACHE_MB`` (``0`` disables caching; a value that
+    is not a whole number is ignored and a negative one means ``0``, each with a
+    warning, once). Otherwise
     uses at most 25% of unified-memory surplus above ``minimum_inference_memory()``
     plus a 512 MiB safety floor, capped at 2 GiB.
     """
@@ -53,9 +64,12 @@ def _mps_dequant_cache_budget_bytes() -> int:
     if override is not None:
         try:
             mb = int(override)
-            return max(0, mb) * 1024 * 1024
         except ValueError:
-            pass
+            _warn_mps_cache_override(override, "is not a whole number of MB: the automatic budget is used")
+        else:
+            if mb < 0:
+                _warn_mps_cache_override(override, "is negative: the cache is off")
+            return max(0, mb) * 1024 * 1024
     try:
         free_bytes = int(get_free_memory(torch.device("mps")))
         floor = int(minimum_inference_memory()) + _MPS_DEQUANT_CACHE_SAFETY_MARGIN

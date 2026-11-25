@@ -248,6 +248,34 @@ def test_mps_dequant_cache_hits_and_matches_uncached_output(monkeypatch, fmt, ex
     assert omp.mps_dequant_cache_stats()["entries"] == 0
 
 
+def test_an_invalid_mps_cache_override_is_warned_about_once(monkeypatch):
+    """REMI_MPS_DEQUANT_CACHE_MB that is not a whole number fell back to the automatic budget,
+    and a negative one turned caching off, both silently: one warning names the variable and
+    the value. The budgets themselves are unchanged."""
+
+    warnings = []
+    monkeypatch.setattr(omp.logger, "warning", lambda message, *args: warnings.append(message % args))
+    monkeypatch.setattr(omp, "_mps_cache_override_warned", False)
+    gib = 1024**3
+    monkeypatch.setattr(omp, "get_free_memory", lambda device: 8 * gib)
+    monkeypatch.setattr(omp, "minimum_inference_memory", lambda: 1 * gib)
+    automatic = int((8 * gib - 1 * gib - omp._MPS_DEQUANT_CACHE_SAFETY_MARGIN) * 0.25)
+
+    monkeypatch.setenv("REMI_MPS_DEQUANT_CACHE_MB", "lots")
+    assert omp._mps_dequant_cache_budget_bytes() == omp._mps_dequant_cache_budget_bytes() == automatic
+    assert len(warnings) == 1 and "REMI_MPS_DEQUANT_CACHE_MB" in warnings[0] and "'lots'" in warnings[0]
+    monkeypatch.setenv("REMI_MPS_DEQUANT_CACHE_MB", "-5")
+    assert omp._mps_dequant_cache_budget_bytes() == 0 and len(warnings) == 1  # once per process
+    monkeypatch.setattr(omp, "_mps_cache_override_warned", False)
+    assert omp._mps_dequant_cache_budget_bytes() == 0
+    assert len(warnings) == 2 and "REMI_MPS_DEQUANT_CACHE_MB" in warnings[1] and "'-5'" in warnings[1]
+    monkeypatch.setattr(omp, "_mps_cache_override_warned", False)
+    for valid, budget in (("64", 64 * 1024 * 1024), ("0", 0)):
+        monkeypatch.setenv("REMI_MPS_DEQUANT_CACHE_MB", valid)
+        assert omp._mps_dequant_cache_budget_bytes() == budget
+    assert len(warnings) == 2
+
+
 def test_mps_dequant_cache_respects_zero_budget_and_lru_eviction(monkeypatch):
     omp.clear_mps_dequant_cache()
     omp._mps_dequant_cache.reset_stats()
