@@ -668,3 +668,18 @@ def test_images_are_indexed_only_from_the_configured_output_folders_and_jobs_sur
 
     monkeypatch.setattr(server.services.queue, "hash_layout", fail)
     assert importer._layout_hash("txt2img") == ""
+
+
+def test_an_imported_job_and_its_import_record_are_stored_together(server):
+    """A job stored without its import record would be imported again (a duplicate) next time."""
+
+    from remi.jobs.store import Job
+
+    store = server.services.store
+    count = lambda: store._db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]  # noqa: E731
+    before = count()
+    store._db.execute("DROP TABLE imports")
+    job = Job(id="", seq=0, tab="txt2img", core={"prompt": "old"}, scripts={}, status="completed")
+    with pytest.raises(sqlite3.OperationalError):
+        server.services.queue.add_imported(job, source="prompt-queue", source_id="x")
+    assert count() == before and not store._db.in_transaction

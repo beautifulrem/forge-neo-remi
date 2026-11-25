@@ -22,7 +22,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from remi.files import connect, decode_cursor, encode_cursor
+from remi.files import connect, decode_cursor, encode_cursor, transaction
 from remi.jobs.texts import NOT_REPLAYABLE, SERVER_STOPPED
 
 QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED, INTERRUPTED = "queued", "running", "completed", "failed", "cancelled", "interrupted"
@@ -243,15 +243,17 @@ class JobStore:
                 self._place(job_id, anchor[1], after, None)
         return self.get(job_id)
 
-    def add_record(self, job: Job) -> Job:
+    def add_record(self, job: Job, *, imported: tuple[str, str] | None = None) -> Job:
         """Insert a job as it is (an imported one: any status, its own times
         and outputs); a new id and sequence number are given. A job that is
-        not replayable is never stored queued (it is stored cancelled)."""
+        not replayable is never stored queued (it is stored cancelled).
+        ``imported``: the ``(source, source_id)`` it came from, recorded in
+        the same transaction (a job stored without it would be imported again)."""
 
         job_id = secrets.token_hex(8)
         if job.status in (QUEUED, RUNNING) and not job.replayable:
             job = replace(job, status=CANCELLED, finished=job.finished or time.time())
-        with self._lock:
+        with self._lock, transaction(self._db):
             cursor = self._db.execute(
                 f"INSERT INTO jobs ({_COLUMNS.replace('id, seq, ', '', 1)}, id) VALUES ({', '.join('?' * (len(_COLUMNS.split(', ')) - 1))})",
                 (
@@ -262,6 +264,8 @@ class JobStore:
                 ),
             )
             self._db.execute("UPDATE jobs SET position = ? WHERE seq = ?", (self._tail_position(cursor.lastrowid, int(job.priority)), cursor.lastrowid))
+            if imported is not None:
+                self._db.execute("INSERT OR REPLACE INTO imports (source, source_id, job_id) VALUES (?, ?, ?)", (*imported, job_id))
         return self.get(job_id)
 
     def _tail_position(self, seq: int, priority: int) -> float:
@@ -520,10 +524,6 @@ class JobStore:
         with self._lock:
             row = self._db.execute("SELECT imports.job_id FROM imports JOIN jobs ON jobs.id = imports.job_id WHERE source = ? AND source_id = ?", (source, source_id)).fetchone()
         return row[0] if row else None
-
-    def record_import(self, source: str, source_id: str, job_id: str) -> None:
-        with self._lock:
-            self._db.execute("INSERT OR REPLACE INTO imports (source, source_id, job_id) VALUES (?, ?, ?)", (source, source_id, job_id))
 
     def recover(self) -> int:
         """Mark jobs left running by a previous process interrupted."""

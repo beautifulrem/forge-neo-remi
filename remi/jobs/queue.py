@@ -512,8 +512,7 @@ class JobQueue:
     def add_imported(self, job: Job, *, source: str, source_id: str) -> Job:
         """Store an imported job (queued ones are announced like submissions)."""
 
-        added = self.store.add_record(job)
-        self.store.record_import(source, source_id, added.id)
+        added = self.store.add_record(job, imported=(source, source_id))
         if added.status == QUEUED:
             self._enqueued(added)
         return added
