@@ -116,6 +116,18 @@ def _overwrites_input(values: dict[str, Any]) -> bool:
     return False
 
 
+def _taken(path: str) -> dict[str, Any] | None:
+    """The warning for a target that is already a file (never replaced: the default
+    Save name, flux.safetensors, may well be a model there). Checked when the action
+    starts and again in the task, once it holds the generation lock: two tasks
+    (Save UNet and Save Checkpoint, a merge, another user) can pass the first check
+    for one new name."""
+
+    if os.path.exists(path):
+        return ui.toast("A file with this name is already in the checkpoint folder; choose another", "warning")
+    return None
+
+
 class CheckpointMerger(pages.Page):
     def params(self):
         uses_b = param("interp_method", ne=NO_INTERPOLATION)
@@ -189,16 +201,26 @@ class CheckpointMerger(pages.Page):
 
         resolved = self.values(ctx, values, uploads=False)
         problem = _problem(resolved)
+        target = None
         if problem is None:
             try:
                 if _overwrites_input(resolved):
                     problem = "The filename is one of the models being merged; choose another"
+                elif resolved["custom_name"].strip():
+                    # a name of its own: like Save, it never replaces a file (generated names
+                    # are the merge's own, made again by merging again)
+                    target = extras.merge_output_path(resolved["custom_name"])
             except ValueError:
                 problem = "The filename must stay inside the checkpoint folder"
         if problem is not None:
             return ui.toast(problem, "warning")
+        if target is not None and (taken := _taken(target)) is not None:
+            return taken
 
         def work(task: pages.Task) -> dict[str, Any]:
+            if target is not None and (taken := _taken(target)) is not None:
+                return taken
+
             def progress(text: str, fraction: float | None) -> None:
                 task.check()  # Cancel stops the merge between two steps
                 task.progress(fraction, text)
@@ -233,13 +255,14 @@ class CheckpointMerger(pages.Page):
             path = extras.merge_output_path(resolved["save_filename"])
         except ValueError:
             return ui.toast("The filename must stay inside the checkpoint folder", "warning")
-        if os.path.exists(path):
-            # The default name (flux.safetensors) may be a model there already: never replace it.
-            return ui.toast("A file with this name is already in the checkpoint folder; choose another", "warning")
+        if (taken := _taken(path)) is not None:
+            return taken
 
         def work(task: pages.Task) -> dict[str, Any]:
             from modules import sd_models, shared
 
+            if (taken := _taken(path)) is not None:
+                return taken
             task.progress(None, "Loading the model…")
             sd_models.forge_model_reload()
             task.check()

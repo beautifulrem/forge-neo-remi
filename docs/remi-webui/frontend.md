@@ -821,7 +821,9 @@ that widget) returning translated text or `null`. It is imported eagerly
   pages (and "UI Tab Order" / "Hide UI Tabs" by its title). Its merge and
   the two "Save Current Model" buttons are `task-runner` tasks behind
   generation (progress per stage and per tensor, Cancel between steps); the
-  new file reaches the checkpoint lists through `networks.changed`.
+  new file reaches the checkpoint lists through `networks.changed`. None of
+  them replaces a file already in the folder (a merge's generated name
+  aside), checked again once the task holds the generation lock.
 
 ## Generate page (`pages/generate`, `features/`)
 

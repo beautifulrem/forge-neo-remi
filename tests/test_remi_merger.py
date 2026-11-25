@@ -244,9 +244,13 @@ def test_the_page_checks_its_inputs_before_starting(server, models):
     # another name for the same file (a hard link): the same file on every volume
     os.link(models.folder / "b.safetensors", models.folder / "alias.safetensors")
     cases.append(({**base, "custom_name": "alias"}, "The filename is one of the models being merged; choose another"))
+    # a model the merge does not read is not replaced either (like Save Current Model)
+    cases.append(({**base, "custom_name": " c "}, "A file with this name is already in the checkpoint folder; choose another"))
+    before = (models.folder / "c.safetensors").read_bytes()
     for values, message in cases:
         answer = _act(server, "merge", values)
         assert answer == {"__toast__": {"level": "warning", "message": message}}, values
+    assert (models.folder / "c.safetensors").read_bytes() == before
     # no interpolation needs A only (a format conversion)
     started = _act(server, "merge", {"primary_model_name": "a.safetensors", "interp_method": "No Interpolation", "custom_name": "copy"})
     final = _wait(server, "merge", started["__outputs__"]["task:merge"]["id"])
@@ -281,6 +285,38 @@ def test_save_current_model_never_writes_over_a_file(server, models):
         assert _act(server, action, {"save_filename": "a"}) == exists
         assert _act(server, action, {"save_filename": " a.safetensors "}) == exists
     assert (models.folder / "a.safetensors").read_bytes() == before
+
+
+def test_tasks_that_save_to_one_new_name_write_it_once(server, models, monkeypatch):
+    """Save UNet, Save Checkpoint and a merge (or two users) can all pass the check for a
+    new name while they wait for the generation lock: once one of them has written the
+    file, the others must not replace it."""
+
+    from modules import sd_models, shared
+
+    writes = []
+
+    def save(path):
+        writes.append(path)
+        Path(path).write_bytes(b"saved model")
+        return path
+
+    monkeypatch.setattr(sd_models, "forge_model_reload", lambda: None)
+    monkeypatch.setattr(shared, "sd_model", SimpleNamespace(save_unet=save, save_checkpoint=save), raising=False)
+    merge = {"primary_model_name": "a.safetensors", "secondary_model_name": "b.safetensors", "interp_method": "Weighted Sum", "custom_name": "fresh"}
+    requests = (("save_unet", {"save_filename": "fresh"}), ("save_checkpoint", {"save_filename": "fresh"}), ("merge", merge))
+    with server.services.queue.lock:  # a generation runs: the three tasks wait for it
+        started = {action: _act(server, action, values)["__outputs__"][f"task:{action}"]["id"] for action, values in requests}
+    finals = {action: _wait(server, action, task_id) for action, task_id in started.items()}
+    levels = {action: final["__toast__"]["level"] for action, final in finals.items()}
+    assert sorted(levels.values()) == ["success", "warning", "warning"], finals
+    exists = "A file with this name is already in the checkpoint folder; choose another"
+    assert all(final["__toast__"]["message"] == exists for action, final in finals.items() if levels[action] == "warning")
+    written = (models.folder / "fresh.safetensors").read_bytes()
+    if levels["merge"] == "success":
+        assert writes == [] and written != b"saved model"
+    else:
+        assert len(writes) == 1 and written == b"saved model"
 
 
 def test_the_page_strings_are_translated(models):
