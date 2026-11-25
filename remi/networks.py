@@ -22,6 +22,7 @@ item dictionaries) or A1111's ``modules.ui_extra_networks.register_page``.
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import io
 import json
@@ -29,15 +30,16 @@ import logging
 import os
 import queue
 import re
+import secrets
 import stat
 import sys
 import threading
 import time
 import weakref
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol
+from typing import IO, Any, Protocol
 
 from remi import network_metadata as nm
 from remi.files import FileStore, decode_offset, encode_cursor
@@ -251,13 +253,36 @@ def read_user_metadata(entry: NetworkEntry) -> dict[str, Any]:
     return utf8_text(data) if isinstance(data, dict) else {}
 
 
+@contextlib.contextmanager
+def replacing(target: str | os.PathLike) -> Iterator[IO[bytes]]:
+    """A file to write that replaces ``target`` whole once it is written: a
+    reader never sees half of it, a failed write leaves the old one, and two
+    writers at once each write a temporary file of their own."""
+
+    folder, name = os.path.split(os.fspath(target))
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+    while True:
+        temp = os.path.join(folder, f".{name}.{secrets.token_hex(6)}.tmp")
+        try:
+            descriptor = os.open(temp, flags, 0o666)  # the umask applies, as it does for open()
+            break
+        except FileExistsError:
+            continue
+    try:
+        with os.fdopen(descriptor, "wb") as file:
+            yield file
+        os.replace(temp, target)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(temp)
+        raise
+
+
 def write_user_metadata(entry: NetworkEntry, data: dict[str, Any]) -> None:
     require_file(entry)
     text = json.dumps(data, indent=4, ensure_ascii=False)
-    temp = entry.base + ".json.tmp"
-    with open(temp, "w", encoding="utf8") as file:
-        file.write(text)
-    os.replace(temp, entry.base + ".json")
+    with replacing(entry.base + ".json") as file:
+        file.write(text.encode("utf8"))
 
 
 def editable(entry: NetworkEntry) -> bool:
@@ -1210,7 +1235,8 @@ class NetworkIndex:
             with Image.open(io.BytesIO(data)) as image:
                 image.load()
                 target.parent.mkdir(parents=True, exist_ok=True)
-                preview_image(image).save(target, format="PNG", optimize=True)
+                with replacing(target) as file:  # a listing at the same time never takes half a file for the cover
+                    preview_image(image).save(file, format="PNG", optimize=True)
         except Exception:
             log.warning("unreadable cover image in %s", entry.filename)
             return None
@@ -1272,7 +1298,8 @@ class NetworkIndex:
 
         entry = self.entry(kind, name)
         require_file(entry)
-        preview_image(image).save(f"{entry.base}.preview.png", optimize=True)
+        with replacing(f"{entry.base}.preview.png") as file:
+            preview_image(image).save(file, format="PNG", optimize=True)
         self._forget(entry)
         return self.item(self.record(kind, name))
 

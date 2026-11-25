@@ -408,6 +408,56 @@ def test_set_preview_from_an_output_and_refresh(lora, lora_root):
     assert sys.modules["networks"].listed == before + 1
 
 
+def test_concurrent_metadata_edits_each_write_a_whole_sidecar(lora, lora_root, monkeypatch):
+    # two edits at once: both reach the rename together (the threadpool runs them side by side)
+    meet = threading.Barrier(2, timeout=5)
+    replace = os.replace
+
+    def rename(source, target, *args, **kwargs):
+        if str(target).endswith("watercolor.json"):
+            meet.wait()
+        return replace(source, target, *args, **kwargs)
+
+    monkeypatch.setattr(module.os, "replace", rename)
+    errors = []
+
+    def edit(text):
+        try:
+            lora.services.networks.update_user_metadata("lora", "watercolor", {"activation text": text})
+        except Exception as error:
+            errors.append(error)
+
+    threads = [threading.Thread(target=edit, args=(text,)) for text in ("first", "second")]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    monkeypatch.undo()
+    assert errors == []
+    sidecar = json.loads((lora_root / "styles" / "watercolor.json").read_text(encoding="utf8"))
+    assert sidecar["activation text"] in ("first", "second")
+    assert [path.name for path in (lora_root / "styles").iterdir() if path.name.endswith(".tmp")] == []
+
+
+def test_a_preview_that_fails_half_way_keeps_the_old_one(lora, lora_root, monkeypatch):
+    previous = (lora_root / "styles" / "watercolor.preview.png").read_bytes()
+
+    class Failing:
+        def save(self, target, *args, **kwargs):
+            if isinstance(target, (str, os.PathLike)):
+                with open(target, "wb") as file:
+                    file.write(b"\x89PNG half")
+            else:
+                target.write(b"\x89PNG half")
+            raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(module, "preview_image", lambda image: Failing())
+    with pytest.raises(OSError):
+        lora.services.networks.set_preview("lora", "watercolor", Image.new("RGB", (8, 8)))
+    assert (lora_root / "styles" / "watercolor.preview.png").read_bytes() == previous
+    assert [path.name for path in (lora_root / "styles").iterdir() if path.name.endswith(".tmp")] == []
+
+
 def test_open_folder(lora, monkeypatch):
     from modules import shared
     from remi.server import gallery
