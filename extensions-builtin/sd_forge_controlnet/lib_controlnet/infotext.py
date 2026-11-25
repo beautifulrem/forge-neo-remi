@@ -1,3 +1,5 @@
+from collections.abc import Collection
+
 from lib_controlnet import external_code
 from lib_controlnet.logging import logger
 
@@ -34,10 +36,12 @@ def serialize_unit(unit: external_code.ControlNetUnit) -> str:
     return ", ".join(f"{field}: {value}" for field, value in log_value.items())
 
 
-def parse_unit_fields(text: str) -> dict:
+def parse_unit_fields(text: str, text_fields: Collection[str] = ()) -> dict:
     """The infotext fields (``ControlNetUnit.infotext_fields()``) a unit's
     entry sets, e.g. ``"Module: canny, Weight: 1.0"`` -> ``{"module":
-    "canny", "weight": 1.0}``; ``ValueError`` for a malformed entry."""
+    "canny", "weight": 1.0}``; ``ValueError`` for a malformed entry. The
+    ``text_fields`` (names: the preprocessor, the model) keep their text as
+    written, also when it reads as a number (``"Model: 12345"``)."""
 
     known = set(external_code.ControlNetUnit.infotext_fields())
     fields = {}
@@ -49,7 +53,7 @@ def parse_unit_fields(text: str) -> dict:
             raise ValueError(f"cannot read {item.strip()!r}")
         field = displaytext_to_field(key)
         if field in known:
-            fields[field] = parse_value(value)
+            fields[field] = value if field in text_fields else parse_value(value)
     return fields
 
 

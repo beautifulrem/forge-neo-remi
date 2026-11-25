@@ -560,6 +560,20 @@ def test_api_written_infotext_and_bad_fields_paste(cn):
     assert [problem.param for problem in problems] == ["unit_0"]
 
 
+def test_model_and_preprocessor_names_paste_as_written(cn):
+    """A name that reads as a number or a boolean ("Model: 12345") stays the
+    name: read as an int it was not text, and the paste dropped the field."""
+
+    from lib_controlnet.unit_param import pasted_fields
+
+    fields = pasted_fields("Module: 007, Model: 12345, Weight: 1")
+    assert (fields["module"], fields["model"], fields["weight"]) == ("007", "12345", 1.0)
+    assert pasted_fields("Module: True, Model: 1.50")["model"] == "1.50"
+    assert pasted_fields("Module: True, Model: 1.50")["module"] == "True"
+    values, problems = layout(cn).paste({"ControlNet 0": "Module: canny, Model: 12345"})
+    assert problems == [] and values["unit_0"]["model"] == "12345"
+
+
 def test_reading_units_from_infotext_can_be_switched_off(cn, monkeypatch):
     from modules import shared
 

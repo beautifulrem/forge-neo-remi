@@ -206,7 +206,7 @@ def pasted_fields(text: str) -> dict[str, Any]:
     Gradio control kept its value then."""
 
     try:
-        fields = parse_unit_fields(text)
+        fields = parse_unit_fields(text, text_fields=TEXTS)
     except ValueError as error:
         raise ui.ParamError(str(error)) from None
     if not fields:
