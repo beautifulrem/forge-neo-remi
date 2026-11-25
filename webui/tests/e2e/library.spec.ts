@@ -115,6 +115,36 @@ async function go(page: Page, hash: string) {
   await page.evaluate((target) => (location.hash = target), hash)
 }
 
+// On a touch screen the first tap on a tile's corner did nothing: the tap focused the tile, the focus
+// turned its hidden corner controls on between the finger lifting and the click, and the click went
+// to neither the image nor the checkbox.
+test.describe("gallery tiles on a touch screen", () => {
+  test("a tap on a hidden corner opens the image; while selecting, it selects @phone", async ({ page }) => {
+    const grid = await openGallery(page)
+    const tile = grid.getByRole("listitem").first()
+    const corner = async () => {
+      const box = (await tile.getByRole("checkbox").boundingBox())!
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+    }
+    const { x, y } = await corner()
+    await page.touchscreen.tap(x, y)
+    const viewer = page.getByRole("dialog", { name: "Image viewer" })
+    await expect(viewer).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(viewer).toBeHidden()
+
+    // selecting (a long press, or Select): the corners are shown and take taps
+    await grid.getByRole("listitem").nth(1).getByRole("button").first().focus()
+    await page.keyboard.press("Space")
+    const bulk = page.getByRole("toolbar", { name: "Selected images" })
+    await expect(bulk).toContainText("1 selected")
+    const shown = await corner()
+    await page.touchscreen.tap(shown.x, shown.y)
+    await expect(bulk).toContainText("2 selected")
+    await expect(tile.getByRole("checkbox")).toHaveAttribute("aria-checked", "true")
+  })
+})
+
 test.describe("queue", () => {
   // The history filters were the page's own state: a reload, or Back after opening a job in its
   // form, showed every job again.
