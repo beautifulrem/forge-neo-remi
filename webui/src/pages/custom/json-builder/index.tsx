@@ -664,8 +664,11 @@ export default function JsonBuilderPage(_props: CustomPageProps) {
     <div className="h-full overflow-y-auto lg:overflow-hidden" data-scroll-root>
       <div className="flex min-h-full flex-col gap-3 p-3 sm:p-4 lg:h-full lg:flex-row">
         <LayoutCanvas className="h-[60vh] max-h-[75vh] min-h-64 shrink-0 lg:h-auto lg:max-h-none lg:min-h-0 lg:flex-1 lg:shrink" activeId={activeId} onActivate={setActiveId} onEditField={setEditField} missing={missing} />
-        {/* lg: a scroller; 4 px of room either side (-mx-1 / px-1) keeps the fields' focus rings */}
-        <div className="flex min-h-0 flex-col gap-3 lg:-mx-1 lg:w-[calc(26rem+0.5rem)] lg:shrink-0 lg:overflow-y-auto lg:px-1 xl:w-[calc(30rem+0.5rem)]">
+        {/* lg: a scroller; 4 px of room either side (-mx-1 / px-1) keeps the fields' focus rings.
+            Below lg its parts are the page column's own (`contents`): the send bar is pinned
+            within the whole page, not below the canvas, whose height would keep it off a phone
+            held sideways until the page scrolled. */}
+        <div className="contents lg:-mx-1 lg:flex lg:min-h-0 lg:w-[calc(26rem+0.5rem)] lg:shrink-0 lg:flex-col lg:gap-3 lg:overflow-y-auto lg:px-1 xl:w-[calc(30rem+0.5rem)]">
           {itemsExpanded ? null : (
             <>
               {/* side by side only where the panel spans the page: the side column (lg+) is too narrow for two */}
@@ -678,7 +681,7 @@ export default function JsonBuilderPage(_props: CustomPageProps) {
           )}
           <ItemsSection activeId={activeId} onActivate={setActiveId} onEditField={setEditField} missing={missing} expanded={itemsExpanded} onToggleExpand={() => setItemsExpanded((v) => !v)} />
           {/* pinned to the bottom of the page (phone) or of the scrolling side column (lg+): the send buttons stay in reach */}
-          <div className="sticky bottom-0 z-10 flex gap-2 border-t border-border/70 bg-background py-2 lg:border-t-0 lg:pt-2 lg:pb-0" data-toast-obstacle>
+          <div className="sticky bottom-0 z-10 flex gap-2 border-t border-border/70 bg-background py-2 md:pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:border-t-0 lg:pt-2 lg:pb-[env(safe-area-inset-bottom)]" data-toast-obstacle>
             <Button variant="glow" className="flex-1 font-semibold" onClick={() => send("txt2img")}>
               <Wand aria-hidden />
               {t("Send to txt2img")}

@@ -1067,6 +1067,42 @@ test.describe("overlays on a phone held sideways", () => {
     await page.waitForTimeout(300)
     expect(await unsafe(editor)).toEqual([])
   })
+
+  // From md a bar pinned to the bottom of a page stands on the screen's edge (the phone's bottom
+  // navigation keeps that room below md): only the gallery's selection bar cleared the home indicator.
+  test("the bars pinned to the bottom of a page", async ({ page }) => {
+    await openRoute(page, "settings")
+    await page.getByRole("switch", { name: "Automatically save every generated image", exact: true }).click()
+    const unsaved = page.getByRole("region", { name: "Unsaved changes" })
+    await expect(unsaved.getByRole("button").first()).toBeVisible()
+    await page.waitForTimeout(300) // the slide in
+    expect(await unsafe(unsaved)).toEqual([])
+
+    await openRoute(page, "extensions")
+    await page.getByRole("main").getByRole("switch").first().click()
+    const pending = page.getByRole("region", { name: "Pending extension changes" })
+    await expect(pending.getByRole("button").first()).toBeVisible()
+    await page.waitForTimeout(300)
+    expect(await unsafe(pending)).toEqual([])
+
+    await openRoute(page, "ext/json-builder")
+    const send = page.getByRole("button", { name: "Send to txt2img" })
+    await expect(send).toBeVisible()
+    const box = (await send.boundingBox())!
+    expect(outside(box)).toEqual([])
+  })
+})
+
+// The JSON Builder's send bar was pinned within the column under the canvas, which starts low on a
+// phone held sideways: the page opened with the send buttons half below the screen.
+test("the JSON Builder's send buttons are on screen when it opens on a phone held sideways", async ({ page }) => {
+  await page.setViewportSize({ width: 852, height: 393 })
+  await openRoute(page, "ext/json-builder")
+  const send = page.getByRole("button", { name: "Send to txt2img" })
+  await expect(send).toBeVisible()
+  const box = (await send.boundingBox())!
+  expect(Math.round(box.y + box.height)).toBeLessThanOrEqual(393)
+  expect(await send.evaluate((button) => button.contains(document.elementFromPoint(button.getBoundingClientRect().left + 8, button.getBoundingClientRect().top + 8)))).toBe(true)
 })
 
 // The comparison's frame took 60 % of the screen's height whatever its row had left: with the

@@ -15,7 +15,7 @@ export function ApplyBar(props: { count: number; onApply: () => void; onDiscard:
     <div
       role="region"
       aria-label={t("Unsaved changes")}
-      className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-3 pb-3 sm:pb-4"
+      className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-3 pb-3 sm:pb-4 md:pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]"
     >
       <div data-toast-obstacle className="pointer-events-auto flex w-full max-w-2xl flex-wrap items-center gap-2 rounded-md bg-popover px-3 py-2 shadow-lg animate-in fade-in slide-in-from-bottom-2">
         <p className="min-w-0 flex-1 text-sm" aria-live="polite">
