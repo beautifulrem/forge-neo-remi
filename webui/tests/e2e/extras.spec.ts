@@ -208,3 +208,44 @@ test.describe("hires fix and refiner", () => {
     console.assertClean()
   })
 })
+
+// The result's toolbar never folded: at 768 px, and on a phone held sideways, "Send to" sat past the
+// edge of the screen (or of its safe area) where no tap reached it. The route sweeps ran Extras
+// without a result, so nothing showed it.
+test.describe("the result toolbar", () => {
+  for (const { name, size, insets } of [
+    { name: "a tablet", size: { width: 768, height: 1024 }, insets: { top: 0, left: 0, bottom: 0, right: 0 } },
+    { name: "a phone held sideways", size: { width: 852, height: 393 }, insets: { top: 0, left: 59, bottom: 21, right: 59 } },
+  ]) {
+    test(`keeps every action on screen on ${name}`, async ({ page }) => {
+      await page.setViewportSize(size)
+      const cdp = await page.context().newCDPSession(page)
+      await cdp.send("Emulation.setSafeAreaInsetsOverride" as never, { insets } as never)
+      await openRoute(page, "extras")
+      const form = page.getByRole("form", { name: "Parameters" })
+      const chooser = page.waitForEvent("filechooser")
+      await form.getByRole("button", { name: "Source" }).click()
+      await (await chooser).setFiles({ name: "photo.png", mimeType: "image/png", buffer: await makePng(page, 300, 200) })
+      await expect(form.getByRole("button", { name: "Remove Source" })).toBeVisible()
+      await page.keyboard.press(`${mod}+Enter`)
+      const result = page.getByRole("region", { name: "Result" })
+      await expect(result.getByRole("slider", { name: "Comparison divider" })).toBeVisible({ timeout: 15_000 })
+      const sendTo = result.getByRole("button", { name: "Send to" })
+      await sendTo.scrollIntoViewIfNeeded()
+      const unreachable = await result.getByRole("button").evaluateAll(
+        (buttons, { size, insets }) =>
+          buttons.flatMap((button) => {
+            const box = button.getBoundingClientRect()
+            if (box.width === 0) return []
+            const hit = button.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2))
+            const inside = box.left >= insets.left - 0.5 && box.right <= size.width - insets.right + 0.5
+            return hit && inside ? [] : [`${button.getAttribute("aria-label") ?? button.textContent?.trim()} at ${Math.round(box.left)}..${Math.round(box.right)}`]
+          }),
+        { size, insets },
+      )
+      expect(unreachable).toEqual([])
+      await sendTo.click()
+      await expect(page.getByRole("menuitem", { name: "img2img" })).toBeVisible()
+    })
+  }
+})

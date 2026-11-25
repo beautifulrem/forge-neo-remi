@@ -177,7 +177,8 @@ function ResultStage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2">
+    // the actions fold by the column's width (`ResultActions` collapsible), as on the generation stage
+    <div className="@container/actions flex h-full min-h-0 flex-col gap-2">
       <div className="flex min-h-9 flex-wrap items-center gap-2">
         {comparable ? (
           <Segmented
@@ -192,13 +193,13 @@ function ResultStage() {
           />
         ) : null}
         {item?.width && item.height ? <span className="text-xs text-muted-foreground tabular-nums">{item.width}×{item.height}</span> : null}
-        <div className="ml-auto flex items-center gap-0.5">
+        <div className="ml-auto flex min-w-0 items-center gap-0.5">
           {item ? (
             <Button variant="ghost" size="icon-sm" aria-label={t("Open in the viewer")} onClick={() => setViewer(true)}>
               <Maximize2 />
             </Button>
           ) : null}
-          <ResultActions item={item} tab="txt2img" removable={false} />
+          <ResultActions item={item} tab="txt2img" removable={false} collapsible />
         </div>
       </div>
       <div className="relative flex min-h-0 flex-1 items-center justify-center rounded-md bg-canvas p-2">{view}</div>
