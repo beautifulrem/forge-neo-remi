@@ -293,6 +293,18 @@ test("a gallery tile shows its focus ring under the pointer", async ({ page }) =
 
 // A bar pinned over a scroller (the run bar, the apply bars, the send bar) covered the control Tab
 // moved to: the scroller brought it to the edge of its box, under the bar (WCAG 2.4.11).
+/** The focused tile when it or its focus ring (3 px plus a 2 px offset) reaches under the gallery's selection bar. */
+function focusUnderSelectionBar(): string | null {
+  const element = document.activeElement
+  const toolbar = document.querySelector('[role="toolbar"][aria-label="Selected images"]')
+  if (!element || !toolbar) return null
+  const r = element.getBoundingClientRect()
+  const b = toolbar.getBoundingClientRect()
+  const ring = 5
+  const overlaps = r.left - ring < b.right && r.right + ring > b.left && r.top - ring < b.bottom && r.bottom + ring > b.top
+  return overlaps ? `${element.getAttribute("aria-label") ?? element.tagName} (${Math.round(r.bottom + ring - b.top)} px under)` : null
+}
+
 test.describe("focus is not hidden under a pinned bar", () => {
   const cases: { route: string; width: number; height: number; pending?: boolean }[] = [
     { route: "txt2img", width: 390, height: 844 },
@@ -358,25 +370,39 @@ test.describe("focus is not hidden under a pinned bar", () => {
       await page.keyboard.press("Space")
       const bar = page.getByRole("toolbar", { name: "Selected images" })
       await expect(bar).toBeVisible()
+      // start in the bar's column (ArrowDown keeps to it): the tile of the first row nearest its centre
+      await page.evaluate(() => {
+        const box = document.querySelector('[role="toolbar"][aria-label="Selected images"]')!.getBoundingClientRect()
+        const centre = (box.left + box.right) / 2
+        const tiles = [...document.querySelectorAll<HTMLElement>("[data-gallery-scroller] [data-gallery-tile] button")].map((element) => ({ element, r: element.getBoundingClientRect() }))
+        const top = Math.min(...tiles.map(({ r }) => r.top))
+        const row = tiles.filter(({ r }) => Math.abs(r.top - top) < 2)
+        const off = ({ r }: { r: DOMRect }) => Math.abs((r.left + r.right) / 2 - centre)
+        row.sort((a, b) => off(a) - off(b))
+        row[0]!.element.focus()
+      })
       const hidden: string[] = []
       for (let i = 0; i < 40; i++) {
         await page.keyboard.press("ArrowDown")
-        const problem = await page.evaluate(() => {
-          const element = document.activeElement
-          const toolbar = document.querySelector('[role="toolbar"][aria-label="Selected images"]')
-          if (!element || !toolbar) return null
-          // the tile and its focus ring (3 px plus a 2 px offset) stop clear of the bar
-          const r = element.getBoundingClientRect()
-          const b = toolbar.getBoundingClientRect()
-          const ring = 5
-          const overlaps = r.left - ring < b.right && r.right + ring > b.left && r.top - ring < b.bottom && r.bottom + ring > b.top
-          return overlaps ? `${element.getAttribute("aria-label") ?? element.tagName} (${Math.round(r.bottom + ring - b.top)} px under)` : null
-        })
+        const problem = await page.evaluate(focusUnderSelectionBar)
         if (problem) hidden.push(problem)
       }
       expect(hidden).toEqual([])
     })
   }
+
+  // The bar comes up with the first selection, over a tile the arrow keys had left at the bottom edge.
+  test("#/gallery selection bar rising over the focused tile", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openRoute(page, "gallery")
+    await page.waitForLoadState("networkidle")
+    await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" })
+    await page.getByTestId("gallery-scroller").locator("[data-gallery-tile] button").first().focus()
+    for (let i = 0; i < 6; i++) await page.keyboard.press("ArrowDown")
+    await page.keyboard.press("Space")
+    await expect(page.getByRole("toolbar", { name: "Selected images" })).toBeVisible()
+    await expect.poll(() => page.evaluate(focusUnderSelectionBar)).toBeNull()
+  })
 
   // A new query remounts the grid; with the results cached the bar stays up over the new scroller.
   test("#/gallery selection bar over a grid rebuilt from cached results", async ({ page }) => {

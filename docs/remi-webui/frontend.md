@@ -107,7 +107,7 @@ imperatively).
   lifted above any control pinned to the bottom edge under them
   (`app/toast-offset.ts`): mark such a control `data-toast-obstacle` (the
   phone's bottom navigation and sticky Generate bar, the canvas's bottom
-  toolbars and the apply bars carry it).
+  toolbars, the apply bars and the gallery's selection bar carry it).
 - **Pinned bars and the focus**: a bar pinned over an edge of a scroller (the
   generate and Extras run bars, the settings and extensions apply bars, the
   JSON Builder's send bar) takes its ref from `usePinnedBar(edge)`
@@ -117,9 +117,11 @@ imperatively).
   inside passes a function that finds it (the settings list, the gallery's
   selection bar). A virtualized list scrolls a row into view itself and reads
   no scroll padding: the gallery grid takes the scroller's bottom scroll
-  padding as the virtualizer's `scrollPaddingEnd` (and adds it to
-  `paddingEnd`, so the last row can scroll clear). The e2e check is "focus is
-  not hidden under a pinned bar" in `a11y.spec.ts`.
+  padding as the virtualizer's `scrollPaddingEnd`, leaves that much room after
+  the list (so the last row and the load-more status scroll clear), and
+  scrolls the focused tile clear when the bar comes up. The bar takes the
+  grid's key, so a rebuilt grid gets the padding too. The e2e check is "focus
+  is not hidden under a pinned bar" in `a11y.spec.ts`.
 - **Page column**: Extensions and every extension page lay their content out
   in `PAGE_CONTAINER` (`components/page-container.ts`): one max width,
   padding and vertical rhythm.
@@ -1473,8 +1475,8 @@ older server) nothing is shown.
   server sent (a param's error entries) and the render translates it, never
   the selector (a selector re-runs only when the store changes). A text the
   server stored (`serverText`) and why a job failed (`jobErrorText`) take the
-  language too. The request failure texts (`errorText`, `renderFailureText`)
-  take none yet: a render that shows one keeps the language it was made in
+  language too. The texts for a failed request (`errorText`, `failureText`,
+  `serviceFailureText`, `renderFailureText`) take none yet: a render that shows one keeps the language it was made in
   until its own values change.
 - `src/locales/zh-CN.json` must contain every chrome key:
   `locales/locales.test.ts` scans the sources and fails on a missing key or a

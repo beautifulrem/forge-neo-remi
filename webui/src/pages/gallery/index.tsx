@@ -65,6 +65,7 @@ function BulkBar(props: {
     <div
       role="toolbar"
       aria-label={t("Selected images")}
+      data-toast-obstacle
       className="pointer-events-auto flex items-center gap-1 rounded-md bg-popover p-1 pl-3 shadow-lg animate-in fade-in-0 slide-in-from-bottom-2"
     >
       <span className="mr-1 text-sm font-medium tabular-nums">{t("{{count}} selected", { count: props.count })}</span>

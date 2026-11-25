@@ -253,8 +253,8 @@ export function GalleryGrid(props: GalleryGridProps) {
     lanes: layout === "masonry" ? columns.count : 1,
     overscan: layout === "justified" ? 4 : 12,
     paddingStart: PADDING,
-    // the last row scrolls clear of a pinned bar, and a tile the arrow keys reach stops above it
-    paddingEnd: PADDING + barRoom,
+    paddingEnd: PADDING,
+    // a tile the arrow keys reach stops above a pinned bar (the room after the list lets the last row get there)
     scrollPaddingEnd: barRoom,
     getItemKey,
     rangeExtractor,
@@ -299,6 +299,13 @@ export function GalleryGrid(props: GalleryGridProps) {
       }
     } else buttons.current.delete(id)
   }, [])
+  // A bar that rises over the grid (a selection made with Space) leaves the focused tile above it.
+  const room = useRef(barRoom)
+  useEffect(() => {
+    const grew = barRoom > room.current
+    room.current = barRoom
+    if (grew && focusInside && items.length > 0) virtualizer.scrollToIndex(layout === "justified" ? Math.max(0, rowOf(rows, current)) : current, { align: "auto" })
+  }, [barRoom, focusInside, items.length, layout, rows, current, virtualizer])
   const focusIndex = (index: number) => {
     const target = Math.max(0, Math.min(index, items.length - 1))
     const item = items[target]
@@ -395,6 +402,8 @@ export function GalleryGrid(props: GalleryGridProps) {
         })}
       </div>
       <LoadMoreStatus loading={loadingMore} failed={loadFailed} onRetry={onLoadMore} />
+      {/* the bar's room: the last row and the load-more status scroll clear of it */}
+      {barRoom > 0 ? <div aria-hidden style={{ height: barRoom }} /> : null}
     </div>
   )
 }
