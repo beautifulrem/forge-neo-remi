@@ -313,7 +313,11 @@ bundle_budget() {
 step perf:bundle bundle_budget
 step pnpm:lint pnpm_in_webui lint
 step pnpm:vitest pnpm_in_webui exec vitest run --coverage
-step e2e pnpm_in_webui exec playwright test --reporter=line
+# Locally the line reporter keeps the log short; in CI (playwright.config.ts: any non-empty CI)
+# the config's own reporters run, which also write the HTML report the workflow uploads.
+E2E_REPORTER=()
+[ -n "${CI:-}" ] || E2E_REPORTER=(--reporter=line)
+step e2e pnpm_in_webui exec playwright test ${E2E_REPORTER[@]+"${E2E_REPORTER[@]}"}
 
 # endregion
 

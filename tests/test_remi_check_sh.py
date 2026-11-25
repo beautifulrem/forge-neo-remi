@@ -124,3 +124,22 @@ def test_failing_self_test_fails_the_run(checkout: Path, tmp_path: Path):
     assert summary_row(result.stdout, "legacy-ui")[1] == "FAIL"
     assert summary_row(result.stdout, "legacy-ui:fixtures")[1] == "FAIL"
     assert "2 of 2 steps failed (0 passed, 0 skipped)." in result.stdout
+
+
+@pytest.mark.parametrize(("ci", "reporter"), [(None, ["--reporter=line"]), ("1", []), ("true", [])])
+def test_the_e2e_step_keeps_the_ci_reporters(checkout: Path, tmp_path: Path, ci: str | None, reporter: list[str]):
+    """playwright.config.ts writes the HTML report CI uploads (node_modules/.e2e-report) only with its
+    own reporters, which --reporter=line replaced: the step forces the line reporter only outside CI
+    (``Boolean(process.env.CI)``, so any non-empty CI)."""
+
+    (checkout / "webui").mkdir()
+    record = tmp_path / "pnpm-args.txt"
+    fake_python(tmp_path / "bin" / "pnpm", record)
+    env = {key: value for key, value in os.environ.items() if key not in {"REMI_LEGACY_PYTHON", "REMI_CHECK_LOGS", "CI"}}
+    env.update(PYTHON=sys.executable, REMI_CHECK_LOGS=str(checkout.parent / "logs"), PATH=f"{tmp_path / 'bin'}{os.pathsep}{env.get('PATH', '')}")
+    if ci is not None:
+        env["CI"] = ci
+    result = subprocess.run(["bash", str(checkout / "tools" / "check.sh"), "--only", "e2e"], cwd=checkout, env=env, capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert summary_row(result.stdout, "e2e")[1] == "pass"
+    assert record.read_text(encoding="utf-8").split() == ["exec", "playwright", "test", *reporter]
