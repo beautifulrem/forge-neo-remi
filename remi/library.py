@@ -249,6 +249,15 @@ class GalleryIndex:
             if not force and version == self._synced:
                 return 0
         folders = self.folders()
+        categories: dict[tuple[str, str | None], str] = {}
+
+        def category(path: str, tab: str | None) -> str:
+            # once per folder: paths are stored resolved, so a file's category is its folder's
+            key = (os.path.dirname(path), tab)
+            if key not in categories:
+                categories[key] = category_of(path, tab, folders)
+            return categories[key]
+
         added = 0
         while True:
             with self._lock:
@@ -259,7 +268,7 @@ class GalleryIndex:
                 if rows:
                     self._db.executemany(
                         "INSERT OR IGNORE INTO gallery_meta (file_id, model, category) VALUES (?, ?, ?)",
-                        [(file_id, model_of(infotext), category_of(path, tab, folders)) for file_id, path, tab, infotext in rows],
+                        [(file_id, model_of(infotext), category(path, tab)) for file_id, path, tab, infotext in rows],
                     )
                 if len(rows) < batch:
                     self._synced = version

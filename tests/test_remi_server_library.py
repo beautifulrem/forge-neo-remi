@@ -12,7 +12,7 @@ import piexif.helper
 import pytest
 from PIL import Image, PngImagePlugin
 
-from remi.library import GalleryIndex, category_of, model_of
+from remi.library import GalleryIndex, GalleryQuery, category_of, model_of
 from remi.server.routes import library as routes
 from remi.server.testing import server_app
 from remi.testing import webui_state
@@ -328,6 +328,34 @@ def test_model_and_category_helpers(tmp_path):
     assert category_of(str(tmp_path / "t" / "a.png"), None, folders) == "txt2img"
     assert category_of(str(tmp_path / "x.png"), "extras", folders) == "extras"
     assert category_of(str(tmp_path / "x.png"), None, folders) == "other"
+
+
+def test_the_first_sync_resolves_each_folder_once(tmp_path, monkeypatch):
+    from remi import library
+    from remi.files import FileStore
+
+    saved, other = tmp_path / "saved", tmp_path / "other"
+    saved.mkdir()
+    other.mkdir()
+    files = FileStore(tmp_path / "data")
+    for number in range(25):
+        for folder in (saved, other):
+            path = write_png(folder / f"{number}.png")
+            files.register_output(path, tab="txt2img")
+    folders = [("saved", os.path.realpath(saved))]
+    index = GalleryIndex(files, folders=lambda: folders)
+    resolved = []
+    real = os.path.realpath
+    monkeypatch.setattr(library.os.path, "realpath", lambda path, *args, **kwargs: resolved.append(path) or real(path, *args, **kwargs))
+    try:
+        assert index.sync() == 50
+        monkeypatch.undo()
+        categories = {item.record.path: item.category for item in index.list(GalleryQuery(), limit=100)[0]}
+        assert categories == {os.path.realpath(path): "saved" if path.parent == saved else "txt2img" for path in [*saved.iterdir(), *other.iterdir()]}
+        assert len(resolved) <= 2 + len(folders), resolved
+    finally:
+        index.close()
+        files.close()
 
 
 def test_the_index_follows_outputs_registered_later(server, webui, tmp_path):
