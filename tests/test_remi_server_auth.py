@@ -198,6 +198,17 @@ def test_auth_status_checks_basic_credentials_under_the_login_throttle(locked):
     assert locked.client.post("/api/v2/auth/login", json={"username": "ann", "password": "s3cret"}).status_code == 429
 
 
+def test_refused_hosts_and_cross_site_requests_do_not_count_as_failed_logins(locked):
+    """A DNS-rebinding page (or a cross-site form) sending wrong Basic credentials from the
+    victim's browser counted failed logins before it was refused, so it could lock the
+    victim's own login."""
+
+    for index in range(6):
+        assert locked.client.get("/api/v2/queue", headers={**basic("ann", f"guess{index}"), "Host": "evil.example"}).status_code == 403
+        assert locked.client.post("/api/v2/queue/pause", headers={**basic("ann", f"guess{index}"), "Origin": "https://evil.example"}).status_code == 403
+    assert locked.client.get("/api/v2/queue", headers=basic("ann", "s3cret")).status_code == 200
+
+
 def test_basic_credentials_on_other_public_paths_do_not_lock_the_login(locked):
     """Public paths need no login: a client that sends other credentials
     (``--api-auth``) on every request does not count as guessing there."""

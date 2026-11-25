@@ -343,6 +343,12 @@ def refusal(auth: Auth, scope: Scope, *, cross_site_check: bool = True, require_
     from modules import extension_route_guard as guard
 
     conn = HTTPConnection(scope)
+    # Before the credentials are checked: a refused request is no login attempt (a DNS-rebinding
+    # page sending wrong Basic credentials from the victim's browser would lock the victim out)
+    if guard.is_rebound_host(conn):
+        return 403, "Unknown host refused"
+    if cross_site_check and _cross_site(scope, conn):
+        return 403, "Cross-site request refused"
     path = route_path(scope)
     public = path.startswith(PUBLIC_PATHS)
     login = require_login and auth.required and not public
@@ -353,10 +359,6 @@ def refusal(auth: Auth, scope: Scope, *, cross_site_check: bool = True, require_
     # guesses (it checks Basic itself, throttled)
     user = auth.user_for(conn, count_failures=login, basic=not public) if auth.required else None
     scope.setdefault("state", {})["remi_user"] = user
-    if guard.is_rebound_host(conn):
-        return 403, "Unknown host refused"
-    if cross_site_check and _cross_site(scope, conn):
-        return 403, "Cross-site request refused"
     if login and user is None:
         if throttled:
             return 429, "Too many failed logins; wait a minute"
