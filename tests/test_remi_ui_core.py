@@ -847,6 +847,11 @@ def test_forge_preset_action_switches_the_model_on_the_server(webui, monkeypatch
         for extra in ({}, {"preset": "nope"}):
             with pytest.raises(ui.ValidationError):
                 ui.call_action(core_actions, "__forge_preset__", ui.ActionContext(tab="txt2img", extra=extra), {})
+        # A tab the action does not run on is refused before anything is switched or saved
+        calls.clear()
+        with pytest.raises(ui.ValidationError, match="core actions run on txt2img or img2img"):
+            ui.call_action(core_actions, "__forge_preset__", ui.ActionContext(tab="extras", extra={"preset": "sd"}), {})
+        assert calls == [] and webui.opts.forge_preset == "anima"
     finally:
         webui.opts.data.clear()
         webui.opts.data.update(saved)

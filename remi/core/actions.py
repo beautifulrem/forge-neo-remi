@@ -86,10 +86,11 @@ class CoreActions:
         from remi.core.capabilities import active_capability_summary
         from remi.core.presets import apply_forge_preset, check_preset, forge_preset_patch
 
+        tab = _tab(ctx)  # checked before the preset switches anything
         preset = check_preset(_argument(ctx, "preset"))
         settings = apply_forge_preset(preset)
         return {
-            **forge_preset_patch(_tab(ctx), preset),
+            **forge_preset_patch(tab, preset),
             "__settings__": settings,
             "__capabilities__": active_capability_summary(preset=preset),
         }
