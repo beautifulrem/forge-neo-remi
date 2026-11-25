@@ -579,6 +579,34 @@ def test_failed_jobs_are_queued_again_up_to_three_attempts(webui, tmp_path):
         assert server.services.queue.wait_idle() and len(executor.calls) == 1
 
 
+# The retry of a failed run copied "generate forever" from the job as it was claimed: stopping
+# generate-forever while that run went on did not reach the retry, which started the loop again
+def test_a_retry_keeps_generate_forever_stopped(webui, tmp_path):
+    state = FakeState()
+    stub = StubExecutor(state, gate=threading.Event())
+
+    def executor(job, ctx):
+        result = stub(job, ctx)  # the first run waits for the gate
+        if len(stub.calls) == 1:
+            raise RuntimeError("CUDA out of memory")
+        return result
+
+    with server_app(tmp_path, state=state, executor=executor) as server:
+        settings(server.services.queue, queue_automatic_requeue_failed_task=True)
+        first = submit(server, "loop", forever=True)["job_id"]
+        assert wait_until(lambda: len(stub.calls) == 1)
+        assert server.client.post("/api/v2/queue/stop-forever").status_code == 200
+        stub.gate.set()
+        assert wait_until(lambda: len(stub.calls) >= 2)
+        time.sleep(0.3)
+        runs = len(stub.calls)
+        server.services.queue.stop_forever()  # ends a loop the retry started, so the test ends
+        assert server.services.queue.wait_idle()
+        retry = stub.calls[1][0]
+        assert retry.retry_of == first and not retry.forever
+        assert runs == 2
+
+
 def test_history_retention_deletes_old_unstarred_jobs(server):
     queue, store = server.services.queue, server.services.store
     ids = [submit(server, f"p{index}")["job_id"] for index in range(3)]

@@ -346,6 +346,15 @@ class JobStore:
                 return None
             return self.add(job.tab, job.core, job.scripts, priority=job.priority, layout_hash=job.layout_hash, schema_version=job.schema_version, summary=job.summary, forever=True, user=job.user, retry_of=job.id, meta={"upscale_from": job.meta["upscale_from"]} if job.meta.get("upscale_from") else None)
 
+    def requeue_failed(self, job: Job, meta: dict) -> Job:
+        """Queue a failed ``job`` again, marked generate-forever only if it
+        still is (atomic with :meth:`clear_forever`: a stop while it ran holds)."""
+
+        with self._lock:
+            current = self.get(job.id)
+            forever = bool(current and current.forever)
+            return self.add(job.tab, job.core, job.scripts, priority=job.priority, layout_hash=job.layout_hash, schema_version=job.schema_version, summary=job.summary, forever=forever, user=job.user, retry_of=job.id, meta=meta)
+
     def clear_forever(self) -> int:
         with self._lock:
             return self._db.execute("UPDATE jobs SET forever = 0 WHERE forever = 1").rowcount

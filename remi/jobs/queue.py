@@ -808,7 +808,8 @@ class JobQueue:
         except Exception:
             return
         meta = {key: job.meta[key] for key in ("name", "upscale_from") if job.meta.get(key)}
-        again = self.store.add(job.tab, job.core, job.scripts, priority=job.priority, layout_hash=job.layout_hash, schema_version=job.schema_version, summary=job.summary, forever=job.forever, user=job.user, retry_of=job.id, meta={**meta, "attempt": attempt + 1})
+        # generate-forever as it is now: `job` is the run as it was claimed, before any stop
+        again = self.store.requeue_failed(job, {**meta, "attempt": attempt + 1})
         log.info("Queued failed job #%d again as #%d (attempt %d of %d)", job.seq, again.seq, attempt + 1, MAX_ATTEMPTS)
         self._enqueued(again)
 
