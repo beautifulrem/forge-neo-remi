@@ -65,6 +65,16 @@ describe("model bar modules picker", () => {
     expect(list).toHaveClass("pb-0.5")
   })
 
+  it("keeps the list at least 96 px tall when the popover is short, but no taller than a short list", async () => {
+    renderBar()
+    fireEvent.click(modulesTriggers()[0]!)
+    const list = (await screen.findByRole("checkbox", { name: "ae.safetensors" })).closest("[role=group]")!
+    // the help text below scrolls with the popover instead of squeezing the list to a row and a half
+    expect(list).toHaveClass("min-h-24")
+    fireEvent.change(screen.getByRole("textbox", { name: "Search modules" }), { target: { value: "ae.safe" } })
+    expect(list).not.toHaveClass("min-h-24")
+  })
+
   it("writes nothing when the selection did not change", async () => {
     const { unmount } = renderBar()
     fireEvent.click(modulesTriggers()[0]!)

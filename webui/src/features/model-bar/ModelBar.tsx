@@ -143,6 +143,7 @@ function ModulesPicker({ className, segmented = false }: { className?: string; s
   const visible = q ? modules.filter((m) => m.label.toLowerCase().includes(q)) : modules
   // Selected files that are no longer listed stay visible so they can be removed.
   const missing = selected.filter((value) => !modules.some((m) => m.value === value))
+  const rows = [...missing.map((value) => ({ value, label: value, size: null, missing: true })), ...visible.map((m) => ({ ...m, missing: false }))]
 
   const edit = (next: string[]) => {
     pending.current = next
@@ -199,21 +200,28 @@ function ModulesPicker({ className, segmented = false }: { className?: string; s
           ) : null}
         </div>
         <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search…")} aria-label={t("Search modules")} className="h-8" />
-        <div role="group" aria-labelledby={`${id}-title`} className="flex max-h-72 flex-col gap-0.5 overflow-y-auto overscroll-contain pb-0.5">
-          {[...missing.map((value) => ({ value, label: value, size: null, missing: true })), ...visible.map((m) => ({ ...m, missing: false }))].map(
-            (m, index) => {
-              const checkId = `${id}-module-${index}` // paths contain spaces and slashes
-              return (
-                <div key={m.value} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-accent">
-                  <Checkbox id={checkId} checked={selected.includes(m.value)} onCheckedChange={(on) => toggle(m.value, on)} />
-                  <label htmlFor={checkId} className={cn("min-w-0 flex-1 truncate text-sm", m.missing && "text-muted-foreground line-through")} title={m.label}>
-                    {m.label}
-                  </label>
-                  {m.size ? <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{m.size}</span> : null}
-                </div>
-              )
-            },
+        <div
+          role="group"
+          aria-labelledby={`${id}-title`}
+          className={cn(
+            "flex max-h-72 flex-col gap-0.5 overflow-y-auto overscroll-contain pb-0.5",
+            // in a short window (a phone held sideways) the list keeps three rows or so and the help
+            // below scrolls with the popover; a list of fewer rows than that stays its own height
+            rows.length > 3 && "min-h-24",
           )}
+        >
+          {rows.map((m, index) => {
+            const checkId = `${id}-module-${index}` // paths contain spaces and slashes
+            return (
+              <div key={m.value} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-accent">
+                <Checkbox id={checkId} checked={selected.includes(m.value)} onCheckedChange={(on) => toggle(m.value, on)} />
+                <label htmlFor={checkId} className={cn("min-w-0 flex-1 truncate text-sm", m.missing && "text-muted-foreground line-through")} title={m.label}>
+                  {m.label}
+                </label>
+                {m.size ? <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{m.size}</span> : null}
+              </div>
+            )
+          })}
           {models.isError && !models.data ? (
             <LoadFailed error={models.error} message={t("Could not load the models")} onRetry={() => void models.refetch()} className="px-2" />
           ) : models.isPending ? (

@@ -661,6 +661,9 @@ test("a popover fits a phone held sideways and scrolls inside", async ({ page })
   expect(Math.round(box.y), "the popover's top").toBeGreaterThanOrEqual(0)
   expect(Math.round(box.y + box.height), "the popover's bottom").toBeLessThanOrEqual(390)
   await expect(popover.getByRole("textbox", { name: "Search modules" })).toBeInViewport()
+  // the list keeps room for a few rows; the help text below it scrolls with the popover
+  const list = popover.getByRole("group", { name: "VAE / Text encoders" })
+  expect(Math.round((await list.boundingBox())!.height), "the modules list's height").toBeGreaterThanOrEqual(96)
 })
 
 // The modules list's last checkbox reached 2 px below the list with its hit box, so a list that fit
