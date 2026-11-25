@@ -4,11 +4,12 @@
  * in collapsed sections, settings not at all, so their code (with the image
  * editor's form glue and the tabs primitives) is fetched the first time one
  * renders instead of with every form (docs/research/ui-performance.md,
- * "Bundle"). A small skeleton stands in while one loads; `preloadViews()`
+ * "Bundle"). A skeleton as tall as what it stands for fills in while one
+ * loads (the content below must not jump when it arrives); `preloadViews()`
  * fetches them all (tests, or a view that is about to show them).
  */
 // oxlint-disable react/only-export-components -- the exports are components made by deferred(), plus their preload
-import { type ComponentType, Suspense } from "react"
+import { type ComponentType, type ReactNode, Suspense } from "react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { retryableLazy } from "@/lib/retryable-lazy"
 
@@ -17,7 +18,11 @@ type View = ComponentType<{ node: any }>
 
 const loaders: (() => Promise<unknown>)[] = []
 
-function deferred(load: () => Promise<View>, fallback: string): View {
+/** What stands in while a view loads: a skeleton's classes, or one made for the node. */
+// oxlint-disable-next-line typescript/no-explicit-any -- as View: each view receives its own node variant
+type Fallback = string | ((node: any) => ReactNode)
+
+function deferred(load: () => Promise<View>, fallback: Fallback): View {
   let loaded: View | null = null
   const fetch = () =>
     load().then((component) => {
@@ -35,7 +40,7 @@ function deferred(load: () => Promise<View>, fallback: string): View {
   const Lazy = retryableLazy(() => (loaded ? ready(loaded) : fetch().then((component) => ({ default: component }))))
   function DeferredView(props: { node: unknown }) {
     return (
-      <Suspense fallback={<Skeleton className={fallback} />}>
+      <Suspense fallback={typeof fallback === "string" ? <Skeleton className={fallback} /> : fallback(props.node)}>
         <Lazy {...props} />
       </Suspense>
     )
@@ -50,7 +55,18 @@ export const FileInput = deferred(() => import("./inputs/File").then((m) => m.Fi
 export const JsonInput = deferred(() => import("./inputs/Json").then((m) => m.JsonInput), "h-20 w-full rounded-md")
 export const TabsView = deferred(() => import("./layout/Tabs").then((m) => m.TabsView), "h-24 w-full rounded-lg")
 export const GalleryView = deferred(() => import("./layout/Outputs").then((m) => m.GalleryView), "h-40 w-full rounded-lg")
-export const OutputView = deferred(() => import("./layout/Outputs").then((m) => m.OutputView), "h-9 w-full rounded-md")
+// An output that has nothing yet: its label over the "No output yet" line, each a line of the same
+// text size (as tall in either density), or nothing at all without a label
+export const OutputView = deferred(
+  () => import("./layout/Outputs").then((m) => m.OutputView),
+  (node: { label?: string | null }) =>
+    node.label ? (
+      <div className="flex flex-col gap-1.5" aria-hidden>
+        <Skeleton className="w-24 rounded-sm text-[0.8rem]">{"\u00a0"}</Skeleton>
+        <Skeleton className="py-2 text-sm">{"\u00a0"}</Skeleton>
+      </div>
+    ) : null,
+)
 
 /** Fetches every deferred view; afterwards they render without a placeholder. */
 export function preloadViews(): Promise<unknown> {

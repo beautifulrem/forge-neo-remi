@@ -163,6 +163,27 @@ test.describe("schema rows on extension pages", () => {
     await expect(status).toHaveText("Prompt built") // the "✅" became the icon and tone
   })
 
+  // An output's placeholder was a 36 px bar where the output (its label over "No output yet") is
+  // 61 px: what came after it jumped down when its code arrived (CLS 0.11 on this page).
+  test("an output's placeholder is as tall as the output", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 })
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    await page.route("**/src/ui/layout/Outputs.tsx*", async (route) => {
+      await held
+      await route.continue()
+    })
+    await page.goto("/#/ext/toolbox")
+    const main = page.getByRole("main")
+    const next = main.getByRole("textbox", { name: "Consolidated prompt" })
+    await expect(main.locator("[data-slot=skeleton]").first()).toBeVisible()
+    await expect(next).toBeVisible()
+    const before = (await next.boundingBox())!.y
+    release()
+    await expect(main.getByText("No output yet")).toBeVisible()
+    expect(Math.abs((await next.boundingBox())!.y - before)).toBeLessThan(1)
+  })
+
   test("two columns of fields stack on a phone", async ({ page }) => {
     for (const [width, sideBySide] of [
       [1280, true],

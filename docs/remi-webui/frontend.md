@@ -1609,7 +1609,11 @@ Keeping a first view small:
   `HistoryEmpty`.
 - Form views most first views do not show (image, file, color, JSON, tabs,
   outputs) are deferred in `ui/lazy-views.tsx`; a test that renders them
-  synchronously calls `preloadViews()` first.
+  synchronously calls `preloadViews()` first. A view's placeholder is as
+  tall as the view it stands for in its usual first state, so what follows
+  does not move when the code arrives: an output's is its label over the
+  "No output yet" line, each a line of the same text size (nothing for an
+  output without a label).
 - Dialogs and surfaces that open on demand (img2img's source panel and
   stage, the networks item dialogs, the lightbox, the style editor) are
   `retryableLazy()` and mounted on first use.
