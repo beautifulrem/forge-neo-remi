@@ -109,7 +109,7 @@ Remi 特有问题请提交到 [Remi Issues](https://github.com/beautifulrem/forg
 
 ## 上游与致谢
 
-Remi 建立在 [AUTOMATIC1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui)、[lllyasviel](https://github.com/lllyasviel/stable-diffusion-webui-forge)、[Haoming02](https://github.com/Haoming02/sd-webui-forge-classic)、[ComfyUI](https://github.com/Comfy-Org/ComfyUI) 以及内置扩展和算法作者的工作之上。原始许可证和声明保留在各自组件中。
+Remi 建立在 [AUTOMATIC1111](https://github.com/AUTOMATIC1111/stable-diffusion-webui)、[lllyasviel](https://github.com/lllyasviel/stable-diffusion-webui-forge)、[Haoming02](https://github.com/Haoming02/sd-webui-forge-classic)、[ComfyUI](https://github.com/Comfy-Org/ComfyUI) 以及内置扩展和算法作者的工作之上。原始许可证和声明保留在各自组件中；设置 → 许可证列出了它们，并链接到网页界面构建产出的 `THIRD-PARTY-NOTICES.txt`（其包含的每个库及其许可证全文；`webui/tools/notices.mjs`）。
 
 ## 许可证
 

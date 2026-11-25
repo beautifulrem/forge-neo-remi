@@ -1192,7 +1192,10 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
   weights in memory, hash every checkpoint with progress, notification
   permission, settings file, localization template download), system info
   (summary, collapsible sections, download, copy, file check), licenses
-  (structured data; license texts fetched on demand).
+  (structured data; license texts fetched on demand; and a link to the
+  build's `THIRD-PARTY-NOTICES.txt`, every package the web interface ships
+  with its license text, written by `webui/tools/notices.mjs`; the dev
+  server answers it with the direct dependencies' notices).
   `tools/dump_settings.py` writes the real schema to
   `api/mock/contract/settings.json` (tests and mock mode).
 - **Former Settings tabs and actions** (decisions):
