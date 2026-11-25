@@ -164,10 +164,14 @@ def delete_output(file_id: str, services: ServicesDep, delete_file: bool = False
 
 @router.post("/outputs/save", response_model=m.SaveResult, responses={404: {"model": m.Detail}}, summary='Save copies to the "Save" folder (`outdir_save`, log.csv); `zip` also packs them')
 def save_outputs(body: m.SaveRequest, services: ServicesDep) -> dict[str, Any]:
+    from remi.server.gallery import GalleryError
     from remi.server.gallery import save_outputs as save
 
     records = [_record(services, file_id) for file_id in dict.fromkeys(body.ids)]
-    result = save(records, make_zip=body.zip)
+    try:
+        result = save(records, make_zip=body.zip)
+    except GalleryError as error:
+        raise HTTPException(status_code=error.status, detail=str(error)) from error
     archive = services.files.register_path(result.zip_path, kind="export") if result.zip_path else None
     return {"saved": result.saved, "zip": archive.id if archive else None}
 

@@ -93,9 +93,14 @@ def save_outputs(records: list[FileRecord], *, make_zip: bool = False) -> SaveRe
     from PIL import Image
 
     from modules import images, infotext_utils, shared
+    from remi.setting_values import setting
 
     opts = shared.opts
-    folder = opts.outdir_save
+    # the settings page can clear the folder: an empty one is its default, as for the other output folders
+    info = opts.data_labels.get("outdir_save")
+    folder = setting("outdir_save", "") or (info.default if info is not None else "")
+    if not folder:
+        raise GalleryError("the folder for saved images is not set", 404)
     os.makedirs(folder, exist_ok=True)
     result = SaveResult()
     rows: list[list[Any]] = []
@@ -112,7 +117,7 @@ def save_outputs(records: list[FileRecord], *, make_zip: bool = False) -> SaveRe
         with Image.open(record.path) as opened:
             opened.load()
             image = opened.copy()
-        fullfn, txt_fullfn = images.save_image(image, folder, "", seed=p.seed, prompt=p.prompt, extension=opts.samples_format, info=record.infotext, p=p, save_to_dirs=opts.use_save_to_dirs_for_ui)
+        fullfn, txt_fullfn = images.save_image(image, folder, "", seed=p.seed, prompt=p.prompt, extension=setting("samples_format", "png") or "png", info=record.infotext, p=p, save_to_dirs=setting("use_save_to_dirs_for_ui", False))
         name = os.path.relpath(fullfn, folder)
         result.paths.append(fullfn)
         result.saved.append(name)
@@ -121,7 +126,7 @@ def save_outputs(records: list[FileRecord], *, make_zip: bool = False) -> SaveRe
             result.saved.append(os.path.relpath(txt_fullfn, folder))
         rows.append([p.prompt, p.seed, record.width, record.height, p.sampler_name, p.cfg_scale, p.steps, name, p.negative_prompt, p.sd_model_name, p.sd_model_hash])
         first = first or (p, image)
-    if rows and opts.save_write_log_csv:
+    if rows and setting("save_write_log_csv", True):
         log_path = os.path.join(folder, "log.csv")
         if os.path.exists(log_path):
             update_logfile(log_path, LOG_FIELDS)

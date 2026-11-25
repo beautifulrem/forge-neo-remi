@@ -449,6 +449,24 @@ def test_gallery_save_writes_copies_a_log_and_a_zip(server, webui, tmp_path, mon
     assert server.client.post("/api/v2/outputs/save", json={"ids": ["missingmissing"]}).status_code == 404
 
 
+# The Save folder setting can be cleared on the settings page: Save then answered 500 (no folder named "")
+def test_gallery_save_with_the_folder_cleared_uses_its_default(server, webui, tmp_path, monkeypatch):
+    from modules import shared
+
+    folder = tmp_path / "gen"
+    folder.mkdir()
+    (folder / "a.png").write_bytes(png(text="a red fox\nSteps: 20, Seed: 42, Size: 64x48"))
+    record = server.services.files.register_output(folder / "a.png", tab="txt2img", infotext="a red fox\nSteps: 20, Seed: 42, Size: 64x48")
+    default = tmp_path / "default-save"
+    monkeypatch.setattr(shared.opts.data_labels["outdir_save"], "default", str(default))
+    monkeypatch.setattr(shared.opts, "outdir_save", "", raising=False)
+    monkeypatch.setattr(shared.opts, "samples_format", "png", raising=False)
+    response = server.client.post("/api/v2/outputs/save", json={"ids": [record.id]})
+    assert response.status_code == 200, response.text
+    [name] = response.json()["saved"]
+    assert (default / name).is_file()
+
+
 def test_open_folder_respects_hide_ui_dir_config(server, webui, monkeypatch):
     from modules import shared
     from remi.server import gallery
