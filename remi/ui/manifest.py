@@ -11,7 +11,9 @@ errors/timeouts without coupling ``remi.ui`` to ``remi.server``.
 
 from __future__ import annotations
 
+import inspect
 import json
+import os
 import threading
 import time
 from collections.abc import Iterable, Mapping
@@ -297,6 +299,36 @@ class DiagnosticsCollector:
 
 diagnostics = DiagnosticsCollector()
 """Process-wide extension diagnostics collector."""
+
+
+def extension_of(path: str | None) -> str | None:
+    """The folder under ``extensions/`` or ``extensions-builtin/`` that ``path``
+    lives in: the name Extensions → Diagnostics lists the extension by. None for
+    a file outside both (the WebUI's own ``scripts/``)."""
+
+    if not path:
+        return None
+    from modules.paths_internal import extensions_builtin_dir, extensions_dir
+
+    real = os.path.realpath(path)
+    for root in (extensions_dir, extensions_builtin_dir):
+        root = os.path.realpath(root)
+        if real.startswith(root + os.sep):
+            return os.path.relpath(real, root).split(os.sep)[0]
+    return None
+
+
+def extension_of_owner(owner: Any) -> str | None:
+    """The extension an action's owner comes from: a script or an Extras
+    operation by its ``filename``, a page or a module by its source file."""
+
+    path = getattr(owner, "filename", None)
+    if not isinstance(path, str) or not path:
+        try:
+            path = inspect.getsourcefile(owner if inspect.ismodule(owner) else type(owner))
+        except TypeError:
+            path = None
+    return extension_of(path)
 
 
 __all__ = [

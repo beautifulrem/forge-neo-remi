@@ -94,16 +94,9 @@ def initialize_runners() -> None:
 
 
 def _extension_of(path: str | None) -> str | None:
-    from modules.paths_internal import extensions_builtin_dir, extensions_dir
+    from remi.ui.manifest import extension_of
 
-    if not path:
-        return None
-    real = os.path.realpath(path)
-    for root in (extensions_dir, extensions_builtin_dir):
-        root = os.path.realpath(root)
-        if real.startswith(root + os.sep):
-            return os.path.relpath(real, root).split(os.sep)[0]
-    return None
+    return extension_of(path)
 
 
 def not_ported() -> list[dict[str, Any]]:

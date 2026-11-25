@@ -258,12 +258,18 @@ def run_action(owner: str, action: str, body: m.ActionRequest, request: Request,
         generation_lock=services.queue.lock,
     )
 
+    # Extensions → Diagnostics counts an action's failures against the extension folder it comes from
+    extension = None if owner == "core" else ui.extension_of_owner(target)
+
     def call() -> dict[str, Any]:
         # a GPU action that timed out would keep using the GPU after the lock is released:
         # it keeps its error isolation and runs without the limit
         if spec.timeout is not None:
-            return ui.call_action_isolated(target, action, ctx, body.values, timeout=0 if spec.gpu else spec.timeout)
-        return ui.call_action(target, action, ctx, body.values)
+            return ui.call_action_isolated(target, action, ctx, body.values, timeout=0 if spec.gpu else spec.timeout, extension=extension)
+        if extension is None:
+            return ui.call_action(target, action, ctx, body.values)
+        # no time limit: the failure is recorded and stays an error answer
+        return ui.call_action_isolated(target, action, ctx, body.values, extension=extension, return_toast=False)
 
     if spec.gpu:
         with services.queue.lock:

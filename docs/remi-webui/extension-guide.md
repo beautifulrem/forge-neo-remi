@@ -379,10 +379,14 @@ def refresh_models(self, ctx: ui.ActionContext, values: dict) -> dict:
 - **Timeout & error isolation:** `@ui.action("name", timeout=15.0)` sets an
   execution timeout in seconds; without one an action has no time limit, and a
   `gpu=True` action never has one (it keeps the generation lock until it ends,
-  so a timed-out action cannot keep using the GPU beside the next job). Timeouts (`ActionTimeoutError`) and uncaught action or
-  hook failures are recorded per extension in `remi.ui.manifest.diagnostics`
-  and surfaced in **Extensions → Diagnostics** (`GET /api/v2/extensions/diagnostics`)
-  without crashing the form or queue.
+  so a timed-out action cannot keep using the GPU beside the next job). An
+  action with a limit that fails or times out answers with an error toast.
+  Its failures and timeouts, those of an action without a limit, and a script
+  hook that raised during a job (the job goes on without it and lists it in its
+  warnings) count against the extension's folder in `remi.ui.manifest.diagnostics`,
+  shown in **Extensions → Diagnostics** (`GET /api/v2/extensions/diagnostics`).
+  An error the request caused (a `ValidationError`, an error with a 4xx
+  `status`) does not count.
 - An exception becomes an error answer (500, shown as an error toast);
   raise `remi.ui.ValidationError([ui.ParamError(message, param=..., owner=...)])`
   for per-field messages (422). The message is a catalog key your

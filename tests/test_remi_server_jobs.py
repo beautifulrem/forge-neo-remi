@@ -130,11 +130,16 @@ def test_a_failing_job_reports_its_error(webui, tmp_path):
         assert failed and failed[0]["error"] == "RuntimeError: boom"
 
 
-def test_script_errors_during_a_job_become_its_warnings(webui, tmp_path):
+def test_script_errors_during_a_job_become_its_warnings(webui, tmp_path, monkeypatch):
     """A script hook that raises is reported by the script runner and skipped; the job
-    completes and says so (history and the job.completed event) instead of failing silently."""
+    completes and says so (history and the job.completed event) instead of failing silently.
+    The failure also counts against the script's extension in Extensions → Diagnostics."""
 
-    from modules import errors
+    from modules import errors, paths_internal
+    from remi import ui
+
+    monkeypatch.setattr(paths_internal, "extensions_dir", "/x/extensions")
+    ui.diagnostics.reset("ADetailer")
 
     state = FakeState()
     stub = StubExecutor(state)
@@ -159,6 +164,9 @@ def test_script_errors_during_a_job_become_its_warnings(webui, tmp_path):
         completed = [event for event in events if isinstance(event, dict) and event["type"] == "job.completed"]
         assert completed[0]["warnings"] == [note]
         assert errors.report.__name__ == "report" and errors.report.__module__ == "modules.errors"  # restored
+        record = ui.diagnostics.get("ADetailer")
+        assert record is not None and record.hook_errors == 2
+        assert record.last_error == "postprocess_image: ModuleNotFoundError: No module named 'ultralytics'"
         # a clean job has none
         clean = submit(server)
         assert server.services.queue.wait_idle()

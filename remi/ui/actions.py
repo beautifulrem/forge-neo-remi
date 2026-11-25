@@ -120,6 +120,14 @@ def call_action(owner: Any, name: str, ctx: ActionContext, values: Mapping[str, 
     return check_patch(bound(ctx, dict(values)) or {})
 
 
+def _answered(error: BaseException) -> bool:
+    """An error the server answers as the request's fault (a 4xx: a rejected
+    upload, an ``HTTPException(422)``), not as the extension's."""
+
+    status = getattr(error, "status", None) or getattr(error, "status_code", None)
+    return isinstance(status, int) and 400 <= status < 500
+
+
 def call_action_isolated(
     owner: Any,
     name: str,
@@ -132,8 +140,9 @@ def call_action_isolated(
 ) -> Patch:
     """Run ``owner``'s action ``name`` with timeout and error isolation.
 
-    Client input errors (:class:`ValidationError`) and missing actions
-    (:class:`KeyError`) propagate normally. Runtime failures and timeouts are
+    Client input errors (:class:`ValidationError`, or any error carrying a 4xx
+    ``status``/``status_code``) and missing actions (:class:`KeyError`)
+    propagate normally. Runtime failures and timeouts are
     recorded in :data:`remi.ui.manifest.diagnostics` and, when
     ``return_toast=True``, turned into a safe error toast patch so a buggy
     extension action never crashes the rest of the page or server.
@@ -162,6 +171,8 @@ def call_action_isolated(
         except (ValidationError, KeyError):
             raise
         except Exception as error:
+            if _answered(error):
+                raise
             log.warning("isolated action %s.%s failed: %s", diag_owner, name, error, exc_info=True)
             diagnostics.record_action_error(diag_owner, name, f"{type(error).__name__}: {error}", timed_out=False)
             if not return_toast:
@@ -191,7 +202,7 @@ def call_action_isolated(
 
     error = result_box.get("error")
     if error is not None:
-        if isinstance(error, (ValidationError, KeyError)):
+        if isinstance(error, (ValidationError, KeyError)) or _answered(error):
             raise error
         log.warning("isolated action %s.%s failed: %s", diag_owner, name, error)
         diagnostics.record_action_error(diag_owner, name, f"{type(error).__name__}: {error}", timed_out=False)

@@ -63,6 +63,8 @@ def script_errors(sink: list[dict[str, Any]]) -> Iterator[None]:
     if errors is None:
         yield
         return
+    from remi.ui.manifest import diagnostics, extension_of
+
     original = errors.report
 
     def report(message: str, *, exc_info: bool = False) -> None:
@@ -72,6 +74,9 @@ def script_errors(sink: list[dict[str, Any]]) -> Iterator[None]:
         match = _SCRIPT_ERROR.match(message.splitlines()[0] if message else "")
         if match:
             note = {"message": "{{script}} failed ({{hook}}): {{error}}", "values": {"script": os.path.basename(match[2]), "hook": match[1], "error": detail or "?"}}
+            extension = extension_of(match[2])
+            if extension is not None:  # Extensions → Diagnostics counts it against the script's extension
+                diagnostics.record_hook_error(extension, f"{match[1]}: {detail or '?'}")
         else:
             note = {"message": "{{error}}", "values": {"error": f"{message.splitlines()[0] if message else ''} {detail}".strip()}}
         if note not in sink and len(sink) < MAX_WARNINGS:

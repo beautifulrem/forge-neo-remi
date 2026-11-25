@@ -21,7 +21,7 @@ from remi.ui.context import Context
 from remi.ui.errors import ParamError, SchemaError, ValidationError
 from remi.ui.files import ActionFiles
 from remi.ui.layout import ScriptLayout
-from remi.ui.manifest import MANIFEST_FILENAME, DiagnosticsCollector, ExtensionManifest, ManifestValidationResult, diagnostics, load_manifest, validate_manifest_dict
+from remi.ui.manifest import MANIFEST_FILENAME, DiagnosticsCollector, ExtensionManifest, ManifestValidationResult, diagnostics, extension_of_owner, load_manifest, validate_manifest_dict
 from remi.ui.nodes import (
     Button,
     Choice,
@@ -120,6 +120,7 @@ __all__ = [
     "conditions",
     "diagnostics",
     "evaluate",
+    "extension_of_owner",
     "jsonable",
     "load_manifest",
     "merge_patches",

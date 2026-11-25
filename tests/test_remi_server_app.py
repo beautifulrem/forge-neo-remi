@@ -75,6 +75,65 @@ def test_core_actions(server):
     assert server.client.post("/api/v2/actions/nobody/x", json={"tab": "txt2img", "values": {}}).status_code == 404
 
 
+def test_an_extension_action_that_fails_counts_against_its_extension(server, webui, tmp_path, monkeypatch):
+    """Extensions → Diagnostics lists extensions by folder name: an action's failure
+    and its timeout are recorded under the folder its script lives in, whether or
+    not the action has a time limit. A failure without a limit stays an error answer."""
+    import time
+
+    from fastapi.testclient import TestClient
+
+    from modules import paths_internal, scripts
+    from remi import ui
+    from remi.files import FileError
+
+    builtin = tmp_path / "extensions-builtin"
+    monkeypatch.setattr(paths_internal, "extensions_builtin_dir", str(builtin))
+    monkeypatch.setattr(paths_internal, "extensions_dir", str(tmp_path / "extensions"))
+
+    class Broken:
+        filename = str(builtin / "broken-ext" / "scripts" / "broken.py")
+
+        @ui.action("boom")
+        def boom(self, ctx, values):
+            raise RuntimeError("kaput")
+
+        @ui.action("limited_boom", timeout=5)
+        def limited_boom(self, ctx, values):
+            raise RuntimeError("kaput too")
+
+        @ui.action("slow", timeout=0.05)
+        def slow(self, ctx, values):
+            time.sleep(0.3)
+
+        @ui.action("bad_input")
+        def bad_input(self, ctx, values):
+            raise ui.ValidationError([ui.ParamError("Required", param="x")])
+
+        @ui.action("gone_upload", timeout=5)
+        def gone_upload(self, ctx, values):
+            raise FileError("no upload", status=404)
+
+    monkeypatch.setitem(scripts.scripts_txt2img.by_id, "broken", Broken())
+    ui.diagnostics.reset("broken-ext")
+    client = TestClient(server.app, base_url=str(server.client.base_url), raise_server_exceptions=False)
+
+    def run(action):
+        return client.post(f"/api/v2/actions/broken/{action}", json={"tab": "txt2img", "values": {}})
+
+    assert run("boom").status_code == 500
+    assert run("limited_boom").json()["__toast__"]["level"] == "error"
+    assert run("slow").json()["__toast__"]["level"] == "error"
+    assert run("bad_input").status_code == 422  # the user's input, not the extension's fault
+    assert run("gone_upload").status_code == 404  # nor is a request the server answers with a 4xx
+    record = ui.diagnostics.get("broken-ext")
+    assert record is not None
+    assert (record.action_errors, record.action_timeouts) == (2, 1)
+    assert [entry["kind"] for entry in record.recent_errors] == ["action_error", "action_error", "action_timeout"]
+    assert record.recent_errors[0]["message"] == "action boom: RuntimeError: kaput"
+    ui.diagnostics.reset("broken-ext")
+
+
 def test_conflicts_by_action_and_by_rules_route(server):
     body = {"tab": "txt2img", "core": {"enable_hr": True}, "scripts": {}, "selected": "core.enable_hr"}
     derived = server.client.post("/api/v2/rules/derive", json=body)
