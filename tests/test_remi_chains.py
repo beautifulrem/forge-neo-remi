@@ -473,3 +473,48 @@ def test_stages_with_non_finite_numbers_are_refused(tmp_path):
         store.create_template("old", [StageSpec(kind="generate")])
         store._db.execute("UPDATE chain_templates SET stages = ?", ('[{"kind": "generate", "core": {"cfg_scale": Infinity}}]',))
         assert server.client.get("/api/v2/chains/templates").status_code == 200
+
+
+def test_an_upsampled_prompt_is_cached_per_provider(tmp_path):
+    """Another endpoint or model writes another prompt: the prompt tools'
+    provider is part of an upsample stage's cache key (never its API key)."""
+
+    files = FileStore(tmp_path / "files")
+    jobs = JobStore(tmp_path / "jobs.db")
+    bus = EventBus()
+    state = FakeState()
+    queue = JobQueue(jobs, files, bus, executor=lambda job, ctx: None, dispatch=run_inline, lock=threading.Lock(), validate=lambda *a: None, state=lambda: state, hash_layout=lambda tab: "h")
+    provider = {"id": "openai:http://a/v1:qwen"}
+    runner = ChainRunner(ChainStore(jobs), queue, files, bus, upsampler=lambda s, p, o: f"{s.core['prompt']}, detailed", model_fingerprint=lambda: "m", upsample_identity=lambda: provider["id"])
+    try:
+        stages = [StageSpec(kind="prompt_upsample", core={"prompt": "fox"})]
+        chain = runner.create_chain(stages)
+        assert runner.wait_idle(5) and runner.store.get_chain(chain.id).status == "completed"
+        first = runner.plan_chain(stages)[0]
+        assert first["cache_hit"]
+        provider["id"] = "openai:http://b/v1:qwen"
+        second = runner.plan_chain(stages)[0]
+        assert second["stage_hash"] != first["stage_hash"] and not second["cache_hit"]
+        # a generate stage does not depend on the provider
+        generate = [StageSpec(kind="generate", core={"seed": 1})]
+        before = runner.plan_chain(generate)[0]["stage_hash"]
+        provider["id"] = "deepl::"
+        assert runner.plan_chain(generate)[0]["stage_hash"] == before
+    finally:
+        runner.close()
+        files.close()
+        jobs.close()
+
+
+def test_the_server_keys_upsampling_by_the_provider_settings_without_the_key(tmp_path, monkeypatch):
+    from remi import prompt_tools as pt
+    from remi.prompt_tools import options as prompt_options
+
+    settings = {"prompt_tools_translation_provider": "openai", "prompt_tools_translation_url": "http://a/v1", "prompt_tools_translation_model": "qwen"}
+    monkeypatch.setattr(prompt_options, "option", lambda name, default=None: settings.get(name, default))
+    with webui_state(), server_app(tmp_path) as server:
+        pt.tools_for(server.services).set_translation_key("sk-secret")
+        identity = server.services.chains.upsample_identity
+        assert identity() == "openai:http://a/v1:qwen"
+        settings["prompt_tools_translation_url"] = "http://b/v1"
+        assert identity() == "openai:http://b/v1:qwen"

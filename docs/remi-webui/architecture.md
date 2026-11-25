@@ -514,8 +514,9 @@ client has a bounded event queue and one preview slot.
   stage's hash, images and prompt, and the server-side model fingerprint
   (checkpoint name and file identity, VAE and text encoders, clip skip and
   the other settings that change every image), read again when the job
-  finishes, so outputs are cached under the model they were made with. A
-  client's `model_fingerprint` is only added to it. A random seed (`-1` or
+  finishes, so outputs are cached under the model they were made with; an
+  upsample stage's key also covers the prompt tools' provider, URL and
+  model (not the API key). A client's `model_fingerprint` is only added to it. A random seed (`-1` or
   none, in `txt2img`/`img2img` stages) salts the key with the chain id:
   re-running a chain reuses its stages, a new chain makes new images. The
   next stage gets the result images, not the grid or extra images. Forced

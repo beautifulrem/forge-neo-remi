@@ -877,6 +877,7 @@ class ChainRunner:
         *,
         upsampler: UpsamplerFunc | None = None,
         model_fingerprint: Callable[[], str] = _default_model_fingerprint,
+        upsample_identity: Callable[[], str] = lambda: "",
     ) -> None:
         self.store = store
         self.queue = queue
@@ -884,6 +885,9 @@ class ChainRunner:
         self.bus = bus
         self.upsampler = upsampler or _default_upsampler
         self.model_fingerprint = model_fingerprint
+        self.upsample_identity = upsample_identity
+        """the endpoint and model ``upsampler`` asks (never its API key): part of
+        a ``prompt_upsample`` stage's hash, as the model is of a generation's"""
         self._lock = threading.RLock()
         self._threads: set[threading.Thread] = set()
         self._run_fingerprints: dict[str, str] = {}
@@ -931,8 +935,8 @@ class ChainRunner:
         if job.meta.get("chain_id"):
             self._run_fingerprints[job.id] = self.model_fingerprint()
 
-    @staticmethod
     def _stage_hash(
+        self,
         spec: StageSpec,
         upstream: tuple[str, Sequence[str], str | None],
         *,
@@ -944,6 +948,10 @@ class ChainRunner:
         if uses_random_seed(spec):
             # a new chain draws a new seed; without a chain (a preview) nothing can match
             salt = f"chain:{chain_id}" if chain_id else f"once:{secrets.token_hex(8)}"
+        if spec.kind == "prompt_upsample":
+            # another endpoint or model writes another prompt (a local model is in the config)
+            provider = "local" if spec.config.get("local_model_path") else self.upsample_identity()
+            fingerprint = f"{fingerprint}|upsample:{provider}"
         return compute_stage_hash(
             spec,
             upstream_hash=upstream_hash,

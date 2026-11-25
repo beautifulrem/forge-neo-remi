@@ -61,8 +61,16 @@ class Services:
 
         return _default_upsampler(stage, upstream_prompt, upstream_outputs, config=pt.tools_for(self).translation_config())
 
+    @staticmethod
+    def _upsample_identity() -> str:
+        """The provider, URL and model a ``prompt_upsample`` stage asks (no API key)."""
+
+        from remi import prompt_tools as pt
+
+        return pt.translation_config().cache_key
+
     def __post_init__(self) -> None:
-        self.chains = ChainRunner(ChainStore(self.store), self.queue, self.files, self.bus, upsampler=self._upsample_stage)
+        self.chains = ChainRunner(ChainStore(self.store), self.queue, self.files, self.bus, upsampler=self._upsample_stage, upsample_identity=self._upsample_identity)
         self.bridge = RuntimeBridge(state_getter=self.state)
         use_process = (os.environ.get("REMI_WORKER_PROCESS") == "1") if self.worker_process is None else bool(self.worker_process)
         use_gpus = (os.environ.get("REMI_WORKER_GPUS") or None) if self.worker_gpus is None else (self.worker_gpus.strip() or None)
