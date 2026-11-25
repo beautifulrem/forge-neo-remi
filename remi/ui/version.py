@@ -10,8 +10,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-REMI_API_VERSION = "1.0"
-"""Current public ``remi.ui`` extension API version."""
+REMI_API_VERSION = "1.1"
+"""Current public ``remi.ui`` extension API version (1.1 added ``ui.Sentence``
+and ``ui.extension_of_owner``)."""
 
 REMI_MIN_SUPPORTED_API_VERSION = "1.0"
 """Oldest extension API version still supported by this runtime."""
