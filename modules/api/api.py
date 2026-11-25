@@ -692,9 +692,14 @@ class Api:
         req = dict(req)
         picks = {key: req.pop(key) for key in model_selection.MODEL_OPTIONS if key in req}
         problems: list[ParamError] = []
-        if (name := picks.get("sd_model_checkpoint")) is not None and (not isinstance(name, str) or name not in sd_models.checkpoint_aliases):
+        # a frozen one (--freeze-settings*): refused with the rest, not select's AssertionError (a 500 after the other settings were saved)
+        frozen = {key: reason for key, value in picks.items() if value is not None and (reason := model_selection.frozen_pick(key, value)) is not None}
+        problems += [ParamError(reason, owner="settings", param=key) for key, reason in frozen.items()]
+        if "sd_model_checkpoint" not in frozen and (name := picks.get("sd_model_checkpoint")) is not None and (not isinstance(name, str) or name not in sd_models.checkpoint_aliases):
             problems.append(ParamError(Sentence("unknown checkpoint {{value}}", value=repr(name)), owner="settings", param="sd_model_checkpoint"))  # A1111's exact names
         for key in ("forge_additional_modules", "forge_unet_storage_dtype"):  # checked as PATCH /api/v2/options checks them
+            if key in frozen:
+                continue
             value, stored = picks.get(key), shared.opts.data.get(key)
             if isinstance(value, list) and isinstance(stored, list) and all(isinstance(item, str) for item in value + stored):
                 value, stored = sorted(value), sorted(stored)  # the same modules in another order (modules_change sorts them)

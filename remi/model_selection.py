@@ -161,7 +161,12 @@ def select(key: str, value: Any, apply: Callable[[str, Any], bool] | None = None
     return True
 
 
-def _check_not_frozen(key: str, value: Any) -> None:
+def frozen_pick(key: str, value: Any) -> str | None:
+    """Why the pick ``value`` for ``key`` may not be made (a frozen setting,
+    ``--freeze-settings*``), or None. The stored value sent again is no
+    change. ``/sdapi/v1/options`` refuses such a pick with the request's
+    other refused values (422) before anything is set."""
+
     from modules import shared
     from remi.setting_values import frozen_reason
 
@@ -169,8 +174,12 @@ def _check_not_frozen(key: str, value: Any) -> None:
     if isinstance(value, list) and isinstance(stored, list) and all(isinstance(item, str) for item in value + stored):
         value, stored = sorted(value), sorted(stored)  # modules in another order (modules_change sorts them)
     if value == stored:  # unchanged: Options.set and the model manager leave it as it is
-        return
-    reason = frozen_reason(shared.opts, key, shared.cmd_opts)
+        return None
+    return frozen_reason(shared.opts, key, shared.cmd_opts)
+
+
+def _check_not_frozen(key: str, value: Any) -> None:
+    reason = frozen_pick(key, value)
     if reason is not None:
         raise AssertionError(f"not possible to set '{key}': {reason}")
 

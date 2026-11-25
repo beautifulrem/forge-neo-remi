@@ -59,7 +59,7 @@ RAW = {
     ("remi/server/options.py", "coerce_values"): "compares the posted value with the stored one (an unchanged value outside stale choices is kept)",
     ("remi/ui/settings.py", "check_api_values"): "skips a posted value equal to the stored one, as upstream's set_config does",
     ("remi/server/options.py", "apply_values"): "tells a setting that refused the value (its stored value unchanged) from one that took it",
-    ("remi/model_selection.py", "_check_not_frozen"): "a pick equal to the stored value is no change (Options.set and the model manager compare it as stored)",
+    ("remi/model_selection.py", "frozen_pick"): "a pick equal to the stored value is no change (Options.set and the model manager compare it as stored)",
     ("remi/prompt_tools/options.py", "register_tag_options"): "moves values stored under the tools' earlier names to the current ones",
     ("remi/prompt_tools/options.py", "take_legacy_translation_key"): "removes the API key an earlier version stored in the settings",
 }

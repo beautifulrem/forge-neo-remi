@@ -3,6 +3,7 @@ POST /sdapi/v1/options) does not reach the running job: it keeps the model it
 started with across its batches and hires/refiner switches, the settings show
 the pick at once, and the next job loads it."""
 
+import re
 import threading
 import time
 
@@ -152,11 +153,8 @@ def test_a_frozen_model_setting_is_refused_also_while_a_job_runs(applied, monkey
     monkeypatch.setitem(shared.opts.data, "samples_format", "png")
     monkeypatch.setattr(shared.cmd_opts, flag, value)
     assert shared.opts.data_labels["sd_model_checkpoint"].section[0] == "sd"
-    with queue_lock:
-        with pytest.raises(AssertionError, match=r"frozen|disabled"):
-            model_selection.select("sd_model_checkpoint", "second.safetensors")
-        with pytest.raises(AssertionError):
-            Api(FastAPI(), queue_lock).set_config({"sd_model_checkpoint": "second.safetensors"})
+    with queue_lock, pytest.raises(AssertionError, match=r"frozen|disabled"):
+        model_selection.select("sd_model_checkpoint", "second.safetensors")
     assert model_selection.held() == {} and applied == []
     with pytest.raises(AssertionError):  # and with the lock free, as Options.set refuses it
         model_selection.select("sd_model_checkpoint", "second.safetensors")
@@ -169,6 +167,32 @@ def test_a_frozen_model_setting_is_refused_also_while_a_job_runs(applied, monkey
     if flag != "freeze_settings":  # (--freeze-settings refuses saving the other settings too, as upstream does)
         Api(FastAPI(), queue_lock).set_config({"sd_model_checkpoint": "first.safetensors", "samples_format": "webp"})
         assert shared.opts.data["samples_format"] == "webp"
+
+
+@pytest.mark.parametrize(("flag", "value"), [("freeze_settings", True), ("freeze_specific_settings", "sd_model_checkpoint"), ("freeze_settings_in_sections", "sd")])
+@pytest.mark.parametrize("running", [True, False])
+def test_sdapi_refuses_a_frozen_model_pick_with_the_other_bad_values(applied, monkeypatch, flag, value, running):
+    """select's AssertionError reached the client as a 500, after the request's other
+    settings were already saved: the pick is now one of the refused values (422)."""
+
+    import contextlib
+
+    from fastapi import FastAPI, HTTPException
+
+    from modules import sd_models, shared
+    from modules.api.api import Api
+    from modules.call_queue import queue_lock
+
+    monkeypatch.setattr(model_selection, "_start_waiter", lambda: None)
+    monkeypatch.setattr(sd_models, "checkpoint_aliases", {"first.safetensors": object(), "second.safetensors": object()})
+    monkeypatch.setitem(shared.opts.data, "samples_format", "png")
+    monkeypatch.setattr(shared.cmd_opts, flag, value)
+    with queue_lock if running else contextlib.nullcontext(), pytest.raises(HTTPException) as refused:
+        Api(FastAPI(), queue_lock).set_config({"samples_format": "webp", "sd_model_checkpoint": "second.safetensors"})
+    assert refused.value.status_code == 422 and "settings.sd_model_checkpoint: " in refused.value.detail
+    assert re.search(r"frozen|disabled", refused.value.detail)
+    assert shared.opts.data["samples_format"] == "png" and shared.opts.data["sd_model_checkpoint"] == "first.safetensors"
+    assert model_selection.held() == {} and applied == []
 
 
 def test_held_picks_reach_the_model_manager_as_it_stores_them(webui, monkeypatch, tmp_path):
