@@ -72,6 +72,14 @@ def test_free_names_count_up_and_keep_the_extension(tmp_path):
     assert gallery._free_name(str(tmp_path), "") == str(tmp_path / "file")
 
 
+def test_a_free_name_is_claimed_when_it_is_chosen(tmp_path):
+    # two saves at once must not pick one name: the second would write over the first's copy
+    (tmp_path / "b.txt").touch()
+    first = gallery._free_name(str(tmp_path), "b.txt")
+    second = gallery._free_name(str(tmp_path), "b.txt")
+    assert (first, second) == (str(tmp_path / "b-1.txt"), str(tmp_path / "b-2.txt"))
+
+
 def test_save_copies_other_files_and_updates_an_old_log(webui, tmp_path, monkeypatch):
     from modules import shared
 

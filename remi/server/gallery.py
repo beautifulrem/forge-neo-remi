@@ -108,7 +108,11 @@ def save_outputs(records: list[FileRecord], *, make_zip: bool = False) -> SaveRe
     for record in records:
         if not record.is_image:
             target = _free_name(folder, record.name)
-            shutil.copy2(record.path, target)
+            try:
+                shutil.copy2(record.path, target)
+            except BaseException:
+                os.unlink(target)  # the empty file that claimed the name
+                raise
             result.paths.append(target)
             result.saved.append(os.path.relpath(target, folder))
             continue
@@ -152,20 +156,30 @@ def _zip(folder: str, result: SaveResult, first: tuple[SavedParams, Any] | None)
         except Exception:
             pass
     path = _free_name(folder, f"{name}.zip")
-    with zipfile.ZipFile(path, "w") as archive:
-        for full, relative in zip(result.paths, result.saved, strict=True):
-            archive.write(full, relative)
+    try:
+        with zipfile.ZipFile(path, "w") as archive:
+            for full, relative in zip(result.paths, result.saved, strict=True):
+                archive.write(full, relative)
+    except BaseException:
+        os.unlink(path)
+        raise
     return path
 
 
 def _free_name(folder: str, name: str) -> str:
+    """A name in ``folder`` no file has, claimed by creating it empty (the
+    caller writes over it): two saves at once never pick the same one."""
+
     base, ext = os.path.splitext(os.path.basename(name) or "file")
     candidate = os.path.join(folder, base + ext)
     index = 1
-    while os.path.exists(candidate):
-        candidate = os.path.join(folder, f"{base}-{index}{ext}")
-        index += 1
-    return candidate
+    while True:
+        try:
+            os.close(os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            return candidate
+        except FileExistsError:
+            candidate = os.path.join(folder, f"{base}-{index}{ext}")
+            index += 1
 
 
 def output_folder(kind: str) -> str:
