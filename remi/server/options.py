@@ -14,7 +14,6 @@ from typing import Any
 
 from remi.setting_values import frozen_reason
 from remi.ui import Context, ParamError, Sentence, ValidationError
-from remi.ui.settings import frozen_reason
 
 MODEL_KEYS = ("sd_model_checkpoint", "forge_additional_modules", "forge_unet_storage_dtype")
 

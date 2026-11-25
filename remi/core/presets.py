@@ -190,7 +190,7 @@ def _refuse_frozen(opts: Any, cmd_opts: Any, preset: str) -> None:
     """:class:`ValidationError` when a ``--freeze-settings*`` flag keeps a
     setting the switch writes (the setter would fail an assertion half way)."""
 
-    from remi.ui.settings import frozen_reason
+    from remi.setting_values import frozen_reason
 
     keys = ("forge_preset", "sd_model_checkpoint", "forge_additional_modules", "forge_unet_storage_dtype")
     for key in (*keys, *(f"{key}_{preset}" for key in ("forge_checkpoint", *keys[2:]))):

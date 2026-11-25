@@ -490,7 +490,7 @@ def _refuse_frozen(*keys: str) -> None:
     it is (the setter would fail an assertion after the checks passed)."""
 
     from modules import shared
-    from remi.ui.settings import frozen_reason
+    from remi.setting_values import frozen_reason
 
     for key in keys:
         if (reason := frozen_reason(shared.opts, key, shared.cmd_opts)) is not None:
@@ -648,7 +648,7 @@ def uninstall(name: str) -> None:
     stay loaded until the next reload."""
 
     from modules import extensions, shared
-    from remi.ui.settings import frozen_reason
+    from remi.setting_values import frozen_reason
 
     check_access()
     ext = find(name)

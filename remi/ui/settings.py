@@ -50,38 +50,6 @@ def component_args(info) -> dict:
     return dict(args or {})
 
 
-def frozen_reason(opts: Any, key: str, cmd_opts: Any) -> str | None:
-    """Why the WebUI may not change ``key`` (None when it may): ``PATCH
-    /options`` refuses it, the settings schema marks it ``locked`` with this
-    reason, and other writers of a setting (extensions, UI presets) ask too
-    instead of tripping the setter's assertion."""
-
-    info = opts.data_labels.get(key)
-    if info is None:
-        return "unknown setting"
-    if getattr(cmd_opts, "freeze_settings", False):
-        return "changing settings is disabled (--freeze-settings)"
-    if info.do_not_save:
-        return "not a stored setting"
-    # ``restrict_api`` guards the A1111 API (/sdapi/v1/options); /api/v2 is the
-    # WebUI's own API, behind the same login as the Gradio settings page was.
-    try:
-        args = info.component_args() if callable(info.component_args) else info.component_args
-    except Exception:  # an extension's arguments that fail to build: coerce_values refuses the value
-        args = None
-    if isinstance(args, dict) and args.get("visible", True) is False:
-        return "this setting is hidden"
-    sections = getattr(cmd_opts, "freeze_settings_in_sections", None)
-    if sections and info.section and info.section[0] in [item.strip() for item in sections.split(",")]:
-        return "the settings in this section are frozen"
-    keys = getattr(cmd_opts, "freeze_specific_settings", None)
-    if keys and key in [item.strip() for item in keys.split(",")]:
-        return "this setting is frozen"
-    if getattr(cmd_opts, "hide_ui_dir_config", False) and key in opts.restricted_opts:
-        return "this setting is restricted (--hide-ui-dir-config)"
-    return None
-
-
 def setting_node(key: str, info, value: Any) -> nodes.Node:
     """The ``remi.ui`` node of one option, its default being ``value``."""
 
