@@ -147,8 +147,7 @@ def build_mflux_command(envelope: JobEnvelope, output_path: Path, *, quantize: i
         shutil.which("mflux-generate") or "mflux-generate",
         "--model",
         model_name,
-        "--prompt",
-        prompt,
+        f"--prompt={prompt}",  # one item: a prompt starting with "-" is not read as an option
         "--width",
         str(width),
         "--height",
@@ -176,13 +175,22 @@ def _default_mflux_runner(
         on_progress(WorkerProgress(job_id=envelope.job_id, seq=envelope.seq, step=0, steps=1, progress=0.05, text="MLX sidecar generating"))
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     try:
-        while proc.poll() is None:
+        # communicate() reads both pipes while it waits (mflux's progress output would otherwise fill
+        # one and block it); a timed-out call loses nothing and is simply called again
+        while True:
             if cancel_event.is_set():
                 proc.terminate()
-                proc.wait(timeout=3.0)
+                try:
+                    proc.communicate(timeout=3.0)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.communicate()
                 raise InterruptedError("cancelled")
-            time.sleep(0.05)
-        stdout_text, stderr_text = proc.communicate(timeout=5.0)
+            try:
+                stdout_text, stderr_text = proc.communicate(timeout=0.25)
+                break
+            except subprocess.TimeoutExpired:
+                continue
     finally:
         for pipe in (proc.stdout, proc.stderr):
             if pipe is not None and not pipe.closed:

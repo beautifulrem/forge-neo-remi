@@ -220,6 +220,47 @@ def test_a_restart_during_a_job_ends_the_job_and_leaves_one_worker(tmp_path):
         worker.stop()
 
 
+FAKE_MFLUX = """#!{python}
+import sys
+sys.stderr.write("progress " * 32768)  # 256 KB: more than a pipe holds
+sys.stderr.flush()
+output = sys.argv[sys.argv.index("--output") + 1]
+open(output, "wb").write(b"png")
+"""
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the fake mflux-generate is a script with a shebang")
+def test_the_mlx_sidecar_reads_mflux_output_while_it_runs(tmp_path, monkeypatch):
+    # stdout and stderr were pipes read only after the process ended: mflux's progress output
+    # filled the stderr pipe and the generation never finished
+    import os
+
+    from remi.worker import mlx_sidecar
+
+    tool = tmp_path / "bin" / "mflux-generate"
+    tool.parent.mkdir()
+    tool.write_text(FAKE_MFLUX.format(python=sys.executable), encoding="utf-8")
+    tool.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tool.parent}{os.pathsep}{os.environ.get('PATH', '')}")
+    cancel = threading.Event()
+    results = []
+    envelope = JobEnvelope(job_id="m-loud", seq=1, tab="txt2img", core={"prompt": "sun"})
+    runner = threading.Thread(target=lambda: results.append(mlx_sidecar._default_mflux_runner(envelope, tmp_path / "o.png", None, cancel)), daemon=True)
+    try:
+        runner.start()
+        runner.join(timeout=10)
+        assert not runner.is_alive() and "MLX Sidecar" in results[0]["infotext"]
+        assert (tmp_path / "o.png").read_bytes() == b"png"
+    finally:
+        cancel.set()
+        runner.join(timeout=10)
+
+
+def test_a_prompt_starting_with_a_dash_stays_the_prompt():
+    command = build_mflux_command(JobEnvelope(job_id="m-dash", seq=1, tab="txt2img", core={"prompt": "-x"}), Path("out.png"))
+    assert "--prompt=-x" in command and "-x" not in command
+
+
 def test_multi_gpu_worker_pool_affinity_and_concurrent_dispatch():
     assert parse_worker_gpus("0, 1, 0, 2") == ["0", "1", "2"]
     assert parse_worker_gpus(None) == []
@@ -277,7 +318,7 @@ def test_mlx_sidecar_worker_adapter_and_unavailable_fallback(tmp_path):
 
     # Command builder check
     cmd = build_mflux_command(JobEnvelope(job_id="m1", seq=1, tab="txt2img", core={"prompt": "cat", "width": 512, "height": 512}, scripts={"sampler": {"steps": 4}, "seed": {"seed": 42}}), Path("/tmp/out.png"))
-    assert "--prompt" in cmd and "cat" in cmd and "--seed" in cmd and "42" in cmd
+    assert "--prompt=cat" in cmd and "--seed" in cmd and "42" in cmd
 
     # Available environment with mock runner writes output into FileStore cleanly
     files = FileStore(tmp_path / "files")
