@@ -629,6 +629,7 @@ def test_imported_jobs_keep_only_the_values_a_job_carries(tmp_path):
         assert items["queued"].outcome == "queued"
         for source_id in ("queued", "done"):
             assert server.services.store.get(items[source_id].job_id).scripts["noted"] == {"on": False}
+        assert server.services.queue.wait_idle()  # it ran: not left in /internal/pending-tasks
 
 
 def test_outputs_that_cannot_be_registered_are_left_out(server, tmp_path, monkeypatch):

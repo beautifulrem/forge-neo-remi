@@ -299,6 +299,7 @@ def test_a_job_keeps_only_the_values_it_carries(tmp_path):
         assert edited.status_code == 200 and edited.json()["scripts"] == {"noted": {}}
         refused = client.post("/api/v2/jobs", json={**sent, "scripts": {"noted": {"notes": ["x"]}}})
         assert refused.status_code == 422 and refused.json()["errors"][0]["param"] == "notes"
+        assert client.delete(f"/api/v2/jobs/{job_id}").status_code == 204  # not left in /internal/pending-tasks
 
 
 @pytest.mark.parametrize("tab", ["txt2img", "img2img", "extras"])
