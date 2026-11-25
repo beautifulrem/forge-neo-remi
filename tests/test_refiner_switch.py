@@ -226,3 +226,39 @@ def test_refiner_cfg_is_recorded_in_infotext_and_cleared_when_disabled(checkpoin
     stale = SimpleNamespace(refiner_checkpoint="anima-refiner", refiner_switch_at=0.5, refiner_cfg=4.5)
     ScriptRefiner().setup(stale, False, "anima-refiner", 0.5, 4.5, "")
     assert (stale.refiner_checkpoint, stale.refiner_switch_at, stale.refiner_cfg) == (None, None, None)
+
+
+def test_the_lora_replacements_are_saved_only_when_changed_and_kept_when_settings_are_frozen(webui, monkeypatch, tmp_path):
+    """setup stores the job's LoRA replacements as the setting apply_refiner reads. It rewrote
+    config.json on every refined job, changed or not; under --freeze-settings (or with that
+    setting frozen) the refused setter raised out of the hook and the job lost its
+    replacements. Frozen, they now hold for this run without being saved."""
+    import json
+
+    from modules import options, shared
+    from modules.processing_scripts.refiner import ScriptRefiner
+
+    config = tmp_path / "config.json"
+    monkeypatch.setattr(shared, "config_filename", str(config))
+    monkeypatch.setitem(webui.opts.data, "refiner_lora_replacement", "a=b")
+    saves = []
+    save = options.Options.save
+    monkeypatch.setattr(options.Options, "save", lambda self, filename: (saves.append(filename), save(self, filename)))
+
+    def run(replacements):
+        p = SimpleNamespace()
+        ScriptRefiner().setup(p, True, "anima-refiner", 0.5, 4.5, replacements)
+        assert (p.refiner_checkpoint, p.refiner_switch_at, p.refiner_cfg) == ("anima-refiner", 0.5, 4.5)
+        return webui.opts.data["refiner_lora_replacement"]
+
+    assert run("a=b") == run("  a=b\n") == "a=b"
+    assert saves == [] and not config.exists()
+    assert run("x=y") == "x=y"
+    assert saves == [str(config)] and json.loads(config.read_text(encoding="utf8"))["refiner_lora_replacement"] == "x=y"
+
+    monkeypatch.setattr(shared.cmd_opts, "freeze_settings", True)
+    assert run("c=d") == "c=d"
+    monkeypatch.setattr(shared.cmd_opts, "freeze_settings", False)
+    monkeypatch.setattr(shared.cmd_opts, "freeze_specific_settings", "refiner_lora_replacement")
+    assert run("e=f") == "e=f"
+    assert saves == [str(config)] and json.loads(config.read_text(encoding="utf8"))["refiner_lora_replacement"] == "x=y"
