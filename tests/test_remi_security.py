@@ -400,10 +400,34 @@ def test_request_bodies_are_capped_while_they_stream(webui, tmp_path, monkeypatc
         assert sized.status_code == 413 and "larger than" in sized.json()["detail"]
         streamed = server.client.post("/api/v2/jobs", content=chunked(), headers={"Content-Type": "application/json"})
         assert streamed.status_code == 413
-        assert server.client.post("/api/v2/auth/login", content=chunked(), headers={"Content-Type": "application/json"}).status_code == 413
         # within the cap: served as usual
         small = server.client.post("/api/v2/jobs", json={"tab": "txt2img", "core": {"prompt": "x" * 100}})
         assert small.status_code in (200, 201, 202), small.text
+
+
+def test_paths_open_without_a_login_take_only_a_small_body(webui, tmp_path):
+    # the login form and the ping answer anyone: a caller nobody vouched for
+    # must not make the server buffer (and scan) megabytes
+    from remi.server import limits
+
+    big = b'{"username": "ann", "password": "' + b"x" * (limits.PUBLIC_BODY_LIMIT + 1) + b'"}'
+
+    def chunked():
+        for start in range(0, len(big), 4096):
+            yield big[start : start + 4096]
+
+    with server_app(tmp_path, auth=Auth({"ann": "s3cret"}, b"k" * 32)) as server:
+        client = server.client
+        json_body = {"Content-Type": "application/json"}
+        for method, path in (("POST", "/api/v2/auth/login"), ("GET", "/api/v2/auth/status"), ("GET", "/internal/ping")):
+            sized = client.request(method, path, content=big, headers=json_body)
+            assert sized.status_code == 413 and sized.json() == {"detail": "the request body is larger than 64 KB"}, (path, sized.text)
+            if path.startswith("/api/v2"):  # (the ping never reads its body)
+                assert client.request(method, path, content=chunked(), headers=json_body).status_code == 413, path
+        assert client.post("/api/v2/auth/login", json={"username": "ann", "password": "s3cret"}).status_code == 204
+        # a logged-in caller's routes keep the full cap
+        prompt = client.post("/api/v2/jobs", json={"tab": "txt2img", "core": {"prompt": "x" * (limits.PUBLIC_BODY_LIMIT * 2)}})
+        assert prompt.status_code in (200, 201, 202), prompt.text
 
 
 # endregion

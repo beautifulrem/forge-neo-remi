@@ -135,7 +135,10 @@ attackers who already have a login (they are administrators by design).
 - Every other request body (JSON jobs, `/sdapi` base64 images, extension
   routes) is capped at twice `remi_upload_max_mb` (at least 16 MB),
   enforced while it streams in, chunked bodies included
-  (`remi/server/limits.py`): 413 past it, without buffering more.
+  (`remi/server/limits.py`): 413 past it, without buffering more. Paths
+  that answer without a login (`PUBLIC_PATHS`: the login form, the ping)
+  take at most 64 KB: a caller nobody has vouched for cannot make the
+  server buffer and scan megabytes.
 - Unsafe deserialization: uploads can only be images, video, text or
   safetensors (a JSON header); nothing reachable from an upload or URL calls
   `pickle`/`torch.load`. Model files are only loaded from the model folders.
@@ -369,3 +372,4 @@ SPA.
 | 4 | An unreadable `Origin` (`http://[`) or `--cors-allow-origins` entry answered 500 with a logged traceback before the login check | low | read as a foreign origin |
 | 5 | A session cookie whose signature held non-ASCII characters answered 500 with a logged traceback before the login check, on every route | low | refused like a wrong signature |
 | 6 | `GET /api/v2/auth/status` checked HTTP Basic credentials without the login throttle (a public path) and answered who they log in as: unlimited password guessing again (2026-10 #4) | medium | public paths read the session cookie only; `/auth/status` checks Basic itself, counting failures and telling a throttled client nothing |
+| 7 | A request to a path open without a login (`/api/v2/auth/*`) could carry a body up to the full cap (128 MB by default), buffered and scanned before any login check (a 60 MB body took about 180 MB of memory) | low | 64 KB on those paths, enforced while the body streams in |

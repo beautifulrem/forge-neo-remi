@@ -211,7 +211,7 @@ def test_broken_text_is_refused_in_a_body_sent_as_utf16_or_utf32(server):
 def test_a_deeply_nested_body_is_not_a_server_error(server):
     deep = b"[" * 100_000 + b'"\\udc80"' + b"]" * 100_000
     headers = {"Content-Type": "application/json"}
-    assert server.client.request("GET", "/api/v2/auth/status", content=deep, headers=headers).status_code == 200
+    assert server.client.request("GET", "/api/v2/queue", content=deep, headers=headers).status_code == 200
     assert server.client.post("/api/v2/recipes", content=deep, headers=headers).status_code < 500
 
 

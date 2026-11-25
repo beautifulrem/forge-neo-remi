@@ -19,12 +19,13 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.requests import HTTPConnection
+from starlette.types import Scope
 
 from remi.files import FileError
 from remi.jobs import JobError
 from remi.server.api_docs import add_docs_routes
-from remi.server.auth import BASE_HEADERS, Auth, SecurityMiddleware, credentials_from_cmd_opts, load_secret
-from remi.server.limits import BodyLimitMiddleware, body_limit
+from remi.server.auth import BASE_HEADERS, PUBLIC_PATHS, Auth, SecurityMiddleware, credentials_from_cmd_opts, load_secret, route_path
+from remi.server.limits import PUBLIC_BODY_LIMIT, BodyLimitMiddleware, body_limit
 from remi.server.services import Services, default_services
 from remi.server.spa import DIST, Spa
 from remi.server.ws import Hub
@@ -300,7 +301,10 @@ def create_app(
         Api(app, queue_lock)
 
     # (inside the security checks: a refused request is never read)
-    app.add_middleware(BodyLimitMiddleware, limit=lambda: body_limit(services.files.max_upload_bytes))
+    def request_body_limit(scope: Scope) -> int:
+        return PUBLIC_BODY_LIMIT if route_path(scope).startswith(PUBLIC_PATHS) else body_limit(services.files.max_upload_bytes)
+
+    app.add_middleware(BodyLimitMiddleware, limit=request_body_limit)
     spa = None
     if webui:
         from modules import shared

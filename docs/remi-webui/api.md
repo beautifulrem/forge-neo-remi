@@ -39,7 +39,8 @@ Contents: [Conventions](#conventions) · [Authentication](#authentication) ·
   anything is stored; `PATCH /options` and `POST /options/validate` name
   each refused setting instead. A body may be at most twice the upload
   limit `remi_upload_max_mb` (1 to 2048 MB; at least 16 MB; 413 above it,
-  also on `/sdapi`).
+  also on `/sdapi`); on the routes open without a login (`/auth/*`,
+  `/internal/ping`) at most 64 KB.
 - **Errors.** A rejected parameter value answers **422** with every problem
   at once:
 

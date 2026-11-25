@@ -8,6 +8,10 @@ and never below :data:`MIN_BODY_LIMIT` (a small upload limit must not break
 ordinary jobs). It is enforced while the body streams in, also for chunked
 bodies that announce no ``Content-Length``: the server never buffers more
 than the cap, whoever the client is.
+
+Paths that answer without a login (the login form, the ping: ``PUBLIC_PATHS``)
+take :data:`PUBLIC_BODY_LIMIT` instead: their bodies are a few bytes, and a
+caller nobody has vouched for must not make the server buffer megabytes.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 MIN_BODY_LIMIT = 16 * 1024 * 1024
+PUBLIC_BODY_LIMIT = 64 * 1024
 
 
 def body_limit(max_upload_bytes: int) -> int:
@@ -34,14 +39,21 @@ class BodyTooLarge(HTTPException):
     answers 413."""
 
     def __init__(self, limit: int) -> None:
-        super().__init__(status_code=413, detail=f"the request body is larger than {limit // (1024 * 1024)} MB")
+        super().__init__(status_code=413, detail=f"the request body is larger than {size(limit)}")
+
+
+def size(limit: int) -> str:
+    """``limit`` bytes for a message: whole MB, or KB below one MB."""
+
+    return f"{limit // (1024 * 1024)} MB" if limit >= 1024 * 1024 else f"{limit // 1024} KB"
 
 
 class BodyLimitMiddleware:
     """Refuses (413) an HTTP request whose ``Content-Length`` or streamed
-    body exceeds ``limit()`` (read per request: the setting is live)."""
+    body exceeds ``limit(scope)`` (read per request: the setting is live,
+    and a path open without a login takes less)."""
 
-    def __init__(self, app: ASGIApp, limit: Callable[[], int]) -> None:
+    def __init__(self, app: ASGIApp, limit: Callable[[Scope], int]) -> None:
         self.app = app
         self.limit = limit
 
@@ -49,7 +61,7 @@ class BodyLimitMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        limit = self.limit()
+        limit = self.limit(scope)
         length = Headers(scope=scope).get("content-length")
         if length and length.strip().isdigit() and int(length) > limit:
             error = BodyTooLarge(limit)
@@ -81,4 +93,3 @@ class BodyLimitMiddleware:
             if started:
                 raise
             await JSONResponse({"detail": error.detail}, status_code=413, headers={"Connection": "close"})(scope, receive, send)
-
