@@ -1148,5 +1148,21 @@
   "the description is too long": "描述过长",
   "the prompt is too long for upsampling": "提示词过长，无法扩写",
   "prompt upsampling needs either an OpenAI-compatible VLM endpoint (llama.cpp / Ollama / MLX-LM / vLLM / cloud) or local_model_path": "提示词扩写需要 OpenAI 兼容的 VLM 接口（llama.cpp / Ollama / MLX-LM / vLLM / 云服务）或本地模型路径（local_model_path）",
-  "reference_images[{{index}}] is too large ({{width}}×{{height}})": "reference_images[{{index}}] 的图像过大（{{width}}×{{height}}）"
+  "reference_images[{{index}}] is too large ({{width}}×{{height}})": "reference_images[{{index}}] 的图像过大（{{width}}×{{height}}）",
+  "must be text": "必须是文本",
+  "a favorite must be at most {{maximum}} characters": "收藏内容不能超过 {{maximum}} 个字符",
+  "a prompt must be at most {{maximum}} characters": "提示词不能超过 {{maximum}} 个字符",
+  "a negative prompt must be at most {{maximum}} characters": "反向提示词不能超过 {{maximum}} 个字符",
+  "a name must be at most {{maximum}} characters": "名称不能超过 {{maximum}} 个字符",
+  "the secret is too long": "密钥过长",
+  "invalid name": "名称无效",
+  "no such history entry": "该历史记录已不存在",
+  "a collection named {{name}} already exists": "已存在名为 {{name}} 的收藏夹",
+  "no such collection": "该收藏夹已不存在",
+  "nothing to save": "没有可保存的内容",
+  "kind must be one of {{kinds}}": "类型必须是以下之一：{{kinds}}",
+  "no such favorite": "该收藏已不存在",
+  "no such favorite to move before": "要移到其前面的收藏已不存在",
+  "not a favorites export": "不是收藏导出文件",
+  "at most {{maximum}} favorites can be imported at once": "一次最多只能导入 {{maximum}} 条收藏"
 }

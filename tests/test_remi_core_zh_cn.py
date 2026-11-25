@@ -420,6 +420,8 @@ def test_every_rejected_value_has_a_catalog_key(catalog):
     assert sorted(set(unchecked) - set(FREE_TEXT_REJECTIONS)) == []
     assert sorted(set(FREE_TEXT_REJECTIONS) - set(unchecked)) == []  # an entry that no longer applies
     assert {"must be at most {{maximum}}, got {{value}}", "unknown upload {{id}}", "a choice is required", "upload a control image"} <= texts
+    # the prompt tools store's, one per field it names
+    assert {"nothing to save", "a negative prompt must be at most {{maximum}} characters", "kind must be one of {{kinds}}"} <= texts
 
     spa = strings_module.spa_catalog()
     core = strings_module.param_error_strings()
@@ -440,7 +442,7 @@ def test_every_refused_request_is_a_catalog_sentence(catalog):
     failed service) is a ``Sentence``, whose template the HTTP error body
     carries and the catalog translates."""
 
-    assert {"ChainError", "NetworkReadOnly"} <= strings_module.request_error_classes()
+    assert {"ChainError", "NetworkReadOnly", "StoreError"} <= strings_module.request_error_classes()
     templates, unchecked = strings_module.request_error_messages()
     assert unchecked == []
     assert {
@@ -455,6 +457,10 @@ def test_every_refused_request_is_a_catalog_sentence(catalog):
         "no translation provider is configured",
         "too much text to translate at once",
         "reference_images[{{index}}] is too large ({{width}}×{{height}})",
+        # the prompt tools store's: an item gone (404), a name taken (409), too many at once (413)
+        "no such favorite",
+        "a collection named {{name}} already exists",
+        "at most {{maximum}} favorites can be imported at once",
     } <= templates
     missing = sorted(text for text in templates if not (catalog.get(text) or "").strip())
     assert missing == [], f"localizations/zh_CN.json lacks {missing}"

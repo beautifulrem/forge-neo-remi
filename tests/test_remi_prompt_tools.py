@@ -15,6 +15,7 @@ from remi.prompt_tools import tags as T
 from remi.prompt_tools.sources import ChantIndex, scan_wildcards, wildcard_values
 from remi.prompt_tools.store import PromptToolsStore, StoreError
 from remi.prompt_tools.translate import ProviderConfig, TranslationError, dictionary_translate, translate
+from remi.ui import ValidationError
 
 TAG_CSV = """1girl,0,6000000,"1girls,sole_female"
 long_hair,0,4300000,"longhair,/lh"
@@ -450,7 +451,7 @@ def test_favorites_collections_and_order(store):
     exported = store.export_favorites()
     assert store.delete_collection(collection["id"]) and store.favorites(all_collections=True) == []
     assert store.import_favorites(exported) == 3 and store.import_favorites(exported) == 0
-    with pytest.raises(StoreError):
+    with pytest.raises(ValidationError):
         store.add_favorite("x", "nope")
     with pytest.raises(StoreError):
         store.update_favorite("missing", {"name": "x"})
@@ -477,8 +478,36 @@ def test_favorites_import_keeps_order_and_skips_bad_items(store):
     assert store.import_favorites(data) == 2
     [collection] = [c for c in store.collections() if c["id"]]
     assert [(f["text"], f["name"]) for f in store.favorites(collection_id=collection["id"])] == [("b", ""), ("a", "n")]
-    with pytest.raises(StoreError):
+    with pytest.raises(ValidationError):
         store.import_favorites({"nope": []})
+
+
+def test_the_store_says_why_it_refuses_in_sentences_the_ui_translates(store):
+    """The store refused in English text (an f-string for the kinds and the limits) that the UI
+    could only say by the status. A value it refuses names its request field, with a catalog key or
+    a sentence; any other refusal is a sentence with its status. These values are also refused
+    before the store (by the request models) when they come over HTTP."""
+
+    def refused_value(call):
+        with pytest.raises(ValidationError) as caught:
+            call()
+        [error] = caught.value.errors
+        return error.to_json()
+
+    def refused(call):
+        with pytest.raises(StoreError) as caught:
+            call()
+        return caught.value.status, caught.value.message.template, caught.value.message.params
+
+    kinds = {"owner": None, "param": "kind", "message": "kind must be one of prompt, negative, tags", "template": "kind must be one of {{kinds}}", "params": {"kinds": "prompt, negative, tags"}}
+    assert refused_value(lambda: store.add_favorite("x", "nope")) == kinds
+    long_name = {"owner": None, "param": "name", "message": "a name must be at most 200 characters", "template": "a name must be at most {{maximum}} characters", "params": {"maximum": "200"}}
+    assert refused_value(lambda: store.add_favorite("x", name="n" * 201)) == long_name
+    assert refused_value(lambda: store.add_favorite(5)) == {"owner": None, "param": "text", "message": "must be text"}
+    assert refused_value(lambda: store.record_history("a cat", 5)) == {"owner": None, "param": "negative_prompt", "message": "must be text"}
+    assert refused_value(lambda: store.import_favorites({"nope": []})) == {"owner": None, "param": "favorites", "message": "not a favorites export"}
+    assert refused(lambda: store.set_secret("translation_key", "k" * 4097)) == (422, "the secret is too long", {})
+    assert refused(lambda: store.rename_history("missing", "x")) == (404, "no such history entry", {})
 
 
 def test_secrets_are_kept_apart(store):
@@ -1327,6 +1356,56 @@ def test_favorites_api(server):
     assert server.client.get(f"{api}/favorites").json()["items"] == []
     assert server.client.post(f"{api}/favorites-import", json=exported).json() == {"added": 2}
     assert server.client.post(f"{api}/favorites", json={"text": ""}).status_code == 422
+
+
+def test_history_and_favorites_say_why_they_refuse_in_sentences_the_ui_translates(server, monkeypatch):
+    """The history and favorites routes answered the store's English detail alone, which the UI
+    could only say by the status or with a sentence of the caller's ("The server rejected the
+    request." for a favorite with nothing in it). A value they refuse is listed under its request
+    field; any other refusal is a sentence with its template."""
+
+    from remi.prompt_tools import store as store_module
+
+    api = "/api/v2/prompt-tools"
+
+    def refused(response, status, template, **params):
+        assert response.status_code == status, response.text
+        assert response.json() == {"detail": response.json()["detail"], "template": template, "params": params}
+
+    def rejected(response, param, message, template=None, **params):
+        error = {"owner": None, "param": param, "message": message} | ({"template": template, "params": params} if template else {})
+        assert response.status_code == 422 and response.json() == {"errors": [error]}, response.text
+
+    faces = server.client.post(f"{api}/collections", json={"name": "Faces"}).json()
+    refused(server.client.post(f"{api}/collections", json={"name": "Faces"}), 409, "a collection named {{name}} already exists", name="Faces")
+    hands = server.client.post(f"{api}/collections", json={"name": "Hands"}).json()
+    refused(server.client.patch(f"{api}/collections/{hands['id']}", json={"name": " Faces "}), 409, "a collection named {{name}} already exists", name="Faces")
+    refused(server.client.patch(f"{api}/collections/missing", json={"name": "Feet"}), 404, "no such collection")
+    refused(server.client.delete(f"{api}/collections/missing"), 404, "no such collection")
+
+    rejected(server.client.post(f"{api}/favorites", json={"text": "  "}), "text", "nothing to save")
+    too_long = "x" * (store_module.MAX_TEXT + 1)
+    rejected(server.client.post(f"{api}/favorites", json={"text": too_long}), "text", "a favorite must be at most 65536 characters", "a favorite must be at most {{maximum}} characters", maximum="65536")
+    refused(server.client.post(f"{api}/favorites", json={"text": "smile", "collection_id": "missing"}), 404, "no such collection")
+    smile = server.client.post(f"{api}/favorites", json={"text": "smile", "collection_id": faces["id"]}).json()
+    rejected(server.client.patch(f"{api}/favorites/{smile['id']}", json={"text": " "}), "text", "nothing to save")
+    refused(server.client.patch(f"{api}/favorites/{smile['id']}", json={"before": "missing"}), 404, "no such favorite to move before")
+    refused(server.client.patch(f"{api}/favorites/missing", json={"name": "x"}), 404, "no such favorite")
+    refused(server.client.delete(f"{api}/favorites/missing"), 404, "no such favorite")
+    monkeypatch.setattr(store_module, "MAX_IMPORT", 1)
+    refused(server.client.post(f"{api}/favorites-import", json={"favorites": [{"text": "a"}, {"text": "b"}]}), 413, "at most {{maximum}} favorites can be imported at once", maximum="1")
+
+    rejected(server.client.post(f"{api}/history", json={"prompt": too_long}), "prompt", "a prompt must be at most 65536 characters", "a prompt must be at most {{maximum}} characters", maximum="65536")
+    rejected(
+        server.client.post(f"{api}/history", json={"negative_prompt": too_long}),
+        "negative_prompt",
+        "a negative prompt must be at most 65536 characters",
+        "a negative prompt must be at most {{maximum}} characters",
+        maximum="65536",
+    )
+    refused(server.client.patch(f"{api}/history/missing", json={"name": "x"}), 404, "no such history entry")
+    refused(server.client.delete(f"{api}/history/missing"), 404, "no such history entry")
+    rejected(server.client.post(f"{api}/usage", json={"name": "   "}), "name", "invalid name")
 
 
 # endregion

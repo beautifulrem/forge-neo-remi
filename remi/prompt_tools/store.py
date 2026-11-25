@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from remi.files import decode_offset, encode_cursor, readonly_uri, transaction
-from remi.ui.errors import ParamError, ValidationError
+from remi.ui.errors import ParamError, Refused, ValidationError
 from remi.ui.sentence import Sentence
 
 SCHEMA_VERSION = 1
@@ -76,12 +76,13 @@ CREATE TABLE IF NOT EXISTS translations (
 """
 
 
-class StoreError(ValueError):
-    """A rejected change; ``status`` is the HTTP status to answer with."""
+class StoreError(Refused):
+    """A rejected change, said with a :class:`Sentence` the UI translates; ``status`` is the HTTP
+    status to answer with: 404 for an item that is gone, 409 for a name taken, 413 for too many at
+    once, 422 (the default) for what cannot be kept. A value the store refuses that is one field of
+    a request is a :class:`ParamError` on that field instead (``ValidationError``)."""
 
-    def __init__(self, message: str, status: int = 422) -> None:
-        super().__init__(message)
-        self.status = status
+    status = 422
 
 
 def _new_id() -> str:
@@ -93,18 +94,28 @@ def _like_terms(query: str | None) -> list[str]:
     return ["%" + re.sub(r"([%_\\])", r"\\\1", term) + "%" for term in terms][:8]
 
 
-def _clean_text(text: str, what: str = "text") -> str:
+def _clean_text(text: str, param: str) -> str:
+    """``text`` as it is kept; one that is not a string, or too long, is a refused value on the
+    request field ``param``: ``text`` (a favorite's), ``prompt`` or ``negative_prompt`` (a history
+    entry's)."""
+
     if not isinstance(text, str):
-        raise StoreError(f"{what} must be a string")
+        raise ValidationError([ParamError("must be text", param=param)])
     if len(text) > MAX_TEXT:
-        raise StoreError(f"{what} is too long")
+        if param == "prompt":
+            raise ValidationError([ParamError(Sentence("a prompt must be at most {{maximum}} characters", maximum=MAX_TEXT), param=param)])
+        if param == "negative_prompt":
+            raise ValidationError([ParamError(Sentence("a negative prompt must be at most {{maximum}} characters", maximum=MAX_TEXT), param=param)])
+        raise ValidationError([ParamError(Sentence("a favorite must be at most {{maximum}} characters", maximum=MAX_TEXT), param=param)])
     return text
 
 
 def _clean_name(name: str | None) -> str:
+    """A favorite's or a history entry's name, stripped; a too long one is a refused value on ``name``."""
+
     name = (name or "").strip()
     if len(name) > MAX_NAME:
-        raise StoreError("name is too long")
+        raise ValidationError([ParamError(Sentence("a name must be at most {{maximum}} characters", maximum=MAX_NAME), param="name")])
     return name
 
 
@@ -168,7 +179,7 @@ class PromptToolsStore:
         """Stores a secret; None or "" removes it."""
 
         if value and len(value) > 4096:
-            raise StoreError("the secret is too long")
+            raise StoreError(Sentence("the secret is too long"))
         with self._tx() as db:
             if value:
                 db.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (f"secret:{name}", value))
@@ -180,7 +191,7 @@ class PromptToolsStore:
     def record_use(self, name: str, type: str, negative: bool = False, *, when: float | None = None) -> None:
         name = name.strip()
         if not name or len(name) > 512:
-            raise StoreError("invalid name")
+            raise ValidationError([ParamError("invalid name", param="name")])
         column = "uses_neg" if negative else "uses_pos"
         with self._tx() as db:
             db.execute(
@@ -237,7 +248,7 @@ class PromptToolsStore:
         """Adds a prompt pair, or moves an identical one to the top (``uses``
         counts the generations). ``limit`` > 0 keeps that many unnamed entries."""
 
-        prompt, negative = _clean_text(prompt or "", "prompt"), _clean_text(negative or "", "negative prompt")
+        prompt, negative = _clean_text(prompt or "", "prompt"), _clean_text(negative or "", "negative_prompt")
         if not prompt.strip() and not negative.strip():
             return None
         now = when if when is not None else time.time()
@@ -313,7 +324,7 @@ class PromptToolsStore:
         with self._tx() as db:
             scope = self._entry_scope(db, entry_id, field)
             if scope is None:
-                raise StoreError("no such history entry", 404)
+                raise StoreError(Sentence("no such history entry"), 404)
             db.execute(f"UPDATE history SET name = ? WHERE {scope[0]}", (_clean_name(name), *scope[1]))
         return self.history_entry(entry_id)  # type: ignore[return-value]
 
@@ -348,7 +359,7 @@ class PromptToolsStore:
             with self._tx() as db:
                 db.execute("INSERT INTO collections (id, name, created) VALUES (?, ?, ?)", (collection_id, name, time.time()))
         except sqlite3.IntegrityError as error:
-            raise StoreError("a collection with this name exists", 409) from error
+            raise StoreError(Sentence("a collection named {{name}} already exists", name=name), 409) from error
         return {"id": collection_id, "name": name, "created": time.time(), "count": 0}
 
     def rename_collection(self, collection_id: str, name: str) -> None:
@@ -356,9 +367,9 @@ class PromptToolsStore:
         try:
             with self._tx() as db:
                 if db.execute("UPDATE collections SET name = ? WHERE id = ?", (name, collection_id)).rowcount == 0:
-                    raise StoreError("no such collection", 404)
+                    raise StoreError(Sentence("no such collection"), 404)
         except sqlite3.IntegrityError as error:
-            raise StoreError("a collection with this name exists", 409) from error
+            raise StoreError(Sentence("a collection named {{name}} already exists", name=name), 409) from error
 
     def delete_collection(self, collection_id: str) -> bool:
         """Deletes the collection and its favorites."""
@@ -368,7 +379,7 @@ class PromptToolsStore:
 
     def _check_collection(self, db: sqlite3.Connection, collection_id: str | None) -> None:
         if collection_id is not None and db.execute("SELECT 1 FROM collections WHERE id = ?", (collection_id,)).fetchone() is None:
-            raise StoreError("no such collection", 404)
+            raise StoreError(Sentence("no such collection"), 404)
 
     @staticmethod
     def _favorite_item(row: sqlite3.Row) -> dict[str, Any]:
@@ -456,11 +467,11 @@ class PromptToolsStore:
         return collection_id
 
     def add_favorite(self, text: str, kind: str = "prompt", *, name: str | None = None, collection_id: str | None = None) -> dict[str, Any]:
-        text = _clean_text(text).strip()
+        text = _clean_text(text, "text").strip()
         if not text:
-            raise StoreError("nothing to save")
+            raise ValidationError([ParamError("nothing to save", param="text")])
         if kind not in FAVORITE_KINDS:
-            raise StoreError(f"kind must be one of {', '.join(FAVORITE_KINDS)}")
+            raise ValidationError([ParamError(Sentence("kind must be one of {{kinds}}", kinds=", ".join(FAVORITE_KINDS)), param="kind")])
         with self._tx() as db:
             favorite_id = self._insert_favorite(db, text, kind, _clean_name(name), collection_id)
         return self.favorite(favorite_id)  # type: ignore[return-value]
@@ -473,16 +484,16 @@ class PromptToolsStore:
         with self._tx() as db:
             row = db.execute("SELECT * FROM favorites WHERE id = ?", (favorite_id,)).fetchone()
             if row is None:
-                raise StoreError("no such favorite", 404)
+                raise StoreError(Sentence("no such favorite"), 404)
             sets, params = [], []
             collection_id = row["collection_id"]
             if "name" in changes:
                 sets.append("name = ?")
                 params.append(_clean_name(changes["name"]))
             if "text" in changes:
-                text = _clean_text(changes["text"]).strip()
+                text = _clean_text(changes["text"], "text").strip()
                 if not text:
-                    raise StoreError("nothing to save")
+                    raise ValidationError([ParamError("nothing to save", param="text")])
                 sets.append("text = ?")
                 params.append(text)
             if "collection_id" in changes:
@@ -513,7 +524,7 @@ class PromptToolsStore:
         for _attempt in range(2):
             target = db.execute("SELECT position FROM favorites WHERE id = ? AND collection_id IS ?", (before, collection_id)).fetchone()
             if target is None:
-                raise StoreError("no such favorite to move before", 404)
+                raise StoreError(Sentence("no such favorite to move before"), 404)
             previous = db.execute(
                 "SELECT MAX(position) AS p FROM favorites WHERE collection_id IS ? AND position < ? AND id != ?",
                 (collection_id, target["position"], favorite_id),
@@ -551,9 +562,9 @@ class PromptToolsStore:
 
         items = data.get("favorites") if isinstance(data, Mapping) else None
         if not isinstance(items, list):
-            raise StoreError("not a favorites export")
+            raise ValidationError([ParamError("not a favorites export", param="favorites")])
         if len(items) > MAX_IMPORT:
-            raise StoreError(f"at most {MAX_IMPORT} favorites can be imported at once", 413)
+            raise StoreError(Sentence("at most {{maximum}} favorites can be imported at once", maximum=MAX_IMPORT), 413)
         added = 0
         with self._tx() as db:
             for item in items:

@@ -11165,7 +11165,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
         };
@@ -11762,7 +11762,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
         };
@@ -12022,7 +12022,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
         };
@@ -12124,7 +12124,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
         };
@@ -12204,7 +12204,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["ValidationErrorBody"];
                 };
             };
         };

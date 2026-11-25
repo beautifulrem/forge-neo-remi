@@ -1673,7 +1673,6 @@
   "Stage {{n}}: {{name}}": "阶段 {{n}}：{{name}}",
   "Cycle RGBA backdrop": "切换 RGBA 底板",
   "A board with this name already exists.": "已有同名的看板。",
-  "A collection with this name already exists.": "已有同名的收藏夹。",
   "The job was removed meanwhile.": "该任务已在此期间被移除。",
   "The recipe was deleted meanwhile.": "该配方已在此期间被删除。",
   "The pipeline was deleted meanwhile.": "该管线已在此期间被删除。",

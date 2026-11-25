@@ -23,8 +23,9 @@ router = APIRouter(prefix="/prompt-tools")
 ERRORS = {404: {"model": m.Detail}, 409: {"model": m.Detail}, 422: {"model": m.Detail}}
 # a prompt tool that refuses a value lists it, as a form does (owner null: a field of the request)
 TOOL_ERRORS = {**ERRORS, 413: {"model": m.Detail}, 422: {"model": m.ValidationErrorBody}, 502: {"model": m.Detail}}
-# a collection name that is blank or too long is a refused value on `name`
-NAME_ERRORS = {**ERRORS, 422: {"model": m.ValidationErrorBody}}
+# a value the store refuses is listed under its request field (a collection name that is blank or
+# too long, a favorite with nothing in it); its other refusals are sentences (pt.StoreError)
+VALUE_ERRORS = {**ERRORS, 422: {"model": m.ValidationErrorBody}}
 
 CompletionMode = Literal["tag", "lora", "embedding", "chant", "network", "wildcard", "wildcard-value"]
 CompletionType = Literal["tag", "extra", "lora", "embedding", "chant", "wildcard", "wildcard-value"]
@@ -51,13 +52,6 @@ def _tool_error(error: pt.TranslationError) -> Exception:
     if isinstance(error.message, Sentence):
         return Refused(error.message, error.status)
     return HTTPException(status_code=error.status, detail=str(error))
-
-
-def _store_call(call: Any) -> Any:
-    try:
-        return call()
-    except pt.StoreError as error:
-        raise HTTPException(status_code=error.status, detail=str(error)) from error
 
 
 # region Models
@@ -337,9 +331,9 @@ def complete(
     return {"items": tools.complete(mode, q, negative=negative, limit=limit, wildcard=wildcard)}
 
 
-@router.post("/usage", response_model=m.Ok, responses=ERRORS, summary="Count an accepted completion (frequency ranking)")
+@router.post("/usage", response_model=m.Ok, responses=VALUE_ERRORS, summary="Count an accepted completion (frequency ranking)")
 def record_usage(body: PromptUsageRecord, tools: ToolsDep) -> dict[str, Any]:
-    _store_call(lambda: tools.record_use(body.name, body.type, body.negative))
+    tools.record_use(body.name, body.type, body.negative)
     return {"ok": True}
 
 
@@ -459,7 +453,7 @@ def set_translation_key(body: PromptTranslationKey, tools: ToolsDep) -> dict[str
         raise Refused(Sentence("changing settings is disabled (--freeze-settings)"))
     if pt.opt.TOOLS_SECTION[0] in [item.strip() for item in sections.split(",")]:
         raise Refused(Sentence("the settings in this section are frozen"))
-    return {"configured": _store_call(lambda: tools.set_translation_key(body.key))}
+    return {"configured": tools.set_translation_key(body.key)}
 
 
 @router.get("/groups", response_model=PromptTagGroups, summary="Quick tag groups in a language")
@@ -485,17 +479,17 @@ def history(
     return {"items": items, "next_cursor": next_cursor, "total": total}
 
 
-@router.post("/history", response_model=PromptHistoryItem, status_code=201, responses={**ERRORS, 422: {"model": m.ValidationErrorBody}}, summary="Add prompts to the history")
+@router.post("/history", response_model=PromptHistoryItem, status_code=201, responses=VALUE_ERRORS, summary="Add prompts to the history")
 def add_history(body: PromptHistoryCreate, tools: ToolsDep) -> dict[str, Any]:
-    item = _store_call(lambda: tools.store.record_history(body.prompt, body.negative_prompt, body.tab, limit=int(pt.opt.option("prompt_tools_history_limit"))))
+    item = tools.store.record_history(body.prompt, body.negative_prompt, body.tab, limit=int(pt.opt.option("prompt_tools_history_limit")))
     if item is None:
         raise ValidationError([ParamError("both prompts are empty", param="prompt")])
     return item
 
 
-@router.patch("/history/{entry_id}", response_model=PromptHistoryItem, responses=ERRORS, summary="Name a history entry, or its group (named entries are kept)")
+@router.patch("/history/{entry_id}", response_model=PromptHistoryItem, responses=VALUE_ERRORS, summary="Name a history entry, or its group (named entries are kept)")
 def rename_history(entry_id: str, body: PromptHistoryPatch, tools: ToolsDep) -> dict[str, Any]:
-    return _store_call(lambda: tools.store.rename_history(entry_id, body.name, field=body.field))
+    return tools.store.rename_history(entry_id, body.name, field=body.field)
 
 
 @router.delete("/history/{entry_id}", response_model=PromptHistoryRemoved, responses=ERRORS, summary="Remove a history entry, or its group")
@@ -506,7 +500,7 @@ def delete_history(
 ) -> dict[str, Any]:
     removed = tools.store.delete_history(entry_id, field=field)
     if not removed:
-        raise HTTPException(status_code=404, detail="no such history entry")
+        raise pt.StoreError(Sentence("no such history entry"), 404)
     return {"ok": True, "removed": removed}
 
 
@@ -525,21 +519,21 @@ def collections(tools: ToolsDep) -> list[dict[str, Any]]:
     return tools.store.collections()
 
 
-@router.post("/collections", response_model=PromptCollection, status_code=201, responses=NAME_ERRORS, summary="Create a collection")
+@router.post("/collections", response_model=PromptCollection, status_code=201, responses=VALUE_ERRORS, summary="Create a collection")
 def create_collection(body: PromptCollectionCreate, tools: ToolsDep) -> dict[str, Any]:
-    return _store_call(lambda: tools.store.create_collection(body.name))
+    return tools.store.create_collection(body.name)
 
 
-@router.patch("/collections/{collection_id}", response_model=m.Ok, responses=NAME_ERRORS, summary="Rename a collection")
+@router.patch("/collections/{collection_id}", response_model=m.Ok, responses=VALUE_ERRORS, summary="Rename a collection")
 def rename_collection(collection_id: str, body: PromptCollectionCreate, tools: ToolsDep) -> dict[str, Any]:
-    _store_call(lambda: tools.store.rename_collection(collection_id, body.name))
+    tools.store.rename_collection(collection_id, body.name)
     return {"ok": True}
 
 
 @router.delete("/collections/{collection_id}", response_model=m.Ok, responses=ERRORS, summary="Delete a collection and its favorites")
 def delete_collection(collection_id: str, tools: ToolsDep) -> dict[str, Any]:
     if not tools.store.delete_collection(collection_id):
-        raise HTTPException(status_code=404, detail="no such collection")
+        raise pt.StoreError(Sentence("no such collection"), 404)
     return {"ok": True}
 
 
@@ -556,25 +550,25 @@ def favorites(
     return {"items": items, "next_cursor": next_cursor, "total": total}
 
 
-@router.post("/favorites", response_model=PromptFavorite, status_code=201, responses=ERRORS, summary="Save a prompt or tags as a favorite")
+@router.post("/favorites", response_model=PromptFavorite, status_code=201, responses=VALUE_ERRORS, summary="Save a prompt or tags as a favorite")
 def add_favorite(body: PromptFavoriteCreate, tools: ToolsDep) -> dict[str, Any]:
-    return _store_call(lambda: tools.store.add_favorite(body.text, body.kind, name=body.name, collection_id=body.collection_id))
+    return tools.store.add_favorite(body.text, body.kind, name=body.name, collection_id=body.collection_id)
 
 
-@router.patch("/favorites/{favorite_id}", response_model=PromptFavorite, responses=ERRORS, summary="Rename, edit, move or reorder a favorite")
+@router.patch("/favorites/{favorite_id}", response_model=PromptFavorite, responses=VALUE_ERRORS, summary="Rename, edit, move or reorder a favorite")
 def update_favorite(favorite_id: str, body: PromptFavoritePatch, tools: ToolsDep) -> dict[str, Any]:
     changes = {name: getattr(body, name) for name in body.model_fields_set}
     if changes.get("name") is None:
         changes.pop("name", None)
     if changes.get("text") is None:
         changes.pop("text", None)
-    return _store_call(lambda: tools.store.update_favorite(favorite_id, changes))
+    return tools.store.update_favorite(favorite_id, changes)
 
 
 @router.delete("/favorites/{favorite_id}", response_model=m.Ok, responses=ERRORS, summary="Remove a favorite")
 def delete_favorite(favorite_id: str, tools: ToolsDep) -> dict[str, Any]:
     if not tools.store.delete_favorite(favorite_id):
-        raise HTTPException(status_code=404, detail="no such favorite")
+        raise pt.StoreError(Sentence("no such favorite"), 404)
     return {"ok": True}
 
 
@@ -584,9 +578,9 @@ def export_favorites(tools: ToolsDep, response: Response) -> dict[str, Any]:
     return tools.store.export_favorites()
 
 
-@router.post("/favorites-import", response_model=PromptFavoritesImported, responses={**ERRORS, 413: {"model": m.Detail}}, summary="Add the favorites of an export (duplicates are skipped)")
+@router.post("/favorites-import", response_model=PromptFavoritesImported, responses={**VALUE_ERRORS, 413: {"model": m.Detail}}, summary="Add the favorites of an export (duplicates are skipped)")
 def import_favorites(body: PromptFavoritesExport, tools: ToolsDep) -> dict[str, Any]:
-    return {"added": _store_call(lambda: tools.store.import_favorites(body.model_dump()))}
+    return {"added": tools.store.import_favorites(body.model_dump())}
 
 
 # endregion
