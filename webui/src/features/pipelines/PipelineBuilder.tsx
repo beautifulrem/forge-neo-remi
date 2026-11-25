@@ -454,7 +454,7 @@ export function PipelineBuilder() {
               >
                 {/* Stage header */}
                 <div className="flex min-h-7 items-center gap-2">
-                  <span className="shrink-0 font-mono text-[0.6875rem] font-semibold tracking-wider text-muted-foreground tabular-nums">
+                  <span className="shrink-0 font-mono text-[0.6875rem] font-semibold text-muted-foreground tabular-nums">
                     {stepNumber(index)}
                   </span>
                   <span className={cn("min-w-0 flex-1 truncate", panelTitleClass(0))} title={t(STAGE_META[stage.kind].label)}>

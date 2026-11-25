@@ -108,7 +108,7 @@ function ChipItem({
           onFocus={onFocus}
           onPointerDown={onPointerDown}
           disabled={disabled}
-          className="rounded-sm px-1.5 text-[0.625rem] font-semibold tracking-widest text-muted-foreground outline-none select-none focus-visible:ring-3 focus-visible:ring-focus-ring"
+          className="rounded-sm px-1.5 font-mono text-[0.625rem] font-semibold text-muted-foreground outline-none select-none focus-visible:ring-3 focus-visible:ring-focus-ring"
         >
           {chip.text}
         </button>

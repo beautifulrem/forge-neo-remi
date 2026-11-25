@@ -75,3 +75,14 @@ describe("pressed toggles", () => {
     expect(swapped).toEqual([])
   })
 })
+
+describe("letter spacing", () => {
+  // Wide tracking is the eyebrow-label look the type rules leave out. A menu's shortcut keys keep
+  // shadcn's spacing: a run of key glyphs (⌘⇧K), not words.
+  const SHORTCUTS = new Set(["components/ui/command.tsx", "components/ui/dropdown-menu-impl.tsx", "components/ui/dropdown-menu.tsx", "components/ui/context-menu.tsx"])
+
+  it("never widens text", () => {
+    const wide = occurrences(/\btracking-wide(?:r|st)?\b/g).filter(({ file }) => !SHORTCUTS.has(file))
+    expect(wide).toEqual([])
+  })
+})
