@@ -1097,7 +1097,6 @@
   "{{provider}} needs more settings: an API key, or the service URL and model in Settings.": "{{provider}} 还需要配置：API 密钥，或在设置中填写服务地址和模型。",
   "{{same}} already match, {{unknown}} unknown here (ignored)": "{{same}} 项已一致，{{unknown}} 项在此未知（已忽略）",
   "{{seconds}} s elapsed": "已用 {{seconds}} 秒",
-  "{{shown}} of {{total}} extensions": "{{shown}} / {{total}} 个扩展",
   "{{toggles}} switched, {{updates}} to update": "{{toggles}} 项开关变更，{{updates}} 项待更新",
   "{{tokens}} tokens; the prompt is split into chunks of 75": "{{tokens}} 个 token；提示词按每 75 个分块",
   "“Disable all extensions” is set to All: no extension is loaded.": "“禁用所有扩展”设为“全部”：不载入任何扩展。",
@@ -1141,7 +1140,6 @@
   "Could not start hashing": "无法开始计算哈希",
   "Hashing checkpoints": "正在计算模型哈希",
   "Hashed {{done}} of {{total}}": "已计算 {{done}} / {{total}}",
-  "Finished: {{done}} checkpoints hashed": "已完成：计算了 {{done}} 个模型的哈希",
   "{{count}} failed": "{{count}} 个失败",
   "{{count}} at a time": "同时 {{count}} 个",
   "Checkpoints hashed at once": "同时计算哈希的模型数",
@@ -1543,7 +1541,6 @@
   "Could not apply recipe": "无法应用配方",
   "Import JSON": "导入 JSON",
   "Export JSON": "导出 JSON",
-  "Imported {{added}} recipes ({{updated}} updated)": "已导入 {{added}} 个配方（更新 {{updated}} 个）",
   "Could not import recipes": "无法导入配方",
   "Exported {{count}} recipes": "已导出 {{count}} 个配方",
   "Delete recipe": "删除配方",
@@ -1704,5 +1701,8 @@
   "This control failed to render: {{reason}}": "此控件渲染失败：{{reason}}",
   "The dialog could not be shown": "无法显示该对话框",
   "The image could not be read.": "无法读取该图像。",
-  "{{field}}: {{message}}": "{{field}}：{{message}}"
+  "{{field}}: {{message}}": "{{field}}：{{message}}",
+  "Imported {{count}} recipes ({{updated}} updated)": "已导入 {{count}} 个配方（更新 {{updated}} 个）",
+  "Finished: {{count}} checkpoints hashed": "已完成：计算了 {{count}} 个模型的哈希",
+  "{{shown}} of {{count}} extensions": "{{shown}} / {{count}} 个扩展"
 }

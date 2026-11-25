@@ -391,6 +391,14 @@ describe("available extensions", { timeout: 20_000 }, () => {
   })
 
   // An index that failed to load was a red line with no way to try again but the form above.
+  // "1 of 1 extensions": an index of one extension counted it in the plural.
+  it("counts a one-extension index in the singular", async () => {
+    vi.spyOn(api.extensions, "index").mockResolvedValue(indexOf(1))
+    renderPage("tab=available")
+    fireEvent.click(await screen.findByRole("button", { name: "Load index" }, { timeout: 8000 }))
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/^0 of 1 extension$/), { timeout: 8000 })
+  })
+
   it("offers a retry when the index fails to load", async () => {
     const index = vi.spyOn(api.extensions, "index").mockRejectedValue(new ApiError(404, "the index was not found", { detail: "the index was not found", template: "the index at {{url}} was not found", params: { url: "https://example.org/index.json" } }))
     renderPage("tab=available")

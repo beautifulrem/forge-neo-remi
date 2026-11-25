@@ -176,7 +176,7 @@ function CheckpointHashes() {
             <p className="text-xs text-muted-foreground tabular-nums">
               {running
                 ? t("Hashed {{done}} of {{total}}", { done: state.done, total: state.total })
-                : t("Finished: {{done}} checkpoints hashed", { done: state.done - state.failed.length })}
+                : t("Finished: {{count}} checkpoints hashed", { count: state.done - state.failed.length })}
               {state.failed.length > 0 ? ` · ${t("{{count}} failed", { count: state.failed.length })}: ${state.failed.join(", ")}` : ""}
             </p>
           </div>

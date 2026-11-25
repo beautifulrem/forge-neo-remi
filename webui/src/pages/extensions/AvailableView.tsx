@@ -326,7 +326,7 @@ export function AvailableView() {
               {t("2025+")}
             </Toggle>
             <span className="ml-auto text-xs text-muted-foreground tabular-nums" role="status" aria-live="polite">
-              {t("{{shown}} of {{total}} extensions", { shown: items.length, total: index.data.items.length })}
+              {t("{{shown}} of {{count}} extensions", { shown: items.length, count: index.data.items.length })}
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">

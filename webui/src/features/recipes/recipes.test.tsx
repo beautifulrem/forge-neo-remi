@@ -338,6 +338,25 @@ describe("Recipes capture and manager UI", () => {
     expect(recipeFileName({ ...SAMPLE_RECIPE, name: " /// " })).toBe("r1.json")
   })
 
+  // "Imported 1 recipes (0 updated)"
+  it("counts one imported recipe in the singular", async () => {
+    const { toast } = await import("sonner")
+    const success = vi.spyOn(toast, "success")
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (init?.method === "POST") return Response.json({ added: 1, updated: 0, skipped: 0, items: [SAMPLE_RECIPE] })
+      return Response.json({ items: [SAMPLE_RECIPE], total: 1 })
+    })
+    const { container } = render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    await screen.findByText("Qwen Turbo 8-step")
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!
+    fireEvent.change(input, { target: { files: [new File([JSON.stringify({ version: 1, recipes: [SAMPLE_RECIPE] })], "one.json", { type: "application/json" })] } })
+    await waitFor(() => expect(success).toHaveBeenCalledWith("Imported 1 recipe (0 updated)"))
+  })
+
   it("says a picked file is not a recipes file instead of blaming the server", async () => {
     const { toast } = await import("sonner")
     const error = vi.spyOn(toast, "error")

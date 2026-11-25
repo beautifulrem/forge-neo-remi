@@ -8,8 +8,8 @@ import { ServerView } from "./ServerView"
 
 const STATUS = { restartable: true, extension_access: true, settings_frozen: false, model_loaded: "anima.safetensors [0123456789]", model_hash: "0123456789abcdef", version: "1.0.0" }
 
-function renderView() {
-  vi.spyOn(api.system, "hashStatus").mockReturnValue(new Promise(() => {}))
+function renderView(hashes: Awaited<ReturnType<typeof api.system.hashStatus>> | null = null) {
+  vi.spyOn(api.system, "hashStatus").mockReturnValue(hashes ? Promise.resolve(hashes) : new Promise(() => {}))
   render(
     <QueryClientProvider client={queryClient}>
       <ServerView onImport={() => {}} onExport={() => {}} />
@@ -74,5 +74,12 @@ describe("ServerView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }))
     expect(await screen.findByRole("alert")).toBeInTheDocument()
     expect(within(screen.getByRole("table", { name: "Weights in memory" })).getByText("anima.safetensors")).toBeInTheDocument()
+  })
+
+  // "Finished: 1 checkpoints hashed"
+  it("counts one hashed checkpoint in the singular", async () => {
+    vi.spyOn(api.system, "status").mockResolvedValue(STATUS as never)
+    renderView({ running: false, done: 1, total: 1, failed: [], current: [], finished_at: "2026-11-26T00:00:00Z", threads: 1 })
+    expect(await screen.findByText("Finished: 1 checkpoint hashed")).toBeInTheDocument()
   })
 })

@@ -32,5 +32,8 @@
   "The images leave the gallery; their files stay in the output folder._one": "The image leaves the gallery; its file stays in the output folder.",
   "The files are deleted from the output folder. This cannot be undone._one": "The file is deleted from the output folder. This cannot be undone.",
   "Also delete the files from disk_one": "Also delete the file from disk",
-  "Delete files_one": "Delete file"
+  "Delete files_one": "Delete file",
+  "Imported {{count}} recipes ({{updated}} updated)_one": "Imported {{count}} recipe ({{updated}} updated)",
+  "Finished: {{count}} checkpoints hashed_one": "Finished: {{count}} checkpoint hashed",
+  "{{shown}} of {{count}} extensions_one": "{{shown}} of {{count}} extension"
 }

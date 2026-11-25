@@ -187,7 +187,7 @@ export function RecipeManager() {
           : [bundle as Partial<Recipe>]
       const res = await importRecipesApi({ version: 1, recipes: listToImport, overwrite: true })
       refreshRecipes()
-      toast.success(t("Imported {{added}} recipes ({{updated}} updated)", { added: res.added, updated: res.updated }))
+      toast.success(t("Imported {{count}} recipes ({{updated}} updated)", { count: res.added, updated: res.updated }))
     } catch (error) {
       toast.error(t("Could not import recipes"), { description: errorText(error) })
     }
