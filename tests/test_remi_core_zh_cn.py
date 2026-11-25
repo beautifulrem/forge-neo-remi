@@ -422,6 +422,8 @@ def test_every_rejected_value_has_a_catalog_key(catalog):
     assert {"must be at most {{maximum}}, got {{value}}", "unknown upload {{id}}", "a choice is required", "upload a control image"} <= texts
     # the prompt tools store's, one per field it names
     assert {"nothing to save", "a negative prompt must be at most {{maximum}} characters", "kind must be one of {{kinds}}"} <= texts
+    # a prompt tool's (``TranslationError(..., 422)``), which its route lists as a rejected value
+    assert {"describe the image first", "local_model_path does not exist: {{path}}"} <= texts
 
     spa = strings_module.spa_catalog()
     core = strings_module.param_error_strings()

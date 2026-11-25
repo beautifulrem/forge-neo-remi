@@ -19,6 +19,7 @@ import ast
 import json
 import re
 import sys
+from collections.abc import Collection
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -249,7 +250,8 @@ def unlisted_action_labels() -> list[str]:
 
 
 # Calls that make a rejected value's error, with the index of their message
-# argument: ParamError and the helpers that wrap one
+# argument: ParamError and the helpers that wrap one (a prompt tool's 422, which
+# its route turns into one, is read too: _message_index)
 PARAM_ERROR_CALLS = {"ParamError": 0, "_error": 1, "bad_input": 1}
 # Remi's own sources that reject values, and modules/scripts.py, whose value checks
 # (``selector_index``, ``script_args_from_values``) Remi wrote; the rest of the shared runtime
@@ -278,7 +280,47 @@ def _message_keys(arg, constants: dict[str, str]) -> list[str] | None:
     return None
 
 
-def param_error_messages(folders=PARAM_ERROR_SOURCES) -> tuple[set[str], list[tuple[str, str]]]:
+def _message_index(node: ast.Call, names: Collection[str] | None) -> int | None:
+    """Where a call that rejects a value has its message: a :data:`PARAM_ERROR_CALLS` call, or a
+    :data:`STATUS_ERRORS` call with a status of :data:`VALUE_STATUSES` (a prompt tool's 422, which
+    its route lists as a ``ParamError``); called by its name or as an attribute (``pt.TranslationError``).
+    None for any other call, and for one whose name is not in ``names`` (when given)."""
+
+    name = _call_name(node)
+    if names is not None and name not in names:
+        return None
+    if name in STATUS_ERRORS:
+        return 0 if _status(node, STATUS_ERRORS[name]) in VALUE_STATUSES else None
+    return PARAM_ERROR_CALLS.get(name)
+
+
+def param_errors_in(source: str, names: Collection[str] | None = None) -> tuple[set[str], list[str]]:
+    """``(texts, unchecked)`` of one module's source: the catalog keys its rejected values'
+    messages can be (a constant, a module constant, a ``Sentence`` template) and the source of
+    each message that is none of them. ``names`` limits the calls read (:func:`_message_index`)."""
+
+    tree = ast.parse(source)
+    constants = {
+        target.id: node.value.value
+        for node in tree.body
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+    texts: set[str] = set()
+    unchecked: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or (index := _message_index(node, names)) is None or len(node.args) <= index:
+            continue
+        found = _message_keys(node.args[index], constants)
+        if found is None:
+            unchecked.append(ast.get_source_segment(source, node.args[index]) or "")
+        else:
+            texts.update(found)
+    return texts, unchecked
+
+
+def param_error_messages(folders=PARAM_ERROR_SOURCES, names: Collection[str] | None = None) -> tuple[set[str], list[tuple[str, str]]]:
     """``(texts, unchecked)``: the catalog keys a rejected value's message can
     be (a constant, a module constant, a ``Sentence`` template) and the calls
     whose message is none of them, as ``(path, source)``. A message passed on
@@ -289,24 +331,9 @@ def param_error_messages(folders=PARAM_ERROR_SOURCES) -> tuple[set[str], list[tu
     for folder in folders:
         root = REPO / folder
         for path in sorted([root] if root.is_file() else root.rglob("*.py")):
-            source = path.read_text(encoding="utf-8")
-            tree = ast.parse(source)
-            constants = {
-                target.id: node.value.value
-                for node in tree.body
-                if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
-                for target in node.targets
-                if isinstance(target, ast.Name)
-            }
-
-            for node in ast.walk(tree):
-                if not isinstance(node, ast.Call) or (index := PARAM_ERROR_CALLS.get(_call_name(node))) is None or len(node.args) <= index:
-                    continue
-                found = _message_keys(node.args[index], constants)
-                if found is None:
-                    unchecked.append((path.relative_to(REPO).as_posix(), ast.get_source_segment(source, node.args[index]) or ""))
-                else:
-                    texts.update(found)
+            found, formatted = param_errors_in(path.read_text(encoding="utf-8"), names)
+            texts |= found
+            unchecked += [(path.relative_to(REPO).as_posix(), text) for text in formatted]
     return texts, unchecked
 
 
@@ -340,8 +367,9 @@ def request_error_classes(folder: str = "remi") -> set[str]:
 # refused value (422: listed under its request field, a catalog key, tests/test_remi_pup.py) and a
 # failed service (502: the service's own answer, passed on as it is)
 STATUS_ERRORS = {"TranslationError": 502}
-PASSED_ON_STATUSES = (422,)
-"""A prompt tool's 422 is a refused value (``ParamError``), checked in ``tests/test_remi_pup.py``."""
+VALUE_STATUSES = (422,)
+"""A prompt tool's 422 is a refused value, which its route lists as a ``ParamError``: its message is
+read with the rejected values' (:func:`param_error_messages`), not as a refused request's."""
 
 
 def _status(node: ast.Call, default: int) -> int | None:
@@ -356,7 +384,7 @@ def _status(node: ast.Call, default: int) -> int | None:
 def request_error_messages(folder: str = "remi") -> tuple[set[str], list[str]]:
     """``(templates, unchecked)``: the ``Sentence`` templates of the refused
     requests (:func:`request_error_classes`, and the :data:`STATUS_ERRORS`
-    with a status other than :data:`PASSED_ON_STATUSES`) and, as
+    with a status other than :data:`VALUE_STATUSES`) and, as
     ``path:line``, each one made with anything else: an f-string or a
     constant cannot carry the sentence's template to the UI (the HTTP error
     body's ``template``). A message passed on from a caught error
@@ -371,7 +399,7 @@ def request_error_messages(folder: str = "remi") -> tuple[set[str], list[str]]:
                 continue
             name = _call_name(node)
             if name in STATUS_ERRORS:
-                if _status(node, STATUS_ERRORS[name]) in PASSED_ON_STATUSES:
+                if _status(node, STATUS_ERRORS[name]) in VALUE_STATUSES:
                     continue
             elif name not in classes:
                 continue

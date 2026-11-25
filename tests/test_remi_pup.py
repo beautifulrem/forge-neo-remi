@@ -762,35 +762,33 @@ def test_upsampling_through_the_endpoint_follows_the_prompt_tools_switch(tmp_pat
 
 def test_every_value_a_prompt_tool_refuses_has_a_catalog_key():
     """A refused value (422) reaches the UI as ``errors``, translated by its message: each must be a
-    constant or a ``Sentence`` template that localizations/zh_CN.json has (an f-string never could)."""
+    constant or a ``Sentence`` template that localizations/zh_CN.json has (an f-string never could).
+    The check read only ``remi/prompt_tools`` and only ``TranslationError(...)`` called by its name
+    with the status second: it is the rejected values' check (``tests/remi_core_strings.py``) now,
+    over all of ``remi/``, which also finds ``pt.TranslationError`` and ``status=422``."""
 
-    import ast
+    import importlib.util
     import re
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location("remi_core_strings", root / "tests" / "remi_core_strings.py")
+    strings = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(strings)
+    tool_errors = set(strings.STATUS_ERRORS)
+
+    source = 'raise pt.TranslationError(Sentence("a value {{x}}", x=x), status=422)\nraise TranslationError(f"no {x}", 422)\nraise pt.TranslationError(f"a failed service: {x}")\n'
+    assert strings.param_errors_in(source, tool_errors) == ({"a value {{x}}"}, ['f"no {x}"'])
+
     catalog = json.loads((root / "localizations" / "zh_CN.json").read_text(encoding="utf-8"))
-    found, formatted = [], []
-    for path in sorted((root / "remi" / "prompt_tools").glob("*.py")):
-        source = path.read_text(encoding="utf-8")
-        for node in ast.walk(ast.parse(source)):
-            if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "TranslationError" and len(node.args) >= 2):
-                continue
-            status = node.args[1]
-            if not (isinstance(status, ast.Constant) and status.value == 422):
-                continue
-            message = node.args[0]
-            if isinstance(message, ast.Call) and getattr(message.func, "id", None) == "Sentence":
-                message = message.args[0]
-            if isinstance(message, ast.Constant) and isinstance(message.value, str):
-                found.append(message.value)
-            else:
-                formatted.append(f"{path.name}: {ast.get_source_segment(source, node.args[0])}")
-    assert formatted == []
-    assert "local_model_path does not exist: {{path}}" in found and "describe the image first" in found
+    found, unchecked = strings.param_error_messages(("remi",), tool_errors)
+    assert unchecked == []
+    assert {"local_model_path does not exist: {{path}}", "describe the image first", "aspect_ratio dimensions must be positive finite numbers"} <= found
     missing = [text for text in found if not catalog.get(text)]
     assert missing == []
     assert all(re.findall(r"\{\{(\w+)\}\}", catalog[text]) == re.findall(r"\{\{(\w+)\}\}", text) for text in found)
+    # and so the rejected values' own check covers them
+    assert found <= strings.param_error_strings()
 
 
 def test_the_upsampler_warnings_are_sentences_the_ui_translates():
