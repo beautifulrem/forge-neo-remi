@@ -279,6 +279,40 @@ describe("Recipes capture and manager UI", () => {
     expect(row).not.toHaveClass("grid-cols-2")
   })
 
+  // The toolbar's export, with a search or a family filter on, still saved every recipe.
+  it("exports only the recipes a filter shows", async () => {
+    const other: Recipe = { ...SAMPLE_RECIPE, id: "r2", name: "SDXL portrait", model_family: "sdxl", tags: [] }
+    const exportAll = vi.fn()
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(typeof input === "string" ? input : (input as Request).url, "http://x")
+      if (url.pathname.endsWith("/export")) {
+        exportAll()
+        return Response.json({ version: 1, recipes: [SAMPLE_RECIPE, other] })
+      }
+      const items = url.searchParams.get("q") === "turbo" ? [SAMPLE_RECIPE] : [SAMPLE_RECIPE, other]
+      return Response.json({ items, total: items.length })
+    })
+    const saved: Blob[] = []
+    vi.spyOn(URL, "createObjectURL").mockImplementation((blob) => {
+      saved.push(blob as Blob)
+      return "blob:recipes"
+    })
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText("SDXL portrait")).toBeInTheDocument()
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search recipes…" }), { target: { value: "turbo" } })
+    await waitFor(() => expect(screen.queryByText("SDXL portrait")).toBeNull())
+    fireEvent.click(screen.getByRole("button", { name: "Export JSON" }))
+    await waitFor(() => expect(saved).toHaveLength(1))
+    const bundle = JSON.parse(await saved[0]!.text()) as { recipes: Recipe[] }
+    expect(bundle.recipes.map((recipe) => recipe.id)).toEqual(["r1"])
+    expect(exportAll).not.toHaveBeenCalled()
+  })
+
   it("names the export when it fails", async () => {
     const { toast } = await import("sonner")
     const error = vi.spyOn(toast, "error")

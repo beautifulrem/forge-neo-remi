@@ -156,9 +156,10 @@ export function RecipeManager() {
     onError: (error) => toast.error(t("Could not apply recipe"), { description: errorText(error) }),
   })
 
-  const handleExportAll = async () => {
+  /** Every recipe, or with a search or family filter on, the recipes it shows (as one recipe's own export). */
+  const handleExport = async () => {
     try {
-      const bundle = await exportRecipesApi()
+      const bundle = filtered ? { version: 1, recipes } : await exportRecipesApi()
       downloadJson("remi-recipes.json", bundle)
       toast.success(t("Exported {{count}} recipes", { count: bundle.recipes.length }))
     } catch (error) {
@@ -244,7 +245,7 @@ export function RecipeManager() {
               if (file) void handleImportFile(file)
             }}
           />
-          <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2.5 text-xs" disabled={!filtered && recipes.length === 0} onClick={() => void handleExportAll()}>
+          <Button variant="outline" size="sm" className="h-7 gap-1.5 px-2.5 text-xs" disabled={recipes.length === 0} onClick={() => void handleExport()}>
             <Download className="size-3.5" aria-hidden />
             {t("Export JSON")}
           </Button>
