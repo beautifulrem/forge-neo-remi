@@ -263,7 +263,7 @@ export default function SettingsPage({ route }: { route: Route }) {
     <div className="flex h-full min-h-0">
       <aside className="hidden w-60 shrink-0 overflow-y-auto border-r bg-sidebar/50 lg:block xl:w-64">{nav}</aside>
       <Sheet open={navOpen} onOpenChange={setNavOpen}>
-        <SheetContent side="left" className="w-[min(20rem,85vw)] overflow-y-auto p-0">
+        <SheetContent side="left" className="w-[min(20rem,85vw)] overflow-y-auto p-0 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
           <SheetHeader className="border-b">
             <SheetTitle>{t("Settings sections")}</SheetTitle>
           </SheetHeader>

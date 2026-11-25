@@ -223,7 +223,7 @@ export default function Editor(props: ImageEditorProps) {
       <Dialog open={maximized} onOpenChange={setMaximized}>
         <DialogContent
           showCloseButton={false}
-          className="top-0 left-0 flex h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 gap-0 rounded-none bg-canvas p-0 pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] ring-0 sm:max-w-none"
+          className="top-0 left-0 flex h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 gap-0 rounded-none bg-canvas p-0 pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] ring-0 sm:max-w-none"
         >
           <DialogTitle className="sr-only">{props.label ?? t("Image editor")}</DialogTitle>
           <DialogDescription className="sr-only">{t("Press Escape or F to exit full screen.")}</DialogDescription>

@@ -207,7 +207,7 @@ export function MetadataDialog({ item, open, onOpenChange }: { item: NetworkItem
   const meta = useQuery({ ...metaQuery(item?.kind ?? "", item?.name ?? ""), enabled: Boolean(item && open) })
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(88dvh,52rem)] flex-col gap-4 sm:max-w-3xl">
+      <DialogContent className="flex max-h-[min(calc(88dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)),52rem)] flex-col gap-4 sm:max-w-3xl">
         <DialogHeader className="pr-8">
           <DialogTitle className="truncate" title={item?.title}>
             {item?.title ?? ""}

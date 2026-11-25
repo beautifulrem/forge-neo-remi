@@ -88,7 +88,7 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex max-h-[min(44rem,calc(100dvh-2rem))] flex-col gap-4 sm:max-w-2xl">
+        <DialogContent className="flex max-h-[min(44rem,calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom)))] flex-col gap-4 sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{t("Styles")}</DialogTitle>
             <DialogDescription>

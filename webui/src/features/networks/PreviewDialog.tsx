@@ -121,7 +121,7 @@ export function PreviewDialog({ item, open, onOpenChange }: { item: NetworkItem 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(90dvh,48rem)] flex-col gap-4 sm:max-w-2xl">
+      <DialogContent className="flex max-h-[min(calc(90dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)),48rem)] flex-col gap-4 sm:max-w-2xl">
         <DialogHeader className="pr-8">
           <DialogTitle className="truncate" title={item?.title}>{t("Preview of {{name}}", { name: item?.title ?? "" })}</DialogTitle>
           <DialogDescription>{t("Pick a result or upload an image. It is saved next to the model file.")}</DialogDescription>

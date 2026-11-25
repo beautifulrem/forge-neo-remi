@@ -940,4 +940,48 @@ test.describe("overlays on a phone held sideways", () => {
     expect(bottom).toBeLessThanOrEqual(size.height - insets.bottom + 0.5)
     expect(await unsafe(drawer)).toEqual([])
   })
+
+  // A centred dialog was sized from the whole viewport: a wide one (the shortcuts, 48rem) reached under
+  // the notch with its Close button, and a tall one ran onto the home indicator.
+  test("a dialog", async ({ page }) => {
+    await openGenerate(page)
+    await page.locator("body").press("?")
+    const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" })
+    await expect(dialog.getByRole("button", { name: "Close" })).toBeVisible()
+    await page.waitForTimeout(300) // the opening zoom
+    const box = (await dialog.boundingBox())!
+    expect(Math.round(box.x), "its left edge").toBeGreaterThanOrEqual(insets.left)
+    expect(Math.round(box.x + box.width), "its right edge").toBeLessThanOrEqual(size.width - insets.right)
+    expect(Math.round(box.y + box.height), "its bottom").toBeLessThanOrEqual(size.height - insets.bottom)
+    expect(await unsafe(dialog)).toEqual([])
+  })
+
+  test("the settings sections", async ({ page }) => {
+    await page.goto("/#/settings")
+    await page.getByRole("button", { name: "Settings sections" }).first().click()
+    const sheet = page.getByRole("dialog", { name: "Settings sections" })
+    await expect(sheet.getByRole("button").nth(2)).toBeVisible()
+    await page.waitForTimeout(300) // the slide in
+    await sheet.evaluate((element) => (element.scrollTop = element.scrollHeight))
+    expect(await unsafe(sheet)).toEqual([])
+  })
+
+  test("the image editor in full screen", async ({ page }) => {
+    await openGenerate(page, "img2img")
+    const png = await page.evaluate(() => {
+      const canvas = document.createElement("canvas")
+      canvas.width = 640
+      canvas.height = 480
+      canvas.getContext("2d")!.fillRect(0, 0, 640, 480)
+      return canvas.toDataURL("image/png").split(",")[1]!
+    })
+    const chooser = page.waitForEvent("filechooser")
+    await page.getByRole("button", { name: "Add a source image" }).click()
+    await (await chooser).setFiles({ name: "source.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") })
+    await page.getByRole("button", { name: "Edit in full screen" }).click()
+    const editor = page.getByRole("dialog")
+    await expect(editor.getByRole("button", { name: "Exit full screen" })).toBeVisible()
+    await page.waitForTimeout(300)
+    expect(await unsafe(editor)).toEqual([])
+  })
 })

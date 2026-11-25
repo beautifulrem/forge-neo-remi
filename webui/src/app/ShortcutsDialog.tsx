@@ -97,7 +97,7 @@ export default function ShortcutsDialog() {
   const interruptOnly = useClientOption("ctrl_enter_interrupt")
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-h-[min(40rem,calc(100dvh-2rem))] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="max-h-[min(40rem,calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom)))] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t("Keyboard shortcuts")}</DialogTitle>
           <DialogDescription>{t("The image editor lists its own: press ? while it is in use.")}</DialogDescription>

@@ -241,7 +241,7 @@ export function EditMetadataDialog({ item, kind, open, onOpenChange }: { item: N
   const meta = useQuery({ ...metaQuery(item?.kind ?? "", item?.name ?? ""), enabled: Boolean(item && open) })
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(90dvh,52rem)] flex-col gap-4 sm:max-w-2xl">
+      <DialogContent className="flex max-h-[min(calc(90dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)),52rem)] flex-col gap-4 sm:max-w-2xl">
         <DialogHeader className="pr-8">
           <DialogTitle className="truncate" title={item?.title}>{t("Edit {{name}}", { name: item?.title ?? "" })}</DialogTitle>
           <DialogDescription>{item?.path}</DialogDescription>

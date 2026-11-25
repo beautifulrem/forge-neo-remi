@@ -275,9 +275,9 @@ imperatively).
   registry ships); app code imports it from `@/lib/utils`. Local fixes to
   vendored components: scalar sliders render one thumb and forward
   `getAriaLabel`; a select's value ellipsizes (line-clamp does nothing on
-  the flex value); a dialog or alert dialog is no taller than the window
-  less 2rem and scrolls inside (up and down only; the full-screen editor
-  opts out with `max-h-none`), and the command dialog no taller than the
+  the flex value); a dialog or alert dialog is no taller and no wider than
+  the window less 2rem and the safe-area insets, and scrolls inside (up and
+  down only; the full-screen editor opts out with `max-h-none`), and the command dialog no taller than the
   room below its top, its list shrinking; a popover, like the menus and
   selects, takes the room beside its trigger (`--available-height`) and
   scrolls inside (up and down only); a menu or popover gives the focus
@@ -289,13 +289,16 @@ imperatively).
   a full-screen viewer opens with the focus on its content (the image
   viewer: on the image, whose keys it handles), not on its first toolbar
   button; `number-field.tsx` is ours.
-- **Safe area**: the app shell pads for a notch and the home indicator
-  (`env(safe-area-inset-*)` in `App.tsx`), but overlays are portalled
-  outside it. An overlay that reaches a screen edge pads for the insets of
-  that edge itself (the image viewer on every side, its black backdrop
-  still to the edge; the networks sheet at the bottom and its open sides),
-  and a centred dialog sized from the viewport (`96vw`, `94dvh`) subtracts
-  them from that size.
+- **Safe area**: the app shell pads its sides for a notch
+  (`env(safe-area-inset-left/right)` in `App.tsx`) and the phone's bottom
+  bar pads for the home indicator, but overlays are portalled outside the
+  shell. An overlay that reaches a screen edge pads for the inset of that
+  edge itself (the image viewer on every side, its black backdrop still to
+  the edge; the full-screen editor at its sides and bottom; the networks
+  sheet, the settings sections and the More sheet at the bottom and their
+  open sides), and a centred dialog subtracts the insets from any size it
+  takes from the viewport (the base dialog and alert dialog, `96vw`,
+  `90dvh`).
 
 ### Visual rules
 

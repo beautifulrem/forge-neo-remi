@@ -122,7 +122,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         if (!next && !run.isPending && !report?.paused) run.reset()
       }}
     >
-      <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-2xl">
+      <DialogContent className="flex max-h-[calc(90dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex-col sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("Import queues")}</DialogTitle>
           <DialogDescription>
