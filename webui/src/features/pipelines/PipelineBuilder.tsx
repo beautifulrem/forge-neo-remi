@@ -431,7 +431,7 @@ export function PipelineBuilder() {
             {t("{{cached}} cached · {{execute}} to run", { cached: cachedCount, execute: executeCount })}
           </span>
           {activeRun && ACTIVE_STATUSES.has(activeRun.status) ? (
-            <Button variant="destructive" size="sm" className="h-7 gap-1.5 px-3 text-xs" onClick={() => cancel.mutate(activeRun.id)}>
+            <Button variant="destructive" size="sm" className="h-7 gap-1.5 px-3 text-xs" disabled={cancel.isPending} onClick={() => cancel.mutate(activeRun.id)}>
               <Ban className="size-3.5" aria-hidden />
               {t("Cancel pipeline")}
             </Button>
@@ -484,7 +484,7 @@ export function PipelineBuilder() {
                   </span>
                   <Switch
                     checked={enabled}
-                    aria-label={`${t("Stage {{n}}", { n: index + 1 })} ${t(STAGE_META[stage.kind].label)}`}
+                    aria-label={t("Stage {{n}}: {{name}}", { n: index + 1, name: t(STAGE_META[stage.kind].label) })}
                     onCheckedChange={(checked) => updateStage(index, (prev) => ({ ...prev, enabled: checked }))}
                   />
                 </div>

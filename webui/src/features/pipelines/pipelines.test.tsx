@@ -309,6 +309,30 @@ describe("PipelineBuilder UI", () => {
     expect(stage("refine").tab).toBe("img2img")
     expect(stage("refine").core?.cfg_scale).toBeUndefined()
   })
+  it("disables Cancel pipeline while the cancel is on its way", async () => {
+    const running: JobChain = { ...completedRun(usePipelineDraft.getState().stages), id: "chain-run", status: "running" }
+    let cancels = 0
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (url.includes("/chains/chain-run/cancel")) {
+        cancels++
+        return new Promise<Response>(() => {})
+      }
+      if (url.includes("/chains/chain-run")) return new Response(JSON.stringify(running), { status: 200 })
+      return new Response(JSON.stringify(init?.method === "POST" ? {} : []), { status: 200 })
+    })
+    usePipelineDraft.setState({ activeRunId: "chain-run" })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PipelineBuilder />
+      </QueryClientProvider>,
+    )
+    const cancel = await screen.findByRole("button", { name: "Cancel pipeline" })
+    fireEvent.click(cancel)
+    await waitFor(() => expect(cancel).toBeDisabled())
+    fireEvent.click(cancel)
+    expect(cancels).toBe(1)
+  })
 })
 
 describe("starter pipelines", () => {
@@ -339,6 +363,18 @@ describe("starter pipelines", () => {
     expect(await screen.findByRole("menuitem", { name: "生成 → 放大" })).toBeInTheDocument()
     fireEvent.click(screen.getByRole("menuitem", { name: "提示词扩写 → 生成 → 精修 → 收尾" }))
     expect(screen.getByRole("textbox", { name: "管线名称" })).toHaveValue("提示词扩写 → 生成 → 精修 → 收尾")
+  })
+
+  it("names each stage's switch with one sentence in the current language", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify([]), { status: 200 }))
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PipelineBuilder />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByRole("switch", { name: `阶段 2：${zhCN["Refine / Inpaint"]}` })).toBeChecked()
   })
 
   it("shows recent runs' status and cache reuse in the current language", async () => {

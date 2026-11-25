@@ -1590,7 +1590,6 @@
   "No pipeline runs yet": "暂无管线运行记录",
   "Load into builder": "载入到编排器",
   "{{cached}} cached · {{execute}} to run": "{{cached}} 个命中缓存 · {{execute}} 个待执行",
-  "Stage {{n}}": "阶段 {{n}}",
   "Diagnostics & workers": "诊断与工作进程",
   "Runtime & workers": "运行时与工作进程",
   "Worker mode": "工作模式",
@@ -1704,5 +1703,6 @@
   "Finished: {{count}} checkpoints hashed": "已完成：计算了 {{count}} 个模型的哈希",
   "{{shown}} of {{count}} extensions": "{{shown}} / {{count}} 个扩展",
   "Move {{stage}} earlier": "将{{stage}}前移",
-  "Move {{stage}} later": "将{{stage}}后移"
+  "Move {{stage}} later": "将{{stage}}后移",
+  "Stage {{n}}: {{name}}": "阶段 {{n}}：{{name}}"
 }
