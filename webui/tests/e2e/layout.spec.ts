@@ -30,6 +30,7 @@ async function headerProblems(page: Page): Promise<string[]> {
       if (k.width > 0 && (k.right > b.right - 2 || k.left < b.left)) problems.push(`kbd "${kbd.textContent}" is cut by its button`)
     }
     for (const label of document.querySelectorAll<HTMLElement>("main button .truncate")) {
+      if (label.classList.contains("sr-only")) continue // read out, not shown: nothing to cut
       if (label.scrollWidth > label.clientWidth + 1) problems.push(`button label "${label.textContent}" is cut`)
     }
     return problems
@@ -636,12 +637,15 @@ test("a popover fits a phone held sideways and scrolls inside", async ({ page })
 })
 
 // While a job runs the Generate button shares its row with Skip and Interrupt: from 768 to 932 px
-// its "Queue another" was cut to "Qu…", with nothing to read the rest from.
+// its "Queue another" was cut to "Qu…", with nothing to read the rest from. The label shows when
+// it fits beside the plus and only then: a fixed breakpoint hid it at 1280 px, where it fits.
 for (const [width, height] of [
   [768, 1024],
   [900, 1024],
   [844, 390],
   [932, 430],
+  [1024, 768],
+  [1280, 720],
   [1440, 900],
 ] as const) {
   test(`the running Generate button is never a cut label at ${width}×${height}`, async ({ page }) => {
@@ -654,9 +658,14 @@ for (const [width, height] of [
     const label = await queue.evaluate((button) => {
       const text = [...button.querySelectorAll("span")].find((span) => span.textContent === "Queue another")!
       const hidden = getComputedStyle(text).position === "absolute" // read out, not shown
-      return { cut: !hidden && text.scrollWidth > text.clientWidth + 1, hidden, title: button.getAttribute("title") }
+      // the room beside the plus: the button's content box less the plus and the gap
+      const style = getComputedStyle(button)
+      const plus = button.querySelector("svg")!.getBoundingClientRect().width
+      const room = button.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - plus - parseFloat(style.columnGap)
+      return { cut: !hidden && text.scrollWidth > text.clientWidth + 1, hidden, fits: text.scrollWidth <= room + 0.5, title: button.getAttribute("title") }
     })
     expect(label.cut, "a cut label").toBe(false)
+    expect(label.hidden, label.fits ? "the label fits but is hidden" : "the label does not fit but is shown").toBe(!label.fits)
     if (label.hidden) expect(label.title).toBe("Queue another")
     await page.getByRole("button", { name: "Interrupt" }).click()
   })

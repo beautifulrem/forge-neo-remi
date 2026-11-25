@@ -6,7 +6,7 @@
  */
 import { useQuery } from "@tanstack/react-query"
 import { Ban, Bell, ChevronDown, Infinity as InfinityIcon, Loader2, Plus, Repeat, RotateCcw, SkipForward, X } from "@/components/icons"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { progressFraction, useProgress } from "@/api/progress"
@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Kbd } from "@/components/ui/kbd"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { useLabelFits } from "@/lib/use-label-fits"
 import { cn } from "@/lib/utils"
 import { ExposureSheet } from "@/features/progress/ExposureSheet"
 import { formatEta, stepText, notificationsAvailable } from "@/features/progress/effects"
@@ -163,6 +164,11 @@ export function GenerateBar({ tab, className, showAdvice = true }: { tab: Genera
   const phase = phaseOf(run)
   const running = phase === "running" || phase === "interrupting"
   const busy = phase !== "idle"
+  const generateRef = useRef<HTMLButtonElement>(null)
+  const labelRef = useRef<HTMLSpanElement>(null)
+  const label = busy ? t("Queue another") : t("Generate")
+  // beside Skip and Interrupt a narrow column has no room for "Queue another" (it read "Qu…"): the plus alone, the label read out
+  const labelFits = useLabelFits(generateRef, labelRef, label, busy)
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
@@ -172,6 +178,7 @@ export function GenerateBar({ tab, className, showAdvice = true }: { tab: Genera
         {/* a size container: the shortcut hint shows only when the label fits beside it */}
         <div className="@container/generate flex min-w-0 flex-1">
           <Button
+            ref={generateRef}
             variant="glow"
             size="lg"
             className="h-11 min-w-0 flex-1 gap-2 rounded-r-none text-[0.9375rem] font-semibold"
@@ -181,8 +188,9 @@ export function GenerateBar({ tab, className, showAdvice = true }: { tab: Genera
             title={busy ? t("Queue another") : undefined}
           >
             {phase === "submitting" ? <Loader2 className="animate-spin" aria-hidden /> : busy ? <Plus aria-hidden /> : null}
-            {/* beside Skip and Interrupt a narrow column has no room for "Queue another" (it read "Qu…"): the plus alone, the label read out */}
-            <span className={cn("truncate", busy && "@max-[12rem]/generate:sr-only")}>{busy ? t("Queue another") : t("Generate")}</span>
+            <span ref={labelRef} className={cn("truncate", !labelFits && "sr-only")}>
+              {label}
+            </span>
             {busy ? null : (
               <Kbd className="ml-1 hidden border border-glow-foreground/30 bg-transparent font-normal text-glow-foreground/75 @min-[14rem]/generate:inline-flex touch-only:hidden!">
                 {formatShortcut("Mod+Enter")}
