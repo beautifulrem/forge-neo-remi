@@ -39,7 +39,8 @@ function TagButton({ item, pressed, disabled, onToggle }: { item: FlatTag; press
       onClick={onToggle}
       className={cn(
         "flex max-w-full min-w-0 flex-col items-start rounded-md border px-2 py-1 text-left text-xs leading-tight transition-colors outline-none",
-        "border-border bg-background hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-focus-ring disabled:opacity-50 aria-pressed:border-primary/50",
+        "hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-focus-ring disabled:opacity-50",
+        "border-border bg-background aria-pressed:border-primary/50",
         PRESSED_TINT_CLASS,
       )}
     >

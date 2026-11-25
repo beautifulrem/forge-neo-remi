@@ -112,7 +112,8 @@ function Chip({ on, onClick, children, label }: { on: boolean; onClick: () => vo
       onClick={onClick}
       className={cn(
         "inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-2.5 text-xs whitespace-nowrap transition-colors outline-none select-none",
-        "border-border text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-focus-ring aria-pressed:border-primary/40",
+        "focus-visible:ring-2 focus-visible:ring-focus-ring",
+        "border-border text-muted-foreground hover:bg-muted hover:text-foreground aria-pressed:border-primary/40",
         PRESSED_TINT_CLASS,
       )}
     >

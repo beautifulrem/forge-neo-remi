@@ -208,8 +208,9 @@ export function RecipeManager() {
               aria-pressed={family === item}
               onClick={() => setFamily(item)}
               className={cn(
-                "h-7 rounded-sm px-2 text-xs font-medium text-muted-foreground transition-colors outline-none hover:bg-muted/50 hover:text-foreground focus-visible:ring-2 focus-visible:ring-focus-ring",
+                "h-7 rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
                 item && "font-mono",
+                "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
                 PRESSED_TINT_CLASS,
               )}
             >
