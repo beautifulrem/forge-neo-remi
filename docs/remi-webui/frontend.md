@@ -529,10 +529,11 @@ generated interfaces (sources: Linear's
   no underline or bottom shadow, and focus rings it evenly (`border-ring`
   plus a 3 px `ring-focus-ring`). An invalid field (`aria-invalid`, or
   `data-invalid` on the group that draws it) has a red edge
-  (`border-destructive`, 50 % in the dark theme; an inset 1 px ring in full
-  `--destructive` on the prompt editor, which has no border) and, while it
-  has no focus, a 3 px halo of 20 % `--destructive` (40 % in the kit's dark
-  theme). Focus wins: focused, it draws the
+  (`border-destructive`, which the shadcn input, textarea, select, combobox
+  and checkable controls thin to 50 % in the dark theme; an inset 1 px ring
+  on the prompt editor, which has no border) and, while it has no focus, a
+  3 px halo of 20 % `--destructive` (40 % in the dark theme on those and the
+  input group). Focus wins: focused, it draws the
   focus ring like any field, and its red edge tells it from a valid field
   with the focus. The halo is written for the unfocused state, `not-` the
   variant the field's focus ring is drawn under
@@ -544,8 +545,12 @@ generated interfaces (sources: Linear's
   `tests/e2e/a11y.spec.ts`, "invalid fields"). The prompt editor draws both in
   its CodeMirror theme, from `--prompt-edge` and `--prompt-halo` that its host
   sets while invalid. Under the coral accent `--ring` and `--destructive` are
-  nearly the same red (and the rose accent close to it): there the message
-  under a focused invalid field, not its edge, tells it from a valid one.
+  nearly the same red (OKLab ΔE 0.05 light, 0.01 dark, computed from the
+  tokens; rose 0.09 and 0.07, the default blue 0.28 and 0.24): there a
+  focused invalid field's edge does not tell it from a focused valid one,
+  and a field with no message under it (the aspect ratio popover's size
+  field, the colour fields) shows nothing invalid while focused. Open: that
+  needs an accent kept clear of `--destructive`, or a second cue.
   Image tiles (network cards) keep a hairline
   ring and no shadow. A focus ring over an image is drawn where the image
   cannot cover it: an inset ring is a box shadow and the tile's own outline
