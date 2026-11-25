@@ -828,6 +828,31 @@ def test_generate_route_uses_the_openai_compatible_provider(server, webui, monke
     assert server.client.post(f"{api}/generate", json={"description": ""}).status_code == 422
 
 
+def test_upsample_loads_a_local_model_path_only_without_hide_ui_dir_config(server, webui, monkeypatch):
+    """``local_model_path`` names a model file or folder anywhere on the server, which the
+    upsampler loads (llama-cpp, or transformers from the folder): --hide-ui-dir-config refuses
+    it, as it refuses the other paths on the server."""
+
+    from modules import shared
+    from remi.prompt_tools import pup
+
+    calls = []
+
+    def fake(prompt, **kwargs):
+        calls.append(kwargs["local_model_path"])
+        return pup.UpsampleResult(prompt=f"{prompt}, detailed", original_prompt=prompt, model_family="anima", mode="t2i", backend="local_qwen35")
+
+    monkeypatch.setattr(pup, "upsample_prompt", fake)
+    body = {"prompt": "a cat", "local_model_path": "/srv/models/qwen.gguf"}
+    monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", True)
+    refused = server.client.post("/api/v2/prompt-tools/upsample", json=body)
+    assert refused.status_code == 403 and "--hide-ui-dir-config" in refused.json()["detail"] and calls == []
+    assert server.client.post("/api/v2/prompt-tools/upsample", json={"prompt": "a cat"}).json()["prompt"] == "a cat, detailed"
+    monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", False)
+    assert server.client.post("/api/v2/prompt-tools/upsample", json=body).json()["prompt"] == "a cat, detailed"
+    assert calls == [None, "/srv/models/qwen.gguf"]
+
+
 def test_unloading_an_extension_turns_its_feature_off(data):
     tags, groups = pt.registry.tag_dirs[0], pt.registry.group_dirs[0]
     pt.unregister_tag_data(tags)

@@ -152,7 +152,12 @@ attackers who already have a login (they are administrators by design).
   server buffer and scan megabytes.
 - Unsafe deserialization: uploads can only be images, video, text or
   safetensors (a JSON header); nothing reachable from an upload or URL calls
-  `pickle`/`torch.load`. Model files are only loaded from the model folders.
+  `pickle`/`torch.load`. Model files are only loaded from the model folders,
+  with one exception: the Prompt Upsampler's `local_model_path`
+  (`POST /api/v2/prompt-tools/upsample` and a pipeline's upsample stage)
+  loads a `.gguf` file (llama-cpp) or a model folder (transformers,
+  `local_files_only`, no remote code) from any path the server can read.
+  `--hide-ui-dir-config` refuses it (see below).
 
 ### Paths and local actions
 
@@ -170,6 +175,13 @@ attackers who already have a login (they are administrators by design).
   directory, Extras batch from a directory and its video clip): the form
   hides them and `check_core` (`remi/core/forms.py`) refuses a request that
   still sends one, whichever way the job arrives.
+- `--hide-ui-dir-config` also refuses the Prompt Upsampler's
+  `local_model_path` (403 from `POST /api/v2/prompt-tools/upsample`; a
+  pipeline's upsample stage fails), stops an empty infotext paste
+  (`POST /api/v2/infotext/parse`) from reading the last generation's
+  `params.txt`, as `--no-prompt-history` does (only that flag stops writing
+  it), and leaves the file paths out of the queue import sources and
+  reports (`path: null`, `/api/v2/queue/import`).
 
 ### Extensions (`remi/extensions_admin.py`)
 

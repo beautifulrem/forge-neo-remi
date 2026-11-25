@@ -197,7 +197,7 @@ Pass options in `COMMANDLINE_ARGS` (`webui-user.bat`, `webui.settings.sh`) or to
 | `--nowebui` | API only (`/api/v2`, `/sdapi/v1`, no web interface), default port 7861 |
 | `--cors-allow-origins URLS`, `--cors-allow-origins-regex RE` | Allow browser front-ends on other origins, and extra host names for a loopback-only server |
 | `--enable-insecure-extension-access` | Allow installing and updating extensions from the UI while listening on the network |
-| `--hide-ui-dir-config` | Hide folder settings and "open folder" / "show in folder" actions |
+| `--hide-ui-dir-config` | Hide folder settings, inputs that name a path on the server (img2img and Extras batch from a directory, the Extras video clip, the Prompt Upsampler's local model path, API only) and "open folder" / "show in folder" actions; an empty parameter paste no longer reads the last generation's `params.txt`, and queue imports do not show their file paths |
 | `--freeze-settings`, `--freeze-settings-in-sections`, `--freeze-specific-settings` | Make settings read-only |
 | `--autolaunch` | Open the browser at start |
 | `--ngrok TOKEN` | Publish through an ngrok tunnel |

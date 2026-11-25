@@ -197,7 +197,7 @@ docker run --device /dev/kfd --device /dev/dri --group-add video -p 127.0.0.1:78
 | `--nowebui` | 仅 API（`/api/v2`、`/sdapi/v1`，无网页界面），默认端口 7861 |
 | `--cors-allow-origins URLS`、`--cors-allow-origins-regex RE` | 允许其他来源的浏览器前端，以及仅监听本机时额外允许的主机名 |
 | `--enable-insecure-extension-access` | 在网络监听时仍允许从界面安装和更新扩展 |
-| `--hide-ui-dir-config` | 隐藏文件夹设置以及“打开文件夹” / “在文件夹中显示”操作 |
+| `--hide-ui-dir-config` | 隐藏文件夹设置、指向服务器路径的输入（图生图和后期处理的从目录批量处理、后期处理的视频片段、提示词扩写（PUP）的本地模型路径，仅限 API）以及“打开文件夹” / “在文件夹中显示”操作；空的参数粘贴不再读取上次生成的 `params.txt`，队列导入也不显示文件路径 |
 | `--freeze-settings`、`--freeze-settings-in-sections`、`--freeze-specific-settings` | 设置只读 |
 | `--autolaunch` | 启动时打开浏览器 |
 | `--ngrok TOKEN` | 通过 ngrok 隧道发布 |
