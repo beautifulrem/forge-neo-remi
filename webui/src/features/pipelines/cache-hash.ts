@@ -56,23 +56,20 @@ export function defaultStage(kind: StageKind): StageSpec {
 }
 
 /** Built-in starter stage sequences (2–4 stages). */
-export const STARTER_PIPELINES: { id: string; name: string; description: string; stages: StageSpec[] }[] = [
+export const STARTER_PIPELINES: { id: string; name: string; stages: StageSpec[] }[] = [
   {
     id: "starter-gen-refine-finish",
     name: "Generate → Refine → Upscale",
-    description: "Standard 3-stage workflow: base generation, low-denoise polish, 2× finish upscale",
     stages: [defaultStage("generate"), defaultStage("refine"), defaultStage("finish")],
   },
   {
     id: "starter-pup-full",
     name: "PUP → Generate → Refine → Finish",
-    description: "Full 4-stage creative chain with Prompt Upsampler and cached intermediate reuse",
     stages: [defaultStage("prompt_upsample"), defaultStage("generate"), defaultStage("refine"), defaultStage("finish")],
   },
   {
     id: "starter-gen-upscale",
     name: "Generate → Upscale",
-    description: "Fast 2-stage workflow for rapid iteration on upscale settings",
     stages: [defaultStage("generate"), defaultStage("finish")],
   },
 ]
