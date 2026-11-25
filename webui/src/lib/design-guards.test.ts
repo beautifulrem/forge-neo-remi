@@ -99,3 +99,20 @@ describe("floating lists", () => {
     expect(capped.filter(({ match }) => !match.includes("--available-height"))).toEqual([])
   })
 })
+
+describe("tab strips", () => {
+  // A strip of fixed tabs that may not fit a phone is a FitTabsList (a select once it does not fit).
+  // Written by hand, with the reason:
+  const OWN_STRIP = new Set([
+    // a varying number of boards / tag groups: the strip scrolls sideways, its edges fading
+    "features/library/BoardsBar.tsx",
+    "features/prompt-tools/panels/GroupsPanel.tsx",
+    // two short views on the canvas's own toolbar
+    "canvas/img2img/Img2imgStage.tsx",
+  ])
+
+  it("are FitTabsList, not hand-written tab lists", () => {
+    const handWritten = files.filter(({ file, source }) => /role="tablist"/.test(source) && !OWN_STRIP.has(file)).map(({ file }) => file)
+    expect(handWritten).toEqual([])
+  })
+})

@@ -1,8 +1,8 @@
 /**
  * The queue's mode tabs sit at the top of `main`, which clips what it holds (`overflow-clip`): a
- * focus ring drawn outside a tab lost its top there. The tab strip keeps 4 px of room above the
- * tabs (frontend.md: 4 px of room around controls at a clipping edge), and the tabs are as much
- * shorter, so the bar keeps its height (h-9) and nothing below it moves.
+ * focus ring drawn outside a tab would lose its top there. The tabs are line tabs in a tab list
+ * whose padding is as wide as a tab's focus ring (frontend.md: room around controls at a clipping
+ * edge), so the whole ring stays inside the bar.
  */
 import { QueryClientProvider } from "@tanstack/react-query"
 import { render, screen, within } from "@testing-library/react"
@@ -19,17 +19,22 @@ afterEach(() => {
   queryClient.clear()
 })
 
+const px = (classes: string[], pattern: RegExp) => classes.map((name) => pattern.exec(name)?.[1]).find(Boolean)
+
 describe("the queue's mode tabs", () => {
-  it("keep room for their focus ring under main's top edge, in a bar of the same height", () => {
+  it("keep their whole focus ring inside the bar under main's top edge", () => {
     render(
       <QueryClientProvider client={queryClient}>
         <QueuePage />
       </QueryClientProvider>,
     )
     const strip = screen.getByRole("tablist", { name: "Queue" })
-    expect(strip.className.split(" ")).toContain("pt-1")
+    const room = px(strip.className.split(" "), /^p-\[(\d+)px\]$/)
+    expect(room).toBeDefined()
     for (const tab of within(strip).getAllByRole("tab")) {
-      expect(tab.className.split(" ")).toContain("h-8")
+      const ring = px(tab.className.split(" "), /^focus-visible:ring-\[(\d+)px\]$/)
+      expect(ring).toBeDefined()
+      expect(Number(ring)).toBeLessThanOrEqual(Number(room))
     }
   })
 })

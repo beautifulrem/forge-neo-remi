@@ -15,6 +15,7 @@ import type { FormTab, Job, QueueStatus } from "@/api/types"
 import { HeaderSlot } from "@/app/header-slot"
 import { useRouteParams, useRouteSearch } from "@/app/route-params"
 import { currentRoute, navigate, type Route } from "@/app/router"
+import { FitTabsList } from "@/components/FitTabsList"
 import { LoadFailed } from "@/components/LoadFailed"
 import { Segmented } from "@/components/Segmented"
 import {
@@ -256,38 +257,31 @@ export default function QueuePage({ route }: { route?: Route } = {}) {
   const pending = <Pending status={status} />
   const history = <History onView={view} />
 
+  const modes = [
+    { value: "queue", label: t("Queue & History"), Icon: ListOrdered },
+    { value: "pipelines", label: t("Pipelines"), Icon: GitMerge },
+    { value: "recipes", label: t("Recipes"), Icon: BookOpen },
+  ] as const
   const modeBar = (
-    <div className="flex items-center border-b border-border bg-background px-4">
-      {/* main clips at its top edge: 4 px of room above the tabs for their focus ring, the tabs as much shorter */}
-      <div role="tablist" aria-label={t("Queue")} className="flex items-stretch gap-1 pt-1">
-        {(
-          [
-            ["queue", t("Queue & History"), ListOrdered],
-            ["pipelines", t("Pipelines"), GitMerge],
-            ["recipes", t("Recipes"), BookOpen],
-          ] as const
-        ).map(([id, text, Icon]) => {
-          const active = localMode === id
-          return (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => setMode(id)}
-              className={cn(
-                "relative inline-flex h-8 items-center gap-1.5 px-2.5 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
-                active
-                  ? "text-foreground after:absolute after:inset-x-1 after:bottom-0 after:h-0.5 after:bg-primary"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
+    // the line tabs' underline lands on this bar's hairline; the select that replaces them gets room above and below
+    <div className="border-b border-border bg-background px-4 has-data-[slot=select-trigger]:py-1.5">
+      <Tabs value={localMode} onValueChange={(value) => setMode(value as QueueViewMode)}>
+        {/* on a narrow phone, or with longer translated labels, the three modes become a select rather than wrap */}
+        <FitTabsList
+          aria-label={t("Queue")}
+          variant="line"
+          options={modes.map(({ value, label, Icon }) => ({ value, label, icon: <Icon aria-hidden /> }))}
+          value={localMode}
+          onValueChange={setMode}
+        >
+          {modes.map(({ value, label, Icon }) => (
+            <TabsTrigger key={value} value={value} className="flex-none px-2.5 text-[0.8rem]">
               <Icon className="size-3.5" aria-hidden />
-              {text}
-            </button>
-          )
-        })}
-      </div>
+              {label}
+            </TabsTrigger>
+          ))}
+        </FitTabsList>
+      </Tabs>
     </div>
   )
 

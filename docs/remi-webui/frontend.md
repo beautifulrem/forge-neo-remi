@@ -266,7 +266,7 @@ imperatively).
   short last row). A strip of fixed tabs that may not fit a phone (three or
   more, or labels that grow once translated) is a `FitTabsList`, which turns
   into a select rather than scroll, wrap or cut a label (Extensions, the
-  network kinds, PNG Info); a strip whose number of items varies scrolls
+  network kinds, PNG Info, the queue's modes); a strip whose number of items varies scrolls
   sideways instead (the boards in a `FadeStrip`, the tag groups), its edges
   fading where there is more (`useScrollFade`, which also watches items that
   arrive after it mounts). A grid that can
@@ -422,8 +422,8 @@ generated interfaces (sources: Linear's
   types the value), and controls hidden until hover take no taps while
   hidden. A scroller (the JSON Builder column, `FadeStrip`) keeps 4 px of
   room around its controls so their focus rings are not clipped, and so does
-  a control at an edge of `main`, which clips (the queue's mode tabs: 4 px
-  above them, the tabs as much shorter so the bar keeps its height). Toolbar
+  a control at an edge of `main`, which clips (the queue's mode tabs: their
+  tab list's padding is as wide as a tab's focus ring). Toolbar
   controls (header, settings, extensions, gallery) are one 28 px height.
   A pressed toggle wears the selection tint (`--primary` text on a 15 %
   wash, 20 % in the dark theme, 25 % there when hovered), set once in

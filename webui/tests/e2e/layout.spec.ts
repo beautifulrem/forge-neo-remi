@@ -118,6 +118,24 @@ test.describe("tab strips on a phone", () => {
     })
   }
 
+  test("#/queue keeps its modes on one line or turns them into a select at 360 px", async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 })
+    await page.goto("/#/queue")
+    const main = page.getByRole("main")
+    const select = main.getByRole("combobox", { name: "Queue" })
+    const tabs = main.getByRole("tablist", { name: "Queue" })
+    await expect(select.or(tabs)).toBeVisible()
+    if (await select.isVisible()) {
+      await select.click()
+      await page.locator("[data-slot=select-item]", { hasText: "Recipes" }).click()
+      await expect(page).toHaveURL(/view=recipes/)
+      return
+    }
+    // one row of tabs, nothing scrolled or cut
+    expect((await tabs.boundingBox())!.height).toBeLessThanOrEqual(40)
+    expect(await tabs.evaluate((list) => list.scrollWidth <= list.clientWidth + 1)).toBe(true)
+  })
+
   test("the tabs come back when there is room", async ({ page }) => {
     await page.goto("/#/extensions")
     await expect(page.getByRole("main").getByRole("combobox", { name: "Extensions" })).toBeVisible()
