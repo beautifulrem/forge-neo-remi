@@ -54,6 +54,18 @@ describe("ServerView", () => {
     expect(screen.getByRole("button", { name: "Restart server" })).toBeEnabled()
   })
 
+  // On a phone the failure and its Retry next to the API documentation link were wider than the
+  // line: it wrapped and pushed the panels down. There the link has a line of its own, always.
+  it("on a phone, gives the version and the API documentation link a line each", () => {
+    vi.spyOn(api.system, "status").mockReturnValue(new Promise(() => {}))
+    renderView()
+    const line = screen.getByRole("link", { name: "API documentation" }).parentElement!
+    expect(line).toHaveClass("flex-col", "sm:flex-row", "sm:flex-wrap")
+    expect(line).not.toHaveClass("flex-wrap")
+    // while the status loads the version's line is blank, not gone: the link stays where it will be
+    expect(line.firstElementChild).toHaveClass("min-h-5")
+  })
+
   it("gives the weights in memory's lone refresh button a 40 px target", async () => {
     vi.spyOn(api.system, "status").mockResolvedValue(STATUS as never)
     vi.spyOn(api.system, "loadedModels").mockReturnValue(new Promise(() => {}))

@@ -1459,20 +1459,36 @@ test.describe("the selection bar on a phone held upright", () => {
 // every panel below jumped (CLS 0.243 on each load in Chinese at 1440×900).
 // When the status failed, its error and Retry sat on a line of their own above the panels and
 // pushed them down 48 px; they take the version's place on the header line instead.
-test("the server view's status failure leaves the panels where they are", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
-  const firstPanelTop = async () => {
-    const reload = page.getByRole("main").getByRole("button", { name: "Reload UI" })
-    await expect(reload).toBeVisible()
-    return (await reload.boundingBox())!.y
-  }
+// On a phone the failure, its Retry and the API documentation link did not fit one line: the line
+// wrapped and the panels moved down all the same; there the link has a line of its own.
+for (const width of [1440, 390, 360]) {
+  test(`the server view's status failure leaves the panels where they are at ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const firstPanelTop = async () => {
+      const reload = page.getByRole("main").getByRole("button", { name: "Reload UI" })
+      await expect(reload).toBeVisible()
+      return (await reload.boundingBox())!.y
+    }
+    await page.goto("/#/settings?view=server")
+    await expect(page.getByText(/^Version /)).toBeVisible()
+    const loaded = await firstPanelTop()
+    await injectFaults(page, [{ path: "^/server/status$", status: 404 }])
+    await page.reload()
+    await expect(page.getByRole("alert").filter({ hasText: "Could not read the server status" })).toBeVisible()
+    expect(Math.abs((await firstPanelTop()) - loaded), "the panels moved").toBeLessThanOrEqual(0.5)
+  })
+}
+
+test("the server view's panels stay put on a phone when the version arrives", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await injectFaults(page, [{ path: "^/server/status$", delay: 1500 }])
   await page.goto("/#/settings?view=server")
+  const reload = page.getByRole("main").getByRole("button", { name: "Reload UI" })
+  await expect(reload).toBeVisible()
+  await expect(page.getByText(/^Version /)).toHaveCount(0)
+  const before = (await reload.boundingBox())!.y
   await expect(page.getByText(/^Version /)).toBeVisible()
-  const loaded = await firstPanelTop()
-  await injectFaults(page, [{ path: "^/server/status$", status: 404 }])
-  await page.reload()
-  await expect(page.getByRole("alert").filter({ hasText: "Could not read the server status" })).toBeVisible()
-  expect(Math.abs((await firstPanelTop()) - loaded), "the panels moved").toBeLessThanOrEqual(0.5)
+  expect(Math.abs((await reload.boundingBox())!.y - before), "the panels moved").toBeLessThanOrEqual(0.5)
 })
 
 test.describe("the server view while its status loads", () => {
