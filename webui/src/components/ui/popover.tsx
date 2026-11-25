@@ -64,9 +64,6 @@ function Popover({ open: openProp, defaultOpen = false, onOpenChange, children, 
   // click that follows must not open it again
   const closedAt = React.useRef(0)
   const popupId = React.useId()
-  React.useEffect(() => {
-    if (open) loadForUse(implementation)
-  }, [open])
   const setOpen = (next: boolean, details?: ChangeDetails) => {
     if (!next && details?.reason === "outside-press" && pressedOn(anchor, details.event)) closedAt.current = performance.now()
     if (openProp === undefined) setOwnOpen(next)
@@ -76,6 +73,12 @@ function Popover({ open: openProp, defaultOpen = false, onOpenChange, children, 
     if (!open && performance.now() - closedAt.current < 400) return
     setOpen(!open)
   }
+  // a popover whose code could not load closes again (its trigger no longer says expanded): the
+  // next press asks for it again
+  const loadFailed = React.useEffectEvent(() => setOpen(false))
+  React.useEffect(() => {
+    if (open) loadForUse(implementation, loadFailed)
+  }, [open])
   return <PopoverContext value={{ open, setOpen, toggle, root, anchor, setAnchor, popupId }}>{children as React.ReactNode}</PopoverContext>
 }
 
