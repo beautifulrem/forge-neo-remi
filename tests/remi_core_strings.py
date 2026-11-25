@@ -316,10 +316,49 @@ def param_error_strings() -> set[str]:
     return param_error_messages()[0]
 
 
+# The errors of a request Remi refuses (an HTTP status with a sentence the UI shows): the queue's
+# and the pipelines' (``JobError`` and its subclasses) and the recipes' (``RecipeError``)
+REQUEST_ERRORS = ("JobError", "RecipeError")
+
+
+def request_error_classes(folder: str = "remi") -> set[str]:
+    """:data:`REQUEST_ERRORS` and every class in ``folder`` that derives from one of them."""
+
+    trees = [ast.parse(path.read_text(encoding="utf-8")) for path in sorted((REPO / folder).rglob("*.py"))]
+    classes = [node for tree in trees for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
+    found = set(REQUEST_ERRORS)
+    while True:
+        derived = {node.name for node in classes if any((base.id if isinstance(base, ast.Name) else getattr(base, "attr", None)) in found for base in node.bases)}
+        if derived <= found:
+            return found
+        found |= derived
+
+
+def request_error_messages(folder: str = "remi") -> tuple[set[str], list[str]]:
+    """``(templates, unchecked)``: the ``Sentence`` templates of the refused
+    requests (:func:`request_error_classes`) and, as ``path:line``, each one
+    made with anything else: an f-string or a constant cannot carry the
+    sentence's template to the UI (the HTTP error body's ``template``)."""
+
+    classes = request_error_classes(folder)
+    templates: set[str] = set()
+    unchecked: list[str] = []
+    for path in sorted((REPO / folder).rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Call) or _call_name(node) not in classes:
+                continue
+            arg = node.args[0] if node.args else None
+            if isinstance(arg, ast.Call) and _call_name(arg) == "Sentence" and arg.args and (text := _constant(arg.args[0])):
+                templates.add(text)
+            else:
+                unchecked.append(f"{path.relative_to(REPO).as_posix()}:{node.lineno}")
+    return templates, unchecked
+
+
 def core_strings(opts) -> set[str]:
     """Everything the core catalog must translate (data names left out)."""
 
-    strings = form_strings() | settings_strings(opts) | message_strings() | job_strings() | advice_strings() | param_error_strings()
+    strings = form_strings() | settings_strings(opts) | message_strings() | job_strings() | advice_strings() | param_error_strings() | request_error_messages()[0]
     dynamic = _dynamic_names()
     return {text for text in strings if text not in dynamic and not _is_data(text)}
 

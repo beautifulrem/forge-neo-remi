@@ -433,6 +433,21 @@ def test_every_rejected_value_has_a_catalog_key(catalog):
     assert all(_placeholders(catalog.get(text) or spa[text]) == _placeholders(text) for text in core)
 
 
+def test_every_refused_request_is_a_catalog_sentence(catalog):
+    """A queue, pipeline or recipe operation the server refuses says why in
+    the UI language: its error (``JobError``, ``RecipeError`` and their
+    subclasses) is a ``Sentence``, whose template the HTTP error body carries
+    and the catalog translates."""
+
+    assert {"ChainError"} <= strings_module.request_error_classes()
+    templates, unchecked = strings_module.request_error_messages()
+    assert unchecked == []
+    assert {"a pipeline stage cannot generate forever", "a recipe named {{name}} already exists", "a chain template named {{name}} already exists"} <= templates
+    missing = sorted(text for text in templates if not (catalog.get(text) or "").strip())
+    assert missing == [], f"localizations/zh_CN.json lacks {missing}"
+    assert all(_placeholders(catalog[text]) == _placeholders(text) for text in templates)
+
+
 def test_a_rejected_value_keeps_its_template():
     """The JSON of a rejected value carries the catalog key and the values
     next to the English message."""
