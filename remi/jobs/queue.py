@@ -665,6 +665,28 @@ class JobQueue:
             self.state().interrupt()  # an /sdapi request or a GPU action
         self._changed()
 
+    @contextlib.contextmanager
+    def interruptible(self) -> Iterator[Callable[[], bool]]:
+        """Around GPU work that is no job but that Interrupt stops (a local prompt upsampler):
+        the caller holds :attr:`lock`, so :meth:`interrupt_all` flips the state for it. As a
+        job's ``shared.state.begin()`` and end do, an interrupt left from before is cleared first
+        (one pressed while nothing ran must not stop it at once) and the flag again afterwards
+        (it must not reach whatever runs next). Yields whether Interrupt was pressed since."""
+
+        def interrupted() -> bool:
+            return bool(getattr(self.state(), "interrupted", False))
+
+        def clear() -> None:
+            state = self.state()
+            if state is not None:
+                state.interrupted = False
+
+        clear()
+        try:
+            yield interrupted
+        finally:
+            clear()
+
     def set_paused(self, paused: bool) -> None:
         with self._cv:
             self._paused = paused

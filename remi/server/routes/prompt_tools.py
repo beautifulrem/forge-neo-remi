@@ -4,12 +4,15 @@ favorites and collections (remi/prompt_tools)."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import Field
 
 from remi import prompt_tools as pt
+from remi.jobs import JobError
+from remi.prompt_tools.translate import GenerationInterrupted
 from remi.server import models as m
 from remi.server.deps import ServicesDep, behind_generation
 from remi.ui import ParamError, Sentence, ValidationError
@@ -402,7 +405,7 @@ def upsample(body: PromptUpsampleRequest, tools: ToolsDep, services: ServicesDep
         # the endpoint is the prompt tools' provider: off with them, as translating and writing are
         raise HTTPException(status_code=409, detail="the prompt tools are disabled")
 
-    def run() -> Any:
+    def run(should_stop: Callable[[], bool] | None = None) -> Any:
         return upsample_prompt(
             body.prompt,
             model_family=body.model_family,
@@ -417,14 +420,23 @@ def upsample(body: PromptUpsampleRequest, tools: ToolsDep, services: ServicesDep
             instructions=body.instructions,
             temperature=body.temperature,
             max_tokens=body.max_tokens,
+            should_stop=should_stop,
         )
+
+    def run_local() -> Any:
+        # Interrupt flips the queue's state while this holds the lock: the model stops on it
+        with services.queue.interruptible() as interrupted:
+            return run(interrupted)
 
     try:
         if body.local_model_path:
             # a local model loads on the GPU: behind the running job, like a pipeline's upsample stage
-            result = behind_generation(services, run)
+            result = behind_generation(services, run_local)
         else:
             result = run()
+    except GenerationInterrupted as error:
+        # stopped by Interrupt: refused as a queue operation is, with the sentence the UI translates
+        raise JobError(Sentence("the prompt upsampling was interrupted"), 409) from error
     except pt.TranslationError as error:
         raise _tool_error(error) from error
     return result.to_dict()

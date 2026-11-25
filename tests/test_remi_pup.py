@@ -385,13 +385,14 @@ def test_local_qwen35_runner_gguf_transformers_and_release_vram(tmp_path, monkey
         def __init__(self, **_kw):
             pass
 
-        def create_chat_completion(self, *, messages, **_kw):
+        def create_chat_completion(self, *, messages, stream=False, **_kw):
             seen_msgs.append(messages)
             if mode["behavior"] == "boom":
                 raise RuntimeError("gguf crash")
             if mode["behavior"] == "terr":
                 raise TranslationError("explicit terr", 503)
-            return {"choices": [{"message": {"content": "Upsampled via GGUF"}}]}
+            assert stream  # streamed, so that Interrupt is seen between tokens
+            return iter([{"choices": [{"delta": {"role": "assistant"}}]}, {"choices": [{"delta": {"content": "Upsampled via GGUF"}}]}])
 
         def close(self):
             closed.append(1)
@@ -480,6 +481,10 @@ def test_local_qwen35_runner_gguf_transformers_and_release_vram(tmp_path, monkey
     fake_tf.AutoProcessor = FakeVLMProcessor
     fake_tf.AutoModelForCausalLM = FakeModel
     fake_tf.AutoModelForImageTextToText = FakeModel
+    from transformers.generation import stopping_criteria as real_stopping
+
+    fake_tf.StoppingCriteria = real_stopping.StoppingCriteria
+    fake_tf.StoppingCriteriaList = real_stopping.StoppingCriteriaList
     monkeypatch.setitem(sys.modules, "transformers", fake_tf)
 
     # Text-only
@@ -807,3 +812,207 @@ def test_the_upsampler_warnings_are_sentences_the_ui_translates():
     assert answer["message"] == "Layout warning: cat_1 is not cited as <cat_1> in the caption"
     assert answer["template"] == "Layout warning: {{problem}}" and answer["params"]["problem.template"] == "{{id}} is not cited as <{{id}}> in the caption"
     assert raw.to_dict()["warnings"] == [{"message": "VGL JSON mode expected a JSON object; returning raw text output."}]
+
+
+# region Interrupt stops a local upsample
+
+
+def _fake_transformers(monkeypatch, generate):
+    """A ``transformers`` module whose model runs ``generate`` (the real stopping criteria classes:
+    the model calls them once per new token, as ``GenerationMixin.generate`` does)."""
+
+    from transformers.generation import stopping_criteria as real
+
+    moved = []
+
+    class FakeInputs(dict):
+        def to(self, _device):
+            return self
+
+    class FakeTokenizer:
+        @classmethod
+        def from_pretrained(cls, _path, **_kw):
+            return cls()
+
+        def apply_chat_template(self, _messages, **_kw):
+            return "templated prompt"
+
+        def __call__(self, _text, **_kw):
+            return FakeInputs(input_ids=torch.tensor([[1, 2, 3]]))
+
+        def decode(self, tokens, **_kw):
+            return " ".join(f"t{int(token)}" for token in tokens)
+
+    class FakeModel:
+        @classmethod
+        def from_pretrained(cls, _path, **_kw):
+            return cls()
+
+        def to(self, device):
+            moved.append(device)
+            return self
+
+        def eval(self):
+            return self
+
+        def generate(self, **kwargs):
+            return generate(**kwargs)
+
+    module = types.ModuleType("transformers")
+    module.AutoTokenizer = module.AutoProcessor = FakeTokenizer
+    module.AutoModelForCausalLM = module.AutoModelForImageTextToText = FakeModel
+    module.StoppingCriteria = real.StoppingCriteria
+    module.StoppingCriteriaList = real.StoppingCriteriaList
+    monkeypatch.setitem(sys.modules, "transformers", module)
+    return moved
+
+
+def test_interrupt_stops_a_local_transformers_upsample_between_tokens(tmp_path, monkeypatch):
+    """Interrupt could not stop a local upsample: ``model.generate`` ran its ``max_new_tokens``. A
+    stopping criterion reads the interrupt flag at every token, and the run ends as interrupted
+    (no half-written prompt), with the model unloaded as after any run."""
+
+    hf_dir = tmp_path / "qwen35-hf"
+    hf_dir.mkdir()
+    flag = {"on": False}
+    steps = []
+
+    def generate(*, input_ids, stopping_criteria=None, max_new_tokens, **_kw):
+        ids = input_ids
+        for step in range(max_new_tokens):
+            ids = torch.cat([ids, torch.tensor([[100 + step]])], dim=-1)
+            steps.append(step)
+            if step == 2:
+                flag["on"] = True  # Interrupt pressed while the third token is made
+            if stopping_criteria is not None and bool(stopping_criteria(ids, torch.zeros(1, 8)).all()):
+                break
+        return ids
+
+    moved = _fake_transformers(monkeypatch, generate)
+    released = []
+    monkeypatch.setattr(pup.LocalQwen35PUPRunner, "release_vram", classmethod(lambda cls: released.append(1)))
+    runner = pup.LocalQwen35PUPRunner(hf_dir, max_tokens=50, should_stop=lambda: flag["on"])
+    with pytest.raises(pup.GenerationInterrupted) as stopped:
+        runner.generate("sys", "a fox")
+    assert stopped.value.status == 409
+    assert steps == [0, 1, 2]  # stopped at the token Interrupt came in, not after 50
+    assert moved[-1] == "cpu" and released == [1]
+
+    # not interrupted: the criterion lets it run to the end
+    flag["on"] = False
+    steps.clear()
+
+    def no_interrupt(*, input_ids, stopping_criteria=None, max_new_tokens, **_kw):
+        ids = input_ids
+        for step in range(max_new_tokens):
+            ids = torch.cat([ids, torch.tensor([[100 + step]])], dim=-1)
+            steps.append(step)
+            if bool(stopping_criteria(ids, torch.zeros(1, 8)).all()):
+                break
+        return ids
+
+    _fake_transformers(monkeypatch, no_interrupt)
+    assert pup.LocalQwen35PUPRunner(hf_dir, max_tokens=4, should_stop=lambda: flag["on"]).generate("sys", "a fox") == "t100 t101 t102 t103"
+    assert steps == [0, 1, 2, 3]
+
+
+def test_interrupt_stops_a_local_gguf_upsample_between_chunks(tmp_path, monkeypatch):
+    """llama-cpp's chat completion ran to its end: it is streamed now, and the stream is closed
+    at the first chunk after Interrupt (closing it stops llama.cpp's token loop)."""
+
+    gguf = tmp_path / "pup.gguf"
+    gguf.write_bytes(b"GGUF")
+    flag = {"on": False}
+    made: list[int] = []
+    stream_closed = []
+    llm_closed = []
+    seen_kwargs: dict = {}
+
+    class FakeLlama:
+        def __init__(self, **_kw):
+            pass
+
+        def create_chat_completion(self, *, messages, **kwargs):
+            seen_kwargs.update(kwargs)
+
+            def chunks():
+                try:
+                    yield {"choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]}
+                    for index in range(40):
+                        made.append(index)
+                        if index == 3:
+                            flag["on"] = True  # Interrupt pressed while the fourth piece is made
+                        yield {"choices": [{"index": 0, "delta": {"content": f"w{index} "}, "finish_reason": None}]}
+                    yield {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+                finally:
+                    stream_closed.append(len(made))
+
+            return chunks()
+
+        def close(self):
+            llm_closed.append(1)
+
+    module = types.ModuleType("llama_cpp")
+    module.Llama = FakeLlama
+    monkeypatch.setitem(sys.modules, "llama_cpp", module)
+    released = []
+    monkeypatch.setattr(pup.LocalQwen35PUPRunner, "release_vram", classmethod(lambda cls: released.append(1)))
+
+    with pytest.raises(pup.GenerationInterrupted):
+        pup.LocalQwen35PUPRunner(gguf, should_stop=lambda: flag["on"]).generate("sys", "a fox")
+    assert seen_kwargs.get("stream") is True
+    assert made == [0, 1, 2, 3] and stream_closed == [4]  # closed at once, not drained to 40
+    assert llm_closed == [1] and released == [1]
+
+    # a whole stream is the answer, its pieces joined
+    flag["on"] = False
+    made.clear()
+    stream_closed.clear()
+
+    class ShortLlama(FakeLlama):
+        def create_chat_completion(self, *, messages, **kwargs):
+            def chunks():
+                yield {"choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]}
+                yield {"choices": [{"index": 0, "delta": {"content": "A fox "}, "finish_reason": None}]}
+                yield {"choices": [{"index": 0, "delta": {"content": None}, "finish_reason": None}]}
+                yield {"choices": [{"index": 0, "delta": {"content": "in snow."}, "finish_reason": None}]}
+                yield {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+
+            return chunks()
+
+    module.Llama = ShortLlama
+    assert pup.LocalQwen35PUPRunner(gguf, should_stop=lambda: flag["on"]).generate("sys", "a fox") == "A fox in snow."
+
+
+def test_a_local_upsample_reads_the_interrupt_flag_of_the_webui_by_default(tmp_path, monkeypatch):
+    """Without ``should_stop`` the runner reads ``shared.state.interrupted`` (what Interrupt and
+    ``/sdapi/v1/interrupt`` set); before the WebUI made its state there is nothing to read."""
+
+    from modules import shared, shared_state
+
+    monkeypatch.setattr(shared, "state", None)
+    assert pup.webui_interrupted() is False
+    state = shared_state.State()
+    monkeypatch.setattr(shared, "state", state)
+    assert pup.webui_interrupted() is False
+    state.interrupt()
+    assert pup.webui_interrupted() is True
+
+    gguf = tmp_path / "pup.gguf"
+    gguf.write_bytes(b"GGUF")
+    calls = []
+
+    def runner(**kwargs):
+        calls.append(kwargs)
+        return "A detailed fox."
+
+    monkeypatch.setattr(pup.LocalQwen35PUPRunner, "release_vram", classmethod(lambda cls: None))
+    # Interrupt while an injected runner worked: its answer is not used
+    with pytest.raises(pup.GenerationInterrupted):
+        pup.upsample_prompt("a fox", model_family="flux3", local_model_path=gguf, local_runner=runner)
+    flag = {"on": False}
+    result = pup.upsample_prompt("a fox", model_family="flux3", local_model_path=gguf, local_runner=runner, should_stop=lambda: flag["on"])
+    assert result.prompt == "A detailed fox." and calls[-1]["should_stop"]() is False
+
+
+# endregion

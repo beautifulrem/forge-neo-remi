@@ -48,6 +48,15 @@ class TranslationError(RuntimeError):
         self.param = param
 
 
+class GenerationInterrupted(TranslationError):
+    """Interrupt stopped a local model while it wrote (the prompt upsampler's llama-cpp or
+    transformers run): no answer, and no half-written one either. The upsample route answers 409
+    with it; a pipeline's upsample stage ends cancelled, as an interrupted generation stage does."""
+
+    def __init__(self, message: str = "the prompt upsampling was interrupted") -> None:
+        super().__init__(message, 409)
+
+
 @dataclass(frozen=True)
 class ProviderConfig:
     provider: str = "none"

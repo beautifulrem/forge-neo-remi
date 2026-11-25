@@ -1137,5 +1137,6 @@
   "board name is required": "需要填写看板名称",
   "board name must be at most {{maximum}} characters": "看板名称不能超过 {{maximum}} 个字符",
   "a collection needs a name": "收藏夹需要名称",
-  "a collection name must be at most {{maximum}} characters": "收藏夹名称不能超过 {{maximum}} 个字符"
+  "a collection name must be at most {{maximum}} characters": "收藏夹名称不能超过 {{maximum}} 个字符",
+  "the prompt upsampling was interrupted": "提示词扩写已中止"
 }

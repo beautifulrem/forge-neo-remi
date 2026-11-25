@@ -973,6 +973,33 @@ def test_upsample_loads_a_local_model_path_only_without_hide_ui_dir_config(serve
     assert calls == [None, "/srv/models/qwen.gguf"]
 
 
+def test_interrupt_stops_a_local_upsample_and_the_route_says_so(server, monkeypatch):
+    """A local model runs behind generation, where Interrupt (``POST /interrupt``) flips the
+    queue's state: the upsampler gets that flag to stop on, cleared first (an Interrupt pressed
+    while nothing ran must not stop it at the first token) and cleared again after (it must not
+    reach what runs next). An interrupted upsample answers 409 with the sentence the UI translates."""
+
+    from modules import shared
+    from remi.prompt_tools import pup
+
+    monkeypatch.setattr(shared.cmd_opts, "hide_ui_dir_config", False)
+    seen = []
+
+    def fake(prompt, *, should_stop, **kwargs):
+        seen.append(should_stop())
+        server.services.queue.interrupt_all()  # the user presses Interrupt while it writes
+        seen.append(should_stop())
+        raise pup.GenerationInterrupted()
+
+    monkeypatch.setattr(pup, "upsample_prompt", fake)
+    server.state.interrupt()  # left over from an Interrupt while nothing ran
+    answer = server.client.post("/api/v2/prompt-tools/upsample", json={"prompt": "a cat", "local_model_path": "/srv/models/qwen.gguf"})
+    assert seen == [False, True]
+    assert answer.status_code == 409
+    assert answer.json() == {"detail": "the prompt upsampling was interrupted", "template": "the prompt upsampling was interrupted", "params": {}}
+    assert server.state.interrupted is False
+
+
 def test_upsample_route_lists_a_refused_value_with_its_template(server):
     refused = server.client.post("/api/v2/prompt-tools/upsample", json={"prompt": "a dog", "aspect_ratio": "wide"})
     assert refused.status_code == 422

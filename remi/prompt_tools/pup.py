@@ -10,8 +10,9 @@ Supports:
   guidance), MOSS-Image / Kromoss, Bria Fibo 2.0 (VGL JSON schema output),
   Z-Image, ERNIE-Image, and Anima;
 - An optional in-process local quantized Qwen3.5 PUP runner
-  (:class:`LocalQwen35PUPRunner`) that loads the checkpoint on demand and
-  always unloads and frees GPU/MPS memory in a ``finally`` block after
+  (:class:`LocalQwen35PUPRunner`) that loads the checkpoint on demand,
+  stops between tokens when Interrupt is pressed (:class:`GenerationInterrupted`),
+  and always unloads and frees GPU/MPS memory in a ``finally`` block after
   upsampling.
 """
 
@@ -35,6 +36,7 @@ from backend.nn import flux3_layout
 from remi.prompt_tools.translate import (
     DEFAULT_INSTRUCTIONS,
     NEGATIVE_INSTRUCTIONS,
+    GenerationInterrupted,
     Post,
     ProviderConfig,
     TranslationError,
@@ -466,6 +468,18 @@ def _build_user_message(
 # region Optional in-process local quantized Qwen3.5 PUP runner
 
 
+def webui_interrupted() -> bool:
+    """Whether Interrupt was pressed: ``shared.state.interrupted``, which the generation queue's
+    Interrupt (``POST /api/v2/interrupt``, when no job holds it) and ``/sdapi/v1/interrupt`` set.
+    False before the WebUI made its state."""
+
+    try:
+        from modules import shared
+    except Exception:
+        return False
+    return bool(getattr(getattr(shared, "state", None), "interrupted", False))
+
+
 class LocalQwen35PUPRunner:
     """Optional in-process local quantized Qwen3.5 Prompt Upsampler runner.
 
@@ -473,6 +487,11 @@ class LocalQwen35PUPRunner:
     HuggingFace / Unsloth quantized directory (via ``transformers``), runs one
     generation call in ``torch.inference_mode()``, and unconditionally unloads
     weights and clears VRAM/MPS cache in a ``finally`` block.
+
+    ``should_stop`` is asked between tokens (default :func:`webui_interrupted`):
+    transformers through a stopping criterion, llama-cpp by streaming the
+    completion and closing the stream. A run it stopped raises
+    :class:`GenerationInterrupted` instead of returning what was written so far.
     """
 
     def __init__(
@@ -482,11 +501,13 @@ class LocalQwen35PUPRunner:
         max_tokens: int = 1024,
         temperature: float = 0.7,
         n_ctx: int = 4096,
+        should_stop: Callable[[], bool] | None = None,
     ) -> None:
         self.model_path = os.fspath(model_path)
         self.max_tokens = int(max_tokens)
         self.temperature = float(temperature)
         self.n_ctx = int(n_ctx)
+        self.should_stop = should_stop or webui_interrupted
 
     @staticmethod
     def release_vram() -> None:
@@ -524,12 +545,30 @@ class LocalQwen35PUPRunner:
             user_content: Any = user_text
             if image_uris:
                 user_content = [{"type": "text", "text": user_text}, *[{"type": "image_url", "image_url": {"url": u}} for u in image_uris]]
-            response = llm.create_chat_completion(
+            # streamed, so that Interrupt is seen between tokens: closing the stream ends
+            # llama.cpp's token loop (a plain call returns only once it has written everything)
+            stream = llm.create_chat_completion(
                 messages=[{"role": "system", "content": system}, {"role": "user", "content": user_content}],
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
+                stream=True,
             )
-            return str(response["choices"][0]["message"]["content"] or "")
+            pieces: list[str] = []
+            try:
+                for chunk in stream:
+                    if self.should_stop():
+                        raise GenerationInterrupted()
+                    choices = chunk.get("choices") or []
+                    content = (choices[0].get("delta") or {}).get("content") if choices else None
+                    if content:
+                        pieces.append(str(content))
+            finally:
+                close_stream = getattr(stream, "close", None)
+                if callable(close_stream):
+                    close_stream()
+            if self.should_stop():
+                raise GenerationInterrupted()
+            return "".join(pieces)
         except TranslationError:
             raise
         except Exception as err:
@@ -551,7 +590,15 @@ class LocalQwen35PUPRunner:
         model = None
         processor = None
         try:
-            from transformers import AutoModelForCausalLM, AutoProcessor, AutoTokenizer
+            from transformers import AutoModelForCausalLM, AutoProcessor, AutoTokenizer, StoppingCriteria, StoppingCriteriaList
+
+            should_stop = self.should_stop
+
+            class InterruptCriteria(StoppingCriteria):
+                """Stops ``generate`` at the next token once Interrupt is pressed."""
+
+                def __call__(self, input_ids: Any, scores: Any, **kwargs: Any) -> Any:
+                    return torch.full((input_ids.shape[0],), bool(should_stop()), device=input_ids.device, dtype=torch.bool)
 
             device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
             dtype = torch.bfloat16 if device != "cpu" else torch.float32
@@ -585,7 +632,10 @@ class LocalQwen35PUPRunner:
                     max_new_tokens=self.max_tokens,
                     do_sample=self.temperature > 0.0,
                     temperature=max(self.temperature, 1e-5),
+                    stopping_criteria=StoppingCriteriaList([InterruptCriteria()]),
                 )
+            if self.should_stop():
+                raise GenerationInterrupted()
             prompt_len = int(inputs["input_ids"].shape[-1])
             generated = output_ids[0, prompt_len:]
             decode = getattr(processor, "decode", None) or processor.tokenizer.decode
@@ -639,9 +689,15 @@ def upsample_prompt(
     max_tokens: int = 1024,
     post: Post = _http_post,
     local_runner: Callable[..., str] | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> UpsampleResult:
     """Upsample a user prompt using either a multimodal OpenAI-compatible VLM
     endpoint or an optional local quantized Qwen3.5 PUP runner.
+
+    A local model stops between tokens once ``should_stop()`` says so (default
+    :func:`webui_interrupted`) and raises :class:`GenerationInterrupted`. It runs
+    behind generation, and the caller clears the interrupt flag around it
+    (``JobQueue.interruptible``), as a job's start and end do.
 
     Raises :class:`remi.prompt_tools.translate.TranslationError` with an HTTP
     status code on validation, configuration, or execution errors.
@@ -698,6 +754,7 @@ def upsample_prompt(
     try:
         if use_local:
             backend: Literal["openai_vlm", "local_qwen35"] = "local_qwen35"
+            stop = should_stop or webui_interrupted
             if local_runner is not None:
                 try:
                     raw_output = local_runner(
@@ -708,11 +765,14 @@ def upsample_prompt(
                         pil_images=pil_images,
                         temperature=temperature,
                         max_tokens=max_tokens,
+                        should_stop=stop,
                     )
                 finally:
                     LocalQwen35PUPRunner.release_vram()
+                if stop():
+                    raise GenerationInterrupted()
             else:
-                runner = LocalQwen35PUPRunner(local_model_path, max_tokens=max_tokens, temperature=temperature)
+                runner = LocalQwen35PUPRunner(local_model_path, max_tokens=max_tokens, temperature=temperature, should_stop=stop)
                 raw_output = runner.generate(system, user_message, image_uris=image_uris, pil_images=pil_images)
             upsampled = _clean_prompt(str(raw_output or ""), preserve_newlines=preserve_newlines)
             if not upsampled:

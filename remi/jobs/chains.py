@@ -1356,24 +1356,38 @@ class ChainRunner:
         return updated_chain
 
     def _run_upsample(self, chain_id: str, stage: StageRun, stage_hash: str, started: float, upstream_prompt: str | None, upstream_outputs: list[str]) -> None:
+        from remi.prompt_tools.translate import GenerationInterrupted
+
+        def run_local() -> str:
+            # Interrupt flips the queue's state while this holds the lock: the local model stops on it
+            with self.queue.interruptible():
+                return self.upsampler(stage, upstream_prompt, upstream_outputs)
+
         try:
             result: str | None = None
             error: str | None = None
+            interrupted = False
             try:
                 if stage.config.get("local_model_path"):
                     # a local model loads into VRAM: behind the generation lock, on the main thread
                     with self.queue.lock:
                         if self._stage_running(chain_id, stage.index, stage_hash, started):
-                            result = self.queue.dispatch(self.upsampler, stage, upstream_prompt, upstream_outputs)
+                            result = self.queue.dispatch(run_local)
                 elif self._stage_running(chain_id, stage.index, stage_hash, started):
                     # the prompt tools' endpoint is only a network request: jobs go on meanwhile
                     result = self.upsampler(stage, upstream_prompt, upstream_outputs)
+            except GenerationInterrupted as exc:
+                error, interrupted = str(exc), True
             except Exception as exc:
                 error = f"{type(exc).__name__}: {exc}"
             should_advance = False
             with self._lock:
                 if not self._stage_running(chain_id, stage.index, stage_hash, started):
                     return  # cancelled, deleted, or re-run (another thread runs it now)
+                if interrupted:  # as an interrupted generation stage: the pipeline is cancelled, nothing cached
+                    self._fail_chain(chain_id, stage.index, error or "", status="cancelled")
+                    self.queue.recheck_done()
+                    return
                 if error is not None or result is None:
                     self._fail_chain(chain_id, stage.index, error or "prompt upsampling returned nothing")
                     self.queue.recheck_done()  # the pipeline ended here, where no job's end looks at the queue

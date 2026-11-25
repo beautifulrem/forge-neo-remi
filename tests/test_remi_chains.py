@@ -555,3 +555,39 @@ def test_the_server_keys_upsampling_by_the_provider_settings_without_the_key(tmp
         assert identity() == "openai:http://a/v1:qwen"
         settings["prompt_tools_translation_url"] = "http://b/v1"
         assert identity() == "openai:http://b/v1:qwen"
+
+
+def test_an_interrupted_local_upsample_stage_ends_the_pipeline_cancelled(tmp_path):
+    """A local model's upsample stage runs behind generation, where Interrupt flips the queue's
+    state: the flag is cleared before it starts and after it ends, and a stage Interrupt stopped
+    ends the pipeline ``cancelled`` (as an interrupted generation stage does), with nothing cached."""
+
+    from remi.prompt_tools.translate import GenerationInterrupted
+
+    files = FileStore(tmp_path / "files")
+    jobs = JobStore(tmp_path / "jobs.db")
+    bus = EventBus()
+    state = FakeState()
+    queue = JobQueue(jobs, files, bus, executor=lambda job, ctx: None, dispatch=run_inline, lock=threading.Lock(), validate=lambda *a: None, state=lambda: state, hash_layout=lambda tab: "h")
+    seen = []
+
+    def upsampler(stage, upstream_prompt, upstream_outputs):
+        seen.append(state.interrupted)
+        queue.interrupt_all()  # the user presses Interrupt while the local model writes
+        raise GenerationInterrupted()
+
+    runner = ChainRunner(ChainStore(jobs), queue, files, bus, upsampler=upsampler, model_fingerprint=lambda: "m")
+    try:
+        state.interrupt()  # left over from an Interrupt while nothing ran
+        chain = runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "fox"}, config={"local_model_path": "/srv/qwen.gguf"}), StageSpec(kind="generate", core={"prompt": "fox"})])
+        assert runner.wait_idle(5)
+        done = runner.store.get_chain(chain.id)
+        assert seen == [False]
+        assert done.status == "cancelled" and done.stages[0].status == "cancelled" and done.stages[1].job_id is None  # the next stage never ran
+        assert done.error == "the prompt upsampling was interrupted"
+        assert runner.store.get_cached(done.stages[0].stage_hash or "") is None
+        assert state.interrupted is False
+    finally:
+        runner.close()
+        files.close()
+        jobs.close()
