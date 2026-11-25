@@ -35,6 +35,8 @@ describe("preferred modules", () => {
     renderModules()
     const retry = await screen.findByRole("button", { name: "Retry" })
     expect(screen.queryByText("No modules found")).not.toBeInTheDocument()
+    // centred in the list, as its loading and empty states are
+    expect(screen.getByRole("alert")).toHaveClass("justify-center")
     list.mockResolvedValue(models)
     fireEvent.click(retry)
     expect(await screen.findByRole("checkbox", { name: models.modules?.[0]?.title ?? models.modules?.[0]?.name ?? "" })).toBeInTheDocument()

@@ -78,7 +78,7 @@ export function PreferredModules({ id, value, onChange }: { id: string; value: s
           </div>
         ))}
         {models.isError && !models.data ? (
-          <LoadFailed error={models.error} message={t("Could not load the models")} onRetry={() => void models.refetch()} className="px-2" />
+          <LoadFailed error={models.error} message={t("Could not load the models")} onRetry={() => void models.refetch()} className="justify-center px-2" />
         ) : models.isPending ? (
           // the list is on its way, not empty (the model bar's picker says the same)
           <p role="status" className="px-2 py-3 text-center text-sm text-muted-foreground">{t("Loading…")}</p>
