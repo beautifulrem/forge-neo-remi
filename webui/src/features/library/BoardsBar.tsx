@@ -6,7 +6,7 @@
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { Check, Folder, FolderPlus, Images, MoreHorizontal, Pencil, Plus, Trash2, X } from "@/components/icons"
-import { type ReactNode, useState } from "react"
+import { type ReactNode, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { FadeStrip } from "@/components/FadeStrip"
@@ -58,6 +58,10 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
   const [newName, setNewName] = useState("")
   const [renaming, setRenaming] = useState<Board | null>(null)
   const [renameText, setRenameText] = useState("")
+  // the name fields are focused through their popup (`initialFocus`), not `autoFocus`, which made the
+  // field the place to give the focus back to on close
+  const newNameRef = useRef<HTMLInputElement>(null)
+  const renameRef = useRef<HTMLInputElement>(null)
   const [deleting, setDeleting] = useState<Board | null>(null)
 
   const activeBoard = boardId ? boards.find((board) => board.id === boardId) ?? null : null
@@ -204,7 +208,7 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
               </Button>
             }
           />
-          <PopoverContent aria-label={t("New board")} align="end" className="w-64 p-3">
+          <PopoverContent aria-label={t("New board")} align="end" className="w-64 p-3" initialFocus={newNameRef}>
             <form
               className="flex flex-col gap-2"
               onSubmit={(event) => {
@@ -219,7 +223,7 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
                   onChange={(event) => setNewName(event.target.value)}
                   placeholder={t("Board name")}
                   className="h-7 text-[0.8rem]"
-                  autoFocus
+                  ref={newNameRef}
                 />
               </label>
               <div className="flex justify-end gap-1.5">
@@ -276,7 +280,7 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
       </div>
 
       <AlertDialog open={renaming !== null} onOpenChange={(open) => !open && setRenaming(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent initialFocus={renameRef}>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("Rename board")}</AlertDialogTitle>
           </AlertDialogHeader>
@@ -291,7 +295,7 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
               value={renameText}
               onChange={(event) => setRenameText(event.target.value)}
               aria-label={t("Board name")}
-              autoFocus
+              ref={renameRef}
             />
             <AlertDialogFooter>
               <AlertDialogCancel>{t("Cancel")}</AlertDialogCancel>

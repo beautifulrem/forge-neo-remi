@@ -20,7 +20,7 @@ import {
   Save,
   Trash2,
 } from "@/components/icons"
-import { type ComponentProps, Fragment, useEffect, useMemo, useState } from "react"
+import { type ComponentProps, Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
@@ -140,6 +140,8 @@ export function PipelineBuilder() {
   }
   const [serverPreview, setServerPreview] = useState<{ sig: string; stages: ChainPreviewStage[] } | null>(null)
   const [saveOpen, setSaveOpen] = useState(false)
+  // focused through the popover (`initialFocus`), not `autoFocus`, which made it the place to give the focus back to
+  const templateRef = useRef<HTMLInputElement>(null)
   const [templateName, setTemplateName] = useState("")
 
   const chains = useQuery(chainsQuery)
@@ -357,7 +359,7 @@ export function PipelineBuilder() {
             <Save className="size-3.5" aria-hidden />
             {t("Save template")}
           </PopoverTrigger>
-          <PopoverContent aria-label={t("Save template")} align="start" className="w-64 p-3">
+          <PopoverContent aria-label={t("Save template")} align="start" className="w-64 p-3" initialFocus={templateRef}>
             <form
               className="flex flex-col gap-2"
               onSubmit={(event) => {
@@ -372,7 +374,7 @@ export function PipelineBuilder() {
                 placeholder={name || t("Pipeline name")}
                 aria-label={t("Pipeline name")}
                 className="h-7 text-xs"
-                autoFocus
+                ref={templateRef}
               />
               <div className="flex justify-end gap-1.5">
                 <Button type="button" variant="ghost" size="sm" className="h-7" onClick={() => setSaveOpen(false)}>

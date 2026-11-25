@@ -179,9 +179,12 @@ function LoadPromptDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
       setError(message(err))
     }
   }
+  // the text box takes the focus through the dialog (`initialFocus`): `autoFocus` made it the place
+  // to give the focus back to on close, and the focus was left on the page
+  const textRef = useRef<HTMLTextAreaElement>(null)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl" initialFocus={textRef}>
         <DialogHeader>
           <DialogTitle>{t("Load prompt")}</DialogTitle>
           <DialogDescription>{t("Paste a compiled MOSS-Image, FLUX.3, or Bria Fibo 2.0 VGL prompt (with the size it was made for) or a saved layout draft.")}</DialogDescription>
@@ -198,7 +201,7 @@ function LoadPromptDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
               aria-label={t("Compiled prompt or layout draft")}
               placeholder={t("Compiled prompt or layout draft")}
               spellCheck={false}
-              autoFocus
+              ref={textRef}
               value={text}
               aria-invalid={error !== null || undefined}
               aria-describedby={error ? `${id}-error` : undefined}

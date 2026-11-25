@@ -264,3 +264,28 @@ test.describe("axe on a phone", () => {
     })
   }
 })
+
+// A dialog whose text field took the focus as it mounted (`autoFocus`) recorded that field as the
+// place to return to: closing it left the focus on the page itself, and the next Tab started over
+// from the top of the page.
+test.describe("focus after a dialog", () => {
+  const cases: { name: string; route: string; before?: (page: Page) => Promise<void>; opener: string }[] = [
+    { name: "JSON Builder's Load prompt", route: "ext/json-builder", opener: "Load prompt…" },
+    { name: "Capture a recipe from the form", route: "queue", before: (page) => page.getByRole("tab", { name: "Recipes" }).click(), opener: "Capture from form" },
+  ]
+  for (const item of cases) {
+    test(`${item.name} gives the focus back to its button`, async ({ page }) => {
+      await openRoute(page, item.route)
+      await item.before?.(page)
+      const opener = page.getByRole("button", { name: item.opener })
+      await opener.focus()
+      await page.keyboard.press("Enter")
+      const dialog = page.getByRole("dialog")
+      await expect(dialog).toBeVisible()
+      await expect(dialog.locator(":focus")).toHaveCount(1)
+      await page.keyboard.press("Escape")
+      await expect(dialog).toBeHidden()
+      await expect(opener).toBeFocused()
+    })
+  }
+})

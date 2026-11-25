@@ -58,6 +58,8 @@ export function RecipeManager() {
   const family = params.family
   const setFamily = (next: string) => setParams({ family: next })
   const [captureOpen, setCaptureOpen] = useState(false)
+  // focused through the dialog (`initialFocus`), not `autoFocus`: see the JSON Builder's Load prompt
+  const nameRef = useRef<HTMLInputElement>(null)
   const [captureTab, setCaptureTab] = useState<FormTab>("txt2img")
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -352,7 +354,7 @@ export function RecipeManager() {
       </section>
 
       <Dialog open={captureOpen} onOpenChange={setCaptureOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg" initialFocus={nameRef}>
           <DialogHeader>
             <DialogTitle>{t("Capture recipe")}</DialogTitle>
             <DialogDescription>{capture?.overrides ? t("Captured overrides: {{count}}", { count: captured.count }) : capture?.error ? t("Could not read the form") : t("Reading…")}</DialogDescription>
@@ -395,7 +397,7 @@ export function RecipeManager() {
 
             <label className="flex flex-col gap-1 text-xs font-medium">
               {t("Recipe name")}
-              <Input value={name} onChange={(event) => setName(event.target.value)} placeholder={t("Recipe name")} className="h-8" autoFocus required />
+              <Input ref={nameRef} value={name} onChange={(event) => setName(event.target.value)} placeholder={t("Recipe name")} className="h-8" required />
             </label>
             <label className="flex flex-col gap-1 text-xs font-medium">
               {t("Description")}
