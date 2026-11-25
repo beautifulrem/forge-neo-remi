@@ -15,6 +15,7 @@ import { navigate } from "@/app/router"
 import type { PasteEntry } from "@/features/infotext/paste"
 import { deliverPaste } from "@/features/send-to/send-to"
 import { errorText, toastInvalid } from "@/features/errors/error-text"
+import { DOUBLE_PRESS_MS } from "@/features/progress/run-machine"
 import { t } from "@/i18n"
 import { getFormStore } from "@/ui/form-store"
 import { lockNote } from "@/ui/locks"
@@ -115,8 +116,30 @@ export async function saveEdit(tab: FormTab): Promise<boolean> {
   }
 }
 
-/** Queues the form as it is, without tracking it in the form's run (the "Add to queue" button). */
-export async function enqueueForm(tab: FormTab): Promise<string | null> {
+/** The newest "Add to queue" press of each form still waiting for its answer. */
+const pressed = new Map<FormTab, { at: number; job: Promise<string | null> }>()
+
+/**
+ * Queues the form as it is, without tracking it in the form's run (the "Add to queue" button,
+ * Ctrl/Cmd+Shift+Enter). A press within `DOUBLE_PRESS_MS` of one still waiting for its answer is
+ * a double click, as for Generate: it joins that press (its request, its `Idempotency-Key`, its
+ * toast) and resolves with the same job.
+ */
+export function enqueueForm(tab: FormTab): Promise<string | null> {
+  const at = Date.now()
+  const last = pressed.get(tab)
+  if (last && at - last.at >= 0 && at - last.at < DOUBLE_PRESS_MS) return last.job
+  const job = enqueue(tab)
+  const press = { at, job }
+  pressed.set(tab, press)
+  const answered = () => {
+    if (pressed.get(tab) === press) pressed.delete(tab)
+  }
+  void job.then(answered, answered)
+  return job
+}
+
+async function enqueue(tab: FormTab): Promise<string | null> {
   const schema = queryClient.getQueryData<TabSchema>(keys.schema(tab))
   if (!schema) return null
   const store = getFormStore(tab)

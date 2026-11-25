@@ -1389,7 +1389,10 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
   to Generate / Process in every form: it posts the form as a job without
   making it the form's run (a toast links to the Queue; Ctrl/Cmd+Shift+Enter
   on the Generate and Extras pages, the Agent Scheduler's "Enqueue"
-  shortcut with a fixed key). Generate forever and
+  shortcut with a fixed key). A press within 400 ms (`DOUBLE_PRESS_MS`) of
+  one still waiting for its answer is a double click, as for Generate: it
+  joins that press (one request, one `Idempotency-Key`, one job, one toast);
+  Extras' Process sends nothing while its submit is pending. Generate forever and
   repeat N stay the run controller's (client-driven, see "Generate page").
   The Agent Scheduler's queue settings live in Settings → System → Queue
   under their old keys (history retention, queueing failed jobs again, the

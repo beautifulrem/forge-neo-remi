@@ -68,6 +68,36 @@ describe("Add to queue", { timeout: 20_000 }, () => {
     expect(failure).toHaveBeenCalledWith("Could not queue the job", { description: "The server ran into an error (500)." })
   })
 
+  // Mod+Shift+Enter calls it with no button to disable: a double press is one press
+  it("joins a second press within 400 ms of one still waiting: one request, one job, one toast", async () => {
+    const success = vi.spyOn(toast, "success")
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000)
+    // the server queues one job per Idempotency-Key
+    const jobs = new Map<string, number>()
+    const fetch = recordFetch((request) => {
+      const key = request.headers.get("Idempotency-Key") ?? ""
+      if (!jobs.has(key)) jobs.set(key, jobs.size + 1)
+      const seq = jobs.get(key)!
+      return { status: 201, body: { job_id: `j${seq}`, job_ids: [`j${seq}`], seq } }
+    })
+    const first = enqueueForm("txt2img")
+    now.mockReturnValue(1_399)
+    const second = enqueueForm("txt2img")
+    expect(await Promise.all([first, second])).toEqual(["j1", "j1"])
+    expect(fetch.requests).toHaveLength(1)
+    expect(success).toHaveBeenCalledOnce()
+
+    // 400 ms or more after a press still waiting, or after its answer: a job of its own
+    now.mockReturnValue(2_000)
+    const third = enqueueForm("txt2img")
+    now.mockReturnValue(2_400)
+    const fourth = enqueueForm("txt2img")
+    expect(await Promise.all([third, fourth])).toEqual(["j2", "j3"])
+    now.mockReturnValue(2_500)
+    expect(await enqueueForm("txt2img")).toBe("j4")
+    expect(fetch.requests).toHaveLength(4)
+  })
+
   it("does nothing before the form's schema is loaded", async () => {
     const fetch = recordFetch()
     queryClient.removeQueries({ queryKey: keys.schema("txt2img") })

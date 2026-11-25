@@ -54,6 +54,14 @@ describe("extras runs", () => {
     expect(useExtrasRuns.getState().jobs).toEqual([])
   })
 
+  it("sends one request for a second press while the first has no answer", async () => {
+    const calls = mockFetch(() => [201, { job_id: "x1", job_ids: ["x1"], seq: 3 }])
+    getFormStore("extras").getState().setValue("core", "image", "up9")
+    await Promise.all([runExtras(), runExtras()])
+    expect(calls.filter((call) => call.method === "POST")).toHaveLength(1)
+    expect(useExtrasRuns.getState().jobs).toEqual(["x1"])
+  })
+
   it("marks rejected values on the form", async () => {
     mockFetch(() => [422, { errors: [{ owner: "core", param: "image", message: "an image is required" }] }])
     await runExtras()
