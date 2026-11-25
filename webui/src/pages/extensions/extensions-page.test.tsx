@@ -352,6 +352,25 @@ describe("available extensions", { timeout: 20_000 }, () => {
   })
 
 
+  // The view went back to "Load index" once the cached index was dropped (five minutes unused).
+  it("loads the index again on its own after the cached one was dropped", async () => {
+    const index = vi.spyOn(api.extensions, "index").mockResolvedValue(indexOf(20))
+    const first = renderPage("tab=available")
+    const field = await screen.findByRole("textbox", { name: "Extension index URL" }, { timeout: 8000 })
+    await waitFor(() => expect(field).toBeEnabled())
+    fireEvent.change(field, { target: { value: "https://example.org/other.json" } })
+    fireEvent.click(screen.getByRole("button", { name: "Load index" }))
+    expect(await screen.findByRole("list", { name: "Available extensions" })).toBeInTheDocument()
+    first.unmount()
+    queryClient.removeQueries({ queryKey: ["extensions", "index"] })
+
+    renderPage("tab=available")
+    expect(await screen.findByRole("list", { name: "Available extensions" }, { timeout: 8000 })).toBeInTheDocument()
+    expect(screen.getByRole("textbox", { name: "Extension index URL" })).toHaveValue("https://example.org/other.json")
+    expect(index).toHaveBeenCalledTimes(2)
+    expect(index).toHaveBeenLastCalledWith({ url: "https://example.org/other.json" }, expect.anything())
+  })
+
   // Filters that matched nothing said "Nothing matches" with no way back but undoing each one.
   it("clears the filters that match nothing back to a fresh tab's, keeping the sort", async () => {
     vi.spyOn(api.extensions, "index").mockResolvedValue(indexOf(500))

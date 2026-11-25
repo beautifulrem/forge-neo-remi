@@ -208,20 +208,35 @@ const AVAILABLE_PARAMS = { q: "", sort: "newest", recent: "1", tags: [...DEFAULT
 const FILTER_KEYS = ["recent", "tags", "tagmode", "match"] as const
 
 /**
- * The index URL last loaded. Another tab and back remounts the view: it shows
- * that index again (cached, or refetched if it went stale) without a second
- * Load, while the query cache still knows it.
+ * The index URL last loaded in this browser tab. Another Extensions tab and
+ * back (or a reload) shows that index again without a second Load: from the
+ * cache, or fetched again once the cache has dropped it.
  */
-let loadedUrl: string | null = null
-const remembered = () => (loadedUrl !== null && queryClient.getQueryState(extensionKeys.index(loadedUrl)) ? loadedUrl : null)
+const LOADED_INDEX_KEY = "remi-extension-index"
+
+function rememberedUrl(): string | null {
+  try {
+    return sessionStorage.getItem(LOADED_INDEX_KEY) || null
+  } catch {
+    return null // storage blocked: Load again after a remount
+  }
+}
+
+function rememberUrl(url: string) {
+  try {
+    sessionStorage.setItem(LOADED_INDEX_KEY, url)
+  } catch {
+    // storage blocked or full: Load again after a remount
+  }
+}
 
 export function AvailableView() {
   const { t } = useTranslation()
   const installed = useQuery(installedQuery)
   const defaultUrl = installed.data?.index_url ?? ""
   const access = installed.data?.access ?? false
-  const [urlDraft, setUrlDraft] = useState<string | null>(remembered)
-  const [url, setUrl] = useState<string | null>(remembered)
+  const [urlDraft, setUrlDraft] = useState<string | null>(rememberedUrl)
+  const [url, setUrl] = useState<string | null>(rememberedUrl)
   const [params, setParams] = useRouteParams(AVAILABLE_PARAMS)
   const [query, setQuery] = useRouteSearch(params.q, (q) => setParams({ q }))
   const tagSet = useMemo<ReadonlySet<string>>(() => new Set(params.tags.split(",").filter(Boolean)), [params.tags])
@@ -253,7 +268,7 @@ export function AvailableView() {
 
   const load = () => {
     const next = (urlDraft ?? defaultUrl).trim()
-    loadedUrl = next
+    if (next) rememberUrl(next)
     if (next === source && url !== null) reload.mutate()
     else setUrl(next)
   }

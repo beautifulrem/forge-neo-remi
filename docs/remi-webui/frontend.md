@@ -1303,7 +1303,9 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
   staged, then "Save" or "Apply and reload UI"; per-extension or bulk update
   checks with progress, one request each, four at a time, stoppable;
   uninstall with confirmation, never for built-in ones; "Disable all
-  extensions"), the extension index (server-fetched, virtualized, search,
+  extensions"), the extension index (server-fetched; the URL loaded last
+  stays loaded for the browser tab, `sessionStorage["remi-extension-index"]`;
+  virtualized, search,
   tag hide / only-show with any / all matching, eight sorts, install), install
   from URL (validated URL, branch, folder), and config-state backups (list,
   save, detail against the current commits, restore the extensions, delete;
