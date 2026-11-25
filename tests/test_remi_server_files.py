@@ -49,7 +49,7 @@ def test_an_image_upload_is_sniffed_sized_and_deduplicated(server):
     assert response.status_code == 201
     data = response.json()
     assert data["width"] == 64 and data["height"] == 48 and data["mime"] == "image/png" and data["name"] == "cat.png"
-    assert upload(server.client, png(), name="again.png").json()["id"] == data["id"]
+    assert upload(server.client, png(), name="cat.png").json()["id"] == data["id"]
     record = server.services.files.get(data["id"])
     assert Path(record.path).is_relative_to(server.services.files.uploads_dir)
     served = server.client.get(f"/api/v2/files/{data['id']}")
@@ -161,6 +161,46 @@ def test_a_reupload_counts_as_new_for_pruning_and_concurrent_uploads_share_one_r
         thread.join()
     assert len(set(results)) == 1
     assert store._db.execute("SELECT COUNT(*) FROM files WHERE kind = 'upload'").fetchone()[0] == 2
+    store.close()
+
+
+def test_the_same_bytes_under_two_names_keep_both_names_and_share_one_file(tmp_path):
+    import sqlite3
+    import time
+
+    store = FileStore(tmp_path)
+    first = store.add_upload_bytes(png(color=(7, 7, 7)), "a.png")
+    second = store.add_upload_bytes(png(color=(7, 7, 7)), "b.png")
+    assert first.id != second.id and (first.name, second.name) == ("a.png", "b.png")
+    assert first.path == second.path
+    assert store.add_upload_bytes(png(color=(7, 7, 7)), "b.png").id == second.id
+    store._db.execute("UPDATE files SET created = ? WHERE id = ?", (time.time() - 30 * 86400, first.id))
+    assert store.prune_uploads(86400) == 1
+    assert store.get(first.id) is None and store.get(second.id) is not None and Path(second.path).is_file()
+    assert store.delete(second.id) and not Path(second.path).exists()
+    store.close()
+
+    # a files.db written before: one upload row per path was enforced by its index
+    legacy = tmp_path / "legacy"
+    legacy.mkdir()
+    db = sqlite3.connect(legacy / "files.db")
+    db.executescript(
+        "CREATE TABLE files (id TEXT PRIMARY KEY, kind TEXT NOT NULL, path TEXT NOT NULL, name TEXT NOT NULL, mime TEXT NOT NULL, size INTEGER NOT NULL,"
+        " width INTEGER, height INTEGER, created REAL NOT NULL, sha256 TEXT, job_id TEXT, tab TEXT, infotext TEXT);"
+        " CREATE UNIQUE INDEX files_kind_path ON files(kind, path);"
+    )
+    db.close()
+    store = FileStore(legacy)
+    first = store.add_upload_bytes(png(color=(8, 8, 8)), "a.png")
+    second = store.add_upload_bytes(png(color=(8, 8, 8)), "b.png")
+    assert first.id != second.id and first.path == second.path
+    output = tmp_path / "out.png"
+    output.write_bytes(png())
+    store.register_output(output)
+    with pytest.raises(sqlite3.IntegrityError):  # still one record per output file
+        store._db.execute("INSERT INTO files (id, kind, path, name, mime, size, created) VALUES ('x', 'output', ?, 'n', 'image/png', 1, 0)", (os.path.realpath(output),))
+    plan = " ".join(str(row) for row in store._db.execute("EXPLAIN QUERY PLAN SELECT id FROM files WHERE kind = ? AND path = ?", ("upload", "p")).fetchall())
+    assert "USING INDEX" in plan
     store.close()
 
 

@@ -191,7 +191,9 @@ CREATE TABLE IF NOT EXISTS files (
 );
 DROP INDEX IF EXISTS files_kind_created;
 CREATE INDEX IF NOT EXISTS files_kind_created_id ON files(kind, created, id);
-CREATE UNIQUE INDEX IF NOT EXISTS files_kind_path ON files(kind, path);
+DROP INDEX IF EXISTS files_kind_path;
+CREATE UNIQUE INDEX IF NOT EXISTS files_kind_path_unique ON files(kind, path) WHERE kind <> 'upload';
+CREATE INDEX IF NOT EXISTS files_kind_path_lookup ON files(kind, path);
 CREATE INDEX IF NOT EXISTS files_sha ON files(sha256);
 CREATE INDEX IF NOT EXISTS files_job ON files(job_id, kind, created);
 CREATE TABLE IF NOT EXISTS removed (path TEXT PRIMARY KEY);
@@ -200,7 +202,9 @@ CREATE INDEX IF NOT EXISTS removed_path_nocase ON removed(path COLLATE NOCASE);
 """
 # ``removed``: outputs taken out of the gallery but kept on disk (the output
 # folder scan skips them). The NOCASE indexes find an output stored under
-# another spelling of its path (see `FileStore._output_at`).
+# another spelling of its path (see `FileStore._output_at`). One record per
+# file, except uploads: the same content uploaded under another name is a
+# record of its own (its name) sharing the stored file.
 
 _COLUMNS = "id, kind, path, name, mime, size, width, height, created, job_id, tab, infotext"
 
@@ -359,8 +363,10 @@ class FileStore:
             if kind == "output" and not remove:
                 self._db.execute("INSERT OR IGNORE INTO removed (path) VALUES (?)", (path,))
             if kind == "upload":
-                # Under the lock: an upload of the same content writes this very path
-                Path(path).unlink(missing_ok=True)
+                # Under the lock: an upload of the same content writes this very path. Kept
+                # while that content is still uploaded under another name
+                if self._db.execute("SELECT 1 FROM files WHERE kind = 'upload' AND path = ? LIMIT 1", (path,)).fetchone() is None:
+                    Path(path).unlink(missing_ok=True)
                 remove = False
         if remove:
             Path(path).unlink(missing_ok=True)
@@ -408,13 +414,17 @@ class FileStore:
                 width, height = _image_size(temp, max_pixels=MAX_UPLOAD_PIXELS)
             sha = digest.hexdigest()
             target = self.uploads_dir / sha[:2] / f"{sha}{sniffed.ext}"
-            with self._lock:  # one record per content, even for concurrent uploads
-                existing = self._upload_by_sha(sha)
+            with self._lock:  # one record per content and name, even for concurrent uploads
+                existing = self._upload_by_sha(sha, name)
                 if existing is not None:
                     return self._touch(existing)  # a re-upload: not old enough to prune
-                target.parent.mkdir(parents=True, exist_ok=True)
-                os.replace(temp, target)
-                self._db.execute("DELETE FROM files WHERE kind = 'upload' AND path = ?", (str(target),))  # its file was gone
+                stored = self._upload_by_sha(sha)
+                if stored is not None:  # the same content under another name: its file, this name
+                    target = Path(stored.path)
+                else:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(temp, target)
+                    self._db.execute("DELETE FROM files WHERE kind = 'upload' AND path = ?", (str(target),))  # its file was gone
                 record = FileRecord(secrets.token_urlsafe(16), "upload", str(target), name, sniffed.mime, size, width, height, time.time())
                 return self._insert(record, sha)
         finally:
@@ -429,9 +439,12 @@ class FileStore:
             self._db.execute("UPDATE files SET created = ? WHERE id = ?", (now, record.id))
         return dataclasses.replace(record, created=now)
 
-    def _upload_by_sha(self, sha: str) -> FileRecord | None:
+    def _upload_by_sha(self, sha: str, name: str | None = None) -> FileRecord | None:
+        """An upload of this content (``name``: under that name) whose file still exists."""
+
+        query = f"SELECT {_COLUMNS} FROM files WHERE kind = 'upload' AND sha256 = ?" + (" AND name = ?" if name is not None else "")
         with self._lock:
-            record = self._record(self._db.execute(f"SELECT {_COLUMNS} FROM files WHERE kind = 'upload' AND sha256 = ?", (sha,)).fetchone())
+            record = self._record(self._db.execute(query, (sha, name) if name is not None else (sha,)).fetchone())
         return record if record is not None and os.path.isfile(record.path) else None
 
     def resolve_upload(self, node: Any, file_id: str) -> Any:
