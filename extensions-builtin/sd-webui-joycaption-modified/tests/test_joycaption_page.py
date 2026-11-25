@@ -202,6 +202,15 @@ def test_caption_type_editor(page, jc):
     assert builtin["__outputs__"]["edit_status"]["text"] == "❗ '{{name}}' is built-in. Delete only removes user overrides."
 
 
+# text UTF-8 cannot write (an unpaired surrogate) raised in the middle of the write: the file was left
+# empty and every saved caption type was gone
+def test_a_caption_type_that_cannot_be_written_keeps_the_saved_ones(jc):
+    jc.jcp.save_user_caption_types({"Mine": ["A", "W", "L"]})
+    with pytest.raises(UnicodeEncodeError):
+        jc.jcp.save_user_caption_types({"Mine": ["A", "W", "L"], "Broken": ["x\udc80", "W", "L"]})
+    assert jc.jcp.load_user_caption_types() == {"Mine": ["A", "W", "L"]}
+
+
 def _choice(schema, name):
     return next(node for node in _walk(schema["layout"]) if node.get("name") == name)["choices"]
 

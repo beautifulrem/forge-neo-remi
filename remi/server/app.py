@@ -195,7 +195,7 @@ async def refuse_broken_text(connection: HTTPConnection) -> None:
     metadata) failed in the middle of its write to a file or to SQLite.
     Typed text fields refused it already (pydantic); this covers values of
     any kind. FastAPI reads a body as JSON without a content type, and with
-    one in any case."""
+    one in any case, and in any of the encodings JSON allows."""
 
     if not isinstance(connection, Request):
         return
@@ -205,7 +205,8 @@ async def refuse_broken_text(connection: HTTPConnection) -> None:
     if connection.scope["path"].endswith(CHECKED_PER_SETTING):
         return  # these name each refused setting for the settings page
     body = await connection.body()
-    if not _MAYBE_BROKEN.search(body):
+    # `json.loads` reads UTF-16 and UTF-32 too, whose bytes the patterns never match: parse those
+    if json.detect_encoding(body) in ("utf-8", "utf-8-sig") and not _MAYBE_BROKEN.search(body):
         return
     try:
         data = json.loads(body)

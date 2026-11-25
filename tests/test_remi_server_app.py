@@ -192,6 +192,21 @@ def test_broken_text_is_refused_however_the_body_is_sent(server):
     assert server.client.post("/api/v2/recipes", content='{"name": "한국어"}'.encode(), headers={"Content-Type": "application/json"}).status_code in (200, 201)
 
 
+# `json.loads` also reads a body sent as UTF-16 or UTF-32 (with or without a BOM): its bytes never
+# matched the UTF-8 patterns, so a recipe answered 500, and an extension action that saves a file
+# (JoyCaption's caption types) left that file empty
+def test_broken_text_is_refused_in_a_body_sent_as_utf16_or_utf32(server):
+    headers = {"Content-Type": "application/json"}
+    for text in ('{"name": "r", "core_patch": {"prompt": "x\\udc80"}}', '{"name": "r", "core_patch": {"prompt": "x\udc80"}}'):
+        for encoding in ("utf-16-le", "utf-16", "utf-32-be"):
+            body = text.encode(encoding, "surrogatepass")
+            response = server.client.post("/api/v2/recipes", content=body, headers=headers)
+            assert response.status_code == 422, (encoding, text, response.text)
+            assert [error["param"] for error in response.json()["errors"]] == ["core_patch.prompt"]
+    # text that UTF-8 can write is still taken in those encodings
+    assert server.client.post("/api/v2/recipes", content='{"name": "猫 😀"}'.encode("utf-16"), headers=headers).status_code in (200, 201)
+
+
 # A body nested deeper than the JSON parser goes answered 500 with a traceback, before any login check
 def test_a_deeply_nested_body_is_not_a_server_error(server):
     deep = b"[" * 100_000 + b'"\\udc80"' + b"]" * 100_000

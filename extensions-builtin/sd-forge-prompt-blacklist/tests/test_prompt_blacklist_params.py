@@ -57,6 +57,13 @@ def test_blacklist_default_is_the_saved_file(env, blacklist_file):
     assert layout.defaults()["blacklist"] == "logo, *_username"
 
 
+# text UTF-8 cannot write (an unpaired surrogate) raised in the middle of the write: the file was left empty
+def test_a_blacklist_that_cannot_be_written_keeps_the_saved_one(env, blacklist_file):
+    env.module.save_blacklist("logo")
+    saved, _message = env.module.save_blacklist("x\udc80")
+    assert not saved and blacklist_file.read_text(encoding="utf-8") == "logo\n"
+
+
 def test_clean_patches_the_core_prompt(env):
     patch = call(env, "clean", {"blacklist": "watermark, *_username", "remove_dupes": True}, {"prompt": "1girl, (watermark:1.2), foo_username, 1girl, solo"})
     assert patch["core.prompt"] == {"value": "1girl, solo"}

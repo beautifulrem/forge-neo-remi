@@ -78,11 +78,13 @@ MESSAGES = (MSG_SAVED, MSG_SAVE_FAILED, MSG_SAVE_FAILED_TOAST, MSG_RELOADED, MSG
 def save_blacklist(text: str) -> tuple[bool, dict]:
     """Writes the blacklist file: ``(saved, status message)``."""
     try:
+        content = (text or "").strip() + "\n"
+        content.encode("utf-8")  # text UTF-8 cannot write fails here, before the file is emptied
         os.makedirs(STATE_DIR, exist_ok=True)
         with open(BLACKLIST_FILE, "w", encoding="utf-8") as f:
-            f.write((text or "").strip() + "\n")
+            f.write(content)
         return True, ui.message(MSG_SAVED)
-    except OSError as e:
+    except (OSError, UnicodeError) as e:
         return False, ui.message(MSG_SAVE_FAILED, error=str(e))
 
 

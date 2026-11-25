@@ -269,7 +269,9 @@ def load_user_caption_types() -> dict:
 def save_user_caption_types(d: dict) -> None:
     p = _user_types_path()
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(d, indent=2, ensure_ascii=False), encoding="utf-8")
+    text = json.dumps(d, indent=2, ensure_ascii=False)
+    text.encode("utf-8")  # text UTF-8 cannot write fails here, before the file is emptied
+    p.write_text(text, encoding="utf-8")
 
 
 def all_caption_types() -> dict:
