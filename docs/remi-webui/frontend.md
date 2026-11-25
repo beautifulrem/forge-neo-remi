@@ -514,7 +514,10 @@ generated interfaces (sources: Linear's
   placeholder (a dimmed glyph over one muted line: the stage, Extras, the
   history). Error views follow three: a list or panel that could not load is
   `LoadFailed` (what failed in a destructive line, then Retry; never an empty
-  list), a page that could not load is `PagePlaceholder` with a Retry, and an
+  list), a page that could not load is `PagePlaceholder` with a Retry
+  (`RetryButton`), and both stay while their retry runs, the Retry busy but
+  focused (`useLoadFailure` in `api/load-failure.ts`: a refetch of a query with
+  no data goes back to "pending" and drops its error), and an
   action's error is a plain destructive line by the action (`role="alert"`,
   `text-sm text-destructive`, no tinted box; the settings import's skipped
   values too, read with the rest of its check in that check's polite live

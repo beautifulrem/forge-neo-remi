@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -53,6 +54,7 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
   // Every opening asks for the list again (stale at once): another client, or an edit of
   // styles.csv, may have changed a style since it was fetched, and no event says so.
   const styles = useQuery({ ...stylesQuery, enabled: open, staleTime: 0 })
+  const failure = useLoadFailure(styles)
   // Until the user edits, the editor shows the form's style as the list has it: the list may
   // arrive after the dialog opens, and an editor left blank would save a blank style over it.
   const [edited, setEdited] = useState<PromptStyle | null>(null)
@@ -117,9 +119,10 @@ export function StyleEditorDialog({ open, onOpenChange, currentPrompts, initial 
           <div className="-mx-1 flex min-h-0 flex-col gap-3 overflow-y-auto px-1 py-1">
             {/* No fields before the list: an edit made then would start from a blank style and save
                 that blank over the real one. */}
-            {styles.isError && !styles.data ? (
+            {failure ? (
               <LoadFailed
-                error={styles.error}
+                error={failure.error}
+                retrying={failure.retrying}
                 message={t("Could not load the styles")}
                 onRetry={() => {
                   focusAfterRetry.current = true

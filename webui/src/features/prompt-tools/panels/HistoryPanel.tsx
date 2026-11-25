@@ -22,6 +22,7 @@ import { toolKeys } from "../queries"
 import { appendText, type PanelProps, timeAgo } from "./helpers"
 import { PanelHeader, SearchBox } from "./panel"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 import { failureText } from "@/features/errors/error-text"
 
 function Action({ label, onClick, children, disabled }: { label: string; onClick: () => void; children: ReactNode; disabled?: boolean }) {
@@ -58,6 +59,7 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
     getNextPageParam: (page) => page.next_cursor ?? undefined,
     staleTime: 10_000,
   })
+  const failure = useLoadFailure(history)
   const items = history.data?.pages.flatMap((page) => page.items) ?? []
   const refresh = () => client.invalidateQueries({ queryKey: ["prompt-tools", "history"] })
   const textOf = (item: HistoryItem) => (field === "negative" ? item.negative_prompt : item.prompt)
@@ -138,12 +140,12 @@ export default function HistoryPanel({ value, setValue, kind, disabled, close }:
         <SearchBox value={query} onChange={setQuery} placeholder={t("Search the history")} />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {history.isPending ? (
+        {failure ? (
+          <LoadFailed className="justify-center px-3" error={failure.error} retrying={failure.retrying} onRetry={() => void history.refetch()} />
+        ) : history.isPending ? (
           <div className="flex h-32 items-center justify-center">
             <Spinner aria-label={t("Loading")} />
           </div>
-        ) : history.isError && history.data === undefined ? (
-          <LoadFailed className="justify-center px-3" error={history.error} onRetry={() => void history.refetch()} />
         ) : items.length === 0 ? (
           <Empty className="py-8">
             <EmptyHeader>

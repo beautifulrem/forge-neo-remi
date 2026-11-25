@@ -6,6 +6,7 @@
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 import { RefreshCw, RotateCw, Search } from "@/components/icons"
 import { useRouteParams, useRouteSearch } from "@/app/route-params"
 import { useTranslation } from "react-i18next"
@@ -80,6 +81,7 @@ export function DiagnosticsView() {
   const filter = (DIAG_FILTERS.includes(params.filter) ? params.filter : "all") as DiagFilter
 
   const diag = useQuery(extensionDiagnosticsQuery)
+  const failure = useLoadFailure(diag)
   const workers = useQuery(workersStatusQuery)
 
   const restart = useMutation({
@@ -343,16 +345,16 @@ export function DiagnosticsView() {
           </div>
         </div>
 
-        {diag.isPending ? (
+        {failure && failure.error instanceof ApiError && failure.error.status === 404 ? (
+          <p className="py-2 text-sm text-muted-foreground">{t("Diagnostics unavailable on this server.")}</p>
+        ) : failure ? (
+          <LoadFailed error={failure.error} retrying={failure.retrying} onRetry={() => void diag.refetch()} className="py-2" />
+        ) : diag.isPending ? (
           <div className="flex flex-col gap-2 py-2" aria-busy="true">
             {Array.from({ length: 4 }, (_, i) => (
               <Skeleton key={i} className="h-10 w-full" />
             ))}
           </div>
-        ) : diag.isError && diag.error instanceof ApiError && diag.error.status === 404 ? (
-          <p className="py-2 text-sm text-muted-foreground">{t("Diagnostics unavailable on this server.")}</p>
-        ) : diag.isError && !diag.data ? (
-          <LoadFailed error={diag.error} onRetry={() => void diag.refetch()} className="py-2" />
         ) : items.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">{t("No extension diagnostics match.")}</p>
         ) : (

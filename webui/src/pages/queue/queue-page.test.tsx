@@ -9,8 +9,11 @@ import QueuePage from "./index"
 
 const finished = (id: string, summary: string, status: Job["status"] = "completed"): Job => ({ ...jobOf(id, status), summary })
 
-/** Serves the queue and the history; a history request whose status is in `held` waits for `release`. */
-function mockServer(held: string[] = []) {
+/**
+ * Serves the queue and the history; a history request whose status is in `held` waits for
+ * `release`, one in `failing` answers 404 (a client error: not retried, so no backoff).
+ */
+function mockServer(held: string[] = [], failing: string[] = []) {
   let release: () => void = () => {}
   const gate = new Promise<void>((resolve) => (release = resolve))
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
@@ -22,12 +25,13 @@ function mockServer(held: string[] = []) {
     if (path === "/jobs") {
       const status = url.searchParams.get("status") ?? ""
       if (held.includes(status)) await gate
+      if (failing.includes(status)) return new Response(JSON.stringify({ detail: "gone" }), { status: 404, headers: { "Content-Type": "application/json" } })
       const items = status === "failed" ? [finished("f1", "a failed fox", "failed")] : status === "cancelled,interrupted" ? [] : [finished("c1", "a calm cat"), finished("c2", "a sleepy dog")]
       return json({ items, next_cursor: null, total: items.length })
     }
     return json({})
   })
-  return { release }
+  return { release, held, failing }
 }
 
 function Page() {
@@ -105,5 +109,44 @@ describe("queue page on a phone", () => {
     expect(panel.querySelector("[data-slot=skeleton]")).not.toBeNull()
     await act(async () => server.release())
     expect(await within(panel).findByText("a calm cat")).toBeInTheDocument()
+  })
+
+  // The retry of a filter that failed went back to "pending": the previous filter's rows came back
+  // as its placeholder until the retry failed again.
+  it("keeps a failed filter's failure while its retry runs, not the previous filter's rows", async () => {
+    const server = mockServer([], ["failed"])
+    navigate({ name: "queue", query: new URLSearchParams("section=history") }, { replace: true })
+    renderPage()
+    const panel = screen.getByRole("tabpanel")
+    expect(await within(panel).findByText("a calm cat")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("radio", { name: "Failed" }))
+    const alert = await within(panel).findByRole("alert")
+    server.failing.length = 0
+    server.held.push("failed")
+    const retry = within(alert).getByRole("button", { name: "Retry" })
+    fireEvent.click(retry)
+    await waitFor(() => expect(retry).toHaveAttribute("aria-disabled", "true"))
+    expect(alert).toBeInTheDocument()
+    expect(within(panel).queryByText("a calm cat")).toBeNull()
+    await act(async () => server.release())
+    expect(await within(panel).findByText("a failed fox")).toBeInTheDocument()
+    expect(within(panel).queryByRole("alert")).toBeNull()
+  })
+
+  it("shows loading, not an old failure, when it opens while a failed history loads again", async () => {
+    const server = mockServer([], ["failed"])
+    navigate({ name: "queue", query: new URLSearchParams("section=history&status=failed") }, { replace: true })
+    const first = renderPage()
+    expect(await within(screen.getByRole("tabpanel")).findByRole("alert")).toBeInTheDocument()
+    first.unmount()
+    server.failing.length = 0
+    server.held.push("failed")
+    renderPage()
+    const panel = screen.getByRole("tabpanel")
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(within(panel).queryByRole("alert")).toBeNull()
+    expect(panel.querySelector("[data-slot=skeleton]")).not.toBeNull()
+    await act(async () => server.release())
+    expect(await within(panel).findByText("a failed fox")).toBeInTheDocument()
   })
 })

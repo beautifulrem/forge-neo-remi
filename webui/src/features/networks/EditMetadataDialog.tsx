@@ -29,6 +29,7 @@ import { TagChips } from "./TagChips"
 import { hasTag, randomPrompt, toggleTag } from "./tags"
 import { type Draft, draftFrom, PREFERRED_WEIGHT_LIMIT, patchFrom } from "./metadata-draft"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 import { failureText } from "@/features/errors/error-text"
 
 function Field({ id, label, info, children }: { id: string; label: string; info?: string; children: React.ReactNode }) {
@@ -51,6 +52,7 @@ function Field({ id, label, info, children }: { id: string; label: string; info?
 export function PreferredModules({ id, value, onChange }: { id: string; value: string[]; onChange: (next: string[]) => void }) {
   const { t } = useTranslation()
   const models = useQuery(modelsQuery)
+  const failure = useLoadFailure(models)
   const listed = (models.data?.modules ?? [...(models.data?.vae ?? []), ...(models.data?.text_encoders ?? [])]).map((m) => ({ value: m.name, label: m.title ?? m.name }))
   // chosen files that are no longer listed stay visible so they can be removed; they are marked
   // missing only once the list has loaded (while it loads or after it failed, nothing is known)
@@ -79,8 +81,8 @@ export function PreferredModules({ id, value, onChange }: { id: string; value: s
             </label>
           </div>
         ))}
-        {models.isError && !models.data ? (
-          <LoadFailed error={models.error} message={t("Could not load the models")} onRetry={() => void models.refetch()} className="justify-center px-2" />
+        {failure ? (
+          <LoadFailed error={failure.error} retrying={failure.retrying} message={t("Could not load the models")} onRetry={() => void models.refetch()} className="justify-center px-2" />
         ) : models.isPending ? (
           // the list is on its way, not empty (the model bar's picker says the same)
           <p role="status" className="px-2 py-3 text-center text-sm text-muted-foreground">{t("Loading…")}</p>
@@ -242,6 +244,7 @@ function Editor({ meta, kind, onDone }: { meta: NetworkMeta; kind: NetworkKind; 
 export function EditMetadataDialog({ item, kind, open, onOpenChange }: { item: NetworkItem | null; kind: NetworkKind | undefined; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { t } = useTranslation()
   const meta = useQuery({ ...metaQuery(item?.kind ?? "", item?.name ?? ""), enabled: Boolean(item && open) })
+  const failure = useLoadFailure(meta)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[min(calc(90dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)),52rem)] flex-col gap-4 sm:max-w-2xl">
@@ -249,10 +252,10 @@ export function EditMetadataDialog({ item, kind, open, onOpenChange }: { item: N
           <DialogTitle className="truncate" title={item?.title}>{t("Edit {{name}}", { name: item?.title ?? "" })}</DialogTitle>
           <DialogDescription>{item?.path}</DialogDescription>
         </DialogHeader>
-        {meta.data && kind ? (
+        {failure ? (
+          <LoadFailed error={failure.error} retrying={failure.retrying} onRetry={() => void meta.refetch()} />
+        ) : meta.data && kind ? (
           <Editor key={`${meta.data.kind}:${meta.data.name}`} meta={meta.data} kind={kind} onDone={() => onOpenChange(false)} />
-        ) : meta.isError ? (
-          <LoadFailed error={meta.error} onRetry={() => void meta.refetch()} />
         ) : (
           <div className="flex flex-col gap-3" aria-busy="true">
             <Skeleton className="h-20 w-full" />

@@ -24,6 +24,7 @@ import { metaQuery } from "./queries"
 import { TagChips } from "./TagChips"
 import { escapeTag } from "./tags"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 
 async function copy(text: string, what: string) {
   try {
@@ -205,6 +206,7 @@ function Body({ meta }: { meta: NetworkMeta }) {
 export function MetadataDialog({ item, open, onOpenChange }: { item: NetworkItem | null; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { t } = useTranslation()
   const meta = useQuery({ ...metaQuery(item?.kind ?? "", item?.name ?? ""), enabled: Boolean(item && open) })
+  const failure = useLoadFailure(meta)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[min(calc(88dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)),52rem)] flex-col gap-4 sm:max-w-3xl">
@@ -215,10 +217,10 @@ export function MetadataDialog({ item, open, onOpenChange }: { item: NetworkItem
           <DialogDescription>{t("File information, training details and dataset tags")}</DialogDescription>
         </DialogHeader>
         <div className="-mx-4 min-h-0 flex-1 overflow-y-auto px-4 pb-1">
-          {meta.data ? (
+          {failure ? (
+            <LoadFailed error={failure.error} retrying={failure.retrying} onRetry={() => void meta.refetch()} />
+          ) : meta.data ? (
             <Body meta={meta.data} />
-          ) : meta.isError ? (
-            <LoadFailed error={meta.error} onRetry={() => void meta.refetch()} />
           ) : (
             <div className="flex flex-col gap-3" aria-busy="true">
               <Skeleton className="h-32 w-full" />

@@ -153,8 +153,30 @@ describe("model bar when the model list does not load", () => {
     expect(screen.queryByText("No modules found")).toBeNull()
   })
 
+  // A retry of a list that never loaded went back to "pending": the failure and its Retry gave way
+  // to "Loading…" under the focus, and came back if the retry failed again.
+  it("keeps the modules picker's failure while its retry runs, with the Retry busy", async () => {
+    const list = vi.spyOn(api, "models").mockRejectedValue(new ApiError(404, "boom"))
+    renderBar()
+    const checkpoint = await screen.findByRole("button", { name: /Could not load the models/ })
+    fireEvent.click(modulesTriggers()[0]!)
+    const alert = await screen.findByRole("alert")
+    let answer: (value: typeof models) => void = () => {}
+    list.mockImplementation(() => new Promise((resolve) => (answer = resolve)))
+    const retry = within(alert).getByRole("button", { name: "Retry" })
+    fireEvent.click(retry)
+    await waitFor(() => expect(retry).toHaveAttribute("aria-disabled", "true"))
+    expect(alert).toBeInTheDocument()
+    expect(alert).toHaveTextContent("Could not load the models")
+    expect(screen.queryByText("Loading…")).toBeNull()
+    // the checkpoint picker's failure still names what failed
+    expect(checkpoint).toHaveAttribute("title", "Could not load the models · It is no longer there. · Retry")
+    await act(async () => answer(models))
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull())
+  })
+
   it("says the modules are loading while the model list is on its way, not that there are none", async () => {
-    vi.spyOn(api, "models").mockImplementation(() => new Promise(() => {})) // a slow server (or a retry after a failure)
+    vi.spyOn(api, "models").mockImplementation(() => new Promise(() => {})) // a slow server
     renderBar()
     fireEvent.click(modulesTriggers()[0]!)
     expect(await screen.findByText("Loading…")).toBeInTheDocument()

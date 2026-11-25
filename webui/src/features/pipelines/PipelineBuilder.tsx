@@ -27,6 +27,7 @@ import { api } from "@/api/endpoints"
 import { queryClient } from "@/api/queries"
 import { onWsEvent } from "@/api/ws"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -146,6 +147,7 @@ export function PipelineBuilder() {
   const [templateName, setTemplateName] = useState("")
 
   const chains = useQuery(chainsQuery)
+  const chainsFailure = useLoadFailure(chains)
   const templates = useQuery(chainTemplatesQuery)
 
   // `chain.updated` carries the whole chain: the run in the builder follows it, the recent runs list refetches.
@@ -772,8 +774,8 @@ export function PipelineBuilder() {
             {chains.data ? <span className="ml-2 font-mono text-xs font-normal text-muted-foreground tabular-nums">{chains.data.items.length}</span> : null}
           </h3>
         </div>
-        {chains.isError && !chains.data ? (
-          <LoadFailed error={chains.error} onRetry={() => void chains.refetch()} className="py-2" />
+        {chainsFailure ? (
+          <LoadFailed error={chainsFailure.error} retrying={chainsFailure.retrying} onRetry={() => void chains.refetch()} className="py-2" />
         ) : chains.isPending ? (
           // the list is on its way, not empty
           <p role="status" className="py-3 text-xs text-muted-foreground">{t("Loading…")}</p>

@@ -17,6 +17,7 @@ import type { ImportItem, ImportReport, ImportSource } from "@/api/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { errorText } from "@/features/errors/error-text"
@@ -84,6 +85,7 @@ function Report({ report }: { report: ImportReport }) {
 export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { t } = useTranslation()
   const sources = useQuery({ ...importSourcesQuery, enabled: open })
+  const failure = useLoadFailure(sources)
   const openRef = useRef(open)
   useEffect(() => {
     openRef.current = open
@@ -131,8 +133,8 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         </DialogHeader>
         {report ? (
           <Report report={report} />
-        ) : sources.isError && !sources.data ? (
-          <LoadFailed error={sources.error} onRetry={() => void sources.refetch()} />
+        ) : failure ? (
+          <LoadFailed error={failure.error} retrying={failure.retrying} onRetry={() => void sources.refetch()} />
         ) : sources.isPending ? (
           <Skeleton className="h-28 w-full" />
         ) : (

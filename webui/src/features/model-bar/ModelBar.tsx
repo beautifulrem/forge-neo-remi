@@ -9,6 +9,7 @@ import { Box, CircleHelp, Hourglass, Layers, Loader2, SlidersHorizontal, Triangl
 import { useEffect, useId, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useClientOption } from "@/api/app-options"
+import { useLoadFailure } from "@/api/load-failure"
 import { useProgress } from "@/api/progress"
 import { modelsQuery } from "@/api/queries"
 import { LoadFailed } from "@/components/LoadFailed"
@@ -62,6 +63,7 @@ function PresetSelect({ className }: { className?: string }) {
 function CheckpointPicker({ className }: { className?: string }) {
   const { t, i18n } = useTranslation()
   const models = useQuery(modelsQuery)
+  const failure = useLoadFailure(models)
   const current = useClientOption("sd_model_checkpoint")
   const write = useOptionWrite<string>(MODEL_OPTION_KEYS.checkpoint)
   const loading = useModelBusy()
@@ -82,11 +84,11 @@ function CheckpointPicker({ className }: { className?: string }) {
     const active = document.activeElement
     if (!active || active === document.body || !active.isConnected) document.getElementById(pickerId)?.focus()
   }, [loaded, pickerId])
-  // Once the list has failed it stays failed until a retry brings it: a refetch of a list that has
-  // no data goes back to "pending", which swapped the button for a loading picker under the focus.
-  if (!models.data && models.errorUpdateCount > 0) {
+  // Once the list has failed it stays failed until a retry brings it (`useLoadFailure`), so the
+  // button under the focus is not swapped for a loading picker.
+  if (failure) {
     // an empty list would read as "no checkpoints installed"; say it failed and offer to load it again
-    const retrying = models.isFetching
+    const retrying = failure.retrying
     return (
       <Button
         variant="ghost"
@@ -99,7 +101,7 @@ function CheckpointPicker({ className }: { className?: string }) {
           focusAfterRetry.current = true
           void models.refetch()
         }}
-        title={[t("Could not load the models"), errorText(models.error), t("Retry")].join(" · ")}
+        title={[t("Could not load the models"), errorText(failure.error), t("Retry")].join(" · ")}
       >
         {retrying ? <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden /> : <TriangleAlert className="size-3.5 shrink-0" aria-hidden />}
         {/* the model in use stays in view: only the list of the others failed */}
@@ -148,6 +150,7 @@ function ModulesPicker({ className, segmented = false }: { className?: string; s
   const { t } = useTranslation()
   const id = useId()
   const models = useQuery(modelsQuery)
+  const failure = useLoadFailure(models)
   // The setting holds paths; the server takes (and lists) file names.
   const current = useClientOption("forge_additional_modules").map(fileName)
   const [draft, setDraft] = useState<string[] | null>(null)
@@ -243,10 +246,10 @@ function ModulesPicker({ className, segmented = false }: { className?: string; s
               </div>
             )
           })}
-          {models.isError && !models.data ? (
-            <LoadFailed error={models.error} message={t("Could not load the models")} onRetry={() => void models.refetch()} className="px-2" />
+          {failure ? (
+            <LoadFailed error={failure.error} retrying={failure.retrying} message={t("Could not load the models")} onRetry={() => void models.refetch()} className="px-2" />
           ) : models.isPending ? (
-            // a first load or a retry after a failure: the list is not empty yet, it is on its way
+            // a first load: the list is not empty yet, it is on its way
             <p role="status" className="px-2 py-4 text-center text-sm text-muted-foreground">{t("Loading…")}</p>
           ) : modules.length === 0 ? (
             <p className="px-2 py-4 text-center text-sm text-muted-foreground">{t("No modules found")}</p>

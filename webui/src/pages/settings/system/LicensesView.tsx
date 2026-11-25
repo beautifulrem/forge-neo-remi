@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
 import { request, ROOT } from "@/api/http"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
@@ -78,6 +79,7 @@ function LicenseEntry({ entry, depth }: { entry: Entry; depth: number }) {
 export function LicensesView() {
   const { t } = useTranslation()
   const licenses = useQuery({ queryKey: ["licenses"], queryFn: ({ signal }) => api.system.licenses(signal), staleTime: Infinity })
+  const failure = useLoadFailure(licenses)
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-6 sm:px-6">
       <header>
@@ -91,14 +93,14 @@ export function LicensesView() {
           </a>
         </p>
       </header>
-      {licenses.isPending ? (
+      {failure ? (
+        <LoadFailed error={failure.error} retrying={failure.retrying} onRetry={() => void licenses.refetch()} />
+      ) : !licenses.data ? (
         <div className="flex flex-col gap-2" aria-busy="true">
           {Array.from({ length: 5 }, (_, i) => (
             <Skeleton key={i} className="h-14 w-full" />
           ))}
         </div>
-      ) : licenses.isError && !licenses.data ? (
-        <LoadFailed error={licenses.error} onRetry={() => void licenses.refetch()} />
       ) : (
         licenses.data.groups.map((group) => (
           <section key={group.title} aria-label={t(group.title)} className={cn("flex flex-col gap-2.5", group.title && panelClass(0))}>

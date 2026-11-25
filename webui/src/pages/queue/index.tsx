@@ -10,6 +10,7 @@ import { Ban, BookOpen, Eraser, GitMerge, Import, Infinity as InfinityIcon, List
 import { Suspense, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
+import { useLoadFailure } from "@/api/load-failure"
 import { queueItemsQuery } from "@/api/queries"
 import type { FormTab, Job, QueueStatus } from "@/api/types"
 import { HeaderSlot } from "@/app/header-slot"
@@ -69,6 +70,7 @@ const SECTION_PARAMS = { section: "queue" }
 function Pending({ status }: { status: QueueStatus | undefined }) {
   const { t } = useTranslation()
   const items = useQuery(queueItemsQuery)
+  const itemsFailure = useLoadFailure(items)
   const jobs = items.data ?? []
   return (
     <div className="flex flex-col gap-3">
@@ -76,12 +78,12 @@ function Pending({ status }: { status: QueueStatus | undefined }) {
       <section aria-labelledby="queue-pending-title" className="flex flex-col gap-2">
         <h2 id="queue-pending-title" className="flex items-center gap-2 text-[0.9375rem] font-semibold">
           {t("Up next")}
-          {items.isPending || (items.isError && !items.data) ? null : <span className="text-sm text-muted-foreground tabular-nums">{jobs.length}</span>}
+          {items.isPending || itemsFailure ? null : <span className="text-sm text-muted-foreground tabular-nums">{jobs.length}</span>}
         </h2>
-        {items.isPending ? (
+        {itemsFailure ? (
+          <LoadFailed error={itemsFailure.error} retrying={itemsFailure.retrying} onRetry={() => void items.refetch()} />
+        ) : items.isPending ? (
           <Skeleton className="h-24 w-full" />
-        ) : items.isError && !items.data ? (
-          <LoadFailed error={items.error} onRetry={() => void items.refetch()} />
         ) : jobs.length === 0 ? (
           <p className="py-6 text-center text-sm text-balance text-muted-foreground">
             {t("No jobs are waiting. Use “Add to queue” next to Generate to line jobs up.")}
@@ -106,8 +108,9 @@ function History({ onView }: { onView: (job: Job, index: number) => void }) {
   const query = { status: HISTORY_STATUSES[filter], ...(q ? { q } : {}), ...(starred ? { starred: true } : {}), ...(tab !== ALL_TABS ? { tab } : {}) }
   // another filter keeps the rows shown until its own page arrives, not a skeleton in between
   const history = useInfiniteQuery({ ...historyQuery(query), placeholderData: keepPreviousData })
+  const failure = useLoadFailure(history)
   const jobs = history.data?.pages.flatMap((page) => page.items) ?? []
-  const total = history.data?.pages[0]?.total ?? null
+  const total = failure ? null : (history.data?.pages[0]?.total ?? null)
   const tabs = [
     { value: ALL_TABS, label: t("All forms") },
     { value: "txt2img", label: t("txt2img") },
@@ -157,14 +160,14 @@ function History({ onView }: { onView: (job: Job, index: number) => void }) {
         </Select>
       </div>
       {/* another filter's empty page says nothing about this one's: loading until it answers */}
-      {history.isPending || (history.isPlaceholderData && jobs.length === 0) ? (
+      {failure ? (
+        <LoadFailed error={failure.error} retrying={failure.retrying} onRetry={() => void history.refetch()} />
+      ) : history.isPending || (history.isPlaceholderData && jobs.length === 0) ? (
         <div className="flex flex-col gap-1.5">
           {Array.from({ length: 4 }, (_, index) => (
             <Skeleton key={index} className="h-20 w-full" />
           ))}
         </div>
-      ) : history.isError && !history.data ? (
-        <LoadFailed error={history.error} onRetry={() => void history.refetch()} />
       ) : jobs.length === 0 ? (
         <p className="py-6 text-center text-sm text-balance text-muted-foreground">
           {q || starred || filter !== "all" || tab !== ALL_TABS ? t("No jobs match.") : t("Finished jobs appear here.")}

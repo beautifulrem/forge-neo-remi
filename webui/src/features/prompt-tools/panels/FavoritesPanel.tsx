@@ -29,6 +29,7 @@ import { toolKeys } from "../queries"
 import { appendText, type PanelProps } from "./helpers"
 import { PanelHeader, SearchBox } from "./panel"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 import { failureText } from "@/features/errors/error-text"
 
 /** Every collection, the unsorted favorites, or a collection id. */
@@ -110,6 +111,7 @@ export default function FavoritesPanel({ value, setValue, kind, disabled, close 
     getNextPageParam: (page) => page.next_cursor ?? undefined,
     staleTime: 10_000,
   })
+  const failure = useLoadFailure(favorites)
   const list: Collection[] = collections.data ?? []
   const named = list.filter((collection) => collection.id)
   const current = named.find((collection) => collection.id === filter)
@@ -273,12 +275,12 @@ export default function FavoritesPanel({ value, setValue, kind, disabled, close 
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {favorites.isPending ? (
+        {failure ? (
+          <LoadFailed className="justify-center px-3" error={failure.error} retrying={failure.retrying} onRetry={() => void favorites.refetch()} />
+        ) : favorites.isPending ? (
           <div className="flex h-32 items-center justify-center">
             <Spinner aria-label={t("Loading")} />
           </div>
-        ) : favorites.isError && favorites.data === undefined ? (
-          <LoadFailed className="justify-center px-3" error={favorites.error} onRetry={() => void favorites.refetch()} />
         ) : items.length === 0 ? (
           <Empty className="py-8">
             <EmptyHeader>

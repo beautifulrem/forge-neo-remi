@@ -6,6 +6,7 @@
  */
 import { useInfiniteQuery, useMutation } from "@tanstack/react-query"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 import { Check, ImageUp, Loader2 } from "@/components/icons"
 import { type KeyboardEvent, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -105,6 +106,7 @@ export function PreviewDialog({ item, open, onOpenChange }: { item: NetworkItem 
   }
 
   const gallery = useInfiniteQuery({ ...galleryQuery, enabled: open && tab === "gallery" })
+  const galleryFailure = useLoadFailure(gallery)
 
   const apply = useMutation({
     mutationFn: async (source: { fileId: string } | { file: File }) => {
@@ -154,14 +156,14 @@ export function PreviewDialog({ item, open, onOpenChange }: { item: NetworkItem 
             )}
           </TabsContent>
           <TabsContent value="gallery" className="max-h-[50dvh] overflow-y-auto">
-            {gallery.isPending ? (
+            {galleryFailure ? (
+              <LoadFailed error={galleryFailure.error} retrying={galleryFailure.retrying} message={t("Could not load the gallery")} onRetry={() => void gallery.refetch()} className="justify-center py-8" />
+            ) : gallery.isPending ? (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2" aria-busy="true">
                 {Array.from({ length: 8 }, (_, i) => (
                   <Skeleton key={i} className="aspect-square rounded-lg" />
                 ))}
               </div>
-            ) : gallery.isError && !gallery.data ? (
-              <LoadFailed error={gallery.error} message={t("Could not load the gallery")} onRetry={() => void gallery.refetch()} className="justify-center py-8" />
             ) : galleryIds.length ? (
               <div className="flex flex-col gap-3">
                 <Thumbs ids={galleryIds} selected={selected} onSelect={setSelected} label={t("Image")} />

@@ -29,6 +29,7 @@ import { type ReactNode, type Ref, type RefObject, Suspense, useEffect, useImper
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
+import { useLoadFailure } from "@/api/load-failure"
 import { queryClient } from "@/api/queries"
 import type { NetworkItem, NetworkKind } from "@/api/types"
 import { FadeStrip } from "@/components/FadeStrip"
@@ -225,10 +226,10 @@ function EmptyState({ filtered, kindTitle, onClear }: { filtered: boolean; kindT
   )
 }
 
-function ErrorState({ title, error, onRetry }: { title: string; error: Error | null; onRetry: () => void }) {
+function ErrorState({ title, error, onRetry, retrying = false }: { title: string; error: unknown; onRetry: () => void; retrying?: boolean }) {
   const { t, i18n } = useTranslation()
   return (
-    <div className="flex h-full items-center justify-center p-6" role="alert">
+    <div className="flex h-full items-center justify-center p-6" role="alert" aria-busy={retrying || undefined}>
       <Empty className="max-w-sm border-0">
         <EmptyHeader>
           <EmptyMedia variant="icon" className="text-destructive">
@@ -242,8 +243,9 @@ function ErrorState({ title, error, onRetry }: { title: string; error: Error | n
           ) : null}
         </EmptyHeader>
         <EmptyContent>
-          <Button variant="outline" size="sm" onClick={onRetry}>
-            <RefreshCw aria-hidden />
+          {/* while the retry runs: busy but focusable, so the focus stays on it */}
+          <Button variant="outline" size="sm" disabled={retrying} focusableWhenDisabled onClick={onRetry}>
+            {retrying ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
             {t("Retry")}
           </Button>
         </EmptyContent>
@@ -293,6 +295,7 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
   useImperativeHandle(ref, () => ({ focusSearch: () => searchRef.current?.focus() }), [])
 
   const kinds = useQuery(kindsQuery)
+  const kindsFailure = useLoadFailure(kinds)
   const kindList = kinds.data ?? []
   const kind = kindList.find((candidate) => candidate.id === state.kind) ?? kindList[0]
   const kindId = kind?.id ?? state.kind
@@ -327,6 +330,7 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
   const range = settled.key === gridKey ? settled : { start: 0, end: 0 }
   const list = useNetworkWindow(kindId, params, range, Boolean(kind))
   const facets = useQuery({ ...facetsQuery(kindId, facetParams), enabled: Boolean(kind) })
+  const facetsFailure = useLoadFailure(facets)
   const { items, total } = list
   const isActive = useActiveTest(kind, form)
   const currentArch = facets.data?.current_arch
@@ -388,15 +392,15 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
   }
 
   const showTree = state.tree && wide && surface === "page"
-  const folderTree = facets.data ? (
+  const folderTree = facetsFailure ? (
+    <LoadFailed error={facetsFailure.error} retrying={facetsFailure.retrying} onRetry={() => void facets.refetch()} className="px-2" />
+  ) : facets.data ? (
     <FolderTree
       folders={facets.data.folders}
       total={facets.data.folder_total ?? facets.data.total}
       selected={folder}
       onSelect={(path) => setKindFilter(surface, "folder", kindId, path || undefined)}
     />
-  ) : facets.isError ? (
-    <LoadFailed error={facets.error} onRetry={() => void facets.refetch()} className="px-2" />
   ) : (
     <div className="flex flex-col gap-1.5 p-2" aria-hidden>
       {Array.from({ length: 6 }, (_, i) => (
@@ -414,8 +418,8 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
 
   const results = (
     <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col">
-      {kinds.isError && !kinds.data ? (
-        <ErrorState title={t("Could not load the network kinds")} error={kinds.error} onRetry={retry} />
+      {kindsFailure ? (
+        <ErrorState title={t("Could not load the network kinds")} error={kindsFailure.error} retrying={kindsFailure.retrying} onRetry={retry} />
       ) : list.isPending || !kind ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-2.5 p-2" role="status" aria-busy="true" aria-label={t("Loading…")}>
           {Array.from({ length: 12 }, (_, i) => (

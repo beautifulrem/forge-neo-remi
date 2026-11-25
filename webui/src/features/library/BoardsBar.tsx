@@ -25,6 +25,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 import { errorText } from "@/features/errors/error-text"
 import { sendToReferenceWithFeedback } from "@/features/send-to/result-actions"
 import type { SendItem } from "@/features/send-to/send-to"
@@ -51,6 +52,7 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
   const boardId = view.boardId
   const setView = view.set
   const boardsList = useQuery(boardsQuery)
+  const boardsFailure = useLoadFailure(boardsList)
   const boards = boardsList.data ?? []
   const facets = useQuery({ ...galleryFacetsQuery, enabled: count !== undefined })
 
@@ -165,11 +167,15 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
             </button>
           )
         })}
-        {boardsList.isError && !boardsList.data ? (
+        {boardsFailure ? (
           <button
             type="button"
-            title={errorText(boardsList.error, {}, i18n.language)}
-            onClick={() => void boardsList.refetch()}
+            title={errorText(boardsFailure.error, {}, i18n.language)}
+            // while the retry runs: busy but focusable, so the focus stays on it
+            aria-disabled={boardsFailure.retrying || undefined}
+            onClick={() => {
+              if (!boardsFailure.retrying) void boardsList.refetch()
+            }}
             className="inline-flex h-8 items-center gap-1 px-2 text-xs text-destructive outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring"
           >
             {t("Could not load boards. Retry")}
@@ -346,6 +352,7 @@ export function AssignBoardPopover({ fileIds, activeBoardId, trigger, tone = "de
   const [open, setOpen] = useState(false)
   const [quickName, setQuickName] = useState("")
   const boardsList = useQuery(boardsQuery)
+  const boardsFailure = useLoadFailure(boardsList)
   const boards = boardsList.data ?? []
 
   const assign = useMutation({
@@ -431,8 +438,8 @@ export function AssignBoardPopover({ fileIds, activeBoardId, trigger, tone = "de
                 </li>
               ))}
             </ul>
-          ) : boardsList.isError && !boardsList.data ? (
-            <LoadFailed error={boardsList.error} onRetry={() => void boardsList.refetch()} className="px-1 py-1 text-xs" />
+          ) : boardsFailure ? (
+            <LoadFailed error={boardsFailure.error} retrying={boardsFailure.retrying} onRetry={() => void boardsList.refetch()} className="px-1 py-1 text-xs" />
           ) : boardsList.isPending ? (
             // the list is on its way, not empty
             <p role="status" className="px-1 text-xs text-muted-foreground">{t("Loading…")}</p>

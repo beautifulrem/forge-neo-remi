@@ -16,6 +16,7 @@ import { toast } from "sonner"
 import { api } from "@/api/endpoints"
 import { queryClient } from "@/api/queries"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 import { Segmented } from "@/components/Segmented"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -233,6 +234,7 @@ function rememberUrl(url: string) {
 export function AvailableView() {
   const { t } = useTranslation()
   const installed = useQuery(installedQuery)
+  const installedFailure = useLoadFailure(installed)
   const defaultUrl = installed.data?.index_url ?? ""
   const access = installed.data?.access ?? false
   const [urlDraft, setUrlDraft] = useState<string | null>(rememberedUrl)
@@ -252,6 +254,7 @@ export function AvailableView() {
     staleTime: 10 * 60_000,
     placeholderData: keepPreviousData,
   })
+  const indexFailure = useLoadFailure(index)
   const reload = useMutation({
     mutationFn: () => api.extensions.index({ url: source, refresh: true }),
     onSuccess: (data) => queryClient.setQueryData(extensionKeys.index(source), data),
@@ -293,11 +296,11 @@ export function AvailableView() {
         <p className="basis-full text-xs text-muted-foreground">{t("This index is maintained by third parties. Please verify an extension before installing it.")}</p>
       </form>
 
-      {installed.isPending ? (
-        <Skeleton className="h-40 w-full" aria-busy="true" />
-      ) : installed.isError && !installed.data ? (
+      {installedFailure ? (
         // without the extension list neither the index URL nor the access is known: say why the form is off
-        <LoadFailed error={installed.error} message={adminErrorMessage(installed.error, t)} onRetry={() => void installed.refetch()} />
+        <LoadFailed error={installedFailure.error} retrying={installedFailure.retrying} message={adminErrorMessage(installedFailure.error, t)} onRetry={() => void installed.refetch()} />
+      ) : installed.isPending ? (
+        <Skeleton className="h-40 w-full" aria-busy="true" />
       ) : !access ? null : url === null ? (
         <Empty>
           <EmptyHeader>
@@ -308,8 +311,8 @@ export function AvailableView() {
             <EmptyDescription>{t("Load the index to search extensions by name, description and tags.")}</EmptyDescription>
           </EmptyHeader>
         </Empty>
-      ) : index.isError && !index.data ? (
-        <LoadFailed error={index.error} message={adminErrorMessage(index.error, t)} onRetry={() => void index.refetch()} />
+      ) : indexFailure ? (
+        <LoadFailed error={indexFailure.error} retrying={indexFailure.retrying} message={adminErrorMessage(indexFailure.error, t)} onRetry={() => void index.refetch()} />
       ) : !index.data ? (
         <div className="flex flex-col gap-2" aria-busy="true">
           {Array.from({ length: 5 }, (_, i) => (

@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils"
 import { adminErrorMessage, backupDiffers, type ConfigStateDetail, formatDate } from "./extensions-model"
 import { extensionKeys, stateQuery, statesQuery } from "./queries"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 
 type Repo = { commit_hash?: string | null; commit_url?: string | null; branch?: string | null; remote?: string | null; enabled?: boolean } | null | undefined
 
@@ -122,11 +123,13 @@ function StateDetail({ detail }: { detail: ConfigStateDetail }) {
 export function BackupView({ access }: { access: boolean }) {
   const { t, i18n } = useTranslation()
   const states = useQuery(statesQuery)
+  const statesFailure = useLoadFailure(states)
   const [selected, setSelected] = useState<string | null>(null)
   const [name, setName] = useState("")
   const [confirm, setConfirm] = useState<"restore" | "delete" | null>(null)
   const current = selected ?? states.data?.[0]?.id ?? null
   const detail = useQuery({ ...stateQuery(current ?? ""), enabled: current !== null })
+  const detailFailure = useLoadFailure(detail)
 
   const save = useMutation({
     mutationFn: () => api.extensions.states.save(name.trim()),
@@ -173,10 +176,10 @@ export function BackupView({ access }: { access: boolean }) {
             {t("Back up")}
           </Button>
         </form>
-        {states.isPending ? (
+        {statesFailure ? (
+          <LoadFailed error={statesFailure.error} retrying={statesFailure.retrying} message={adminErrorMessage(statesFailure.error, t)} onRetry={() => void states.refetch()} />
+        ) : !states.data ? (
           <Skeleton className="h-40 w-full" />
-        ) : states.isError && !states.data ? (
-          <LoadFailed error={states.error} message={adminErrorMessage(states.error, t)} onRetry={() => void states.refetch()} />
         ) : states.data.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("No backups yet. One is made before every update.")}</p>
         ) : (
@@ -228,10 +231,10 @@ export function BackupView({ access }: { access: boolean }) {
               <EmptyDescription>{t("A backup records the commit of every extension, so a bad update can be undone.")}</EmptyDescription>
             </EmptyHeader>
           </Empty>
-        ) : detail.isPending ? (
+        ) : detailFailure ? (
+          <LoadFailed error={detailFailure.error} retrying={detailFailure.retrying} message={adminErrorMessage(detailFailure.error, t)} onRetry={() => void detail.refetch()} />
+        ) : !detail.data ? (
           <Skeleton className="h-64 w-full" />
-        ) : detail.isError && !detail.data ? (
-          <LoadFailed error={detail.error} message={adminErrorMessage(detail.error, t)} onRetry={() => void detail.refetch()} />
         ) : (
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center gap-2">

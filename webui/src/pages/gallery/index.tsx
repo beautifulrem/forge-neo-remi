@@ -17,6 +17,8 @@ import { queryClient } from "@/api/queries"
 import type { GalleryItem } from "@/api/types"
 import { useRegisterCommands } from "@/app/commands"
 import { HeaderSlot } from "@/app/header-slot"
+import { useLoadFailure } from "@/api/load-failure"
+import { RetryButton } from "@/components/LoadFailed"
 import { PagePlaceholder } from "@/components/PagePlaceholder"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -87,6 +89,7 @@ export default function GalleryPage() {
   const bulkBarRef = usePinnedBar("bottom", gridScroller)
   const query = galleryQuery(view)
   const list = useInfiniteQuery(galleryListQuery(query))
+  const failure = useLoadFailure(list)
   const items = list.data?.pages.flatMap((page) => page.items) ?? []
   const order = items.map((item) => item.id)
   // Once every page is in, the count is what the pages hold: it can never disagree with the tiles.
@@ -161,22 +164,20 @@ export default function GalleryPage() {
   )
 
   let body: React.ReactNode
-  if (list.isPending || readingOn) {
+  if (failure) {
+    // only when nothing loaded: a failed next page or refetch keeps the images shown
+    body = (
+      <PagePlaceholder icon={GalleryVerticalEnd} title="Gallery unavailable" description={errorText(failure.error, {}, i18n.language)}>
+        <RetryButton retrying={failure.retrying} onRetry={() => void list.refetch()} />
+      </PagePlaceholder>
+    )
+  } else if (list.isPending || readingOn) {
     body = (
       <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5 p-3" aria-busy="true">
         {Array.from({ length: 18 }, (_, index) => (
           <Skeleton key={index} className="aspect-square" />
         ))}
       </div>
-    )
-  } else if (list.isError && !list.data) {
-    // only when nothing loaded: a failed next page or refetch keeps the images shown
-    body = (
-      <PagePlaceholder icon={GalleryVerticalEnd} title="Gallery unavailable" description={errorText(list.error, {}, i18n.language)}>
-        <Button variant="outline" size="sm" onClick={() => void list.refetch()}>
-          {t("Retry")}
-        </Button>
-      </PagePlaceholder>
     )
   } else if (items.length === 0) {
     body =
@@ -228,7 +229,7 @@ export default function GalleryPage() {
     <div className="relative flex h-full flex-col">
       {header}
       <GalleryToolbar />
-      <BoardsBar activeItems={activeBoardSendItems} count={items.length} total={total} failed={list.isError && !list.data} />
+      <BoardsBar activeItems={activeBoardSendItems} count={items.length} total={total} failed={failure !== null} />
       <div className="min-h-0 flex-1">{body}</div>
       {selection.ids.size > 0 ? (
         // a phone's bottom navigation keeps the home indicator's room below the page; from md the page reaches the screen's edge

@@ -230,7 +230,21 @@ describe("network browser: windows, filters, errors", { timeout: 60_000 }, () =>
     const alert = await within(folders).findByRole("alert", {}, { timeout: 20_000 })
     expect(alert).toHaveTextContent("The server ran into an error (500).")
     broken = false
-    fireEvent.click(within(alert).getByRole("button", { name: "Retry" }))
+    // the retry's answer waits: meanwhile the failure stays, its Retry busy, not a skeleton
+    const fetch = vi.mocked(globalThis.fetch)
+    const answer = fetch.getMockImplementation()!
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    fetch.mockImplementation(async (input, init) => {
+      if (new URL((input as Request).url).pathname.endsWith("/facets")) await held
+      return answer(input, init)
+    })
+    const retry = within(alert).getByRole("button", { name: "Retry" })
+    fireEvent.click(retry)
+    await waitFor(() => expect(retry).toHaveAttribute("aria-disabled", "true"))
+    expect(alert).toBeInTheDocument()
+    expect(alert).toHaveTextContent("The server ran into an error (500).")
+    release()
     expect(await within(folders).findByRole("tree", { name: "Folders" }, slow)).toBeInTheDocument()
   })
 

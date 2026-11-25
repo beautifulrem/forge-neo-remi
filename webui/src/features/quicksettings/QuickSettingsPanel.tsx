@@ -11,10 +11,12 @@ import { RenderNode } from "@/ui/Renderer"
 import { createQuickForm, QUICK_OWNER, type QuickForm } from "./quick-form"
 import { setPinned } from "./pinned"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 
 export default function QuickSettingsPanel({ keys: pinned }: { keys: string[] }) {
   const { t } = useTranslation()
   const options = useQuery(optionsQuery)
+  const failure = useLoadFailure(options)
   const [form] = useState<QuickForm>(() => createQuickForm())
   const [loadedFrom, setLoadedFrom] = useState<object | null>(null)
   const signature = pinned.join("\n")
@@ -28,7 +30,7 @@ export default function QuickSettingsPanel({ keys: pinned }: { keys: string[] })
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [form, options.data, signature])
 
-  if (options.isError && !options.data) return <LoadFailed className="px-1" error={options.error} onRetry={() => void options.refetch()} />
+  if (failure) return <LoadFailed className="px-1" error={failure.error} retrying={failure.retrying} onRetry={() => void options.refetch()} />
   if (!options.data || loadedFrom === null) {
     return (
       <div className="grid place-items-center py-8" aria-busy="true">

@@ -19,6 +19,7 @@ import { toolKeys } from "../queries"
 import { groupTagText, type PanelProps } from "./helpers"
 import { PanelHeader, SearchBox } from "./panel"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 
 type FlatTag = { tag: string; label: string | null; group: string; color: string | null }
 
@@ -54,6 +55,7 @@ export default function GroupsPanel({ value, setValue, disabled, config }: Panel
   const { t } = useTranslation()
   const locale = toServerLocale(useLocale((state) => state.locale))
   const groups = useQuery({ queryKey: toolKeys.groups(locale), queryFn: ({ signal }) => promptToolsApi.groups(locale, signal), staleTime: Infinity })
+  const failure = useLoadFailure(groups)
   const [category, setCategory] = useState(0)
   const [query, setQuery] = useState("")
   const search = useDeferredValue(query.trim())
@@ -80,12 +82,12 @@ export default function GroupsPanel({ value, setValue, disabled, config }: Panel
       <PanelHeader title={t("Quick tags")}>
         <SearchBox value={query} onChange={setQuery} placeholder={t("Search tags")} className="w-44" />
       </PanelHeader>
-      {groups.isPending ? (
+      {failure ? (
+        <LoadFailed className="justify-center px-3" error={failure.error} retrying={failure.retrying} onRetry={() => void groups.refetch()} />
+      ) : groups.isPending ? (
         <div className="flex h-40 items-center justify-center">
           <Spinner aria-label={t("Loading")} />
         </div>
-      ) : groups.isError && groups.data === undefined ? (
-        <LoadFailed className="justify-center px-3" error={groups.error} onRetry={() => void groups.refetch()} />
       ) : categories.length === 0 ? (
         <Empty className="py-8">
           <EmptyHeader>

@@ -16,6 +16,8 @@ import { toast } from "sonner"
 import { useStore } from "zustand"
 import { bootstrapQuery, optionsQuery } from "@/api/queries"
 import { navigate, type Route } from "@/app/router"
+import { useLoadFailure } from "@/api/load-failure"
+import { RetryButton } from "@/components/LoadFailed"
 import { PagePlaceholder } from "@/components/PagePlaceholder"
 import { Segmented } from "@/components/Segmented"
 import { Button } from "@/components/ui/button"
@@ -126,6 +128,7 @@ export default function SettingsPage({ route }: { route: Route }) {
   const { t, i18n } = useTranslation()
   const view = parseView(route.query?.get("view"))
   const options = useQuery(optionsQuery)
+  const optionsFailure = useLoadFailure(options)
   const status = useQuery(serverStatusQuery)
   const bootstrap = useQuery(bootstrapQuery)
   const listRef = useRef<SettingsListHandle>(null)
@@ -258,12 +261,10 @@ export default function SettingsPage({ route }: { route: Route }) {
     />
   )
 
-  if (options.isError && !schema) {
+  if (optionsFailure && !schema) {
     return (
-      <PagePlaceholder icon={SettingsIcon} title="Settings unavailable" description={errorText(options.error, {}, language)}>
-        <Button variant="outline" size="sm" onClick={() => void options.refetch()}>
-          {t("Retry")}
-        </Button>
+      <PagePlaceholder icon={SettingsIcon} title="Settings unavailable" description={errorText(optionsFailure.error, {}, language)}>
+        <RetryButton retrying={optionsFailure.retrying} onRetry={() => void options.refetch()} />
       </PagePlaceholder>
     )
   }

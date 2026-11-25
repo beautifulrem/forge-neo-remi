@@ -38,6 +38,7 @@ import { CATEGORY_LABELS } from "@/features/library/labels"
 import { appliedRecipeValues, applyRecipeEntries, type CapturedOverrides, captureTabOverrides, conflictOverrides, countRecipeParams, recipeHighlights } from "./capture"
 import type { Recipe } from "./types"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 import { recipeFileName } from "./file-name"
 
 const FAMILIES = ["", "anima", "qwen21", "flux3", "moss", "zimage", "sdxl"] as const
@@ -77,6 +78,7 @@ export function RecipeManager() {
   const filtered = q !== "" || family !== ""
   // the previous list stays while a new search loads, so typing does not flash the skeleton
   const list = useQuery({ ...recipesQuery({ ...(q ? { q } : {}), ...(family ? { model_family: family } : {}) }), placeholderData: keepPreviousData })
+  const listFailure = useLoadFailure(list)
   const recipes = list.data?.items ?? []
 
   // what the capture dialog read from the source form (null while it reads: a form never opened loads its schema first)
@@ -271,18 +273,18 @@ export function RecipeManager() {
           <h2 className={panelTitleClass(0)}>
             {t("Cross-model parameter recipes")}
             {/* not after a failed load: "0" would say the library is empty */}
-            {list.data ? <span className="ml-2 font-mono text-xs font-normal text-muted-foreground tabular-nums">{recipes.length}</span> : null}
+            {list.data && !listFailure ? <span className="ml-2 font-mono text-xs font-normal text-muted-foreground tabular-nums">{recipes.length}</span> : null}
           </h2>
         </div>
 
-        {list.isPending ? (
+        {listFailure ? (
+          <LoadFailed error={listFailure.error} retrying={listFailure.retrying} onRetry={() => void list.refetch()} />
+        ) : list.isPending ? (
           <div className="flex flex-col gap-2 py-2" aria-busy="true">
             {Array.from({ length: 3 }, (_, i) => (
               <Skeleton key={i} className="h-14 w-full" />
             ))}
           </div>
-        ) : list.isError && !list.data ? (
-          <LoadFailed error={list.error} onRetry={() => void list.refetch()} />
         ) : recipes.length === 0 && filtered ? (
           // a placeholder: a dimmed glyph over one muted line, and the way out
           <div className="flex flex-col items-center gap-2 py-10 text-center">

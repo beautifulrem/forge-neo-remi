@@ -15,6 +15,7 @@ import { navigate, type Route } from "@/app/router"
 import { HeaderSlot } from "@/app/header-slot"
 import { FitTabsList } from "@/components/FitTabsList"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsTrigger } from "@/components/ui/tabs"
@@ -115,17 +116,19 @@ function Actions({ fileId, infotext }: { fileId: string; infotext: string | null
 function Details({ fileId }: { fileId: string }) {
   const { t, i18n } = useTranslation()
   const info = useQuery({ queryKey: ["pnginfo", fileId], queryFn: ({ signal }) => api.pngInfo(fileId, signal), staleTime: Infinity })
+  const failure = useLoadFailure(info)
   const [section, setSection] = useState("params")
-  if (info.isPending) return <Skeleton className="h-64 w-full" />
   // a failed refetch (a reconnect invalidates every query) keeps the metadata already shown
-  if (info.isError && !info.data)
+  if (failure)
     return (
       <LoadFailed
-        error={info.error}
-        message={errorText(info.error, { 404: t("The image is no longer there."), 415: t("This file cannot be read as an image (or it is too large to read).") }, i18n.language)}
+        error={failure.error}
+        retrying={failure.retrying}
+        message={errorText(failure.error, { 404: t("The image is no longer there."), 415: t("This file cannot be read as an image (or it is too large to read).") }, i18n.language)}
         onRetry={() => void info.refetch()}
       />
     )
+  if (!info.data) return <Skeleton className="h-64 w-full" />
   const data = info.data
   return (
     <div className="flex flex-col gap-4">

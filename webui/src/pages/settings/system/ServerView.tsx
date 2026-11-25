@@ -15,6 +15,7 @@ import { ROOT } from "@/api/http"
 import { useProgress } from "@/api/progress"
 import { queryClient } from "@/api/queries"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -206,6 +207,7 @@ function CheckpointHashes() {
 export function ServerView({ onImport, onExport }: { onImport: () => void; onExport: (all: boolean) => void }) {
   const { t } = useTranslation()
   const status = useQuery(serverStatusQuery)
+  const statusFailure = useLoadFailure(status)
   const modelLoading = useProgress((s) => s.modelLoading)
   const notifications = useNotificationPermission()
   const model = useMutation({
@@ -235,8 +237,8 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
         <h1 className="font-heading text-xl font-semibold tracking-tight">{t("Server and models")}</h1>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
           {/* a failure takes the version's place (-my-1: its Retry does not make the line taller), so the panels stay put */}
-          {status.isError && !status.data ? (
-            <LoadFailed error={status.error} message={t("Could not read the server status")} onRetry={() => void status.refetch()} className="-my-1 py-0" />
+          {statusFailure ? (
+            <LoadFailed error={statusFailure.error} retrying={statusFailure.retrying} message={t("Could not read the server status")} onRetry={() => void status.refetch()} className="-my-1 py-0" />
           ) : (
             <span>{status.data ? t("Version {{version}}", { version: status.data.version }) : " "}</span>
           )}

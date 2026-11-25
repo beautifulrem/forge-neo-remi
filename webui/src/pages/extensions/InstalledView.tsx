@@ -55,6 +55,7 @@ import {
 import { extensionKeys, installedQuery } from "./queries"
 import { checkForUpdates, stopUpdateCheck, useUpdateCheck } from "./update-check"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 import { usePinnedBar } from "@/lib/use-pinned-bar"
 
 /** Staged changes survive switching tabs (not a page reload: the shell asks first). */
@@ -261,6 +262,7 @@ const INSTALLED_PARAMS = { q: "" }
 export function InstalledView() {
   const { t } = useTranslation()
   const list = useQuery(installedQuery)
+  const failure = useLoadFailure(list)
   const staged = useStaged((s) => s.staged)
   const setStaged = useStaged((s) => s.set)
   const progress = useUpdateCheck((s) => s.progress)
@@ -318,6 +320,8 @@ export function InstalledView() {
     else if (result.checked > 0) toast.success(result.available > 0 ? t("{{count}} updates available", { count: result.available }) : t("Everything is up to date"))
   }
 
+  // a failed refetch keeps the list on screen; only a first load that failed has nothing to show
+  if (failure) return <LoadFailed error={failure.error} retrying={failure.retrying} message={adminErrorMessage(failure.error, t)} onRetry={() => void list.refetch()} />
   if (list.isPending) {
     return (
       <div className="flex flex-col gap-2" aria-busy="true">
@@ -327,8 +331,6 @@ export function InstalledView() {
       </div>
     )
   }
-  // a failed refetch keeps the list on screen; only a first load that failed has nothing to show
-  if (list.isError && !list.data) return <LoadFailed error={list.error} message={adminErrorMessage(list.error, t)} onRetry={() => void list.refetch()} />
 
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean)
   const visible = terms.length ? items.filter((ext) => terms.every((term) => `${ext.name} ${ext.remote ?? ""}`.toLowerCase().includes(term))) : items

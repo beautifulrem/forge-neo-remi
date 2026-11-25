@@ -13,6 +13,7 @@ import { errorText } from "@/features/errors/error-text"
 import { cn } from "@/lib/utils"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import { LoadFailed } from "@/components/LoadFailed"
+import { useLoadFailure } from "@/api/load-failure"
 
 /** Short scalar entries shown as a summary; everything else is a collapsible section. */
 const SUMMARY_KEYS = ["Platform", "Python", "Version", "Git status", "Script path", "Data path", "Extensions dir"]
@@ -94,6 +95,7 @@ function CheckFile() {
 export function SysinfoView() {
   const { t } = useTranslation()
   const info = useQuery({ queryKey: ["sysinfo"], queryFn: ({ signal }) => api.system.sysinfo(signal), staleTime: 60_000 })
+  const failure = useLoadFailure(info)
   const data = info.data
   const summary = data ? SUMMARY_KEYS.filter((key) => key in data && typeof data[key] !== "object") : []
   const sections = data ? Object.keys(data).filter((key) => !summary.includes(key) && key !== "Checksum") : []
@@ -125,14 +127,14 @@ export function SysinfoView() {
         </Button>
       </header>
       <CheckFile />
-      {info.isPending ? (
+      {failure ? (
+        <LoadFailed error={failure.error} retrying={failure.retrying} onRetry={() => void info.refetch()} />
+      ) : info.isPending ? (
         <div className="flex flex-col gap-2" aria-busy="true">
           {Array.from({ length: 6 }, (_, i) => (
             <Skeleton key={i} className="h-9 w-full" />
           ))}
         </div>
-      ) : info.isError && !info.data ? (
-        <LoadFailed error={info.error} onRetry={() => void info.refetch()} />
       ) : (
         <>
           <dl className={cn("grid gap-x-4 gap-y-2 text-sm sm:grid-cols-[max-content_1fr]", panelClass(0))}>
