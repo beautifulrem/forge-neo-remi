@@ -378,6 +378,32 @@ def test_a_message_nested_past_the_parser_is_ignored_like_any_bad_message():
     assert asyncio.run(scenario()) == [{"type": "pong"}]
 
 
+def test_an_event_with_text_utf8_cannot_hold_is_sent_escaped_not_a_closed_socket():
+    """A job's error or an extension's progress text can hold an unpaired surrogate: the
+    socket's UTF-8 encoding failed and the send loop closed the connection (1011)."""
+
+    import json
+
+    class Utf8Socket(FakeSocket):
+        async def send_text(self, text):
+            text.encode("utf-8")  # as the server's WebSocket does
+            await super().send_text(text)
+
+    async def scenario():
+        socket = Utf8Socket()
+        client = Client(socket)
+        client.push_event({"type": "job.failed", "error": "x\udc80 猫"})
+        client.push_event({"type": "pong"})
+        task = asyncio.create_task(client.send_loop())
+        await asyncio.sleep(0.05)
+        task.cancel()
+        return socket
+
+    socket = asyncio.run(scenario())
+    assert socket.closed is None and [json.loads(text) for text in socket.sent] == [{"type": "job.failed", "error": "x\udc80 猫"}, {"type": "pong"}]
+    assert "\\udc80" in socket.sent[0]
+
+
 def test_a_client_that_fell_behind_gets_a_resync_and_a_fresh_snapshot():
     import json
 

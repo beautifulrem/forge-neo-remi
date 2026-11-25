@@ -148,6 +148,19 @@ def test_a_failing_job_reports_its_error(webui, tmp_path):
         assert failed and failed[0]["error"] == "RuntimeError: boom"
 
 
+def test_a_job_failing_with_text_utf8_cannot_hold_still_ends_failed(webui, tmp_path):
+    """An exception naming a file whose name is not UTF-8 (Linux keeps its bytes as
+    surrogates): SQLite refused the error text, so the job never ended."""
+
+    state = FakeState()
+    executor = StubExecutor(state, error=OSError("cannot open x\udc80.png"))
+    with server_app(tmp_path, state=state, executor=executor) as server:
+        created = submit(server)
+        assert server.services.queue.wait_idle()
+        job = server.client.get(f"/api/v2/jobs/{created['job_id']}").json()
+        assert job["status"] == FAILED and job["error"] == "OSError: cannot open x\ufffd.png"
+
+
 def test_script_errors_during_a_job_become_its_warnings(webui, tmp_path, monkeypatch):
     """A script hook that raises is reported by the script runner and skipped; the job
     completes and says so (history and the job.completed event) instead of failing silently.

@@ -30,6 +30,7 @@ from typing import Any
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from remi.realtime import FORMAT_NAMES, PreviewFrame
+from remi.setting_values import encodable
 
 log = logging.getLogger(__name__)
 
@@ -96,6 +97,10 @@ class Client:
         except ValueError:  # NaN/inf in an event: not JSON
             log.warning("dropped an event that is not JSON: %s", event.get("type"))
             return
+        if not encodable(text):
+            # An unpaired surrogate (a job's error naming a file that is not UTF-8, an extension's
+            # progress text): the frame is UTF-8, so it goes as a JSON escape, as the API writes it
+            text = json.dumps(event, ensure_ascii=True, allow_nan=False, default=str)
         await self.websocket.send_text(text)
 
     async def _resync(self) -> None:

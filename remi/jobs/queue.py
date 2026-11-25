@@ -868,6 +868,9 @@ class JobQueue:
                 self._enqueued(again)
 
     def _fail(self, job: Job, message: str, *, errors: list[dict] | None = None) -> None:
+        from remi.image_meta import utf8_text
+
+        message = utf8_text(message)  # an exception naming a file that is not UTF-8: SQLite cannot store it
         status = CANCELLED if job.id in self._cancelled else FAILED
         finished = self.store.finish(job.id, status, error=message, errors=errors)
         self.bus.publish("job.failed", job_id=job.id, seq=job.seq, tab=job.tab, status=status, error=message, errors=errors)
