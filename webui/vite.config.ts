@@ -8,7 +8,7 @@ import babel from "@rolldown/plugin-babel"
 import tailwindcss from "@tailwindcss/vite"
 import react, { reactCompilerPreset } from "@vitejs/plugin-react"
 import { defineConfig, loadEnv, type Plugin } from "vite"
-import { collectNotices, cssImportedPackages, formatNotices, runtimeDependencies, vendoredNotices } from "./tools/notices.mjs"
+import { collectNotices, cssImportedPackages, devNotices, formatNotices, runtimeDependencies, vendoredNotices } from "./tools/notices.mjs"
 
 // The WebUI server (python launch.py) serves the built app from webui/dist;
 // `pnpm dev` proxies its API and WebSocket to that server.
@@ -120,6 +120,36 @@ function thirdPartyNotices(): Plugin {
 }
 
 /**
+ * The dev server (`pnpm dev`, `pnpm dev:mock`) answers THIRD-PARTY-NOTICES.txt itself, which only
+ * the build writes (thirdPartyNotices()): the notices of the runtime dependencies, instead of a 404
+ * behind Settings → Licenses.
+ */
+function devThirdPartyNotices(): Plugin {
+  let text: Promise<string> | undefined
+  return {
+    name: "remi-dev-third-party-notices",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (!/^\/THIRD-PARTY-NOTICES\.txt(?:\?|$)/.test(req.url ?? "")) return next()
+        text ??= devNotices(import.meta.dirname)
+        text.then(
+          (body) => {
+            res.setHeader("Content-Type", "text/plain; charset=utf-8")
+            res.setHeader("Cache-Control", "no-store")
+            res.end(body)
+          },
+          (error: unknown) => {
+            text = undefined
+            next(error)
+          },
+        )
+      })
+    },
+  }
+}
+
+/**
  * The API documentation viewers the server shows at /docs (Swagger UI) and /redoc (ReDoc),
  * vendored into the build instead of loaded from a CDN: pinned versions (package.json), served by
  * the server itself under the page CSP, no third-party code on the app origin. Each package goes
@@ -194,7 +224,7 @@ function phosphorWeights(): Plugin {
 export default defineConfig(({ mode }) => {
   const mock = loadEnv(mode, process.cwd(), "VITE_").VITE_MOCK === "1"
   return {
-    plugins: [phosphorWeights(), react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss(), mock && mockFiles(), apiDocs(), thirdPartyNotices(), precompress()],
+    plugins: [phosphorWeights(), react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss(), mock && mockFiles(), devThirdPartyNotices(), apiDocs(), thirdPartyNotices(), precompress()],
     resolve: { alias: { "@": path.resolve(import.meta.dirname, "./src") } },
     server: {
       proxy: mock

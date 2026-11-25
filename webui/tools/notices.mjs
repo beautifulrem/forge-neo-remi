@@ -122,12 +122,26 @@ export async function vendoredNotices() {
   return [{ name: "shadcn/ui", version: "(base-nova registry, vendored)", license: "MIT", texts: [text] }]
 }
 
+const BUILD_HEAD = "Third-party software in the Remi WebUI web interface build\n\nEach package below is bundled into this build under its own license.\n"
+
 /** The notices as one plain-text file. */
-export function formatNotices(packages) {
-  const head = "Third-party software in the Remi WebUI web interface build\n\nEach package below is bundled into this build under its own license.\n"
+export function formatNotices(packages, head = BUILD_HEAD) {
   const blocks = packages.map((pkg) => {
     const text = pkg.texts.length > 0 ? pkg.texts.join("\n\n") : "(the package ships no license file; its package.json names the license above)"
     return `${"=".repeat(72)}\n${pkg.name} ${pkg.version}\nLicense: ${pkg.license}\n\n${text}\n`
   })
   return `${head}\n${blocks.join("\n")}`
+}
+
+/**
+ * What the dev server (`pnpm dev`, `pnpm dev:mock`) answers for THIRD-PARTY-NOTICES.txt, which only
+ * the build writes (Settings → Licenses links it): the notices of the app's runtime dependencies
+ * and the vendored code. `root`: the web interface folder (webui/).
+ */
+export async function devNotices(root) {
+  const manifest = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"))
+  const ids = runtimeDependencies(manifest).map((name) => path.join(root, "node_modules", name, "package.json"))
+  const notices = [...(await collectNotices(ids)), ...(await vendoredNotices())].sort((a, b) => a.name.localeCompare(b.name))
+  const head = "Third-party software in the Remi WebUI web interface (development server)\n\nThe development server lists the app's direct dependencies; `pnpm build` writes the full list,\nevery package the build ships, as THIRD-PARTY-NOTICES.txt next to index.html.\n"
+  return formatNotices(notices, head)
 }

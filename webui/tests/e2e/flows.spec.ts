@@ -67,6 +67,14 @@ test.describe("settings", () => {
   })
 })
 
+// Settings → Licenses links THIRD-PARTY-NOTICES.txt, which only the build writes: the dev server answers it too
+test("serves the third-party notices the Licenses view links to", async ({ request }) => {
+  const response = await request.get("/THIRD-PARTY-NOTICES.txt")
+  expect(response.status()).toBe(200)
+  expect(response.headers()["content-type"]).toMatch(/^text\/plain/)
+  expect(await response.text()).toMatch(/^react \d/m)
+})
+
 test.describe("networks drawer", () => {
   test("opens with Alt+N, filters and inserts a LoRA into the prompt", async ({ page }) => {
     const console = watchConsole(page)
