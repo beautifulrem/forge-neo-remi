@@ -712,11 +712,44 @@ def test_a_setting_nested_too_deep_is_refused_on_both_routes(webui_tmp, monkeypa
                         response = client.patch("/api/v2/options", json={key: nested(depth)})
                         assert response.status_code == 422, (key, depth, response.text)
                     assert config.read_bytes() == before and shared.opts.data == stored
+            # the model selection, which the route takes out before the check (a dtype went straight to opts.save)
+            from remi import model_selection
+
+            picks = []
+            monkeypatch.setattr(model_selection, "select", lambda key, value: picks.append(key))
+            for key in model_selection.MODEL_OPTIONS:
+                response = client.post("/sdapi/v1/options", json={key: nested(MAX_NESTING + 1), "jpeg_quality": 77})
+                assert response.status_code == 422 and key in response.json()["detail"], (key, response.text)
+                assert picks == [] and config.read_bytes() == before and shared.opts.data == stored
             assert client.post("/sdapi/v1/options", json={"ext_json": nested(MAX_NESTING)}).status_code == 200
             assert client.patch("/api/v2/options", json={"ext_json": {"a": [1, [2]]}}).status_code == 200
             assert shared.opts.data["ext_json"] == {"a": [1, [2]]}
     finally:
         services.close()
+
+
+def test_sdapi_override_settings_nested_too_deep_are_refused():
+    """A generation's ``override_settings`` go into ``opts.data`` (``processing.py``), kept
+    there with ``override_settings_restore_afterwards: false`` or while another route saves:
+    one nested about a thousand levels deep cut ``config.json`` short at the next save. They
+    are refused (422) before anything else of the request is read."""
+    import pytest
+    from fastapi import HTTPException
+
+    from modules.api import api, models
+    from remi.setting_values import MAX_NESTING
+
+    deep: list = []
+    for _ in range(MAX_NESTING):
+        deep = [deep]
+    requests = [
+        (api.Api.text2imgapi, models.StableDiffusionTxt2ImgProcessingAPI(override_settings={"forge_checkpoint_sd": deep})),
+        (api.Api.img2imgapi, models.StableDiffusionImg2ImgProcessingAPI(override_settings={"forge_checkpoint_sd": deep})),
+    ]
+    for handler, request in requests:
+        with pytest.raises(HTTPException) as error:
+            handler(None, request)  # refused before the handler uses its Api
+        assert error.value.status_code == 422 and "forge_checkpoint_sd" in error.value.detail
 
 
 def test_sdapi_infotext_fills_request_fields_and_script_args(webui_tmp):

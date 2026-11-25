@@ -206,6 +206,18 @@ def encode_pil_to_base64(image):
     return base64.b64encode(bytes_data)
 
 
+def refuse_deep_settings(values, what: str):
+    """Remi: 422 for setting values nested deeper than ``MAX_NESTING`` levels. They reach
+    ``opts.data``, and ``Options.save``'s recursive ``json.dump`` stopped half way on one about
+    a thousand levels deep, cutting ``config.json`` short (remi.setting_values.MAX_NESTING)."""
+    from remi.setting_values import MAX_NESTING, nested_deeper
+
+    if isinstance(values, dict):
+        deep = sorted(str(key) for key, value in values.items() if nested_deeper(value))
+        if deep:
+            raise HTTPException(status_code=422, detail=f"{what} nested deeper than {MAX_NESTING} levels: {', '.join(deep)}"[:1000])
+
+
 class Api:
     def __init__(self, app: FastAPI, queue_lock: Lock):
         if shared.cmd_opts.api_auth:
@@ -435,6 +447,7 @@ class Api:
         return params
 
     def text2imgapi(self, txt2imgreq: models.StableDiffusionTxt2ImgProcessingAPI):
+        refuse_deep_settings(txt2imgreq.override_settings, "override_settings")
         task_id = txt2imgreq.force_task_id or create_task_id("txt2img")
 
         script_runner = scripts.scripts_txt2img
@@ -498,6 +511,7 @@ class Api:
         return models.TextToImageResponse(images=b64images, parameters=vars(txt2imgreq), info=processed.js())
 
     def img2imgapi(self, img2imgreq: models.StableDiffusionImg2ImgProcessingAPI):
+        refuse_deep_settings(img2imgreq.override_settings, "override_settings")
         task_id = img2imgreq.force_task_id or create_task_id("img2img")
 
         init_images = img2imgreq.init_images
@@ -658,6 +672,7 @@ class Api:
     def set_config(self, req: dict[str, Any]):
         from modules.sysinfo import set_config
 
+        refuse_deep_settings(req, "settings")  # Remi: the model selection below skips the value check
         # A setting that does not exist is a client error (422, nothing set),
         # not a KeyError half-way through (500 and a traceback per request).
         # Unchanged values are skipped as before: a posted-back GET answer

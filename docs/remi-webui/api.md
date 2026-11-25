@@ -407,9 +407,10 @@ What changed underneath, and what it means for clients:
   checkbox stores `false`, a text `""`, a multiple choice `[]`; a number,
   a choice or a list setting without a widget refuses it). A list setting
   without a widget (`disabled_extensions`) takes only a list of names. A
-  list or object nested deeper than 64 levels is refused for any setting
-  (`PATCH /api/v2/options` too): saving one stopped half way and cut
-  `config.json` short. A value it refuses
+  list or object nested deeper than 64 levels is refused for any setting,
+  the model selection included (also by `PATCH /api/v2/options` and in the
+  `override_settings` of `/sdapi/v1/txt2img` and `img2img`): saving one
+  stopped half way and cut `config.json` short. A value it refuses
   answers `422 {"detail": "invalid settings: …"}` naming each one, and
   nothing in the request is set. A1111 stored any value; a client that
   sent, say, a number where a list belongs now gets the 422. A value equal
@@ -417,7 +418,9 @@ What changed underneath, and what it means for clients:
   still works. Not checked, as before: a setting set elsewhere
   (`sd_vae`), an extension option the settings page cannot show either,
   the preset name (`forge_preset`, which the settings page checks against
-  the presets) and a "restricted" setting (ignored, as above).
+  the presets), the model selection beyond the checkpoint's name
+  (`forge_unet_storage_dtype`, `forge_additional_modules`) and a
+  "restricted" setting (ignored, as above).
 - The Agent Scheduler (`/agent-scheduler/v1/*`) and Prompt Queue
   (`/prompt-queue/*`) APIs are **not** kept: use `POST /api/v2/jobs` and the
   `/api/v2/queue/*` routes. Their data is imported with
