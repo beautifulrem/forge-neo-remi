@@ -260,8 +260,9 @@ extension can still store it).
 `COMMANDLINE_ARGS`, settings with key/token/secret/password-like names,
 extension remotes) and `/sdapi/v1/cmd-flags` hide `--auth`, `--api-auth`,
 `--ngrok`, `--ngrok-options` values (also as `--flag=value` and argparse
-abbreviations) and credentials inside URLs. Logins are never logged; the
-translation API key is stored write-only.
+abbreviations) and credentials inside URLs. A failed `--ngrok` connection
+names the token by its last 4 characters only (`modules/ngrok.py`). Logins
+are never logged; the translation API key is stored write-only.
 
 ## Running exposed
 
@@ -380,3 +381,4 @@ SPA.
 | 6 | `GET /api/v2/auth/status` checked HTTP Basic credentials without the login throttle (a public path) and answered who they log in as: unlimited password guessing again (2026-10 #4) | medium | public paths read the session cookie only; `/auth/status` checks Basic itself, counting failures and telling a throttled client nothing |
 | 7 | A request to a path open without a login (`/api/v2/auth/*`) could carry a body up to the full cap (128 MB by default), buffered and scanned before any login check (a 60 MB body took about 180 MB of memory) | low | 64 KB on those paths, enforced while the body streams in |
 | 8 | `POST /sdapi/v1/options` with text holding an unpaired surrogate stored it and saved the settings: the save stopped half-way and left `config.json` cut short (#2 for the A1111 API), every setting lost at the next start | high | `/sdapi/v1` JSON bodies are checked as `/api/v2`'s are (422, nothing stored) |
+| 9 | A failed `--ngrok` connection printed the whole authtoken to the console, which launchers and services often log | low | the token is named by its last 4 characters; token and basic-auth password are removed from the printed reason |
