@@ -423,3 +423,21 @@ def test_an_upload_a_saved_template_uses_is_not_pruned(tmp_path):
     finally:
         files.close()
         jobs.close()
+
+
+def test_housekeeping_prunes_old_stage_cache_entries(tmp_path):
+    from remi.jobs import run_inline
+    from remi.server.services import Services
+
+    with webui_state():
+        services = Services.create(tmp_path, dispatch=run_inline, realtime=False, housekeeping=False)
+        try:
+            store = services.chains.store
+            store.put_cached("old", "prompt_upsample", output_prompt="a")
+            store.put_cached("new", "prompt_upsample", output_prompt="b")
+            store._db.execute("UPDATE stage_cache SET created = ? WHERE stage_hash = 'old'", (time.time() - 30 * 86400,))
+            services.housekeeping()
+            assert store.get_cached("old") is None and store.get_cached("new") is not None
+            assert store.prune_cache(time.time() + 1) == 1 and store.get_cached("new") is None
+        finally:
+            services.close()

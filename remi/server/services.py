@@ -11,6 +11,7 @@ import logging
 import math
 import os
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -183,8 +184,9 @@ class Services:
         self.store.close()
 
     def housekeeping(self) -> None:
-        """Prune old uploads, unsaved outputs and gallery zips, and index
-        outputs saved outside the queue (at start, then hourly)."""
+        """Prune old uploads, unsaved outputs, pipeline stage cache entries
+        and gallery zips, and index outputs saved outside the queue (at
+        start, then hourly)."""
 
         from remi.server.settings import option
 
@@ -202,6 +204,11 @@ class Services:
                 log.info("Removed %d old unsaved output(s)", removed)
         except Exception:
             log.exception("pruning uploads")
+        try:
+            days = _positive(option("remi_upload_retention_days", 7), 7)
+            self.chains.store.prune_cache(time.time() - days * 86400)
+        except Exception:
+            log.exception("pruning the pipeline stage cache")
         try:
             from remi.library import gallery_for
 

@@ -655,6 +655,13 @@ class ChainStore:
                 (stage_hash, kind, json.dumps(list(output_file_ids), ensure_ascii=False), output_prompt, infotext, job_id, time.time()),
             )
 
+    def prune_cache(self, older_than: float) -> int:
+        """Forget the cached stage outputs stored before ``older_than`` (a
+        time); how many went. A pipeline that needs one runs the stage again."""
+
+        with self._lock:
+            return self._db.execute("DELETE FROM stage_cache WHERE created < ?", (older_than,)).rowcount
+
     # endregion
 
     # region Chain templates
