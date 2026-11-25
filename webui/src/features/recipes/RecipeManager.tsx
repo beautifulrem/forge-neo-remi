@@ -129,7 +129,7 @@ export function RecipeManager() {
       setDeleting(null)
       toast.success(t("Recipe deleted"))
     },
-    onError: (error) => toast.error(t("Could not delete recipe"), { description: errorText(error) }),
+    onError: (error) => toast.error(t("Could not delete recipe"), { description: errorText(error, { 404: t("The recipe was deleted meanwhile.") }) }),
   })
 
   const apply = useMutation({
@@ -157,7 +157,7 @@ export function RecipeManager() {
         description: noteLines(...warnings.map((warning) => noteText(warning)), overridden),
       })
     },
-    onError: (error) => toast.error(t("Could not apply recipe"), { description: errorText(error) }),
+    onError: (error) => toast.error(t("Could not apply recipe"), { description: errorText(error, { 404: t("The recipe was deleted meanwhile.") }) }),
   })
 
   /** Every recipe, or with a search or family filter on, the recipes it shows (as one recipe's own export). */

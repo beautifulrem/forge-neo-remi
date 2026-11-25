@@ -89,6 +89,19 @@ describe("errorText", () => {
     expect(errorText(failed(409), queueTexts)).toBe("The job changed meanwhile (it started or finished).")
   })
 
+  // A refused request's body names what is gone by its id ("no recipe 'r1'", "no such job"): the
+  // caller knows what that is in the user's words, so its own 404 sentence comes first.
+  it("prefers the caller's own 404 sentence to the body's", async () => {
+    const gone = new ApiError(404, "no recipe 'r1'", { detail: "no recipe 'r1'", template: "no recipe {{id}}", params: { id: "'r1'" } })
+    expect(errorText(gone, { 404: "The recipe was deleted meanwhile." })).toBe("The recipe was deleted meanwhile.")
+    expect(failureText(gone, { 404: "The recipe was deleted meanwhile." })).toBe("The recipe was deleted meanwhile.")
+    // without one, the body's sentence still says more than the status
+    expect(errorText(gone)).toBe("no recipe 'r1'")
+    // any other status keeps the body's sentence first
+    const started = new ApiError(409, "the job started meanwhile", { detail: "the job started meanwhile", template: "the job started meanwhile", params: {} })
+    expect(errorText(started, { 404: "The job was removed meanwhile.", 409: "The job changed meanwhile (it started or finished)." })).toBe("the job started meanwhile")
+  })
+
   it("falls back on the status class for other codes", () => {
     expect(errorText(failed(500))).toBe("The server ran into an error (500).")
     expect(errorText(failed(502))).toBe("The server ran into an error (502).")

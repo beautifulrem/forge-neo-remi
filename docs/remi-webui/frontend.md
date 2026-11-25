@@ -1654,7 +1654,11 @@ older server) nothing is shown.
   recipe or admin operation; it says more than any reading of the status)
   or else a sentence chosen by status (callers pass their own for a status
   that means something specific to them, such as a name already taken; a
-  422 lists the refused values' messages, which are catalog keys),
+  422 lists the refused values' messages, which are catalog keys). A
+  caller's own 404 sentence comes before the body's: the server names what
+  is gone by its id ("no recipe 'r1'"), the caller in the user's words
+  ("The recipe was deleted meanwhile."), so a call that can meet a 404 of
+  its own passes one;
   `failureText` also keeps the app's own errors (already translated
   sentences), `serviceFailureText` is for the prompt tools (a 502 keeps the
   service's own answer after a translated sentence: it is the only clue to

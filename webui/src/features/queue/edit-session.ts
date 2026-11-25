@@ -71,7 +71,7 @@ export function jobEntries(job: Pick<JobDetail, "core" | "scripts">): PasteEntry
 }
 
 /** The failure as text in the UI language; rejected values are marked on the form itself. */
-const message = (error: unknown) => errorText(error, { 422: t("Check the marked fields.") })
+const message = (error: unknown) => errorText(error, { 404: t("The job was removed meanwhile."), 422: t("Check the marked fields.") })
 
 /** Loads a job's parameters into its form (and, while it is queued, edits it). */
 export async function openJob(jobId: string): Promise<void> {

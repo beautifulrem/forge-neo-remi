@@ -54,7 +54,7 @@ export async function act<T>(run: () => Promise<T>, failure: string, success?: s
     if (success) toast.success(success)
     return result
   } catch (error) {
-    toast.error(failure, { description: errorText(error, { 409: t("The job changed meanwhile (it started or finished)."), ...texts }) })
+    toast.error(failure, { description: errorText(error, { 404: t("The job was removed meanwhile."), 409: t("The job changed meanwhile (it started or finished)."), ...texts }) })
     return undefined
   } finally {
     refreshQueue()

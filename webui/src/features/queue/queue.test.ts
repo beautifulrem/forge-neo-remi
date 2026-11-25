@@ -94,3 +94,17 @@ describe("removing a job", () => {
     expect(failed).toHaveBeenCalledTimes(1)
   })
 })
+
+describe("acting on a job removed meanwhile", () => {
+  // The server's sentence for it is "no such job", which the toast showed.
+  it("says so in the queue's own words", async () => {
+    const { toast } = await import("sonner")
+    const { api } = await import("@/api/endpoints")
+    const { ApiError } = await import("@/api/http")
+    const { duplicate } = await import("./queries")
+    const failed = vi.spyOn(toast, "error").mockImplementation(() => "")
+    vi.spyOn(api.jobs, "duplicate").mockRejectedValue(new ApiError(404, "no such job", { detail: "no such job", template: "no such job", params: {} }))
+    await duplicate({ id: "j1", status: "completed" } as never)
+    expect(failed).toHaveBeenCalledWith("Could not duplicate the job", { description: "The job was removed meanwhile." })
+  })
+})

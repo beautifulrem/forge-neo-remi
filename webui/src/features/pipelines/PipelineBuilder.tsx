@@ -206,7 +206,7 @@ export function PipelineBuilder() {
       refreshChains()
       toast.success(t("Pipeline started"))
     },
-    onError: (error) => toast.error(t("Could not start pipeline"), { description: errorText(error) }),
+    onError: (error) => toast.error(t("Could not start pipeline"), { description: errorText(error, { 404: t("The pipeline was deleted meanwhile.") }) }),
   })
 
   const cancel = useMutation({
@@ -216,7 +216,7 @@ export function PipelineBuilder() {
       refreshChains()
       toast.info(t("Pipeline cancelled"))
     },
-    onError: (error) => toast.error(t("Could not cancel pipeline"), { description: errorText(error) }),
+    onError: (error) => toast.error(t("Could not cancel pipeline"), { description: errorText(error, { 404: t("The pipeline was deleted meanwhile.") }) }),
   })
 
   const saveTemplate = useMutation({
@@ -236,7 +236,7 @@ export function PipelineBuilder() {
       refreshChains()
       toast.success(t("Template deleted"))
     },
-    onError: (error) => toast.error(t("Could not delete template"), { description: errorText(error) }),
+    onError: (error) => toast.error(t("Could not delete template"), { description: errorText(error, { 404: t("The template was deleted meanwhile.") }) }),
   })
 
   const updateStage = (index: number, updater: (prev: StageSpec) => StageSpec) => {

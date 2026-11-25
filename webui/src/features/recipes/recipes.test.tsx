@@ -460,6 +460,26 @@ describe("Recipes capture and manager UI", () => {
     expect(error.mock.calls[0]![1]).toMatchObject({ description: "This file is not a recipes export." })
   })
 
+  // The server names the recipe it lacks by its id ("no recipe 'r1'"), which the toast showed.
+  it("says a recipe deleted meanwhile in its own words, not by its id", async () => {
+    const { toast } = await import("sonner")
+    const error = vi.spyOn(toast, "error")
+    const gone = { detail: "no recipe 'r1'", template: "no recipe {{id}}", params: { id: "'r1'" } }
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (url.includes("/apply")) return new Response(JSON.stringify(gone), { status: 404, headers: { "Content-Type": "application/json" } })
+      return new Response(JSON.stringify({ items: [SAMPLE_RECIPE], total: 1 }), { status: 200, headers: { "Content-Type": "application/json" } })
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    await screen.findByText("Qwen Turbo 8-step")
+    fireEvent.click(screen.getByRole("button", { name: "Apply recipe" }))
+    await waitFor(() => expect(error).toHaveBeenCalledWith("Could not apply recipe", { description: "The recipe was deleted meanwhile." }))
+  })
+
   it("does not report a recipe as applied when the server could not apply it", async () => {
     const { toast } = await import("sonner")
     const success = vi.spyOn(toast, "success")

@@ -5,10 +5,13 @@
  * own (already translated) sentence for the statuses that mean something
  * specific to them. A refused queue, pipeline or recipe operation says why
  * with the sentence its body carries (`template`, a catalog key, and
- * `params`), and a 422 that lists the refused values says why: those
- * messages are catalog keys (`validationText`). A text shown by a render
- * takes the render's language (`useTranslation().i18n.language`): the React
- * Compiler keeps a render's text until the values it read change.
+ * `params`): it comes before the caller's sentence for its status, except
+ * for a 404, whose sentence names what is gone by its id ("no recipe 'r1'")
+ * where the caller knows it in the user's words. A 422 that lists the
+ * refused values says why: those messages are catalog keys
+ * (`validationText`). A text shown by a render takes the render's language
+ * (`useTranslation().i18n.language`): the React Compiler keeps a render's
+ * text until the values it read change.
  */
 import { toast } from "sonner"
 import { ApiError, fieldMessages, RequestError, sentenceParams, validationErrors } from "@/api/http"
@@ -22,9 +25,11 @@ export type StatusTexts = Partial<Record<number, string>>
 export function errorText(error: unknown, texts: StatusTexts = {}, language = i18n.language): string {
   const lng = language
   if (!(error instanceof ApiError)) return t("The server cannot be reached.", { lng })
+  const own = texts[error.status]
+  // what is gone, in the caller's words: the body names it by its id
+  if (own && error.status === 404) return own
   const sentence = bodySentence(error, language)
   if (sentence !== null) return sentence
-  const own = texts[error.status]
   if (own) return own
   switch (error.status) {
     case 401:
@@ -53,7 +58,8 @@ export function errorText(error: unknown, texts: StatusTexts = {}, language = i1
 /**
  * The sentence a refused request's body carries (`remi.ui.Sentence`: `{detail, template, params}`),
  * in the UI language; null for any other body. It says more than any reading of the status: a
- * recipe name already taken is a 409, as a job that started meanwhile is.
+ * recipe name already taken is a 409, as a job that started meanwhile is. A 404's names the thing
+ * by its id, so a caller's own 404 sentence comes first (`errorText`).
  */
 function bodySentence(error: ApiError, language: string): string | null {
   const body = error.detail
