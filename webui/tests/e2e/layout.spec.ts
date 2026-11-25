@@ -333,6 +333,8 @@ test.describe("hints and warnings", () => {
 test.describe("a deferred view's placeholder", () => {
   // A tabs node's placeholder was a 96 px block, where img2img's resize tabs (their strip over the
   // width and height sliders) are taller: what came after them jumped when the code arrived.
+  // Measured from the strip, not the window: the Source card above loads on its own and grows 4 px
+  // as it lands (its 160 px stand-in, a 164 px panel), at any time around the tabs.
   test("a tabs placeholder is as tall as the tabs", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 })
     let release = () => {}
@@ -346,11 +348,15 @@ test.describe("a deferred view's placeholder", () => {
     await expect(main.locator("[data-part=tab-strip]").first()).toBeVisible()
     const next = main.getByRole("textbox", { name: "CFG Scale", exact: true })
     await expect(next).toBeVisible()
-    const before = (await next.boundingBox())!.y
+    // how far below the strip the next field starts, both read in one frame
+    const below = async (strip: Locator) =>
+      next.evaluate((field, top) => field.getBoundingClientRect().top - top!.getBoundingClientRect().top, await strip.elementHandle())
+    const before = await below(main.locator("[data-part=tab-strip]").first())
     release()
     await expect(main.getByRole("tab", { name: "Resize to" })).toBeVisible()
     await expect(main.locator("[data-part=tab-strip]")).toHaveCount(0)
-    expect(Math.abs((await next.boundingBox())!.y - before)).toBeLessThan(1)
+    const tabs = main.getByRole("tablist").filter({ has: page.getByRole("tab", { name: "Resize to" }) })
+    expect(Math.abs((await below(tabs)) - before)).toBeLessThan(1)
   })
 })
 
