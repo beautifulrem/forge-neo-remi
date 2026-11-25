@@ -95,7 +95,7 @@ container prepares the folders below in whichever folder the WebUI uses.
 | `output/` | Generated images |
 | `extensions/` | User-installed extensions |
 | `extension-data/` | Presets, templates and lists saved by the built-in extensions |
-| `config.json`, `styles.csv`, `user.css` | Settings, prompt styles, custom CSS |
+| `config.json`, `styles.csv`, `user.css`, `notification.mp3` | Settings, prompt styles, custom CSS, the completion sound |
 | `remi-data/` | The queue, history, gallery stars and prompt tools data |
 
 Bind subfolders separately when they live elsewhere, for example

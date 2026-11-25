@@ -358,7 +358,7 @@
        "label": "Play a notification sound after image generation",
        "default": true,
        "notes": [
-        "a \"notification.mp3\" file is required in the root directory"
+        "a \"notification.mp3\" file is required in the data folder"
        ],
        "needs_reload_ui": true
       },

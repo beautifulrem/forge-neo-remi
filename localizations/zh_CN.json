@@ -613,7 +613,7 @@
   "[SDXL] High Aesthetic Score": "[SDXL] 高美学评分",
   "[SDXL] Low Aesthetic Score": "[SDXL] 低美学评分",
   "[SDXL] Zero out the conditioning when negative prompt is empty": "[SDXL] 反向提示词为空时将条件置零",
-  "a \"notification.mp3\" file is required in the root directory": "需要在根目录放置“notification.mp3”文件",
+  "a \"notification.mp3\" file is required in the data folder": "需要在数据目录中放置“notification.mp3”文件",
   "additional text to insert before the Extra Networks syntax": "插入在附加网络语法前的文本",
   "after each generation, process the face(s) with a 3rd-party model": "每次生成后用第三方模型处理面部",
   "allow you to drag-and-drop images onto the input similar to AUTOMATIC1111 behavior": "允许像 AUTOMATIC1111 一样把图像拖放到输入框",

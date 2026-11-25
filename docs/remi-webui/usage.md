@@ -250,7 +250,7 @@ Paths are relative to the data folder (`--data-dir`, by default the installation
 | Built-in extensions' data | `extension-data/`: Spectrum presets, LoRA stage and artist mixer templates, the prompt blacklist, post-processing presets, the prompt workshop's settings |
 | **Remi data** | `remi-data/`: `jobs.db` (queue, history, multi-stage chains & templates), `files.db` (file index, gallery stars, project boards & lineage), `recipes.db` (saved cross-model Recipes), `uploads/` (images you upload, pruned after `remi_upload_retention_days`), `outputs/` (results the save settings did not write to the output folders, pruned the same way), `thumbs/` (thumbnail cache), `networks/` (extracted previews and placeholders), `prompt-tools.db` (prompt history, favorites, completion usage), `secret.key` and `revoked-sessions.json` (login sessions) |
 | Your own CSS | `user.css` (applied to the web interface when present) |
-| Completion sound | `notification.mp3` in the installation folder |
+| Completion sound | `notification.mp3` (the installation folder is also read when the data folder has none) |
 | Per browser | form values (drafts), appearance, language, pinned layout sizes: the browser's local storage. "Reset all parameters" in the Generate menu returns a form to its defaults |
 
 Keep `remi-data/` when you move an installation or a Docker volume; deleting it clears the queue, the history, the gallery stars and the prompt tools data, never your images in `output/`.

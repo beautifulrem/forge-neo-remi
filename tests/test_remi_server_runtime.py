@@ -404,6 +404,28 @@ def test_user_css_and_notification_sound_are_served_when_present(webui_tmp, monk
         assert server.client.get("/api/v2/user-assets/..%2Fsecret").status_code == 404
 
 
+def test_the_notification_sound_is_read_from_the_data_folder_first(webui_tmp, monkeypatch):
+    """notification.mp3 was read from the installation folder only, outside the data folder (and
+    the Docker volume), so a container could not keep one; that folder still works."""
+
+    from modules import paths_internal
+
+    data, install = webui_tmp / "data", webui_tmp / "app"
+    data.mkdir()
+    install.mkdir()
+    monkeypatch.setattr(paths_internal, "data_path", str(data))
+    monkeypatch.setattr(paths_internal, "script_path", str(install))
+    with server_app(webui_tmp) as server:
+        (data / "notification.mp3").write_bytes(b"ID3data")
+        assert server.client.get("/api/v2/app").json()["user_assets"] == ["notification.mp3"]
+        sound = server.client.get("/api/v2/user-assets/notification.mp3")
+        assert sound.status_code == 200 and sound.content == b"ID3data" and sound.headers["content-type"] == "audio/mpeg"
+        (install / "notification.mp3").write_bytes(b"ID3install")
+        assert server.client.get("/api/v2/user-assets/notification.mp3").content == b"ID3data"
+        (data / "notification.mp3").unlink()
+        assert server.client.get("/api/v2/user-assets/notification.mp3").content == b"ID3install"
+
+
 @pytest.fixture
 def webui_tmp(tmp_path):
     with webui_state():

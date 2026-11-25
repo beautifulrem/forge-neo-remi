@@ -93,13 +93,20 @@ def restart_server() -> dict[str, Any]:
 
 def user_assets() -> dict[str, tuple[str, str]]:
     """The user's customisation files that exist: name → (path, media type);
-    ``user.css`` in the data folder, ``notification.mp3`` in the WebUI
-    folder (where the Gradio UI read them)."""
+    ``user.css`` in the data folder, ``notification.mp3`` in the data folder
+    or else the WebUI folder (where the Gradio UI read it: outside the data
+    folder, so outside a Docker volume)."""
 
     from modules.paths_internal import data_path, script_path
 
-    candidates = {"user.css": (os.path.join(data_path, "user.css"), "text/css"), "notification.mp3": (os.path.join(script_path, "notification.mp3"), "audio/mpeg")}
-    return {name: entry for name, entry in candidates.items() if os.path.isfile(entry[0])}
+    candidates = {"user.css": [os.path.join(data_path, "user.css")], "notification.mp3": [os.path.join(data_path, "notification.mp3"), os.path.join(script_path, "notification.mp3")]}
+    media_types = {"user.css": "text/css", "notification.mp3": "audio/mpeg"}
+    found = {}
+    for name, paths in candidates.items():
+        path = next((path for path in paths if os.path.isfile(path)), None)
+        if path is not None:
+            found[name] = (path, media_types[name])
+    return found
 
 
 @router.get("/user-assets/{name}", response_class=FileResponse, responses={200: {"content": {"text/css": {}, "audio/mpeg": {}}}, 404: {"model": m.Detail}}, summary="user.css or notification.mp3, when the user added them")
