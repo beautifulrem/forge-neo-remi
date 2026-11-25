@@ -157,11 +157,10 @@ def select(key: str, value: Any, apply: Callable[[str, Any], bool] | None = None
     which a freeze may keep. Back to the stored pick, the held one is
     dropped and nothing is applied."""
 
-    as_stored = _as_stored(key, value)
-    if any(_same_pick(pick, _shown(key)) for pick in (value, as_stored)):
+    if unchanged(key, value):
         return False  # the pick the settings show already (the stored one, or the one held)
     _check_not_frozen(key, value)
-    if any(_same_pick(pick, _stored(key)) for pick in (value, as_stored)):
+    if _same_selection(key, value, _stored(key)):
         with _guard:
             _held.pop(key, None)  # the stored pick, which nothing has to apply
         return True
@@ -173,7 +172,7 @@ def select(key: str, value: Any, apply: Callable[[str, Any], bool] | None = None
             return (apply or _apply_now)(key, value)
         finally:
             lock.release()
-    value = as_stored
+    value = _as_stored(key, value)
     with _guard:
         if _same_pick(value, _held[key] if key in _held else _stored(key)):
             return False  # held meanwhile by another request
@@ -199,10 +198,32 @@ def _shown(key: str) -> Any:
         return _held[key] if key in _held else _stored(key)
 
 
+def unchanged(key: str, value: Any) -> bool:
+    """Whether ``value`` is the pick the settings show (the one held, else
+    the stored one; modules by name or path, in any order). :func:`select`
+    does nothing for it, and ``PATCH /api/v2/options`` does not check it
+    against the models the WebUI offers (a stored pick whose file was
+    removed, posted back)."""
+
+    return _same_selection(key, value, _shown(key))
+
+
 def _same_pick(value: Any, shown: Any) -> bool:
     if isinstance(value, list) and isinstance(shown, list) and all(isinstance(item, str) for item in value + shown):
         return sorted(value) == sorted(shown)  # modules in another order (modules_change sorts them)
     return value == shown
+
+
+def _same_selection(key: str, value: Any, other: Any) -> bool:
+    """Whether ``value`` selects what ``other`` does: the same pick, or for the
+    modules the same file names in any order (``modules_change`` finds a module
+    by its file name; the settings store its path)."""
+
+    if _same_pick(value, other):
+        return True
+    if key != "forge_additional_modules" or not isinstance(value, list) or not isinstance(other, list) or not all(isinstance(item, str) for item in value + other):
+        return False
+    return sorted(item.replace("\\", "/").rsplit("/", 1)[-1] for item in value) == sorted(item.replace("\\", "/").rsplit("/", 1)[-1] for item in other)
 
 
 def frozen_pick(key: str, value: Any) -> tuple[str, str] | None:
@@ -216,18 +237,16 @@ def frozen_pick(key: str, value: Any) -> tuple[str, str] | None:
     from modules import shared
     from remi.setting_values import frozen_reason
 
-    if _same_pick(value, _stored(key)):  # unchanged: Options.set and the model manager leave it as it is
+    if _same_selection(key, value, _stored(key)):  # unchanged: Options.set and the model manager leave it as it is
         return None
-    found = None
     if (reason := frozen_reason(shared.opts, key, shared.cmd_opts)) is not None:
-        found = key, reason
-    elif (preset := _preset()) is not None:
-        copy = PRESET_COPIES[key] + preset
-        if (reason := frozen_reason(shared.opts, copy, shared.cmd_opts)) is not None and not _same_pick(_as_stored(key, value), _stored(copy)):
-            found = copy, reason
-    if found is None or _same_pick(_as_stored(key, value), _stored(key)):  # modules named, not by path: the stored ones
+        return key, reason
+    if (preset := _preset()) is None:
         return None
-    return found
+    copy = PRESET_COPIES[key] + preset
+    if (reason := frozen_reason(shared.opts, copy, shared.cmd_opts)) is None or _same_selection(key, value, _stored(copy)):
+        return None
+    return copy, reason
 
 
 def _check_not_frozen(key: str, value: Any) -> None:

@@ -291,18 +291,23 @@ def model_files(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize("route", ["sdapi", "patch"])
-def test_an_unchanged_model_pick_does_nothing(webui, model_files, monkeypatch, tmp_path, route):
+@pytest.mark.parametrize("files", ["offered", "gone"])
+def test_an_unchanged_model_pick_does_nothing(webui, model_files, monkeypatch, tmp_path, route, files):
     """A pick equal to the stored one still went to the model manager while no generation ran:
     dtype_change sets the dtype again, saves the settings, reloads the loading parameters and
     says it changed, so posting back what the settings show saved and announced
     ``options.changed`` for nothing. An unchanged pick (modules by name or path, in any order)
-    now does nothing, on either route."""
+    now does nothing, on either route, and is not checked against the models the WebUI offers:
+    a stored pick whose file was removed (or a dtype of another Forge) made ``PATCH`` a 422."""
     from modules import shared
 
+    if files == "gone":
+        for key, value in (("sd_model_checkpoint", "gone.safetensors"), ("forge_additional_modules", ["/gone/VAE/missing.safetensors"]), ("forge_unet_storage_dtype", "bnb-nf4")):
+            monkeypatch.setitem(shared.opts.data, key, value)
     saves = []
     monkeypatch.setattr(shared.opts, "save", saves.append)
     stored = {key: shared.opts.data[key] for key in model_selection.MODEL_OPTIONS}
-    bodies = [dict(stored), {**stored, "forge_additional_modules": ["vae.safetensors"]}]
+    bodies = [dict(stored)] + ([{**stored, "forge_additional_modules": ["vae.safetensors"]}] if files == "offered" else [])
     with options_client(tmp_path / "data") as client:
         for body in bodies:
             response = client.send(route, body)

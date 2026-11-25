@@ -48,6 +48,9 @@ def coerce_values(opts: Any, values: Any, cmd_opts: Any) -> dict[str, Any]:
             problems.append(_error(key, "the text has a broken character (an unpaired surrogate)"))
             continue
         if key in MODEL_KEYS:
+            if model_selection.unchanged(key, value):  # the pick shown, posted back (its file since removed too): nothing to do
+                result[key] = value
+                continue
             try:
                 result[key] = _model_value(key, value)
             except ParamError as error:
