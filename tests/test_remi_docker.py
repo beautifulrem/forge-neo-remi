@@ -135,6 +135,28 @@ def test_the_docs_name_the_variables_the_entrypoint_reads():
         assert "`REMI_DATA_DIR`" in (ROOT / "docs" / "remi-webui" / guide).read_text(encoding="utf-8"), guide
 
 
+def readme_paragraph(start: str) -> str:
+    """The paragraph of docker/README.md that starts with ``start``, its lines joined."""
+
+    paragraphs = [" ".join(block.split()) for block in README.split("\n\n")]
+    found = [paragraph for paragraph in paragraphs if paragraph.startswith(start)]
+    assert len(found) == 1, start
+    return found[0]
+
+
+def test_the_readme_names_every_option_the_health_check_does_not_follow():
+    """The health check asks http://localhost:7860: another port (``--port``; ``--nowebui``
+    defaults to 7861), one bound address (``--server-name``) or HTTPS fails it while the
+    server works."""
+
+    from remi.server.launch import DEFAULT_API_PORT, DEFAULT_PORT
+
+    assert f"localhost:{DEFAULT_PORT}/internal/ping" in DOCKERFILE and DEFAULT_API_PORT != DEFAULT_PORT
+    paragraph = readme_paragraph("The image's health check")
+    for option in ("--port", "--nowebui", "--server-name", "--tls-keyfile", "--no-healthcheck"):
+        assert f"`{option}" in paragraph, option
+
+
 def test_the_rocm_recipe_is_the_same_image_with_rocm_pytorch():
     """docker/Dockerfile.rocm (upstream 2900d594, translated): the same
     stages, data folder, launcher run and entrypoint; only the base image and
