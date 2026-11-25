@@ -1473,7 +1473,6 @@
   "Unchanged": "未变化",
   "Added": "新增",
   "Removed": "移除",
-  "Changed": "变更",
   "Reference image (ImageStitch)": "参考图（ImageStitch）",
   "Send to Reference Image": "发送到参考图",
   "Send board to Reference Images": "发送看板图片到参考图",
@@ -1627,9 +1626,7 @@
   "Issues only": "仅看异常",
   "Manifest only": "仅看清单",
   "Load time": "加载耗时",
-  "Errors": "错误",
   "Manifest": "清单",
-  "Compatible": "兼容",
   "Incompatible": "不兼容",
   "Disabled reason": "禁用原因",
   "Last error": "最近错误",
@@ -1688,5 +1685,7 @@
   "Set up the service in Settings first.": "请先在设置中配置该服务。",
   "The text is too long.": "文本过长。",
   "The model could not be loaded.": "模型未能加载。",
-  "the backup {{name}} is in the installation folder's config_states/, which is only read: move it to the data folder to delete it here": "备份 {{name}} 位于安装目录的 config_states/ 中，这里只读取不修改：把它移到数据目录后才能在这里删除"
+  "the backup {{name}} is in the installation folder's config_states/, which is only read: move it to the data folder to delete it here": "备份 {{name}} 位于安装目录的 config_states/ 中，这里只读取不修改：把它移到数据目录后才能在这里删除",
+  "Select all images": "全选图像",
+  "Remove the selected images": "移除所选图像"
 }

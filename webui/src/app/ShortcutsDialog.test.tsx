@@ -88,4 +88,15 @@ describe("keyboard shortcuts dialog", () => {
       ["Interrupt", "Esc"],
     ]) expect(extras.getByText(label).nextElementSibling?.textContent).toBe(key)
   })
+
+  // the gallery's select all, clear and remove keys (pages/gallery) were listed nowhere in the app
+  it("lists the gallery's selection keys", () => {
+    openWith(false)
+    const gallery = within(screen.getByRole("region", { name: "Gallery" }))
+    for (const [label, key] of [
+      ["Select all images", "Ctrl+A"],
+      ["Clear selection", "Esc"],
+      ["Remove the selected images", "Delete"],
+    ]) expect(gallery.getByText(label).nextElementSibling?.textContent).toBe(key)
+  })
 })

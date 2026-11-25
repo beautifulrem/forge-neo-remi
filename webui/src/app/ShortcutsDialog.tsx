@@ -72,6 +72,10 @@ const SHORTCUT_GROUPS: { group: string; entries: Entry[] }[] = [
       { label: "Move between images", keys: ["←", "→", "↑", "↓"] },
       { label: "Select (in selection mode)", keys: ["Space"] },
       { label: "Star", keys: ["F"] },
+      // pages/gallery/index.tsx (Backspace removes too: a Mac's delete key)
+      { label: "Select all images", keys: ["Mod+A"] },
+      { label: "Clear selection", keys: ["Esc"] },
+      { label: "Remove the selected images", keys: ["Delete"] },
     ],
   },
   {
