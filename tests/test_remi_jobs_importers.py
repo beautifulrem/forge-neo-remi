@@ -526,6 +526,20 @@ def test_the_signing_key_and_image_paths(webui, tmp_path, monkeypatch):
     assert importers._is_image(str(image)) and not importers._is_image(str(tmp_path / "missing.png"))
 
 
+def test_an_image_path_spelling_the_output_folder_in_another_case_is_imported(tmp_path):
+    """macOS keeps the case a path is given: a task saved under ``.../out`` while the
+    setting names ``.../Out`` was refused by an exact prefix test."""
+
+    (tmp_path / "Out").mkdir()
+    image = tmp_path / "Out" / "x.png"
+    Image.new("RGB", (2, 2)).save(image)
+    if not (tmp_path / "out").exists():
+        pytest.skip("this volume tells letter case apart")
+    roots = [os.path.realpath(tmp_path / "Out")]
+    assert importers._resolve_image_path(str(tmp_path / "out" / "x.png"), roots) == str(tmp_path / "out" / "x.png")
+    assert importers._resolve_image_path(str(tmp_path / "Outer.png"), roots) is None
+
+
 # endregion
 
 # region import failures and edge cases

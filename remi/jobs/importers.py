@@ -745,13 +745,15 @@ def _resolve_image_path(path: Any, roots: list[str]) -> str | None:
     folder or the data folder, as the extension saved it)."""
 
     from modules import paths_internal
+    from remi.library import _inside
 
     if not isinstance(path, str) or not path or "\x00" in path:
         return None
     bases = [None] if os.path.isabs(path) else [paths_internal.script_path, paths_internal.data_path]
     for base in bases:
         candidate = os.path.realpath(path if base is None else os.path.join(base, path))
-        if os.path.isfile(candidate) and any(candidate.startswith(root.rstrip(os.sep) + os.sep) for root in roots):
+        # also below another spelling of a root (macOS keeps the case a path is given)
+        if os.path.isfile(candidate) and any(_inside(candidate, root) for root in roots):
             return candidate
     return None
 
