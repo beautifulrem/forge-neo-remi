@@ -87,11 +87,16 @@ function str(v: unknown): v is string {
   return typeof v === "string"
 }
 
+/** An item id that still counts up: past 2^53 (1e300 is an "integer") `id + 1` is `id` again. */
+function itemId(v: unknown): v is number {
+  return Number.isSafeInteger(v) && (v as number) >= 0 && (v as number) <= 1e9
+}
+
 function restoreItem(value: unknown): Item | null {
   if (!value || typeof value !== "object") return null
   const item = value as Record<string, unknown>
   const box = item.bbox
-  if (!Number.isInteger(item.id) || !Array.isArray(box) || box.length !== 4 || !box.every((v) => typeof v === "number" && Number.isFinite(v))) return null
+  if (!itemId(item.id) || !Array.isArray(box) || box.length !== 4 || !box.every((v) => typeof v === "number" && Number.isFinite(v))) return null
   if (!(LABELS as readonly unknown[]).includes(item.label) || !str(item.caption) || !str(item.text)) return null
   return { id: item.id as number, label: item.label as Item["label"], caption: item.caption, text: item.text, bbox: box.slice() as Box }
 }
@@ -125,7 +130,7 @@ export function restore(persisted: unknown): Partial<BuilderState> {
   const items = Array.isArray(p.items) ? p.items.map(restoreItem).filter((item): item is Item => item !== null) : []
   if (items.length > 0 && new Set(items.map((item) => item.id)).size === items.length) {
     out.items = items
-    out.lastId = Math.max(...items.map((item) => item.id), Number.isInteger(p.lastId) ? (p.lastId as number) : 0)
+    out.lastId = Math.max(...items.map((item) => item.id), itemId(p.lastId) ? p.lastId : 0)
   }
   return out
 }

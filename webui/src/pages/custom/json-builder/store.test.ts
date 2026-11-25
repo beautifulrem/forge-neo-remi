@@ -108,6 +108,18 @@ describe("restore", () => {
     expect(useBuilder.getState().items[0]!.bbox).toEqual([20, 40, 220, 120])
   })
 
+  // 1e300 + 1 === 1e300: every item added after it got the same id (and React key)
+  it("gives new items distinct ids after a stored id past counting", () => {
+    const item = (id: number) => ({ id, label: "object", caption: "c", text: "", bbox: [0, 0, 16, 16] })
+    useBuilder.setState(restore({ items: [item(3)], lastId: 1e300 }))
+    expect(useBuilder.getState().lastId).toBe(3)
+    useBuilder.getState().addItem()
+    useBuilder.getState().addItem()
+    expect(useBuilder.getState().items.map((entry) => entry.id)).toEqual([3, 4, 5])
+    // an item id past counting is malformed like any other: dropped
+    expect(restore({ items: [item(2 ** 60), item(1)] }).items?.map((entry) => entry.id)).toEqual([1])
+  })
+
   it("restores the stored draft when the page loads", async () => {
     // rehydration runs inside create(), before the rest of the module is evaluated
     const stored = { width: 768, height: 512, caption: "kept", items: [{ id: 3, label: "object", caption: "c", text: "", bbox: [10, 20, 110, 60] }], lastId: 3 }
