@@ -34,7 +34,6 @@ from PIL import Image
 from backend.nn import flux3_layout
 from remi.prompt_tools.translate import (
     DEFAULT_INSTRUCTIONS,
-    MAX_DESCRIPTION,
     NEGATIVE_INSTRUCTIONS,
     Post,
     ProviderConfig,
@@ -722,13 +721,11 @@ def upsample_prompt(
                     "prompt upsampling needs either an OpenAI-compatible VLM endpoint (llama.cpp / Ollama / MLX-LM / vLLM / cloud) or local_model_path",
                     409,
                 )
-            # Enforce translate.py's MAX_DESCRIPTION smoothly while allowing structured BBox payloads.
-            effective_prompt = user_message if len(user_message) <= MAX_DESCRIPTION else user_message[:MAX_DESCRIPTION]
-            if len(user_message) > MAX_DESCRIPTION:
-                warnings.append("Truncated upsampler request to provider maximum description length.")
+            # the whole request: its prompt is already held to _MAX_PUP_CHARS above (a cut request
+            # would lose the end of the prompt, the layout boxes or the template's closing words)
             upsampled = generate_prompt(
                 config,
-                effective_prompt,
+                user_message,
                 current="",
                 negative=negative,
                 instructions=system,
@@ -736,6 +733,7 @@ def upsample_prompt(
                 temperature=temperature,
                 max_tokens=max_tokens,
                 preserve_newlines=preserve_newlines,
+                max_chars=None,
                 post=post,
             )
     finally:

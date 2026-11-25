@@ -553,10 +553,25 @@ def test_upsample_prompt_warnings_modes_and_validation_errors():
     assert r_vgl_raw.vgl_json is None
     assert any("VGL JSON mode expected a JSON object" in w for w in r_vgl_raw.warnings)
 
-    # Truncation warning when user_message exceeds MAX_DESCRIPTION
-    long_prompt = "a" * (MAX_DESCRIPTION + 200)
-    r_trunc = pup.upsample_prompt(long_prompt, model_family="zimage", config=_openai_cfg(), post=echo_post)
-    assert any("Truncated upsampler request" in w for w in r_trunc.warnings)
+    # The whole request reaches the provider, up to the upsampler's own limit: the prompt and the
+    # current prompt it accepts, with the canvas line, the layout boxes and the template around them
+    longest, current = "a" * (pup._MAX_PUP_CHARS - 2000), "b" * 2000
+    r_long = pup.upsample_prompt(
+        longest,
+        current=current,
+        model_family="flux3",
+        aspect_ratio="16:9",
+        bbox_draft=[{"id": "cat_1", "bbox": [0.1, 0.1, 0.5, 0.5], "desc": "cat"}],
+        config=_openai_cfg(),
+        post=echo_post,
+    )
+    sent = seen[-1]["messages"][1]["content"]
+    assert longest in sent and current in sent and '"cat_1"' in sent and "16:9" in sent
+    assert not any("Truncated" in w for w in r_long.warnings)
+    # writing a prompt from a description keeps its own limit
+    with pytest.raises(TranslationError) as description_err:
+        generate_prompt(_openai_cfg(), "a" * (MAX_DESCRIPTION + 1), post=echo_post)
+    assert description_err.value.status == 413
 
     # Validation errors
     with pytest.raises(TranslationError) as empty_err:

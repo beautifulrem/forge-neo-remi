@@ -207,11 +207,14 @@ def generate_prompt(
     temperature: float = 0.7,
     max_tokens: int | None = None,
     preserve_newlines: bool = False,
+    max_chars: int | None = MAX_DESCRIPTION,
     post: Post = _http_post,
 ) -> str:
     """A prompt written by the OpenAI-compatible model of ``config`` (the
     translation provider) from ``description``; ``current``: the prompt to
     build on. ``instructions`` replaces the built-in system message.
+    ``max_chars``: the limit of ``description`` and ``current`` together
+    (None: the caller has applied its own).
 
     When ``images`` (data URIs or image URLs) are supplied, the user turn uses
     OpenAI-compatible multimodal content parts (supported by llama.cpp,
@@ -223,7 +226,7 @@ def generate_prompt(
     description = description.strip()
     if not description:
         raise TranslationError("describe the image first", 422)
-    if len(description) + len(current) > MAX_DESCRIPTION:
+    if max_chars is not None and len(description) + len(current) > max_chars:
         raise TranslationError("the description is too long", 413)
     system = instructions.strip() or (NEGATIVE_INSTRUCTIONS if negative else DEFAULT_INSTRUCTIONS)
     request = description if not current.strip() else f"Current prompt: {current.strip()}\n\nChange it as follows: {description}"
