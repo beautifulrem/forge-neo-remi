@@ -649,6 +649,7 @@ for (const [width, height] of [
     await openGenerate(page)
     await page.keyboard.press(`${mod}+Enter`)
     const queue = page.getByRole("button", { name: "Queue another" })
+    await expect(page.getByRole("button", { name: "Interrupt" })).toBeVisible() // Skip and Interrupt have joined the row
     await expect(queue).toBeVisible()
     const label = await queue.evaluate((button) => {
       const text = [...button.querySelectorAll("span")].find((span) => span.textContent === "Queue another")!
