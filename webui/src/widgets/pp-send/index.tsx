@@ -1,5 +1,6 @@
 /**
- * `pp-send`: Post Processing Suite's "Apply PP → Send to img2img". Runs the
+ * `pp-send`: Post Processing Suite's "Post-process and send to img2img" (the
+ * suite's old "Apply PP -> Send to img2img" button). Runs the
  * suite's action `props.action` on this form's result selected on the stage
  * (the session's image results of this tab, as the old button used the
  * txt2img gallery; the newest when the selection is another tab's), which
@@ -76,7 +77,7 @@ export default function PpSend({ props, disabled, id }: WidgetProps<null, Props>
       ) : null}
       <Button id={id} variant="secondary" disabled={disabled || busy || !item} aria-busy={busy || undefined} onClick={() => void send()}>
         {busy ? <Loader2 className="animate-spin" aria-hidden /> : <ImageUp aria-hidden />}
-        {inpaint ? tw("Apply PP → Send to inpaint") : tw("Apply PP → Send to img2img")}
+        {inpaint ? tw("Post-process and send to inpaint") : tw("Post-process and send to img2img")}
       </Button>
       {item ? null : <span className="text-xs text-muted-foreground">{tw("Generate an image first")}</span>}
     </div>

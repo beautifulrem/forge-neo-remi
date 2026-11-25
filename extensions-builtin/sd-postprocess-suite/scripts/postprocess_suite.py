@@ -6,7 +6,7 @@ fully reorderable stack of image effects in `postprocess_image_after_composite`
 - the last hook before the image is saved - so every effect is baked into the
 saved file, the gallery, and the API result.
 
-txt2img also gets an "Apply PP -> Send to img2img" button (the ``pp-send``
+txt2img also gets a "Post-process and send to img2img" button (the ``pp-send``
 widget) that runs the current settings on the selected result and drops the
 processed image into the img2img form.
 

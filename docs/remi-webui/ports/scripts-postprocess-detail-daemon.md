@@ -96,8 +96,8 @@ are accepted as text (`remi/files.py` `TEXT_EXTENSIONS`). Preset buttons are
 actions (`preset_load|save|delete|refresh`; the `preset` combobox takes an
 existing name or a new one); a saved preset keeps a copy of its LUT under
 `presets/luts/`, and loading re-uploads it; deleting or overwriting the
-preset removes that copy (only files inside `presets/luts/`). "Apply PP →
-Send to img2img" is the `pp-send` widget: it calls `apply_send` with the file
+preset removes that copy (only files inside `presets/luts/`). "Post-process
+and send to img2img" is the `pp-send` widget: it calls `apply_send` with the file
 id of the form's own result selected on the stage (txt2img's, as the old
 button read the txt2img gallery; the newest txt2img result when the
 selection is another tab's) as `file_id` (the action's own argument), which

@@ -50,7 +50,7 @@ describe("pp-send widget", () => {
 
   it("waits for a result to send", () => {
     setup()
-    expect(screen.getByRole("button", { name: "Apply PP → Send to img2img" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Post-process and send to img2img" })).toBeDisabled()
     expect(screen.getByText("Generate an image first")).toBeInTheDocument()
   })
 
@@ -76,7 +76,7 @@ describe("pp-send widget", () => {
     const store = setup()
     expect(screen.getByRole("img", { name: "Selected result" })).toHaveAttribute("src", expect.stringContaining("/thumbs/out-b"))
 
-    fireEvent.click(screen.getByRole("button", { name: "Apply PP → Send to img2img" }))
+    fireEvent.click(screen.getByRole("button", { name: "Post-process and send to img2img" }))
     await waitFor(() => expect(deliver).toHaveBeenCalled())
     expect(calls[0]).toMatchObject({ file_id: "out-b", values: { enable: true, tone_enabled: true } })
     expect(deliver).toHaveBeenCalledWith("img2img", [{ owner: "core", values: { init_img: "pp-copy", mode: "img2img" } }])
@@ -102,12 +102,12 @@ describe("pp-send widget", () => {
     vi.mocked(deliver).mockResolvedValueOnce({ count: 0, locked: [] })
     const success = vi.spyOn(toast, "success")
     const failure = vi.spyOn(toast, "error")
-    fireEvent.click(screen.getByRole("button", { name: "Apply PP → Send to inpaint" }))
+    fireEvent.click(screen.getByRole("button", { name: "Post-process and send to inpaint" }))
     await waitFor(() => expect(failure).toHaveBeenCalledWith("Could not send the post-processed image", expect.anything()))
     expect(deliver).toHaveBeenCalledWith("img2img", [{ owner: "core", values: { init_img: "pp-copy", mode: "Inpaint" } }])
     expect(success).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole("button", { name: "Apply PP → Send to inpaint" }))
+    fireEvent.click(screen.getByRole("button", { name: "Post-process and send to inpaint" }))
     await waitFor(() => expect(success).toHaveBeenCalledWith("Post-processed image sent to inpaint", expect.anything()))
   })
 
@@ -133,5 +133,14 @@ describe("pp-send widget", () => {
     const keys = Object.values(sources).flatMap(widgetKeys)
     expect(keys.length).toBeGreaterThan(0)
     expect(keys.filter((key) => !(zh as Record<string, string>)[key])).toEqual([])
+  })
+
+  // The button kept the suite's "Apply PP → Send to img2img": a button says what happens, with no
+  // arrow welded to it (frontend.md), in either language.
+  it("labels its button with a verb and no arrow", () => {
+    const sources = import.meta.glob<string>(["./*.tsx", "!./*.test.*"], { query: "?raw", import: "default", eager: true })
+    const keys = Object.values(sources).flatMap(widgetKeys)
+    const labels = [...keys, ...keys.map((key) => (zh as Record<string, string>)[key] ?? "")]
+    expect(labels.filter((label) => label.includes("→"))).toEqual([])
   })
 })

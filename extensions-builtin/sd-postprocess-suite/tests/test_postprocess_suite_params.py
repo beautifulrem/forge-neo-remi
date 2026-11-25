@@ -1,6 +1,6 @@
 """Post Processing Suite on ``params()``: the legacy ``ui()`` contract, the
 pipeline arguments process hooks receive, the collapsed (lazily rendered)
-panel, the preset actions (with the LUT file) and "Apply PP → Send to img2img"."""
+panel, the preset actions (with the LUT file) and "Post-process and send to img2img"."""
 
 import json
 import os

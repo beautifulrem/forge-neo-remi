@@ -62,7 +62,7 @@ On **img2img** a selector chooses where the pipeline is applied:
 "only masked" full-res and latent-resize, to avoid disturbing those paths.)
 
 ## Send to img2img (txt2img only)
-The **Apply PP → Send to img2img** button (the `pp-send` widget) runs the
+The **Post-process and send to img2img** button (the `pp-send` widget) runs the
 current settings on the result selected on the stage (the newest one when none
 is picked) on the server, then puts the processed copy into the img2img source
 image and switches to img2img — your txt2img → img2img handoff with the
