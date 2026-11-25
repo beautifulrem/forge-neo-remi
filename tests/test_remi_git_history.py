@@ -118,6 +118,56 @@ def test_a_failed_fetch_names_its_reason(repos, monkeypatch, capsys):
     assert history.ensure_commits(middle, repo=clone) == f"{middle[:10]} is not in this shallow clone, which has no remote to fetch it from"
 
 
+def fetches(monkeypatch) -> list[tuple[str, ...]]:
+    """The ``git fetch`` commands the helper runs from now on."""
+
+    seen: list[tuple[str, ...]] = []
+    real = history._git
+
+    def counting(repo, *args, **kwargs):
+        if args[:1] == ("fetch",):
+            seen.append(args)
+        return real(repo, *args, **kwargs)
+
+    monkeypatch.setattr(history, "_git", counting)
+    return seen
+
+
+def test_a_remote_that_failed_is_not_asked_again(repos, monkeypatch):
+    """Each gate asks for its own commits; once the remote failed to give the
+    whole history, the others skip at once (a hanging remote would cost each
+    of them the fetch timeout again)."""
+
+    _source, clone, (old, middle, _head) = repos
+    git("remote", "set-url", "origin", (clone.parent / "gone").as_uri(), cwd=clone)
+    reason = history.ensure_commits(old, repo=clone)
+    assert reason is not None
+    seen = fetches(monkeypatch)
+    later = history.ensure_commits(middle, repo=clone)
+    assert later.startswith(f"{middle[:10]} is not in this shallow clone and fetching it from origin failed: ")
+    assert later.split(" failed: ", 1)[1] in reason  # the first failure's own words
+    assert history.ensure_history(clone).startswith("this shallow clone lacks the history and fetching it from origin failed: ")
+    assert seen == []
+
+
+def test_a_fetch_that_timed_out_is_not_retried(repos, monkeypatch):
+    _source, clone, (old, _unused, _head) = repos
+    real = subprocess.run
+    seen = []
+
+    def hanging(command, **kwargs):
+        if command[1:2] == ["fetch"]:
+            seen.append(command)
+            raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+        return real(command, **kwargs)
+
+    monkeypatch.setattr(history.subprocess, "run", hanging)
+    reason = history.ensure_commits(old, repo=clone)
+    assert reason is not None and "timed out" in reason
+    assert len(seen) == 1  # neither the whole history nor HEAD's branch after it
+    assert history.ensure_history(clone) is not None and len(seen) == 1
+
+
 def test_a_full_clone_is_never_fetched_into(repos, tmp_path):
     source, _clone, (old, _unused, head) = repos
     full = tmp_path / "full"
@@ -140,5 +190,5 @@ def test_git_never_waits_for_input(monkeypatch):
 
     monkeypatch.setattr(history.subprocess, "run", fake_run)
     result = history._git(REPO, "fetch", "origin", timeout=1)
-    assert result.returncode == 1 and "timed out" in result.stderr
+    assert result.returncode == history.TIMED_OUT and result.stderr == "git fetch timed out after 1 s"
     assert seen["stdin"] is subprocess.DEVNULL and seen["env"]["GIT_TERMINAL_PROMPT"] == "0"
