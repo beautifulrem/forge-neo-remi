@@ -89,7 +89,7 @@ export function WorkflowAdviceBar({ tab }: { tab: GenerateTab }) {
                 type="button"
                 aria-label={t("Dismiss advice")}
                 onClick={() => store.getState().dismissAdvice(key)}
-                className="relative grid size-5 place-items-center rounded-xs opacity-70 after:absolute after:-inset-x-2 after:-inset-y-2.5 outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
+                className="relative grid size-5 place-items-center rounded-xs opacity-70 after:absolute after:-inset-x-2 after:-inset-y-2.5 outline-none hover:opacity-100 focus-visible:ring-3 focus-visible:ring-ring"
               >
                 <X className="size-3" aria-hidden />
               </button>
@@ -101,7 +101,7 @@ export function WorkflowAdviceBar({ tab }: { tab: GenerateTab }) {
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="self-start rounded-xs px-1 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="self-start rounded-xs px-1 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring"
         >
           {t("Show {{count}} more advice", { count: hiddenCount })}
         </button>
@@ -109,7 +109,7 @@ export function WorkflowAdviceBar({ tab }: { tab: GenerateTab }) {
         <button
           type="button"
           onClick={() => setExpanded(false)}
-          className="self-start rounded-xs px-1 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="self-start rounded-xs px-1 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring"
         >
           {t("Show fewer")}
         </button>

@@ -207,7 +207,7 @@ export function BackupView({ access }: { access: boolean }) {
                   options?.[target]?.focus()
                 }}
                 className={cn(
-                  "cursor-default rounded-lg px-3 py-2 outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-focus-ring",
+                  "cursor-default rounded-lg px-3 py-2 outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-focus-ring",
                   state.id === current && "bg-accent",
                 )}
               >

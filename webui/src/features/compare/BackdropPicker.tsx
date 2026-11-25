@@ -36,7 +36,7 @@ export function BackdropPicker({ value, onChange, tone = "default", className }:
             title={label}
             onClick={() => onChange(mode)}
             className={cn(
-              "grid size-6 place-items-center rounded-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+              "grid size-6 place-items-center rounded-sm transition-colors outline-none focus-visible:ring-3 focus-visible:ring-focus-ring",
               active
                 ? tone === "light"
                   ? "bg-white/22 ring-1 ring-white/80"

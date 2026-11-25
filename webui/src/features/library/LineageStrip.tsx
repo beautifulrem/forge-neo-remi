@@ -45,7 +45,7 @@ function ThumbChip({
       title={current ? `${t("Current")} · ${label}` : t("Jump to {{name}}", { name: label })}
       onClick={onClick}
       className={cn(
-        "group relative flex w-14 shrink-0 flex-col items-center gap-1 rounded-sm p-1 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "group relative flex w-14 shrink-0 flex-col items-center gap-1 rounded-sm p-1 text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring",
         current ? "bg-white/12 ring-1 ring-white/75" : "bg-white/5 ring-1 ring-white/10 hover:bg-white/12 hover:ring-white/30",
       )}
     >

@@ -44,7 +44,7 @@ export function Segmented<V extends string | number>(props: SegmentedProps<V>) {
           render={<button type="button" />}
           className={cn(
             "min-w-0 truncate rounded-[calc(var(--radius-lg)-2px)] px-2.5 text-[0.8rem] font-medium text-muted-foreground transition-colors outline-none select-none",
-            "hover:text-foreground focus-visible:ring-2 focus-visible:ring-focus-ring data-disabled:pointer-events-none",
+            "hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring data-disabled:pointer-events-none",
             // tone only: shadows are for what floats
             "data-checked:bg-card data-checked:text-foreground dark:data-checked:bg-accent",
             props.size === "sm" ? "h-6" : "h-7",

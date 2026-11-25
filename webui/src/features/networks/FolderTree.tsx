@@ -104,7 +104,7 @@ export function FolderTree({ folders, total, selected, onSelect, className }: { 
             onClick={() => onSelect(row.path)}
             className={cn(
               "group/tree flex h-7 cursor-pointer items-center gap-1 rounded-md pr-2 text-muted-foreground outline-none select-none",
-              "hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-focus-ring",
+              "hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring",
               "aria-selected:bg-accent aria-selected:font-medium aria-selected:text-foreground",
             )}
             style={{ paddingLeft: `${0.25 + Math.max(0, row.depth - 1) * 0.875}rem` }}

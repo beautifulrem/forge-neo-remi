@@ -205,6 +205,52 @@ describe("toggle names", () => {
   })
 })
 
+describe("focus rings", () => {
+  // A variant of a focus state: focus, focus-visible, focus-within, group- or peer-focus…, or
+  // has-[…:focus…].
+  const FOCUS_VARIANT = /(?:^|[:-])(?:focus|focus-visible|focus-within)(?:\/[\w-]+)?:|:focus(?:-visible|-within)?\]/
+  /** The variants, kind and width of a ring or outline width class, or undefined for any other utility. */
+  function width(cls: string): { prefix: string; kind: string; width: string } | undefined {
+    const m = /^(.*?)(ring|outline)-(\d+|\[[^\]]+\])$/.exec(cls)
+    return m ? { prefix: m[1]!, kind: m[2]!, width: m[3]!.replace(/^\[(\d+)px\]$/, "$1") } : undefined
+  }
+
+  it("are 3 px wide", () => {
+    // frontend.md: a focus ring is `ring-3` in --focus-ring (or a 3 px outline over an image). A 2 px
+    // ring read thinner than every other focus ring beside it. `ring-0` takes the ring off a control
+    // whose group draws it; shadcn's 1 px outline sits on the edge inside a 3 px ring.
+    // every class in the sources (a run outside quotes, braces and spaces), brackets included
+    const rings = files.flatMap(({ file, source }) =>
+      (source.match(/[^\s"'`{}]+/g) ?? [])
+        .filter((cls) => FOCUS_VARIANT.test(cls))
+        .flatMap((cls) => {
+          const drawn = width(cls)
+          return drawn ? [{ file, cls, ...drawn }] : []
+        }),
+    )
+    // A keyboard cursor or highlight (the networks grid's current item) is drawn in the focus ring's
+    // colour under a state of its own: the width beside that colour, under the same variants.
+    const cursors = files.flatMap(({ file, source }) =>
+      (source.match(/"[^"\n]*"|'[^'\n]*'|`[^`]*`/g) ?? []).flatMap((literal) => {
+        const classes = literal.slice(1, -1).split(/\s+/)
+        return classes.flatMap((cls) => {
+          const colour = /^(.*?)(ring|outline)-focus-ring$/.exec(cls)
+          if (!colour || FOCUS_VARIANT.test(cls)) return []
+          return classes.flatMap((other) => {
+            const drawn = width(other)
+            return drawn && drawn.prefix === colour[1] && drawn.kind === colour[2] ? [{ file, cls: other, ...drawn }] : []
+          })
+        })
+      }),
+    )
+    expect(rings.filter(({ width }) => width === "3").length).toBeGreaterThan(40)
+    expect(cursors.length).toBeGreaterThan(1)
+    const SHADCN_EDGE = new Set(["components/ui/tabs.tsx", "components/ui/scroll-area.tsx"])
+    const off = [...rings, ...cursors].filter(({ file, kind, width }) => width !== "3" && width !== "0" && !(kind === "outline" && width === "1" && SHADCN_EDGE.has(file)))
+    expect(off.map(({ file, cls }) => `${file}: ${cls}`)).toEqual([])
+  })
+})
+
 describe("colours", () => {
   it("come from the tokens, not Tailwind's palette", () => {
     // frontend.md: colours are tokens of index.css (white and black stay for the viewer's

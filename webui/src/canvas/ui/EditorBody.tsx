@@ -716,7 +716,7 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
                         .setSplitPosition(editor.docKey, staging.splitPosition + (event.key === "ArrowRight" ? step : -step))
                     }
                   }}
-                  className="pointer-events-auto absolute inset-y-0 w-3 -translate-x-1/2 cursor-ew-resize outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="pointer-events-auto absolute inset-y-0 w-3 -translate-x-1/2 cursor-ew-resize outline-none focus-visible:ring-3 focus-visible:ring-ring"
                   style={{ left: `${(staging.splitPosition * 100).toFixed(1)}%` }}
                 >
                   <span aria-hidden className="mx-auto block h-full w-0.5 bg-white shadow-[0_0_0_1px_rgb(0_0_0/0.35)]" />

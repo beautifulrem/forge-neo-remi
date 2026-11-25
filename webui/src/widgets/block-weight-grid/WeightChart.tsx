@@ -132,7 +132,7 @@ export function WeightChart(props: Props) {
               aria-valuetext={fmt(weight, 3)}
               aria-disabled={disabled || undefined}
               title={`${label}: ${fmt(weight, 3)}${copy !== null ? ` (↳ ${copy})` : ""}`}
-              className="relative h-full min-w-1 flex-1 rounded-t-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="relative h-full min-w-1 flex-1 rounded-t-sm outline-none focus-visible:ring-3 focus-visible:ring-ring"
               onFocus={() => props.onSelect(index)}
               onKeyDown={(event) => onKeyDown(event, index)}
             >

@@ -96,7 +96,7 @@ function ModePicker({ tabs, modeNode }: { tabs: TabsNode; modeNode: InputNode })
                 "group/mode col-span-2 flex min-w-0 flex-col items-center justify-start gap-1 rounded-lg px-0.5 py-1.5 text-muted-foreground transition-colors outline-none select-none",
                 options.length <= 5 ? "@[22rem]:col-span-1" : "@[30rem]:col-span-1",
                 index === centredIndex(options.length) && (options.length <= 5 ? "col-start-2 @[22rem]:col-start-auto" : "col-start-2 @[30rem]:col-start-auto"),
-                "hover:bg-background/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-focus-ring",
+                "hover:bg-background/60 hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring",
                 "data-checked:bg-card data-checked:text-foreground dark:data-checked:bg-accent",
               )}
             >

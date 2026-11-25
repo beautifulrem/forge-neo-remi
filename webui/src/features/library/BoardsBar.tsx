@@ -139,7 +139,7 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
           aria-selected={boardId === null}
           onClick={() => setView({ boardId: null })}
           className={cn(
-            "relative inline-flex h-8 items-center gap-1.5 px-2 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+            "relative inline-flex h-8 items-center gap-1.5 px-2 text-xs transition-colors outline-none focus-visible:ring-3 focus-visible:ring-focus-ring",
             boardId === null
               ? "font-medium text-foreground after:absolute after:inset-x-0.5 after:bottom-0 after:h-0.5 after:bg-primary"
               : "text-muted-foreground hover:text-foreground",
@@ -159,7 +159,7 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
               title={board.description || board.name}
               onClick={() => setView({ boardId: selected ? null : board.id })}
               className={cn(
-                "relative inline-flex h-8 max-w-48 items-center gap-1.5 px-2 text-xs transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+                "relative inline-flex h-8 max-w-48 items-center gap-1.5 px-2 text-xs transition-colors outline-none focus-visible:ring-3 focus-visible:ring-focus-ring",
                 selected
                   ? "font-medium text-foreground after:absolute after:inset-x-0.5 after:bottom-0 after:h-0.5 after:bg-primary"
                   : "text-muted-foreground hover:text-foreground",
@@ -180,7 +180,7 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
             onClick={() => {
               if (!boardsFailure.retrying) void boardsList.refetch()
             }}
-            className="inline-flex h-8 items-center gap-1 px-2 text-xs text-destructive outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus-ring"
+            className="inline-flex h-8 items-center gap-1 px-2 text-xs text-destructive outline-none hover:underline focus-visible:ring-3 focus-visible:ring-focus-ring"
           >
             {t("Could not load boards. Retry")}
           </button>
@@ -433,7 +433,7 @@ export function AssignBoardPopover({ fileIds, activeBoardId, trigger, tone = "de
                     type="button"
                     disabled={assign.isPending}
                     onClick={() => assign.mutate(board)}
-                    className="flex h-7 w-full items-center gap-2 rounded-sm px-2 text-left text-xs transition-colors outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-focus-ring"
+                    className="flex h-7 w-full items-center gap-2 rounded-sm px-2 text-left text-xs transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-focus-ring"
                   >
                     <Folder className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
                     <span title={board.name} className="min-w-0 flex-1 truncate">{board.name}</span>

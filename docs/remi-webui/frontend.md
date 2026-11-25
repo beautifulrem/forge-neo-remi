@@ -378,7 +378,14 @@ imperatively).
   with `--ring` wherever an accent is set. A focus ring, a keyboard
   cursor or highlight included, takes the token, never a share of `--ring`
   of its own (`ring-ring/60`; the test fails on one); a hover ring, which
-  marks no focus, takes `--primary` (`hover:ring-primary/40`).
+  marks no focus, takes `--primary` (`hover:ring-primary/40`). Every focus
+  ring is 3 px wide (`ring-3`, or a 3 px outline over an image), and so is a
+  keyboard cursor drawn in the token (the networks grid's current item: an
+  outline on the tile's `after:` layer, an inset ring on a list row); a 2 px
+  ring read thinner than the rings beside it. `ring-0` takes the ring off a
+  control whose group draws it, and shadcn's 1 px outline in the tabs and the
+  scroll area sits inside its 3 px ring (`lib/design-guards.test.ts`, "focus
+  rings").
 - See [Visual rules](#visual-rules) for the design rules every new screen
   follows.
 - shadcn components import `cn` from the `cn` package (what the base-nova

@@ -54,7 +54,7 @@ export function ModifiedDot(props: { onReset: () => void; defaultValue?: unknown
             onClick={props.onReset}
             // a 32 px target (`after:`) that reaches no neighbour: 4 px of margin each side make the room
             // between the label and the row's controls; 8 px below is the field's gap to its control
-            className="group/dot relative mx-1 grid size-4 shrink-0 place-items-center rounded-full outline-none after:absolute after:-inset-2 after:rounded-full focus-visible:ring-2 focus-visible:ring-focus-ring disabled:pointer-events-none"
+            className="group/dot relative mx-1 grid size-4 shrink-0 place-items-center rounded-full outline-none after:absolute after:-inset-2 after:rounded-full focus-visible:ring-3 focus-visible:ring-focus-ring disabled:pointer-events-none"
           />
         }
       >

@@ -253,7 +253,7 @@ function ModulesPicker({ className, segmented = false }: { className?: string; s
               href={MODULES_HELP_URL}
               target="_blank"
               rel="noreferrer noopener"
-              className="inline-flex items-center gap-1 rounded-sm font-medium text-foreground/80 underline underline-offset-2 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-focus-ring"
+              className="inline-flex items-center gap-1 rounded-sm font-medium text-foreground/80 underline underline-offset-2 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring"
             >
               <CircleHelp className="size-3.5" aria-hidden />
               {t("Where to get them")}

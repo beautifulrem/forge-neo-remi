@@ -40,7 +40,7 @@ export function TagChips({
                 title={t("Images: {{count}}", { count })}
                 className={cn(
                   "inline-flex h-6 max-w-64 items-center gap-1.5 rounded-md border px-2.5 text-xs transition-colors outline-none",
-                  "focus-visible:ring-2 focus-visible:ring-focus-ring",
+                  "focus-visible:ring-3 focus-visible:ring-focus-ring",
                   // pressed is a solid fill, not the selection tint: unpressed chips already wear a primary wash for their frequency
                   on ? "border-primary bg-primary text-primary-foreground" : "border-transparent hover:border-ring/40",
                 )}

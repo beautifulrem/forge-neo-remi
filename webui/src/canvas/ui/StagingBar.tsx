@@ -65,7 +65,7 @@ export function StagingBar({
         // One row: as its `@container/staging` (the canvas width) narrows, the candidate dots go
         // first (the counter and arrows stay), then the fader, then Accept's label (its icon stays,
         // named). Measured in English, the longest: 657, 553, 431 and 302 px of bar.
-        "flex max-w-[calc(100%-0.5rem)] items-center gap-1 px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+        "flex max-w-[calc(100%-0.5rem)] items-center gap-1 px-2 py-1 outline-none focus-visible:ring-3 focus-visible:ring-focus-ring",
       )}
     >
       <IconButton label={t("Previous candidate")} keys={["←"]} onClick={onPrev} disabled={count <= 1 || busy}>
@@ -88,7 +88,7 @@ export function StagingBar({
                 aria-label={t("Candidate {{index}} of {{count}}", { index: idx + 1, count })}
                 aria-pressed={idx === session.index}
                 onClick={() => onSelect(idx)}
-                className="group grid size-6 place-items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="group grid size-6 place-items-center rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring"
               >
                 <span
                   aria-hidden

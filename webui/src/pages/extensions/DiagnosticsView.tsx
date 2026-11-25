@@ -333,7 +333,7 @@ export function DiagnosticsView() {
                 aria-pressed={filter === btn.id}
                 onClick={() => setParams({ filter: btn.id })}
                 className={cn(
-                  "relative h-7 rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
+                  "relative h-7 rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-focus-ring",
                   "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
                   PRESSED_TINT_CLASS,
                 )}

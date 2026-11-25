@@ -172,7 +172,9 @@ function CardView({ item, kind, id, index, active, cursor, mismatch, width, onAp
           "relative size-full cursor-pointer overflow-hidden rounded-md bg-card ring-1 ring-border transition-shadow select-none",
           "group-hover/card:ring-foreground/30",
           "data-active:ring-2 data-active:ring-primary",
-          "data-cursor:outline-2 data-cursor:outline-offset-2 data-cursor:outline-focus-ring",
+          // the cursor is an outline on a layer over the image (after:), inside the tile: the image cannot
+          // cover it, the scroller (no top padding) cannot clip it, and the applied ring stays visible outside
+          "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] data-cursor:after:outline-3 data-cursor:after:-outline-offset-3 data-cursor:after:outline-solid data-cursor:after:outline-focus-ring",
         )}
       >
         <Preview item={item} width={width} className={cn("absolute inset-0 transition-[filter]", mismatch && "opacity-70 saturate-50")} />
@@ -235,7 +237,8 @@ function RowView({ item, kind, id, index, active, cursor, mismatch, onApply, onA
         onContextMenu={contextMenu(onAction, item, index)}
         className={cn(
           "flex size-full cursor-pointer items-center gap-3 rounded-lg px-2 transition-colors select-none group-hover/row:bg-muted",
-          "data-cursor:bg-accent data-cursor:ring-1 data-cursor:ring-focus-ring",
+          // inset: the first row sits on the scroller's top edge, which would clip a ring outside it
+          "data-cursor:bg-accent data-cursor:ring-3 data-cursor:ring-focus-ring data-cursor:ring-inset",
         )}
       >
         <div className="relative size-10 shrink-0">
