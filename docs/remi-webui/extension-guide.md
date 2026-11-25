@@ -593,8 +593,13 @@ script_callbacks.on_ui_settings(on_ui_settings)
   handled by the built-in `extra-options-section` extension.
 
 The settings schema is exported by `remi/ui/settings.py`
-(schema-format.md §6). Gradio component classes are recognized by name for
-code that still passes them, but import nothing: prefer the `ui.*` classes.
+(schema-format.md §6). A `component` that is not one of the `ui.*` classes
+is ignored, whatever its name, and the widget follows the default's type: a
+toggle for a `bool`, a text box for a `str` (`lines`, `placeholder`), a
+number field for an `int` or `float` (`minimum`, `maximum`, `step`,
+`precision`) and a JSON editor for anything else. A slider from another
+library becomes a number field and a dropdown or radio a text box without
+its `choices`, so declare settings with the `ui.*` classes.
 
 ## 11. Custom widgets (frontend)
 
