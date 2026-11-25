@@ -12,6 +12,8 @@
 # Nothing is cloned. tests/test_remi_docker.py keeps both recipes in step.
 
 ARG NODE_VERSION=24
+# The server stage's base image (see docker/Dockerfile): a tag, or an exact image by digest
+ARG BASE_IMAGE=ubuntu:22.04
 
 # region The web interface
 
@@ -34,7 +36,7 @@ RUN pnpm run build
 
 # region The server
 
-FROM ubuntu:22.04
+FROM ${BASE_IMAGE}
 
 # The ROCm build of PyTorch (see https://download.pytorch.org/whl/): the versions the launcher
 # installs on Linux (modules/launch_utils.default_torch_command), built for that ROCm index

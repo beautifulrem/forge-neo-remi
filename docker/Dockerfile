@@ -12,6 +12,9 @@
 # tests/test_remi_docker.py keeps this file in step with the launcher.
 
 ARG CUDA_VERSION=13.0.0
+# The server stage's base image. A tag takes the base image's fixes when rebuilt; to build on one
+# exact image, pass it by digest: --build-arg BASE_IMAGE=nvidia/cuda:<tag>@sha256:<digest>
+ARG BASE_IMAGE=nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu22.04
 ARG NODE_VERSION=24
 
 # region The web interface
@@ -35,7 +38,7 @@ RUN pnpm run build
 
 # region The server
 
-FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu22.04
+FROM ${BASE_IMAGE}
 
 # The PyTorch build the launcher installs on Linux (modules/launch_utils.default_torch_command)
 ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu130

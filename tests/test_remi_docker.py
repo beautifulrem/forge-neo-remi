@@ -403,6 +403,20 @@ def test_uv_comes_from_a_pinned_digest():
             assert re.fullmatch(r"--from=ghcr\.io/astral-sh/uv:[\w.]+@sha256:[0-9a-f]{64}", source), source
 
 
+def test_the_server_base_image_can_be_pinned_by_digest():
+    """The server stage is built on ``BASE_IMAGE``, a tag by default (it takes the base image's
+    security fixes when rebuilt); one ``--build-arg`` pins an exact image by its digest."""
+
+    for recipe, default in ((DOCKERFILE, "nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu22.04"), (ROCM_DOCKERFILE, "ubuntu:22.04")):
+        steps = instructions(recipe)
+        froms = [rest for keyword, rest in steps if keyword == "FROM"]
+        assert froms[-1] == "${BASE_IMAGE}", froms
+        first_from = next(index for index, (keyword, _rest) in enumerate(steps) if keyword == "FROM")
+        assert ("ARG", f"BASE_IMAGE={default}") in steps[:first_from]  # global: only an ARG before the first FROM reaches FROM
+    assert re.search(r"--build-arg BASE_IMAGE=nvidia/cuda:[\w.-]+@sha256:", README)
+    assert "`BASE_IMAGE`" in README
+
+
 def docker_runs(text: str) -> list[str]:
     """The ``docker run`` commands in ``text``, continuation lines joined."""
 

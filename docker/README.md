@@ -34,7 +34,9 @@ context has no `.git`); `docker inspect --format
 - `.dockerignore` (repository root) leaves models, outputs, virtual
   environments, `webui/node_modules` and `webui/dist` out of the build context.
 
-Build arguments: `CUDA_VERSION` (base image, default `13.0.0`), `NODE_VERSION`
+Build arguments: `CUDA_VERSION` (base image, default `13.0.0`), `BASE_IMAGE`
+(the server stage's base image, default `nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu22.04`;
+`ubuntu:22.04` for ROCm), `NODE_VERSION`
 (default `24`), `PNPM_VERSION` (default `12`), `TORCH_INDEX_URL` and
 `TORCH_PACKAGES` (default: the launcher's Linux PyTorch build). Changing
 `CUDA_VERSION` needs the matching `TORCH_INDEX_URL` (`…/whl/cuXY` for CUDA X.Y)
@@ -45,6 +47,15 @@ index of <https://download.pytorch.org/whl/>) and `TORCH_PACKAGES` (default
 `torch==2.14.0+rocm7.2 torchvision==0.29.0+rocm7.2`: the launcher's versions,
 built for that index) instead of the CUDA arguments. Changing `TORCH_INDEX`
 needs the matching `+rocmX.Y` builds in `TORCH_PACKAGES`.
+
+The base image is a tag, so a rebuild picks up its security fixes. To build on
+one exact image instead, pass it by digest (`docker buildx imagetools inspect
+<image>` prints it), and update that digest yourself from then on:
+
+```bash
+docker build --build-arg BASE_IMAGE=nvidia/cuda:13.0.0-runtime-ubuntu22.04@sha256:<digest> \
+    --build-arg REMI_REVISION="$(git rev-parse HEAD)" -f docker/Dockerfile -t remi-webui .
+```
 
 ## Run
 
