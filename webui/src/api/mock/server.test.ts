@@ -3,12 +3,13 @@
  * its values (`remi.ui.Sentence`), so the zh mock preview shows them in Chinese through the
  * catalog sample, as the product does.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { sentenceParams } from "@/api/http"
 import { validationMessage } from "@/features/errors/error-text"
 import { i18n } from "@/i18n"
 import { serverCatalogZh } from "./fixtures"
 import { actionPatch, validateJob } from "./server"
+import { MockSocket } from "./socket"
 
 const HAN = /\p{Script=Han}/u
 
@@ -63,5 +64,24 @@ describe("the mock's action toasts", () => {
     const patch = actionPatch("anima", "apply_preset", { values: { preset: "detail" } } as never) as { __toast__?: { message: unknown } }
     expect(patch.__toast__?.message).toEqual({ text: "Preset “{{preset}}” applied", params: { preset: "detail" } })
     expect(serverCatalogZh["Preset “{{preset}}” applied"]).toMatch(HAN)
+  })
+})
+
+describe("the mock's model load", () => {
+  afterEach(() => vi.useRealTimers())
+
+  it("sends what the server sends: one model.loading with its stage and model, then model.loaded", async () => {
+    vi.useFakeTimers()
+    const socket = new MockSocket()
+    const events: Record<string, unknown>[] = []
+    socket.onmessage = (event) => {
+      if (typeof event.data === "string") events.push(JSON.parse(event.data) as Record<string, unknown>)
+    }
+    await vi.advanceTimersByTimeAsync(200)
+    actionPatch("core", "__forge_preset__", { preset: "flux" } as never)
+    await vi.advanceTimersByTimeAsync(5000)
+    socket.close()
+    expect(events.filter((event) => event.type === "model.loading")).toEqual([{ type: "model.loading", stage: "loading", model: "flux preset" }])
+    expect(events.filter((event) => event.type === "model.loaded")).toEqual([{ type: "model.loaded", model: "flux preset" }])
   })
 })

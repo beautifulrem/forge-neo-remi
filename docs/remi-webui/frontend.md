@@ -936,7 +936,7 @@ mode's schema is prefetched).
   once; the picker says which checkpoints need them and links to where to
   download them, the Gradio UI's "?" next to the dropdown), "Diffusion in
   Low Bits"; option writes are optimistic `PATCH
-  /options`; `model.loading` stages show next to it. Narrow headers fold
+  /options`; the `model.loading` stage shows next to it. Narrow headers fold
   preset, modules and dtype into a popover.
 
 ## Image editor (`src/canvas`)

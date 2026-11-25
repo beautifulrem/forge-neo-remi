@@ -30,7 +30,7 @@ export type WsEventMap = {
   resync: { dropped?: number }
   pong: Record<string, never>
   /** A model load in progress; `stage` is free text. `done`, `error` and `failed` end it. */
-  "model.loading": { stage: string; model?: string; progress?: number | null }
+  "model.loading": { stage: string; model?: string }
   /** A model load finished (successfully or not); ends `model.loading`. */
   "model.loaded": { model?: string; error?: string | null }
   /** A pipeline changed; the rest of the fields are the whole chain, as `GET /chains/{id}` returns it. */

@@ -77,13 +77,14 @@ const FORGE_PRESETS: Record<string, [number, number, string, number]> = {
   flux3: [1024, 1, "Euler", 8],
 }
 
-/** Emits what a real model switch produces: `model.loading` (the server's only stage is "loading"), then `model.loaded`. */
+/**
+ * Emits what a real model switch produces (`remi/jobs/queue.py`): one `model.loading` with the
+ * server's only stage, "loading", and the model (no progress: the server cannot tell it), then
+ * `model.loaded`.
+ */
 function simulateModelLoad(model: string) {
-  const steps = 3
-  for (let index = 0; index < steps; index++) {
-    setTimeout(() => broadcast({ type: "model.loading", stage: "loading", model, progress: (index + 1) / (steps + 1) }), 150 + index * 450)
-  }
-  setTimeout(() => broadcast({ type: "model.loaded", model }), 150 + steps * 450)
+  setTimeout(() => broadcast({ type: "model.loading", stage: "loading", model }), 150)
+  setTimeout(() => broadcast({ type: "model.loaded", model }), 1500)
 }
 
 /** The Hires. fix target size (`calculate_target_resolution`): the resize sizes win over the factor; one left at 0 keeps the aspect ratio. */

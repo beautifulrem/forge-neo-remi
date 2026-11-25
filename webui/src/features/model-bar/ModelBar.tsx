@@ -265,10 +265,8 @@ function DtypeSelect({ className }: { className?: string }) {
 const MODEL_STAGES: Record<string, string> = { loading: "Loading" }
 
 function loadingText(t: (key: string) => string, loading: NonNullable<ReturnType<typeof useModelBusy>>): string {
-  const percent = typeof loading.progress === "number" ? Math.round(loading.progress * 100) : null
   const key = MODEL_STAGES[loading.stage.toLowerCase()]
-  const stage = key ? t(key) : serverText(loading.stage)
-  return percent !== null ? `${stage} ${percent}%` : stage
+  return key ? t(key) : serverText(loading.stage)
 }
 
 /** The model loading stage as a live region (visible in the stacked bar, announced only in the header). */
