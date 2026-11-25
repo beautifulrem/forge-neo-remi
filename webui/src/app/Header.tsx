@@ -119,7 +119,7 @@ export function Header({ title, locales }: { title: string; locales: LocaleInfo[
       >
         {title}
       </h1>
-      <div ref={setSlot} className="flex shrink-0 items-center gap-2" />
+      <div ref={setSlot} className="flex shrink-0 items-center gap-2 max-sm:gap-1" />
       {/* 4 px apart on a phone: room for a page's tabs beside four of them at 320 px */}
       <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 max-sm:gap-1 max-sm:group-has-data-page-tabs/header:shrink sm:shrink">
         <div className="hidden min-w-0 sm:block">

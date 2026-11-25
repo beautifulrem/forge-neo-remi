@@ -92,7 +92,9 @@ export function NetworksDrawerHost({ tab }: { tab: GenerateTab }) {
           className={cn("gap-1.5", ICON_SQUARE_BELOW_LG, PRESSED_TINT_CLASS)}
         >
           <Layers aria-hidden />
-          <span className="hidden lg:inline">{t("Networks")}</span>
+          {/* read out below lg too: a toggle keeps one name ("Networks", pressed or not); the title,
+              which says what a press does, is only its description */}
+          <span className="max-lg:sr-only">{t("Networks")}</span>
           {/* the hint needs room: at 1280 px the header also holds the full model bar */}
           <Kbd className="hidden 2xl:inline-flex touch-only:hidden!">{formatShortcut(NETWORKS_SHORTCUT)}</Kbd>
         </Button>

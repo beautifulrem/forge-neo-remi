@@ -42,10 +42,12 @@ describe("networks drawer host", () => {
     })
 
     // Below lg, where its label is hidden, the button was 36 px wide beside the header's 28 px icon
-    // buttons, which a phone's header has no room for.
-    it("is a 28 px square where its label is hidden", () => {
+    // buttons, which a phone's header has no room for. The label is still read out there: hidden
+    // (display: none), the toggle took its name from its title, "Show networks" or "Hide networks".
+    it("is a 28 px square where its label is hidden, keeping its one name", () => {
       const label = within(header).getByText("Networks")
-      expect(label).toHaveClass("hidden", "lg:inline")
+      expect(label).toHaveClass("max-lg:sr-only")
+      expect(label).not.toHaveClass("hidden")
       expect(label.closest("button")).toHaveClass("max-lg:size-7", "max-lg:px-0")
     })
 

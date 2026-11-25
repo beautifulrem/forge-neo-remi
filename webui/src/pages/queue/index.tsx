@@ -228,9 +228,10 @@ export default function QueuePage({ route }: { route?: Route } = {}) {
 
   const header = (
     <HeaderSlot>
-      {/* on a phone a 28 px icon square, its label read out: the page title keeps its room */}
+      {/* ghost like the header's other buttons; on a phone a 28 px icon square, its label read
+          out: the page title keeps its room */}
       <Button
-        variant="outline"
+        variant="ghost"
         size="sm"
         onClick={() => void act(() => (paused ? api.queue.resume() : api.queue.pause()), paused ? t("Could not resume the queue") : t("Could not pause the queue"))}
         className={ICON_SQUARE_BELOW_SM}

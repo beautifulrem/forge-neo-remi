@@ -112,7 +112,9 @@ imperatively).
   Rescan, PNG Info's Clear), its label read out (`sr-only`, never
   `hidden`, which would leave the button without a name), and its icon
   16 px like theirs, not the 14 px of a small labelled button
-  (`ICON_SQUARE_BELOW_SM` / `ICON_SQUARE_BELOW_LG` in `app/header-slot.tsx`). On a phone the header's controls sit 4 px
+  (`ICON_SQUARE_BELOW_SM` / `ICON_SQUARE_BELOW_LG` in `app/header-slot.tsx`).
+  Every header button is ghost like them (no fill or edge until hovered or
+  pressed), a page's own included: an outlined one among them reads as pressed. On a phone the header's controls sit 4 px
   apart, and the hairline that sets the networks button apart from
   Generate's tabs is left out (its icon does that there).
 - **Command palette** (Ctrl/Cmd+K, `cmdk`, its own chunk loaded on first

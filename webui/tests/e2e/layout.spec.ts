@@ -188,7 +188,7 @@ test.describe("the header's icon buttons on a phone", () => {
     await pinQuickSetting(page)
     const sizes = new Map<string, string>()
     for (const [route, own] of [
-      ["txt2img", /^Show networks/],
+      ["txt2img", /^Networks$/],
       ["gallery", /^Rescan$/],
       ["queue", /^(Pause|Resume)$/],
     ] as const) {
@@ -201,14 +201,26 @@ test.describe("the header's icon buttons on a phone", () => {
           .map((button) => ({ button, rect: button.getBoundingClientRect(), icon: button.querySelector("svg")?.getBoundingClientRect() }))
           .filter(({ rect, icon }) => icon && Math.round(rect.width) === 28 && Math.round(rect.height) === 28)
           // named as read out: aria-label, its rendered text (sr-only included), else the title (the networks button's label is display: none here)
-          .map(({ button, icon }) => [(button.getAttribute("aria-label") || button.innerText.trim() || button.title.replace(/ \(.*\)$/, "")).trim(), `${icon!.width}×${icon!.height}`] as const),
+          .map(({ button, icon }) => {
+            // ghost, as search and the appearance menu: no fill and no edge until hovered or pressed
+            const style = getComputedStyle(button)
+            const look = /rgba\(.*, 0\)|transparent/.test(style.backgroundColor) && /rgba\(.*, 0\)|transparent/.test(style.borderTopColor) ? "" : " filled"
+            return [(button.getAttribute("aria-label") || button.innerText.trim() || button.title.replace(/ \(.*\)$/, "")).trim(), `${icon!.width}×${icon!.height}${look}`] as const
+          }),
       )
       for (const [name, size] of seen) sizes.set(name, size)
     }
-    for (const name of ["Search", "Appearance", "Show networks", "Quick settings", "Rescan", "Pause"]) {
+    for (const name of ["Search", "Appearance", "Networks", "Quick settings", "Rescan", "Pause"]) {
       expect(sizes.get(name), `"${name}" is not an icon square`).toBeDefined()
     }
     expect(Object.fromEntries(sizes)).toEqual(Object.fromEntries([...sizes.keys()].map((name) => [name, "16×16"])))
+
+    // a toggle keeps its one name, pressed or not (its title says what a press does)
+    await page.evaluate(() => (location.hash = "#/txt2img"))
+    const networks = page.locator("header").first().getByRole("button", { name: "Networks", exact: true })
+    await expect(networks).toHaveAttribute("aria-pressed", "false")
+    await networks.click()
+    await expect(networks).toHaveAttribute("aria-pressed", "true")
   })
 })
 
