@@ -226,9 +226,9 @@ docker run --device /dev/kfd --device /dev/dri --group-add video -p 127.0.0.1:78
 | `--force-w4a8` | 以 `w4a8` 格式加载 `convrot_w4a4` checkpoint（画质更好） |
 | `--use-ck-attention`、`--enable-triton-backend` | 使用 Comfy-Kitchen attention（覆盖其他 attention 包）；启用 `comfy-kitchen` 的 Triton 内核 |
 | `--pynvml` | 通过 NVIDIA Management Library 读取实际可用显存 |
-| `--worker-process` | 在独立的受监管子进程（`SubprocessWorker`）中运行 PyTorch 推理，实现 OOM/崩溃隔离自愈并消除 UI/WS 的 GIL 争用（默认：进程内模式） |
-| `--worker-gpus 0,1` | 在 `WorkerPool` 中按指定的 GPU 索引为每张卡启动一个独立推理 Worker |
-| `--worker-mlx` | 启用可选的 Apple Silicon MLX / `mflux` Sidecar Worker，复用全部网页界面、队列与图库 |
+| `--worker-process` | 为 PyTorch 推理启动一个独立的受监管子进程（`SubprocessWorker`）。预览：队列仍在进程内执行所有任务 |
+| `--worker-gpus 0,1` | 在 `WorkerPool` 中按指定的 GPU 索引为每张卡启动一个独立推理 Worker。预览：队列还不会把任务派给它们 |
+| `--worker-mlx` | 启动可选的 Apple Silicon MLX / `mflux` Sidecar Worker。预览：队列还不会把任务派给它 |
 
 这三个 `--worker-*` 参数目前是预览：Worker 会出现在 Workers 监控里（健康状态、重启），但队列不会把任务派给它们，仍在进程内执行所有任务。没有给出参数时，`REMI_WORKER_PROCESS=1`、`REMI_WORKER_GPUS=0,1` 和 `REMI_WORKER_MLX=1` 起同样的作用（开关只认 `1`）。
 

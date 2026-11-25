@@ -226,9 +226,9 @@ Pass options in `COMMANDLINE_ARGS` (`webui-user.bat`, `webui.settings.sh`) or to
 | `--force-w4a8` | Load `convrot_w4a4` checkpoints as `w4a8` (better quality) |
 | `--use-ck-attention`, `--enable-triton-backend` | Comfy-Kitchen attention (overrides other attention packages); Triton kernels in `comfy-kitchen` |
 | `--pynvml` | Read the actual free VRAM through the NVIDIA Management Library |
-| `--worker-process` | Run PyTorch inference in an isolated supervised child process (`SubprocessWorker`) for OOM/crash recovery and zero UI/WS GIL contention (default: in-process) |
-| `--worker-gpus 0,1` | Spawn one isolated inference worker per listed GPU index in `WorkerPool` |
-| `--worker-mlx` | Enable the optional Apple Silicon MLX / `mflux` sidecar worker alongside the standard UI, queue, and gallery |
+| `--worker-process` | Start an isolated, supervised child process for PyTorch inference (`SubprocessWorker`). Preview: the queue still runs every job in-process |
+| `--worker-gpus 0,1` | Start one isolated inference worker per listed GPU index in `WorkerPool`. Preview: the queue does not dispatch jobs to them yet |
+| `--worker-mlx` | Start the optional Apple Silicon MLX / `mflux` sidecar worker. Preview: the queue does not dispatch jobs to it yet |
 
 The three `--worker-*` options are a preview: they list the workers in the Workers monitor (health, restart), but the queue does not dispatch to them and still runs every job in-process. `REMI_WORKER_PROCESS=1`, `REMI_WORKER_GPUS=0,1` and `REMI_WORKER_MLX=1` set the same options when the flags are absent (only `1` turns the switches on).
 
