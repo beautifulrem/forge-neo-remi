@@ -3,9 +3,14 @@
 Remi WebUI is licensed under the [GNU Affero General Public License v3.0](../../LICENSE),
 like the Forge Neo, Forge and AUTOMATIC1111 WebUIs it derives from. Code
 from other projects keeps its own license and notices: Settings → Licenses
-lists the projects (`html/licenses.html`), and the web interface build's
-`THIRD-PARTY-NOTICES.txt` lists every library it ships with its license text
-(`webui/tools/notices.mjs`).
+lists the projects the shared runtime takes code from (`html/licenses.html`,
+upstream's list), the web interface build's `THIRD-PARTY-NOTICES.txt` lists
+every library it ships with its license text (`webui/tools/notices.mjs`), and
+third-party code inside a built-in extension (DAVE, FreeFuse, JoyCaption's
+prompts, Agent Scheduler, Spectrum, …) keeps its notice in that extension's
+folder (`NOTICE`, `LICENSE-*`), listed under
+[Built-in extensions](#built-in-extensions) below; the Licenses page does not
+list those.
 
 ## Source code for users of the server (AGPL-3.0 section 13)
 
