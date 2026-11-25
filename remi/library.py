@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from remi.files import ID_RE, FileRecord, FileStore, connect
-from remi.image_meta import MAX_INFOTEXT_CHARS
+from remi.image_meta import clip_infotext
 
 Sort = Literal["newest", "oldest", "name", "largest"]
 SORTS: tuple[Sort, ...] = ("newest", "oldest", "name", "largest")
@@ -1280,7 +1280,7 @@ def parse_infotext_fields(infotext: str | None) -> dict[str, Any]:
     """Parse A1111/Forge/Remi infotext into prompt, negative, params and LoRAs."""
 
     # rows stored before infotext was capped on ingest may be longer
-    text = (infotext or "")[:MAX_INFOTEXT_CHARS].replace("\r\n", "\n").strip()
+    text = clip_infotext(infotext or "").replace("\r\n", "\n").strip()
     if not text:
         return {"prompt": "", "negative_prompt": "", "params": {}, "loras": {}}
 

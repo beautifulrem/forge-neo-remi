@@ -56,3 +56,25 @@ def test_compare_takes_pasted_text_up_to_the_cap(tmp_path):
         long = "a\nSteps: 20, " + "x" * MAX_INFOTEXT_CHARS
         assert server.client.post("/api/v2/gallery/compare", json={"infotext_a": long, "infotext_b": "b"}).status_code == 422
         assert server.client.post("/api/v2/gallery/compare", json={"infotext_a": long[:MAX_INFOTEXT_CHARS], "infotext_b": "b"}).status_code == 200
+
+
+def test_a_cut_infotext_keeps_its_parameters_line(tmp_path):
+    """A prompt over the cap cut the infotext's end, its ``Steps: …`` line with it:
+    the gallery then showed no parameters for the image."""
+
+    from remi.image_meta import clip_infotext, read_metadata
+
+    text = "a" * 300_000 + "\nNegative prompt: blurry\nSteps: 20, Seed: 1"
+    clipped = clip_infotext(text)
+    assert len(clipped) == MAX_INFOTEXT_CHARS and clipped.endswith("\nSteps: 20, Seed: 1") and clipped.startswith("aaa")
+    assert clip_infotext("short\nSteps: 1") == "short\nSteps: 1"
+    assert clip_infotext("x" * 300_000) == "x" * MAX_INFOTEXT_CHARS  # one line: the start
+
+    files = FileStore(tmp_path / "files")
+    try:
+        record = files.save_output_image(Image.new("RGB", (8, 8)), text)
+        assert files.get(record.id).infotext == clipped
+        assert read_metadata(record.path)["infotext"] == clipped
+    finally:
+        files.close()
+    assert parse_infotext_fields(text)["params"] == {"Steps": "20", "Seed": "1"}  # a row stored before the cap

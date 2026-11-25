@@ -43,6 +43,19 @@ def utf8_text(value: Any) -> Any:
     return value
 
 
+def clip_infotext(text: str, limit: int = MAX_INFOTEXT_CHARS) -> str:
+    """``text`` cut to ``limit`` characters, keeping its last line when that
+    fits: an infotext's parameters (``Steps: …``) come after the prompt,
+    which is what makes one this long."""
+
+    if len(text) <= limit:
+        return text
+    head, newline, last = text.rstrip().rpartition("\n")
+    if newline and len(last) < limit:
+        return head[: limit - len(last) - 1] + "\n" + last
+    return text[:limit]
+
+
 def _text(value: Any) -> tuple[str, str]:
     """``(display text, kind)``; kind ``text``, ``binary`` or ``number``."""
 
@@ -182,8 +195,8 @@ def read_metadata(path: str, name: str | None = None) -> dict[str, Any]:
             text = text[:budget]
             budget -= len(text)
             entries.append({"group": "Metadata", "key": str(key)[:200], "value": text, "kind": kind})
-        if isinstance(infotext, str) and len(infotext) > MAX_INFOTEXT_CHARS:
-            infotext = infotext[:MAX_INFOTEXT_CHARS]
+        if isinstance(infotext, str):
+            infotext = clip_infotext(infotext)
         entries.extend(_exif_entries(image))
         result = {
             "name": name or os.path.basename(path),

@@ -28,7 +28,7 @@ from typing import Any
 
 from PIL import Image, PngImagePlugin
 
-from remi.image_meta import MAX_INFOTEXT_CHARS, utf8_text
+from remi.image_meta import clip_infotext, utf8_text
 
 log = logging.getLogger(__name__)
 
@@ -508,10 +508,11 @@ class FileStore:
 
     def register_output(self, path: str | os.PathLike, *, job_id: str | None = None, tab: str | None = None, infotext: str | None = None, width: int | None = None, height: int | None = None, created: float | None = None) -> FileRecord:
         """Index a generated file (idempotent per path). Its infotext is kept up
-        to :data:`~remi.image_meta.MAX_INFOTEXT_CHARS` (an image's own text can be any size)."""
+        to :data:`~remi.image_meta.MAX_INFOTEXT_CHARS` (an image's own text can be any size),
+        with its parameters line."""
 
         if infotext is not None:
-            infotext = utf8_text(infotext[:MAX_INFOTEXT_CHARS])
+            infotext = utf8_text(clip_infotext(infotext))
         path = os.path.realpath(path)
         stale = self._removed_as(path)
         # A first look, so that the file is read (stat, type, size) before the transaction
