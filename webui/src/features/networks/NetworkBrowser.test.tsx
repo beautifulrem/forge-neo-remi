@@ -364,6 +364,37 @@ describe("network browser: windows, filters, errors", { timeout: 60_000 }, () =>
     await within(await listbox()).findAllByRole("option", {}, slow)
   })
 
+  // A later window that failed had no items to keep: its retry went back to "pending", which
+  // dropped the error line over the cards, and the focused Retry with it.
+  it("keeps a later window's error line up while its retry runs, then gives the focus to the cards", async () => {
+    seedBootstrap()
+    let broken = true
+    const later = (url: URL) => Number(url.searchParams.get("offset") ?? 0) > 0
+    mockApi({ fail: (call) => broken && call.path === "/networks/lora" && later(call.url) })
+    layout(1200, 800)
+    renderBrowser()
+    const list = await listbox()
+    await within(list).findAllByRole("option", {}, slow)
+    // a scrollbar drag to the bottom (jsdom does not scroll by itself)
+    Object.defineProperty(list, "scrollTop", { configurable: true, value: 10_000_000 })
+    fireEvent.scroll(list)
+    const alert = await screen.findByRole("alert", {}, { timeout: 20_000 })
+    expect(alert).toHaveTextContent("The server ran into an error (500).")
+    broken = false
+    const release = holdRequests((path, url) => path === "/networks/lora" && later(url))
+    const retry = within(alert).getByRole("button", { name: "Retry" })
+    act(() => retry.focus())
+    fireEvent.click(retry)
+    await waitFor(() => expect(retry).toHaveAttribute("aria-disabled", "true"))
+    expect(alert).toBeInTheDocument()
+    expect(alert).toHaveAttribute("aria-busy", "true")
+    expect(retry).toHaveFocus()
+    await release()
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull(), slow)
+    await waitFor(() => expect(within(list).getAllByRole("option").some((option) => option.id.endsWith("-o4545"))).toBe(true), slow)
+    await waitFor(() => expect(screen.getByRole("listbox", { name: "LoRA" })).toHaveFocus())
+  })
+
   // The kinds row kept a loading skeleton for good when the kinds failed, beside the error.
   it("shows no loading skeleton once the network kinds failed", async () => {
     seedBootstrap()

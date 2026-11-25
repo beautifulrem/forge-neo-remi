@@ -3,7 +3,8 @@
  * retry runs (`LoadFailed`, `RetryButton`); when the data arrives the failure view is replaced by
  * what it loaded, and the focus it held fell to `<body>` (or to the dialog around it). It now goes
  * to that content: its first tabbable element, or, while it has none, the nearest focusable
- * element around it (a dialog, `#main`).
+ * element around it (a dialog, `#main`). A failure line that nothing replaces (a later page of a
+ * list, over the items that stayed) hands it to the content after it, the items it was about.
  *
  * Only a failure view that held the focus as it went, and only once a retry ran from it (pressed,
  * or a refetch on reconnect shown as retrying): one that leaves for another reason (a filter
@@ -70,9 +71,12 @@ function focusWhatReplaces(view: Element) {
     const children = [...container.childNodes]
     const start = previous?.parentNode === container ? children.indexOf(previous as ChildNode) + 1 : 0
     const end = next?.parentNode === container ? children.indexOf(next as ChildNode) : children.length
-    for (const node of children.slice(start, end)) {
+    const replacement = children.slice(start, end)
+    for (const node of replacement) {
       if (node instanceof HTMLElement && focusFirstTabbable(node)) return
     }
+    // nothing took its place: a line over content that stayed, which follows it
+    if (replacement.length === 0 && next instanceof HTMLElement && next.parentNode === container && focusFirstTabbable(next)) return
     if (++frame < FRAMES) {
       requestAnimationFrame(attempt)
       return

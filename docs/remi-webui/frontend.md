@@ -554,7 +554,9 @@ generated interfaces (sources: Linear's
   error in its own state and marks it retrying instead of clearing it). When
   the retry brings the data, the focus the failure view held goes to what
   took its place, its first tabbable element or else the nearest focusable
-  container (a dialog, `#main`), never to `<body>`; a focus the user moved
+  container (a dialog, `#main`), never to `<body>` (a line that nothing
+  replaces, a later page of the network list over the cards that stayed,
+  hands it to the content after it); a focus the user moved
   elsewhere stays (`useFocusAfterRetry` in `components/focus-after-retry.ts`,
   built into `LoadFailed` and `RetryButton`; a Retry of its own puts its ref
   on its view). The third, an

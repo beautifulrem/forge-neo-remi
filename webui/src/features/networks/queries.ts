@@ -9,6 +9,7 @@
  * refetches the pages on screen.
  */
 import { queryOptions, useQueries, useQuery } from "@tanstack/react-query"
+import { useState } from "react"
 import { api } from "@/api/endpoints"
 import { type LoadFailure, useLoadFailure } from "@/api/load-failure"
 import type { NetworkItem, NetworkQuery } from "@/api/types"
@@ -116,9 +117,13 @@ export type NetworkWindow = {
   /** The first window has no data yet (a new kind; never for a new search of the same kind). */
   isPending: boolean
   isError: boolean
-  error: Error | null
   /** The first window failed with nothing of its own to show (`useLoadFailure`): kept while its retry runs. */
   failure: LoadFailure | null
+  /**
+   * A window failed while the list has items to show: a refresh of the first (its items, and its
+   * error, stay while it is retried) or a later window, kept while its retry runs like `failure`.
+   */
+  refreshFailure: LoadFailure | null
   isFetching: boolean
   /** The items shown are a previous search's while the new one loads. */
   isPlaceholder: boolean
@@ -152,13 +157,31 @@ export function useNetworkWindow(kind: string, params: ListParams, range: IndexR
   more.forEach((page, index) => place(page, rest[index]?.data))
 
   const failed = first.isError ? first : rest.find((query) => query.isError)
+  // A later window has no items to keep: a retry sends it back to "pending", which drops its error.
+  // The failure this list showed stays while that window's retry runs (`useLoadFailure` for
+  // windows that come and go with the scroll).
+  const [seenLater, setSeenLater] = useState<{ key: string; error: unknown; at: number } | null>(null)
+  const keyOf = (page: number) => JSON.stringify(pageQuery(kind, params, page).queryKey)
+  const laterIndex = rest.findIndex((query) => query.isError)
+  let laterFailure: LoadFailure | null = null
+  if (laterIndex >= 0) {
+    const query = rest[laterIndex]!
+    const key = keyOf(more[laterIndex]!)
+    if (seenLater?.key !== key || seenLater.at !== query.errorUpdatedAt || seenLater.error !== query.error) setSeenLater({ key, error: query.error, at: query.errorUpdatedAt })
+    // a window with items keeps its error while it is fetched again
+    laterFailure = { error: query.error, retrying: query.isFetching }
+  } else if (seenLater) {
+    const query = rest[more.findIndex((page) => keyOf(page) === seenLater.key)]
+    if (query && query.data === undefined && query.isFetching && query.errorUpdatedAt === seenLater.at) laterFailure = { error: seenLater.error, retrying: true }
+  }
+  const refreshFailure = first.isError && first.data !== undefined ? { error: first.error, retrying: first.isFetching } : laterFailure
   return {
     items,
     total,
     isPending: first.isPending,
     isError: Boolean(failed),
-    error: failed?.error ?? null,
     failure,
+    refreshFailure,
     isFetching: first.isFetching || rest.some((query) => query.isFetching),
     isPlaceholder: first.isPlaceholderData,
     refetch: () => {

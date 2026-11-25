@@ -433,16 +433,17 @@ export function NetworkBrowser({ surface, form, toolbarEnd, tabsEnd, toastOnAppl
             <Skeleton key={i} className="aspect-3/4 rounded-md" />
           ))}
         </div>
-      ) : list.isError && total === 0 ? (
+      ) : list.refreshFailure && total === 0 ? (
         // a refresh of an empty list that failed: its retry keeps the error (the list has data)
-        <ErrorState title={t("Could not load {{kind}}", { kind: kindTitle(kind) })} error={list.error} retrying={list.isFetching} onRetry={retry} />
+        <ErrorState title={t("Could not load {{kind}}", { kind: kindTitle(kind) })} error={list.refreshFailure.error} retrying={list.refreshFailure.retrying} onRetry={retry} />
       ) : total === 0 ? (
         <EmptyState filtered={filtered} kindTitle={kindTitle(kind)} onClear={clearFilters} />
       ) : (
         <>
           {/* a refresh that failed keeps the cards it already showed */}
-          {list.isError || kinds.isError ? (
-            <LoadFailed error={list.error ?? kinds.error} retrying={(list.isError && list.isFetching) || (kinds.isError && kinds.isFetching)} onRetry={retry} className="shrink-0 px-3 py-1.5" />
+          {/* kept while its retry runs; the cards below take the focus once it brings them */}
+          {list.refreshFailure || kinds.isError ? (
+            <LoadFailed error={list.refreshFailure?.error ?? kinds.error} retrying={Boolean(list.refreshFailure?.retrying) || (kinds.isError && kinds.isFetching)} onRetry={retry} className="shrink-0 px-3 py-1.5" />
           ) : null}
           <NetworkGrid
             key={gridKey}

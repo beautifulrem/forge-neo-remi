@@ -86,6 +86,29 @@ describe("the focus after a retry", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "First item" })).toHaveFocus())
   })
 
+  // A line over items that stayed (a later page of a list failed): nothing takes its place, and
+  // the items it was about follow it.
+  it("goes to the content after a failure line that nothing replaces", async () => {
+    const Cards = ({ state }: { state: "failed" | "retrying" | "loaded" }) => (
+      <div data-testid="cards" tabIndex={-1}>
+        <button type="button">Before</button>
+        {state === "loaded" ? null : <LoadFailed error={null} message="Could not load more" retrying={state === "retrying"} onRetry={() => {}} />}
+        <ul>
+          <li>
+            <button type="button">A card</button>
+          </li>
+        </ul>
+      </div>
+    )
+    const view = render(<Cards state="failed" />)
+    const retry = screen.getByRole("button", { name: "Retry" })
+    act(() => retry.focus())
+    fireEvent.click(retry)
+    view.rerender(<Cards state="retrying" />)
+    view.rerender(<Cards state="loaded" />)
+    await waitFor(() => expect(screen.getByRole("button", { name: "A card" })).toHaveFocus())
+  })
+
   it("stays where the user put it", async () => {
     const { rerender } = failedThenRetrying()
     const before = screen.getByRole("button", { name: "Before" })
