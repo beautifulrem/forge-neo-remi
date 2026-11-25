@@ -506,6 +506,25 @@ def test_output_scan_goes_on_past_text_utf8_cannot_hold(server, tmp_path, monkey
     assert "bad \ufffd" in records["a-novelai.png"].infotext
 
 
+# On Linux a file name that is not UTF-8 reads as text with surrogates: no row can hold it, and the
+# network listing that registers each preview raised for all of them
+def test_a_file_name_that_is_not_utf8_is_not_registered(tmp_path, monkeypatch):
+    from remi import files as files_module
+
+    store = FileStore(tmp_path / "data")
+    try:
+        preview = tmp_path / "preview.png"
+        preview.write_bytes(png())
+        found = os.stat(preview)
+        stat = os.stat
+        monkeypatch.setattr(files_module.os.path, "realpath", lambda path: str(path))
+        monkeypatch.setattr(files_module.os, "stat", lambda path, *args, **kwargs: found if "\udcff" in str(path) else stat(path, *args, **kwargs))
+        assert store.register_path(str(tmp_path / "pre\udcffview.png")) is None
+        assert store.register_path(str(preview)) is not None
+    finally:
+        store.close()
+
+
 class FakeProvider:
     def __init__(self, root):
         self.root = root

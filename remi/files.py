@@ -607,6 +607,8 @@ class FileStore:
         cached copies are not reused); None when it is gone."""
 
         path = os.path.realpath(path)
+        if utf8_text(path) != path:  # a file name that is not UTF-8 (Linux): no row can hold it
+            return None
         try:
             stat = os.stat(path)
         except OSError:
