@@ -186,34 +186,66 @@ def job_strings() -> set[str]:
 ADVICE_SOURCES = ("backend/nn", "modules/anima_presets.py")
 
 
-def advice_strings() -> set[str]:
-    """The model advice and capability sentences: ``Sentence`` templates, the
-    constant ``message`` and ``action_label`` of an ``AdviceItem``, and the
-    constant sentences a ``*_workflow_advice`` function appends."""
-
-    found: set[str] = set()
-
-    def constant(node) -> str | None:
-        return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value.strip() else None
+def _advice_nodes():
+    """``(path, node)`` for every AST node of the advice sources."""
 
     for source in ADVICE_SOURCES:
         base = REPO / source
         assert base.exists(), source
         for path in [base] if base.is_file() else sorted(base.rglob("*.py")):
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-            for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef) and node.name.endswith("workflow_advice"):
-                    for call in ast.walk(node):
-                        if isinstance(call, ast.Call) and getattr(call.func, "attr", None) == "append" and call.args and (text := constant(call.args[0])):
-                            found.add(text)
-                if not isinstance(node, ast.Call):
-                    continue
-                name = node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id if isinstance(node.func, ast.Name) else None
-                if name == "Sentence" and node.args and (text := constant(node.args[0])):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                yield path, node
+
+
+def _constant(node) -> str | None:
+    return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value.strip() else None
+
+
+def _choices(node) -> list[str] | None:
+    """The texts of a constant or of a conditional choosing between constants; None for anything else."""
+
+    if isinstance(node, ast.IfExp):
+        body, orelse = _choices(node.body), _choices(node.orelse)
+        return None if body is None or orelse is None else body + orelse
+    text = _constant(node)
+    return None if text is None else [text]
+
+
+def _advice_items():
+    for path, node in _advice_nodes():
+        if isinstance(node, ast.Call) and _call_name(node) in ("AdviceItem", "advice_cls"):
+            yield path, node
+
+
+def advice_strings() -> set[str]:
+    """The model advice and capability sentences: ``Sentence`` templates, the
+    constant ``message`` and ``action_label`` of an ``AdviceItem`` (or each
+    constant a conditional label chooses between), and the constant
+    sentences a ``*_workflow_advice`` function appends."""
+
+    found: set[str] = set()
+    for _path, node in _advice_nodes():
+        if isinstance(node, ast.FunctionDef) and node.name.endswith("workflow_advice"):
+            for call in ast.walk(node):
+                if isinstance(call, ast.Call) and getattr(call.func, "attr", None) == "append" and call.args and (text := _constant(call.args[0])):
                     found.add(text)
-                elif name in ("AdviceItem", "advice_cls"):
-                    found.update(text for kw in node.keywords if kw.arg in ("message", "action_label") and (text := constant(kw.value)))
+        if isinstance(node, ast.Call) and _call_name(node) == "Sentence" and node.args and (text := _constant(node.args[0])):
+            found.add(text)
+    for _path, node in _advice_items():
+        for kw in node.keywords:
+            if kw.arg == "message" and (text := _constant(kw.value)):
+                found.add(text)
+            elif kw.arg == "action_label":
+                found.update(_choices(kw.value) or ())
     return found
+
+
+def unlisted_action_labels() -> list[str]:
+    """``path:line`` of each ``AdviceItem`` whose ``action_label`` is neither a
+    constant nor a choice between constants (an f-string, say): the SPA looks
+    the label up in the catalog, which cannot hold it."""
+
+    return [f"{path.relative_to(REPO).as_posix()}:{kw.value.lineno}" for path, node in _advice_items() for kw in node.keywords if kw.arg == "action_label" and _choices(kw.value) is None]
 
 
 # Calls that make a rejected value's error, with the index of their message

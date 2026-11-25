@@ -607,7 +607,8 @@ def _evaluate_moss_advice(
                         Sentence("{{variant}} detected with steps={{steps}}, cfg={{cfg}}: distilled/Turbo variants typically work best at 4-16 steps and CFG 1.0 (with SLG automatically disabled at CFG 1).", variant=variant, steps=steps, cfg=cfg)
                     ),
                     patch={"sampler.steps": {"value": target_steps}, "cfg_scale": {"value": 1.0}},
-                    action_label=f"Set {target_steps} steps · CFG 1.0",
+                    # one catalog key per step count: the SPA translates the label as a whole
+                    action_label="Set 4 steps · CFG 1.0" if target_steps == 4 else "Set 16 steps · CFG 1.0" if target_steps == 16 else "Set 8 steps · CFG 1.0",
                 )
             )
     if combined and _MOSS_EDIT_RE.search(combined) and ref_mode == "Disable" and not has_refs:

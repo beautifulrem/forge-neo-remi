@@ -73,14 +73,18 @@ def test_the_model_advice_is_collected(strings, catalog):
     the server formatted their sentences with the values in them, which the
     UI could never translate. A ``Sentence`` keeps its template for it."""
 
-    from remi_core_strings import advice_strings
+    from remi_core_strings import advice_strings, unlisted_action_labels
 
     advice = advice_strings()
     assert advice <= strings
+    # the SPA translates a fix button's label as a catalog key: a label built from values has none
+    assert unlisted_action_labels() == []
     assert {
         "Anima-Turbo checkpoint with CFG {{cfg}} / {{steps}} steps: it is distilled for CFG 1 and 8-12 steps (see the Official Turbo preset); higher values over-cook it.",
         "Requires {{capabilities}} (active model: {{model}})",
         "Set Turbo (10 steps · CFG 1.0)",
+        "Set 4 steps · CFG 1.0",
+        "Set 16 steps · CFG 1.0",
         "Z-Image: reference images are attached while Z-Image Omni/Edit reference mode is disabled.",
     } <= advice
     missing = sorted(text for text in advice if not (catalog.get(text) or "").strip())
