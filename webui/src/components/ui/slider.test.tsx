@@ -18,4 +18,12 @@ describe("Slider", () => {
     expect(classes).toContain("w-18")
     expect(classes.filter((name) => /(^|:)w-full$/.test(name))).toEqual([])
   })
+
+  // `data-vertical:h-full` came after a caller's `h-24` in the stylesheet and won, as the width did.
+  it("takes a height it is given in place of its own when vertical", () => {
+    const { container } = render(<Slider value={[50]} orientation="vertical" getAriaLabel={() => "Opacity"} className="h-24" />)
+    const classes = root(container).className.split(" ")
+    expect(classes).toContain("h-24")
+    expect(classes.filter((name) => /(^|:)h-full$/.test(name))).toEqual([])
+  })
 })

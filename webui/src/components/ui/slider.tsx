@@ -23,9 +23,10 @@ function Slider({
 
   return (
     <SliderPrimitive.Root
-      // A plain `w-full`, so a width the caller gives (`w-18`) replaces it: a `data-horizontal:`
-      // variant comes later in the stylesheet and would win over the caller's class.
-      className={cn("group/slider", orientation === "vertical" ? "data-vertical:h-full" : "w-full", className)}
+      // A plain `w-full` (`h-full` when vertical), so a size the caller gives (`w-18`, `h-24`)
+      // replaces it: a `data-horizontal:` variant comes later in the stylesheet and would win over
+      // the caller's class.
+      className={cn("group/slider", orientation === "vertical" ? "h-full" : "w-full", className)}
       data-slot="slider"
       orientation={orientation}
       defaultValue={defaultValue}
