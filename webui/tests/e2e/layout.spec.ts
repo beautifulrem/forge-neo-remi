@@ -992,6 +992,16 @@ test.describe("no sideways scrolling", () => {
         ),
       )
       .toEqual([])
+
+
+  // The phone's "Insert into" row (its label and two segmented controls) was 400 px wide in English.
+  test("the insert targets fit a phone's row", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await openRoute(page, "networks")
+    const row = page.getByRole("main").getByRole("group", { name: "Insert into" }).first()
+    await expect(row.getByRole("radio", { name: "Negative" })).toBeVisible()
+    const { scrollWidth, clientWidth } = await row.evaluate((element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }))
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth)
   })
 
   // The model metadata form was one column as wide as its longest module name.

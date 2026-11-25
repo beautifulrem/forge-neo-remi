@@ -12,15 +12,19 @@ import { NetworkBrowser } from "@/features/networks/NetworkBrowser"
 import { useNetworksUi } from "@/features/networks/store"
 import { FormTargetSwitch, PromptTargetSwitch } from "@/features/networks/TargetSwitch"
 
-/** Where a prompt card goes: the form, the prompt, and a link to that form. */
-function InsertTargets() {
+/**
+ * Where a prompt card goes: the form, the prompt, and a link to that form. On a phone's row of its
+ * own the label is read out only and the two switches share the row's width.
+ */
+export function InsertTargets({ phone = false }: { phone?: boolean }) {
   const { t } = useTranslation()
   const form = useNetworksUi((s) => s.pageForm)
+  const fit = phone ? "min-w-0 flex-1" : "shrink-0"
   return (
     <>
-      <span className="shrink-0 text-xs text-muted-foreground">{t("Insert into")}</span>
-      <FormTargetSwitch className="shrink-0" />
-      <PromptTargetSwitch className="shrink-0" />
+      <span className={phone ? "sr-only" : "shrink-0 text-xs text-muted-foreground"}>{t("Insert into")}</span>
+      <FormTargetSwitch className={fit} />
+      <PromptTargetSwitch className={fit} />
       <Button variant="ghost" size="sm" render={<a href={routeHref({ name: "generate", tab: form })} />} nativeButton={false} className="hidden shrink-0 text-muted-foreground sm:inline-flex">
         {t("Open {{form}}", { form: t(form) })}
       </Button>
@@ -42,7 +46,7 @@ export default function NetworksPage() {
         {/* Below 2xl the header (model bar, quick settings) has no room: the targets end the kinds row, and on
             a phone, where the kinds are a full-width select, they get a row of their own. */}
         <div className="flex items-center gap-2 overflow-x-auto border-b px-3 py-1.5 md:hidden" role="group" aria-label={t("Insert into")}>
-          <InsertTargets />
+          <InsertTargets phone />
         </div>
         <NetworkBrowser
           surface="page"
