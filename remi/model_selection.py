@@ -165,6 +165,9 @@ def select(key: str, value: Any, apply: Callable[[str, Any], bool] | None = None
 
 
 def _stored(key: str) -> Any:
+    """The pick as stored (a value equal to it is no change: Options.set and the model manager
+    compare it so), not read as a setting."""
+
     from modules import shared
 
     return shared.opts.data.get(key)
@@ -184,7 +187,7 @@ def frozen_pick(key: str, value: Any) -> str | None:
     from modules import shared
     from remi.setting_values import frozen_reason
 
-    if _same_pick(value, shared.opts.data.get(key)):  # unchanged: Options.set and the model manager leave it as it is
+    if _same_pick(value, _stored(key)):  # unchanged: Options.set and the model manager leave it as it is
         return None
     return frozen_reason(shared.opts, key, shared.cmd_opts)
 
