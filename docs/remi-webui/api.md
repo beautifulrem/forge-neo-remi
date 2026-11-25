@@ -401,12 +401,15 @@ What changed underneath, and what it means for clients:
 - `/sdapi/v1/options` cannot change settings marked "restricted"; the
   WebUI's own `PATCH /api/v2/options` can.
 - `/sdapi/v1/options` checks a changed value as `PATCH /api/v2/options`
-  does: its kind, its slider's range and step (a number beyond the range is
-  set to the nearest end, one between steps is rounded: `150.5` for an
-  integer setting stores `151`) and its fixed choices. `null` is checked
-  like any other value (a checkbox stores `false`, a text `""`, a number or
-  a choice refuses it). A list setting without a widget
-  (`disabled_extensions`) takes only a list of names. A value it refuses
+  does: its kind, its slider's range (a number beyond it is set to the
+  nearest end; an integer setting rounds a fraction: `150.5` stores `151`)
+  and its fixed choices. `null` is checked like any other value (a
+  checkbox stores `false`, a text `""`, a multiple choice `[]`; a number,
+  a choice or a list setting without a widget refuses it). A list setting
+  without a widget (`disabled_extensions`) takes only a list of names. A
+  list or object nested deeper than 64 levels is refused for any setting
+  (`PATCH /api/v2/options` too): saving one stopped half way and cut
+  `config.json` short. A value it refuses
   answers `422 {"detail": "invalid settings: …"}` naming each one, and
   nothing in the request is set. A1111 stored any value; a client that
   sent, say, a number where a list belongs now gets the 422. A value equal

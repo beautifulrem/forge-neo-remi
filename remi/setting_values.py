@@ -59,6 +59,30 @@ def encodable(value: Any) -> bool:
     return True
 
 
+MAX_NESTING = 64
+"""How deep a setting's lists and objects may nest. ``Options.save`` writes
+``config.json`` with the recursive ``json.dump`` straight into the file: a
+value nested about a thousand levels deep stopped it half way, leaving a file
+the WebUI could not start from, and any limit set by the stack's depth moves
+with the caller's."""
+
+
+def nested_deeper(value: Any, limit: int = MAX_NESTING) -> bool:
+    """Whether ``value`` holds lists or objects nested deeper than ``limit``
+    levels (read without recursion)."""
+
+    pending = [(value, 1)]
+    while pending:
+        item, depth = pending.pop()
+        children = item.values() if isinstance(item, dict) else item if isinstance(item, (list, tuple)) else None
+        if children is None:
+            continue
+        if depth > limit:
+            return True
+        pending.extend((child, depth + 1) for child in children)
+    return False
+
+
 def bounds(info: Any) -> tuple[float, float] | None:
     """The ``(minimum, maximum)`` a setting's slider offers, if it has both."""
 

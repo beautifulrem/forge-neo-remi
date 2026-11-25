@@ -257,8 +257,10 @@ def check_api_values(opts, values: Mapping[str, Any]) -> dict[str, Any]:
     (nothing is set then). A value equal to the stored one passes as it is, as
     upstream's ``set_config`` skips it (a client posting back what GET
     answered). A setting without a widget that checks it (a ``Json`` node)
-    takes only a value of its default's kind (a list of names where the
-    default is one: ``disabled_extensions: 5`` stopped the next start).
+    takes only a list of its default's kinds where the default is a list (of
+    names when it is empty: ``disabled_extensions: 5`` stopped the next
+    start). A value nested deeper than ``MAX_NESTING`` levels is refused,
+    whatever the setting.
 
     Left as upstream had them: a setting set elsewhere (``interactive=False``:
     ``sd_vae``, whose offered choices are not what a client sends), an
@@ -268,14 +270,19 @@ def check_api_values(opts, values: Mapping[str, Any]) -> dict[str, Any]:
     ``--freeze-settings`` stays ``Options.set``'s call. Here rather than in
     ``remi.server.options``: ``modules/api`` does not import the server."""
 
-    from remi.setting_values import fit
+    from remi.setting_values import MAX_NESTING, fit, nested_deeper
 
     ctx = Context()
     result = dict(values)
     problems: list[ParamError] = []
     for key, value in values.items():
         info = opts.data_labels.get(key)
-        if info is None or value == opts.data.get(key) or getattr(info, "restrict_api", False):
+        if info is None or getattr(info, "restrict_api", False):
+            continue
+        if nested_deeper(value):  # first: even one left unchecked is saved (see MAX_NESTING)
+            problems.append(ParamError(Sentence("nested deeper than {{limit}} levels", limit=MAX_NESTING), owner="settings", param=key))
+            continue
+        if value == opts.data.get(key):
             continue
         try:
             if component_args(info).get("interactive") is False:
@@ -290,8 +297,7 @@ def check_api_values(opts, values: Mapping[str, Any]) -> dict[str, Any]:
         except ParamError as error:
             problems.append(ParamError(error.message, owner="settings", param=key))
             continue
-        except Exception:  # nested past the recursion limit: its save would stop half way
-            problems.append(ParamError("this value cannot be read", owner="settings", param=key))
+        except Exception:  # an extension's choices that fail to build: unchecked, as the page cannot show it either
             continue
         if isinstance(node, nodes.Json) and info.default is not None and fit(info.default, coerced) is info.default and coerced != info.default:
             problems.append(ParamError(Sentence("expected a value like {{default}}", default=repr(info.default)), owner="settings", param=key))

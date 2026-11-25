@@ -667,26 +667,56 @@ def test_sdapi_options_leaves_alone_what_the_settings_page_does_not_check(webui_
         services.close()
 
 
-def test_sdapi_options_refuses_a_value_too_deep_to_check():
-    """A value the check cannot read (nested deeper than the recursion limit) is refused,
-    not a 500: written, it stopped ``config.json``'s save half way."""
-    import pytest
+def test_a_setting_nested_too_deep_is_refused_on_both_routes(webui_tmp, monkeypatch):
+    """A list nested about a thousand levels deep passed the checks (each one recursion-deep
+    enough to read it) and stopped ``Options.save``'s ``json.dump`` half way, deeper in the
+    stack: ``config.json`` was cut short and every setting lost at the next start. Either
+    route now refuses a value nested deeper than ``MAX_NESTING`` levels before anything else,
+    a setting the check otherwise leaves alone included."""
+    from fastapi.testclient import TestClient
 
+    from modules import shared
     from modules.options import OptionInfo
-    from remi.ui import ValidationError
-    from remi.ui.settings import check_api_values
+    from remi.jobs import run_inline
+    from remi.server import Services, create_app
+    from remi.server.auth import Auth
+    from remi.setting_values import MAX_NESTING
 
-    class Opts:
-        data_labels = {"ext_json": OptionInfo([], "A list setting")}
-        data: dict = {"ext_json": []}
-        ext_json: list = []
+    def boom():
+        raise RuntimeError("an extension's component_args")
 
-    deep: list = []
-    for _ in range(100_000):
-        deep = [deep]
-    with pytest.raises(ValidationError) as error:
-        check_api_values(Opts(), {"ext_json": deep})
-    assert "ext_json" in str(error.value)
+    config = webui_tmp / "config.json"
+    monkeypatch.setattr(shared, "config_filename", str(config))
+    monkeypatch.setitem(shared.opts.data_labels, "ext_json", OptionInfo(None, "Extension JSON value"))
+    monkeypatch.setitem(shared.opts.data_labels, "ext_throwing_args", OptionInfo("a", "Broken extension option", component_args=boom))
+    for key in ("ext_json", "ext_throwing_args", "disabled_extensions"):
+        monkeypatch.setitem(shared.opts.data, key, shared.opts.data_labels[key].default)
+    shared.opts.save(str(config))
+    before, stored = config.read_bytes(), dict(shared.opts.data)
+
+    def nested(depth):
+        value: list = []
+        for _ in range(depth - 1):
+            value = [value]
+        return value
+
+    services = Services.create(webui_tmp, dispatch=run_inline, realtime=False, housekeeping=False)
+    try:
+        app = create_app(services=services, auth=Auth(), sdapi=True, start_services=False)
+        with TestClient(app, base_url="http://127.0.0.1:7860", raise_server_exceptions=False) as client:
+            for key in ("ext_json", "ext_throwing_args", "disabled_extensions"):
+                for depth in (MAX_NESTING + 1, 700):
+                    response = client.post("/sdapi/v1/options", json={key: nested(depth)})
+                    assert response.status_code == 422 and key in response.json()["detail"], (key, depth, response.text)
+                    if key != "ext_throwing_args":  # the settings page shows that one as an error, not a field
+                        response = client.patch("/api/v2/options", json={key: nested(depth)})
+                        assert response.status_code == 422, (key, depth, response.text)
+                    assert config.read_bytes() == before and shared.opts.data == stored
+            assert client.post("/sdapi/v1/options", json={"ext_json": nested(MAX_NESTING)}).status_code == 200
+            assert client.patch("/api/v2/options", json={"ext_json": {"a": [1, [2]]}}).status_code == 200
+            assert shared.opts.data["ext_json"] == {"a": [1, [2]]}
+    finally:
+        services.close()
 
 
 def test_sdapi_infotext_fills_request_fields_and_script_args(webui_tmp):
