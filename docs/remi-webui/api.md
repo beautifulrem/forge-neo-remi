@@ -269,7 +269,9 @@ An `image` param takes an upload id (or an output file id). img2img needs
 `init_img` in every mode but "Batch"; "Inpaint" also needs `mask` (alpha 255
 = inpaint; a mask without transparency is read by luminance, white =
 inpaint), "Inpaint upload" needs `mask_upload`, "Inpaint sketch" needs
-`sketch`.
+`sketch`. An upload in a field the mode does not read (the `sketch` in
+"Inpaint", say) is ignored, so an id that is no longer stored there does
+not fail the job.
 
 ### Infotext and presets
 

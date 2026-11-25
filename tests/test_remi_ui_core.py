@@ -310,6 +310,35 @@ def test_badly_shaped_request_bodies_are_validation_errors(webui, tab):
             processing_args(tab, core, scripts)
 
 
+def test_an_upload_the_mode_does_not_read_is_left_alone(webui):
+    """A canvas layer of another mode (the sketch while inpainting with a painted
+    mask, say) may hold an id whose upload is gone: it is not read, so it must
+    not fail the job. The layers the mode reads are still checked."""
+
+    from remi.core.tabs import processing_args
+
+    def resolve(node, upload_id):
+        if upload_id == "stale":
+            raise ui.ParamError(ui.Sentence("unknown upload {{id}}", id=repr(upload_id)))
+        return upload_id
+
+    ctx = ui.Context(resolve_upload=resolve)
+    core, _ = processing_args("img2img", {"mode": "Inpaint", "init_img": "img", "mask": "mask", "sketch": "stale", "mask_upload": "stale", "batch_upload": ["stale"]}, {}, ctx)
+    assert (core["init_img"], core["mask"], core["sketch"], core["mask_upload"], core["batch_upload"]) == ("img", "mask", None, None, [])
+    core, _ = processing_args("img2img", {"mode": "Batch", "batch_source": "upload", "init_img": "stale", "batch_upload": ["img"]}, {}, ctx)
+    assert core["init_img"] is None and core["batch_upload"] == ["img"]
+    core, _ = processing_args("extras", {"mode": "Batch Process", "image": "stale", "image_batch": ["img"]}, {}, ctx)
+    assert core["image"] is None and core["image_batch"] == ["img"]
+    for tab, values, param in (
+        ("img2img", {"mode": "Sketch", "init_img": "img", "sketch": "stale"}, "sketch"),
+        ("img2img", {"mode": "Inpaint upload", "init_img": "img", "mask_upload": "stale"}, "mask_upload"),
+        ("extras", {"mode": "Single Image", "image": "stale"}, "image"),
+    ):
+        with pytest.raises(ui.ValidationError) as caught:
+            processing_args(tab, values, {}, ctx)
+        assert [error["param"] for error in caught.value.to_json()["errors"]] == [param]
+
+
 def test_named_img2img_resolves_uploads_and_mode(webui, anima_checkpoint):
     from modules import img2img
     from remi.core import JobContext

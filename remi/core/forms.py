@@ -547,6 +547,31 @@ REQUIRED_INPUTS: dict[str, tuple[tuple[str, str, ui.conditions.Condition], ...]]
 }
 
 
+# The uploads each mode reads, (param, when): the canvas keeps every layer while the mode
+# changes, so a layer the mode does not read may name an upload that is gone. Outside ``when``
+# the request's value is not resolved (:func:`unread_uploads`), so it cannot fail the job.
+UPLOAD_INPUTS: dict[str, tuple[tuple[str, ui.conditions.Condition], ...]] = {
+    "img2img": (
+        ("init_img", ui.param("mode", in_=list(_IMG2IMG_IMAGE_MODES))),
+        ("sketch", ui.param("mode", in_=["Sketch", "Inpaint sketch"])),
+        ("mask", ui.param("mode", eq="Inpaint")),
+        ("mask_upload", ui.param("mode", eq="Inpaint upload")),
+        ("batch_upload", ui.all_of(ui.param("mode", eq="Batch"), ui.param("batch_source", eq="upload"))),
+    ),
+    "extras": (
+        ("image", ui.param("mode", eq="Single Image")),
+        ("image_batch", ui.param("mode", eq="Batch Process")),
+    ),
+}
+
+
+def unread_uploads(tab: str, values: Mapping[str, Any]) -> list[str]:
+    """The upload inputs of a coerced core form that its mode does not read
+    (:data:`UPLOAD_INPUTS`): processing gets their defaults."""
+
+    return [name for name, when in UPLOAD_INPUTS.get(tab, ()) if not ui.evaluate(when, values)]
+
+
 # The inputs that name a path on the server, (param, when). ``--hide-ui-dir-config`` hides them,
 # and :func:`check_core` refuses a request that still uses one: the upstream runners assert this
 # for directories, but a video path was opened as given.

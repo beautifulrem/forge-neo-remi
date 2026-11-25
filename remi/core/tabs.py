@@ -140,6 +140,8 @@ def processing_args(tab: str, core: Any, scripts_values: Any, ctx: Context | Non
         values = {"script": _selected_script(layout, core, ctx)}
     else:
         problems += forms.check_core(tab, values)
+        # a layer the mode does not read is not resolved: its upload may be gone
+        values = {**values, **{name: layout.by_name[name].resolve_default(ctx) for name in forms.unread_uploads(tab, values)}}
         try:
             core_args = dict(zip(layout.names, layout.args_for(values, ctx), strict=True))
         except ValidationError as error:
