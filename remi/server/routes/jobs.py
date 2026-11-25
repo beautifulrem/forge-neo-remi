@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from typing import Any
 
@@ -63,7 +62,8 @@ def with_missing_outputs(items: list[dict[str, Any]], files: FileStore) -> list[
     """Mark the outputs whose file is gone (``missing``), so clients show a
     placeholder instead of requesting a thumbnail that answers 404."""
 
-    gone: dict[str, bool] = {}
+    ids = [output.get("id") for item in items for output in item.get("outputs") or [] if isinstance(output, dict)]
+    present = files.get_many(file_id for file_id in ids if file_id)
     for item in items:
         outputs = item.get("outputs") or []
         marked = []
@@ -72,10 +72,7 @@ def with_missing_outputs(items: list[dict[str, Any]], files: FileStore) -> list[
             if not file_id:
                 marked.append(output)
                 continue
-            if file_id not in gone:
-                record = files.get(file_id)
-                gone[file_id] = record is None or not os.path.isfile(record.path)
-            marked.append({**output, "missing": True} if gone[file_id] else output)
+            marked.append(output if file_id in present else {**output, "missing": True})
         item["outputs"] = marked
     return items
 

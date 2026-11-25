@@ -286,6 +286,22 @@ class FileStore:
             return None
         return record
 
+    def get_many(self, file_ids: Iterable[str]) -> dict[str, FileRecord]:
+        """The records of those ``file_ids`` whose files still exist (as
+        :meth:`get`, one query per 500 ids)."""
+
+        wanted = list(dict.fromkeys(file_id for file_id in file_ids if isinstance(file_id, str) and ID_RE.match(file_id)))
+        found: dict[str, FileRecord] = {}
+        for start in range(0, len(wanted), 500):
+            chunk = wanted[start : start + 500]
+            with self._lock:
+                rows = self._db.execute(f"SELECT {_COLUMNS} FROM files WHERE id IN ({','.join('?' * len(chunk))})", chunk).fetchall()
+            for row in rows:
+                record = FileRecord(*row)
+                if os.path.isfile(record.path):
+                    found[record.id] = record
+        return found
+
     def _insert(self, record: FileRecord, sha256: str | None = None) -> FileRecord:
         with self._lock:
             self._db.execute(

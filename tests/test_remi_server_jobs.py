@@ -95,6 +95,24 @@ def test_outputs_whose_file_is_gone_are_marked_missing(server):
     assert server.client.get(f"/api/v2/jobs/{created['job_id']}").json()["outputs"][0]["missing"] is True
 
 
+def test_a_page_of_jobs_looks_its_outputs_up_in_one_query(server):
+    import os
+
+    made = [submit(server, f"fox {index}")["job_id"] for index in range(3)]
+    assert server.services.queue.wait_idle()
+    gone = server.client.get(f"/api/v2/jobs/{made[1]}").json()["outputs"][0]["id"]
+    os.remove(server.services.files.get(gone).path)
+    statements: list[str] = []
+    db = server.services.files._db
+    db.set_trace_callback(statements.append)
+    try:
+        listed = {job["id"]: job for job in server.client.get("/api/v2/jobs").json()["items"]}
+    finally:
+        db.set_trace_callback(None)
+    assert [[bool(output.get("missing")) for output in listed[job_id]["outputs"]] for job_id in made] == [[False], [True], [False]]
+    assert len([sql for sql in statements if "FROM files" in sql]) == 1
+
+
 def test_the_executor_gets_the_named_values_and_an_upload_resolver(server):
     submit(server, "dog", priority=3)
     assert server.services.queue.wait_idle()
