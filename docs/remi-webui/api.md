@@ -60,7 +60,10 @@ Contents: [Conventions](#conventions) · [Authentication](#authentication) ·
   state, 413 too large, 415 unsupported type, 403 refused, 401 not logged in).
   Extension-management errors add `template` and `params` in the same way.
 - **Paging.** Lists return `{"items": [...], "next_cursor": "...", "total": n}`;
-  pass `cursor=<next_cursor>` for the next page. Cursors are opaque.
+  pass `cursor=<next_cursor>` for the next page. Cursors are opaque. A few
+  short lists are not paged and answer a plain JSON array: `GET /api/v2/pages`,
+  `/styles`, `/networks`, `/queue/items`, `/queue/import`,
+  `/extensions/config-states` and `/prompt-tools/collections`.
 - **Ids.** Jobs, uploads and output files have opaque string ids. Files are
   only ever served by id (`/api/v2/files/{id}`), never by path.
 

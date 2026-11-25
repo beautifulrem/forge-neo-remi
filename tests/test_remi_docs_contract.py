@@ -69,3 +69,16 @@ def test_the_event_table_lists_every_status_a_failed_job_is_published_with():
     published = _published_statuses("job.failed")
     assert {"failed", "cancelled", "interrupted"} <= published
     assert sorted(published - listed) == []
+
+
+def test_the_paging_rule_names_every_list_that_is_a_plain_array():
+    """Lists answer ``{items, next_cursor, total}``, except a few short unpaged
+    ones that have always been JSON arrays: api.md names each of them."""
+
+    spec = json.loads((ROOT / "webui" / "src" / "api" / "openapi.json").read_text(encoding="utf-8"))
+    arrays = {path.removeprefix("/api/v2") for path, operations in spec["paths"].items() if path.startswith("/api/v2/") and operations.get("get", {}).get("responses", {}).get("200", {}).get("content", {}).get("application/json", {}).get("schema", {}).get("type") == "array"}
+    text = (DOCS / "api.md").read_text(encoding="utf-8")
+    paging = text[text.index("- **Paging.**") : text.index("- **Ids.**")]
+    named = set(re.findall(r"`(?:GET /api/v2)?(/[\w/-]+)`", paging))
+    assert len(arrays) == 7
+    assert sorted(arrays - named) == []
