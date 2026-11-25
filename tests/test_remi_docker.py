@@ -10,6 +10,7 @@ and leaves Gradio-era files (``ui-config.json``) out.
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
 import shutil
@@ -101,6 +102,68 @@ def test_all_user_data_is_in_the_data_folder():
 @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
 def test_the_entrypoint_parses():
     assert subprocess.run(["bash", "-n", str(DOCKER / "entrypoint.sh")], capture_output=True).returncode == 0
+
+
+def run_entrypoint(tmp_path: Path, commandline_args: str | None, *args: str) -> tuple[subprocess.CompletedProcess[str], list[str] | None]:
+    """docker/entrypoint.sh with a ``python`` on PATH that records its arguments: the result
+    and what the launcher would have received (None when it was not started)."""
+
+    stubs = tmp_path / "stubs"
+    stubs.mkdir(exist_ok=True)
+    record = tmp_path / "launcher-args"
+    record.unlink(missing_ok=True)
+    stub = stubs / "python"
+    stub.write_text(f'#!/bin/sh\nfor arg in "$@"; do printf \'%s\\0\' "$arg"; done > "{record}"\n', encoding="utf-8")
+    stub.chmod(0o755)
+    env = {key: value for key, value in os.environ.items() if key != "COMMANDLINE_ARGS"}
+    env["PATH"] = f"{stubs}{os.pathsep}{env.get('PATH', '')}"
+    env["REMI_DATA_DIR"] = str(tmp_path / "data")
+    if commandline_args is not None:
+        env["COMMANDLINE_ARGS"] = commandline_args
+    result = subprocess.run(["bash", str(DOCKER / "entrypoint.sh"), *args], env=env, capture_output=True, text=True, timeout=60)
+    received = record.read_bytes().decode().split("\0")[:-1] if record.exists() else None
+    return result, received
+
+
+@pytest.mark.skipif(shutil.which("bash") is None or os.name == "nt", reason="needs bash")
+def test_the_entrypoint_splits_commandline_args_like_a_shell(tmp_path):
+    """COMMANDLINE_ARGS was split on blanks (``read -ra``), so a quoted value with a space
+    (a folder name, a prompt) reached the launcher as several arguments."""
+
+    base = ["/home/remi/app/launch.py", "--listen", "--data-dir", str(tmp_path / "data")]
+    result, received = run_entrypoint(tmp_path, "--x \"a b\" --y 'c d' e\\ f", "--last")
+    assert result.returncode == 0, result.stderr
+    assert received == [*base, "--x", "a b", "--y", "c d", "e f", "--last"]
+    assert (tmp_path / "data" / "models" / "Lora").is_dir() and (tmp_path / "data" / "extensions").is_dir()
+    for empty in (None, "", "   "):
+        result, received = run_entrypoint(tmp_path, empty)
+        assert result.returncode == 0 and received == base, (empty, result.stderr)
+    # an unbalanced quote stops the container instead of starting without some of the options
+    result, received = run_entrypoint(tmp_path, '--auth-file "/run/remi/logins.txt')
+    assert result.returncode != 0 and received is None
+    assert "COMMANDLINE_ARGS" in result.stderr and "logins.txt" not in result.stderr
+
+
+@pytest.mark.skipif(shutil.which("bash") is None or os.name == "nt", reason="needs bash")
+def test_the_entrypoint_prepares_the_data_folder_the_launcher_uses(tmp_path):
+    """A --data-dir among the launch options wins (argparse takes the last one), so the model and
+    output folders are made there, not under $REMI_DATA_DIR."""
+
+    for commandline_args, args, folder in ((f"--data-dir {tmp_path / 'other'}", (), "other"), (None, (f"--data-dir={tmp_path / 'third'}",), "third"), (f"--data-dir {tmp_path / 'other'}", ("--data-dir", str(tmp_path / "last")), "last")):
+        result, received = run_entrypoint(tmp_path, commandline_args, *args)
+        assert result.returncode == 0, result.stderr
+        assert received is not None and received[:4] == ["/home/remi/app/launch.py", "--listen", "--data-dir", str(tmp_path / "data")]
+        assert (tmp_path / folder / "models" / "Stable-diffusion").is_dir() and (tmp_path / folder / "output").is_dir(), folder
+        assert not (tmp_path / "data").exists(), folder
+
+
+def test_the_readme_names_the_data_folder_variable():
+    """The entrypoint passes ``--data-dir "$REMI_DATA_DIR"`` and prepares that folder (or the last
+    --data-dir of the launch options): the README says which variable names it and its default."""
+
+    data = section(README, "## Data")
+    assert "`REMI_DATA_DIR`" in data and "`/home/remi/data`" in data and "-e REMI_DATA_DIR=" in data
+    assert "REMI_DATA_DIR=/home/remi/data" in DOCKERFILE and '--data-dir "$REMI_DATA_DIR"' in ENTRYPOINT
 
 
 def test_the_entrypoint_runs_from_a_windows_checkout():
