@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from remi.files import connect, decode_cursor, encode_cursor
+from remi.jobs.texts import NOT_REPLAYABLE, SERVER_STOPPED
 
 QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED, INTERRUPTED = "queued", "running", "completed", "failed", "cancelled", "interrupted"
 STATUSES = (QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED, INTERRUPTED)
@@ -294,7 +295,7 @@ class JobStore:
         with self._lock:
             self._db.execute(
                 "UPDATE jobs SET status = ?, finished = ?, error = COALESCE(error, ?) WHERE status = ? AND replayable = 0",
-                (CANCELLED, time.time(), "not replayable: its arguments do not map to the current parameters", QUEUED),
+                (CANCELLED, time.time(), NOT_REPLAYABLE, QUEUED),
             )
             row = self._db.execute(f"SELECT id FROM jobs WHERE status = ? ORDER BY {_QUEUE_ORDER} LIMIT 1", (QUEUED,)).fetchone()
             if row is None:
@@ -519,7 +520,7 @@ class JobStore:
         """Mark jobs left running by a previous process interrupted."""
 
         with self._lock:
-            return self._db.execute("UPDATE jobs SET status = ?, finished = ?, error = ? WHERE status = ?", (INTERRUPTED, time.time(), "the server stopped while the job ran", RUNNING)).rowcount
+            return self._db.execute("UPDATE jobs SET status = ?, finished = ?, error = ? WHERE status = ?", (INTERRUPTED, time.time(), SERVER_STOPPED, RUNNING)).rowcount
 
     def referenced_strings(self) -> set[str]:
         """Every string value in the queued jobs' parameters (upload ids the

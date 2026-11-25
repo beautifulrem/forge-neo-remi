@@ -31,6 +31,7 @@ from remi.files import FileStore
 from remi.jobs import completion
 from remi.jobs.runner import Executor, JobResult, run_job, run_on_main_thread
 from remi.jobs.store import CANCELLED, COMPLETED, FAILED, INTERRUPTED, QUEUED, RUNNING, Job, JobStore
+from remi.jobs.texts import DELETED, END_NOT_SAVED, MODEL_NOT_LOADED, OUT_OF_MEMORY
 from remi.realtime import EventBus, JobRef
 
 log = logging.getLogger(__name__)
@@ -532,7 +533,7 @@ class JobQueue:
                 # never saved (the store failed). It is over; record it so it can go.
                 if self.get(job_id).status == RUNNING:
                     log.warning("job %s was left running by a store failure; it is marked interrupted", job_id)
-                    message = "the job's end could not be saved"
+                    message = END_NOT_SAVED
                     ended = self.store.finish(job_id, INTERRUPTED, error=message)
                     self._pending_done(job)  # the worker never got as far as dropping it from /internal/pending-tasks
                     # whoever waits for it (a pipeline stage) learns that it ended, as from the worker
@@ -543,7 +544,7 @@ class JobQueue:
                     self._pending_done(job)
                     self._changed()
                     # it never ran: tell whoever waits for it (a pipeline stage) that it ended
-                    self._notify_finished(replace(job, status=CANCELLED, error="deleted from the queue"))
+                    self._notify_finished(replace(job, status=CANCELLED, error=DELETED))
                 return
             # the worker claimed it between the read and the delete (the store keeps running
             # jobs): cancel it as the running job it now is
@@ -902,7 +903,7 @@ class JobQueue:
                 sd_models.unload_model_weights()
             except Exception:
                 log.exception("unloading the model after running out of memory")
-            return "Out of memory: the model was unloaded"
+            return OUT_OF_MEMORY
         log.error("job failed", exc_info=error)
         return f"{type(error).__name__}: {error}"
 
@@ -951,7 +952,7 @@ class JobQueue:
             self.bus.publish("model.loaded", model=model)
         elif self._current is None:
             self._loading_model = None
-            self.bus.publish("model.loaded", model=model, error="the model was not loaded")
+            self.bus.publish("model.loaded", model=model, error=MODEL_NOT_LOADED)
 
     # endregion
 

@@ -172,10 +172,19 @@ def message_strings() -> set[str]:
     return found
 
 
+def job_strings() -> set[str]:
+    """The fixed sentences a job or a model load ends with (shown in the
+    history and the failure toasts)."""
+
+    from remi.jobs.texts import JOB_TEXTS
+
+    return set(JOB_TEXTS)
+
+
 def core_strings(opts) -> set[str]:
     """Everything the core catalog must translate (data names left out)."""
 
-    strings = form_strings() | settings_strings(opts) | message_strings()
+    strings = form_strings() | settings_strings(opts) | message_strings() | job_strings()
     dynamic = _dynamic_names()
     return {text for text in strings if text not in dynamic and not _is_data(text)}
 

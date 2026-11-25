@@ -944,5 +944,11 @@
   "Compatibility: {{notes}}": "兼容性：{{notes}}",
   "Action {{name}} failed: {{error}}": "操作 {{name}} 失败：{{error}}",
   "Action {{name}} timed out after {{seconds}} s": "操作 {{name}} 超时（{{seconds}} 秒）",
-  "the setting rejected the value": "该设置不接受这个值"
+  "the setting rejected the value": "该设置不接受这个值",
+  "the server stopped while the job ran": "任务运行时服务器停止了",
+  "Out of memory: the model was unloaded": "内存不足：模型已卸载",
+  "the job's end could not be saved": "未能保存任务的结束状态",
+  "deleted from the queue": "已从队列中删除",
+  "not replayable: its arguments do not map to the current parameters": "无法重放：其参数与当前参数对应不上",
+  "the model was not loaded": "模型未能加载"
 }

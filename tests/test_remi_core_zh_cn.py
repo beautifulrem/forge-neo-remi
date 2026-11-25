@@ -56,6 +56,17 @@ def test_the_collector_sees_the_whole_ui(strings):
     assert not any(text.startswith(("prioritized_callbacks_", "base/")) for text in strings)
 
 
+def test_the_sentences_a_job_ends_with_are_collected(strings, catalog):
+    """The history and the failure toasts show them translated (the job's
+    own exception text stays as it is)."""
+
+    from remi.jobs.texts import JOB_TEXTS
+
+    assert set(JOB_TEXTS) <= strings
+    assert {"the server stopped while the job ran", "Out of memory: the model was unloaded", "the model was not loaded"} <= set(JOB_TEXTS)
+    assert all((catalog.get(text) or "").strip() for text in JOB_TEXTS)
+
+
 def test_the_callbacks_section_keeps_the_vae_explanation():
     """The Callbacks section's help once reused the key ``sd_vae_explanation``
     and replaced the VAE section's explanation."""
