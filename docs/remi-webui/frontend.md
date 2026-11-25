@@ -279,7 +279,9 @@ imperatively).
   dialog sideways (the backups, the model metadata editor).
 - A running job's progress shows once where the user looks: over the stage
   (`ProgressOverlay`, which registers itself in
-  `features/progress/stage-overlay.ts`), and in the run bar's status line
+  `features/progress/stage-overlay.ts`; in a short window, a phone held
+  sideways, one line along the stage's bottom edge, clear of the picture's
+  middle), and in the run bar's status line
   only while the stage does not show it (img2img's Source view, the progress
   bar turned off), so the form does not move for the length of a job. The
   header's hairline is the global indicator on every page.

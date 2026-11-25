@@ -781,6 +781,31 @@ for (const [width, height] of [
   })
 }
 
+// Held sideways the stage is short, and the progress block over its lower part covered the middle of
+// the picture: in a short window the progress is a strip along the stage's bottom edge.
+for (const [width, height] of [
+  [844, 390],
+  [932, 430],
+  [1280, 720],
+] as const) {
+  test(`a running job's progress leaves the middle of the stage clear at ${width}×${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height })
+    await openGenerate(page)
+    await page.keyboard.press(`${mod}+Enter`)
+    const progress = page.getByRole("progressbar", { name: "Generation progress" })
+    await expect(progress).toBeVisible()
+    const covers = await progress.evaluate((bar) => {
+      const overlay = bar.closest("[data-slot=stage-progress]")!
+      const stage = overlay.parentElement!.getBoundingClientRect()
+      const box = overlay.getBoundingClientRect()
+      const middle = stage.top + stage.height / 2
+      return box.top <= middle && box.bottom >= middle
+    })
+    expect(covers, "the progress covers the middle of the stage").toBe(false)
+    await page.getByRole("button", { name: "Interrupt" }).click()
+  })
+}
+
 // The reset dot (a changed value's way back to its default) was a 24 × 20 px target between a
 // label and the row's controls: it takes the room up to them, never reaching one.
 for (const [width, height] of [

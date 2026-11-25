@@ -13,7 +13,7 @@ import { api } from "@/api/endpoints"
 import { progressFraction, type RunningJob } from "@/api/progress"
 import { useWs } from "@/api/ws"
 import { Button } from "@/components/ui/button"
-import { useKeyboardHints } from "@/lib/use-media-query"
+import { useKeyboardHints, useMediaQuery } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { selectedItem, useSession } from "@/features/gallery/session-store"
 import { InfotextPanel } from "@/features/infotext/InfotextPanel"
@@ -29,23 +29,44 @@ import { useOwnRunningJob } from "./hooks"
 import { LivePreview } from "./LivePreview"
 import { viewfinderMetrics } from "./viewfinder"
 
+/** A short window (a phone held sideways): the empty viewfinder gives up its frame's room, the progress its block. */
+const SHORT_WINDOW = "(max-height: 32rem)"
+
 function ProgressOverlay({ job, tab }: { job: RunningJob; tab: GenerateTab }) {
   const { t } = useTranslation()
   useShowsStageProgress(tab)
+  // A short stage's picture is not much taller than the progress block over its lower part, which
+  // then covered its middle: there the progress is one line along the stage's bottom edge.
+  const edge = useMediaQuery(SHORT_WINDOW)
   const fraction = progressFraction(job) ?? 0
   const eta = formatEta(job.eta)
-  return (
-    // No backdrop-filter: the preview under it changes every step, and a blur would be redrawn with it.
-    <div className="absolute inset-x-3 bottom-3 rounded-md bg-background/92 px-3 pt-2 pb-2.5">
+  const facts = (
+    <>
+      <span className="min-w-0 truncate">{stepText(job)}</span>
+      {job.jobCount && job.jobCount > 1 ? (
+        <span className="shrink-0 text-muted-foreground">{t("Batch {{index}} of {{count}}", { index: (job.jobNo ?? 0) + 1, count: job.jobCount })}</span>
+      ) : null}
+    </>
+  )
+  const percent = <span className={cn("shrink-0 font-medium", !edge && "ml-auto")}>{Math.round(fraction * 100)}%</span>
+  const time = eta ? <span className="shrink-0 text-muted-foreground">{t("ETA {{eta}}", { eta })}</span> : null
+  const sheet = <ExposureSheet step={job.step} steps={job.steps} fraction={fraction} aria-label={t("Generation progress")} className={edge ? "h-1.5 min-w-8 flex-1" : undefined} />
+  // No backdrop-filter: the preview under it changes every step, and a blur would be redrawn with it.
+  return edge ? (
+    <div data-slot="stage-progress" data-placement="edge" className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-background/92 px-2.5 py-1 text-xs tabular-nums">
+      {facts}
+      {sheet}
+      {percent}
+      {time}
+    </div>
+  ) : (
+    <div data-slot="stage-progress" data-placement="float" className="absolute inset-x-3 bottom-3 rounded-md bg-background/92 px-3 pt-2 pb-2.5">
       <div className="mb-1.5 flex items-baseline gap-3 text-xs tabular-nums">
-        <span className="truncate">{stepText(job)}</span>
-        {job.jobCount && job.jobCount > 1 ? (
-          <span className="shrink-0 text-muted-foreground">{t("Batch {{index}} of {{count}}", { index: (job.jobNo ?? 0) + 1, count: job.jobCount })}</span>
-        ) : null}
-        <span className="ml-auto shrink-0 font-medium">{Math.round(fraction * 100)}%</span>
-        {eta ? <span className="shrink-0 text-muted-foreground">{t("ETA {{eta}}", { eta })}</span> : null}
+        {facts}
+        {percent}
+        {time}
       </div>
-      <ExposureSheet step={job.step} steps={job.steps} fraction={fraction} aria-label={t("Generation progress")} />
+      {sheet}
     </div>
   )
 }

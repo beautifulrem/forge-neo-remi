@@ -2,6 +2,7 @@
 import { QueryClientProvider } from "@tanstack/react-query"
 import { render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { useProgress } from "@/api/progress"
 import { keys, queryClient } from "@/api/queries"
 import { useSession } from "@/features/gallery/session-store"
 import { TOUCH_ONLY_QUERY } from "@/lib/use-media-query"
@@ -30,6 +31,7 @@ describe("Stage", () => {
   afterEach(() => {
     vi.restoreAllMocks()
     queryClient.clear()
+    useProgress.setState({ running: null, owned: {} })
   })
 
   it("asks for the keyboard shortcut where there is a keyboard", () => {
@@ -43,5 +45,27 @@ describe("Stage", () => {
     renderStage()
     expect(screen.getByText("Write a prompt, then tap Generate")).toBeInTheDocument()
     expect(screen.queryByText(/press|⌘|Ctrl/)).toBeNull()
+  })
+
+  describe("while this tab's job runs", () => {
+    beforeEach(() => useProgress.setState({ running: { jobId: "job-1", step: 6, steps: 20, eta: 12 }, owned: { "job-1": "txt2img" } }))
+    const overlay = () => screen.getByRole("progressbar", { name: "Generation progress" }).closest<HTMLElement>("[data-slot=stage-progress]")!
+
+    it("lays the progress over the lower part of the stage", () => {
+      renderStage()
+      expect(overlay().dataset.placement).toBe("float")
+      expect(overlay()).toHaveTextContent("30%")
+    })
+
+    // Held sideways (844×390) the stage is short, and the progress block over its lower part covered
+    // the middle of the picture: in a short window it is a strip along the bottom edge.
+    it("keeps the progress to a strip along the bottom edge in a short window", () => {
+      mediaMatching("(max-height: 32rem)")
+      renderStage()
+      expect(overlay().dataset.placement).toBe("edge")
+      expect(overlay().className.split(/\s+/)).toEqual(expect.arrayContaining(["inset-x-0", "bottom-0"]))
+      expect(overlay()).toHaveTextContent("30%")
+      expect(overlay()).toHaveTextContent("ETA")
+    })
   })
 })
