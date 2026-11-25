@@ -267,6 +267,15 @@ def test_the_docs_say_the_container_refuses_extension_installs():
         assert "--enable-insecure-extension-access" in text and "extensions/" in text, text[:80]
 
 
+def test_the_readme_says_a_cuda_version_needs_its_wheels():
+    """The base image's CUDA must be the wheels' CUDA (test_pytorch_and_pnpm_follow_the_launcher):
+    the README says that changing CUDA_VERSION means changing the PyTorch arguments with it."""
+
+    arguments = readme_paragraph("Build arguments:")
+    rule = arguments[arguments.index("Changing `CUDA_VERSION`") :]
+    assert "`TORCH_INDEX_URL`" in rule and "cuXY" in rule and "`TORCH_PACKAGES`" in rule, rule
+
+
 def test_the_rocm_recipe_is_the_same_image_with_rocm_pytorch():
     """docker/Dockerfile.rocm (upstream 2900d594, translated): the same
     stages, data folder, launcher run and entrypoint; only the base image and

@@ -36,7 +36,10 @@ context has no `.git`); `docker inspect --format
 
 Build arguments: `CUDA_VERSION` (base image, default `13.0.0`), `NODE_VERSION`
 (default `24`), `PNPM_VERSION` (default `12`), `TORCH_INDEX_URL` and
-`TORCH_PACKAGES` (default: the launcher's Linux PyTorch build). The ROCm recipe
+`TORCH_PACKAGES` (default: the launcher's Linux PyTorch build). Changing
+`CUDA_VERSION` needs the matching `TORCH_INDEX_URL` (`…/whl/cuXY` for CUDA X.Y)
+and `TORCH_PACKAGES` (the `+cuXY` builds): the base image's CUDA must be the
+one the PyTorch wheels are built for. The ROCm recipe
 uses `ubuntu:22.04` as its base and takes `TORCH_INDEX` (default `rocm7.2`, an
 index of <https://download.pytorch.org/whl/>) and `TORCH_PACKAGES` (default
 `torch torchvision`) instead of the CUDA arguments.
