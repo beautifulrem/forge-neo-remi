@@ -33,18 +33,18 @@ export function DeleteDialog({ ids, onCancel, onConfirm }: DeleteDialogProps) {
           <AlertDialogTitle>{count === 1 ? t("Remove this image?") : t("Remove {{count}} images?", { count })}</AlertDialogTitle>
           <AlertDialogDescription>
             {deleteFiles
-              ? t("The files are deleted from the output folder. This cannot be undone.")
-              : t("The images leave the gallery; their files stay in the output folder.")}
+              ? t("The files are deleted from the output folder. This cannot be undone.", { count })
+              : t("The images leave the gallery; their files stay in the output folder.", { count })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <label className="flex items-center gap-2 text-sm">
           <Checkbox checked={deleteFiles} onCheckedChange={(checked) => setDeleteFiles(checked === true)} />
-          {t("Also delete the files from disk")}
+          {t("Also delete the files from disk", { count })}
         </label>
         <AlertDialogFooter>
           <AlertDialogCancel ref={cancel}>{t("Cancel")}</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={() => ids && onConfirm(ids, deleteFiles)}>
-            {deleteFiles ? t("Delete files") : t("Remove")}
+            {deleteFiles ? t("Delete files", { count }) : t("Remove")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
