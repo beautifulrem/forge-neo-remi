@@ -311,15 +311,21 @@ def preset_list() -> dict[str, Any]:
     return {"anima": [SAFE_BASE_AESTHETIC_LABEL, *[label for label in PRESETS if label != SAFE_BASE_AESTHETIC_LABEL]], "forge": ui_preset_choices(), "current": setting("forge_preset")}
 
 
-@router.get("/presets/{name:path}", response_model=m.ActionPatch, summary="The form patch of an Anima preset")
+@router.get(
+    "/presets/{name:path}",
+    response_model=m.ActionPatch,
+    responses={422: {"model": m.ValidationErrorBody}, 404: {"model": m.Detail}},
+    summary="The form patch of an Anima preset",
+)
 def preset_patch(name: str, tab: m.FormTab = "txt2img") -> dict[str, Any]:
     from modules.anima_presets import PRESETS, SAFE_BASE_AESTHETIC_LABEL
+    from remi import ui
     from remi.core.presets import anima_preset_patch
 
     if name != SAFE_BASE_AESTHETIC_LABEL and name not in PRESETS:
         raise not_found(f"no preset {name!r}")
     if tab == "extras":
-        raise HTTPException(status_code=422, detail="presets apply to txt2img and img2img")
+        raise ui.ValidationError([ui.ParamError("presets apply to txt2img and img2img", param="tab")])
     return anima_preset_patch(tab, name)
 
 

@@ -1039,5 +1039,6 @@
   "unknown script": "未知的脚本",
   "unknown script {{title}}": "未知的脚本 {{title}}",
   "scripts: expected an object of values by script id, got {{type}}": "scripts：应为以脚本 id 为键的取值对象，实际为 {{type}}",
-  "{{given}} values for {{expected}} params": "{{expected}} 个参数却给了 {{given}} 个值"
+  "{{given}} values for {{expected}} params": "{{expected}} 个参数却给了 {{given}} 个值",
+  "presets apply to txt2img and img2img": "预设只适用于 txt2img 和 img2img"
 }

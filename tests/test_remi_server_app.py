@@ -227,7 +227,16 @@ def test_presets(server):
     label = listed["anima"][0]
     patch = server.client.get(f"/api/v2/presets/{label}", params={"tab": "txt2img"})
     assert patch.status_code == 200 and isinstance(patch.json(), dict)
-    assert server.client.get("/api/v2/presets/no such preset").status_code == 404
+    missing = server.client.get("/api/v2/presets/no such preset")
+    assert missing.status_code == 404 and isinstance(missing.json()["detail"], str)
+    # A tab presets do not apply to is a rejected value: the §3 error body, as api.md promises for a 422
+    extras = server.client.get(f"/api/v2/presets/{label}", params={"tab": "extras"})
+    assert extras.status_code == 422
+    assert extras.json() == {"errors": [{"owner": None, "param": "tab", "message": "presets apply to txt2img and img2img"}]}
+    # Both answers are declared in the API description
+    responses = server.client.get("/openapi.json").json()["paths"]["/api/v2/presets/{name}"]["get"]["responses"]
+    assert responses["422"]["content"]["application/json"]["schema"]["$ref"].endswith("/ValidationErrorBody")
+    assert responses["404"]["content"]["application/json"]["schema"]["$ref"].endswith("/Detail")
 
 
 def test_settings_refresh_action(server, webui):
