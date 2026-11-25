@@ -135,6 +135,18 @@ imperatively).
   a panel marked `aria-modal="false"` (the Networks drawer) and a dialog
   fading out (`data-closed`) are not. Escape is another matter: an open
   popover or menu takes it (`escapeIsFree` in `pages/generate/shortcuts.ts`).
+  While a modal is open the page behind it is `inert`
+  (`components/ui/modal-inert.tsx`, the `render` of the kit's dialog, alert
+  dialog and sheet popups and of the image viewer): Base UI's focus guards
+  send Tab back inside a frame late, and a held Tab with no repeat delay
+  went on from a guard through the whole page; Base UI only hides that page
+  with `aria-hidden`. The modal's own portal (its backdrop, guards and the
+  popups opened inside it) and the toasts (`data-react-aria-top-layer`)
+  stay live; a modal over another holds the lower one too; the inert goes
+  in the commit that closes the modal, before the focus goes back to the
+  page. A dialog with `modal={false}` or `"trap-focus"` and the Networks
+  drawer leave the page live (`tests/e2e/a11y.spec.ts`, "focus stays in a
+  modal").
 - **Toasts**: `sonner`; use `showToast(level, message)` from `lib/toast.ts`
   for server-provided levels, or `toast` directly. They sit bottom-right,
   lifted above any control pinned to the bottom edge under them

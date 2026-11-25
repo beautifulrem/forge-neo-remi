@@ -7,9 +7,14 @@ import { cn } from "cn"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "@/components/icons"
 import { useTranslation } from "react-i18next"
+import { isFullModal, ModalRootContext, renderModalPopup } from "@/components/ui/modal-inert"
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+  return (
+    <ModalRootContext value={isFullModal(props.modal)}>
+      <DialogPrimitive.Root data-slot="dialog" {...props} />
+    </ModalRootContext>
+  )
 }
 
 function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
@@ -45,7 +50,7 @@ function DialogContent({
   children,
   showCloseButton = true,
   ...props
-}: DialogPrimitive.Popup.Props & {
+}: Omit<DialogPrimitive.Popup.Props, "render"> & {
   showCloseButton?: boolean
 }) {
   const { t } = useTranslation()
@@ -54,6 +59,8 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
+        // the page behind is inert while it is open (modal-inert.tsx)
+        render={renderModalPopup}
         className={cn(
           "fixed top-[calc(50%+(env(safe-area-inset-top)-env(safe-area-inset-bottom))/2)] left-[calc(50%+(env(safe-area-inset-left)-env(safe-area-inset-right))/2)] z-50 grid max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-[calc(100%-2rem-env(safe-area-inset-left)-env(safe-area-inset-right))] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-x-hidden overflow-y-auto rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-150 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className

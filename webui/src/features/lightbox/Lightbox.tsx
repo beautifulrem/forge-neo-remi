@@ -12,6 +12,7 @@ import { useClientOption } from "@/api/app-options"
 import { api } from "@/api/endpoints"
 import type { FormTab } from "@/api/types"
 import { Button } from "@/components/ui/button"
+import { renderModalPopup } from "@/components/ui/modal-inert"
 import { cn } from "@/lib/utils"
 import { type BackdropMode, backdropSurface, nextBackdrop } from "@/features/compare/backdrop-modes"
 import { BackdropPicker } from "@/features/compare/BackdropPicker"
@@ -153,6 +154,8 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
         <Dialog.Backdrop data-slot="viewer-backdrop" className="fixed inset-0 z-50 bg-[oklch(0.1_0_0)] duration-150 data-closed:animate-out data-closed:fade-out-0 data-open:animate-in data-open:fade-in-0" />
         {/* the backdrop fills the screen; the controls stay inside its safe area (a notch, the home indicator) */}
         <Dialog.Popup
+          // a modal like the kit's dialogs: the page behind is inert while it is open
+          render={renderModalPopup}
           aria-label={t("Image viewer")}
           onKeyDown={onKeyDown}
           initialFocus={stage}

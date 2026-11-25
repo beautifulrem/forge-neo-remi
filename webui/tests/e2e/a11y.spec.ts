@@ -4,7 +4,7 @@
  */
 import AxeBuilder from "@axe-core/playwright"
 import { expect, type Locator, type Page, test } from "@playwright/test"
-import { injectFaults, openRoute, presetStorage, type Theme } from "./helpers"
+import { injectFaults, openGenerate, openRoute, presetStorage, type Theme } from "./helpers"
 
 /** A 96×64 solid PNG. */
 const SOURCE_PNG = Buffer.from(
@@ -589,4 +589,137 @@ test.describe("focus after a dialog", () => {
       await expect(opener).toBeFocused()
     })
   }
+})
+
+/**
+ * Presses Tab `count` times as fast as the browser takes key events (a held Tab with no repeat
+ * delay): the presses are sent at once, none waits for the page to answer the one before.
+ */
+async function burstOfTabs(page: Page, count: number) {
+  const cdp = await page.context().newCDPSession(page)
+  const key = { key: "Tab", code: "Tab", windowsVirtualKeyCode: 9, nativeVirtualKeyCode: 9 }
+  await Promise.all(Array.from({ length: count }, (_, i) => [cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", autoRepeat: i > 0, ...key }), cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...key })]).flat())
+  await cdp.detach()
+}
+
+/**
+ * The elements behind an open modal that could still take the focus: every focusable element
+ * outside the modal's portal that is not inert. The toasts stay live (they are still read out).
+ */
+function reachableBehind(modal: Locator) {
+  return modal.evaluate((popup) => {
+    const portal = popup.closest("[data-base-ui-portal]") ?? popup
+    const focusable = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]'
+    return [...document.querySelectorAll<HTMLElement>(focusable)]
+      .filter((element) => !portal.contains(element) && !element.closest("[inert], [data-react-aria-top-layer]") && element.getClientRects().length > 0)
+      .map((element) => `${element.tagName.toLowerCase()} ${element.getAttribute("aria-label") ?? element.textContent?.trim().slice(0, 30) ?? ""}`)
+  })
+}
+
+/** How many elements of the page are inert (not counting inside shadow roots: the token counter's animated digits). */
+function inertCount(page: Page) {
+  return page.evaluate(() => document.querySelectorAll("[inert]").length)
+}
+
+/** Records every element outside the open modal's portal that takes the focus from now on. */
+async function watchFocusLeaving(modal: Locator) {
+  await modal.evaluate((popup) => {
+    const portal = popup.closest("[data-base-ui-portal]") ?? popup
+    const strays: string[] = []
+    ;(window as unknown as { __strays: string[] }).__strays = strays
+    document.addEventListener("focusin", (event) => {
+      const target = event.target as Element
+      if (!portal.contains(target)) strays.push(`${target.tagName.toLowerCase()} ${target.getAttribute("aria-label") ?? target.textContent?.trim().slice(0, 30) ?? ""}`)
+    })
+  })
+  return () => modal.page().evaluate(() => (window as unknown as { __strays: string[] }).__strays)
+}
+
+// Holding Tab with no key repeat delay took the focus out of an open dialog: Base UI's focus guards
+// send it back inside a frame later, and the next press, sooner than that, moved on from the guard
+// to the page behind, where nothing was inert.
+test.describe("focus stays in a modal", () => {
+  test("a dialog keeps it under a burst of Tab presses", async ({ page }) => {
+    await openRoute(page, "txt2img")
+    const inertBefore = await inertCount(page)
+    await page.locator("body").press("?")
+    const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" })
+    await expect(dialog.getByRole("button", { name: "Close" })).toBeFocused()
+    // the page behind takes no focus and no clicks while the dialog is open
+    expect(await reachableBehind(dialog)).toEqual([])
+    const strays = await watchFocusLeaving(dialog)
+    for (const backwards of [false, true]) {
+      if (backwards) await page.keyboard.down("Shift")
+      await burstOfTabs(page, 60)
+      if (backwards) await page.keyboard.up("Shift")
+      await page.waitForTimeout(100) // the guards' frame
+      expect(await strays()).toEqual([])
+      expect(await dialog.evaluate((popup) => popup.contains(document.activeElement))).toBe(true)
+    }
+    await page.keyboard.press("Escape")
+    await expect(dialog).toBeHidden()
+    await expect.poll(() => inertCount(page)).toBe(inertBefore)
+  })
+
+  test("an alert dialog over a dialog holds both, and a popup inside the dialog still works", async ({ page }) => {
+    await openRoute(page, "txt2img")
+    const inertBefore = await inertCount(page)
+    const opener = page.getByRole("button", { name: "Edit styles" })
+    await opener.click()
+    const dialog = page.getByRole("dialog", { name: "Styles" })
+    expect(await reachableBehind(dialog)).toEqual([])
+    // the style select's list opens inside the dialog's portal, and takes the pointer and the keys
+    await dialog.getByRole("combobox").click()
+    const option = page.getByRole("option").first()
+    const name = (await option.textContent())!.trim()
+    await option.click()
+    await expect(dialog.getByRole("combobox")).toContainText(name)
+    const remove = dialog.getByRole("button", { name: "Delete" })
+    await remove.click()
+    const alert = page.getByRole("alertdialog", { name: `Delete style “${name}”?` })
+    await expect(alert.getByRole("button", { name: "Cancel" })).toBeFocused()
+    // the dialog under it is behind it now
+    expect(await reachableBehind(alert)).toEqual([])
+    const strays = await watchFocusLeaving(alert)
+    await burstOfTabs(page, 60)
+    await page.waitForTimeout(100)
+    expect(await strays()).toEqual([])
+    // closed, it gives the focus back to the button in the dialog, which is live again
+    await alert.getByRole("button", { name: "Cancel" }).click()
+    await expect(remove).toBeFocused()
+    expect(await reachableBehind(dialog)).toEqual([])
+    await page.keyboard.press("Escape")
+    await expect(dialog).toBeHidden()
+    await expect(opener).toBeFocused()
+    await expect.poll(() => inertCount(page)).toBe(inertBefore)
+  })
+
+  test("the Networks drawer leaves the page live", async ({ page }) => {
+    await openGenerate(page)
+    const inertBefore = await inertCount(page)
+    await page.locator("body").press("Alt+N")
+    const drawer = page.getByRole("dialog", { name: "Networks" })
+    await expect(drawer).toHaveAttribute("aria-modal", "false")
+    await expect(drawer.getByRole("searchbox").first()).toBeFocused()
+    await expect.poll(() => inertCount(page)).toBe(inertBefore)
+    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true })
+    await prompt.click()
+    await expect(prompt).toBeFocused()
+  })
+
+  test("a sheet keeps it under a burst of Tab presses @phone", async ({ page }) => {
+    await openRoute(page, "txt2img")
+    const inertBefore = await inertCount(page)
+    await page.getByRole("button", { name: "More", exact: true }).click()
+    const sheet = page.getByRole("dialog", { name: "More" })
+    await expect(sheet).toBeVisible()
+    expect(await reachableBehind(sheet)).toEqual([])
+    const strays = await watchFocusLeaving(sheet)
+    await burstOfTabs(page, 60)
+    await page.waitForTimeout(100)
+    expect(await strays()).toEqual([])
+    await page.keyboard.press("Escape")
+    await expect(sheet).toBeHidden()
+    await expect.poll(() => inertCount(page)).toBe(inertBefore)
+  })
 })

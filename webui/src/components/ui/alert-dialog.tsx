@@ -5,6 +5,7 @@ import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog
 import { cn } from "cn"
 
 import { Button } from "@/components/ui/button"
+import { renderModalPopup } from "@/components/ui/modal-inert"
 
 function AlertDialog({ ...props }: AlertDialogPrimitive.Root.Props) {
   return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />
@@ -42,7 +43,7 @@ function AlertDialogContent({
   className,
   size = "default",
   ...props
-}: AlertDialogPrimitive.Popup.Props & {
+}: Omit<AlertDialogPrimitive.Popup.Props, "render"> & {
   size?: "default" | "sm"
 }) {
   return (
@@ -50,6 +51,8 @@ function AlertDialogContent({
       <AlertDialogOverlay />
       <AlertDialogPrimitive.Popup
         data-slot="alert-dialog-content"
+        // always modal: the page behind is inert while it is open (modal-inert.tsx)
+        render={renderModalPopup}
         data-size={size}
         className={cn(
           "group/alert-dialog-content fixed top-[calc(50%+(env(safe-area-inset-top)-env(safe-area-inset-bottom))/2)] left-[calc(50%+(env(safe-area-inset-left)-env(safe-area-inset-right))/2)] z-50 grid max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-[calc(100%-2rem-env(safe-area-inset-left)-env(safe-area-inset-right))] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-x-hidden overflow-y-auto rounded-xl bg-popover p-4 text-popover-foreground ring-1 ring-foreground/10 duration-150 outline-none data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-[size=default]:sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
