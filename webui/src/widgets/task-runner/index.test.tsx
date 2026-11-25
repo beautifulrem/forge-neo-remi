@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import * as toasts from "@/lib/toast"
 import { FormProvider, OwnerProvider } from "@/ui/context"
 import { createFormStore } from "@/ui/form-store"
 import type { CustomNode } from "@/ui/schema"
@@ -164,6 +165,38 @@ describe("task-runner widget", () => {
         fireEvent.click(screen.getByRole("button", { name: "Caption image" }))
       })
       expect(await screen.findByRole("alert")).toHaveTextContent("失败：未知模型 'x'")
+    } finally {
+      await i18n.changeLanguage("en")
+    }
+  })
+
+  // The card named them in the UI language while the toast joined their English messages.
+  it("names the values a task refused in its toast too, in the UI language", async () => {
+    const { i18n } = await import("@/i18n")
+    i18n.addResource("zh-CN", "server", "Failed: {{error}}", "失败：{{error}}")
+    i18n.addResource("zh-CN", "server", "unknown model {{name}}", "未知模型 {{name}}")
+    i18n.addResource("zh-CN", "server", "unknown style {{name}}", "未知样式 {{name}}")
+    const errors = [
+      { owner: OWNER, param: "model", message: "unknown model 'x'", template: "unknown model {{name}}", params: { name: "'x'" } },
+      { owner: OWNER, param: "style", message: "unknown style 'y'", template: "unknown style {{name}}", params: { name: "'y'" } },
+    ]
+    const english = "unknown model 'x'; unknown style 'y'"
+    server({
+      caption: [{ __outputs__: { "task:caption": status("queued") } }],
+      __task__: [
+        { __outputs__: { "task:caption": null } },
+        { __outputs__: { "task:caption": status("failed", { error: english, errors }) }, __toast__: { level: "error", message: { text: "Failed: {{error}}", params: { error: english } } } },
+      ],
+    })
+    const shown = vi.spyOn(toasts, "showToast").mockImplementation(() => {})
+    await i18n.changeLanguage("zh-CN")
+    try {
+      setup()
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Caption image" }))
+      })
+      await waitFor(() => expect(shown).toHaveBeenCalled())
+      expect(shown.mock.calls[0]!.slice(0, 2)).toEqual(["error", "失败：未知模型 'x' · 未知样式 'y'"])
     } finally {
       await i18n.changeLanguage("en")
     }

@@ -7,11 +7,11 @@
  * left the page meanwhile.
  */
 import { api } from "@/api/endpoints"
-import { ApiError } from "@/api/http"
-import type { ActionExtra } from "@/api/types"
-import { failureText } from "@/features/errors/error-text"
+import { ApiError, fieldMessages } from "@/api/http"
+import type { ActionExtra, ActionToast } from "@/api/types"
+import { failureText, jobErrorText } from "@/features/errors/error-text"
 import { type ActionContext, actionRequest, applyResponse, splitResponse } from "@/ui/actions"
-import type { Message } from "@/ui/messages"
+import { isMessage, type Message } from "@/ui/messages"
 
 export type TaskStatus = {
   id: string
@@ -113,7 +113,19 @@ async function poll(ctx: ActionContext, owner: string, task: string, extra: Reco
   // them; ActionExtra types only the core actions' extras, so the body is widened to it.
   const body = actionRequest(ctx, owner, { task, ...extra } as unknown as ActionExtra)
   const split = splitResponse(owner, await api.action(owner, "__task__", body))
-  applyResponse(ctx.store, owner, split)
   const status = split.outputs?.[outputKey(task)]
+  if (split.toast && isTaskStatus(status)) split.toast = refusalToast(split.toast, status)
+  applyResponse(ctx.store, owner, split)
   return isTaskStatus(status) ? status : null
+}
+
+/**
+ * The "Failed: {{error}}" toast of a task that refused several values names them as its card does,
+ * in the UI language: the server could only join their English messages (a single one is its own
+ * toast, already translated).
+ */
+function refusalToast(toast: ActionToast, status: TaskStatus): ActionToast {
+  const { message } = toast
+  if (status.state !== "failed" || !isMessage(message) || message.text !== "Failed: {{error}}" || fieldMessages(status.errors).length === 0) return toast
+  return { ...toast, message: { ...message, params: { ...message.params, error: jobErrorText(status.error ?? "", status.errors) } } }
 }
