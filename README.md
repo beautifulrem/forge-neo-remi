@@ -112,3 +112,5 @@ Remi builds on the work of [AUTOMATIC1111](https://github.com/AUTOMATIC1111/stab
 ## License
 
 The main project is licensed under the [GNU Affero General Public License v3.0](LICENSE). Bundled extensions, vendored components, and third-party model weights (such as Bria Fibo 2.0 under CC BY-NC 4.0) carry their own licenses; consult the `LICENSE` files and model cards before use.
+
+The web interface offers its users the source code of the running server (AGPL-3.0 section 13): the sign-in screen, Settings → Licenses and Settings → Server and models link it. If you run a modified copy that others use over a network, publish your source and start the server with `--source-url` pointing at it. Details: [docs/remi-webui/licensing.md](docs/remi-webui/licensing.md).

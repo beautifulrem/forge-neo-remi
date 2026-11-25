@@ -4,12 +4,55 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
 import { queryClient } from "@/api/queries"
+import { useSession } from "@/api/session"
+import { i18n } from "@/i18n"
+import zhCN from "@/locales/zh-CN.json"
 import { LicensesView } from "./LicensesView"
 
 describe("LicensesView", () => {
   afterEach(() => {
     vi.restoreAllMocks()
     queryClient.clear()
+    useSession.setState({ source: null })
+  })
+
+  function renderEmpty() {
+    vi.spyOn(api.system, "licenses").mockReturnValue(new Promise(() => {}))
+    render(
+      <QueryClientProvider client={queryClient}>
+        <LicensesView />
+      </QueryClientProvider>,
+    )
+  }
+
+  // GNU AGPL v3 section 13: the users of a modified program on a network are offered its source
+  it("offers the source code of the running version, under the WebUI's own license", () => {
+    useSession.setState({ source: "https://example.org/remi/tree/0123abc" })
+    renderEmpty()
+    expect(screen.getByText(/free software under the GNU Affero General Public License v3\.0/)).toBeInTheDocument()
+    const link = screen.getByRole("link", { name: "Source code" })
+    expect(link).toHaveAttribute("href", "https://example.org/remi/tree/0123abc")
+    expect(link).toHaveAttribute("target", "_blank")
+    // a 40 px target: a line of text lies between it and the notices link, so the boxes do not meet
+    expect(link).toHaveClass("relative", "after:absolute", "after:inset-x-0", "after:-inset-y-2.5")
+  })
+
+  it("names the source code link in the UI language", async () => {
+    useSession.setState({ source: "https://example.org/remi" })
+    renderEmpty()
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      expect(screen.getByRole("link", { name: zhCN["Source code"] })).toHaveAttribute("href", "https://example.org/remi")
+      expect(screen.getByText(zhCN["This WebUI is free software under the GNU Affero General Public License v3.0."], { exact: false })).toBeInTheDocument()
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
+  })
+
+  it("links no source before the server said where it is", () => {
+    renderEmpty()
+    expect(screen.queryByRole("link", { name: "Source code" })).toBeNull()
   })
 
   it("links the notices of the libraries bundled into the web interface", () => {

@@ -40,6 +40,7 @@ parser.add_argument("--ui-settings-file", type=str, help="filename to use for ui
 parser = _parser.add_argument_group(description="server")
 parser.add_argument("--auth", type=str, help='require a login for the WebUI, like "username:password"; or comma-delimit multiple like "u1:p1,u2:p2,u3:p3"', default=None)
 parser.add_argument("--auth-file", type=normalized_filepath, help="file with logins in the --auth format, one or more per line", default=None)
+parser.add_argument("--source-url", type=str, default=None, metavar="URL", help="where users get the source code of this server (GNU AGPL v3 section 13): set it when you run a modified copy; default: the public Remi repository (REMI_SOURCE_URL sets it when the flag is absent)")
 
 parser = _parser.add_argument_group(description="misc")
 parser.add_argument("--styles-file", type=str, action="append", help="path or wildcard path of styles files, allow multiple entries.", default=[])

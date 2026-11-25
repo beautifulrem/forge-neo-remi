@@ -2,9 +2,11 @@
  * The sign-in form (`--auth` / `--auth-file`). The server renders no login
  * page of its own: without a session a page load gets the SPA shell and
  * `AuthGate` shows this form, alone while signed out, over the app (which
- * keeps its state) once its session ended.
+ * keeps its state) once its session ended. Under it, the link to the
+ * server's source code (GNU AGPL v3 section 13: whoever reaches the server
+ * is offered it, signed in or not).
  */
-import { LogIn } from "@/components/icons"
+import { ExternalLink, LogIn } from "@/components/icons"
 import { type FormEvent, type ReactNode, useEffect, useId, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
@@ -25,6 +27,7 @@ function SignInForm({ expired, onSignedIn }: { expired: boolean; onSignedIn: (us
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const source = useSession((s) => s.source)
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -91,6 +94,15 @@ function SignInForm({ expired, onSignedIn }: { expired: boolean; onSignedIn: (us
         {busy ? <Spinner /> : <LogIn aria-hidden />}
         {t("Sign in")}
       </Button>
+      {source ? (
+        // a 40 px target on a 16 px line: 12 px each way, clear of the button 16 px above
+        <p className="text-center text-xs text-muted-foreground">
+          <a href={source} target="_blank" rel="noreferrer noopener" className="relative inline-flex items-center gap-1 underline-offset-2 after:absolute after:inset-x-0 after:-inset-y-3 hover:text-foreground hover:underline">
+            {t("Source code")}
+            <ExternalLink className="size-3" aria-hidden />
+          </a>
+        </p>
+      ) : null}
     </form>
   )
 }

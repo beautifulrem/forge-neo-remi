@@ -191,6 +191,7 @@ Pass options in `COMMANDLINE_ARGS` (`webui-user.bat`, `webui.settings.sh`) or to
 | `--tls-keyfile KEY --tls-certfile CERT` | Serve HTTPS (session cookies become `Secure`) |
 | `--auth user:pass[,user2:pass2]` | Require a login for the web interface, `/api/v2`, files and the WebSocket (formerly `--gradio-auth`) |
 | `--auth-file PATH` | Read logins in the `--auth` format from a file, one or more per line (formerly `--gradio-auth-path`) |
+| `--source-url URL` | Where users get the source code of this server: the sign-in screen, Settings → Licenses and Settings → Server and models link it (GNU AGPL v3 section 13). Default: Remi's public repository, at the running commit when the repository has it, else the `remi` branch. **Set it when you run a modified copy**, pointing at the published source of your version ([licensing.md](licensing.md)). `REMI_SOURCE_URL` sets it when the flag is absent |
 | `--api` | Also serve the A1111-compatible `/sdapi/v1` API |
 | `--api-auth user:pass[,…]` | HTTP Basic login for `/sdapi/v1` (and for extension routes from API clients) |
 | `--api-no-auth-on-localhost` | With `--auth` and no `--api-auth`: let API clients on this machine use `/sdapi/v1` and extension API routes without a login (the old WebUI behaviour) |

@@ -5,6 +5,7 @@
  * until it signed in, like the real server. The session lives in
  * `sessionStorage`, so it survives the reload after signing in.
  */
+import { MOCK_SOURCE_URL } from "./fixtures"
 import { MockHttpError } from "./server"
 
 type Handler = (match: RegExpExecArray, body: unknown, url: URL) => unknown | Promise<unknown>
@@ -25,7 +26,7 @@ export function mockRefusal(path: string): MockHttpError | null {
 }
 
 export const authRoutes: [method: string, pattern: RegExp, handler: Handler][] = [
-  ["GET", /^\/auth\/status$/, () => ({ required: required(), user: user() })],
+  ["GET", /^\/auth\/status$/, () => ({ required: required(), user: user(), source_url: MOCK_SOURCE_URL })],
   [
     "POST",
     /^\/auth\/login$/,

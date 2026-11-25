@@ -150,7 +150,7 @@ def bootstrap(request: Request, services: ServicesDep, user: UserDep) -> dict[st
     from modules import shared
     from modules_forge import forge_version
     from remi import model_selection
-    from remi.server.routes.system import user_assets
+    from remi.server.routes.system import source_url, user_assets
     from remi.server.runtime import not_ported
 
     options = opts()
@@ -178,7 +178,7 @@ def bootstrap(request: Request, services: ServicesDep, user: UserDep) -> dict[st
         "options": {key: held[key] if key in held else setting(key, opts=options) for key in BOOTSTRAP_OPTIONS if key in options.data_labels},
         "models": models_summary(),
         "not_ported": not_ported(),
-        "auth": {"required": auth.required, "user": user},
+        "auth": {"required": auth.required, "user": user, "source_url": source_url(request, user)},
         "queue": services.queue.status(),
         "user_assets": sorted(user_assets()),
     }

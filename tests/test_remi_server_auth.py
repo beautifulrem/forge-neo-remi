@@ -20,6 +20,13 @@ def webui():
         yield state
 
 
+def sans_source(status):
+    """An auth status without its source link (``tests/test_remi_source_offer.py``)."""
+
+    assert status.pop("source_url").startswith("https://")
+    return status
+
+
 def basic(user, password):
     return {"Authorization": "Basic " + base64.b64encode(f"{user}:{password}".encode()).decode()}
 
@@ -67,13 +74,13 @@ def test_session_tokens_are_signed_expire_and_die_with_the_password(tmp_path):
 def test_everything_is_open_without_credentials(webui, tmp_path):
     with server_app(tmp_path) as server:
         assert server.client.get("/api/v2/queue").status_code == 200
-        assert server.client.get("/api/v2/auth/status").json() == {"required": False, "user": None}
+        assert sans_source(server.client.get("/api/v2/auth/status").json()) == {"required": False, "user": None}
 
 
 def test_rest_needs_a_login(locked):
     response = locked.client.get("/api/v2/queue")
     assert response.status_code == 401 and response.json() == {"detail": "Not authenticated"}
-    assert locked.client.get("/api/v2/auth/status").json() == {"required": True, "user": None}
+    assert sans_source(locked.client.get("/api/v2/auth/status").json()) == {"required": True, "user": None}
     assert locked.client.get("/internal/ping").status_code == 200
     assert locked.client.post("/internal/progress", json={"id_task": "x"}).status_code == 401
 
@@ -90,7 +97,7 @@ def test_a_page_load_without_a_login_gets_the_spa_shell(webui, tmp_path):
             page = client.get(path, headers={"Accept": "text/html"})
             assert page.status_code == 401 and '<div id="root">' in page.text and "__REMI_ROOT__" in page.text, path
             assert page.headers["cache-control"] == "no-store" and "www-authenticate" not in page.headers, path
-        assert client.get("/api/v2/auth/status").json() == {"required": True, "user": None}
+        assert sans_source(client.get("/api/v2/auth/status").json()) == {"required": True, "user": None}
         # not a page load: JSON, never the shell
         for path, headers in (("/", {"Accept": "application/json"}), ("/api/v2/queue", {"Accept": "text/html"})):
             response = client.get(path, headers=headers)
@@ -135,8 +142,8 @@ def test_login_sets_a_session_cookie_and_logout_clears_it(locked):
     cookie = response.headers["set-cookie"]
     assert "HttpOnly" in cookie and "samesite=lax" in cookie.lower()
     assert client.get("/api/v2/queue").status_code == 200
-    assert client.get("/api/v2/auth/status").json() == {"required": True, "user": "ann"}
-    assert client.get("/api/v2/app").json()["auth"] == {"required": True, "user": "ann"}
+    assert sans_source(client.get("/api/v2/auth/status").json()) == {"required": True, "user": "ann"}
+    assert sans_source(client.get("/api/v2/app").json()["auth"]) == {"required": True, "user": "ann"}
     client.post("/api/v2/auth/logout")
     client.cookies.clear()
     assert client.get("/api/v2/queue").status_code == 401

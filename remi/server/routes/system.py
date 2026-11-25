@@ -33,7 +33,15 @@ def auth_status(request: Request, user: UserDep) -> dict[str, Any]:
         # HTTP Basic, checked like a login: failures count towards the
         # client's throttle, and a throttled client is not told
         user = auth.basic_user(request.headers, client_key(request))
-    return {"required": auth.required, "user": user}
+    return {"required": auth.required, "user": user, "source_url": source_url(request, user)}
+
+
+def source_url(request: Request, user: str | None) -> str:
+    """The source offer (``remi/server/source.py``): the running version for
+    its users, the repository for a client that has not signed in."""
+
+    source = request.app.state.source
+    return source.running if user is not None or not request.app.state.auth.required else source.public
 
 
 @router.post("/auth/login", status_code=204, responses={401: {"model": m.Detail}, 429: {"model": m.Detail}}, summary="Log in (sets the session cookie)")

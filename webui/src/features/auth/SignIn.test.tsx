@@ -3,7 +3,7 @@
  * the app shows it while signed out, and over the app when a request is
  * refused with 401 (the app keeps its state).
  */
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { useSession } from "@/api/session"
@@ -11,7 +11,7 @@ import { recordFetch } from "@/test/fetch-recorder"
 import { AuthGate } from "./SignIn"
 
 afterEach(() => {
-  useSession.setState({ state: "signed-in", user: null })
+  useSession.setState({ state: "signed-in", user: null, source: null })
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
@@ -78,6 +78,29 @@ describe("sign-in", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
     expect(useSession.getState()).toMatchObject({ state: "signed-in", user: "ann" })
     expect(screen.getByText("the app").closest("[inert]")).toBeNull()
+  })
+
+  // GNU AGPL v3 section 13: whoever reaches the server is offered its source, signed in or not
+  it("links the source code under the sign-in form", () => {
+    useSession.setState({ state: "signed-out", source: "https://example.org/remi/tree/remi" })
+    render(<AuthGate>{null}</AuthGate>)
+    const link = screen.getByRole("link", { name: "Source code" })
+    expect(link).toHaveAttribute("href", "https://example.org/remi/tree/remi")
+    expect(link).toHaveAttribute("rel", "noreferrer noopener")
+    // after the Sign in button in the tab order, its 40 px target clear of the button
+    expect(screen.getByRole("button", { name: "Sign in" }).compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(link).toHaveClass("relative", "after:absolute", "after:-inset-y-3")
+  })
+
+  it("links the source code in the form over the app as well", () => {
+    useSession.setState({ state: "expired", user: "ann", source: "https://example.org/remi/tree/0123abc" })
+    render(
+      <AuthGate>
+        <p>the app</p>
+      </AuthGate>,
+    )
+    const dialog = screen.getByRole("dialog", { name: "Sign in" })
+    expect(within(dialog).getByRole("link", { name: "Source code" })).toHaveAttribute("href", "https://example.org/remi/tree/0123abc")
   })
 
   it("a refused sign-in request is not a lost session", async () => {

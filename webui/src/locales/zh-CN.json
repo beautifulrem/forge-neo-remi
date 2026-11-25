@@ -1726,5 +1726,7 @@
   "VGL objects array must contain at least one item": "VGL 的 objects 数组至少要包含一项",
   "Object {{n}} needs a description": "第 {{n}} 个对象需要描述",
   "The text is not valid JSON.": "该文本不是有效的 JSON。",
-  "{{label}}: ": "{{label}}："
+  "{{label}}: ": "{{label}}：",
+  "Source code": "源代码",
+  "This WebUI is free software under the GNU Affero General Public License v3.0.": "本 WebUI 是自由软件，采用 GNU Affero 通用公共许可证 v3.0 授权。"
 }

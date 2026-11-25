@@ -1,7 +1,9 @@
 /**
- * Settings → Licenses: third-party code (from `html/licenses.html`, served
- * as data — no server HTML is rendered). A license text is fetched from its
- * upstream repository when its entry is opened, as plain text.
+ * Settings → Licenses: the WebUI's own license with the link to its source
+ * code (GNU AGPL v3 section 13: `source_url` of `GET /auth/status`), then
+ * third-party code (from `html/licenses.html`, served as data — no server
+ * HTML is rendered). A license text is fetched from its upstream repository
+ * when its entry is opened, as plain text.
  */
 import { useQuery } from "@tanstack/react-query"
 import { ChevronRight, ExternalLink } from "@/components/icons"
@@ -11,6 +13,7 @@ import { api } from "@/api/endpoints"
 import { request, ROOT } from "@/api/http"
 import { LoadFailed } from "@/components/LoadFailed"
 import { useLoadFailure } from "@/api/load-failure"
+import { useSession } from "@/api/session"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
@@ -95,12 +98,27 @@ function LicenseEntry({ entry, depth }: { entry: Entry; depth: number }) {
 
 export function LicensesView() {
   const { t } = useTranslation()
+  const source = useSession((s) => s.source)
   const licenses = useQuery({ queryKey: ["licenses"], queryFn: ({ signal }) => api.system.licenses(signal), staleTime: Infinity })
   const failure = useLoadFailure(licenses)
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-6 sm:px-6">
       <header>
         <h1 className="font-heading text-xl font-semibold tracking-tight">{t("Licenses")}</h1>
+        {/* the source of the running version (GNU AGPL v3 section 13); its 40 px target and the
+            notices link's stay apart: the line between them takes 10 px of each */}
+        <p className="text-sm text-muted-foreground">
+          {t("This WebUI is free software under the GNU Affero General Public License v3.0.")}
+          {source ? (
+            <>
+              {" "}
+              <a href={source} target="_blank" rel="noreferrer noopener" className="relative inline-flex items-center gap-1 text-foreground underline-offset-2 after:absolute after:inset-x-0 after:-inset-y-2.5 hover:underline">
+                {t("Source code")}
+                <ExternalLink className="size-3 text-muted-foreground" aria-hidden />
+              </a>
+            </>
+          ) : null}
+        </p>
         <p className="text-sm text-muted-foreground">{t("Code from these projects is used or adapted in this WebUI.")}</p>
         {/* written by the build (webui/tools/notices.mjs): every package bundled into the web interface */}
         <p className="mt-1 text-sm">

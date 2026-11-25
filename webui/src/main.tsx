@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client"
 import { I18nextProvider } from "react-i18next"
 import { api } from "@/api/endpoints"
 import { queryClient } from "@/api/queries"
-import { useSession } from "@/api/session"
+import { applyAuthStatus } from "@/api/session"
 import { App } from "@/app/App"
 import { BOOT_WAIT, settleWithin } from "@/app/boot"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
@@ -28,11 +28,12 @@ void forgetCopiedRuns().catch(() => {})
 const root = createRoot(document.getElementById("root")!)
 
 // Whether a login is needed (`--auth`): signed out, only the sign-in form
-// renders and the app requests nothing. If the server does not answer, the
-// app starts and shows its own connection errors.
+// renders and the app requests nothing. The same answer says where the
+// server's source code is (the sign-in form links it). If the server does not
+// answer, the app starts and shows its own connection errors.
 const session = api.auth
   .status()
-  .then(({ required, user }) => useSession.setState({ state: required && !user ? "signed-out" : "signed-in", user: user ?? null }))
+  .then(applyAuthStatus)
   .catch(() => {})
 
 // Load the stored/browser locale first so the shell never flashes English;

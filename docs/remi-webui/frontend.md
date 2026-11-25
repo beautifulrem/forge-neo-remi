@@ -706,7 +706,12 @@ generated interfaces (sources: Linear's
   API docs the browser asked for). A 401 while the app is open shows the
   form in a dialog over it (the app stays mounted, `inert`); signing in
   closes it, refetches the queries and reconnects the socket. "Sign out
-  (user)" is in the Appearance menu and the command palette. Strings come
+  (user)" is in the Appearance menu and the command palette. The status
+  also says where the server's source code is (`source_url`, kept as
+  `useSession().source`; AGPL-3.0 section 13, licensing.md): the form links
+  it under its button (a 40 px target, clear of the button), Settings →
+  Licenses under the WebUI's own license and Settings → Server and models
+  next to the version. Strings come
   from the chrome catalog like every other text. The mock backend has a
   login too (`api/mock/auth.ts`, `sessionStorage["remi-mock-login"]`,
   demo / demo; `tests/e2e/auth.spec.ts`).
@@ -1417,7 +1422,8 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
   weights in memory, hash every checkpoint with progress, notification
   permission, settings file, localization template download), system info
   (summary, collapsible sections, download, copy, file check), licenses
-  (structured data; license texts fetched on demand; and a link to the
+  (the WebUI's own license with its source code link first; structured
+  data; license texts fetched on demand; and a link to the
   build's `THIRD-PARTY-NOTICES.txt`, every package the web interface ships
   with its license text, written by `webui/tools/notices.mjs`; the dev
   server answers it with the direct dependencies' notices).

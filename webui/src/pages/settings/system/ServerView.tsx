@@ -1,12 +1,12 @@
 /**
- * Settings → Server and models: version and API documentation link (the old
- * footer), reload / restart, model memory (unload, load or load again, the
+ * Settings → Server and models: version, API documentation and source code
+ * links (the old footer; the source: GNU AGPL v3 section 13), reload / restart, model memory (unload, load or load again, the
  * weights in memory, the loaded checkpoint's hash with a CivitAI search link),
  * checkpoint hashes, browser notifications, the settings file and the
  * localization template.
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { Bell, BookOpen, Download, ExternalLink, FileUp, Fingerprint, HardDriveDownload, Hourglass, ListTree, Loader2, Power, RefreshCw, Upload } from "@/components/icons"
+import { Bell, BookOpen, Code, Download, ExternalLink, FileUp, Fingerprint, HardDriveDownload, Hourglass, ListTree, Loader2, Power, RefreshCw, Upload } from "@/components/icons"
 import { type ReactNode, useId, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
@@ -16,6 +16,7 @@ import { useProgress } from "@/api/progress"
 import { queryClient } from "@/api/queries"
 import { LoadFailed } from "@/components/LoadFailed"
 import { useLoadFailure } from "@/api/load-failure"
+import { useSession } from "@/api/session"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -213,6 +214,7 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
   const { t } = useTranslation()
   const status = useQuery(serverStatusQuery)
   const statusFailure = useLoadFailure(status)
+  const source = useSession((s) => s.source)
   const modelLoading = useProgress((s) => s.modelLoading)
   const notifications = useNotificationPermission()
   const model = useMutation({
@@ -252,6 +254,12 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
             <BookOpen className="size-3.5" aria-hidden />
             {t("API documentation")}
           </a>
+          {source ? (
+            <a href={source} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline-offset-4 hover:text-foreground hover:underline">
+              <Code className="size-3.5" aria-hidden />
+              {t("Source code")}
+            </a>
+          ) : null}
         </div>
       </header>
 

@@ -744,6 +744,9 @@ export const toolboxPage: PageSchema = {
 
 // ---------------------------------------------------------------- app
 
+/** `source_url` of the auth status: the repository's branch, as a server whose commit is not published says */
+export const MOCK_SOURCE_URL = "https://github.com/beautifulrem/forge-neo-remi/tree/remi"
+
 export const bootstrap: Bootstrap = {
   version: "remi-mock",
   features: ["jobs", "uploads", "preview.binary", "folders.open"],
@@ -775,7 +778,7 @@ export const bootstrap: Bootstrap = {
   },
   models: { checkpoint: "animagine-xl-4.0.safetensors [a1b2c3]", vae: "Automatic", text_encoders: [], modules: [] },
   not_ported: [],
-  auth: { required: false },
+  auth: { required: false, source_url: MOCK_SOURCE_URL },
   queue: { size: 0, paused: false, running: null },
   // the dev server's mock plugin serves an empty user.css (vite.config.ts); end-to-end tests route their own
   user_assets: ["user.css"],

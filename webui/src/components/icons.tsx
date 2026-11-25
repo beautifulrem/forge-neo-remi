@@ -73,6 +73,7 @@ export { ProhibitInsetIcon as CircleSlash } from "@phosphor-icons/react/dist/csr
 export { XCircleIcon as CircleX } from "@phosphor-icons/react/dist/csr/XCircle"
 export { ClipboardTextIcon as ClipboardCopy } from "@phosphor-icons/react/dist/csr/ClipboardText"
 export { ClipboardIcon as ClipboardPaste } from "@phosphor-icons/react/dist/csr/Clipboard"
+export { CodeIcon as Code } from "@phosphor-icons/react/dist/csr/Code"
 export { ColumnsIcon as Columns2 } from "@phosphor-icons/react/dist/csr/Columns"
 export { CompassIcon as Compass } from "@phosphor-icons/react/dist/csr/Compass"
 export { CircleHalfIcon as Contrast } from "@phosphor-icons/react/dist/csr/CircleHalf"

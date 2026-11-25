@@ -27,6 +27,8 @@ test.describe("sign-in", () => {
     await expect(page).toHaveTitle("Sign in · Remi")
     await expect(page.getByRole("navigation")).toHaveCount(0)
     await expect(page.getByLabel("Username")).toBeFocused()
+    // GNU AGPL v3 section 13: the source of the server, for those who cannot sign in too
+    await expect(page.getByRole("link", { name: "Source code" })).toHaveAttribute("href", "https://github.com/beautifulrem/forge-neo-remi/tree/remi")
 
     await signIn(page, "demo", "wrong")
     await expect(page.getByRole("alert")).toHaveText("Wrong username or password.")
@@ -47,6 +49,7 @@ test.describe("sign-in", () => {
     await expect(page.getByRole("heading", { name: "登录 Remi WebUI" })).toBeVisible()
     await expect(page.getByLabel("用户名")).toBeVisible()
     await expect(page.getByLabel("密码")).toBeVisible()
+    await expect(page.getByRole("link", { name: "源代码" })).toBeVisible()
     await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN")
   })
 

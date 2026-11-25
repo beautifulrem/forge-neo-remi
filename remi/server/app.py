@@ -30,6 +30,7 @@ from remi.server.api_docs import add_docs_routes
 from remi.server.auth import BASE_HEADERS, PUBLIC_PATHS, Auth, BaseHeadersMiddleware, SecurityMiddleware, credentials_from_cmd_opts, load_secret, route_path
 from remi.server.limits import PUBLIC_BODY_LIMIT, BodyLimitMiddleware, body_limit
 from remi.server.services import Services, default_services
+from remi.server.source import current_source
 from remi.server.spa import DIST, Spa
 from remi.server.ws import Hub
 from remi.setting_values import encodable
@@ -320,6 +321,7 @@ def create_app(
     app.state.auth = auth
     app.state.hub = hub
     app.state.sdapi = sdapi
+    app.state.source = current_source()  # where users get the source (AGPL-3.0 section 13)
     # extension_route_guard asks the app who is logged in
     app.auth_dependency = auth.user_for  # type: ignore[attr-defined]
 

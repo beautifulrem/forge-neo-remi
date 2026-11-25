@@ -1225,15 +1225,21 @@ test("the weights in memory refresh is a 40 px target", async ({ page }) => {
   expect(box.reached).toEqual([])
 })
 
-// On a phone the licences page's one-line links (the notices link, each Show license) are 20 px of
-// text: each takes taps on an invisible box at least 40 px tall that reaches no other control.
+// On a phone the licences page's one-line links (the source code link, the notices link, each Show
+// license) are 20 px of text: each takes taps on an invisible box at least 40 px tall that reaches no
+// other control.
 test("the licences page's small links are 40 px tall targets on a phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto("/#/settings?view=licenses")
   const main = page.getByRole("main")
   await expect(main.getByRole("button", { name: "Show license" }).first()).toBeVisible()
   // an entry's name links to its project: one more line of text, its box shared with the toggle below
-  const targets = [main.getByRole("link", { name: /Web interface libraries/ }), main.getByRole("button", { name: "Show license" }).first(), main.getByRole("link", { name: "ComfyUI" })]
+  const targets = [
+    main.getByRole("link", { name: /Web interface libraries/ }),
+    main.getByRole("button", { name: "Show license" }).first(),
+    main.getByRole("link", { name: "ComfyUI" }),
+    main.getByRole("link", { name: "Source code" }),
+  ]
   const boxes: { top: number; bottom: number }[] = []
   for (const target of targets) {
     const box = await target.evaluate((element) => {
@@ -1257,6 +1263,8 @@ test("the licences page's small links are 40 px tall targets on a phone", async 
   }
   // ComfyUI's name and its Show license toggle: the two boxes meet, neither takes the other's taps
   expect(boxes[2]!.bottom, "the name's box reaches into the toggle's").toBeLessThanOrEqual(boxes[1]!.top + 0.5)
+  // the source code and notices links: a line of text between them, their boxes apart
+  expect(boxes[3]!.bottom, "the source link's box reaches into the notices link's").toBeLessThanOrEqual(boxes[0]!.top + 0.5)
 })
 
 // The recipe capture dialog changed height as it read a form (nothing), found no changes (a line) and

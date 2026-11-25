@@ -191,6 +191,7 @@ docker run --device /dev/kfd --device /dev/dri --group-add video -p 127.0.0.1:78
 | `--tls-keyfile KEY --tls-certfile CERT` | 提供 HTTPS（会话 cookie 变为 `Secure`） |
 | `--auth user:pass[,user2:pass2]` | 网页界面、`/api/v2`、文件和 WebSocket 需要登录（原 `--gradio-auth`） |
 | `--auth-file PATH` | 从文件读取 `--auth` 格式的登录信息，每行一个或多个（原 `--gradio-auth-path`） |
+| `--source-url URL` | 用户获取本服务器源代码的地址：登录界面、设置 → 许可证和设置 → 服务器与模型会链接它（GNU AGPL v3 第 13 条）。默认是 Remi 的公开仓库：仓库中有正在运行的提交时指向该提交，否则指向 `remi` 分支。**运行修改过的副本时请设置它**，指向你所运行版本已公开的源代码（[licensing.md](licensing.md)）。未给出此参数时可用 `REMI_SOURCE_URL` 设置 |
 | `--api` | 同时提供兼容 A1111 的 `/sdapi/v1` API |
 | `--api-auth user:pass[,…]` | `/sdapi/v1` 的 HTTP Basic 登录（API 客户端访问扩展路由时也使用） |
 | `--api-no-auth-on-localhost` | 设置了 `--auth` 而没有 `--api-auth` 时：本机的 API 客户端无需登录即可使用 `/sdapi/v1` 和扩展 API 路由（旧 WebUI 的行为） |

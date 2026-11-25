@@ -2449,6 +2449,11 @@ export interface components {
             required: boolean;
             /** User */
             user?: string | null;
+            /**
+             * Source Url
+             * @description where users get the source code of the running server (GNU AGPL v3 section 13; --source-url): the running commit's tree once signed in (or without a login), before that the repository
+             */
+            source_url: string;
         };
         /** BoardCreate */
         BoardCreate: {

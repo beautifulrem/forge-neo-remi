@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
 import { queryClient } from "@/api/queries"
+import { useSession } from "@/api/session"
 import { ServerView } from "./ServerView"
 
 const STATUS = { restartable: true, extension_access: true, settings_frozen: false, model_loaded: "anima.safetensors [0123456789]", model_hash: "0123456789abcdef", version: "1.0.0" }
@@ -23,6 +24,19 @@ describe("ServerView", () => {
   afterEach(() => {
     vi.restoreAllMocks()
     queryClient.clear()
+  })
+
+  // beside the version: where the source of the running version is (GNU AGPL v3 section 13)
+  it("links the source code of the running version next to the version", () => {
+    useSession.setState({ source: "https://example.org/remi/tree/0123abc" })
+    try {
+      vi.spyOn(api.system, "status").mockReturnValue(new Promise(() => {}))
+      renderView()
+      const header = screen.getByRole("heading", { name: "Server and models" }).closest("header")!
+      expect(within(header).getByRole("link", { name: "Source code" })).toHaveAttribute("href", "https://example.org/remi/tree/0123abc")
+    } finally {
+      useSession.setState({ source: null })
+    }
   })
 
   it("claims nothing about the model or restarting before the status arrives", () => {

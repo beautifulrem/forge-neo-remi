@@ -40,7 +40,7 @@ export const bootstrapWith = (options: Record<string, unknown>): Bootstrap => ({
   options,
   models: { text_encoders: [], modules: [] },
   not_ported: [],
-  auth: { required: false },
+  auth: { required: false, source_url: "https://example.org/remi" },
   queue: { size: 0, paused: false },
   user_assets: [],
 })

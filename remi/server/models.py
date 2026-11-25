@@ -94,6 +94,7 @@ class NotPorted(Model):
 class AuthStatus(Model):
     required: bool
     user: str | None = None
+    source_url: str = Field(description="where users get the source code of the running server (GNU AGPL v3 section 13; --source-url): the running commit's tree once signed in (or without a login), before that the repository")
 
 
 class Bootstrap(Model):

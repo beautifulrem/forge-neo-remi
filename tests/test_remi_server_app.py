@@ -36,7 +36,7 @@ def test_bootstrap_describes_the_app(server):
     assert data["tabs"][:3] == ["txt2img", "img2img", "extras"]
     assert {"jobs.v1", "ws.v1"} <= set(data["features"]) and "auth" not in data["features"]
     assert data["models"]["preset"] == data["options"]["forge_preset"]
-    assert data["auth"] == {"required": False, "user": None}
+    assert data["auth"] == {"required": False, "user": None, "source_url": server.app.state.source.running}
     assert data["queue"] == {"size": 0, "paused": False, "running": None}
     assert isinstance(data["not_ported"], list) and data["pages"] == []
 
