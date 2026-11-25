@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest"
-import { splitResponse } from "./actions"
+import * as sonner from "sonner"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { runAction, splitResponse } from "./actions"
+import { createFormStore } from "./form-store"
 
 describe("splitResponse", () => {
   it("separates reserved keys and resolves cross-owner params", () => {
@@ -65,5 +67,28 @@ describe("splitResponse", () => {
       },
     ])
     expect(split.capabilities?.preset).toBe("qwen21")
+  })
+})
+
+// The server's error details are English, for logs: the toast says what failed in the UI language
+describe("runAction failures", () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  const cases: [string, () => Promise<Response>, string][] = [
+    [
+      "a server error",
+      async () => Response.json({ error: "Internal Server Error", detail: "Internal server error (id 0a1b2c3d4e5f); the details are in the server log" }, { status: 500 }),
+      "The server ran into an error (500).",
+    ],
+    ["no answer", async () => Promise.reject(new TypeError("Failed to fetch")), "The server cannot be reached."],
+    ["an unknown action", async () => Response.json({ detail: "core has no action 'x'" }, { status: 404 }), "It is no longer there."],
+  ]
+  it.each(cases)("explains %s in the UI language", async (_name, answer, text) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(answer)
+    const shown: unknown[][] = []
+    vi.spyOn(sonner.toast, "error").mockImplementation(((...args: unknown[]) => shown.push(args)) as never)
+    const store = createFormStore("probe", { persistDrafts: false })
+    expect(await runAction({ store, tab: "txt2img" }, "core", "swap_dimensions")).toBeNull()
+    expect(shown).toEqual([["Action failed", { description: text }]])
   })
 })

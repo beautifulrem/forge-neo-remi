@@ -5,6 +5,7 @@
 import { api } from "@/api/endpoints"
 import { keys, queryClient } from "@/api/queries"
 import type { ActionExtra, ActionRequest, ActionResponse, ActionToast, Bootstrap, ParamPatch, ParamValues } from "@/api/types"
+import { errorText } from "@/features/errors/error-text"
 import { i18n, t } from "@/i18n"
 import { showToast } from "@/lib/toast"
 import { splitRef } from "./conditions"
@@ -130,7 +131,8 @@ export async function runAction(
     response = await api.action(owner, action, actionRequest(ctx, owner, extra))
   } catch (error) {
     if (generations.get(key) === generation) {
-      showToast("error", `${t("Action failed")}: ${error instanceof Error ? error.message : String(error)}`)
+      // the server's details are English, for its log: the status says what failed
+      showToast("error", t("Action failed"), errorText(error))
     }
     return null
   }
