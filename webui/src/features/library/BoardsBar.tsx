@@ -119,7 +119,7 @@ export function BoardsBar({ activeItems, count, total, failed = false }: BoardsB
       <FadeStrip
         role="tablist"
         aria-label={t("Boards")}
-        className="-mx-1 flex h-8 min-w-0 flex-1 items-stretch gap-1 px-1 *:shrink-0"
+        className="-mx-1 flex min-w-0 flex-1 items-stretch gap-1 px-1 *:shrink-0"
       >
         <button
           type="button"
