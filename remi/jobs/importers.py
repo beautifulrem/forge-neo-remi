@@ -745,7 +745,7 @@ def _resolve_image_path(path: Any, roots: list[str]) -> str | None:
     folder or the data folder, as the extension saved it)."""
 
     from modules import paths_internal
-    from remi.library import _inside
+    from remi.files import path_inside
 
     if not isinstance(path, str) or not path or "\x00" in path:
         return None
@@ -753,7 +753,7 @@ def _resolve_image_path(path: Any, roots: list[str]) -> str | None:
     for base in bases:
         candidate = os.path.realpath(path if base is None else os.path.join(base, path))
         # also below another spelling of a root (macOS keeps the case a path is given)
-        if os.path.isfile(candidate) and any(_inside(candidate, root) for root in roots):
+        if os.path.isfile(candidate) and any(path_inside(candidate, root) is not None for root in roots):
             return candidate
     return None
 
