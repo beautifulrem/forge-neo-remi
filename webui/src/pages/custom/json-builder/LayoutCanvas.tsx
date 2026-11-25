@@ -18,7 +18,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { selectedItem, useSession } from "@/features/gallery/session-store"
 import { useMediaQuery } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
-import { type EditableField, type Item, LABEL_NAMES, type Missing, moveBox, resizeBox } from "./draft"
+import { errorTextId } from "@/ui/a11y"
+import { type EditableField, type Item, LABEL_NAMES, type Missing, missingMessageId, moveBox, resizeBox } from "./draft"
 import { useBuilder } from "./store"
 import { clampView, fitStage, itemColor, RESET_VIEW, type View, ZOOM_STEP, zoomAbout } from "./view"
 
@@ -140,6 +141,8 @@ function BoxView({
       <textarea
         aria-label={name === "caption" ? t("Box {{n}} caption", { n: index + 1 }) : t("Box {{n}} text", { n: index + 1 })}
         aria-invalid={invalid || undefined}
+        // the "Required" under the item's field in the list, which the box mirrors
+        aria-describedby={invalid ? errorTextId(missingMessageId(`item:${item.id}:${name}`)) : undefined}
         readOnly
         // the box itself takes focus (and its keys); the read-only text inside it is not a stop of its own
         tabIndex={-1}

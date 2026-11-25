@@ -10,6 +10,8 @@ import { parseHex, toHex } from "../core/pixels"
 import { SWATCHES } from "../state/tools"
 import { Hint } from "./controls"
 import { isComposing } from "@/lib/ime"
+import { errorTextId } from "@/ui/a11y"
+import { FieldCheck } from "@/ui/Field"
 
 type EyeDropperApi = { open: () => Promise<{ sRGBHex: string }> }
 
@@ -35,6 +37,7 @@ export function ColorControl({ color, recent, onChange, onEyedropper }: { color:
   const [text, setText] = useState<string | null>(null)
   const id = useId()
   const screenPicker = typeof window !== "undefined" && "EyeDropper" in window
+  const invalid = text !== null && parseHex(text) === null
 
   const commitText = (value: string) => {
     const rgb = parseHex(value)
@@ -54,42 +57,46 @@ export function ColorControl({ color, recent, onChange, onEyedropper }: { color:
         />
       </Hint>
       <PopoverContent aria-label={t("Brush color")} className="w-60" side="bottom" align="start">
-        <div className="flex items-center gap-2">
-          <label htmlFor={`${id}-native`} className="sr-only">
-            {t("Pick a color")}
-          </label>
-          <input
-            id={`${id}-native`}
-            type="color"
-            value={color}
-            onChange={(event) => onChange(event.target.value)}
-            className="h-9 w-12 shrink-0 cursor-pointer rounded-md border bg-transparent p-0.5"
-          />
-          <Input
-            aria-label={t("Hex color")}
-            value={text ?? color}
-            spellCheck={false}
-            onChange={(event) => setText(event.target.value)}
-            onBlur={(event) => commitText(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !isComposing(event)) commitText(event.currentTarget.value)
-            }}
-            aria-invalid={text !== null && parseHex(text) === null ? true : undefined}
-            className="h-9 font-mono text-xs uppercase"
-          />
-          <Hint label={t("Pick a color from the image")} keys={["I"]}>
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label={t("Pick a color from the image")}
-              onClick={() => {
-                setOpen(false)
-                onEyedropper()
+        <div>
+          <div className="flex items-center gap-2">
+            <label htmlFor={`${id}-native`} className="sr-only">
+              {t("Pick a color")}
+            </label>
+            <input
+              id={`${id}-native`}
+              type="color"
+              value={color}
+              onChange={(event) => onChange(event.target.value)}
+              className="h-9 w-12 shrink-0 cursor-pointer rounded-md border bg-transparent p-0.5"
+            />
+            <Input
+              aria-label={t("Hex color")}
+              value={text ?? color}
+              spellCheck={false}
+              onChange={(event) => setText(event.target.value)}
+              onBlur={(event) => commitText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !isComposing(event)) commitText(event.currentTarget.value)
               }}
-            >
-              <Pipette />
-            </Button>
-          </Hint>
+              aria-invalid={invalid || undefined}
+              aria-describedby={invalid ? errorTextId(`${id}-hex`) : undefined}
+              className="h-9 font-mono text-xs uppercase"
+            />
+            <Hint label={t("Pick a color from the image")} keys={["I"]}>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label={t("Pick a color from the image")}
+                onClick={() => {
+                  setOpen(false)
+                  onEyedropper()
+                }}
+              >
+                <Pipette />
+              </Button>
+            </Hint>
+          </div>
+          <FieldCheck id={`${id}-hex`} message={invalid ? t("Enter a hex color, such as #ff8800.") : null} />
         </div>
         <div role="group" aria-label={t("Swatches")} className="grid grid-cols-6 gap-1.5">
           {SWATCHES.map((swatch) => (

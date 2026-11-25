@@ -71,7 +71,7 @@ export function EmptyState({ busy, noUpload, blankSize, hint, error, loadFailed,
       <button
         type="button"
         onClick={() => input.current?.click()}
-        aria-describedby={hintId}
+        aria-describedby={error ? `${hintId} ${hintId}-error` : hintId}
         aria-invalid={error ? true : undefined}
         disabled={busy}
         className={cn(
@@ -95,7 +95,7 @@ export function EmptyState({ busy, noUpload, blankSize, hint, error, loadFailed,
         </Button>
       ) : null}
       {error ? (
-        <p role="alert" className="text-sm text-destructive">
+        <p id={`${hintId}-error`} role="alert" className="text-sm text-destructive">
           {t(error)}
         </p>
       ) : null}

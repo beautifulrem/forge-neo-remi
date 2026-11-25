@@ -449,3 +449,28 @@ describe("colours", () => {
     expect(palette).toEqual([])
   })
 })
+
+describe("invalid fields", () => {
+  // frontend.md: an invalid field says why in text. Its red edge alone is colour alone (WCAG 1.4.1),
+  // and under the coral accent a focused invalid field's edge is the focus ring's red: a control
+  // marked aria-invalid names the message that says why in its aria-describedby (or
+  // aria-errormessage). The tests of the fields check that the message is there and visible.
+  const OWN_WAY: { file: string; tag: string; why: string }[] = [
+    // one box of a group of checkboxes: the group around the boxes names the field's message
+    { file: "ui/inputs/MultiChoice.tsx", tag: "<Checkbox", why: "the group names the message" },
+  ]
+  it("name the text that says why", () => {
+    const tags = files
+      .filter(({ file }) => !file.startsWith("components/ui/"))
+      .flatMap(({ file, source }) =>
+        openingTags(source)
+          .tags.filter(({ tag }) => /\s(?:aria-invalid|ariaInvalid)=/.test(tag))
+          .map(({ tag }) => ({ file, tag })),
+      )
+    expect(tags.length).toBeGreaterThan(25)
+    const silent = tags.filter(
+      ({ file, tag }) => !/\s(?:aria-describedby|ariaDescribedBy|aria-errormessage)=/.test(tag) && !OWN_WAY.some((own) => own.file === file && tag.startsWith(own.tag)),
+    )
+    expect(silent.map(({ file, tag }) => `${file}: ${tag.replace(/\s+/g, " ").slice(0, 70)}`)).toEqual([])
+  })
+})

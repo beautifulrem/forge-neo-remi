@@ -18,6 +18,7 @@ import JsonBuilderPage from "./index"
 import { sizeLimit } from "./size-limit"
 import { useBuilder } from "./store"
 import { COMPILED, DRAFT } from "./testdata"
+import { shownReason } from "@/test/says-why"
 
 // The real editor is CodeMirror: a plain textarea stands in for it here.
 vi.mock("@/features/prompt-editor", () => ({
@@ -102,9 +103,26 @@ describe("JSON Builder page", () => {
     expect(screen.getByLabelText("Caption")).toHaveAttribute("aria-invalid", "true")
     expect(screen.getByLabelText("Caption of item 1")).toHaveAttribute("aria-invalid", "true")
     expect(location.hash).toBe("#/ext/json-builder")
+    // the toast's "highlighted" was a red edge alone: each empty field says it in text, and the
+    // box on the canvas names the message of its field in the list
+    expect(shownReason(screen.getByLabelText("Caption"))).toBe("Required")
+    expect(shownReason(screen.getByLabelText("Caption of item 1"))).toBe("Required")
+    expect(shownReason(within(screen.getByTestId("json-builder-canvas")).getByLabelText("Box 1 caption"))).toBe("Required")
     // a filled field is no longer marked
     fireEvent.change(screen.getByLabelText("Caption"), { target: { value: "a room" } })
     expect(screen.getByLabelText("Caption")).not.toHaveAttribute("aria-invalid")
+  })
+
+  it("says an empty field is required in the UI language", async () => {
+    try {
+      i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+      await act(() => i18n.changeLanguage("zh-CN"))
+      renderPage()
+      fireEvent.click(screen.getByRole("button", { name: zhCN["Send to txt2img"] }))
+      expect(shownReason(screen.getByLabelText(zhCN["Caption of item {{n}}"].replace("{{n}}", "1")))).toBe(zhCN["Required"])
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
   })
 
   it("sends the prompt, width and height to txt2img and shows it", async () => {

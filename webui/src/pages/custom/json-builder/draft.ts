@@ -130,6 +130,12 @@ export type EditableField = { kind: "summary" } | { kind: "item"; id: number; fi
 /** A field left empty that the prompt needs. */
 export type Missing = "caption" | `item:${number}:caption` | `item:${number}:text`
 
+/**
+ * The base id of the message under an empty field the prompt needs ("Required"; its element is
+ * `errorTextId` of it): the field in the side column and the item's box on the canvas name it.
+ */
+export const missingMessageId = (missing: Missing) => `json-builder-missing-${missing.replace(/:/g, "-")}`
+
 /** The empty fields the prompt needs (upstream marks them red instead of compiling). */
 export function missingFields(state: BuilderDraft): Set<Missing> {
   const missing = new Set<Missing>()

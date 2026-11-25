@@ -4,13 +4,15 @@
  * text anywhere in the size card sets both).
  */
 import { RectangleHorizontal } from "@/components/icons"
-import { useState } from "react"
+import { useId, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { cn } from "@/lib/utils"
+import { errorTextId } from "@/ui/a11y"
+import { FieldCheck } from "@/ui/Field"
 import { useFormState } from "@/ui/hooks"
 import { ASPECTS, aspectSize, matchAspect, parseSize } from "./size"
 import { useSetSize } from "./size-hooks"
@@ -25,6 +27,8 @@ export function SizeTools({ className }: { className?: string }) {
   const area = Math.max(64 * 64, width * height)
   const current = matchAspect({ width, height })
   const typed = parseSize(text)
+  const invalid = text !== "" && !typed
+  const sizeId = useId()
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -61,7 +65,6 @@ export function SizeTools({ className }: { className?: string }) {
           })}
         </div>
         <form
-          className="flex gap-1.5"
           onSubmit={(event) => {
             event.preventDefault()
             if (!typed) return
@@ -70,17 +73,21 @@ export function SizeTools({ className }: { className?: string }) {
             setOpen(false)
           }}
         >
-          <Input
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            placeholder="1216x832"
-            aria-label={t("Size as width x height")}
-            aria-invalid={text !== "" && !typed ? true : undefined}
-            className="h-8 tabular-nums"
-          />
-          <Button type="submit" size="sm" disabled={!typed}>
-            {t("Set")}
-          </Button>
+          <div className="flex gap-1.5">
+            <Input
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              placeholder="1216x832"
+              aria-label={t("Size as width x height")}
+              aria-invalid={invalid || undefined}
+              aria-describedby={invalid ? errorTextId(sizeId) : undefined}
+              className="h-8 tabular-nums"
+            />
+            <Button type="submit" size="sm" disabled={!typed}>
+              {t("Set")}
+            </Button>
+          </div>
+          <FieldCheck id={sizeId} message={invalid ? t("Enter width x height, such as 1216x832.") : null} />
         </form>
       </PopoverContent>
     </Popover>

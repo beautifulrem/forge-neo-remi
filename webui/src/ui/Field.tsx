@@ -156,6 +156,18 @@ export function Field(props: FieldProps) {
   )
 }
 
+/**
+ * A field's own check of the text typed into it (a size, a hex color): what it takes, under the
+ * field while the text does not parse, so an invalid field says why in text and not with its red
+ * edge alone. It is written into a polite live region that stays mounted, so a screen reader reads
+ * it as it appears (a region added with its text already in it is often not read); the control
+ * lists `errorTextId(id)` in its aria-describedby while invalid. Empty, the region takes no room:
+ * the message brings the field's 6 px gap above it, so put it where nothing spaces it (`gap-*`).
+ */
+export function FieldCheck({ id, message }: { id: string; message: string | null }) {
+  return <div aria-live="polite">{message ? <FieldError id={id} message={message} className="mt-1.5" /> : null}</div>
+}
+
 /** A server validation message under a control, already in the UI language (`fieldErrorText`). */
 export function FieldError({ id, message, className }: { id: string; message: string; className?: string }) {
   return (

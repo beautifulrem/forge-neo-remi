@@ -8,6 +8,7 @@ import { TabForm } from "./SchemaForm"
 import { preloadViews } from "./lazy-views"
 import { flushPendingWrites } from "./pending-writes"
 import type { Node, OwnerDefaults, ScriptSchema, TabSchema } from "./schema"
+import { shownReason } from "@/test/says-why"
 
 // these forms show deferred node views (image, file, color, JSON, tabs, outputs): fetched up front,
 // they render at once as the assertions expect (the deferred path: ui/lazy-views.test.tsx)
@@ -232,7 +233,22 @@ describe("input kinds", () => {
     expect(core(store).tint).toBe("#00f")
     fireEvent.change(hex, { target: { value: "nope" } })
     expect(core(store).tint).toBe("#00f")
-    expect(hex).toHaveAttribute("aria-invalid", "true")
+    // its red edge was the only sign: it says what it takes, in text, while the text is wrong
+    expect(shownReason(hex)).toBe("Enter a hex color, such as #ff8800.")
+    expect(screen.getByText("Enter a hex color, such as #ff8800.").closest("[aria-live=polite]")).not.toBeNull()
+    fireEvent.blur(hex)
+    expect(hex).toHaveValue("#00f")
+    expect(hex).not.toHaveAttribute("aria-invalid", "true")
+    expect(screen.queryByText("Enter a hex color, such as #ff8800.")).toBeNull()
+  })
+
+  it("color: a refused value and a hex that does not parse both say why", () => {
+    const store = one({ type: "color", name: "tint", label: "Tint" }, { tint: "#ff0000" })
+    act(() => store.getState().setErrors([{ owner: "core", param: "tint", message: "not allowed here" }]))
+    const hex = screen.getByLabelText("Tint")
+    expect(shownReason(hex)).toBe("not allowed here")
+    fireEvent.change(hex, { target: { value: "#ff" } })
+    expect(shownReason(hex)).toBe("Enter a hex color, such as #ff8800. not allowed here")
   })
 
   it("image, image list and file render upload targets", () => {
@@ -404,6 +420,25 @@ describe("layout and display nodes", () => {
     expect(core(store).enable_hr).toBe(false)
     fireEvent.click(trigger)
     expect(trigger).toHaveAttribute("aria-expanded", "false")
+  })
+
+  // A refused enable switch had its message in a title (a hover tooltip) and its red edge alone.
+  it("an enable switch the server refused says why under the section's title", () => {
+    const store = one(
+      {
+        type: "section",
+        title: "Hires fix",
+        enable: { type: "toggle", name: "enable_hr", label: "Hires fix" },
+        children: [{ type: "slider", name: "scale", label: "Scale", minimum: 1, maximum: 4, step: 0.5 }],
+      },
+      { enable_hr: true, scale: 2 },
+    )
+    act(() => store.getState().setErrors([{ owner: "core", param: "enable_hr", message: "needs a refiner" }]))
+    const toggle = screen.getByRole("switch", { name: "Enable Hires fix" })
+    expect(shownReason(toggle)).toBe("needs a refiner")
+    fireEvent.click(toggle)
+    expect(toggle).not.toHaveAttribute("aria-invalid")
+    expect(screen.queryByText("needs a refiner")).toBeNull()
   })
 
   it("keeps the enable switch's hit box off the section title", () => {

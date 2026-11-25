@@ -548,9 +548,19 @@ generated interfaces (sources: Linear's
   nearly the same red (OKLab ΔE 0.05 light, 0.01 dark, computed from the
   tokens; rose 0.09 and 0.07, the default blue 0.28 and 0.24): there a
   focused invalid field's edge does not tell it from a focused valid one,
-  and a field with no message under it (the aspect ratio popover's size
-  field, the colour fields) shows nothing invalid while focused. Open: that
-  needs an accent kept clear of `--destructive`, or a second cue.
+  so colour cannot carry the state. An invalid field says why in text
+  (WCAG 1.4.1): a message under it (`FieldError`: `text-xs`, `font-medium`,
+  `text-destructive`, its alert icon) that its control names in
+  `aria-describedby`. A refusal shows the server's message (`Field`; a
+  section's enable switch, under the section's title); a field that checks
+  what is typed (the aspect ratio popover's size field, the colour fields)
+  says what it takes ("Enter width x height, such as 1216x832.") while the
+  text does not parse, in a polite live region that stays mounted so the
+  message is read as it appears (`FieldCheck`); a JSON Builder field the
+  prompt needs says "Required", and its item's box on the canvas names that
+  message (`lib/design-guards.test.ts`, "invalid fields": every
+  `aria-invalid` outside the kit names a message; each field's own test
+  that the message is shown).
   Image tiles (network cards) keep a hairline
   ring and no shadow. A focus ring over an image is drawn where the image
   cannot cover it: an inset ring is a box shadow and the tile's own outline

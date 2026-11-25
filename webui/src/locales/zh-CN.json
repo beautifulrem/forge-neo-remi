@@ -1728,5 +1728,8 @@
   "The text is not valid JSON.": "该文本不是有效的 JSON。",
   "{{label}}: ": "{{label}}：",
   "Source code": "源代码",
-  "This WebUI is free software under the GNU Affero General Public License v3.0.": "本 WebUI 是自由软件，采用 GNU Affero 通用公共许可证 v3.0 授权。"
+  "This WebUI is free software under the GNU Affero General Public License v3.0.": "本 WebUI 是自由软件，采用 GNU Affero 通用公共许可证 v3.0 授权。",
+  "Enter width x height, such as 1216x832.": "请输入 宽x高，例如 1216x832。",
+  "Enter a hex color, such as #ff8800.": "请输入十六进制颜色，例如 #ff8800。",
+  "Required": "必填"
 }

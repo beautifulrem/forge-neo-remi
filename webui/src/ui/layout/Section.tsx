@@ -6,7 +6,8 @@ import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { resetParams } from "../actions"
 import { useForm, useFormState, useOwner, useParam } from "../hooks"
-import { ModifiedDot } from "../Field"
+import { errorTextId } from "../a11y"
+import { FieldError, ModifiedDot } from "../Field"
 import { inputsIn, sectionKey } from "../form-index"
 import { anyModified } from "../form-store"
 import { ContainerTitleContext } from "../fallback-name"
@@ -15,7 +16,7 @@ import type { SectionNode, ToggleNode } from "../schema"
 import { summarizeSection } from "../section-summary"
 import { PanelDepthContext, panelClass, panelTitleClass, usePanelDepth } from "./panel"
 
-function EnableSwitch({ node, title, onEnabled }: { node: ToggleNode; title: string; onEnabled: () => void }) {
+function EnableSwitch({ node, id, title, onEnabled }: { node: ToggleNode; id: string; title: string; onEnabled: () => void }) {
   const { t } = useTranslation()
   const param = useParam<boolean>(node)
   return (
@@ -28,11 +29,17 @@ function EnableSwitch({ node, title, onEnabled }: { node: ToggleNode; title: str
       disabled={!param.enabled}
       aria-label={t("Enable {{title}}", { title })}
       aria-invalid={param.error ? true : undefined}
-      title={param.error}
+      aria-describedby={param.error ? errorTextId(id) : undefined}
       // the row's gap plus this margin hold the switch's 12 px after: box off the title before it
       className="ml-1"
     />
   )
+}
+
+/** The server's message for a refused enable switch, under the section's title. */
+function EnableError({ node, id }: { node: ToggleNode; id: string }) {
+  const param = useParam<boolean>(node)
+  return param.error ? <FieldError id={id} message={param.error} className="mt-1" /> : null
 }
 
 /**
@@ -93,8 +100,9 @@ export function Section({ node }: { node: SectionNode }) {
             onReset={() => resetParams({ store, tab: formId }, owner, names)}
           />
         ) : null}
-        {node.enable ? <EnableSwitch node={node.enable} title={title} onEnabled={() => setOpen(true)} /> : null}
+        {node.enable ? <EnableSwitch node={node.enable} id={`${id}-enable`} title={title} onEnabled={() => setOpen(true)} /> : null}
       </div>
+      {node.enable ? <EnableError node={node.enable} id={`${id}-enable`} /> : null}
       <Collapsible.Panel
         className={cn(
           // 4 px of room either side (-mx-1 / px-1): the clip keeps the fields' focus rings

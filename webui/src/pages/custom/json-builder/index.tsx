@@ -24,11 +24,13 @@ import { copyText } from "@/features/gallery/files"
 import { deliver } from "@/features/send-to/send-to"
 import { cn } from "@/lib/utils"
 import type { CustomPageProps } from "@/pages/ext"
+import { errorTextId } from "@/ui/a11y"
+import { FieldError } from "@/ui/Field"
 import { getFormStore } from "@/ui/form-store"
 import { lockNote } from "@/ui/locks"
 import { CANVAS_TYPES, LABELS } from "./compile"
 import { type Box, type CanvasType, decompilePrompt, type Label, splitPrompt } from "./decompile"
-import { ASPECT_RATIOS, type AspectRatio, buildDraft, finalPrompt, type Item, LABEL_NAMES, type Missing, type EditableField, missingFields, resolutionFor, round16 } from "./draft"
+import { ASPECT_RATIOS, type AspectRatio, buildDraft, finalPrompt, type Item, LABEL_NAMES, type Missing, missingMessageId, type EditableField, missingFields, resolutionFor, round16 } from "./draft"
 import { decompileFlux3Prompt, isFlux3Prompt, PROMPT_FORMAT_NAMES, PROMPT_FORMATS, type PromptFormat } from "./flux3"
 import { LayoutCanvas } from "./LayoutCanvas"
 import { sizeLimit } from "./size-limit"
@@ -439,10 +441,12 @@ function SummarySection({ missing, onEditField }: { missing: ReadonlySet<Missing
           className="min-h-14"
           placeholder={t("The whole picture in a sentence or two")}
           aria-invalid={missing.has("caption") || undefined}
+          aria-describedby={missing.has("caption") ? errorTextId(missingMessageId("caption")) : undefined}
           value={caption}
           onChange={(event) => set({ caption: event.target.value })}
           onDoubleClick={() => onEditField({ kind: "summary" })}
         />
+        {missing.has("caption") ? <FieldError id={missingMessageId("caption")} message={t("Required")} /> : null}
       </div>
       <div className="flex gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -480,6 +484,8 @@ function ItemRow({
   const updateItem = useBuilder((s) => s.updateItem)
   const removeItem = useBuilder((s) => s.removeItem)
   const edit = (field: "caption" | "text") => onEditField({ kind: "item", id: item.id, field })
+  const captionMissing = missing.has(`item:${item.id}:caption`)
+  const textMissing = missing.has(`item:${item.id}:text`)
   return (
     <li
       data-item={item.id}
@@ -509,7 +515,8 @@ function ItemRow({
           placeholder={t("Caption")}
           rows={1}
           className="min-h-8 min-w-0 flex-1 py-1.5"
-          aria-invalid={missing.has(`item:${item.id}:caption`) || undefined}
+          aria-invalid={captionMissing || undefined}
+          aria-describedby={captionMissing ? errorTextId(missingMessageId(`item:${item.id}:caption`)) : undefined}
           value={item.caption}
           onChange={(event) => updateItem(item.id, { caption: event.target.value })}
           onDoubleClick={() => edit("caption")}
@@ -518,13 +525,15 @@ function ItemRow({
           <Pencil aria-hidden />
         </Button>
       </div>
+      {captionMissing ? <FieldError id={missingMessageId(`item:${item.id}:caption`)} message={t("Required")} /> : null}
       {item.label === "text" ? (
         <div className="flex items-center gap-1">
           <Input
             aria-label={t("Text to render of item {{n}}", { n: index + 1 })}
             className="min-w-0 flex-1"
             placeholder={t("Text to render")}
-            aria-invalid={missing.has(`item:${item.id}:text`) || undefined}
+            aria-invalid={textMissing || undefined}
+            aria-describedby={textMissing ? errorTextId(missingMessageId(`item:${item.id}:text`)) : undefined}
             value={item.text}
             onChange={(event) => updateItem(item.id, { text: event.target.value })}
             onDoubleClick={() => edit("text")}
@@ -534,6 +543,7 @@ function ItemRow({
           </Button>
         </div>
       ) : null}
+      {item.label === "text" && textMissing ? <FieldError id={missingMessageId(`item:${item.id}:text`)} message={t("Required")} /> : null}
       <div className="grid grid-cols-4 gap-1.5" role="group" aria-label={t("Box of item {{n}}", { n: index + 1 })}>
         {CORNERS.map((corner, i) => (
           <div key={corner} className="flex min-w-0 items-center gap-1">

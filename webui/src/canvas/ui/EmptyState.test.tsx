@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
+import { shownReason } from "@/test/says-why"
 import { EmptyState } from "./EmptyState"
 
 describe("the editor's empty stage", () => {
@@ -15,5 +16,12 @@ describe("the editor's empty stage", () => {
       expect(retry).not.toBeDisabled()
       view.unmount()
     }
+  })
+
+  // An upload that failed said so in an alert beside the drop target, which named only its hint.
+  it("names a failed upload's message as the drop target's description", () => {
+    render(<EmptyState busy={false} error="Could not upload the image" onFiles={() => {}} onBlank={() => {}} />)
+    const target = screen.getByRole("button", { name: /Add a source image/ })
+    expect(shownReason(target)).toBe("Drop an image, paste, or click to browse Could not upload the image")
   })
 })
