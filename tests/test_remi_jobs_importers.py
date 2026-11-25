@@ -14,7 +14,7 @@ import zlib
 
 import numpy as np
 import pytest
-from PIL import Image
+from PIL import Image, ImageFile, PngImagePlugin
 
 from remi.jobs import importers
 from remi.jobs.importers import ImportFailed, ImportItem, ImportReport, Mapper, note, note_text
@@ -94,6 +94,82 @@ def test_the_unpickler_refuses_other_globals(value):
         importers.safe_loads(pickle.dumps(value))
 
 
+@pytest.fixture
+def allocations(monkeypatch):
+    """The sizes Pillow is asked to allocate image memory for; anything past a
+    million pixels raises MemoryError instead of allocating."""
+
+    sizes = []
+
+    def spy(real):
+        def allocate(mode, size, *args):
+            sizes.append(tuple(size))
+            if size[0] * size[1] > 1_000_000:
+                raise MemoryError(f"{size[0]}x{size[1]}")
+            return real(mode, size, *args)
+
+        return allocate
+
+    monkeypatch.setattr(Image.core, "new", spy(Image.core.new))
+    monkeypatch.setattr(Image.core, "fill", spy(Image.core.fill))
+    return sizes
+
+
+class _ForgedImage:
+    """Pickles like a PIL image of ``cls`` whose state declares ``size``."""
+
+    def __init__(self, cls, size, data=b""):
+        self.cls, self.size, self.data = cls, size, data
+
+    def __reduce__(self):
+        import copyreg
+
+        state = [{}, "RGB", self.size, None, self.data] + ([None] if issubclass(self.cls, ImageFile.ImageFile) else [])
+        return copyreg._reconstructor, (self.cls, object, None), state
+
+
+def test_pickled_images_past_the_pixel_cap_are_refused_before_any_allocation(allocations, monkeypatch):
+    """PIL's ``__setstate__`` allocates the declared size before it reads the data: a pickle
+    declaring 100000x100000 asked for 30 GB. The restricted loader checks the size first."""
+
+    from remi import files
+
+    for cls in (Image.Image, PngImagePlugin.PngImageFile):
+        for size in ((100_000, 100_000), (-1, 5), ("a", 1), (1, 2, 3)):
+            with pytest.raises(pickle.UnpicklingError):
+                importers.safe_loads(pickle.dumps(_ForgedImage(cls, size)))
+    assert allocations == []
+    monkeypatch.setattr(files, "MAX_UPLOAD_PIXELS", 64 * 64)
+    with pytest.raises(pickle.UnpicklingError, match="too large"):
+        importers.safe_loads(pickle.dumps(Image.new("RGB", (65, 64))))
+    image = importers.safe_loads(pickle.dumps(Image.new("RGB", (64, 64), (1, 2, 3))))
+    assert type(image) is Image.Image and image.size == (64, 64) and image.getpixel((0, 0)) == (1, 2, 3)
+    png = io.BytesIO()
+    Image.new("L", (3, 2), 7).save(png, format="PNG")
+    opened = importers.safe_loads(pickle.dumps(Image.open(png)))
+    assert type(opened) is PngImagePlugin.PngImageFile and opened.getpixel((0, 0)) == 7
+
+
+def test_the_unpickler_never_constructs_an_image(tmp_path):
+    """A pickle could call an allowed image class: ``PngImageFile(path)`` opened any file on
+    the server, and its header (not the pickle) decided the size."""
+
+    import copyreg
+
+    class Construct:
+        def __init__(self, cls, *args):
+            self.cls, self.args = cls, args
+
+        def __reduce__(self):
+            return self.cls, self.args
+
+    path = tmp_path / "server.png"
+    Image.new("RGB", (4, 4)).save(path)
+    for value in (Construct(PngImagePlugin.PngImageFile, str(path)), Construct(Image.Image), Construct(copyreg._reconstructor, Image.Image, Image.Image, ())):
+        with pytest.raises(pickle.UnpicklingError):
+            importers.safe_loads(pickle.dumps(value))
+
+
 def test_script_arguments_that_are_empty_or_not_a_list():
     assert importers.read_script_params(None, None) == ([], [])
     assert importers.read_script_params(b"", b"k" * 32) == ([], [])
@@ -133,6 +209,36 @@ def test_stored_images_of_every_kind_become_pil_images():
     # anything else is returned as it is
     for value in ("a path.png", 7, None, np.zeros(3), {"cls": "Tensor"}):
         assert importers.deserialize_image(value) is value
+
+
+def test_stored_images_past_the_pixel_cap_are_refused_before_decoding(allocations, monkeypatch):
+    """An Agent Scheduler image dict names its size (``frombytes`` allocated it before
+    finding the data short); a data URL's header does (``load`` decoded it), and the X/Y/Z
+    plot turns Pillow's own limit off for the process."""
+
+    from remi import files
+
+    empty = base64.b64encode(zlib.compress(b"")).decode()
+    for size in ([100_000, 100_000], [-1, 5], ["a", 1], [1, 2, 3]):
+        with pytest.raises(ValueError):
+            importers.deserialize_image({"cls": "Image", "mode": "RGB", "size": size, "data": empty})
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", None)
+
+    def chunk(kind, data):
+        return len(data).to_bytes(4, "big") + kind + data + zlib.crc32(kind + data).to_bytes(4, "big")
+
+    # a PNG header only: 100000x100000, 8-bit grey
+    huge = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", (100_000).to_bytes(4, "big") * 2 + bytes([8, 0, 0, 0, 0])) + chunk(b"IEND", b"")
+    with pytest.raises(ValueError, match="too large"):
+        importers.deserialize_image("data:image/png;base64," + base64.b64encode(huge).decode())
+    assert allocations == []
+    monkeypatch.setattr(files, "MAX_UPLOAD_PIXELS", 3 * 2)
+    assert importers.deserialize_image(png_data_url((3, 2))).size == (3, 2)
+    with pytest.raises(ValueError, match="too large"):
+        importers.deserialize_image(png_data_url((3, 3)))
+    data = base64.b64encode(zlib.compress(b"\0" * 27)).decode()
+    with pytest.raises(ValueError, match="too large"):
+        importers.deserialize_image({"cls": "Image", "mode": "RGB", "size": [3, 3], "data": data})
 
 
 # endregion

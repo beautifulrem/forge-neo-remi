@@ -35,6 +35,7 @@ import hmac
 import io
 import json
 import logging
+import operator
 import os
 import pickle
 import sqlite3
@@ -177,9 +178,62 @@ class ImportReport:
 # region Safe unpickling
 
 
+def checked_image_size(size: Any) -> tuple[int, int]:
+    """``size`` as ``(width, height)``: two non-negative integers within
+    :data:`remi.files.MAX_UPLOAD_PIXELS` (Pillow allocates the size it is
+    given, whatever ``Image.MAX_IMAGE_PIXELS`` says), else ValueError."""
+
+    from remi import files
+
+    try:
+        width, height = size
+        width, height = operator.index(width), operator.index(height)
+    except (TypeError, ValueError):
+        raise ValueError(f"not an image size: {size!r}"[:200]) from None
+    if width < 0 or height < 0:
+        raise ValueError(f"not an image size: {size!r}"[:200])
+    if width * height > files.MAX_UPLOAD_PIXELS:
+        raise ValueError(f"the image is too large ({width}×{height})")
+    return width, height
+
+
+_CHECKED_IMAGE_CLASSES: dict[type, type] = {}
+
+
+def _checked_image_class(cls: type) -> type:
+    """A subclass of the PIL image class ``cls`` for the unpickler: its
+    ``__setstate__`` checks the declared size (PIL's allocates it before it
+    reads the data) and then turns the object into a ``cls``; it is never
+    constructed (``PngImageFile(path)`` would open any file on the server,
+    whose header then decides the size)."""
+
+    checked = _CHECKED_IMAGE_CLASSES.get(cls)
+    if checked is not None:
+        return checked
+
+    def __init__(self: Any, *args: Any, **kwargs: Any) -> None:
+        raise pickle.UnpicklingError(f"refused: constructing {cls.__name__}")
+
+    def __setstate__(self: Any, state: Any) -> None:
+        if not isinstance(state, (list, tuple)) or len(state) < 5:
+            raise pickle.UnpicklingError(f"not a {cls.__name__} state")
+        try:
+            checked_image_size(state[2])
+        except ValueError as error:
+            raise pickle.UnpicklingError(str(error)) from None
+        self.__class__ = cls
+        cls.__setstate__(self, list(state))
+
+    checked = type(cls.__name__, (cls,), {"__init__": __init__, "__setstate__": __setstate__, "__module__": __name__})
+    _CHECKED_IMAGE_CLASSES[cls] = checked
+    return checked
+
+
 class SafeUnpickler(pickle.Unpickler):
-    """Only plain data, numpy arrays and PIL images: any other global (a
-    function, a class with side effects) refuses the whole pickle."""
+    """Only plain data, numpy arrays and PIL images (of at most
+    :data:`remi.files.MAX_UPLOAD_PIXELS`, never constructed): any other
+    global (a function, a class with side effects) refuses the whole
+    pickle."""
 
     ALLOWED = {
         ("builtins", "set"), ("builtins", "frozenset"), ("builtins", "complex"), ("builtins", "bytearray"),
@@ -198,7 +252,7 @@ class SafeUnpickler(pickle.Unpickler):
             from PIL import Image
 
             if isinstance(cls, type) and issubclass(cls, Image.Image):
-                return cls
+                return _checked_image_class(cls)
         raise pickle.UnpicklingError(f"refused global {module}.{name}")
 
 
@@ -261,15 +315,18 @@ def describe(value: Any) -> str:
 
 def deserialize_image(value: Any) -> Any:
     """A PIL image from an Agent Scheduler image dict, a data URL or an
-    image (anything else is returned as is)."""
+    image (anything else is returned as is). Images past
+    :data:`remi.files.MAX_UPLOAD_PIXELS` raise ValueError before any pixel
+    memory is allocated."""
 
     from PIL import Image
 
     if isinstance(value, Image.Image):
         return value
     if isinstance(value, Mapping) and value.get("cls") == "Image":
+        size = checked_image_size(value["size"])
         data = zlib.decompressobj().decompress(base64.b64decode(value["data"]), MAX_PICKLE_BYTES)
-        return Image.frombytes(value["mode"], tuple(value["size"]), data)
+        return Image.frombytes(value["mode"], size, data)
     if isinstance(value, Mapping) and value.get("cls") == "ndarray":
         import numpy as np
 
@@ -278,6 +335,7 @@ def deserialize_image(value: Any) -> Any:
         return Image.fromarray(array.astype("uint8"))
     if isinstance(value, str) and value.startswith("data:image/") and "," in value:
         image = Image.open(io.BytesIO(base64.b64decode(value.split(",", 1)[1])))
+        checked_image_size(image.size)  # from the header: nothing is decoded yet
         image.load()
         return image
     try:

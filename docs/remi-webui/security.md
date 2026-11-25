@@ -141,6 +141,11 @@ attackers who already have a login (they are administrators by design).
   X/Y/Z plot lifts). Stored as `uploads/<sha256><ext>`; the display name is
   cleaned (last path component, no control characters, ≤ 200 characters).
 - `/sdapi` images (base64 or URL) get the same pixel cap before decoding.
+- So do the images of an imported Agent Scheduler queue
+  (`remi/jobs/importers.py`): its restricted unpickler checks a pickled
+  image's declared size before Pillow allocates it and never calls an image
+  class (`PngImageFile(path)` would open a file on the server); image dicts
+  and data URLs are checked before `frombytes` / `load`.
 - Upload errors are fixed messages ("not a readable image"): Pillow's own
   message names the incoming file in the data folder, so it is only logged.
 - Every other request body (JSON jobs, `/sdapi` base64 images, extension
