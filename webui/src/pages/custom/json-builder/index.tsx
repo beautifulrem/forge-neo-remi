@@ -35,6 +35,7 @@ import { decompileVglPrompt, isVglPrompt, VGL_LICENSE, VGL_STYLE_MEDIUMS } from 
 import { itemColor } from "./view"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
 import { retryableLazy } from "@/lib/retryable-lazy"
+import { usePinnedBar } from "@/lib/use-pinned-bar"
 
 /** The field editor, a lazy chunk (it carries CodeMirror): mounted only while a field is open in it. */
 const FieldEditor = retryableLazy(() => import("./FieldEditor").then((m) => ({ default: m.FieldEditor })))
@@ -620,6 +621,7 @@ export default function JsonBuilderPage(_props: CustomPageProps) {
   const [activeId, setActiveId] = useState<number | null>(null)
   const [showMissing, setShowMissing] = useState(false)
   const [itemsExpanded, setItemsExpanded] = useState(false)
+  const sendBarRef = usePinnedBar("bottom")
   const [editField, setEditField] = useState<EditableField | null>(null)
   const state = useBuilder()
   const missing = showMissing ? missingFields(state) : new Set<Missing>()
@@ -684,7 +686,7 @@ export default function JsonBuilderPage(_props: CustomPageProps) {
           )}
           <ItemsSection activeId={activeId} onActivate={setActiveId} onEditField={setEditField} missing={missing} expanded={itemsExpanded} onToggleExpand={() => setItemsExpanded((v) => !v)} />
           {/* pinned to the bottom of the page (phone) or of the scrolling side column (lg+): the send buttons stay in reach */}
-          <div className="sticky bottom-0 z-10 flex gap-2 border-t border-border/70 bg-background py-2 md:pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:border-t-0 lg:pt-2 lg:pb-[env(safe-area-inset-bottom)]" data-toast-obstacle>
+          <div ref={sendBarRef} className="sticky bottom-0 z-10 flex gap-2 border-t border-border/70 bg-background py-2 md:pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:border-t-0 lg:pt-2 lg:pb-[env(safe-area-inset-bottom)]" data-toast-obstacle>
             <Button variant="glow" className="flex-1 font-semibold" onClick={() => send("txt2img")}>
               <Wand aria-hidden />
               {t("Send to txt2img")}

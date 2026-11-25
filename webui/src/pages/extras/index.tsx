@@ -35,6 +35,7 @@ import { getFormStore } from "@/ui/form-store"
 import { ScriptsProvider, Slot } from "@/ui/layout/Slot"
 import { RenderLayout } from "@/ui/Renderer"
 import { retryableLazy } from "@/lib/retryable-lazy"
+import { usePinnedBar } from "@/lib/use-pinned-bar"
 
 const Lightbox = retryableLazy(() => import("@/features/lightbox/Lightbox").then((m) => ({ default: m.Lightbox })))
 
@@ -306,11 +307,13 @@ export default function ExtrasPage() {
   const noResults = useExtrasRuns((s) => s.results.length === 0)
   const running = useProgress((s) => runningFor(s, "extras") !== null)
   const idle = noResults && !running
+  // a phone scrolls the page under the run bar; the desktop columns scroll below it
+  const runBarRef = usePinnedBar("top")
   useExtrasShortcuts()
   return (
     <div className={cn("h-full", desktop ? "grid grid-cols-[minmax(22rem,30rem)_minmax(0,1fr)]" : "overflow-y-auto")}>
       <div className={cn("flex flex-col", desktop && "min-h-0 border-r")}>
-        <div className="sticky top-0 z-10 border-b bg-background p-3">
+        <div ref={runBarRef} className="sticky top-0 z-10 border-b bg-background p-3">
           <RunBar />
         </div>
         <div className={cn("p-3", desktop && "min-h-0 flex-1 overflow-y-auto")}>

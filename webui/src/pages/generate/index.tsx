@@ -30,6 +30,7 @@ import { useGenerateCommands, useGenerateRuntime } from "./runtime"
 import { useGenerateShortcuts } from "./shortcuts"
 import { Stage } from "./Stage"
 import { retryableLazy } from "@/lib/retryable-lazy"
+import { usePinnedBar } from "@/lib/use-pinned-bar"
 
 // The parameter form (the schema renderer with its controls, the prompt fields, the scripts) is its
 // own chunk. Its fetch starts when this module runs, alongside the schema request, so the page's
@@ -123,8 +124,10 @@ function useViewer(tab: GenerateTab) {
 
 function ParamsColumn({ tab, sticky, showModelBar }: { tab: GenerateTab; sticky: "top" | "bottom"; showModelBar?: boolean }) {
   const { data: schema } = useSchema(tab)
+  const pinnedRef = usePinnedBar(sticky)
   const bar = (
     <div
+      ref={pinnedRef}
       data-toast-obstacle={sticky === "bottom" ? "" : undefined}
       className={
         sticky === "top"

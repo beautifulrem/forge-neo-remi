@@ -291,6 +291,59 @@ test("a gallery tile shows its focus ring under the pointer", async ({ page }) =
   expect(focused.equals(await edge())).toBe(false)
 })
 
+// A bar pinned over a scroller (the run bar, the apply bars, the send bar) covered the control Tab
+// moved to: the scroller brought it to the edge of its box, under the bar (WCAG 2.4.11).
+test.describe("focus is not hidden under a pinned bar", () => {
+  const cases: { route: string; width: number; height: number; pending?: boolean }[] = [
+    { route: "txt2img", width: 390, height: 844 },
+    { route: "txt2img", width: 1280, height: 720 },
+    { route: "extras", width: 390, height: 844 },
+    { route: "settings", width: 1280, height: 720, pending: true },
+    { route: "settings", width: 852, height: 393, pending: true },
+    { route: "extensions", width: 852, height: 393, pending: true },
+    { route: "txt2img", width: 852, height: 393 },
+    { route: "ext/json-builder", width: 390, height: 844 },
+    { route: "ext/json-builder", width: 852, height: 393 },
+    { route: "ext/json-builder", width: 1280, height: 720 },
+  ]
+  for (const { route, width, height, pending } of cases) {
+    test(`#/${route} at ${width}×${height}`, async ({ page }) => {
+      await page.setViewportSize({ width, height })
+      await openRoute(page, route)
+      await page.waitForLoadState("networkidle")
+      await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" })
+      // a pending change shows the bar (settings, extensions)
+      if (pending) await page.getByRole("main").getByRole("switch").first().click()
+      await page.locator("body").click({ position: { x: 1, y: 1 } })
+      const hidden = new Set<string>()
+      // forwards, then back up (a bar at the top hides what Shift+Tab scrolls up to)
+      for (let i = 0; i < 120; i++) {
+        await page.keyboard.press(i < 60 ? "Tab" : "Shift+Tab")
+        const problem = await page.evaluate(() => {
+          const element = document.activeElement
+          if (!element || element === document.body) return null
+          const r = element.getBoundingClientRect()
+          if (r.width < 4 || r.height < 4) return null
+          const points = [
+            [r.left + r.width / 2, r.top + r.height / 2],
+            [r.left + 2, r.top + 2],
+            [r.right - 2, r.bottom - 2],
+          ]
+          const underBar = points.filter(([x, y]) => {
+            const hit = document.elementFromPoint(x!, y!)
+            const bar = hit?.closest(".sticky, [data-toast-obstacle]")
+            return bar !== null && bar !== undefined && !bar.contains(element)
+          })
+          if (underBar.length < 2) return null
+          return element.getAttribute("aria-label") || element.textContent?.trim().slice(0, 40) || element.tagName
+        })
+        if (problem) hidden.add(problem)
+      }
+      expect([...hidden]).toEqual([])
+    })
+  }
+})
+
 test.describe("axe on a phone", () => {
   for (const route of ["txt2img", "img2img", "gallery", "queue", "settings", "networks"]) {
     test(`#/${route} has no serious or critical violations @phone`, async ({ page }) => {

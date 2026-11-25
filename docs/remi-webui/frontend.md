@@ -108,6 +108,14 @@ imperatively).
   (`app/toast-offset.ts`): mark such a control `data-toast-obstacle` (the
   phone's bottom navigation and sticky Generate bar, the canvas's bottom
   toolbars and the apply bars carry it).
+- **Pinned bars and the focus**: a bar pinned over an edge of a scroller (the
+  generate and Extras run bars, the settings and extensions apply bars, the
+  JSON Builder's send bar) takes its ref from `usePinnedBar(edge)`
+  (`lib/use-pinned-bar.ts`). It gives the scroller scroll padding as deep as
+  the bar reaches in, so Tab and Shift+Tab stop a control clear of the bar
+  instead of under it (WCAG 2.4.11). A bar laid over a scroller it is not
+  inside passes a function that finds it (the settings list). The e2e
+  check is "focus is not hidden under a pinned bar" in `a11y.spec.ts`.
 - **Page column**: Extensions and every extension page lay their content out
   in `PAGE_CONTAINER` (`components/page-container.ts`): one max width,
   padding and vertical rhythm.

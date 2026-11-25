@@ -6,13 +6,21 @@ import { Kbd } from "@/components/ui/kbd"
 import { formatShortcut } from "@/app/commands"
 import { requestServerCommand } from "@/features/server-control/server-control"
 import { useSettingsEditor } from "./settings-store"
+import { usePinnedBar } from "@/lib/use-pinned-bar"
+
+/** The settings list's scroller, which the bar lies over (it is not inside it). */
+function settingsScroller(): HTMLElement | null {
+  return document.querySelector<HTMLElement>("[data-settings-scroller]")
+}
 
 export function ApplyBar(props: { count: number; onApply: () => void; onDiscard: () => void; onReview: () => void; reviewing: boolean }) {
   const { t } = useTranslation()
   const applying = useSettingsEditor((s) => s.applying)
+  const barRef = usePinnedBar("bottom", settingsScroller)
   if (props.count === 0 && !applying) return null
   return (
     <div
+      ref={barRef}
       role="region"
       aria-label={t("Unsaved changes")}
       className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-3 pb-3 sm:pb-4 md:pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]"
