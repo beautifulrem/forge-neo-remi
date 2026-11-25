@@ -6,7 +6,7 @@
  * runs stay in a strip below.
  */
 import { Ban, ImageIcon, ImageUpscale, Loader2, Maximize2 } from "@/components/icons"
-import { Suspense, useEffect, useState } from "react"
+import { Suspense, useEffect, useLayoutEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { api } from "@/api/endpoints"
 import { progressFraction, runningFor, useProgress } from "@/api/progress"
@@ -33,6 +33,7 @@ import { FormProvider, OwnerProvider } from "@/ui/context"
 import { DEFAULT_SLOT } from "@/ui/form-index"
 import { getFormStore } from "@/ui/form-store"
 import { ScriptsProvider, Slot } from "@/ui/layout/Slot"
+import { ImageFieldSkeleton, LabelSkeleton } from "@/ui/lazy-views"
 import { RenderLayout } from "@/ui/Renderer"
 import { retryableLazy } from "@/lib/retryable-lazy"
 import { usePinnedBar } from "@/lib/use-pinned-bar"
@@ -41,11 +42,15 @@ const Lightbox = retryableLazy(() => import("@/features/lightbox/Lightbox").then
 
 wireExtrasRuns()
 
-function ExtrasForm() {
+function ExtrasForm({ onShown }: { onShown: () => void }) {
   const { t } = useTranslation()
   const { data: schema } = useSchema("extras")
   const store = getFormStore("extras")
   const ready = useFormLoader(store, schema)
+  // before paint, so the result area comes in the same frame as the form
+  useLayoutEffect(() => {
+    if (ready) onShown()
+  }, [ready, onShown])
   if (!ready) return <FormSkeleton />
   const hasDefaultSlot = store.getState().index.slots.has(DEFAULT_SLOT)
   return (
@@ -62,12 +67,23 @@ function ExtrasForm() {
   )
 }
 
+/**
+ * Stands in while the form's schema loads: the opening of a form of one image and two fields (the
+ * source image's label over its empty drop zone, then two fields of a label over an h-8 control),
+ * made of the same sizes so a form like that does not change height when it arrives. A form with the
+ * source tabs and every postprocessing section is taller: on a phone the result area comes in with
+ * the form (`onShown`), so nothing under the skeleton moves whatever form arrives.
+ */
 function FormSkeleton() {
   return (
-    <div className="flex flex-col gap-3" aria-busy>
-      <Skeleton className="h-56 rounded-md" />
-      <Skeleton className="h-32 rounded-md" />
-      <Skeleton className="h-24 rounded-md" />
+    <div data-slot="form-skeleton" className="flex flex-col gap-3" aria-busy>
+      <ImageFieldSkeleton label />
+      {["w-20", "w-16"].map((width) => (
+        <div key={width} className="flex flex-col gap-1.5">
+          <LabelSkeleton className={width} />
+          <Skeleton data-part="control" className="h-8 rounded-md" />
+        </div>
+      ))}
     </div>
   )
 }
@@ -309,6 +325,8 @@ export default function ExtrasPage() {
   const idle = noResults && !running
   // a phone scrolls the page under the run bar; the desktop columns scroll below it
   const runBarRef = usePinnedBar("top")
+  // on a phone the result area is under the form: it comes in with the form, never under the skeleton
+  const [formShown, setFormShown] = useState(false)
   useExtrasShortcuts()
   return (
     <div className={cn("h-full", desktop ? "grid grid-cols-[minmax(22rem,30rem)_minmax(0,1fr)]" : "overflow-y-auto")}>
@@ -318,13 +336,15 @@ export default function ExtrasPage() {
         </div>
         <div className={cn("p-3", desktop && "min-h-0 flex-1 overflow-y-auto")}>
           <Suspense fallback={<FormSkeleton />}>
-            <ExtrasForm />
+            <ExtrasForm onShown={() => setFormShown(true)} />
           </Suspense>
         </div>
       </div>
-      <section aria-label={t("Result")} className={cn("p-3", desktop ? "min-h-0" : idle ? "h-64" : "h-[80dvh]")}>
-        <ResultStage />
-      </section>
+      {desktop || formShown ? (
+        <section aria-label={t("Result")} className={cn("p-3", desktop ? "min-h-0" : idle ? "h-64" : "h-[80dvh]")}>
+          <ResultStage />
+        </section>
+      ) : null}
     </div>
   )
 }

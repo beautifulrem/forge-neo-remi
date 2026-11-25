@@ -33,6 +33,19 @@ describe("deferred node views", { timeout: 30_000 }, () => {
     expect(screen.getByLabelText("Pick a color for Tint")).toHaveAttribute("type", "color")
   })
 
+  // An image field's placeholder was a 160 px block where the empty field (its label over the drop
+  // zone) is 122 px: what came after it jumped up when the code arrived.
+  it("stand in for an empty image field with its label over the drop zone", async () => {
+    const { container } = renderNode({ type: "image", name: "source", label: "Source" }, { source: null })
+    const classes = (element: Element) => element.className.split(/\s+/)
+    expect(classes(container.querySelector("[data-part=label]")!)).toContain("h-5")
+    const zone = container.querySelector("[data-part=drop-zone]")!
+    expect(classes(zone)).toEqual(expect.arrayContaining(["rounded-lg", "border", "py-6"]))
+    expect(container.querySelector(".h-40")).toBeNull()
+    expect(await screen.findByRole("button", { name: "Source" }, slow)).toBeInTheDocument()
+    expect(container.querySelector("[data-part=drop-zone]")).toBeNull()
+  })
+
   it("keeps the eagerly rendered kinds synchronous", () => {
     renderNode({ type: "toggle", name: "on", label: "Enable thing" }, { on: false })
     expect(screen.getByRole("switch", { name: "Enable thing" })).toBeInTheDocument()

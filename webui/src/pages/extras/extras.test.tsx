@@ -97,4 +97,51 @@ describe("extras page", () => {
       await act(() => i18n.changeLanguage("en"))
     }
   })
+
+  // The placeholder was three tall blocks (224, 128 and 96 px), 172 px taller than the form on a phone,
+  // and the result area under it jumped up when the schema arrived. It is the form's first blocks,
+  // made of the same sizes (the source image's label over its empty drop zone, then two fields), and
+  // on a phone the result area comes in with the form: no fixed height fits every form.
+  describe("while its schema loads", () => {
+    beforeEach(() => queryClient.removeQueries({ queryKey: keys.schema("extras") }))
+
+    it("holds the form's shape, with nothing under it on a phone", () => {
+      vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise<Response>(() => {}))
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ExtrasPage />
+        </QueryClientProvider>,
+      )
+      const skeleton = document.querySelector<HTMLElement>("[data-slot=form-skeleton]")!
+      expect(skeleton).toHaveAttribute("aria-busy", "true")
+      const classes = (element: Element) => element.className.split(/\s+/)
+      const [image, ...fields] = [...skeleton.children]
+      // the field's label line over the drop zone, with the upload hint's padding, icon and line of text
+      expect(classes(image!.querySelector("[data-part=label]")!)).toContain("h-5")
+      const zone = image!.querySelector("[data-part=drop-zone]")!
+      expect(classes(zone)).toEqual(expect.arrayContaining(["rounded-lg", "border", "py-6"]))
+      expect(zone.querySelector(".size-5")).not.toBeNull()
+      expect(zone.querySelector(".text-sm")).not.toBeNull()
+      // a label line over a control as tall as a select or a slider
+      expect(fields).toHaveLength(2)
+      for (const field of fields) {
+        expect(classes(field.querySelector("[data-part=label]")!)).toContain("h-5")
+        expect(classes(field.querySelector("[data-part=control]")!)).toContain("h-8")
+      }
+      expect(screen.queryByRole("region", { name: "Result" })).toBeNull()
+    })
+
+    it("brings the result area in with the form", async () => {
+      mockFetch()
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ExtrasPage />
+        </QueryClientProvider>,
+      )
+      expect(document.querySelector("[data-slot=form-skeleton]")).not.toBeNull()
+      expect(await screen.findByText("Scale by")).toBeInTheDocument()
+      expect(screen.getByRole("region", { name: "Result" })).toHaveTextContent("Results appear here, next to their source.")
+      expect(document.querySelector("[data-slot=form-skeleton]")).toBeNull()
+    })
+  })
 })

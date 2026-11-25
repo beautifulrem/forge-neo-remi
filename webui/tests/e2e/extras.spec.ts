@@ -4,7 +4,7 @@
  * generated image sent to Extras; Hires. fix and Refiner values in a txt2img job and its infotext.
  */
 import { expect, type Page, test } from "@playwright/test"
-import { mod, openGenerate, openRoute, presetStorage, setPrompt, watchConsole } from "./helpers"
+import { injectFaults, mod, openGenerate, openRoute, presetStorage, setPrompt, watchConsole } from "./helpers"
 
 type MockModule = { handleMockRequest: (request: Request) => Promise<Response> }
 
@@ -359,6 +359,60 @@ for (const locale of ["en", "zh-CN"]) {
     expect(overlap).toBe(false)
   })
 }
+
+// At 390 wide the form's placeholder was 172 px taller than the form, and the result area under it
+// jumped up when the schema arrived (a layout shift of 0.106 on each load); the image field's own
+// placeholder was 38 px taller than the empty field. The skeleton is the form's opening blocks, the
+// image field's placeholder its label over the drop zone, and on a phone the result area comes in
+// with the form.
+test.describe("the form while it loads at 390×844", () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test("the skeleton is as tall as the form, and the result area comes in with the form", async ({ page }) => {
+    await injectFaults(page, [{ path: "^/schema/extras$", delay: 1500 }])
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    await page.route("**/src/ui/inputs/Image.tsx*", async (route) => {
+      await held
+      await route.continue()
+    })
+    await page.goto("/#/extras")
+    const skeleton = page.locator("[data-slot=form-skeleton]")
+    await expect(skeleton).toBeVisible()
+    const skeletonHeight = (await skeleton.boundingBox())!.height
+    const result = page.getByRole("region", { name: "Result" })
+    await expect(result).toHaveCount(0)
+    // the form arrives, its image field still loading
+    const form = page.getByRole("form", { name: "Parameters" })
+    await expect(form).toBeVisible({ timeout: 10_000 })
+    await expect(result).toBeVisible()
+    const placeholderHeight = (await form.boundingBox())!.height
+    const before = (await result.boundingBox())!.y
+    release()
+    await expect(form.getByRole("button", { name: "Source" })).toBeVisible()
+    const formHeight = (await form.boundingBox())!.height
+    expect(Math.abs(skeletonHeight - formHeight), "skeleton against the form").toBeLessThanOrEqual(16)
+    expect(Math.abs(placeholderHeight - formHeight), "image placeholder against the field").toBeLessThan(2)
+    expect(Math.abs((await result.boundingBox())!.y - before), "the result area moved").toBeLessThan(2)
+  })
+
+  test("loading the page shifts its layout by less than 0.05", async ({ page }) => {
+    await page.addInitScript(() => {
+      const record = window as unknown as { layoutShift: number }
+      record.layoutShift = 0
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries() as (PerformanceEntry & { value: number; hadRecentInput: boolean })[]) {
+          if (!entry.hadRecentInput) record.layoutShift += entry.value
+        }
+      }).observe({ type: "layout-shift", buffered: true })
+    })
+    await openRoute(page, "extras")
+    await expect(page.getByRole("form", { name: "Parameters" }).getByRole("button", { name: "Source" })).toBeVisible()
+    await expect(page.getByRole("region", { name: "Result" })).toBeVisible()
+    await page.waitForTimeout(500)
+    expect(await page.evaluate(() => (window as unknown as { layoutShift: number }).layoutShift)).toBeLessThan(0.05)
+  })
+})
 
 // The selected image of a run is marked by a layer over the thumbnail, which also covered the
 // focus ring drawn inside it: Tab landed on the selected thumbnail first, and nothing showed it.

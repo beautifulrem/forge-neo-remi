@@ -1327,7 +1327,10 @@ tree's width). Until a sort is chosen, `extra_networks_card_order_field` /
   with ←/→, Shift for 10 %, Home / End; both images fitted to the frame so an
   upscale compares feature for feature) or alone; batches get a thumbnail
   strip. Result actions (download, save, send to img2img / inpaint / Extras,
-  copy parameters), the viewer, "Add to queue".
+  copy parameters), the viewer, "Add to queue". While the schema loads, the
+  opening of a form stands in (the source image's label over its empty drop
+  zone, then two fields), made of the same sizes; no fixed height fits every
+  form, so on a phone the result area under the form comes in with the form.
 - **PNG Info** (`pages/png-info`, `features/pnginfo`,
   `#/png-info?file=<id>`): drop, paste (anywhere on the page) or choose an
   image; it is uploaded once and read by `POST /pnginfo`. The infotext panel,
@@ -1752,7 +1755,8 @@ Keeping a first view small:
   tall as the view it stands for in its usual first state, so what follows
   does not move when the code arrives: an output's is its label over the
   "No output yet" line, each a line of the same text size (nothing for an
-  output without a label).
+  output without a label); an image upload field's is its label line over the
+  empty drop zone (`ImageFieldSkeleton`).
 - Dialogs and surfaces that open on demand (img2img's source panel and
   stage, the networks item dialogs, the lightbox, the style editor) are
   `retryableLazy()` and mounted on first use.
