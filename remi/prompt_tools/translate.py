@@ -149,9 +149,11 @@ def _openai(config: ProviderConfig, texts: Sequence[str], target: str, post: Pos
         content = data["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as error:
         raise TranslationError("unexpected chat completion answer") from error
-    match = re.search(r"\[.*\]", str(content), re.DOTALL)
+    # the first "[" through the last "]" (what re.search(r"\[.*\]", DOTALL) found, in linear time)
+    text = str(content)
+    start, end = text.find("["), text.rfind("]")
     try:
-        translated = json.loads(match.group(0)) if match else None
+        translated = json.loads(text[start : end + 1]) if 0 <= start < end else None
     except ValueError:
         translated = None
     if not isinstance(translated, list) or len(translated) != len(texts):
@@ -192,7 +194,10 @@ def _clean_prompt(text: str, *, preserve_newlines: bool = False) -> str:
     """The model's answer as a prompt: code fences, a "Prompt:" label and
     enclosing quotes dropped; lines joined with commas unless ``preserve_newlines``."""
 
-    text = re.sub(r"^```[\w-]*\s*|\s*```$", "", text.strip())
+    # the fences one at a time: "\s*```$" tried from every blank of a long run (quadratic)
+    text = re.sub(r"^```[\w-]*\s*", "", text.strip())
+    if text.endswith("```"):
+        text = text[:-3].rstrip()
     text = re.sub(r"^(?:negative\s+)?prompt\s*:\s*", "", text, flags=re.IGNORECASE)
     if len(text) >= 2 and (text[0], text[-1]) in (('"', '"'), ("'", "'"), ("“", "”"), ("「", "」")):
         text = text[1:-1]

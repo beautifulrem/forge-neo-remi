@@ -677,6 +677,56 @@ def test_openai_and_deepl_requests():
         translate(["猫"], "en", ProviderConfig("openai", url="http://x/v1", model="m"), {}, post=broken)
 
 
+def test_an_answer_full_of_brackets_is_read_in_linear_time():
+    # The list was found with re.search(r"\[.*\]", DOTALL): an answer with many "[" and no "]"
+    # took quadratic time (40,000 brackets: 0.4 s; the 4 MB the provider may answer: about an hour).
+    config = ProviderConfig("openai", url="http://x/v1", model="m")
+
+    def brackets(url, headers, body):
+        return {"choices": [{"message": {"content": "[" * 400_000}}]}
+
+    started = time.perf_counter()
+    with pytest.raises(TranslationError):
+        translate(["猫"], "en", config, {}, post=brackets)
+    assert time.perf_counter() - started < 2
+
+    def wrapped(url, headers, body):
+        return {"choices": [{"message": {"content": 'x] note [ignored: no] ["cat"] trailing'}}]}
+
+    # the first "[" through the last "]", as before
+    with pytest.raises(TranslationError):
+        translate(["猫"], "en", config, {}, post=wrapped)
+
+    def answer(url, headers, body):
+        return {"choices": [{"message": {"content": 'Here you go:\n["cat", "dog"]\nDone.'}}]}
+
+    assert translate(["猫", "狗"], "en", config, {}, post=answer) == ["cat", "dog"]
+
+
+def test_a_written_prompt_with_a_long_blank_run_is_cleaned_in_linear_time():
+    # the code fence was stripped with re.sub(r"^```[\w-]*\s*|\s*```$"): a long run of blanks
+    # inside the answer took quadratic time (40,000 spaces: 1 s)
+    from remi.prompt_tools.translate import generate_prompt
+
+    config = ProviderConfig("openai", url="http://x/v1", model="m")
+
+    def blanks(url, headers, body):
+        return {"choices": [{"message": {"content": "a" + " " * 400_000 + "b"}}]}
+
+    started = time.perf_counter()
+    assert generate_prompt(config, "cat", post=blanks) == "a" + " " * 400_000 + "b"
+    assert time.perf_counter() - started < 2
+
+    def answering(content):
+        return lambda url, headers, body: {"choices": [{"message": {"content": content}}]}
+
+    assert generate_prompt(config, "cat", post=answering("```\n1girl, beach\n```")) == "1girl, beach"
+    assert generate_prompt(config, "cat", post=answering("```text 1girl```")) == "1girl"
+    for empty in ("```", "```python\n```"):  # nothing inside the fences
+        with pytest.raises(TranslationError):
+            generate_prompt(config, "cat", post=answering(empty))
+
+
 def test_writing_a_prompt_from_a_description():
     from remi.prompt_tools.translate import DEFAULT_INSTRUCTIONS, generate_prompt
 
