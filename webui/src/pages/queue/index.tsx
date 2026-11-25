@@ -156,7 +156,8 @@ function History({ onView }: { onView: (job: Job, index: number) => void }) {
           </SelectContent>
         </Select>
       </div>
-      {history.isPending ? (
+      {/* another filter's empty page says nothing about this one's: loading until it answers */}
+      {history.isPending || (history.isPlaceholderData && jobs.length === 0) ? (
         <div className="flex flex-col gap-1.5">
           {Array.from({ length: 4 }, (_, index) => (
             <Skeleton key={index} className="h-20 w-full" />

@@ -22,7 +22,7 @@ function mockServer(held: string[] = []) {
     if (path === "/jobs") {
       const status = url.searchParams.get("status") ?? ""
       if (held.includes(status)) await gate
-      const items = status === "failed" ? [finished("f1", "a failed fox", "failed")] : [finished("c1", "a calm cat"), finished("c2", "a sleepy dog")]
+      const items = status === "failed" ? [finished("f1", "a failed fox", "failed")] : status === "cancelled,interrupted" ? [] : [finished("c1", "a calm cat"), finished("c2", "a sleepy dog")]
       return json({ items, next_cursor: null, total: items.length })
     }
     return json({})
@@ -90,5 +90,20 @@ describe("queue page on a phone", () => {
     await act(async () => server.release())
     expect(await within(panel).findByText("a failed fox")).toBeInTheDocument()
     expect(within(panel).queryByText("a calm cat")).toBeNull()
+  })
+
+  it("does not say an empty filter's 'no jobs' while another filter loads", async () => {
+    const server = mockServer(["completed"])
+    navigate({ name: "queue", query: new URLSearchParams("section=history&status=stopped") }, { replace: true })
+    renderPage()
+    const panel = screen.getByRole("tabpanel")
+    expect(await within(panel).findByText("No jobs match.")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("radio", { name: "Completed" }))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    // the stopped jobs' empty page is not the completed ones' answer
+    expect(within(panel).queryByText("No jobs match.")).toBeNull()
+    expect(panel.querySelector("[data-slot=skeleton]")).not.toBeNull()
+    await act(async () => server.release())
+    expect(await within(panel).findByText("a calm cat")).toBeInTheDocument()
   })
 })
