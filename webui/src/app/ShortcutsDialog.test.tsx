@@ -77,4 +77,15 @@ describe("keyboard shortcuts dialog", () => {
     const texts = [...Array.from(dialog.querySelectorAll("section"), (section) => section.getAttribute("aria-label") ?? ""), ...Array.from(dialog.querySelectorAll("dt"), (dt) => dt.textContent ?? "")]
     expect(texts.filter((text) => !zh[text])).toEqual([])
   })
+
+  // Extras' Ctrl/Cmd+Shift+Enter (add to queue, as on the Generate page) was listed nowhere
+  it("lists the Extras page's keys", () => {
+    openWith(false)
+    const extras = within(screen.getByRole("region", { name: "Extras" }))
+    for (const [label, key] of [
+      ["Process", "Ctrl+Enter"],
+      ["Add to queue", "Ctrl+Shift+Enter"],
+      ["Interrupt", "Esc"],
+    ]) expect(extras.getByText(label).nextElementSibling?.textContent).toBe(key)
+  })
 })

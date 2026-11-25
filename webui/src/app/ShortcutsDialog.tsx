@@ -84,6 +84,15 @@ const SHORTCUT_GROUPS: { group: string; entries: Entry[] }[] = [
     ],
   },
   {
+    // pages/extras/index.tsx (useExtrasShortcuts)
+    group: "Extras",
+    entries: [
+      { label: "Process", keys: ["Mod+Enter"] },
+      { label: "Add to queue", keys: ["Mod+Shift+Enter"] },
+      { label: "Interrupt", keys: ["Esc"] },
+    ],
+  },
+  {
     group: "Settings",
     entries: [
       { label: "Search", keys: ["/"] },

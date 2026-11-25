@@ -270,7 +270,7 @@ The command palette (Ctrl+K, ⌘K on a Mac) lists every command with its shortcu
 | Gallery | arrows move · Enter open · Space select (Shift extends) · F star · Ctrl/⌘+A select all · Delete remove · Esc clear selection |
 | Networks | / search · arrows move · Enter apply · I metadata · E edit · Shift+F10 item menu |
 | Queue | Space pick up a job, ↑ / ↓ move it, Space drop, Esc cancel |
-| Extras | Ctrl/⌘+Enter process · Esc interrupt |
+| Extras | Ctrl/⌘+Enter process · Ctrl/⌘+Shift+Enter add to queue · Esc interrupt |
 | Settings | / search · Ctrl/⌘+S apply |
 
 ## Migrating from the Gradio UI

@@ -270,7 +270,7 @@ docker run --device /dev/kfd --device /dev/dri --group-add video -p 127.0.0.1:78
 | 图库 | 方向键移动 · Enter 打开 · 空格选择（Shift 扩展选择）· F 星标 · Ctrl/⌘+A 全选 · Delete 移除 · Esc 清除选择 |
 | 模型网络 | / 搜索 · 方向键移动 · Enter 应用 · I 元数据 · E 编辑 · Shift+F10 条目菜单 |
 | 队列 | 空格拿起任务，↑ / ↓ 移动，空格放下，Esc 取消 |
-| 后期处理 | Ctrl/⌘+Enter 处理 · Esc 中止 |
+| 后期处理 | Ctrl/⌘+Enter 处理 · Ctrl/⌘+Shift+Enter 加入队列 · Esc 中止 |
 | 设置 | / 搜索 · Ctrl/⌘+S 应用 |
 
 ## 从 Gradio 界面迁移
