@@ -788,6 +788,31 @@ for (const [width, height] of [
   })
 }
 
+// A lone small icon button (the server page's Refresh of the weights in memory) takes taps on an
+// invisible 40 px box around it that reaches no other control.
+test("the weights in memory refresh is a 40 px target", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto("/#/settings?view=server")
+  await page.getByRole("button", { name: "Show the weights in memory" }).click()
+  const refresh = page.getByRole("button", { name: "Refresh", exact: true })
+  await expect(refresh).toBeVisible()
+  const box = await refresh.evaluate((button) => {
+    const rect = button.getBoundingClientRect()
+    const after = getComputedStyle(button, "::after")
+    const box = { left: rect.left + parseFloat(after.left), top: rect.top + parseFloat(after.top), right: rect.right - parseFloat(after.right), bottom: rect.bottom - parseFloat(after.bottom) }
+    const reached = [...document.querySelectorAll("button, input, select, textarea, a, [role=switch], [tabindex]:not([tabindex='-1'])")]
+      .filter((element) => element !== button && !element.contains(button) && !button.contains(element))
+      .filter((element) => {
+        const other = element.getBoundingClientRect()
+        return other.width > 0 && other.left < box.right - 0.5 && other.right > box.left + 0.5 && other.top < box.bottom - 0.5 && other.bottom > box.top + 0.5
+      })
+      .map((element) => element.getAttribute("aria-label") ?? element.textContent?.slice(0, 30))
+    return { width: Math.round(box.right - box.left), height: Math.round(box.bottom - box.top), reached }
+  })
+  expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(40)
+  expect(box.reached).toEqual([])
+})
+
 // A section's enable switch has a wide after: box; it reached 4 px into the section's title, so a tap at
 // the title's end flipped the switch instead of opening the section.
 test("an enable switch's target stops short of the section title", async ({ page }) => {

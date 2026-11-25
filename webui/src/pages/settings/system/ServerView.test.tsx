@@ -47,4 +47,13 @@ describe("ServerView", () => {
     expect(await screen.findByText("anima.safetensors")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Restart server" })).toBeEnabled()
   })
+
+  it("gives the weights in memory's lone refresh button a 40 px target", async () => {
+    vi.spyOn(api.system, "status").mockResolvedValue(STATUS as never)
+    vi.spyOn(api.system, "loadedModels").mockReturnValue(new Promise(() => {}))
+    renderView()
+    fireEvent.click(screen.getByRole("button", { name: "Show the weights in memory" }))
+    // 24 px and 8 px on each side; nothing else in its row takes taps
+    expect(await screen.findByRole("button", { name: "Refresh" })).toHaveClass("size-6", "relative", "after:absolute", "after:-inset-2")
+  })
 })

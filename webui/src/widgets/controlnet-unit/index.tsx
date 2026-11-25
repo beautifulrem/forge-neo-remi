@@ -371,7 +371,16 @@ export default function ControlNetUnitWidget({ value, onChange, props, disabled,
             id={`${id}-model`}
             label={label("model", "Model")}
             trailing={
-              <Button size="icon-xs" variant="ghost" aria-label={tw("Refresh models")} title={tw("Refresh models")} onClick={() => void call("refresh_models")} disabled={busy !== null}>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label={tw("Refresh models")}
+                title={tw("Refresh models")}
+                onClick={() => void call("refresh_models")}
+                disabled={busy !== null}
+                // a 32 px target: the label row's 4 px gap and the field's 6 px gap below hold its reach
+                className="relative after:absolute after:-inset-1"
+              >
                 <RefreshCw aria-hidden className={cn(busy === "refresh_models" && "animate-spin")} />
               </Button>
             }

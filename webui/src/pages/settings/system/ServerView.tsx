@@ -76,7 +76,15 @@ function LoadedWeights() {
     <div className="flex flex-col gap-1.5 rounded-lg bg-muted/50 p-2" aria-live="polite" aria-busy={loaded.isFetching}>
       <div className="flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
         <span className="flex-1">{t("Weights in memory")}</span>
-        <Button variant="ghost" size="icon-xs" aria-label={t("Refresh")} disabled={loaded.isFetching} onClick={() => void loaded.refetch()}>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={t("Refresh")}
+          disabled={loaded.isFetching}
+          onClick={() => void loaded.refetch()}
+          // alone in its row: a 40 px target
+          className="relative after:absolute after:-inset-2"
+        >
           <RefreshCw className={cn(loaded.isFetching && "animate-spin")} />
         </Button>
       </div>

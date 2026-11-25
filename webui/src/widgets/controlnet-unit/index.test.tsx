@@ -266,6 +266,13 @@ describe("controlnet-unit widget", { timeout: 30_000 }, () => {
     expect(await screen.findByRole("option", { name: "brand_new_model" })).toBeInTheDocument()
   })
 
+  it("gives the 24 px refresh button a 32 px target that stops at the label and the select", async () => {
+    renderForm()
+    const unit = await panel()
+    // -inset-1 reaches 4 px: the label row's gap-1 on the left, the field's gap-1.5 below
+    expect(within(unit).getByRole("button", { name: "Refresh models" })).toHaveClass("size-6", "relative", "after:absolute", "after:-inset-1")
+  })
+
   it("reads the catalog shipped with the first unit in every unit", async () => {
     const store = renderForm()
     await panel()
