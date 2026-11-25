@@ -621,6 +621,32 @@ def test_prompt_queue_files_that_are_missing_or_unreadable(server, tmp_path, mon
     assert importer.prompt_queue(str(bad)).skipped == 1
 
 
+def test_import_errors_do_not_show_server_paths(server, tmp_path, monkeypatch):
+    """--hide-ui-dir-config hides the source's path; an OSError's text would name it again."""
+
+    importer = importers.Importer(server.services.queue)
+    path = tmp_path / "secret-folder" / "queue.json"
+    path.parent.mkdir()
+    path.write_text("{}", encoding="utf-8")
+
+    def refuse(file, *args, **kwargs):
+        raise PermissionError(13, "Permission denied", str(file))
+
+    monkeypatch.setattr(importers, "open", refuse, raising=False)
+    with pytest.raises(ImportFailed) as unreadable:
+        importer.prompt_queue(str(path))
+    assert unreadable.value.status == 422 and "Permission denied" in str(unreadable.value) and "secret-folder" not in str(unreadable.value)
+    monkeypatch.undo()
+
+    def fail(row, key):
+        raise FileNotFoundError(2, "No such file or directory", str(tmp_path / "secret-folder" / "image.png"))
+
+    monkeypatch.setattr(importer, "_agent_task", fail)
+    report = importer.agent_scheduler(agent_database(tmp_path / "tasks.sqlite3", [api_task("t", "pending")]))
+    [item] = report.items
+    assert item.outcome == "error" and "No such file or directory" in texts(item.notes)[0] and "secret-folder" not in texts(item.notes)[0]
+
+
 def test_an_unknown_source_leaves_the_queue_running(server):
     queue = server.services.queue
     queue.set_paused(False)

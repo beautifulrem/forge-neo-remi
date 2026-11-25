@@ -683,6 +683,13 @@ def _connect_readonly(path: str) -> Iterator[sqlite3.Connection]:
         db.close()
 
 
+def _error_text(error: BaseException) -> str:
+    """An error's text for the client, without the file name an OSError
+    carries (paths stay on the server under ``--hide-ui-dir-config``)."""
+
+    return (error.strerror if isinstance(error, OSError) else None) or str(error)
+
+
 def count_agent_scheduler(path: str) -> int:
     try:
         with _connect_readonly(path) as db:
@@ -830,7 +837,7 @@ class Importer:
                 report.add(self._agent_task(row, key))
             except Exception as error:
                 log.exception("importing Agent Scheduler task %s", source_id)
-                report.add(ImportItem(source_id, row.get("name") or source_id, "error", notes=[note("The task could not be imported: {{error}}", error=f"{type(error).__name__}: {error}"[:300])]))
+                report.add(ImportItem(source_id, row.get("name") or source_id, "error", notes=[note("The task could not be imported: {{error}}", error=f"{type(error).__name__}: {_error_text(error)}"[:300])]))
         return self._finish(report)
 
     def _agent_task(self, row: Mapping[str, Any], key: bytes | None) -> ImportItem:
@@ -946,7 +953,7 @@ class Importer:
             with open(path, encoding="utf-8") as file:
                 items = json.load(file).get("items", [])
         except (OSError, ValueError, AttributeError) as error:
-            raise ImportFailed(f"cannot read the queue file: {error}", 422) from error
+            raise ImportFailed(f"cannot read the queue file: {_error_text(error)}", 422) from error
         report = ImportReport(PROMPT_QUEUE, path)
         items = [item for item in items if isinstance(item, dict)]
         report.total = len(items)
