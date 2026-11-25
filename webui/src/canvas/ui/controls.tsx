@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
 import { Slider } from "@/components/ui/slider"
+import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { ariaKeyShortcuts } from "./a11y"
@@ -67,7 +68,7 @@ export function IconButton({ label, keys, onClick, pressed, disabled, side, clas
         aria-keyshortcuts={ariaKeyShortcuts(keys)}
         onClick={onClick}
         disabled={disabled}
-        className={cn("aria-pressed:bg-primary/15 aria-pressed:text-primary dark:aria-pressed:bg-primary/20", className)}
+        className={cn(PRESSED_TINT_CLASS, className)}
       >
         {children}
       </Button>
