@@ -14,6 +14,10 @@ function Panel({ state }: { state: State }) {
       ) : state === "loaded" ? (
         <ul>
           <li>
+            {/* out of the Tab order (a roving focus's other stops): not where the focus goes */}
+            <button type="button" tabIndex={-1}>
+              Roving stop
+            </button>
             <button type="button">First item</button>
           </li>
         </ul>

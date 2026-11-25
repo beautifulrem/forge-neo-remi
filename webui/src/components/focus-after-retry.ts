@@ -11,6 +11,7 @@
  */
 import { type RefCallback, useCallback, useLayoutEffect, useRef } from "react"
 
+/** In the Tab order: a control taken out of it (`tabindex="-1"`, a roving focus's other stops) is not. */
 const TABBABLE = [
   "a[href]",
   "button:not([disabled])",
@@ -19,8 +20,10 @@ const TABBABLE = [
   "textarea:not([disabled])",
   '[contenteditable=""]',
   '[contenteditable="true"]',
-  '[tabindex]:not([tabindex="-1"])',
-].join(", ")
+  "[tabindex]",
+]
+  .map((selector) => `${selector}:not([tabindex="-1"])`)
+  .join(", ")
 const OUT_OF_REACH = '[hidden], [inert], [aria-hidden="true"]'
 const DIALOGS = '[role="dialog"], [role="alertdialog"]'
 /** Frames to wait for the content (a panel may draw a spinner for one more render first). */
