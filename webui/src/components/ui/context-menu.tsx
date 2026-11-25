@@ -5,6 +5,7 @@ import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu
 import { cn } from "cn"
 
 import { CheckIcon, ChevronRightIcon } from "@/components/icons"
+import { useCollisionPadding } from "@/lib/safe-area"
 
 function ContextMenu({ ...props }: ContextMenuPrimitive.Root.Props) {
   return <ContextMenuPrimitive.Root data-slot="context-menu" {...props} />
@@ -41,9 +42,11 @@ function ContextMenuContent({
     ContextMenuPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
   >) {
+  const collisionPadding = useCollisionPadding()
   return (
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.Positioner
+        collisionPadding={collisionPadding}
         className="isolate z-50 outline-none"
         align={align}
         alignOffset={alignOffset}

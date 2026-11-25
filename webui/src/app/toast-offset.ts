@@ -2,10 +2,12 @@
  * Where the toasts sit: bottom-right, lifted above whatever controls are
  * pinned to the bottom of the window under them (the phone's bottom
  * navigation and sticky Generate bar, the canvas's zoom and layer toolbars,
- * the settings' apply bar). Such controls carry `data-toast-obstacle`.
+ * the settings' apply bar). Such controls carry `data-toast-obstacle`. On a
+ * phone with a notch or a home indicator the offsets start at the safe area.
  */
 import { useSonner } from "sonner"
 import { useEffect, useState } from "react"
+import { type Insets, useSafeAreaInsets } from "@/lib/safe-area"
 
 export interface Box {
   top: number
@@ -24,12 +26,20 @@ export const GAP = 12
 
 export const OBSTACLE_ATTRIBUTE = "data-toast-obstacle"
 
-/** The toaster's bottom offset (px) for a bottom-right toaster in a `width`×`height` window. */
-export function toastBottomOffset(obstacles: readonly Box[], width: number, height: number): number {
-  const mobile = width <= MOBILE_MAX_WIDTH
+const NO_INSETS: Insets = { top: 0, right: 0, bottom: 0, left: 0 }
+
+/** The toaster's side offsets (px): sonner's own, from the edges of the safe area. */
+export function toastSideOffsets(insets: Insets, mobile: boolean): { left: number; right: number } {
   const base = mobile ? MOBILE_OFFSET : OFFSET
+  return { left: base + insets.left, right: base + insets.right }
+}
+
+/** The toaster's bottom offset (px) for a bottom-right toaster in a `width`×`height` window. */
+export function toastBottomOffset(obstacles: readonly Box[], width: number, height: number, insets: Insets = NO_INSETS): number {
+  const mobile = width <= MOBILE_MAX_WIDTH
+  const base = (mobile ? MOBILE_OFFSET : OFFSET) + insets.bottom
   // the column the toasts occupy: the whole width on a phone, the right edge otherwise
-  const left = mobile ? 0 : width - OFFSET - TOAST_WIDTH
+  const left = mobile ? 0 : width - toastSideOffsets(insets, false).right - TOAST_WIDTH
   let offset = base
   for (const box of obstacles) {
     if (box.right - box.left <= 0 || box.bottom - box.top <= 0) continue
@@ -41,15 +51,16 @@ export function toastBottomOffset(obstacles: readonly Box[], width: number, heig
   return Math.round(offset)
 }
 
-function measure(): number {
+function measure(insets: Insets): number {
   const boxes = [...document.querySelectorAll<HTMLElement>(`[${OBSTACLE_ATTRIBUTE}]`)].map((element) => element.getBoundingClientRect())
-  return toastBottomOffset(boxes, window.innerWidth, window.innerHeight)
+  return toastBottomOffset(boxes, window.innerWidth, window.innerHeight, insets)
 }
 
 /** The bottom offset to give the toaster; measured only while a toast is shown. */
 export function useToastBottomOffset(): number {
   const { toasts } = useSonner()
   const active = toasts.length > 0
+  const insets = useSafeAreaInsets()
   const [offset, setOffset] = useState(OFFSET)
 
   useEffect(() => {
@@ -59,7 +70,7 @@ export function useToastBottomOffset(): number {
       if (frame) return
       frame = requestAnimationFrame(() => {
         frame = 0
-        setOffset(measure())
+        setOffset(measure(insets))
       })
     }
     update() // in the next frame: the first toast is laid out then, before it slides in
@@ -75,7 +86,7 @@ export function useToastBottomOffset(): number {
       window.removeEventListener("scroll", update, { capture: true })
       mutations.disconnect()
     }
-  }, [active])
+  }, [active, insets])
 
   return offset
 }

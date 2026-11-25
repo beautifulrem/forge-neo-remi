@@ -218,7 +218,7 @@ export default function GalleryPage() {
       <BoardsBar activeItems={activeBoardSendItems} count={items.length} total={total} failed={list.isError && !list.data} />
       <div className="min-h-0 flex-1">{body}</div>
       {selection.ids.size > 0 ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-3">
+        <div className="pointer-events-none absolute inset-x-0 bottom-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))] flex justify-center px-3">
           <BulkBar
             count={selection.ids.size}
             selectedIds={selectedIds}

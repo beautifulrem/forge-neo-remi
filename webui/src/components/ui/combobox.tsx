@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/input-group"
 import { CheckIcon, ChevronDownIcon, XIcon } from "@/components/icons"
 import { COMBOBOX_CHIP_CLASS, COMBOBOX_CHIP_REMOVE_CLASS, COMBOBOX_CHIPS_CLASS, COMBOBOX_CHIPS_INPUT_CLASS } from "./combobox-styles"
+import { useCollisionPadding } from "@/lib/safe-area"
 
 const Combobox = ComboboxPrimitive.Root
 
@@ -102,9 +103,11 @@ function ComboboxContent({
     ComboboxPrimitive.Positioner.Props,
     "side" | "align" | "sideOffset" | "alignOffset" | "anchor"
   >) {
+  const collisionPadding = useCollisionPadding()
   return (
     <ComboboxPrimitive.Portal>
       <ComboboxPrimitive.Positioner
+        collisionPadding={collisionPadding}
         side={side}
         sideOffset={sideOffset}
         align={align}

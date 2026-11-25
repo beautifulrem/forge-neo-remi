@@ -109,7 +109,7 @@ export function NavRail({ items, route }: { items: NavItem[]; route: Route }) {
   return (
     <nav
       aria-label={t("Main navigation")}
-      className="hidden w-14 shrink-0 flex-col items-center gap-1 border-r border-border bg-rail py-2 md:flex"
+      className="hidden w-14 shrink-0 flex-col items-center gap-1 border-r border-border bg-rail pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:flex"
     >
       <Logo />
       <div ref={scroller} style={fade} className="no-scrollbar mt-2 flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto px-2 py-1">

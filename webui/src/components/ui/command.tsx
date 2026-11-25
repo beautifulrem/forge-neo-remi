@@ -53,11 +53,11 @@ function CommandDialog({
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
-      {/* opens a third of the way down: no taller than the room below that (less 1rem), its list
-          shrinking in a short window (a phone held sideways) */}
+      {/* opens a third of the way down: no taller than the room below that (less 1rem and the home
+          indicator), its list shrinking in a short window (a phone held sideways) */}
       <DialogContent
         className={cn(
-          "top-1/3 flex max-h-[calc(200%/3_-_1rem)] translate-y-0 flex-col overflow-hidden rounded-xl! p-0",
+          "top-1/3 flex max-h-[calc(200%/3_-_1rem_-_env(safe-area-inset-bottom))] translate-y-0 flex-col overflow-hidden rounded-xl! p-0",
           className
         )}
         showCloseButton={showCloseButton}

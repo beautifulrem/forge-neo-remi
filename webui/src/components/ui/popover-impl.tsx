@@ -9,6 +9,7 @@
 import * as React from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 import { cn } from "cn"
+import { useCollisionPadding } from "@/lib/safe-area"
 
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
@@ -41,9 +42,11 @@ function PopoverContent({
     PopoverPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "anchor"
   >) {
+  const collisionPadding = useCollisionPadding()
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Positioner
+        collisionPadding={collisionPadding}
         align={align}
         alignOffset={alignOffset}
         side={side}

@@ -2,6 +2,7 @@
 
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
 import { cn } from "cn"
+import { useCollisionPadding } from "@/lib/safe-area"
 
 function TooltipProvider({
   delay = 0,
@@ -37,9 +38,11 @@ function TooltipContent({
     TooltipPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
   >) {
+  const collisionPadding = useCollisionPadding()
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Positioner
+        collisionPadding={collisionPadding}
         align={align}
         alignOffset={alignOffset}
         side={side}

@@ -12,6 +12,7 @@ import { cn } from "cn"
 import { SELECT_TRIGGER_CLASS, SELECT_VALUE_CLASS } from "./select-styles"
 
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "@/components/icons"
+import { useCollisionPadding } from "@/lib/safe-area"
 
 const Select = SelectPrimitive.Root
 
@@ -79,9 +80,11 @@ function SelectContent({
     SelectPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
   >) {
+  const collisionPadding = useCollisionPadding()
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Positioner
+        collisionPadding={collisionPadding}
         side={side}
         sideOffset={sideOffset}
         align={align}

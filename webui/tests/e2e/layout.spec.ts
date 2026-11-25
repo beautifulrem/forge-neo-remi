@@ -905,6 +905,63 @@ test.describe("overlays on a phone held sideways", () => {
       { size, insets },
     )
 
+  /** Whether `box` lies inside the safe area (the inset sides only). */
+  const outside = (box: { x: number; y: number; width: number; height: number }) =>
+    [
+      box.x < insets.left - 0.5 ? `left ${Math.round(box.x)}` : "",
+      box.x + box.width > size.width - insets.right + 0.5 ? `right ${Math.round(box.x + box.width)}` : "",
+      box.y + box.height > size.height - insets.bottom + 0.5 ? `bottom ${Math.round(box.y + box.height)}` : "",
+    ].filter(Boolean)
+
+  // The safe area was kept by the dialogs and sheets only (O14-1): menus, selects and popovers took
+  // Base UI's 5 px from the screen's edge, toasts sat 24 px from it, the nav rail ran onto the home
+  // indicator, and the command palette and the selection bar reached 5 px into it.
+  test("a menu", async ({ page }) => {
+    await openGenerate(page)
+    await page.getByRole("button", { name: "Appearance" }).click()
+    const menu = page.getByRole("menu")
+    await expect(menu.getByRole("menuitemradio").first()).toBeVisible()
+    await page.waitForTimeout(300) // its opening animation
+    expect(outside((await menu.boundingBox())!)).toEqual([])
+  })
+
+  test("a toast", async ({ page }) => {
+    await openGenerate(page)
+    // the app's own sonner (the dev server's module of it), as any feature calls it
+    await page.evaluate(async () => {
+      const url = performance.getEntriesByType("resource").map((entry) => entry.name).find((name) => /\/sonner\.js/.test(new URL(name).pathname))
+      if (!url) throw new Error("sonner not loaded")
+      const { toast } = (await import(/* @vite-ignore */ url)) as { toast: { success: (text: string, options: object) => void } }
+      toast.success("Queued job #4 updated", { action: { label: "Open queue", onClick: () => {} }, duration: 60_000 })
+    })
+    const item = page.locator("[data-sonner-toast]").first()
+    await expect(item.getByRole("button", { name: "Open queue" })).toBeVisible()
+    await page.waitForTimeout(500) // it slides in
+    expect(outside((await item.boundingBox())!)).toEqual([])
+  })
+
+  test("the nav rail, the command palette and the selection bar", async ({ page }) => {
+    await page.goto("/#/gallery")
+    const rail = page.getByRole("navigation", { name: "Main navigation" })
+    await expect(rail.getByRole("link").last()).toBeVisible()
+    expect(outside((await rail.getByRole("link").last().boundingBox())!), "the rail's last item").toEqual([])
+
+    const tiles = page.getByRole("list", { name: "Images" }).getByRole("listitem")
+    await tiles.first().hover()
+    await tiles.first().getByRole("checkbox").click()
+    const bulk = page.getByRole("toolbar", { name: "Selected images" })
+    await expect(bulk).toContainText("1 selected")
+    await page.waitForTimeout(300)
+    expect(outside((await bulk.boundingBox())!), "the selection bar").toEqual([])
+    await page.keyboard.press("Escape")
+
+    await page.keyboard.press(`${mod}+K`)
+    const palette = page.getByRole("dialog", { name: "Command palette" })
+    await expect(palette).toBeVisible()
+    await page.waitForTimeout(300)
+    expect(outside((await palette.boundingBox())!), "the command palette").toEqual([])
+  })
+
   test("the image viewer", async ({ page }) => {
     await page.goto("/#/gallery")
     const tile = page.getByRole("list", { name: "Images" }).getByRole("listitem").first()

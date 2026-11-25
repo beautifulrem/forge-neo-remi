@@ -298,7 +298,14 @@ imperatively).
   sheet and the settings sections at the bottom and their open sides; the
   More sheet, shown on a phone only, at the bottom), and a centred dialog subtracts the insets from any size it
   takes from the viewport (the base dialog and alert dialog, `96vw`,
-  `90dvh`).
+  `90dvh`; the command dialog's room below its top). The nav rail pads its
+  bottom for the home indicator, and a bar pinned to the bottom of a page
+  (the gallery's selection bar) stands clear of it. What positions itself
+  in script reads the insets as numbers (`lib/safe-area.ts`): every Base UI
+  positioner (menus, selects, popovers, comboboxes, tooltips, hover cards)
+  takes `collisionPadding={useCollisionPadding()}`, its own 5px from the
+  edges of the safe area, and the toaster's offsets start at it
+  (`toast-offset.ts`). A new positioned popup takes the same padding.
 
 ### Visual rules
 

@@ -13,6 +13,7 @@ import { standInFocus } from "@/lib/lazy-module"
 import { SEARCH_SELECT_TRIGGER_CLASS, selectedOption, type SearchSelectProps, type SelectOption } from "./search-select-shared"
 import { SearchSelectTriggerContent } from "./SearchSelectTriggerContent"
 import { isComposing } from "@/lib/ime"
+import { useCollisionPadding } from "@/lib/safe-area"
 
 /**
  * The trigger's accessible name as the user hears it: `aria-label`, then the
@@ -41,6 +42,7 @@ type ImplProps = SearchSelectProps & {
 }
 
 export function SearchSelectImpl({ openOnMount, standInKey, ...props }: ImplProps) {
+  const collisionPadding = useCollisionPadding()
   const { t } = useTranslation()
   const { options, value, onValueChange, allowCustom = false, size = "default" } = props
   const [query, setQuery] = useState("")
@@ -99,7 +101,7 @@ export function SearchSelectImpl({ openOnMount, standInKey, ...props }: ImplProp
         <SearchSelectTriggerContent selected={selected} placeholder={props.placeholder ?? t("Select…")} prefix={props.prefix} suffix={props.suffix} />
       </Combobox.Trigger>
       <Combobox.Portal>
-        <Combobox.Positioner sideOffset={4} align="start" className="isolate z-50">
+        <Combobox.Positioner collisionPadding={collisionPadding} sideOffset={4} align="start" className="isolate z-50">
           <Combobox.Popup
             aria-label={popupName || props.placeholder || t("Options")}
             // never narrower than the trigger, and never wider than the room beside it

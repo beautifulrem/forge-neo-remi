@@ -22,10 +22,11 @@ import { routeTitle } from "./route-title"
 import { buildNav, type NavItem, pageFor } from "./routes"
 import { onShortcutsKey, useShortcutsHelp } from "./shortcuts-help"
 import { navigate, routeKey, useRoute } from "./router"
-import { useToastBottomOffset } from "./toast-offset"
+import { toastSideOffsets, useToastBottomOffset } from "./toast-offset"
 import { useUserStylesheet } from "./user-stylesheet"
 import { useWsBridge } from "./ws-bridge"
 import { retryableLazy } from "@/lib/retryable-lazy"
+import { useSafeAreaInsets } from "@/lib/safe-area"
 
 const CommandPalette = retryableLazy(() => import("./CommandPalette"))
 const ShortcutsDialog = retryableLazy(() => import("./ShortcutsDialog"))
@@ -80,11 +81,12 @@ function useShellCommands(nav: NavItem[], locales: ReturnType<typeof availableLo
 function AppToaster() {
   const { t } = useTranslation()
   const bottom = useToastBottomOffset()
+  const insets = useSafeAreaInsets()
   return (
     <Toaster
       position="bottom-right"
-      offset={{ bottom }}
-      mobileOffset={{ bottom }}
+      offset={{ bottom, ...toastSideOffsets(insets, false) }}
+      mobileOffset={{ bottom, ...toastSideOffsets(insets, true) }}
       closeButton
       richColors={false}
       // sonner's own labels are English ("Notifications alt+T", "Close toast"); Alt+T is its default hotkey

@@ -12,6 +12,7 @@ import { Menu as MenuPrimitive } from "@base-ui/react/menu"
 import { cn } from "cn"
 
 import { CheckIcon, ChevronRightIcon } from "@/components/icons"
+import { useCollisionPadding } from "@/lib/safe-area"
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
   return <MenuPrimitive.Root data-slot="dropdown-menu" {...props} />
@@ -38,9 +39,11 @@ function DropdownMenuContent({
     MenuPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "anchor"
   >) {
+  const collisionPadding = useCollisionPadding()
   return (
     <MenuPrimitive.Portal>
       <MenuPrimitive.Positioner
+        collisionPadding={collisionPadding}
         className="isolate z-50 outline-none"
         align={align}
         alignOffset={alignOffset}
