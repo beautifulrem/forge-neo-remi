@@ -21,6 +21,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from backend.nn.anima_layout import declared_depth as anima_declared_depth
+from remi.image_meta import utf8_text
 
 _ANIMA_DEPTH_LABELS: dict[int, str] = {
     28: "2B (28 blocks)",
@@ -66,8 +67,8 @@ def parse_json(value: Any) -> Any:
 
     if isinstance(value, str) and value[:1] in ("{", "["):
         try:
-            return json.loads(value)
-        except ValueError:
+            return utf8_text(json.loads(value))
+        except (ValueError, RecursionError):
             return value
     return value
 

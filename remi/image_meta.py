@@ -12,6 +12,7 @@ lets a PNG carry about 64 MB of text).
 from __future__ import annotations
 
 import os
+import re
 import struct
 from collections.abc import Iterator
 from typing import Any
@@ -22,6 +23,24 @@ MAX_EXIF_TAGS = 400
 MAX_INFO_ENTRIES = 200
 MAX_TOTAL_CHARS = 1_000_000
 MAX_INFOTEXT_CHARS = 200_000
+
+_SURROGATE = re.compile("[\ud800-\udfff]")
+
+
+def utf8_text(value: Any) -> Any:
+    """``value`` with every character UTF-8 cannot hold as U+FFFD, in its
+    text, its keys and anything it holds. An image's or a model's own text
+    can carry an unpaired surrogate (JSON escapes one: a NovelAI comment, a
+    LoRA header written by another tool), and such text stops a write to
+    SQLite or a JSON response half way."""
+
+    if isinstance(value, str):
+        return _SURROGATE.sub("\ufffd", value)
+    if isinstance(value, dict):
+        return {utf8_text(key): utf8_text(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [utf8_text(item) for item in value]
+    return value
 
 
 def _text(value: Any) -> tuple[str, str]:

@@ -482,6 +482,30 @@ def test_output_folders_are_indexed(server, tmp_path, monkeypatch):
 # region Networks
 
 
+# An image's own text can hold an unpaired surrogate (a NovelAI comment is JSON with escapes), and on
+# Linux a file name that is not UTF-8 reads as one: the scan stopped at that file (Refresh answered 500,
+# housekeeping logged an error every hour, and no image after it was ever indexed)
+def test_output_scan_goes_on_past_text_utf8_cannot_hold(server, tmp_path, monkeypatch):
+    from remi import files as files_module
+    from remi.server import services
+
+    folder = tmp_path / "outputs"
+    folder.mkdir()
+    info = PngImagePlugin.PngInfo()
+    info.add_text("Software", "NovelAI")
+    info.add_text("Description", "a cat")
+    info.add_text("Comment", '{"uc": "bad \\udc80", "sampler": "k_euler", "steps": 20, "scale": 7, "seed": 1}')
+    Image.new("RGB", (16, 16)).save(folder / "a-novelai.png", pnginfo=info)
+    Image.new("RGB", (16, 16)).save(folder / "b.png")
+    walk = files_module._walk_images
+    monkeypatch.setattr(files_module, "_walk_images", lambda directories: iter([str(folder / "0-\udcff.png"), *walk(directories)]))
+    monkeypatch.setattr(services, "output_dirs", lambda: [str(folder)])
+    assert server.client.post("/api/v2/outputs/refresh").json() == {"added": 2}
+    records = {record.name: record for record in server.services.files.list_outputs()[0]}
+    assert sorted(records) == ["a-novelai.png", "b.png"]
+    assert "bad \ufffd" in records["a-novelai.png"].infotext
+
+
 class FakeProvider:
     def __init__(self, root):
         self.root = root
@@ -528,6 +552,27 @@ def test_networks_are_searched_paged_and_never_expose_absolute_paths(server, net
     assert client.get(f"/api/v2/thumbs/{alpha['preview']}").status_code == 200
     assert str(networks.root) not in client.get("/api/v2/networks/lora").text
     assert client.get("/api/v2/networks/nope").status_code == 404
+
+
+# A model's header or its sidecar can hold an unpaired surrogate (JSON escapes, written by another tool):
+# its details answered 500, saving its notes wrote the sidecar and then answered 500, and a merge was refused
+def test_network_metadata_with_text_utf8_cannot_hold_is_shown_and_edited(server, networks):
+    import json
+
+    root = networks.root
+    safetensors(root / "broken.safetensors", {"ss_output_name": "x\udc80", "ss_tag_frequency": json.dumps({"set": {"t\udc80g": 3}})})
+    (root / "alpha.json").write_text('{"notes": "n\\udc80"}', encoding="utf8")
+    server.services.networks.refresh("lora")
+    client = server.client
+    meta = client.get("/api/v2/networks/lora/broken/meta")
+    assert meta.status_code == 200, meta.text
+    assert meta.json()["metadata"]["ss_output_name"] == "x\ufffd"
+    edited = client.patch("/api/v2/networks/lora/broken/meta", json={"user_metadata": {"description": "d"}})
+    assert edited.status_code == 200, edited.text
+    merged = client.patch("/api/v2/networks/lora/alpha/meta", json={"user_metadata": {"description": "d"}})
+    assert merged.status_code == 200, merged.text
+    assert merged.json()["user_metadata"] == {"notes": "n\ufffd", "description": "d"}
+    assert client.get("/api/v2/networks/lora").status_code == 200
 
 
 def test_network_metadata_and_user_metadata_editing(server, networks):

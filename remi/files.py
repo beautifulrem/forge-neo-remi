@@ -27,7 +27,7 @@ from typing import Any
 
 from PIL import Image, PngImagePlugin
 
-from remi.image_meta import MAX_INFOTEXT_CHARS
+from remi.image_meta import MAX_INFOTEXT_CHARS, utf8_text
 
 log = logging.getLogger(__name__)
 
@@ -445,8 +445,8 @@ class FileStore:
         """Index a generated file (idempotent per path). Its infotext is kept up
         to :data:`~remi.image_meta.MAX_INFOTEXT_CHARS` (an image's own text can be any size)."""
 
-        if infotext is not None and len(infotext) > MAX_INFOTEXT_CHARS:
-            infotext = infotext[:MAX_INFOTEXT_CHARS]
+        if infotext is not None:
+            infotext = utf8_text(infotext[:MAX_INFOTEXT_CHARS])
         path = os.path.realpath(path)
         stale = self._removed_as(path)
         with self._lock:
@@ -568,6 +568,10 @@ class FileStore:
             if added >= limit:
                 break
             real = os.path.realpath(path)
+            if utf8_text(real) != real:
+                # a file name that is not UTF-8 (Linux keeps its bytes as surrogates): no row can hold it
+                log.debug("not indexing %r: its name is not UTF-8", real)
+                continue
             if self._output_at(real) is not None or self._was_removed(real):
                 continue
             infotext = width = height = None
@@ -577,7 +581,11 @@ class FileStore:
                     infotext, _ = images.read_info_from_image(image)
             except Exception:
                 continue
-            self.register_output(real, infotext=infotext, width=width, height=height)
+            try:
+                self.register_output(real, infotext=infotext, width=width, height=height)
+            except (OSError, sqlite3.Error):  # gone or unreadable meanwhile: the images after it are still indexed
+                log.debug("not indexing %r", real, exc_info=True)
+                continue
             added += 1
         return added
 

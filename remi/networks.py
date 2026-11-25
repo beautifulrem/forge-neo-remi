@@ -41,6 +41,7 @@ from typing import Any, Protocol
 
 from remi import network_metadata as nm
 from remi.files import FileStore, decode_offset, encode_cursor
+from remi.image_meta import utf8_text
 
 log = logging.getLogger(__name__)
 
@@ -150,7 +151,8 @@ class NetworkEntry:
             source = source()
         if not source and self.on_disk and self.filename.lower().endswith(".safetensors"):
             source = read_safetensors_metadata(self.filename)
-        return dict(source or {})
+        # another tool's text can hold what UTF-8 cannot (an escaped surrogate): the details answered 500
+        return utf8_text(dict(source or {}))
 
 
 def _resolve(source: PromptSource, user: Mapping[str, Any]) -> str | None:
@@ -243,7 +245,7 @@ def read_user_metadata(entry: NetworkEntry) -> dict[str, Any]:
             data = json.load(file)
     except (OSError, ValueError):
         return {}
-    return data if isinstance(data, dict) else {}
+    return utf8_text(data) if isinstance(data, dict) else {}
 
 
 def write_user_metadata(entry: NetworkEntry, data: dict[str, Any]) -> None:
