@@ -87,11 +87,14 @@ describe("preview dialog", { timeout: 30_000 }, () => {
     const fetch = vi.mocked(globalThis.fetch)
     const answer = fetch.getMockImplementation()!
     let failNext = true
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
     fetch.mockImplementation(async (input, init) => {
       const url = new URL((input as Request).url)
-      if (url.searchParams.get("cursor") && failNext) {
+      if (url.searchParams.get("cursor")) {
         // a client error: the query client does not retry it, so the test needs no backoff
-        return new Response(JSON.stringify({ detail: "gone" }), { status: 404, headers: { "Content-Type": "application/json" } })
+        if (failNext) return new Response(JSON.stringify({ detail: "gone" }), { status: 404, headers: { "Content-Type": "application/json" } })
+        await held
       }
       return answer(input, init)
     })
@@ -106,6 +109,10 @@ describe("preview dialog", { timeout: 30_000 }, () => {
 
     failNext = false
     fireEvent.click(within(status).getByRole("button", { name: "Retry" }))
+    // the retry shows that it is loading, not the failure it is retrying
+    expect(await screen.findByText("Loading…")).toBeInTheDocument()
+    expect(screen.queryByText("Could not load more.")).toBeNull()
+    release()
     await waitFor(() => expect(within(group).getAllByRole("radio")).toHaveLength(6))
     expect(screen.queryByRole("alert")).toBeNull()
   })

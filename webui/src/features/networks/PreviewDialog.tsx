@@ -167,7 +167,7 @@ export function PreviewDialog({ item, open, onOpenChange }: { item: NetworkItem 
                 <Thumbs ids={galleryIds} selected={selected} onSelect={setSelected} label={t("Image")} />
                 {gallery.isFetchNextPageError ? (
                   // the pages shown stay; only the next one failed
-                  <LoadMoreStatus loading={false} failed onRetry={() => void gallery.fetchNextPage()} />
+                  <LoadMoreStatus loading={gallery.isFetchingNextPage} failed onRetry={() => void gallery.fetchNextPage()} />
                 ) : gallery.hasNextPage ? (
                   <Button variant="outline" size="sm" className="self-center" disabled={gallery.isFetchingNextPage} onClick={() => void gallery.fetchNextPage()}>
                     {gallery.isFetchingNextPage ? <Loader2 className="animate-spin" aria-hidden /> : null}
