@@ -199,8 +199,9 @@ def docker_builds(text: str) -> list[str]:
 def test_the_build_context_leaves_out_generated_tokenizers_and_local_tool_folders():
     """The launcher writes each tokenizer.json of ``backend.huggingface.Token`` from the .xz archive
     next to it at start (``process()``): ~150 MB a checkout that has run once would send with the
-    build context for nothing. The archives and the tracked Chroma tokenizer stay in. So does no
-    local tool folder of webui/ (``webui/.impeccable``, ignored by .git/info/exclude, not .gitignore)."""
+    build context for nothing. The archives and the tracked Chroma tokenizer stay in. The hidden
+    files and folders of webui/ (local tool settings, some kept out of Git by .git/info/exclude
+    only) stay out too: the build reads none of them, Vite's ``.env`` files excepted."""
 
     from backend.huggingface import Token
 
@@ -214,7 +215,10 @@ def test_the_build_context_leaves_out_generated_tokenizers_and_local_tool_folder
     assert not any("tokenizer" in pattern and "*" in pattern for pattern in IGNORE)
     chroma = "backend/huggingface/Chroma/tokenizer/tokenizer.json"
     assert (ROOT / chroma).is_file() and "/" + chroma not in IGNORE
-    assert "/webui/.impeccable" in IGNORE
+    assert {"/webui/.*", "!/webui/.env", "!/webui/.env.*"} <= set(IGNORE)
+    from modules.launch_utils import WEBUI_SOURCES
+
+    assert not [name for name in WEBUI_SOURCES if name.startswith(".") or "/." in name]
 
 
 def test_the_readme_describes_this_image():

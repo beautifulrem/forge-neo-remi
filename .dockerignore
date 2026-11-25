@@ -60,8 +60,11 @@
 /webui/coverage
 /webui/test-results
 /webui/playwright-report
-# local tool folders of webui/ (kept out of Git by .git/info/exclude, not .gitignore)
-/webui/.impeccable
+# hidden files and folders of webui/: local tool settings (some kept out of Git by
+# .git/info/exclude only); the build reads none of them, Vite's .env files excepted
+/webui/.*
+!/webui/.env
+!/webui/.env.*
 
 # tokenizers the launcher writes at start from the .xz archives next to them
 # (backend/huggingface: Token, process()); the tracked Chroma tokenizer stays
