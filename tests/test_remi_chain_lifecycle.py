@@ -560,3 +560,31 @@ def test_deleting_a_chain_waits_for_the_runner(tmp_path):
             assert not deleted.wait(0.3)
         thread.join(5)
         assert deleted.is_set() and r.runner.store.get_chain(chain.id) is None
+
+
+def test_a_stage_that_cannot_start_fails_the_chain(tmp_path, monkeypatch):
+    """An error while the next stage is looked up or queued must not leave the
+    chain running with no stage running (busy() would hold the queue's done state)."""
+
+    with rig(tmp_path) as r:
+
+        def broken(*args, **kwargs):
+            raise RuntimeError("the hash broke")
+
+        monkeypatch.setattr(r.runner, "_stage_hash", broken)
+        chain = r.runner.create_chain(seeded(5))
+        assert chain.status == "failed" and "the hash broke" in (chain.error or "")
+        assert r.statuses(chain.id) == ["failed", "pending"] and not r.runner.busy()
+
+
+def test_an_upsample_thread_that_cannot_start_is_not_waited_for(tmp_path, monkeypatch):
+    with rig(tmp_path) as r:
+
+        def refuse(self):
+            raise RuntimeError("can't start new thread")
+
+        monkeypatch.setattr(threading.Thread, "start", refuse)
+        chain = r.runner.create_chain([StageSpec(kind="prompt_upsample", core={"prompt": "fox"}), *seeded(5)[:1]])
+        assert chain.status == "failed" and not r.runner._threads
+        monkeypatch.undo()
+        assert r.runner.wait_idle(1)

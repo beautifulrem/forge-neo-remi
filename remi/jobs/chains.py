@@ -1223,72 +1223,89 @@ class ChainRunner:
                     self.store.update_chain(chain_id, status="running", current_stage=next_stage.index, started=now)
                 else:
                     self.store.update_chain(chain_id, status="running", current_stage=next_stage.index)
-
-                upstream = self._upstream_state(chain, next_stage.index)
-                _upstream_hash, upstream_outputs, upstream_prompt = upstream
-                stage_hash = self._stage_hash(next_stage.to_spec(), upstream, fingerprint=self._fingerprint(chain.model_fingerprint), chain_id=chain.id)
-
-                forced = self.store.get_forced(chain_id)
-                cached_entry = None if next_stage.index in forced else self.store.get_cached(stage_hash)
-                if self._cache_valid(cached_entry) and cached_entry is not None:
-                    self.store.update_stage(
-                        chain_id,
-                        next_stage.index,
-                        status="cached",
-                        stage_hash=stage_hash,
-                        cached=True,
-                        job_id=cached_entry.job_id,
-                        output_file_ids=list(cached_entry.output_file_ids),
-                        output_prompt=cached_entry.output_prompt,
-                        infotext=cached_entry.infotext,
-                        started=now,
-                        finished=now,
-                    )
-                    updated_chain = self.store.get_chain(chain_id)
-                    assert updated_chain is not None
-                    self._publish_stage_completed(updated_chain.stages[next_stage.index])
-                    self._publish_chain(updated_chain)
-                    continue
-
-                if next_stage.kind == "prompt_upsample":
-                    # Runs in the background: a request or the queue worker must not wait for it.
-                    # A local model (VRAM) also runs behind the generation lock (_run_upsample).
-                    self.store.update_stage(chain_id, next_stage.index, status="running", stage_hash=stage_hash, cached=False, started=now)
-                    thread = threading.Thread(
-                        target=self._run_upsample,
-                        args=(chain_id, next_stage, stage_hash, now, upstream_prompt, list(upstream_outputs)),
-                        name=f"remi-chain-upsample-{chain_id[:6]}",
-                        daemon=True,
-                    )
-                    self._threads.add(thread)
-                    thread.start()
-                    updated_chain = self.store.get_chain(chain_id)
-                    assert updated_chain is not None
-                    self._publish_chain(updated_chain)
-                    return updated_chain
-
-                # Queue a generation stage job (the completion hook waits for this lock,
-                # so it sees the job id even when the job ends at once)
                 try:
-                    submission = self._build_stage_submission(chain, next_stage, upstream_outputs, upstream_prompt)
-                    jobs = self.queue.submit(submission, user=chain.user)
+                    started = self._start_stage(chain, next_stage, now)
                 except Exception as error:
-                    return self._fail_chain(chain_id, next_stage.index, f"{type(error).__name__}: {error}", stage_hash=stage_hash, started=now)
+                    # a chain left running with no stage running would never move again
+                    log.exception("starting stage %d of chain %s", next_stage.index, chain_id)
+                    return self._fail_chain(chain_id, next_stage.index, f"{type(error).__name__}: {error}")
+                if started is not None:
+                    return started
 
-                job = jobs[0]
-                self.store.update_stage(
-                    chain_id,
-                    next_stage.index,
-                    status="running",
-                    stage_hash=stage_hash,
-                    cached=False,
-                    job_id=job.id,
-                    started=now,
-                )
-                updated_chain = self.store.get_chain(chain_id)
-                assert updated_chain is not None
-                self._publish_chain(updated_chain)
-                return updated_chain
+    def _start_stage(self, chain: JobChain, next_stage: StageRun, now: float) -> JobChain | None:
+        """Under the lock: answer the stage from the cache (None: go on to the
+        next one), or start it (the chain as it is now)."""
+
+        chain_id = chain.id
+        upstream = self._upstream_state(chain, next_stage.index)
+        _upstream_hash, upstream_outputs, upstream_prompt = upstream
+        stage_hash = self._stage_hash(next_stage.to_spec(), upstream, fingerprint=self._fingerprint(chain.model_fingerprint), chain_id=chain.id)
+
+        forced = self.store.get_forced(chain_id)
+        cached_entry = None if next_stage.index in forced else self.store.get_cached(stage_hash)
+        if self._cache_valid(cached_entry) and cached_entry is not None:
+            self.store.update_stage(
+                chain_id,
+                next_stage.index,
+                status="cached",
+                stage_hash=stage_hash,
+                cached=True,
+                job_id=cached_entry.job_id,
+                output_file_ids=list(cached_entry.output_file_ids),
+                output_prompt=cached_entry.output_prompt,
+                infotext=cached_entry.infotext,
+                started=now,
+                finished=now,
+            )
+            updated_chain = self.store.get_chain(chain_id)
+            assert updated_chain is not None
+            self._publish_stage_completed(updated_chain.stages[next_stage.index])
+            self._publish_chain(updated_chain)
+            return None
+
+        if next_stage.kind == "prompt_upsample":
+            # Runs in the background: a request or the queue worker must not wait for it.
+            # A local model (VRAM) also runs behind the generation lock (_run_upsample).
+            self.store.update_stage(chain_id, next_stage.index, status="running", stage_hash=stage_hash, cached=False, started=now)
+            thread = threading.Thread(
+                target=self._run_upsample,
+                args=(chain_id, next_stage, stage_hash, now, upstream_prompt, list(upstream_outputs)),
+                name=f"remi-chain-upsample-{chain_id[:6]}",
+                daemon=True,
+            )
+            self._threads.add(thread)
+            try:
+                thread.start()
+            except BaseException:
+                self._threads.discard(thread)
+                raise
+            updated_chain = self.store.get_chain(chain_id)
+            assert updated_chain is not None
+            self._publish_chain(updated_chain)
+            return updated_chain
+
+        # Queue a generation stage job (the completion hook waits for this lock,
+        # so it sees the job id even when the job ends at once)
+        try:
+            submission = self._build_stage_submission(chain, next_stage, upstream_outputs, upstream_prompt)
+            jobs = self.queue.submit(submission, user=chain.user)
+        except Exception as error:
+            return self._fail_chain(chain_id, next_stage.index, f"{type(error).__name__}: {error}", stage_hash=stage_hash, started=now)
+
+        job = jobs[0]
+        self.store.update_stage(
+            chain_id,
+            next_stage.index,
+            status="running",
+            stage_hash=stage_hash,
+            cached=False,
+            job_id=job.id,
+            started=now,
+        )
+        updated_chain = self.store.get_chain(chain_id)
+        assert updated_chain is not None
+        self._publish_chain(updated_chain)
+        return updated_chain
 
     def _run_upsample(self, chain_id: str, stage: StageRun, stage_hash: str, started: float, upstream_prompt: str | None, upstream_outputs: list[str]) -> None:
         try:
