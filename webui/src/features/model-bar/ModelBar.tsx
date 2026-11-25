@@ -71,17 +71,37 @@ function CheckpointPicker({ className }: { className?: string }) {
     hint: [m.arch ? presetLabel(m.arch) : null, formatBytes(m.size)].filter(Boolean).join(" · ") || undefined,
   }))
   const busy = write.isPending || loading !== null
-  if (models.isError && !models.data) {
+  // A retry that brings the list replaces its button with the picker: the focus the button had
+  // goes to the picker, not to the page (unless the user has moved it meanwhile).
+  const pickerId = useId()
+  const focusAfterRetry = useRef(false)
+  const loaded = models.data !== undefined
+  useEffect(() => {
+    if (!loaded || !focusAfterRetry.current) return
+    focusAfterRetry.current = false
+    const active = document.activeElement
+    if (!active || active === document.body || !active.isConnected) document.getElementById(pickerId)?.focus()
+  }, [loaded, pickerId])
+  // Once the list has failed it stays failed until a retry brings it: a refetch of a list that has
+  // no data goes back to "pending", which swapped the button for a loading picker under the focus.
+  if (!models.data && models.errorUpdateCount > 0) {
     // an empty list would read as "no checkpoints installed"; say it failed and offer to load it again
+    const retrying = models.isFetching
     return (
       <Button
         variant="ghost"
         size="sm"
         className={cn(FIELD_BUTTON_CLASS, "min-w-0 justify-start gap-1.5 px-2.5 font-normal text-destructive", className)}
-        onClick={() => void models.refetch()}
+        // disabled but focusable (aria-disabled): the button keeps the focus while the list loads
+        disabled={retrying}
+        focusableWhenDisabled
+        onClick={() => {
+          focusAfterRetry.current = true
+          void models.refetch()
+        }}
         title={[t("Could not load the models"), errorText(models.error), t("Retry")].join(" · ")}
       >
-        <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
+        {retrying ? <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden /> : <TriangleAlert className="size-3.5 shrink-0" aria-hidden />}
         {/* the model in use stays in view: only the list of the others failed */}
         {current ? (
           <>
@@ -97,6 +117,7 @@ function CheckpointPicker({ className }: { className?: string }) {
   }
   return (
     <SearchSelect
+      id={pickerId}
       // the loading stage sits inside the pill, so a crowded header never cuts it off
       suffix={loading ? loadingText(t, loading) : null}
       aria-label={t("Checkpoint")}

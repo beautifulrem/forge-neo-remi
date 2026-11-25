@@ -126,6 +126,23 @@ describe("model bar when the model list does not load", () => {
     expect(retry).toHaveTextContent("animagine-xl-4.0")
   })
 
+  it("shows the retry is under way, then gives the focus to the picker it brought", async () => {
+    const list = vi.spyOn(api, "models").mockRejectedValue(new ApiError(404, "boom"))
+    renderBar()
+    const retry = await screen.findByRole("button", { name: /Could not load the models/ })
+    let answer: (value: typeof models) => void = () => {}
+    list.mockImplementation(() => new Promise((resolve) => (answer = resolve)))
+    retry.focus()
+    fireEvent.click(retry)
+    await waitFor(() => expect(retry).toHaveAttribute("aria-disabled", "true"))
+    expect(document.activeElement).toBe(retry)
+    // a second press while it runs asks nothing more
+    fireEvent.click(retry)
+    expect(list).toHaveBeenCalledTimes(2)
+    await act(async () => answer(models))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Checkpoint" })))
+  })
+
   it("shows the failure in the modules picker too, with a retry", async () => {
     vi.spyOn(api, "models").mockRejectedValue(new ApiError(404, "boom"))
     renderBar()
