@@ -939,7 +939,6 @@
   "The style is removed from styles.csv.": "该样式将从 styles.csv 中移除。",
   "Theme": "主题",
   "This address does not match any page.": "此地址不对应任何页面。",
-  "This control failed to render": "此控件渲染失败",
   "This image has no generation parameters": "这张图像没有生成参数",
   "This image has no generation parameters. Its other metadata is below.": "这张图像没有生成参数。其他元数据见下方。",
   "This image has no seed to reuse": "这张图像没有可复用的种子",
@@ -1701,5 +1700,6 @@
   "Crashed": "已崩溃",
   "Translation not applied: the prompt changed meanwhile.": "未应用翻译：提示词在翻译期间已被修改。",
   "Write a prompt, then tap Generate": "写好提示词，轻点“生成”",
-  "extensions that are already installed": "已安装的扩展"
+  "extensions that are already installed": "已安装的扩展",
+  "This control failed to render: {{reason}}": "此控件渲染失败：{{reason}}"
 }

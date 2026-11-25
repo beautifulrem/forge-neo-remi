@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider, useSuspenseQuery } from "@tanstack/react-query"
-import { fireEvent, render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen } from "@testing-library/react"
 import { Suspense } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { ApiError, RequestError } from "@/api/http"
+import { activateLocale } from "@/i18n"
 import { ErrorBoundary } from "./ErrorBoundary"
 
 function Schema({ load }: { load: () => Promise<string> }) {
@@ -153,5 +154,44 @@ describe("error boundary", () => {
     )
     expect(screen.getByText("the panel")).toBeInTheDocument()
     expect(onError).toHaveBeenCalledTimes(1)
+  })
+
+  // A control inside a form that failed to render had no way back short of reloading the page.
+  it("offers to render a failed form control again", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    let broken = true
+    function Control() {
+      if (broken) throw new Error("the widget broke")
+      return <p>the control</p>
+    }
+    render(
+      <ErrorBoundary inline>
+        <Control />
+      </ErrorBoundary>,
+    )
+    expect(screen.getByRole("alert")).toHaveTextContent("This control failed to render: the widget broke")
+    broken = false
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(screen.getByText("the control")).toBeInTheDocument()
+  })
+
+  // The sentence and the reason were two pieces joined with an English colon.
+  it("says a failed form control in one sentence of the UI language", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { headers: { "Content-Type": "application/json" } }))
+    await act(() => activateLocale("zh_CN"))
+    try {
+      function Control(): never {
+        throw new ApiError(500, "Internal server error")
+      }
+      render(
+        <ErrorBoundary inline>
+          <Control />
+        </ErrorBoundary>,
+      )
+      expect(screen.getByRole("alert")).toHaveTextContent("此控件渲染失败：服务器出错（500）。")
+    } finally {
+      await act(() => activateLocale("en"))
+    }
   })
 })

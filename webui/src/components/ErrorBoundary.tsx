@@ -86,9 +86,12 @@ class Boundary extends Component<Props & { onRetry: () => void }, State> {
     if (this.props.inline) {
       return (
         // in the field's place, like the field's own message: a plain line, no box
-        <p role="alert" className="text-xs leading-snug text-destructive">
-          {t("This control failed to render")}: {renderFailureText(error)}
-        </p>
+        <div role="alert" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-snug text-destructive">
+          <span className="min-w-0 break-words">{t("This control failed to render: {{reason}}", { reason: renderFailureText(error) })}</span>
+          <Button variant="outline" size="xs" onClick={this.retry}>
+            {t("Try again")}
+          </Button>
+        </div>
       )
     }
     return (
