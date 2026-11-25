@@ -54,3 +54,13 @@ def test_secrets_from_the_options_and_the_environment_stay_out(monkeypatch, caps
     module.connect(None, 7860, {"authtoken_from_env": True, "basic_auth": ["user:optionsSecret99"]})
     out = capsys.readouterr().out
     assert "optionsSecret99" not in out and "ENVTOKENabcdefghijkl_env" not in out
+
+
+def test_every_secret_named_option_stays_out(monkeypatch, capsys):
+    """ngrok takes more secrets than basic auth: ``verify_webhook_secret``, ``oidc_client_secret``
+    and the like. A value under a name that says it is a secret is masked, whatever ngrok calls it."""
+    module = _module(monkeypatch, RuntimeError("webhook whsecVALUE_abc123 and oidc OIDCsecretValue42 refused for example.ngrok.app"))
+    module.connect(None, 7860, {"verify_webhook_secret": "whsecVALUE_abc123", "oidc_client_secret": "OIDCsecretValue42", "domain": "example.ngrok.app"})
+    out = capsys.readouterr().out
+    assert "whsecVALUE_abc123" not in out and "OIDCsecretValue42" not in out
+    assert "example.ngrok.app" in out  # a name that is not a secret still helps to tell what failed

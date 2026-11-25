@@ -27,10 +27,11 @@ def connect(token, port, options):
     except Exception as e:
         # the console is often logged: name the token by its end only, and keep secrets out of the reason
         secrets = [token, os.environ.get('NGROK_AUTHTOKEN')]
-        auths = options.get('basic_auth') or []  # the token's user:password, or --ngrok-options'
-        for auth in [auths] if isinstance(auths, str) else auths:
-            if isinstance(auth, str):
-                secrets += [auth, auth.split(':', 1)[-1]]
+        for name, values in options.items():  # basic_auth (the token's user:password), *_secret, ...
+            if any(word in name.lower() for word in ('auth', 'secret', 'token', 'password', 'key')):
+                for value in [values] if isinstance(values, str) else values if isinstance(values, (list, tuple)) else []:
+                    if isinstance(value, str):
+                        secrets += [value, value.split(':', 1)[-1]]
         reason = str(e)
         for secret in sorted((secret for secret in secrets if secret and len(secret) > 4), key=len, reverse=True):
             reason = reason.replace(secret, '***')
