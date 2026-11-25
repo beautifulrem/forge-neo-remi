@@ -26,6 +26,7 @@ import { toast } from "sonner"
 import { api } from "@/api/endpoints"
 import { queryClient } from "@/api/queries"
 import { onWsEvent } from "@/api/ws"
+import { LoadFailed } from "@/components/LoadFailed"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -748,12 +749,7 @@ export function PipelineBuilder() {
           </h3>
         </div>
         {chains.isError && !chains.data ? (
-          <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-xs">
-            <span className="text-destructive">{errorText(chains.error)}</span>
-            <Button variant="outline" size="sm" className="h-7" onClick={() => void chains.refetch()}>
-              {t("Retry")}
-            </Button>
-          </div>
+          <LoadFailed error={chains.error} onRetry={() => void chains.refetch()} className="py-2" />
         ) : chains.isPending ? (
           // the list is on its way, not empty
           <p role="status" className="py-3 text-xs text-muted-foreground">{t("Loading…")}</p>

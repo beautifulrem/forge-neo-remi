@@ -5,6 +5,7 @@
  * hairline between them. Lazily loaded on `#/extensions?tab=diagnostics`.
  */
 import { useMutation, useQuery } from "@tanstack/react-query"
+import { LoadFailed } from "@/components/LoadFailed"
 import { RefreshCw, RotateCw, Search } from "@/components/icons"
 import { useRouteParams, useRouteSearch } from "@/app/route-params"
 import { useTranslation } from "react-i18next"
@@ -351,12 +352,7 @@ export function DiagnosticsView() {
         ) : diag.isError && diag.error instanceof ApiError && diag.error.status === 404 ? (
           <p className="py-2 text-sm text-muted-foreground">{t("Diagnostics unavailable on this server.")}</p>
         ) : diag.isError && !diag.data ? (
-          <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
-            <span className="text-destructive">{errorText(diag.error)}</span>
-            <Button variant="outline" size="sm" onClick={() => void diag.refetch()}>
-              {t("Retry")}
-            </Button>
-          </div>
+          <LoadFailed error={diag.error} onRetry={() => void diag.refetch()} className="py-2" />
         ) : items.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">{t("No extension diagnostics match.")}</p>
         ) : (

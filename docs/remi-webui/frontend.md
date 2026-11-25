@@ -480,7 +480,13 @@ generated interfaces (sources: Linear's
   same chevron. Empty areas follow two patterns: a drop zone (dashed box,
   round tinted icon, a 14 px title, a muted hint: img2img, PNG Info) and a
   placeholder (a dimmed glyph over one muted line: the stage, Extras, the
-  history).
+  history). Error views follow three: a list or panel that could not load is
+  `LoadFailed` (what failed in a destructive line, then Retry; never an empty
+  list), a page that could not load is `PagePlaceholder` with a Retry, and an
+  action's error is a plain destructive line by the action (`role="alert"`,
+  `text-sm text-destructive`, no tinted box). The network browser's pane, a
+  next page that failed (`LoadMoreStatus`) and the image editor's stage keep
+  their own; `components/error-views.test.ts` holds the rest to this.
   Image surfaces (the stage, Extras, the image editor) are one borderless
   `bg-canvas` (the JSON Builder's layout canvas too). In the light theme the
   page and the fields are separate steps of lightness, and control tracks

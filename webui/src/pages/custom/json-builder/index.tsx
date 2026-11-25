@@ -218,7 +218,7 @@ function LoadPromptDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
             </div>
           </div>
           {error ? (
-            <p id={`${id}-error`} role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm break-words text-destructive">
+            <p id={`${id}-error`} role="alert" className="text-sm break-words text-destructive">
               {error}
             </p>
           ) : null}

@@ -118,7 +118,7 @@ function Details({ fileId }: { fileId: string }) {
   if (info.isPending) return <Skeleton className="h-64 w-full" />
   if (info.isError)
     return (
-      <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <p role="alert" className="text-sm text-destructive">
         {errorText(info.error, { 404: t("The image is no longer there."), 415: t("This file cannot be read as an image (or it is too large to read).") })}
       </p>
     )

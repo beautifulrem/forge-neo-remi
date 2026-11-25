@@ -5,6 +5,7 @@
  * fresh: nothing picked, on the session's results when there are any.
  */
 import { useInfiniteQuery, useMutation } from "@tanstack/react-query"
+import { LoadFailed } from "@/components/LoadFailed"
 import { Check, ImageUp, Loader2 } from "@/components/icons"
 import { type KeyboardEvent, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -147,12 +148,7 @@ export function PreviewDialog({ item, open, onOpenChange }: { item: NetworkItem 
                 ))}
               </div>
             ) : gallery.isError ? (
-              <div className="flex flex-col items-center gap-2 py-8 text-sm text-muted-foreground" role="alert">
-                {t("Could not load the gallery")}
-                <Button variant="outline" size="sm" onClick={() => void gallery.refetch()}>
-                  {t("Retry")}
-                </Button>
-              </div>
+              <LoadFailed error={gallery.error} message={t("Could not load the gallery")} onRetry={() => void gallery.refetch()} className="justify-center py-8" />
             ) : galleryIds.length ? (
               <div className="flex flex-col gap-3">
                 <Thumbs ids={galleryIds} selected={selected} onSelect={setSelected} label={t("Image")} />
