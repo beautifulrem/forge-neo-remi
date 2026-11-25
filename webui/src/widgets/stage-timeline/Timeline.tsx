@@ -118,7 +118,7 @@ export function Timeline(props: Props) {
         {name === "peak" ? (
           <span className="mt-0.5 size-3 rotate-45 rounded-xs border-2 border-background bg-primary group-focus-visible/handle:ring-3 group-focus-visible/handle:ring-focus-ring" />
         ) : (
-          <span className="h-full w-0.5 rounded bg-foreground/70 group-hover/handle:bg-foreground group-focus-visible/handle:w-1 group-focus-visible/handle:bg-ring" />
+          <span className="h-full w-0.5 rounded bg-foreground/70 group-hover/handle:bg-foreground group-focus-visible/handle:ring-3 group-focus-visible/handle:ring-focus-ring" />
         )}
       </div>
     )

@@ -408,6 +408,15 @@ describe("focus rings", () => {
     expect(checked).toBeGreaterThan(0)
     expect([...new Set(dead)]).toEqual([])
   })
+
+  it("ring a handle instead of filling it with --ring", () => {
+    // frontend.md: a focus is a 3 px ring in --focus-ring. The stage timeline's start and end lines
+    // widened and turned --ring (the opaque brand colour) on focus, beside the peak handle's focus
+    // ring, and the networks drawer's edge became a 1 px --ring line: looks of their own, louder or
+    // thinner than every focus ring beside them, which no drag or hover state of the handle shares.
+    const fills = occurrences(/[^\s"'`{}]+/g).filter(({ match }) => underFocus(match) && /^bg-ring(?:\/\d+)?$/.test(utility(match)))
+    expect(fills.map(({ file, match }) => `${file}: ${match}`)).toEqual([])
+  })
 })
 
 describe("selected segments", () => {

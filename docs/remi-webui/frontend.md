@@ -404,7 +404,14 @@ imperatively).
   ring is 3 px wide (`ring-3`, or a 3 px outline over an image), and so is a
   keyboard cursor drawn in the token (the networks grid's current item: an
   outline on the tile's `after:` layer, an inset ring on a list row); a 2 px
-  ring read thinner than the rings beside it. `ring-0` takes the ring off a
+  ring read thinner than the rings beside it. A handle rings its line on
+  focus, as the kit's resize separators do (the stage timeline's start and
+  end lines, the networks drawer's edge, whose 1 px line fills with the token
+  so the ring reads as one band), never fills it with `--ring`: those two
+  widened to a 4 px or turned to a 1 px `--ring` line, a look no hover or
+  drag state of theirs shares, louder or thinner than the focus ring of the
+  peak handle beside them (`lib/design-guards.test.ts`, "focus rings").
+  `ring-0` takes the ring off a
   control whose group draws it, and shadcn's 1 px outline in the tabs sits
   inside its 3 px ring (`lib/design-guards.test.ts`, "focus rings"). The
   scroll area's viewport, a tab stop while it scrolls, shows its focus with

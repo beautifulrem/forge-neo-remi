@@ -58,7 +58,7 @@ function ResizeHandle() {
       }}
       className="group/resize absolute inset-y-0 -left-1.5 z-10 w-3 cursor-col-resize touch-none outline-none"
     >
-      <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover/resize:bg-ring/60 group-focus-visible/resize:bg-ring" />
+      <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors group-hover/resize:bg-ring/60 group-focus-visible/resize:bg-focus-ring group-focus-visible/resize:ring-3 group-focus-visible/resize:ring-focus-ring" />
     </div>
   )
 }
