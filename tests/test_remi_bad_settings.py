@@ -191,3 +191,30 @@ def test_the_prompt_history_limit_reads_within_its_slider(server, garbage):
             assert response.status_code == 201, response.text
     finally:
         pt.forget(server.services)
+
+
+# Output folders feed os.walk and os.path: a list or a number there (an /sdapi/v1/options write) made
+# Rescan, the imports' folder check and the gallery's categories raise until the next start.
+@pytest.mark.parametrize("value", [["x"], 5, {"a": 1}, math.nan], ids=_id)
+def test_output_folders_of_the_wrong_kind_read_as_unset(server, garbage, value):
+    from remi.jobs.importers import output_roots
+    from remi.library import output_folders
+    from remi.server.gallery import GalleryError, output_folder
+    from remi.server.services import OUTPUT_DIR_OPTIONS, output_dirs
+
+    garbage(value, OUTPUT_DIR_OPTIONS)
+    assert output_dirs() == [] and output_roots() == [] and output_folders() == []
+    assert server.client.post("/api/v2/outputs/refresh").json() == {"added": 0}
+    with pytest.raises(GalleryError):  # the folder is not set: a 404
+        output_folder("txt2img")
+
+
+def test_a_preset_reads_its_settings_as_their_kind(server, garbage):
+    from remi.core.presets import forge_preset_settings
+
+    garbage(5, ["forge_additional_modules_xl"])
+    garbage(["x"], ["forge_checkpoint_xl", "forge_unet_storage_dtype_xl"])
+    garbage(math.nan, ["sd_modules_dropdown_use_short"])
+    settings = forge_preset_settings("xl", server.opts)
+    assert settings["forge_additional_modules"] == [] and settings["forge_unet_storage_dtype"] == "Automatic"
+    assert isinstance(settings["sd_model_checkpoint"], str)

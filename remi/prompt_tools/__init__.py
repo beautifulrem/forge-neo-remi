@@ -282,7 +282,7 @@ def client_config(translation: ProviderConfig | None = None) -> dict[str, Any]:
             "txt2img": bool(o("tac_activeIn_txt2img")),
             "img2img": bool(o("tac_activeIn_img2img")),
             "third_party": bool(o("tac_activeIn_thirdParty")),
-            "delay": max(0, min(_int_option("tac_delayTime"), 1000)),
+            "delay": max(0, min(_int_option("tac_delayTime"), 500)),  # its slider's range
             "only_alias": bool(o("tac_alias_onlyShowAlias")),
             "source": tag_source_name(),
             "max_results": max(3, min(_int_option("tac_maxResults"), 50)),

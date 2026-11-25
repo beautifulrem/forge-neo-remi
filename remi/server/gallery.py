@@ -166,13 +166,13 @@ def _free_name(folder: str, name: str) -> str:
 def output_folder(kind: str) -> str:
     """The output folder of ``kind`` (a key of :data:`OUTPUT_FOLDERS`)."""
 
-    from modules import shared
+    from remi.setting_values import setting
 
     names = OUTPUT_FOLDERS.get(kind)
     if names is None:
         raise GalleryError(f"unknown folder {kind!r}", 404)
     for name in names:
-        value = getattr(shared.opts, name, "")
+        value = setting(name, "")  # a list or a number there: unset
         if value:
             return value
     raise GalleryError("the folder is not set", 404)

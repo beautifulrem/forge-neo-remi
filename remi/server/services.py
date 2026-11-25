@@ -216,9 +216,11 @@ class Services:
 
 
 def output_dirs() -> list[str]:
-    from modules import shared
+    """The output folders that are set (a value of another kind reads as unset)."""
 
-    return [path for name in OUTPUT_DIR_OPTIONS if (path := getattr(shared.opts, name, ""))]
+    from remi.setting_values import setting
+
+    return [path for name in OUTPUT_DIR_OPTIONS if (path := setting(name, ""))]
 
 
 def worker_options_from_cmd_opts(cmd_opts: Any = None) -> tuple[bool, str | None, bool]:

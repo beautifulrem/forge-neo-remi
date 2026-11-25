@@ -158,14 +158,17 @@ def forge_preset_settings(preset: str, opts: Any = None) -> dict[str, Any]:
     """The settings the UI preset ``preset`` selects: itself, its checkpoint,
     VAE/text encoder modules and low-bits dtype."""
 
+    from remi.setting_values import fit
+
     opts = _opts(opts)
-    get = lambda name, default: getattr(opts, name, default)  # noqa: E731
-    modules = [os.path.basename(module) for module in get(f"forge_additional_modules_{preset}", []) or []]
+    # each as the kind of its default (a number where the module list belongs raised)
+    get = lambda name, default: fit(default, getattr(opts, name, default))  # noqa: E731
+    modules = [os.path.basename(module) for module in get(f"forge_additional_modules_{preset}", [])]
     if not get("sd_modules_dropdown_use_short", True) and (main_entry := _main_entry()) is not None:
         modules = [main_entry.module_map.get(module, module) for module in modules]
     return {
         "forge_preset": preset,
-        "sd_model_checkpoint": get(f"forge_checkpoint_{preset}", None) or get("sd_model_checkpoint", ""),
+        "sd_model_checkpoint": get(f"forge_checkpoint_{preset}", "") or get("sd_model_checkpoint", ""),
         "forge_additional_modules": modules,
         "forge_unet_storage_dtype": get(f"forge_unet_storage_dtype_{preset}", "Automatic"),
     }
