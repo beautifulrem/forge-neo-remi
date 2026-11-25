@@ -288,6 +288,30 @@ def test_preferred_weight_and_activation_text_shape_the_prompt(lora, webui):
     assert names(client.get("/api/v2/networks/lora", params={"q": "SOFT paint"})) == ["watercolor"]
 
 
+def test_sidecars_other_tools_wrote_are_read_and_stay_editable(lora, lora_root):
+    """A sidecar with a BOM did not parse, so an edit replaced it with the new keys alone; one
+    nested past the parser failed the whole listing; one larger than 64 KB could never be edited."""
+
+    client = lora.client
+    sidecar = lora_root / "styles" / "watercolor.json"
+    sidecar.write_text(json.dumps({"activation text": "bom paint", "civitai": {"id": 1}}), encoding="utf-8-sig")
+    item = client.get("/api/v2/networks/lora", params={"q": "watercolor"}).json()["items"][0]
+    assert item["activation_text"] == "bom paint"
+    assert client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"notes": "kept"}}).status_code == 200
+    assert json.loads(sidecar.read_text(encoding="utf-8")) == {"activation text": "bom paint", "civitai": {"id": 1}, "notes": "kept"}
+
+    (lora_root / "plain.json").write_text("[" * 100_000 + "]" * 100_000, encoding="utf-8")
+    lora.services.networks.refresh("lora")
+    assert names(client.get("/api/v2/networks/lora")) == ["alice", "ink", "plain", "watercolor"]
+
+    large = {"activation text": "big", "images": ["x" * 1000] * 100}  # 100 KB from another tool
+    sidecar.write_text(json.dumps(large), encoding="utf-8")
+    assert client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"notes": "small"}}).status_code == 200
+    assert json.loads(sidecar.read_text(encoding="utf-8")) == {**large, "notes": "small"}
+    # what a client sends is still capped
+    assert client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"mine": ["y" * 1000] * 70}}).status_code == 422
+
+
 def test_bad_user_metadata_is_rejected(lora):
     response = lora.client.patch("/api/v2/networks/lora/watercolor/meta", json={"user_metadata": {"preferred weight": "heavy"}})
     assert response.status_code == 422 and "preferred weight" in response.json()["detail"]

@@ -50,6 +50,7 @@ PREVIEW_EXTENSIONS = ("png", "jpg", "jpeg", "webp", "gif", "avif", "jxl", "heif"
 """Preview files next to a model (images first; as upstream, short videos too)."""
 MODEL_EXTENSIONS = (".ckpt", ".pt", ".pth", ".bin", ".safetensors", ".sft", ".gguf")
 USER_METADATA_LIMIT = 64 * 1024
+"""Bytes of user metadata one edit may write (the keys it sends; a sidecar may be larger)."""
 PREVIEW_SIZE = 1024
 PLACEHOLDER_SIZE = 16
 SORTS = ("name", "date", "created", "size", "path")
@@ -237,14 +238,15 @@ def read_safetensors_metadata(filename: str) -> dict[str, Any]:
 
 
 def read_user_metadata(entry: NetworkEntry) -> dict[str, Any]:
-    """The JSON sidecar ``<model>.json`` (sd_forge_lora's format)."""
+    """The JSON sidecar ``<model>.json`` (sd_forge_lora's format); one another
+    tool wrote with a BOM too."""
 
     if not entry.on_disk:
         return {}
     try:
-        with open(entry.base + ".json", encoding="utf8") as file:
+        with open(entry.base + ".json", encoding="utf-8-sig") as file:
             data = json.load(file)
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):  # nested past the parser: as unreadable, not a failed listing
         return {}
     return utf8_text(data) if isinstance(data, dict) else {}
 
@@ -252,8 +254,6 @@ def read_user_metadata(entry: NetworkEntry) -> dict[str, Any]:
 def write_user_metadata(entry: NetworkEntry, data: dict[str, Any]) -> None:
     require_file(entry)
     text = json.dumps(data, indent=4, ensure_ascii=False)
-    if len(text.encode()) > USER_METADATA_LIMIT:
-        raise ValueError("user metadata is too large")
     temp = entry.base + ".json.tmp"
     with open(temp, "w", encoding="utf8") as file:
         file.write(text)
@@ -1252,6 +1252,9 @@ class NetworkIndex:
         entry = self.entry(kind, name)
         require_file(entry)
         changes = nm.normalize_user_metadata(values)
+        # The limit is on what the client sends: a larger sidecar another tool wrote stays editable
+        if len(json.dumps(changes, indent=4, ensure_ascii=False).encode()) > USER_METADATA_LIMIT:
+            raise ValueError("user metadata is too large")
         data = {} if replace else read_user_metadata(entry)
         for key, value in changes.items():
             if value is None:
