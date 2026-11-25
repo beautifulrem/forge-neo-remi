@@ -51,9 +51,15 @@ components/         app-level components (SearchSelect, Segmented, ErrorBoundary
 components/ui/      vendored shadcn components (edit sparingly; lint-exempt)
 i18n/               i18next setup, locale store, catalog loading
 locales/            chrome translations, one JSON per locale (zh-CN.json; en.json: English plural forms only)
-lib/                appearance store (theme.ts), toast, media query, cn()
+lib/                appearance store (theme.ts), toast, media query, cn(), persisted-store guard
+                    (persist.ts), stale-chunk reload, retryable-lazy / lazy-module (loads that
+                    retry, modules fetched on first intent), IME keys, safe area, platform (isMac),
+                    layout hooks (use-label-fits, use-fitting-placeholder, use-pinned-bar,
+                    use-scroll-fade), motion features
 styles/             fonts.css, shadcn.css (keyframes and variants the vendored components use)
-test/               setup.ts (jsdom shims, jest-dom, i18n init), fake-socket.ts (WebSocket double)
+test/               setup.ts (jsdom shims, jest-dom, i18n init), fake-socket.ts (WebSocket double),
+                    api-fixtures.ts (complete API models), fetch-recorder.ts (records and answers
+                    the API clients' requests)
 ```
 
 `src/canvas/` is the image editor (see "Image editor"); it is the only module
