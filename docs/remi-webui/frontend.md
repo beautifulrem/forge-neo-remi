@@ -192,6 +192,12 @@ imperatively).
   shadcn's `--accent` stays a neutral hover surface; `--glow` renders a machined
   warm-ivory (dark) or technical-ink (light) keycap for the primary creation CTA
   (`Generate`, `Send to txt2img`).
+  Colours come from these tokens, never from Tailwind's palette (`red-300`,
+  `neutral-900`: a shade ignores the theme and the accent;
+  `lib/design-guards.test.ts`, "colours"). White and black stay for controls
+  over a picture or the viewer's black backdrop; a control there that needs
+  a token colour (the viewer's Remove, red on hover) carries the `dark`
+  class, so the tokens it reads are the dark theme's in either theme.
   Extra semantic colours:
   - `success`, `warning`, `destructive`, `star` (warm gold star marks, ≥ 3.5:1
     on paper), `canvas` (borderless image backdrops), utility `bg-checker`;
