@@ -70,7 +70,8 @@ describe("error views", () => {
     const copies = files
       .filter(({ file }) => !own.has(file))
       .flatMap(({ file, source }) => {
-        const retries = source.match(/t\("Retry"\)/g)?.length ?? 0
+        // a toast's Retry action (a failure the page has no place to show) is not an error view
+        const retries = (source.match(/t\("Retry"\)/g)?.length ?? 0) - (source.match(/action: \{ label: t\("Retry"\)/g)?.length ?? 0)
         const inPlaceholders = placeholders(source).reduce((count, body) => count + (body.match(/t\("Retry"\)/g)?.length ?? 0), 0)
         return retries > inPlaceholders ? [file] : []
       })
