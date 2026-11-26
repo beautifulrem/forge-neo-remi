@@ -15,8 +15,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: check-${{ github.ref }}
-  # a newer push to a pull request replaces its run; every push to remi keeps its own
+  # a newer push to a pull request replaces its run; a push to remi (or a run by hand) is a group of
+  # its own and runs to the end (in one group for the branch, a third push would cancel the
+  # second's pending run)
+  group: check-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -82,7 +84,8 @@ jobs:
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          # the Docker image's Node.js (docker/Dockerfile NODE_VERSION), the oldest line usage.md supports
+          # the Docker image's Node.js (docker/Dockerfile NODE_VERSION); usage.md also supports 22.18+
+          # (launch_utils.NODE_REQUIREMENT), which CI does not run
           node-version: 24
           cache: pnpm
           cache-dependency-path: webui/pnpm-lock.yaml
@@ -92,7 +95,11 @@ jobs:
 
       - name: Playwright version
         id: playwright
-        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+        # never empty: the cache key would then be playwright-Linux-, a browser of any version
+        run: |
+          version="$(pnpm exec playwright --version | awk '{print $2}')"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       # The browser is downloaded once per Playwright version; its system libraries come from apt
       # on every run.
