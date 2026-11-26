@@ -689,6 +689,21 @@ for (const theme of ["light", "dark"] satisfies Theme[]) {
     expect(await backgroundBytes(dates), "open").toBe(await srgb(page, await css("backgroundColor", "bg-field")))
     expect(await srgb(page, await dates.evaluate((node) => getComputedStyle(node).color)), "open, a range set").toBe(await srgb(page, await css("color", "text-primary")))
   })
+
+  // On a wide screen VAE / TE is a segment of the model bar's field, which draws the fill: the segment itself is
+  // clear, and with its popover open it stayed tinted with the kit's `aria-expanded:bg-muted`.
+  test(`${theme}: the model bar's VAE / TE segment stays clear while its popover is open`, async ({ page }) => {
+    await presetStorage(page, { theme })
+    await openRoute(page, "txt2img")
+    await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" })
+    const segment = page.getByRole("button", { name: "VAE / Text encoders" }).filter({ visible: true })
+    await expect(segment).toHaveCount(1)
+    expect(await backgroundBytes(segment), "closed").toBe("0 0 0 / 0")
+    await segment.click()
+    await expect(segment).toHaveAttribute("aria-expanded", "true")
+    await page.mouse.move(0, 0)
+    expect(await backgroundBytes(segment), "open").toBe("0 0 0 / 0")
+  })
 }
 
 /**
