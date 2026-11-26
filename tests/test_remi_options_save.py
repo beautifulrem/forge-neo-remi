@@ -253,7 +253,8 @@ def test_under_pytest_the_repositorys_own_settings_file_is_refused(tmp_path, mon
     owners.parent.mkdir()
     owners.write_text('{"owner": 1}', encoding="utf-8")
     monkeypatch.setattr(options, "_REPOSITORY_SETTINGS", str(owners))
-    spellings = [owners, tmp_path / "repository" / ".." / "repository" / "config.json"]
+    os.link(owners, tmp_path / "hard.json")
+    spellings = [owners, tmp_path / "repository" / ".." / "repository" / "config.json", tmp_path / "hard.json"]
     if sys.platform != "win32":
         (tmp_path / "link.json").symlink_to(owners)
         spellings.append(tmp_path / "link.json")
@@ -265,7 +266,11 @@ def test_under_pytest_the_repositorys_own_settings_file_is_refused(tmp_path, mon
     opts.save(str(tmp_path / "config.json"))  # a file of the test's own is saved
     assert json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
 
-    monkeypatch.delenv("PYTEST_CURRENT_TEST")  # outside a test: the WebUI's own save
+    # between tests and while pytest collects them (module-level code) only PYTEST_VERSION is set
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")
+    with pytest.raises(RuntimeError, match="repository's"):
+        opts.save(str(owners))
+    monkeypatch.delenv("PYTEST_VERSION", raising=False)  # outside pytest: the WebUI's own save
     opts.save(str(owners))
     assert "owner" not in json.loads(owners.read_text(encoding="utf-8"))
 
