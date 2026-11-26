@@ -171,6 +171,9 @@ describe("pressed toggles", () => {
 })
 
 describe("button washes", () => {
+  /** The kit's buttons, by component, with the variant each draws when none is given. */
+  const BUTTON_VARIANT: Record<string, string> = { Button: "default", InputGroupButton: "ghost", AlertDialogCancel: "outline" }
+
   it("are set for the dark theme too where a ghost or outline button sets its own", () => {
     expect(CLASS_CONSTANTS.get("FIELD_BUTTON_CLASS")).toContain("hover:bg-field-hover")
     // The kit's ghost button carries `dark:hover:bg-muted/50` and its outline button `dark:bg-input/30` and
@@ -178,15 +181,21 @@ describe("button washes", () => {
     // button that set its own wash (the image viewer's 12 % white, a destructive tint, a field's hover) lost
     // it in the dark theme, and in the viewer's dark-scoped chrome in both. It repeats it under `dark:`.
     const lost = files.flatMap(({ file, source: raw }) =>
-      openingTags(raw)
-        .tags.filter(({ name, tag }) => name === "Button" && /\bvariant="(?:ghost|outline)"/.test(tag))
-        .flatMap(({ tag: written }) => {
-          const tag = withConstants(written)
-          const outline = /\bvariant="outline"/.test(tag)
-          const own = (variant: string) => new RegExp(`(?:^|[\\s"'\`])${variant}bg-[^\\s"'\`]+`).test(tag)
-          const missing = [own("hover:") && !own("dark:hover:") && "hover", outline && own("") && !own("dark:") && "fill"].filter(Boolean)
-          return missing.length ? [`${file}: ${written.replace(/\s+/g, " ").slice(0, 70)} (${missing.join(", ")})`] : []
-        }),
+      openingTags(raw).tags.flatMap(({ name, tag: written }) => {
+        const tag = withConstants(written)
+        // The variants the element may draw: a button's (a literal, or each one an expression can pick; a wrapper's
+        // default), and a `buttonVariants({ variant })` call's on any element.
+        const variants = new Set([...tag.matchAll(/\bbuttonVariants\(\{[^}]*\bvariant:\s*"([a-z-]+)"/g)].map((m) => m[1]))
+        const attribute = /\svariant=(?:"([^"]*)"|\{([^}]*)\})/.exec(tag)
+        if (name in BUTTON_VARIANT) {
+          const picked = attribute ? (attribute[1] !== undefined ? [attribute[1]] : [...(attribute[2] ?? "").matchAll(/"([a-z-]+)"/g)].map((m) => m[1])) : [BUTTON_VARIANT[name]]
+          for (const variant of picked) variants.add(variant)
+        }
+        if (!variants.has("ghost") && !variants.has("outline")) return []
+        const own = (variant: string) => new RegExp(`(?:^|[\\s"'\`])${variant}bg-[^\\s"'\`]+`).test(tag)
+        const missing = [own("hover:") && !own("dark:hover:") && "hover", variants.has("outline") && own("") && !own("dark:") && "fill"].filter(Boolean)
+        return missing.length ? [`${file}: ${written.replace(/\s+/g, " ").slice(0, 70)} (${missing.join(", ")})`] : []
+      }),
     )
     expect(lost).toEqual([])
   })
