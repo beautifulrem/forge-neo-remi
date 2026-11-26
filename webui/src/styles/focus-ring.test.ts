@@ -9,6 +9,7 @@
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
 import { ACCENTS } from "@/lib/theme"
+import { openingTags } from "@/test/jsx-tags"
 
 const css = readFileSync("src/index.css", "utf8")
 
@@ -149,6 +150,34 @@ describe("the focus ring token", () => {
     for (const slot of SURFACES) expect(kit).toContain(`data-slot="${slot}"`)
   })
 
+  it("reaches the popups built outside the kit", () => {
+    // The rule reads the kit's slots. A Base UI popup built in app code (the search select's, a network
+    // card's menu) carried none, and sat over the page with no edge in forced colours: each takes the
+    // slot of the kit popup it stands for. A popover's or hover card's edge there is its bare
+    // outline-hidden (lib/design-guards.test.ts keeps that outline to those two).
+    const rule = /\n {4}(:is\(\[data-slot="dialog-content"\][^{]*)\{/.exec(forcedColours())
+    const listed = [...(rule?.[1] ?? "").matchAll(/\[data-slot="([a-z-]+)"\]/g)].map((m) => m[1]!)
+    expect(listed.length).toBeGreaterThan(5)
+    const popups = appTags(/\.Popup$/)
+    expect(popups.length).toBeGreaterThan(2)
+    const edgeless = popups.filter(({ file, tag }) => {
+      const slot = /\sdata-slot="([a-z-]+)"/.exec(tag)?.[1] ?? ""
+      if (listed.includes(slot)) return false
+      if (OWN_EDGE.includes(slot) && /[\s"'`]outline-hidden[\s"'`]/.test(tag)) return false
+      return !FILLS_THE_SCREEN.some((own) => own.file === file && tag.includes(own.look))
+    })
+    expect(edgeless.map(({ file, name }) => `${file}: <${name}`)).toEqual([])
+  })
+
+  it("marks the highlighted item of a combobox built outside the kit", () => {
+    // The search select's items are Base UI's own and carried no slot: its highlighted option, which
+    // does not take the focus (that stays in its search field), was not told apart in forced colours.
+    const items = appTags(/^Combobox(?:Primitive)?\.Item$/)
+    expect(items.length).toBeGreaterThan(0)
+    const unmarked = items.filter(({ tag }) => !/\sdata-slot="combobox-item"/.test(tag))
+    expect(unmarked.map(({ file, name }) => `${file}: <${name}`)).toEqual([])
+  })
+
   it("is the only focus ring colour drawn from --ring at a share of its own", () => {
     const ownShares = Object.entries(sources)
       .filter(([, source]) => /\b(?:ring|outline)-ring\/\d+\b|var\(--ring\) \d+%/.test(source))
@@ -159,8 +188,34 @@ describe("the focus ring token", () => {
   })
 })
 
+/** The base layer's forced-colours block, its comments left out. */
+function forcedColours(): string {
+  const base = css.slice(css.indexOf("@layer base {"))
+  return (/@media \(forced-colors: active\) \{([\s\S]*?)\n {2}\}/.exec(base)?.[1] ?? "").replace(/\/\*[\s\S]*?\*\//g, "")
+}
+
+/** The opening tags in the app's own code (outside the kit) whose name matches `name`, with their file. */
+function appTags(name: RegExp): { file: string; name: string; tag: string }[] {
+  return Object.entries(scripts)
+    .filter(([file]) => !file.startsWith("../components/ui/"))
+    .flatMap(([file, source]) =>
+      openingTags(source)
+        .tags.filter((tag) => name.test(tag.name))
+        .map((tag) => ({ file: file.replace(/^\.\.\//, ""), name: tag.name, tag: tag.tag })),
+    )
+}
+
+/** Popup slots whose edge in forced colours is their own bare outline-hidden, not the rule's outline. */
+const OWN_EDGE = ["popover-content", "hover-card-content"]
+
+/** Popups with no edge to draw, with the reason: `look` pins the tag to what makes it so. */
+const FILLS_THE_SCREEN = [
+  // the image viewer covers the whole window: there is no page beside it for an edge to divide it from
+  { file: "features/lightbox/Lightbox.tsx", look: "fixed inset-0" },
+]
+
 /** The kit's floating surfaces, whose edge is a ring and a shadow (none of the popover kind, whose outline-hidden is its edge). */
-const SURFACES = ["dialog-content", "alert-dialog-content", "sheet-content", "dropdown-menu-content", "dropdown-menu-sub-content", "context-menu-content", "context-menu-sub-content", "select-content", "combobox-content", "tooltip-content"]
+const SURFACES =["dialog-content", "alert-dialog-content", "sheet-content", "dropdown-menu-content", "dropdown-menu-sub-content", "context-menu-content", "context-menu-sub-content", "select-content", "combobox-content", "tooltip-content"]
 
 /** The opening JSX tag around `marker` in `source`: from its `<` to the `>` outside braces and strings. */
 function tagAround(source: string, marker: string): string {

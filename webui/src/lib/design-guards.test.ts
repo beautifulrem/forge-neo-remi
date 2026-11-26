@@ -3,6 +3,7 @@
  * without any test of the component noticing. Each rule is its own test.
  */
 import { describe, expect, it } from "vitest"
+import { openingTags } from "@/test/jsx-tags"
 
 const sources = import.meta.glob<string>(["../**/*.{ts,tsx}", "!../**/*.test.*", "!../api/gen/**"], { query: "?raw", import: "default", eager: true })
 
@@ -11,35 +12,6 @@ const files = Object.entries(sources).map(([file, source]) => ({ file: file.repl
 /** Every match of `re` in the sources, with the file it is in. */
 function occurrences(re: RegExp): { file: string; match: string }[] {
   return files.flatMap(({ file, source }) => [...source.matchAll(re)].map((m) => ({ file, match: m[0] })))
-}
-
-/**
- * The opening JSX tags of a source, scanned to the `>` outside braces and strings, and the source
- * they were read from: comments are removed first (an apostrophe in one reads as a string).
- */
-function openingTags(raw: string): { source: string; tags: { name: string; tag: string; index: number }[] } {
-  const source = raw.replace(/^\s*\/\/.*$/gm, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
-  const tags: { name: string; tag: string; index: number }[] = []
-  for (const m of source.matchAll(/<([A-Za-z][\w.]*)\b/g)) {
-    let depth = 0
-    let quote = ""
-    let end = -1
-    for (let i = m.index + m[0].length; i < Math.min(source.length, m.index + 8000); i++) {
-      const c = source[i]
-      if (quote) {
-        if (c === "\\") i++
-        else if (c === quote) quote = ""
-      } else if (c === '"' || c === "'" || c === "`") quote = c
-      else if (c === "{") depth++
-      else if (c === "}") depth--
-      else if (c === ">" && depth === 0) {
-        end = i
-        break
-      }
-    }
-    if (end > 0) tags.push({ name: m[1] ?? "", tag: source.slice(m.index, end + 1), index: m.index })
-  }
-  return { source, tags }
 }
 
 /** The end of the call opened at `open` (its `(`), skipping strings, or -1. */
