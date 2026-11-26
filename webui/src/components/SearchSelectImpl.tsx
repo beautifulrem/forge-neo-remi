@@ -145,6 +145,8 @@ export function SearchSelectImpl({ openOnMount, standInKey, ...props }: ImplProp
             <Combobox.List className="min-h-0 flex-1 scroll-py-1 overflow-y-auto overscroll-contain p-1 empty:hidden">
               {(option: SelectOption) => (
                 <Combobox.Item
+                  // the kit's slot: forced colours outline the highlighted item by it, the focus staying in the search field
+                  data-slot="combobox-item"
                   key={option.value}
                   value={option}
                   className="relative flex cursor-default items-center gap-2 rounded-md py-1.5 pr-8 pl-2 text-sm outline-none select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-50"
