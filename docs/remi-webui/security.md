@@ -479,8 +479,8 @@ narrows them too:
   read. It may still list the direct dependencies from `webui/package.json`
   (Insights → Dependency graph shows what it found). GitHub creates no
   Dependabot alerts and no security updates for the lockfile's dependencies,
-  which its graph does not detect, and alerts it opened for them before may
-  close; it promises nothing for the direct ones it lists from
+  which its graph does not detect in it, and alerts it opened for them before
+  may close; it promises nothing for the direct ones it lists from
   `package.json`, so the SPA is treated as having no alerts. The weekly
   version updates still work. `pnpm audit` in `webui/` lists the advisories
   against the whole lockfile; run it with each dependency change and each

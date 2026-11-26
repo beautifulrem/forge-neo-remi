@@ -355,7 +355,7 @@ def test_a_temporary_folder_commandline_args_names_is_the_tests_own(tmp_path, mo
     link = tmp_path / "link to temporary"
     try:
         link.symlink_to(temporary, target_is_directory=True)
-    except OSError:  # no symbolic links here
+    except OSError:  # no symbolic links here: this checks the exemption only, not its realpath
         link = temporary
     monkeypatch.setattr(tempfile, "tempdir", str(link))  # pytest's own may be outside the system's
     monkeypatch.setattr(paths_internal, "commandline_args", f"--data-dir {shlex.quote(str(data))}")
@@ -372,7 +372,12 @@ def test_a_temporary_folder_that_is_the_working_directory_exempts_nothing(tmp_pa
     owners = started_in / "data" / "config.json"
     owners.parent.mkdir(parents=True)
     owners.write_text('{"owner": 1}', encoding="utf-8")
-    monkeypatch.setattr(paths_internal, "cwd", str(started_in))
+    link = tmp_path / "link to started in"  # the working directory, reached through a link
+    try:
+        link.symlink_to(started_in, target_is_directory=True)
+    except OSError:  # no symbolic links here: this checks the comparison only, not its realpath
+        link = started_in
+    monkeypatch.setattr(paths_internal, "cwd", str(link))
     monkeypatch.setattr(tempfile, "tempdir", str(started_in))
     monkeypatch.setattr(paths_internal, "commandline_args", "--data-dir data")
     with pytest.raises(RuntimeError, match="COMMANDLINE_ARGS named"):
