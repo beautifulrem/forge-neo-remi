@@ -3,16 +3,27 @@
 One command runs every gate (scorecard dimension 8):
 
 ```sh
-tools/check.sh                      # everything, ~15 min
+tools/check.sh                      # everything, ~10 min
 tools/check.sh --skip e2e           # leave steps out (names or prefixes, comma-separated)
 tools/check.sh --only ruff,pytest   # only these steps ("pytest" = core + every extension)
 tools/check.sh --list               # step names
 tools/check.sh --strict             # a skipped step fails the run too
+tools/check.sh --serial             # one step at a time
 ```
 
-It keeps going after a failure, prints the last lines of each failing step's
-log, ends with a table (step, result, seconds) and exits 1 when any step
-failed. Every step is always in the table: a step that cannot run on this
+Three lanes run at once, each one step after another: `python`
+(`env:gradio-free`, the ruff steps, `pytest:tests`), `suites` (the extension
+suites, the contracts, the `legacy-ui` steps, `i18n:server`) and `frontend`
+(`pnpm:install` to `e2e`). `pytest:coverage` combines the coverage data of
+every pytest step, so it runs once both Python lanes have ended. A step prints
+its line when it ends, and the table lists the steps in `--list` order.
+`--serial` runs one step at a time, to rule out two steps getting in each
+other's way. Stopping the run (Ctrl-C, SIGTERM) stops every lane and the steps
+they run.
+
+It keeps going after a failure; once every step has ended it prints the last
+lines of each failing step's log, then a table (step, result, seconds), and
+exits 1 when any step failed. Every step is always in the table: a step that cannot run on this
 machine (only the `legacy-ui` steps, without their optional Gradio
 interpreter) is reported as `skip` with the reason under the table, and the
 last line counts it (`<n> of <m> steps passed, 2 skipped.`, never "All ...

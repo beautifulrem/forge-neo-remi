@@ -181,3 +181,113 @@ def test_the_steps_do_not_see_commandline_args(checkout: Path, tmp_path: Path):
     result = subprocess.run(["bash", str(checkout / "tools" / "check.sh"), "--only", "contract:sdapi"], cwd=checkout, env=env, capture_output=True, text=True, timeout=120)
     assert result.returncode == 0, result.stdout + result.stderr
     assert set(seen.read_text(encoding="utf-8").splitlines()) == {"unset"}
+
+
+def rendezvous_tool(path: Path, role: str, other: str, record: Path, wait: float, when: str | None = None) -> Path:
+    """An executable that records its start, waits up to ``wait`` seconds for ``other`` to start
+    (only when its arguments contain ``when``), then records its end and exits 0."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    folder = record.parent
+    rounds = int(wait * 10)
+    body = f'echo "{role} start" >> "{record}"\ntouch "{folder / role}.started"\ni=0\nwhile [ $i -lt {rounds} ] && [ ! -e "{folder / other}.started" ]; do sleep 0.1; i=$((i + 1)); done\necho "{role} end" >> "{record}"\n'
+    if when is not None:
+        body = f'case "$*" in\n  *{when}*) ;;\n  *) exit 0 ;;\nesac\n' + body
+    path.write_text("#!/bin/sh\n" + body + "exit 0\n", encoding="utf-8")
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
+    return path
+
+
+def run_two_lanes(checkout: Path, tmp_path: Path, *args: str, wait: float) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    """contract:sdapi (a Python lane) and pnpm:lint (the frontend lane), each waiting for the other."""
+
+    (checkout / "webui").mkdir()
+    record = tmp_path / "record.txt"
+    python = rendezvous_tool(tmp_path / "bin" / "python", "python", "pnpm", record, wait, when="sdapi_contract")
+    rendezvous_tool(tmp_path / "bin" / "pnpm", "pnpm", "python", record, wait)
+    env = {key: value for key, value in os.environ.items() if key not in {"REMI_LEGACY_PYTHON", "REMI_CHECK_LOGS"}}
+    env.update(PYTHON=str(python), REMI_CHECK_LOGS=str(checkout.parent / "logs"), PATH=f"{tmp_path / 'bin'}{os.pathsep}{env.get('PATH', '')}")
+    command = ["bash", str(checkout / "tools" / "check.sh"), "--only", "contract:sdapi,pnpm:lint", *args]
+    result = subprocess.run(command, cwd=checkout, env=env, capture_output=True, text=True, timeout=120)
+    return result, record.read_text(encoding="utf-8").splitlines()
+
+
+def test_the_python_and_frontend_lanes_run_side_by_side(checkout: Path, tmp_path: Path):
+    result, record = run_two_lanes(checkout, tmp_path, wait=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+    # each saw the other start before it ended: run one after the other, the first would wait 30 s
+    assert sorted(record[:2]) == ["pnpm start", "python start"], record
+    # the summary keeps the order the steps are declared in, whichever ends first
+    rows = [line.split()[0] for line in result.stdout.splitlines() if line.startswith(("contract:sdapi ", "pnpm:lint "))]
+    assert rows == ["contract:sdapi", "pnpm:lint"], result.stdout
+    assert "All 2 steps passed." in result.stdout
+
+
+def test_serial_runs_one_step_at_a_time(checkout: Path, tmp_path: Path):
+    result, record = run_two_lanes(checkout, tmp_path, "--serial", wait=1)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert record == ["python start", "python end", "pnpm start", "pnpm end"]
+
+
+def test_pytest_coverage_waits_for_both_python_lanes(checkout: Path, tmp_path: Path):
+    """pytest:coverage combines the coverage data of every pytest step, so it starts only after
+    pytest:tests (one lane) and the other Python steps (the other lane) have ended."""
+
+    record = tmp_path / "args.txt"
+    python = tmp_path / "bin" / "python"
+    python.parent.mkdir()
+    python.write_text(f'#!/bin/sh\ncase "$*" in\n  *"-m pytest tests "*|*test_remi_core_zh_cn*) sleep 1 ;;\nesac\necho "$@" >> "{record}"\nexit 0\n', encoding="utf-8")
+    python.chmod(python.stat().st_mode | stat.S_IXUSR)
+    result = run(checkout, "--only", "pytest,i18n:server", python=str(python))
+    assert result.returncode == 0, result.stdout + result.stderr
+    calls = record.read_text(encoding="utf-8").splitlines()
+    strict = next(i for i, call in enumerate(calls) if "check_coverage.py strict" in call)
+    assert any("-m pytest tests " in call for call in calls[:strict]), calls
+    assert any("test_remi_core_zh_cn" in call for call in calls[:strict]), calls
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="signals")
+def test_stopping_the_run_stops_every_lane(checkout: Path, tmp_path: Path):
+    """A stopped run (a terminal's Ctrl-C, a tool stopping it) leaves no step running in the background."""
+
+    import signal
+    import time
+
+    pids = tmp_path / "pids.txt"
+    python = tmp_path / "bin" / "python"
+    python.parent.mkdir()
+    python.write_text(f'#!/bin/sh\ncase "$*" in\n  *sdapi_contract*|*test_remi_core_zh_cn*) echo $$ >> "{pids}"; sleep 60 ;;\nesac\nexit 0\n', encoding="utf-8")
+    python.chmod(python.stat().st_mode | stat.S_IXUSR)
+    env = {key: value for key, value in os.environ.items() if key not in {"REMI_LEGACY_PYTHON", "REMI_CHECK_LOGS"}}
+    env.update(PYTHON=str(python), REMI_CHECK_LOGS=str(checkout.parent / "logs"))
+    command = ["bash", str(checkout / "tools" / "check.sh"), "--only", "contract:sdapi,i18n:server"]
+    process = subprocess.Popen(command, cwd=checkout, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline and not (pids.is_file() and pids.read_text(encoding="utf-8").split()):
+            time.sleep(0.1)
+        started = [int(pid) for pid in pids.read_text(encoding="utf-8").split()]
+        assert started
+        process.send_signal(signal.SIGTERM)
+        assert process.wait(timeout=30) != 0
+        deadline = time.monotonic() + 10
+        alive = started
+        while alive and time.monotonic() < deadline:
+            alive = [pid for pid in started if _alive(pid)]
+            time.sleep(0.1)
+        assert not alive, f"steps still running: {alive}"
+    finally:
+        if process.poll() is None:
+            process.kill()
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    # a zombie (ended, not yet reaped by its parent) is not running
+    status = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True)
+    return bool(status.stdout.strip()) and not status.stdout.strip().startswith("Z")

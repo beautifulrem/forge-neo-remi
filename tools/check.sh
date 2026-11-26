@@ -6,6 +6,7 @@
 #   tools/check.sh --only ruff,pytest # run only these steps (prefixes: "pytest" = core + extensions)
 #   tools/check.sh --list             # list the steps
 #   tools/check.sh --strict           # a skipped step (a missing optional interpreter) fails the run
+#   tools/check.sh --serial           # one step at a time, to rule out two steps getting in each other's way
 #
 # Steps: a Gradio-free Python - ruff (Remi code strict, test suites, the built-in extensions'
 # scripts and libraries, the upstream-origin runtime, the whole tree for syntax errors and
@@ -20,6 +21,11 @@
 # mock backend.
 # Steps keep running after a failure; the script ends with a summary table and exits 1
 # when any step failed (or, with --strict, was skipped).
+# Three lanes run at once, each one step after another: python (the Gradio check, ruff,
+# pytest:tests), suites (the extension suites, the contracts, the legacy ui() recorder, i18n:server)
+# and frontend (pnpm to e2e). pytest:coverage combines the coverage data of every pytest step, so
+# it runs once both Python lanes have ended. Each step prints its line when it ends; the summary
+# lists the steps in the order above. Stopping the run (Ctrl-C, SIGTERM) stops every lane.
 #
 # Python: $PYTHON, else venv/ or .venv/ in the repo, else python3 - the first one with
 # requirements.txt and requirements-dev.txt (pytest, pytest-cov) installed, preferring one
@@ -46,9 +52,11 @@ ONLY=""
 SKIP=""
 LIST=0
 STRICT=0
+SERIAL=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --strict) STRICT=1; shift ;;
+    --serial) SERIAL=1; shift ;;
     --only) [ $# -ge 2 ] || { echo "--only needs a value (see --help)" >&2; exit 2; }; ONLY="$2"; shift 2 ;;
     --only=*) ONLY="${1#*=}"; shift ;;
     --skip) [ $# -ge 2 ] || { echo "--skip needs a value (see --help)" >&2; exit 2; }; SKIP="$2"; shift 2 ;;
@@ -124,11 +132,12 @@ export PYTHONDONTWRITEBYTECODE=1
 
 # region Step bookkeeping
 
-NAMES=()
-RESULTS=()
-TIMES=()
-SKIPPED=() # "<name>: <reason>" of each skipped step
 DECLARED=() # every step name, run or not (to report --only/--skip items that name no step)
+# The steps to run, in the order declared: name, lane, and the command (quoted for eval).
+QUEUED_NAMES=()
+QUEUED_LANES=()
+QUEUED_CMDS=()
+LANE=python # the lane of the steps declared next: python, suites, after or frontend
 
 matches() { # matches <name> <comma list>: exact name or prefix
   local item
@@ -151,7 +160,10 @@ wanted() {
 # "skip" with the last line of its output as the reason (--strict counts it as failed).
 SKIP_STATUS=77
 
-# step <name> <command...>: runs the command with its output in $LOGS/<name>.log
+log_of() { echo "$LOGS/${1//[:\/]/_}.log"; }
+
+# step <name> <command...>: declares a step of the current $LANE; it runs with its output in
+# $LOGS/<name>.log
 step() {
   local name="$1"
   shift
@@ -161,47 +173,19 @@ step() {
     return 0
   fi
   wanted "$name" || return 0
-  local log="$LOGS/${name//[:\/]/_}.log"
-  local start end status
-  printf '==> %-44s ' "$name"
-  start=$(date +%s)
-  "$@" >"$log" 2>&1
-  status=$?
-  end=$(date +%s)
-  NAMES+=("$name")
-  TIMES+=("$((end - start))")
-  if [ $status -eq 0 ]; then
-    RESULTS+=("pass")
-    echo "pass ($((end - start))s)"
-  elif [ $status -eq $SKIP_STATUS ]; then
-    local reason
-    reason="$(tail -n 1 "$log")"
-    RESULTS+=("skip")
-    SKIPPED+=("$name: ${reason:-exit $SKIP_STATUS}")
-    echo "skip (${reason:-exit $SKIP_STATUS})"
-  else
-    RESULTS+=("FAIL")
-    echo "FAIL ($((end - start))s, exit $status)"
-    tail -n 40 "$log" | sed 's/^/    | /'
-  fi
+  QUEUED_NAMES+=("$name")
+  QUEUED_LANES+=("$LANE")
+  QUEUED_CMDS+=("$(printf '%q ' "$@")")
+}
+
+skip_because() { # the command of a step that cannot run here: its reason, then the skip status
+  echo "$1"
+  return $SKIP_STATUS
 }
 
 # skip_step <name> <reason>: a step that cannot run here (a missing optional interpreter). It is
 # still listed, and the summary reports it as "skip" with the reason; --strict counts it as failed.
-skip_step() {
-  local name="$1" reason="$2"
-  DECLARED+=("$name")
-  if [ "$LIST" = 1 ]; then
-    echo "$name"
-    return 0
-  fi
-  wanted "$name" || return 0
-  printf '==> %-44s skip (%s)\n' "$name" "$reason"
-  NAMES+=("$name")
-  TIMES+=("0")
-  RESULTS+=("skip")
-  SKIPPED+=("$name: $reason")
-}
+skip_step() { step "$1" skip_because "$2"; }
 
 # pytest that also fails when nothing was collected (pytest exits 5).
 run_pytest() {
@@ -260,6 +244,7 @@ pytest_tests() {
   return $status
 }
 step pytest:tests pytest_tests
+LANE=suites
 for dir in extensions-builtin/*/tests; do
   [ -d "$dir" ] || continue
   ext="${dir#extensions-builtin/}"
@@ -268,7 +253,9 @@ done
 strict_coverage() {
   py tools/check_coverage.py strict --floor "$COVERAGE_FLOOR_STRICT" --data "$LOGS"/.coverage.pytest_*
 }
+LANE=after
 step pytest:coverage strict_coverage
+LANE=suites
 
 step contract:openapi py tools/export_openapi.py --check
 # /sdapi/v1 against Forge Neo's at the last absorbed commit; a shallow clone (CI) fetches that
@@ -319,6 +306,7 @@ step i18n:server run_pytest tests/test_remi_core_zh_cn.py
 
 pnpm_in_webui() { (cd "$ROOT/webui" && pnpm "$@"); }
 
+LANE=frontend
 step pnpm:install pnpm_in_webui install --frozen-lockfile
 step i18n:spa pnpm_in_webui exec vitest run src/locales
 step pnpm:build pnpm_in_webui build
@@ -342,7 +330,116 @@ step e2e pnpm_in_webui exec playwright test ${E2E_REPORTER[@]+"${E2E_REPORTER[@]
 
 [ "$LIST" = 1 ] && exit 0
 
+# region Run
+
+STATE="$LOGS/.steps" # one file per run step: result, seconds, skip reason
+rm -rf "$STATE"
+mkdir -p "$STATE"
+
+# run_step <index>: runs a queued step, records its result and prints its line
+run_step() {
+  local name="${QUEUED_NAMES[$1]}" log start seconds status result line reason=""
+  log="$(log_of "$name")"
+  start=$(date +%s)
+  eval "${QUEUED_CMDS[$1]}" >"$log" 2>&1 </dev/null
+  status=$?
+  seconds=$(($(date +%s) - start))
+  if [ $status -eq 0 ]; then
+    result=pass
+    line="pass (${seconds}s)"
+  elif [ $status -eq $SKIP_STATUS ]; then
+    result=skip
+    reason="$(tail -n 1 "$log")"
+    reason="${reason:-exit $SKIP_STATUS}"
+    line="skip ($reason)"
+  else
+    result=FAIL
+    line="FAIL (${seconds}s, exit $status)"
+  fi
+  printf '%s\t%s\t%s\n' "$result" "$seconds" "$reason" >"$STATE/$1"
+  printf '==> %-44s %s\n' "$name" "$line"
+}
+
+run_lane() { # run_lane <lane>: its steps, one after another
+  local i=0
+  while [ $i -lt ${#QUEUED_NAMES[@]} ]; do
+    if [ "${QUEUED_LANES[$i]}" = "$1" ]; then run_step "$i"; fi
+    i=$((i + 1))
+  done
+}
+
+descendants() { # descendants <pid>: every process under it
+  command -v pgrep >/dev/null || return 0
+  local child
+  for child in $(pgrep -P "$1"); do
+    echo "$child"
+    descendants "$child"
+  done
+}
+
+# Stopped, the script stops its lanes and every step they run (a step would go on in the background).
+stop_lanes() {
+  local lane pids=""
+  for lane in $(jobs -pr); do
+    pids="$pids $lane $(descendants "$lane")"
+  done
+  # shellcheck disable=SC2086 # one word per process
+  [ -z "${pids// /}" ] || kill $pids 2>/dev/null
+}
+trap 'stop_lanes; exit 130' INT
+trap 'stop_lanes; exit 143' TERM
+
+# The lanes run in the background and the script waits for them, so a signal stops it at once.
+if [ ${#QUEUED_NAMES[@]} -gt 0 ]; then
+  if [ "$SERIAL" = 1 ]; then
+    echo "Running ${#QUEUED_NAMES[@]} steps one at a time; logs in $LOGS"
+    for lane in python suites after frontend; do
+      run_lane "$lane" &
+      wait $!
+    done
+  else
+    echo "Running ${#QUEUED_NAMES[@]} steps in three lanes at once (python, suites, frontend); logs in $LOGS"
+    run_lane python &
+    python_lane=$!
+    run_lane suites &
+    suites_lane=$!
+    run_lane frontend &
+    frontend_lane=$!
+    wait $python_lane $suites_lane
+    run_lane after &
+    wait $!
+    wait $frontend_lane
+  fi
+fi
+
+# endregion
+
 # region Summary
+
+NAMES=()
+RESULTS=()
+TIMES=()
+SKIPPED=() # "<name>: <reason>" of each skipped step
+i=0
+while [ $i -lt ${#QUEUED_NAMES[@]} ]; do
+  name="${QUEUED_NAMES[$i]}"
+  result=FAIL # a step that left no result did not end
+  seconds=0
+  reason=""
+  if [ -f "$STATE/$i" ]; then
+    IFS=$'\t' read -r result seconds reason <"$STATE/$i"
+  fi
+  NAMES+=("$name")
+  RESULTS+=("$result")
+  TIMES+=("$seconds")
+  if [ "$result" = skip ]; then SKIPPED+=("$name: $reason"); fi
+  if [ "$result" = FAIL ]; then
+    echo
+    echo "$name failed; the end of $(log_of "$name"):"
+    tail -n 40 "$(log_of "$name")" 2>/dev/null | sed 's/^/    | /'
+  fi
+  i=$((i + 1))
+done
 
 failed=0
 skipped=0
