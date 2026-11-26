@@ -474,6 +474,24 @@ for (const theme of ["light", "dark"] satisfies Theme[]) {
     }
     expect(weak).toEqual({})
   })
+
+  // The backdrop picker sits in the dark-scoped toolbar, but its checkerboard swatch shows the stage's
+  // checkerboard, which keeps the page's tokens: in the light theme it showed the dark one.
+  test(`${theme}: the image viewer's checkerboard swatch matches its stage`, async ({ page }) => {
+    await presetStorage(page, { theme })
+    await openRoute(page, "gallery")
+    await page.getByRole("list", { name: "Images" }).getByRole("listitem").nth(1).getByRole("button").first().click()
+    const viewer = page.getByRole("dialog", { name: "Image viewer" })
+    const swatch = viewer.getByRole("group", { name: "RGBA backdrop" }).getByRole("button", { name: "Checkerboard" }).locator("span")
+    const stage = viewer.locator('[data-backdrop="checker"]').first()
+    const checker = (element: Element) => {
+      const style = getComputedStyle(element)
+      return { canvas: style.backgroundColor, squares: [...new Set(style.backgroundImage.match(/oklch\([^)]*\)/g) ?? [])] }
+    }
+    const shown = await stage.evaluate(checker)
+    expect(shown.squares).toHaveLength(1)
+    expect(await swatch.evaluate(checker)).toEqual(shown)
+  })
 }
 
 /**

@@ -159,11 +159,14 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
           aria-label={t("Image viewer")}
           onKeyDown={onKeyDown}
           initialFocus={stage}
-          className="fixed inset-0 z-50 flex flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] text-white outline-none duration-150 data-closed:animate-out data-closed:fade-out-0 data-open:animate-in data-open:fade-in-0"
+          // the page's checkerboard colours, pinned here above the toolbar's dark scope: the backdrop
+          // picker's swatch shows the stage's checkerboard
+          className="fixed inset-0 z-50 flex flex-col [--checker-canvas:var(--canvas)] [--checker-square:var(--muted)] pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] text-white outline-none duration-150 data-closed:animate-out data-closed:fade-out-0 data-open:animate-in data-open:fade-in-0"
         >
           <Dialog.Title className="sr-only">{t("Image viewer")}</Dialog.Title>
           {/* the chrome over the backdrop, black in both themes, carries `dark`: the tokens it reads (its focus
-              ring) are the dark theme's; the stage keeps the page's (its checkerboard) */}
+              ring) are the dark theme's; the stage keeps the page's (its checkerboard, which the picker's
+              swatch shows too) */}
           <div
             style={dim(toolbarOpacity)}
             className="dark @container/actions flex h-12 shrink-0 items-center gap-2 bg-gradient-to-b from-black/60 to-transparent px-3 opacity-(--lightbox-dim) transition-opacity focus-within:opacity-100 hover:opacity-100"

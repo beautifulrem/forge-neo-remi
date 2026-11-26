@@ -252,7 +252,11 @@ imperatively).
   `--ring`, `--focus-ring`) with the dark theme's lightness for the accent
   (`index.css`), since they are resolved where they are declared and would
   come down as the light theme's. The stage itself keeps the page's tokens
-  (its checkerboard).
+  (its checkerboard), and the backdrop picker's checkerboard swatch in the
+  dark toolbar shows the same one: the viewer pins `--checker-canvas` and
+  `--checker-square`, which `bg-checker` reads before `--canvas` and
+  `--muted`, above the dark scope (`tests/e2e/a11y.spec.ts`, "checkerboard
+  swatch").
   Extra semantic colours:
   - `success`, `warning`, `destructive`, `star` (warm gold star marks, ≥ 3.5:1
     on paper), `canvas` (borderless image backdrops), utility `bg-checker`;

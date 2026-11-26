@@ -596,14 +596,15 @@
   }
 }
 
-/* Transparent-image backdrop. */
+/* Transparent-image backdrop. --checker-canvas and --checker-square, when an ancestor sets them, pin
+   its colours above a dark scope inside it (the image viewer's toolbar, whose swatch shows the stage's). */
 @utility bg-checker {
-  background-color: var(--canvas);
+  background-color: var(--checker-canvas, var(--canvas));
   background-image:
-    linear-gradient(45deg, var(--muted) 25%, transparent 25%),
-    linear-gradient(-45deg, var(--muted) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, var(--muted) 75%),
-    linear-gradient(-45deg, transparent 75%, var(--muted) 75%);
+    linear-gradient(45deg, var(--checker-square, var(--muted)) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--checker-square, var(--muted)) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--checker-square, var(--muted)) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--checker-square, var(--muted)) 75%);
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
