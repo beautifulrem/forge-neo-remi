@@ -95,10 +95,11 @@ jobs:
 
       - name: Playwright version
         id: playwright
-        # never empty: the cache key would then be playwright-Linux-, a browser of any version
+        # a version number, never empty or the first words of an error: the cache key would then
+        # not name this Playwright's browser
         run: |
           version="$(pnpm exec playwright --version | awk '{print $2}')"
-          test -n "$version"
+          echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+'
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       # The browser is downloaded once per Playwright version; its system libraries come from apt
