@@ -45,12 +45,17 @@ def webui_state(options: dict | None = None, *, script_classes=None, postprocess
     from modules import options as options_module
     from modules import shared, shared_options
 
-    saved = {name: getattr(shared, name) for name in ("opts", "options_templates", "prompt_styles")}
+    saved = {name: getattr(shared, name) for name in ("opts", "options_templates", "prompt_styles", "config_filename")}
     shared.options_templates = shared_options.options_templates
     shared.opts = options_module.Options(shared_options.options_templates, shared_options.restricted_opts)
     # saving styles writes the file and a .bak: not in the data folder (the repository under pytest)
     styles_dir = tempfile.TemporaryDirectory(prefix="remi-test-styles-")
     try:
+        # Saving options writes shared.config_filename. Unless the test chose its own, that is the
+        # command line's, the repository's config.json outside tests/: a scratch test rewrote the
+        # owner's settings that way. It goes into this folder too.
+        if shared.config_filename == shared.cmd_opts.ui_settings_file:
+            shared.config_filename = str(Path(styles_dir.name) / "config.json")
         for key, value in (options or {}).items():
             shared.opts.data[key] = value
 
