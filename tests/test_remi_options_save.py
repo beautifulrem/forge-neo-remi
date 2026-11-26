@@ -240,3 +240,41 @@ def test_without_a_new_file_the_free_space_decides_before_the_file_is_written(tm
     monkeypatch.setattr(shutil, "disk_usage", lambda path: SimpleNamespace(total=10**9, used=0, free=10**9))
     opts.save(str(config))
     assert json.loads(config.read_text(encoding="utf-8"))["remi_test_value"] == "x" * 1000
+
+
+def test_under_pytest_the_repositorys_own_settings_file_is_refused(tmp_path, monkeypatch, opts):
+    """A test once saved to the repository's ``config.json``, the owner's settings (ignored by
+    git, so in no history), and rewrote them with the defaults. Under pytest that file is refused
+    whatever path names it, so a test outside ``tests/`` (which ``tests/conftest.py`` never
+    reaches) cannot do it again; the WebUI itself still saves there."""
+    from modules import options
+
+    owners = tmp_path / "repository" / "config.json"  # stands for the repository's settings file
+    owners.parent.mkdir()
+    owners.write_text('{"owner": 1}', encoding="utf-8")
+    monkeypatch.setattr(options, "_REPOSITORY_SETTINGS", str(owners))
+    spellings = [owners, tmp_path / "repository" / ".." / "repository" / "config.json"]
+    if sys.platform != "win32":
+        (tmp_path / "link.json").symlink_to(owners)
+        spellings.append(tmp_path / "link.json")
+    for path in spellings:
+        with pytest.raises(RuntimeError, match="repository's"):
+            opts.save(str(path))
+    assert owners.read_text(encoding="utf-8") == '{"owner": 1}'
+
+    opts.save(str(tmp_path / "config.json"))  # a file of the test's own is saved
+    assert json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
+
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")  # outside a test: the WebUI's own save
+    opts.save(str(owners))
+    assert "owner" not in json.loads(owners.read_text(encoding="utf-8"))
+
+
+def test_the_guarded_file_is_the_repositorys_default_settings_file():
+    # a WebUI a test starts with --data-dir <its folder> saves its settings there
+    from modules import cmd_args, options, paths_internal
+
+    guarded = options._REPOSITORY_SETTINGS
+    assert guarded == os.path.join(paths_internal.script_path, "config.json")
+    assert cmd_args.parser.get_default("ui_settings_file") == os.path.join(paths_internal.data_path, "config.json")
+    assert paths_internal.parser.get_default("data_dir") == paths_internal.script_path

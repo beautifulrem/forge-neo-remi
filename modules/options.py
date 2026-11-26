@@ -11,7 +11,24 @@ from dataclasses import dataclass
 
 from modules import errors
 from modules.shared_cmd_options import cmd_opts
+from modules.paths_internal import script_path
 from remi import ui
+
+
+# Remi: the repository's own settings file (--ui-settings-file's default, as the default data folder
+# is the repository), the owner's settings: ignored by git, so in no history. A test once saved there
+# and rewrote them with the defaults. Under pytest (a WebUI process a test starts inherits
+# PYTEST_CURRENT_TEST) Options.save refuses it, wherever the test's file lives (tests/conftest.py
+# only reaches tests/); a data folder a test passes with --data-dir is its own, and the WebUI itself
+# still saves there.
+_REPOSITORY_SETTINGS = os.path.join(script_path, "config.json")
+
+
+def _is_repository_settings(filename) -> bool:
+    try:
+        return os.path.samefile(filename, _REPOSITORY_SETTINGS)
+    except OSError:  # either file missing
+        return os.path.realpath(filename) == os.path.realpath(_REPOSITORY_SETTINGS)
 
 
 class OptionInfo:
@@ -347,6 +364,8 @@ class Options:
 
     def save(self, filename):
         assert not cmd_opts.freeze_settings, "saving settings is disabled"
+        if "PYTEST_CURRENT_TEST" in os.environ and _is_repository_settings(filename):  # Remi: see _REPOSITORY_SETTINGS
+            raise RuntimeError(f"A test cannot save settings to the repository's {_REPOSITORY_SETTINGS}: save to a file of its own (remi.testing.webui_state does)")
 
         data = dict(self.data)
         for key, (value, stored) in self._held_for_run.items():  # Remi: see hold_for_run
