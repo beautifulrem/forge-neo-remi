@@ -17,8 +17,8 @@ from remi.server.testing import BASE_URL, server_app
 from remi.testing import webui_state
 
 SWAGGER = "assets/swagger-ui-dist-5.0.0"
-REDOC = "assets/redoc-2.0.0"
-OUTSIDE_HOSTS = ("cdn.jsdelivr.net", "fonts.googleapis.com", "fastapi.tiangolo.com", "unpkg.com", "validator.swagger.io")
+REDOC = "assets/redoc-3.0.0"
+OUTSIDE_HOSTS = ("cdn.jsdelivr.net", "fonts.googleapis.com", "fastapi.tiangolo.com", "unpkg.com", "validator.swagger.io", "cdn.redoc.ly", "redocly.com")
 
 
 @pytest.fixture(scope="module")
@@ -69,13 +69,29 @@ def test_swagger_ui_loads_the_builds_copy_under_the_csp(webui, tmp_path):
         assert_locked_down(redirect)
 
 
-def test_redoc_loads_the_builds_copy_without_google_fonts(webui, tmp_path):
+def test_redoc_loads_the_builds_copy_as_a_module_with_telemetry_off(webui, tmp_path):
     with server_app(tmp_path / "data", spa_dir=make_dist(tmp_path)) as server:
         response = server.client.get("/redoc")
-        assert response.status_code == 200
+        assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
         assert_locked_down(response)
-        assert set(urls(response.text)) == {f"/{REDOC}/redoc.standalone.js", "/favicon.svg"}
-        assert 'spec-url="/openapi.json"' in response.text
+        assert set(urls(response.text)) == {f"/{REDOC}/redoc.standalone.js", "/favicon.svg", "/openapi.json"}
+        # ReDoc 3's bundle is an ES module (a classic script tag fails on its `export`), and it
+        # reads its options from the tag: without this one it reports usage to Redocly
+        assert f'<script type="module" src="/{REDOC}/redoc.standalone.js"></script>' in response.text
+        assert '<redoc spec-url="/openapi.json" disable-telemetry="true"></redoc>' in response.text
+        # no inline script: nothing for the CSP to allow by hash
+        assert response.text.count("<script") == 1 and "'sha256-" not in response.headers["content-security-policy"]
+        # a browser runs a module only when it is served as JavaScript
+        bundle = server.client.get(f"/{REDOC}/redoc.standalone.js")
+        assert bundle.status_code == 200 and bundle.headers["content-type"].startswith("text/javascript")
+
+
+def test_the_redoc_page_escapes_what_it_writes_into_the_markup(webui, tmp_path):
+    with server_app(tmp_path / "data", spa_dir=make_dist(tmp_path)) as server:
+        client = TestClient(server.app, base_url=BASE_URL, root_path='/a"><script>alert(1)</script>')
+        response = client.get('/a"><script>alert(1)</script>/redoc')
+        assert response.status_code == 200 and "&lt;script&gt;alert(1)" in response.text
+        assert "<script>alert(1)" not in response.text and response.text.count("<script") == 1
 
 
 def test_the_pages_follow_the_subpath(webui, tmp_path):
@@ -83,7 +99,8 @@ def test_the_pages_follow_the_subpath(webui, tmp_path):
         client = TestClient(server.app, base_url=BASE_URL, root_path="/remi")
         docs = client.get("/remi/docs").text
         assert f'src="/remi/{SWAGGER}/swagger-ui-bundle.js"' in docs and "url: '/remi/openapi.json'" in docs
-        assert 'spec-url="/remi/openapi.json"' in client.get("/remi/redoc").text
+        redoc = client.get("/remi/redoc").text
+        assert 'spec-url="/remi/openapi.json"' in redoc and f'src="/remi/{REDOC}/redoc.standalone.js"' in redoc
 
 
 @pytest.mark.parametrize(
@@ -133,7 +150,8 @@ def test_without_the_spa_the_server_still_serves_the_viewer_files(webui, tmp_pat
             assert bundle.status_code == 200 and bundle.text == "window.SwaggerUIBundle = () => {}" and "immutable" in bundle.headers["cache-control"]
             packed = client.get(f"/{SWAGGER}/swagger-ui-bundle.js", headers={"Accept-Encoding": "gzip"})
             assert packed.headers.get("content-encoding") == "gzip" and packed.text == "packed"
-            assert client.get(f"/{REDOC}/redoc.standalone.js").text == "// redoc"
+            module = client.get(f"/{REDOC}/redoc.standalone.js")
+            assert module.text == "// redoc" and module.headers["content-type"].startswith("text/javascript")
             assert client.get("/assets/app-1a2b.js").status_code == 404
             assert client.get(f"/{SWAGGER}/missing.js").status_code == 404
             assert client.get("/assets/../index.html").status_code == 404
@@ -151,7 +169,8 @@ def test_the_openapi_description_stays_and_lists_no_docs_pages(webui, tmp_path):
 @pytest.mark.skipif(not (DIST / MANIFEST).is_file() and not os.environ.get("REMI_SPA_BUILT"), reason="the SPA is not built (cd webui && pnpm build)")
 def test_the_build_vendors_both_viewers():
     """``apiDocs`` in webui/vite.config.ts: pinned versions, the license
-    files next to them, no references to source maps that are not shipped.
+    files next to them, no references to source maps that are not shipped,
+    and no outside host left for a viewer to load from or report to.
 
     Reads the real build: tools/check.sh runs it after its own build (step
     ``api-docs``, which sets REMI_SPA_BUILT: then a missing build fails), never
@@ -162,7 +181,18 @@ def test_the_build_vendors_both_viewers():
     for key, name in (("swaggerJs", "swagger-ui-dist"), ("swaggerCss", "swagger-ui-dist"), ("redocJs", "redoc")):
         file = DIST / assets[key]
         assert file.parent.name.startswith(f"{name}-") and (file.parent / "LICENSE").is_file()
-        assert "sourceMappingURL" not in file.read_text(encoding="utf8")[-300:]
+        source = file.read_text(encoding="utf8")
+        assert "sourceMappingURL" not in source[-300:]
+        # redocly.com itself stays: the attribution's link and the links to the OpenAPI reference
+        remote = re.search(r"https://(?:[a-z0-9.-]+\.redoc\.ly|[a-z0-9.-]+\.redocly\.com|cdn\.jsdelivr\.net|unpkg\.com|fonts\.(?:googleapis|gstatic)\.com)\b[^`'\"\s]*", source)
+        assert remote is None, f"{assets[key]} names {remote[0]}"
+    redoc = DIST / assets["redocJs"]
+    source = redoc.read_text(encoding="utf8")
+    # the bundle the /redoc page loads as a module, with the option that page sets
+    assert re.search(r"export\s*\{[^}]*\}\s*;?\s*$", source) and "disableTelemetry" in source
+    # ReDoc 3 lists what its bundle includes nowhere: the build writes the license comments the bundle keeps
+    notices = redoc.with_name(redoc.name + ".LICENSE.txt").read_text(encoding="utf8")
+    assert "Redocly" in notices and "React" in notices
 
 
 def test_the_not_built_pages_ask_for_the_node_version_the_launcher_names():

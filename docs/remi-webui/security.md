@@ -255,14 +255,47 @@ are not FastAPI's default pages, which load floating CDN versions
 vendors pinned copies (`swagger-ui-dist` and `redoc` in `webui/package.json`,
 `apiDocs` in `webui/vite.config.ts`, which writes them under
 `assets/<package>-<version>/` with their licenses and fails when a viewer
-still names a CDN host; ReDoc's attribution logo from `cdn.redoc.ly` is
-replaced). The pages carry the same CSP as the SPA shell (scripts from the
-server and the page's inline script by hash, `connect-src 'self'`), Swagger
-UI's validator badge (`validator.swagger.io`) is off, and the packages'
-install scripts are disabled (`webui/pnpm-workspace.yaml`: `@scarf/scarf`
-would report the install). `tests/test_remi_api_docs.py` checks the pages;
-a browser load of both against a built server makes no outside request and
-reports no CSP violation.
+still names a CDN host). The pages carry the same CSP as the SPA shell
+(scripts from the server and the page's inline script by hash,
+`connect-src 'self'`), Swagger UI's validator badge (`validator.swagger.io`)
+is off, and the packages' install scripts are disabled
+(`webui/pnpm-workspace.yaml`: `@scarf/scarf` would report the install).
+
+ReDoc is ReDoc 3, whose bundle is an ES module that would reach three outside
+hosts on its own. The server writes the `/redoc` page itself (`REDOC` in
+`remi/server/api_docs.py`: a module script, no inline script) and the build
+replaces each address in the bundle:
+
+- Usage telemetry (`otel.cloud.redocly.com`): off by the page's
+  `disable-telemetry="true"`, and the bundle keeps no collector address.
+- The two logos of the "API docs by Redocly" attribution (`cdn.redoc.ly`): the
+  name as text in a local image. The attribution and its link to
+  `redocly.com` stay.
+- Two icon sets (`cdn.redocly.com`: file-type icons on the tabs of a code
+  block, Font Awesome icons an API description names): an empty local image
+  each. The server's own API description (`/api/v2`, `/sdapi/v1`) has no code
+  block and names no icon, and the label beside an icon stays. The language
+  icons of code samples are in the bundle.
+
+The package lists what its bundle includes nowhere (ReDoc 2 shipped
+`redoc.standalone.js.LICENSE.txt`); the build writes that file from the
+license comments the bundle keeps. Two things remain the viewer's own:
+
+- Its Copy menu has "Open in Claude" and "Open in ChatGPT", which open that
+  service in a new tab with the page's part of the API description in the
+  address. That happens when the user chooses the entry, like following the
+  attribution link, never on its own.
+- When its search creates its index, it tries `Function()` once to see
+  whether it can index in a worker. The CSP refuses that (no
+  `'unsafe-eval'`), the browser reports the refusal, and the search indexes
+  on the page instead.
+
+`tests/test_remi_api_docs.py` checks the pages and that the built viewers name
+none of these hosts. In a browser against a built server, both pages make
+requests to the server only: for `/redoc` also after searching, following a
+deep link, switching the colour mode and layout, collapsing the sidebar and
+opening the Copy menu, with that one refused `Function()` call as its only CSP
+report.
 
 ### XSS (`webui/src/ui/rich-text.tsx`, `webui/src/ui/image-ref.ts`)
 
@@ -465,10 +498,13 @@ raised from 0.127.1 and kept below 0.137, see below; `starlette`, `uvicorn`,
 a comment) so that only these updates move them. It takes effect once the file
 is on the repository's default branch on GitHub;
 `tests/test_dependabot_config.py` keeps its list in step with these pins.
-`redoc` stays below 3: ReDoc 3 is another viewer (an ES module where the
-`/redoc` page loads a classic script, usage telemetry unless the page opts
-out, icon sets loaded from `cdn.redocly.com`, no licence file for what its
-bundle includes), so moving to it is a port of the page, not a version update.
+`redoc` stays below 4: the `/redoc` page is written for ReDoc 3 (see
+"Outbound network calls"), which was another viewer than ReDoc 2 (an ES
+module, usage telemetry unless the page opts out, icon sets loaded from
+`cdn.redocly.com`, no licence file for what its bundle includes), so another
+major version is a port of the page, not a version update. Updates within 3
+come with the weekly group; the build fails when one names an outside host of
+Redocly's again.
 Dependabot alerts and security updates are repository settings, and the file
 narrows them too:
 
@@ -505,6 +541,16 @@ not change. ReDoc parses no XML a client sends: it renders the server's own
 OpenAPI document, from which `openapi-sampler` builds XML examples. redoc 3
 (3.2.0) would replace the page with a new major version, so 2.5.4 stays until
 a 2.x release carries the fix or the page moves to 3.
+
+### 2026-11-27: ReDoc 3.2.0
+
+The `/redoc` page moved to redoc 3.2.0 (see "Outbound network calls" for what
+the port turns off and replaces). Its prebuilt bundle is built with
+`fast-xml-parser` `^5.12.0`, past the versions of GHSA-474x-hrwr-fgx4, and
+the lockfile no longer has `openapi-sampler` or `fast-xml-parser`: the
+package's own dependencies are now `@redocly/redoc-opentelemetry` and the
+OpenTelemetry packages under it, development dependencies that the build does
+not read (it copies the prebuilt bundle). `pnpm audit` finds no advisory.
 
 ### 2026-11-26: Starlette 1.3.1 and FastAPI 0.136.3
 
