@@ -6,6 +6,7 @@ the server packages Remi adds to requirements.txt or pins above Forge Neo's are 
 with the workflow's actions, which check.yml pins to commit SHAs.
 """
 
+import json
 import re
 from pathlib import Path
 
@@ -30,6 +31,15 @@ def test_the_spa_is_updated_in_one_weekly_group():
     assert spa["directory"] == "/webui"
     assert spa["schedule"]["interval"] == "weekly"
     assert any(group.get("patterns") == ["*"] for group in spa["groups"].values())
+
+
+def test_redoc_stays_on_the_viewer_the_redoc_page_loads():
+    # ReDoc 3's bundle is an ES module with telemetry and CDN icon sets; remi/server/api_docs.py
+    # serves ReDoc 2's classic script, which webui/vite.config.ts vendors
+    (spa,) = _updates("npm")
+    assert {"dependency-name": "redoc", "versions": [">=3.0.0"]} in spa["ignore"]
+    package = json.loads((ROOT / "webui" / "package.json").read_text(encoding="utf-8"))
+    assert package["devDependencies"]["redoc"].startswith("2.")
 
 
 def test_only_remis_own_python_pins_are_updated():
