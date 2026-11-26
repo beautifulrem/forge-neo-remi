@@ -91,10 +91,14 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
   // A new image starts at the configured zoom (the live preview keeps the view).
   const imageKey = live ? "live" : item?.key
   useEffect(() => {
+    // Forget the last image's size: the new one reports its own when it loads.
+    // oxlint-disable-next-line react/set-state-in-effect
     setNatural(null)
     setTiled(false)
   }, [imageKey])
   useEffect(() => {
+    // The view follows two measurements (the image's size, the viewport's) that arrive in events.
+    // oxlint-disable-next-line react/set-state-in-effect
     if (natural && viewportSize.width > 0) setView(initialView(natural, viewportSize, zoomedByDefault))
     // Re-fit on image or viewport change only.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
