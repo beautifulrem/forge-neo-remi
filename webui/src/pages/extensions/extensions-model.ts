@@ -35,7 +35,12 @@ export function backupDiffers(saved: BackupRepo, current: BackupRepo): boolean {
 
 // ---------------------------------------------------------------- errors
 
-export type Translate = (key: string, options?: Record<string, unknown>) => string
+/**
+ * i18next's `t` as {@link adminErrorMessage} calls it: a key with its values. The values are
+ * required: `t`'s own type lists its ways of being called one by one (a key; a key and options),
+ * which a single signature with optional values matches none of.
+ */
+export type Translate = (key: string, options: Record<string, unknown>) => string
 
 /**
  * A server error in the user's language: extension and system errors carry
