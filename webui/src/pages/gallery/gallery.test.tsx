@@ -63,6 +63,7 @@ describe("gallery page", { timeout: 20_000 }, () => {
     vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(900)
     vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(900)
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(700)
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(700)
   })
   afterEach(() => {
     vi.restoreAllMocks()

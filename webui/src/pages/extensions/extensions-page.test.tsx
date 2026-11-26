@@ -301,6 +301,7 @@ const indexOf = (count: number): ExtensionIndex => ({
 describe("available extensions", { timeout: 20_000 }, () => {
   beforeEach(() => {
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(800)
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(800)
     vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(1000)
     vi.spyOn(api.extensions, "list").mockResolvedValue(listing([]))
   })
