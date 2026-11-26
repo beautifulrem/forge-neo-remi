@@ -8,16 +8,19 @@ import logging
 import math
 import re
 import secrets
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI, Request
+from fastapi.dependencies.utils import get_flat_params
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.openapi.utils import validation_error_definition, validation_error_response_definition
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware import Middleware
 from starlette.requests import HTTPConnection
@@ -168,6 +171,40 @@ def _refused(request: Request, error: JobError | RecipeError | Refused) -> JSONR
     translates."""
 
     return ErrorResponse(status_code=error.status, content={"detail": str(error), **error_fields(error.message)})
+
+
+REQUEST_422 = {"$ref": "#/components/schemas/HTTPValidationError"}
+
+
+def _listing_request_422s(app: FastAPI) -> Callable[[], dict[str, Any]]:
+    """``app.openapi`` that lists FastAPI's 422 (a request that fails its model,
+    ``{"detail": [...]}``) on every route that takes parameters or a body.
+    FastAPI lists it only on a route that declares no 422 of its own, and
+    Remi's routes that declare one (a refused value, a refused operation)
+    still answer FastAPI's to a malformed request."""
+
+    def openapi() -> dict[str, Any]:
+        if app.openapi_schema is not None:
+            return app.openapi_schema
+        document = FastAPI.openapi(app)
+        listed = False
+        for route in app.routes:
+            if not (isinstance(route, APIRoute) and route.include_in_schema and (get_flat_params(route.dependant) or route.body_field)):
+                continue
+            for method in route.methods:
+                operation = document.get("paths", {}).get(route.path_format, {}).get(method.lower(), {})
+                content = operation.get("responses", {}).get("422", {}).get("content", {}).get("application/json")
+                if content is None or content.get("schema") == REQUEST_422:
+                    continue
+                content["schema"] = {"anyOf": [*content["schema"].get("anyOf", [content["schema"]]), REQUEST_422]}
+                listed = True
+        if listed:
+            schemas = document.setdefault("components", {}).setdefault("schemas", {})
+            schemas.setdefault("ValidationError", validation_error_definition)
+            schemas.setdefault("HTTPValidationError", validation_error_response_definition)
+        return document
+
+    return openapi
 
 
 def _file_error(request: Request, error: FileError) -> JSONResponse:
@@ -321,6 +358,7 @@ def create_app(
         # requests are refused by their Origin / Sec-Fetch-Site (SecurityMiddleware), not by it.
         strict_content_type=False,
     )
+    app.openapi = _listing_request_422s(app)  # type: ignore[method-assign]
     app.state.services = services
     app.state.auth = auth
     app.state.hub = hub

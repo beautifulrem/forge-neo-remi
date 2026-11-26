@@ -56,7 +56,7 @@ def upload_json(record: FileRecord) -> dict[str, Any]:
     return {"id": record.id, "width": record.width, "height": record.height, "name": record.name, "mime": record.mime, "size": record.size}
 
 
-@router.post("/uploads", response_model=m.Upload, status_code=201, openapi_extra=UPLOAD_BODY, responses={413: {"model": m.Detail}, 415: {"model": m.Detail}}, summary="Upload an image or file (multipart field `file`)")
+@router.post("/uploads", response_model=m.Upload, status_code=201, openapi_extra=UPLOAD_BODY, responses={400: {"model": m.Detail}, 413: {"model": m.Detail}, 415: {"model": m.Detail}, 422: {"model": m.Detail}}, summary="Upload an image or file (multipart field `file`)")
 async def upload(request: Request, services: ServicesDep) -> dict[str, Any]:
     limit = services.files.max_upload_bytes
     too_large = HTTPException(status_code=413, detail=f"the file is larger than {limit // (1024 * 1024)} MB")

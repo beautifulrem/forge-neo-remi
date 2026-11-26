@@ -239,7 +239,7 @@ def test_presets(server):
     assert extras.json() == {"errors": [{"owner": None, "param": "tab", "message": "presets apply to txt2img and img2img"}]}
     # Both answers are declared in the API description
     responses = server.client.get("/openapi.json").json()["paths"]["/api/v2/presets/{name}"]["get"]["responses"]
-    assert responses["422"]["content"]["application/json"]["schema"]["$ref"].endswith("/ValidationErrorBody")
+    assert {"$ref": "#/components/schemas/ValidationErrorBody"} in responses["422"]["content"]["application/json"]["schema"]["anyOf"]
     assert responses["404"]["content"]["application/json"]["schema"]["$ref"].endswith("/Detail")
 
 
@@ -843,6 +843,25 @@ def test_openapi_covers_the_api_and_the_export_is_current(server):
     assert {"Bootstrap", "JobRequest", "Job", "Upload", "ValidationErrorBody"} <= set(document["components"]["schemas"])
     result = subprocess.run([sys.executable, str(ROOT / "tools" / "export_openapi.py"), "--check"], cwd=ROOT, capture_output=True, text=True, timeout=300)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_a_route_with_its_own_422_still_lists_the_422_of_a_malformed_request(server):
+    # POST /jobs declares the 422 of a refused value; a body of the wrong shape gets FastAPI's
+    malformed = server.client.post("/api/v2/jobs", json={"tab": "txt2img", "core": "not an object"})
+    assert malformed.status_code == 422 and isinstance(malformed.json()["detail"], list)
+    document = server.client.get("/openapi.json").json()
+    request_422 = {"$ref": "#/components/schemas/HTTPValidationError"}
+    assert document["paths"]["/api/v2/jobs"]["post"]["responses"]["422"]["content"]["application/json"]["schema"] == {"anyOf": [{"$ref": "#/components/schemas/ValidationErrorBody"}, request_422]}
+    for path, item in document["paths"].items():
+        for method, operation in item.items():
+            if operation.get("parameters") or (operation.get("requestBody") and path != "/api/v2/uploads"):
+                schema = operation["responses"]["422"]["content"]["application/json"]["schema"]
+                assert schema == request_422 or request_422 in schema["anyOf"], f"{method.upper()} {path}"
+    # The upload form is read by the route itself: its 400 and 422 are its own sentences
+    upload = document["paths"]["/api/v2/uploads"]["post"]["responses"]
+    for status in ("400", "422"):
+        assert upload[status]["content"]["application/json"]["schema"] == {"$ref": "#/components/schemas/Detail"}
+    assert server.client.post("/api/v2/uploads", files={"other": ("a.png", b"x")}).json() == {"detail": "the form needs a `file` field"}
 
 
 # endregion

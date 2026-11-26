@@ -64,6 +64,10 @@ Contents: [Conventions](#conventions) · [Authentication](#authentication) ·
   in the same way; for these a sentence without values has them too (its template
   is the `detail` itself, `params` is `{}`), so a client knows the detail is
   a catalog sentence.
+  A request that does not fit the route's own model (a field of the wrong
+  type, a missing one) is FastAPI's 422, `{"detail": [{"loc": [...], "msg":
+  "...", "type": "..."}]}`; the API description lists it beside a route's
+  own 422 on every route that can answer it.
 - **Paging.** Lists return `{"items": [...], "next_cursor": "...", "total": n}`;
   pass `cursor=<next_cursor>` for the next page. Cursors are opaque. A few
   short lists are not paged and answer a plain JSON array: `GET /api/v2/pages`,

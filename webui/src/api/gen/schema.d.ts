@@ -6091,7 +6091,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6124,7 +6124,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6186,7 +6186,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6420,7 +6420,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6577,7 +6577,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6651,7 +6651,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -7141,6 +7141,15 @@ export interface operations {
                     "application/json": components["schemas"]["Upload"];
                 };
             };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Detail"];
+                };
+            };
             /** @description Content Too Large */
             413: {
                 headers: {
@@ -7152,6 +7161,15 @@ export interface operations {
             };
             /** @description Unsupported Media Type */
             415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Detail"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7732,7 +7750,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -7786,7 +7804,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -7925,7 +7943,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminErrorBody"];
+                    "application/json": components["schemas"]["AdminErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -7996,7 +8014,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminErrorBody"];
+                    "application/json": components["schemas"]["AdminErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8045,7 +8063,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminErrorBody"];
+                    "application/json": components["schemas"]["AdminErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8096,7 +8114,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminErrorBody"];
+                    "application/json": components["schemas"]["AdminErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
             /** @description Bad Gateway */
@@ -8165,7 +8183,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminErrorBody"];
+                    "application/json": components["schemas"]["AdminErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
             /** @description Bad Gateway */
@@ -8221,7 +8239,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminErrorBody"];
+                    "application/json": components["schemas"]["AdminErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8271,7 +8289,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminErrorBody"];
+                    "application/json": components["schemas"]["AdminErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
             /** @description Bad Gateway */
@@ -8351,7 +8369,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminErrorBody"];
+                    "application/json": components["schemas"]["AdminErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8400,7 +8418,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminErrorBody"];
+                    "application/json": components["schemas"]["AdminErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8447,7 +8465,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminErrorBody"];
+                    "application/json": components["schemas"]["AdminErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8509,7 +8527,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminErrorBody"];
+                    "application/json": components["schemas"]["AdminErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8759,7 +8777,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8927,7 +8945,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8976,7 +8994,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -9029,7 +9047,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -9206,7 +9224,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -9589,7 +9607,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -9638,7 +9656,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -9685,7 +9703,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -9738,7 +9756,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -9791,7 +9809,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -9844,7 +9862,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -9892,7 +9910,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -9941,7 +9959,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -9992,7 +10010,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10078,7 +10096,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10149,7 +10167,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10198,7 +10216,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10245,7 +10263,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10298,7 +10316,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10351,7 +10369,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10435,7 +10453,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10486,7 +10504,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10557,7 +10575,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10606,7 +10624,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10653,7 +10671,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10702,7 +10720,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10749,7 +10767,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10802,7 +10820,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10851,7 +10869,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10900,7 +10918,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -10949,7 +10967,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -11123,7 +11141,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -11174,7 +11192,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -11319,7 +11337,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
             /** @description Bad Gateway */
@@ -11388,7 +11406,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
             /** @description Bad Gateway */
@@ -11457,7 +11475,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
             /** @description Bad Gateway */
@@ -11517,7 +11535,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -11635,7 +11653,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -11718,7 +11736,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -11771,7 +11789,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -11842,7 +11860,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -11891,7 +11909,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -11944,7 +11962,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -12031,7 +12049,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -12080,7 +12098,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Detail"];
+                    "application/json": components["schemas"]["Detail"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -12133,7 +12151,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -12213,7 +12231,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ValidationErrorBody"];
+                    "application/json": components["schemas"]["ValidationErrorBody"] | components["schemas"]["HTTPValidationError"];
                 };
             };
         };
