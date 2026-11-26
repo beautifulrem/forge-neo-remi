@@ -12,6 +12,23 @@ const sources = import.meta.glob<string>(["../../**/*.{ts,tsx}", "!../../**/*.te
 /** A path parameter the mock matches by name, and a value it knows. */
 const SAMPLE: Record<string, string> = { tab: "txt2img", page_id: "toolbox", source: "agent-scheduler" }
 
+/** Whether an object literal spreads another object into itself (`{ ...init }`; one in a nested `body` sets no method). */
+function spreadsAtTop(literal: string): boolean {
+  let depth = 0
+  let quote = ""
+  for (let i = 0; i < literal.length; i++) {
+    const c = literal[i]
+    if (quote) {
+      if (c === "\\") i++
+      else if (c === quote) quote = ""
+    } else if (c === '"' || c === "'" || c === "`") quote = c
+    else if (c === "{" || c === "[" || c === "(") depth++
+    else if (c === "}" || c === "]" || c === ")") depth--
+    else if (depth === 1 && literal.startsWith("...", i)) return true
+  }
+  return false
+}
+
 /**
  * The calls through the workbench transport (`workbenchRequest(path, { method })`), as "METHOD /api/v2/path"
  * (the transport's default method is GET), and the call sites whose path or method is not written out (a
@@ -40,9 +57,12 @@ function workbenchCalls(raw: string): { calls: string[]; unread: string[] } {
       else if (source[end] === ")") depth--
     }
     const args = source[open] === "(" ? source.slice(open + 1, end - 1) : ""
-    const path = /^\s*(["`])(\/[^"`]*)\1/.exec(args)?.[2]
-    const method = /\bmethod\b\s*(?::\s*([^,}\s]+))?/.exec(args)
-    if (!path || (method && !/^"[A-Z]+"$/.test(method[1] ?? ""))) {
+    const written = /^\s*(["`])(\/[^"`]*)\1/.exec(args)
+    const path = written?.[2]
+    // the options: none, or an object literal; one passed in a variable or spread may carry any method
+    const options = args.slice(written?.[0].length ?? 0).replace(/^\s*,/, "").trim()
+    const method = /\bmethod\b\s*(?::\s*([^,}\s]+))?/.exec(options)
+    if (!path || (options && (!options.startsWith("{") || spreadsAtTop(options))) || (method && !/^"[A-Z]+"$/.test(method[1] ?? ""))) {
       unread.push(source.slice(m.index, source[open] === "(" ? end : m.index + 60).replace(/\s+/g, " "))
       continue
     }
@@ -61,10 +81,12 @@ it("reads every workbench call site, or lists the one it cannot", () => {
     'workbenchRequest("/recipes")',
     "workbenchRequest(path)",
     'workbenchRequest("/recipes", { method })',
+    'workbenchRequest("/chains", init)',
+    'workbenchRequest("/chains", { ...init, signal })',
   ].join("\n")
   expect(workbenchCalls(source)).toEqual({
     calls: ["PATCH /api/v2/boards", "POST /api/v2/chains/{id}/cancel", "GET /api/v2/recipes"],
-    unread: ["workbenchRequest(path)", 'workbenchRequest("/recipes", { method })'],
+    unread: ["workbenchRequest(path)", 'workbenchRequest("/recipes", { method })', 'workbenchRequest("/chains", init)', 'workbenchRequest("/chains", { ...init, signal })'],
   })
 })
 
