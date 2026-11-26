@@ -685,11 +685,17 @@ generated interfaces (sources: Linear's
   does not read with a dark accent, are a 25 % white wash with a full-white
   glyph, well above their 12 % hover. A light theme's hover keeps the 15 % wash: a deeper one
   takes some accents' labels under 4.5:1.
-  Every button over the viewer's black backdrop takes that 12 % hover and 25 % pressed wash from
-  `features/lightbox/tone.ts`. A ghost or outline button that sets its own wash repeats it under
-  `dark:`: the kit's `dark:hover:bg-muted/50` is `:is(.dark *)`, which outranks a plain `hover:`
-  class in the dark theme, and in both themes inside the viewer's dark-scoped chrome
-  (`design-guards.test.ts`, "button washes").
+  The viewer's ghost buttons (its toolbar, the details panel with its Star and copy button, the
+  result and board actions) take their washes from `features/lightbox/tone.ts`: 12 % white on hover
+  and while their menu is open, 25 % once pressed. The swatch picker, the lineage tiles and the
+  previous / next discs draw their own look over the picture.
+  A ghost or outline button that sets its own wash sets one under `dark:` too: the same wash, or the
+  dark theme's step of it (a destructive ghost's 20 %). The kit's ghost button carries
+  `dark:hover:bg-muted/50` and its outline button `dark:bg-input/30` and `dark:hover:bg-input/50`;
+  `dark:` is `:is(.dark *)`, a class more than a plain `hover:` or `bg-`, so it wins in the dark
+  theme, and in both themes inside the viewer's dark-scoped chrome. A class constant
+  (`FIELD_BUTTON_CLASS`) carries its `dark:` wash as well (`design-guards.test.ts`, "button
+  washes", which reads the constants a tag names).
   Truncated names and URLs carry their full text in a `title`. A form column (the generate parameters, an
   extension page, the JSON Builder's side column, the Extensions list) is an inspector, not a
   stack of cards: each block is a panel with a hairline above it and no box,

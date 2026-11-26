@@ -14,6 +14,7 @@ import type { FormTab, GalleryItem } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { errorText } from "@/features/errors/error-text"
 import { parsedEntries } from "@/features/infotext/paste"
+import { ON_BACKDROP } from "@/features/lightbox/tone"
 import { deliver } from "@/features/send-to/send-to"
 import { cn } from "@/lib/utils"
 import { getFormStore } from "@/ui/form-store"
@@ -129,7 +130,7 @@ export function LineageStrip({ item, onSelectImage, onClose }: LineageStripProps
             size="xs"
             disabled={loadingJob}
             onClick={() => void loadSourceJob()}
-            className="h-6 gap-1 px-1.5 text-[0.6875rem] text-white/80 hover:bg-white/12 hover:text-white dark:hover:bg-white/12"
+            className={cn("h-6 gap-1 px-1.5 text-[0.6875rem]", ON_BACKDROP)}
           >
             <History className="size-3" aria-hidden />
             {t("Load source job")}

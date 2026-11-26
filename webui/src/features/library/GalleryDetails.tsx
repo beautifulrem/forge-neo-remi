@@ -7,7 +7,7 @@ import type { GalleryCategory, GalleryItem } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { InfotextPanel } from "@/features/infotext/InfotextPanel"
-import { ON_BACKDROP } from "@/features/lightbox/tone"
+import { ON_BACKDROP, ON_BACKDROP_PRESSED } from "@/features/lightbox/tone"
 import { AssignBoardPopover } from "./BoardsBar"
 import { CATEGORY_LABELS, formatBytes } from "./labels"
 import { LineageStrip } from "./LineageStrip"
@@ -37,7 +37,7 @@ export function GalleryDetails({ item, onDelete, onClose, onSelectImage }: Galle
   return (
     <div className="flex flex-col gap-3 text-white/90">
       <div className="flex items-center gap-1">
-        <Button variant="ghost" size="sm" className={tone} aria-pressed={item.starred} onClick={() => void starOutputs([item.id], !item.starred)}>
+        <Button variant="ghost" size="sm" className={cn(tone, ON_BACKDROP_PRESSED)} aria-pressed={item.starred} onClick={() => void starOutputs([item.id], !item.starred)}>
           <Star className={cn(item.starred && "fill-star text-star")} aria-hidden />
           {t("Star")}
         </Button>
@@ -75,7 +75,7 @@ export function GalleryDetails({ item, onDelete, onClose, onSelectImage }: Galle
         ))}
       </dl>
       <LineageStrip item={item} onSelectImage={onSelectImage} onClose={onClose} />
-      <InfotextPanel infotext={item.infotext} className="[&_.bg-muted]:bg-white/10 [&_.text-muted-foreground]:text-white/55" />
+      <InfotextPanel infotext={item.infotext} tone="light" className="[&_.bg-muted]:bg-white/10 [&_.text-muted-foreground]:text-white/55" />
     </div>
   )
 }

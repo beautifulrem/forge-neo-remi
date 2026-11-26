@@ -5,15 +5,16 @@ import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { copyText } from "@/features/gallery/files"
+import { ON_BACKDROP } from "@/features/lightbox/tone"
 import { infotextKeyLabel, splitInfotext } from "./display"
 
-function CopyButton({ text, label }: { text: string; label: string }) {
+function CopyButton({ text, label, tone }: { text: string; label: string; tone?: "light" }) {
   const [copied, setCopied] = useState(false)
   return (
     <Button
       variant="ghost"
       size="icon-xs"
-      className="relative after:absolute after:-inset-2"
+      className={cn("relative after:absolute after:-inset-2", tone === "light" && ON_BACKDROP)}
       aria-label={label}
       title={label}
       onClick={() =>
@@ -29,7 +30,8 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   )
 }
 
-export function InfotextPanel({ infotext, className }: { infotext: string | null | undefined; className?: string }) {
+/** `tone="light"`: white controls over the image viewer's black backdrop (its details panel). */
+export function InfotextPanel({ infotext, className, tone }: { infotext: string | null | undefined; className?: string; tone?: "light" }) {
   const { t } = useTranslation()
   if (!infotext) {
     return <p className={cn("text-xs text-muted-foreground", className)}>{t("No generation parameters")}</p>
@@ -42,7 +44,7 @@ export function InfotextPanel({ infotext, className }: { infotext: string | null
           <h3 className="mb-0.5 text-[0.8rem] font-medium text-muted-foreground">{t("Prompt")}</h3>
           <p className="leading-relaxed break-words whitespace-pre-wrap select-text">{parts.prompt || "—"}</p>
         </div>
-        <CopyButton text={infotext} label={t("Copy generation parameters")} />
+        <CopyButton text={infotext} label={t("Copy generation parameters")} tone={tone} />
       </div>
       {parts.negative ? (
         <div>

@@ -558,6 +558,16 @@ for (const theme of ["light", "dark"] satisfies Theme[]) {
     await expect(tile).toHaveAttribute("aria-pressed", "true")
     await tile.hover()
     expect(await backgroundBytes(tile)).toBe("255 255 255 / 0.25")
+    // The details panel's Star is a toggle too, and a menu's trigger keeps the hover's wash while it is open.
+    await details.click()
+    await expect(details).toHaveAttribute("aria-pressed", "true")
+    await details.hover()
+    expect(await backgroundBytes(details)).toBe("255 255 255 / 0.25")
+    const board = viewer.getByRole("button", { name: "Add to board" })
+    await board.click()
+    await expect(board).toHaveAttribute("aria-expanded", "true")
+    await page.mouse.move(0, 0)
+    expect(await backgroundBytes(board)).toBe("255 255 255 / 0.12")
   })
 
   // A button in a row of selects (FIELD_BUTTON_CLASS) lightens on hover as the selects do. On a ghost button the
