@@ -258,6 +258,29 @@ def test_serial_runs_one_step_at_a_time(checkout: Path, tmp_path: Path):
     assert record == ["python start", "python end", "pnpm start", "pnpm end"]
 
 
+@pytest.mark.parametrize(("only", "build", "flag"), [("pnpm:build,api-docs", 0, "1"), ("pnpm:build,api-docs", 1, "unset"), ("api-docs", None, "unset")], ids=["built", "build failed", "no build"])
+def test_a_missing_build_fails_api_docs_only_after_this_runs_build(checkout: Path, tmp_path: Path, only: str, build: int | None, flag: str):
+    """REMI_SPA_BUILT turns the spa_build tests' skip (no build) into a failure, but only once
+    pnpm:build has passed in this run: without a build (--skip pnpm, a machine without Node.js)
+    they skip as they did in pytest:tests."""
+
+    (checkout / "webui").mkdir()
+    record = tmp_path / "record.txt"
+    python = tmp_path / "bin" / "python"
+    python.parent.mkdir()
+    python.write_text(f'#!/bin/sh\necho "${{REMI_SPA_BUILT-unset}} $*" >> "{record}"\nexit 0\n', encoding="utf-8")
+    python.chmod(python.stat().st_mode | stat.S_IXUSR)
+    pnpm = tmp_path / "bin" / "pnpm"
+    pnpm.write_text(f"#!/bin/sh\nexit {build or 0}\n", encoding="utf-8")
+    pnpm.chmod(pnpm.stat().st_mode | stat.S_IXUSR)
+    env = {key: value for key, value in os.environ.items() if key not in {"REMI_LEGACY_PYTHON", "REMI_CHECK_LOGS", "REMI_SPA_BUILT"}}
+    env.update(PYTHON=str(python), REMI_CHECK_LOGS=str(checkout.parent / "logs"), PATH=f"{tmp_path / 'bin'}{os.pathsep}{env.get('PATH', '')}")
+    result = subprocess.run(["bash", str(checkout / "tools" / "check.sh"), "--only", only], cwd=checkout, env=env, capture_output=True, text=True, timeout=120)
+    assert summary_row(result.stdout, "api-docs")[1] == "pass", result.stdout + result.stderr
+    calls = [call.split()[0] for call in record.read_text(encoding="utf-8").splitlines() if "-m spa_build" in call]
+    assert calls == [flag], calls
+
+
 @pytest.mark.parametrize("slow", ['*"-m pytest tests "*', "*test_remi_core_zh_cn*"], ids=["pytest:tests", "i18n:server"])
 def test_pytest_coverage_waits_for_both_python_lanes(checkout: Path, tmp_path: Path, slow: str):
     """pytest:coverage combines the coverage data of every pytest step, so it starts only after

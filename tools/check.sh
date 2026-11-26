@@ -314,9 +314,27 @@ step pnpm:install pnpm_in_webui install --frozen-lockfile
 step i18n:spa pnpm_in_webui exec vitest run src/locales
 step pnpm:build pnpm_in_webui build
 # The tests of that build (pytest marker spa_build): the API docs viewers it vendors
-# (webui/vite.config.ts's apiDocs), as the server reads them (remi/server/api_docs.py). Right after
-# the build a missing viewer fails instead of skipping (REMI_SPA_BUILT).
-api_docs() { (export REMI_SPA_BUILT=1 && run_pytest tests -m spa_build); }
+# (webui/vite.config.ts's apiDocs), as the server reads them (remi/server/api_docs.py). When this
+# run built the SPA, a missing viewer fails instead of skipping (REMI_SPA_BUILT); without a build
+# in this run (--skip pnpm), they read the build there is, or skip without one.
+built_this_run() { # pnpm:build ran in this run and passed (its result file)
+  local i=0
+  while [ $i -lt ${#QUEUED_NAMES[@]} ]; do
+    if [ "${QUEUED_NAMES[$i]}" = pnpm:build ]; then
+      [ -f "$STATE/$i" ] && [ "$(cut -f 1 "$STATE/$i")" = pass ]
+      return
+    fi
+    i=$((i + 1))
+  done
+  return 1
+}
+api_docs() {
+  if built_this_run; then
+    (export REMI_SPA_BUILT=1 && run_pytest tests -m spa_build)
+  else
+    run_pytest tests -m spa_build
+  fi
+}
 step api-docs api_docs
 # The JS budget (scorecard dimension 5): a manifest build of the same sources, checked against
 # webui/tools/perf/budget.json (initial JS, every route and lazy entry, recorded exceptions).
