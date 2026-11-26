@@ -371,8 +371,8 @@ async function fieldMarks(field: Locator): Promise<{ ring: string; edge: string 
       return color
     }
     const near = (a: number[], b: number[], channels: number, by: number) => a.slice(0, channels).every((x, i) => Math.abs(x - b[i]!) <= by)
-    // the focus ring is --ring at 80 % (60 % dark): its alpha tells it from an edge in --ring; the halo and an edge
-    // in --destructive are a share of it (20 % to 50 %): their channels tell them
+    // the focus ring is --ring at 80 % (60 % dark): its alpha tells it from an edge in --ring; the halo (a share of
+    // --destructive, 20 % to 40 %) and the invalid edge (the whole --destructive): their channels tell them
     const tokens = { "focus-ring": token("--focus-ring"), ring: token("--ring"), destructive: token("--destructive") }
     const name = (color: number[]) =>
       near(color, tokens["focus-ring"], 4, 4) ? "focus-ring" : near(color, tokens.destructive, 3, 6) ? "destructive" : near(color, tokens.ring, 4, 4) ? "ring" : `rgba(${color.join(", ")})`

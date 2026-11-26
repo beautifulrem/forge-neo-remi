@@ -538,7 +538,10 @@ generated interfaces (sources: Linear's
   thinned it to 50 %: 2.5:1 against a hovered field's fill on a popover,
   1.9:1 against a switch's track. A switch needs 88 % of `--destructive`,
   so the edge is the whole token, as the number field, the input group, the
-  search select and the drop zone already drew it: 5.5:1 or more against a
+  search select and the drop zone already drew it; an error edge outside the
+  kit (the Source card's image line, the canvas editor) is the whole token
+  too (`lib/design-guards.test.ts`, "draw an error edge in the whole
+  --destructive"): 5.5:1 or more against a
   field's fill and 3.5:1 against a switch's track in the dark theme, 5.1:1
   and 3.2:1 in the light one, the same for every accent
   (`styles/focus-ring.test.ts`, "the invalid edge"; `tests/e2e/a11y.spec.ts`,

@@ -126,7 +126,7 @@ function ImageRow({ label, id, error, emptyText, mask, onFile, onRemove, busy, e
   const known = size && size.id === id ? size : null
   return (
     <div
-      className={cn(IMAGE_LINE, dragging && "border-dashed border-primary bg-primary/5", error && "border-destructive/50")}
+      className={cn(IMAGE_LINE, dragging && "border-dashed border-primary bg-primary/5", error && "border-destructive")}
       onDragOver={(event) => {
         if (!event.dataTransfer.types.includes("Files")) return
         event.preventDefault()

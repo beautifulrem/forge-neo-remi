@@ -473,4 +473,15 @@ describe("invalid fields", () => {
     )
     expect(silent.map(({ file, tag }) => `${file}: ${tag.replace(/\s+/g, " ").slice(0, 70)}`)).toEqual([])
   })
+
+  // frontend.md: the invalid edge is drawn at full strength (a share of --destructive falls under
+  // 3:1 on the page and the card). An error edge outside the kit (the Source card's image line, the
+  // canvas editor) kept 50–60 %; only a destructive button's focused edge (under its focus ring) and
+  // a rule beside red text may be a share.
+  it("draw an error edge in the whole --destructive", () => {
+    const shares = occurrences(/(?<![\w-])(?:[\w-]+:)*border(?:-[lrtbxy])?-destructive\/\d+/g).filter(
+      ({ file, match }) => !(file === "components/ui/button.tsx" && match.startsWith("focus-visible:")) && !(file === "pages/extensions/DiagnosticsView.tsx" && match === "border-destructive/70"),
+    )
+    expect(shares.map(({ file, match }) => `${file}: ${match}`)).toEqual([])
+  })
 })
