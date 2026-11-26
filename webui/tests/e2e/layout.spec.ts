@@ -819,6 +819,39 @@ test.describe("the editor's bottom toolbars in a narrow editor with a keyboard",
   }
 })
 
+// A toolbar that scrolls fades its cut edge with a mask, and a mask cuts what is drawn outside its element:
+// on the floating panel itself it took the panel's edge and shadow away while it scrolled, and in forced
+// colours the 1 px outline the panel draws instead. The toolbar scrolls inside its panel.
+test("an editor toolbar that scrolls fades inside its panel, which keeps its edge", async ({ page }) => {
+  await openGenerate(page, "img2img")
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement("canvas")
+    canvas.width = 640
+    canvas.height = 480
+    canvas.getContext("2d")!.fillRect(0, 0, 640, 480)
+    return canvas.toDataURL("image/png").split(",")[1]!
+  })
+  const chooser = page.waitForEvent("filechooser")
+  await page.getByRole("button", { name: "Add a source image" }).click()
+  await (await chooser).setFiles({ name: "source.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") })
+  const image = page.getByRole("toolbar", { name: "Image", exact: true })
+  await expect(image).toBeVisible()
+  // too narrow for its buttons, as in a narrow editor
+  await image.evaluate((element) => (element.style.maxWidth = "120px"))
+  await expect.poll(() => image.evaluate((element) => getComputedStyle(element).maskImage)).toContain("linear-gradient")
+  const panel = () =>
+    image.evaluate((element) => {
+      for (let node: Element | null = element; node; node = node.parentElement) {
+        const style = getComputedStyle(node)
+        if (style.boxShadow !== "none" || style.outlineStyle !== "none") return { mask: style.maskImage, outline: `${style.outlineStyle} ${style.outlineWidth}` }
+      }
+      return null
+    })
+  expect((await panel())?.mask, "the panel drawing the toolbar's edge is masked").toBe("none")
+  await page.emulateMedia({ forcedColors: "active" })
+  expect(await panel(), "forced colours").toEqual({ mask: "none", outline: "solid 1px" })
+})
+
 test.describe("the img2img stage on a phone held sideways", () => {
   // The editor kept its 16rem floor in a column that had less room: it overflowed onto the history
   // strip, whose thumbnails then covered the editor's history and zoom controls.

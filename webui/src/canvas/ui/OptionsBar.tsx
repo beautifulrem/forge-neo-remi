@@ -45,66 +45,70 @@ export function OptionsBar({ tool, kind, fixedColor, fixedSize, fixedOpacity, fi
   else if (tool === "hand") hint = t("Drag to pan; scroll to zoom")
 
   return (
-    <div ref={barRef} style={fade} role="toolbar" aria-label={t("Tool options")} className={cn(PANEL, "flex h-10 max-w-full items-center gap-1.5 overflow-x-auto px-1.5 [scrollbar-width:none] @md:gap-2", className)}>
-      {showColor ? (
-        <ColorControl color={tools.color} recent={tools.recent} onChange={tools.setColor} onEyedropper={() => tools.setTool("eyedropper")} />
-      ) : null}
-      {showSize ? (
-        <ValueSlider
-          label={t("Size")}
-          icon={<CircleDot />}
-          value={sizeToSlider(brush.size)}
-          min={0}
-          max={100}
-          step={0.5}
-          onChange={(value) => setBrush({ size: sliderToSize(value) })}
-          format={() => `${brush.size}`}
-          valueText={() => t("{{size}} px", { size: brush.size })}
-        />
-      ) : null}
-      {sketch && fixedOpacity === undefined && (tool === "brush" || tool === "eraser" || tool === "fill" || tool === "rect" || tool === "lasso") ? (
-        <ValueSlider
-          label={t("Opacity")}
-          icon={<Blend />}
-          value={(tool === "eraser" ? tools.eraser : tools.brush).opacity}
-          min={0.01}
-          max={1}
-          step={0.01}
-          onChange={(value) => (tool === "eraser" ? tools.setEraser({ opacity: value }) : tools.setBrush({ opacity: value }))}
-          format={percent}
-          valueText={percent}
-        />
-      ) : null}
-      {(tool === "brush" || tool === "eraser") && fixedSoftness === undefined ? (
-        <ValueSlider label={t("Softness")} icon={<Feather />} value={brush.softness} min={0} max={1} step={0.01} onChange={(value) => setBrush({ softness: value })} format={percent} />
-      ) : null}
-      {tool === "fill" ? (
-        <>
-          <ValueSlider label={t("Tolerance")} icon={<SlidersHorizontal />} value={tools.fillTolerance} min={0} max={255} onChange={(value) => tools.set({ fillTolerance: value })} format={(v) => String(Math.round(v))} />
-          <Segmented
-            size="sm"
-            aria-label={t("Fill by the colors of")}
-            value={tools.fillSample}
-            onValueChange={(value) => tools.set({ fillSample: value })}
-            options={[
-              { value: "layer", label: t("Layer") },
-              { value: "image", label: t("Image") },
-            ]}
-            className="shrink-0 flex-nowrap"
-          />
-        </>
-      ) : null}
-      {hint ? <span className="hidden shrink-0 px-1 text-xs whitespace-nowrap text-muted-foreground @lg:inline">{hint}</span> : null}
-      <div className="ml-auto flex shrink-0 items-center">
-        <Divider />
-        {kind === "mask" ? (
-          <IconButton label={t("Invert mask")} keys={[mod, "I"]} onClick={onInvert} side="bottom">
-            <Contrast />
-          </IconButton>
+    // the panel draws the floating material and the toolbar inside it scrolls: the fade's mask on the
+    // panel itself cut the panel's edge and shadow, and in forced colours its outline (frontend.md)
+    <div className={cn(PANEL, "flex h-10 max-w-full min-w-0", className)}>
+      <div ref={barRef} style={fade} role="toolbar" aria-label={t("Tool options")} className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto rounded-[inherit] px-1.5 [scrollbar-width:none] @md:gap-2">
+        {showColor ? (
+          <ColorControl color={tools.color} recent={tools.recent} onChange={tools.setColor} onEyedropper={() => tools.setTool("eyedropper")} />
         ) : null}
-        <IconButton label={kind === "mask" ? t("Clear mask") : t("Clear sketch")} keys={[mod, "X"]} onClick={onClear} disabled={!canClear} side="bottom">
-          <Trash2 />
-        </IconButton>
+        {showSize ? (
+          <ValueSlider
+            label={t("Size")}
+            icon={<CircleDot />}
+            value={sizeToSlider(brush.size)}
+            min={0}
+            max={100}
+            step={0.5}
+            onChange={(value) => setBrush({ size: sliderToSize(value) })}
+            format={() => `${brush.size}`}
+            valueText={() => t("{{size}} px", { size: brush.size })}
+          />
+        ) : null}
+        {sketch && fixedOpacity === undefined && (tool === "brush" || tool === "eraser" || tool === "fill" || tool === "rect" || tool === "lasso") ? (
+          <ValueSlider
+            label={t("Opacity")}
+            icon={<Blend />}
+            value={(tool === "eraser" ? tools.eraser : tools.brush).opacity}
+            min={0.01}
+            max={1}
+            step={0.01}
+            onChange={(value) => (tool === "eraser" ? tools.setEraser({ opacity: value }) : tools.setBrush({ opacity: value }))}
+            format={percent}
+            valueText={percent}
+          />
+        ) : null}
+        {(tool === "brush" || tool === "eraser") && fixedSoftness === undefined ? (
+          <ValueSlider label={t("Softness")} icon={<Feather />} value={brush.softness} min={0} max={1} step={0.01} onChange={(value) => setBrush({ softness: value })} format={percent} />
+        ) : null}
+        {tool === "fill" ? (
+          <>
+            <ValueSlider label={t("Tolerance")} icon={<SlidersHorizontal />} value={tools.fillTolerance} min={0} max={255} onChange={(value) => tools.set({ fillTolerance: value })} format={(v) => String(Math.round(v))} />
+            <Segmented
+              size="sm"
+              aria-label={t("Fill by the colors of")}
+              value={tools.fillSample}
+              onValueChange={(value) => tools.set({ fillSample: value })}
+              options={[
+                { value: "layer", label: t("Layer") },
+                { value: "image", label: t("Image") },
+              ]}
+              className="shrink-0 flex-nowrap"
+            />
+          </>
+        ) : null}
+        {hint ? <span className="hidden shrink-0 px-1 text-xs whitespace-nowrap text-muted-foreground @lg:inline">{hint}</span> : null}
+        <div className="ml-auto flex shrink-0 items-center">
+          <Divider />
+          {kind === "mask" ? (
+            <IconButton label={t("Invert mask")} keys={[mod, "I"]} onClick={onInvert} side="bottom">
+              <Contrast />
+            </IconButton>
+          ) : null}
+          <IconButton label={kind === "mask" ? t("Clear mask") : t("Clear sketch")} keys={[mod, "X"]} onClick={onClear} disabled={!canClear} side="bottom">
+            <Trash2 />
+          </IconButton>
+        </div>
       </div>
     </div>
   )

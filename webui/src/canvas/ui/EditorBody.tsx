@@ -846,45 +846,46 @@ export function EditorBody({ doc, editor, screenBrush, plainColor, toolbarAlways
             </div>
 
             {/* narrower than both toolbars (about 385 px with a keyboard's shortcuts button), this one scrolls, as the tool options do */}
-            <div
-              ref={imageBarRef}
-              style={imageBarFade}
-              role="toolbar"
-              aria-label={t("Image")}
-              data-toast-obstacle
-              onKeyDown={toolbarKeys("horizontal")}
-              className={cn(PANEL, "flex h-10 min-w-0 scroll-px-1 items-center gap-0.5 overflow-x-auto px-1 [scrollbar-width:none]")}
-            >
-              {pending ? (
-                <span role="status" className="flex items-center gap-1.5 px-1.5 text-xs text-muted-foreground">
-                  <Loader2 className="size-3 animate-spin" aria-hidden />
-                  <span className="hidden @lg:inline">{t("Saving…")}</span>
+            <div data-toast-obstacle className={cn(PANEL, "flex h-10 min-w-0")}>
+              <div
+                ref={imageBarRef}
+                style={imageBarFade}
+                role="toolbar"
+                aria-label={t("Image")}
+                onKeyDown={toolbarKeys("horizontal")}
+                className="flex min-w-0 flex-1 scroll-px-1 items-center gap-0.5 overflow-x-auto rounded-[inherit] px-1 [scrollbar-width:none]"
+              >
+                {pending ? (
+                  <span role="status" className="flex items-center gap-1.5 px-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="size-3 animate-spin" aria-hidden />
+                    <span className="hidden @lg:inline">{t("Saving…")}</span>
+                  </span>
+                ) : null}
+                <span className="hidden px-1.5 text-xs text-muted-foreground tabular-nums @xl:inline">
+                  {width}×{height}
                 </span>
-              ) : null}
-              <span className="hidden px-1.5 text-xs text-muted-foreground tabular-nums @xl:inline">
-                {width}×{height}
-              </span>
-              {editor.onUseImageSize ? (
-                <IconButton label={t("Use the image size ({{width}}×{{height}})", { width, height })} onClick={() => editor.onUseImageSize?.({ width, height })}>
-                  <Proportions />
-                </IconButton>
-              ) : null}
-              <LayersPopover layer={kind && layerLabel ? { kind, label: layerLabel } : null} inpaint={Boolean(inpaint)} onlyMasked={Boolean(inpaint?.onlyMasked)} />
-              {/* by the device, not the width: a narrow editor with a keyboard has keys to list */}
-              {keyboardHints ? <ShortcutsPopover open={helpOpen} onOpenChange={setHelpOpen} /> : null}
-              {editor.noUpload ? null : (
-                <>
-                  <Divider />
-                  <ReplaceButton onFiles={onFiles} />
-                  <IconButton label={t("Remove image")} onClick={onRemove}>
-                    <X />
+                {editor.onUseImageSize ? (
+                  <IconButton label={t("Use the image size ({{width}}×{{height}})", { width, height })} onClick={() => editor.onUseImageSize?.({ width, height })}>
+                    <Proportions />
                   </IconButton>
-                </>
-              )}
-              <Divider />
-              <IconButton label={maximized ? t("Exit full screen") : t("Edit in full screen")} keys={["F"]} onClick={() => onMaximize(!maximized)}>
-                {maximized ? <Minimize2 /> : <Maximize2 />}
-              </IconButton>
+                ) : null}
+                <LayersPopover layer={kind && layerLabel ? { kind, label: layerLabel } : null} inpaint={Boolean(inpaint)} onlyMasked={Boolean(inpaint?.onlyMasked)} />
+                {/* by the device, not the width: a narrow editor with a keyboard has keys to list */}
+                {keyboardHints ? <ShortcutsPopover open={helpOpen} onOpenChange={setHelpOpen} /> : null}
+                {editor.noUpload ? null : (
+                  <>
+                    <Divider />
+                    <ReplaceButton onFiles={onFiles} />
+                    <IconButton label={t("Remove image")} onClick={onRemove}>
+                      <X />
+                    </IconButton>
+                  </>
+                )}
+                <Divider />
+                <IconButton label={maximized ? t("Exit full screen") : t("Edit in full screen")} keys={["F"]} onClick={() => onMaximize(!maximized)}>
+                  {maximized ? <Minimize2 /> : <Maximize2 />}
+                </IconButton>
+              </div>
             </div>
           </div>
         </div>

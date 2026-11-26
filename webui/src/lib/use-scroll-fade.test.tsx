@@ -83,3 +83,26 @@ describe("useScrollFade", () => {
   })
 })
 
+// The fade is a mask on the element it is given, and a mask cuts everything drawn outside that element's
+// border box: on an editor toolbar that was the floating panel (`PANEL`, `material-float`), its edge and
+// shadow went while it scrolled, and in forced colours its 1 px outline too. The panel wraps the strip.
+describe("the strip a fade is on", () => {
+  const sources = import.meta.glob<string>(["../**/*.tsx", "!../**/*.test.*"], { query: "?raw", import: "default", eager: true })
+
+  it("is not a floating panel", () => {
+    const strips = Object.entries(sources).flatMap(([file, source]) => [
+      // the element a fade is on (`style={fade}`, or spread into its style)
+      ...[...source.matchAll(/\bconst (\w+) = useScrollFade\(/g)].map(([, name]) => {
+        const at = source.search(new RegExp(`style=\\{(?:${name}\\}|\\{[^}]*\\.\\.\\.${name}\\b)`))
+        const tag = at < 0 ? "" : source.slice(source.lastIndexOf("<", at), source.indexOf(">", at) + 1)
+        return { file, name, tag }
+      }),
+      // FadeStrip takes its classes from where it is used
+      ...[...source.matchAll(/<FadeStrip\b[^>]*>/g)].map(([tag]) => ({ file, name: "FadeStrip", tag })),
+    ])
+    expect(strips.length).toBeGreaterThanOrEqual(6)
+    expect(strips.filter(({ tag }) => !tag)).toEqual([])
+    expect(strips.filter(({ tag }) => /\bPANEL\b|material-float|\bshadow-/.test(tag)).map(({ file, name }) => `${file}: ${name}`)).toEqual([])
+  })
+})
+
