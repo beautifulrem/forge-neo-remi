@@ -1064,8 +1064,11 @@ Rules the renderer implements:
   `ctrl_enter_interrupt` is on, generates again once the job has ended.
   Ctrl/Cmd+Shift+Enter adds the form to the queue ("Add to queue").
   Alt+Enter skips. Escape interrupts only when nothing else owns it: not in a
-  text field, not inside a dialog, menu or popup, and no popup open. In a
-  prompt editor it interrupts as in A1111 (the placeholder advertises it)
+  text field, not inside a dialog, menu or popup, and no popup open. A popup
+  is one of the kit's floating content slots (`POPUP_SLOTS`), not any
+  `*-content` slot: in a form tab, an accordion or a card Escape interrupts.
+  A test makes each new `*-content` slot pick a side. In a prompt editor
+  it interrupts as in A1111 (the placeholder advertises it)
   unless the editor used it first (closing the completion list, dropping a
   selection: CodeMirror calls `preventDefault`). The interrupt is decided
   after the event has run its course (`setTimeout`), so the image editor's

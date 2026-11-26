@@ -18,7 +18,26 @@ import { isBusy } from "@/features/progress/run-machine"
 import { modalOpen } from "@/lib/modal-open"
 
 const TEXT_TARGETS = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .cm-editor'
-const OWN_ESCAPE = '[role="dialog"], [role="alertdialog"], [role="menu"], [data-slot$="-content"]'
+/**
+ * The content slots of the kit's floating popups, which close on Escape (Base UI's `useDismiss`).
+ * Not every `*-content` slot: tabs, accordions, collapsibles, cards and fields are in the page, and
+ * a switch in a form tab leaves Escape free (`shortcuts.test.ts` sorts each slot the kit defines).
+ */
+export const POPUP_SLOTS = [
+  "dialog-content",
+  "alert-dialog-content",
+  "sheet-content",
+  "popover-content",
+  "hover-card-content",
+  "tooltip-content",
+  "dropdown-menu-content",
+  "dropdown-menu-sub-content",
+  "context-menu-content",
+  "context-menu-sub-content",
+  "select-content",
+  "combobox-content",
+] as const
+const OWN_ESCAPE = ['[role="dialog"]', '[role="alertdialog"]', '[role="menu"]', ...POPUP_SLOTS.map((slot) => `[data-slot="${slot}"]`)].join(", ")
 /** The text of a prompt editor (not a decorator's own fields around it). */
 const PROMPT_TEXT = '[data-slot="prompt-editor"] .cm-editor'
 const IN_OVERLAY = '[role="dialog"], [role="alertdialog"], [role="menu"]'
