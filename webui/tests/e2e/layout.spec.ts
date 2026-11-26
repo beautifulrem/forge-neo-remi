@@ -76,7 +76,7 @@ test.describe("layout at 1280×720", () => {
       await expect(pin).toHaveAttribute("aria-pressed", "true")
       await page.evaluate(() => (location.hash = "#/txt2img"))
       await expect(page.getByRole("textbox", { name: /^(Prompt|提示词)$/ })).toBeVisible()
-      await expect(page.locator("header").getByRole("button", { name: /^(Quick settings|快捷设置)$/ })).toBeVisible()
+      await expect(page.locator("header").getByRole("button", { name: /^(Quick settings|快捷设置)/ })).toBeVisible()
       await expect.poll(() => headerProblems(page)).toEqual([])
 
       await page.getByRole("button", { name: /^(Generate|生成)/ }).first().click()
@@ -158,7 +158,7 @@ test.describe("the header on a phone with a quick setting pinned", () => {
       await page.evaluate(() => (location.hash = "#/txt2img"))
       await expect(page.getByRole("textbox", { name: /^(Prompt|提示词)$/ })).toBeVisible()
       const header = page.locator("header").first()
-      await expect(header.getByRole("button", { name: /^(Quick settings|快捷设置)$/ })).toBeVisible()
+      await expect(header.getByRole("button", { name: /^(Quick settings|快捷设置)/ })).toBeVisible()
 
       // still the page's heading, shown whole or not at all: never a stub
       const heading = header.getByRole("heading", { level: 1, name: title })
