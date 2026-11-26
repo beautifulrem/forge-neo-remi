@@ -1,6 +1,7 @@
 import argparse
 import contextlib
 import errno
+import getpass
 import json
 import os
 import re
@@ -22,29 +23,40 @@ from remi import ui
 
 # Remi: the repository's own settings file (--ui-settings-file's default, as the default data folder
 # is the repository), the owner's settings: ignored by git, so in no history. A test once saved there
-# and rewrote them with the defaults. While pytest runs (PYTEST_VERSION, set for the whole run from
-# before the conftests load, or PYTEST_CURRENT_TEST, set while a test runs; a WebUI process a test
-# starts inherits both) Options.save refuses it, wherever the test's file lives (tests/conftest.py
-# only reaches tests/), and so the settings file COMMANDLINE_ARGS named when the WebUI was imported
-# (modules.paths_internal adds it to the command line; its --data-dir or --ui-settings-file, read as
-# the WebUI's parser reads them, abbreviations too, and a few it rejects as ambiguous: the owner's,
-# when a shell exports it; the files of both, when both are given; a value this cannot read, which
-# stops the WebUI too, leaves the repository's file alone guarded). A settings file or data folder
-# that COMMANDLINE_ARGS names inside the system's temporary folder is the test's own (so an owner's
-# settings kept there are not guarded; a temporary folder that is the working directory exempts
-# nothing), as is any data folder a test passes on the command line. The WebUI itself still saves to
-# all of them.
+# and rewrote them with the defaults. Under test (pytest: PYTEST_VERSION, set for the whole run from
+# before the conftests load, or PYTEST_CURRENT_TEST, set while a test runs, and a WebUI process a test
+# starts inherits both; or a script that set the WebUI up with remi.testing or remi.server.testing,
+# which the WebUI never loads) Options.save refuses it, wherever the test's file lives
+# (tests/conftest.py only reaches tests/), and so the settings file COMMANDLINE_ARGS named when the
+# WebUI was imported (modules.paths_internal adds it to the command line; its --data-dir or
+# --ui-settings-file, read as the WebUI's parser reads them, abbreviations too, and a few it rejects
+# as ambiguous: the owner's, when a shell exports it; the files of both, when both are given; a value
+# this cannot read, which stops the WebUI too, leaves the repository's file alone guarded). A file
+# that COMMANDLINE_ARGS names inside pytest's own temporary folder (where tmp_path is made) is the
+# test's own, as is any data folder a test passes on the command line. Outside a test a save to them
+# is the WebUI's own, and goes ahead.
 _UNDER_PYTEST = ("PYTEST_VERSION", "PYTEST_CURRENT_TEST")
+_TEST_HELPERS = ("remi.testing", "remi.server.testing")
 _REPOSITORY_SETTINGS = os.path.join(script_path, "config.json")
 _COMMANDLINE = argparse.ArgumentParser(add_help=False, exit_on_error=False)
 _COMMANDLINE.add_argument("--data-dir")
 _COMMANDLINE.add_argument("--ui-settings-file")
 
 
-def _temporary_folder() -> str | None:
-    # asked only under pytest: gettempdir() writes a probe file, and falls back to the working directory
-    temporary = os.path.realpath(tempfile.gettempdir())
-    return None if temporary == os.path.realpath(paths_internal.cwd) else temporary
+def _under_test() -> bool:
+    return any(name in os.environ for name in _UNDER_PYTEST) or any(name in sys.modules for name in _TEST_HELPERS)
+
+
+def _pytest_temporary_folders() -> list[str]:
+    # pytest makes tmp_path in pytest-of-<user> (pytest-of-unknown when it cannot use the name) in
+    # PYTEST_DEBUG_TEMPROOT or the system's temporary folder. Asked only under test: gettempdir() writes
+    # a probe file. A --basetemp elsewhere is not seen, and the guard refuses that folder's files.
+    root = os.environ.get("PYTEST_DEBUG_TEMPROOT") or tempfile.gettempdir()
+    try:
+        user = getpass.getuser() or "unknown"
+    except (ImportError, OSError, KeyError):
+        user = "unknown"
+    return [os.path.realpath(os.path.join(root, f"pytest-of-{name}")) for name in {user, "unknown"}]
 
 
 def _owners_settings() -> list[str]:
@@ -54,10 +66,10 @@ def _owners_settings() -> list[str]:
     except (ValueError, argparse.ArgumentError, SystemExit):  # unbalanced quotes, a missing value
         return files
     named_files = [os.path.join(named.data_dir, "config.json") if named.data_dir is not None else None, named.ui_settings_file]
-    temporary = _temporary_folder()
+    tests_own = _pytest_temporary_folders()
     for named_file in filter(None, named_files):
         named_file = os.path.realpath(os.path.join(paths_internal.cwd, named_file))
-        if temporary is None or not Path(named_file).is_relative_to(temporary):
+        if not any(Path(named_file).is_relative_to(folder) for folder in tests_own):
             files.append(named_file)
     return files
 
@@ -406,7 +418,7 @@ class Options:
 
     def save(self, filename):
         assert not cmd_opts.freeze_settings, "saving settings is disabled"
-        if any(name in os.environ for name in _UNDER_PYTEST) and _is_owners_settings(filename):  # Remi: see _REPOSITORY_SETTINGS
+        if _under_test() and _is_owners_settings(filename):  # Remi: see _REPOSITORY_SETTINGS
             raise RuntimeError(f"A test cannot save settings to {filename}, the repository's settings file or the one COMMANDLINE_ARGS named: save to a file of its own (remi.testing.webui_state does)")
 
         data = dict(self.data)
