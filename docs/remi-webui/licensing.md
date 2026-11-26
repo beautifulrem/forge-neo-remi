@@ -60,8 +60,8 @@ changes to the upstream built-ins); **bundled** — added in one commit by
 the Remi maintainer as a standalone extension (an install-into-`extensions/`
 README, `<your-fork>` placeholders), with no public repository of its own
 found: who wrote it before it was bundled, and under which license, is not
-on record. It is distributed here under the repository's AGPL-3.0; that its
-author agreed to this is for the maintainer to confirm.
+on record. It is distributed here under the repository's AGPL-3.0 by the
+maintainer who bundled it.
 
 | directory | origin | license | third-party code inside | evidence |
 |---|---|---|---|---|
