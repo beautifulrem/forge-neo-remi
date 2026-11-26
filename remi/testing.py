@@ -35,6 +35,19 @@ def processing_script_classes(names=PROCESSING_SCRIPTS) -> list:
     return classes
 
 
+_OWN_FOLDER_PREFIX = "remi-test-styles-"
+
+
+def settings_file_left_behind(path: str) -> bool:
+    """A settings file in a folder of ``webui_state``'s own that is gone: a test that set
+    ``shared.config_filename`` inside it, with monkeypatch's undo running after its exit, left that
+    path behind, and the next helper would take it for a file the test chose. A missing folder of
+    the test's own is still the test's choice."""
+
+    folder = Path(path).parent
+    return folder.name.startswith(_OWN_FOLDER_PREFIX) and not folder.is_dir()
+
+
 @contextmanager
 def webui_state(options: dict | None = None, *, script_classes=None, postprocessing=()):
     """Yield ``SimpleNamespace(opts, txt2img, img2img, postproc)`` with
@@ -49,13 +62,13 @@ def webui_state(options: dict | None = None, *, script_classes=None, postprocess
     shared.options_templates = shared_options.options_templates
     shared.opts = options_module.Options(shared_options.options_templates, shared_options.restricted_opts)
     # saving styles writes the file and a .bak: not in the data folder (the repository under pytest)
-    styles_dir = tempfile.TemporaryDirectory(prefix="remi-test-styles-")
+    styles_dir = tempfile.TemporaryDirectory(prefix=_OWN_FOLDER_PREFIX)
     try:
         # Saving options writes shared.config_filename. Unless the test chose its own, that is the
         # command line's, the repository's config.json outside tests/: a scratch test rewrote the
-        # owner's settings that way. It goes into this folder too, as does a file whose folder is
-        # gone (a helper's, left behind by a monkeypatch undone after the helper's exit).
-        if shared.config_filename == shared.cmd_opts.ui_settings_file or not Path(shared.config_filename).parent.is_dir():
+        # owner's settings that way. It goes into this folder too, as does a file left behind in
+        # an earlier one (settings_file_left_behind).
+        if shared.config_filename == shared.cmd_opts.ui_settings_file or settings_file_left_behind(shared.config_filename):
             shared.config_filename = str(Path(styles_dir.name) / "config.json")
         for key, value in (options or {}).items():
             shared.opts.data[key] = value
