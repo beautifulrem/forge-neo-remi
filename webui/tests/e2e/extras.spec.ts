@@ -349,7 +349,8 @@ for (const locale of ["en", "zh-CN"]) {
     await openRoute(page, "extras")
     const form = page.getByRole("form", { name: /^(Parameters|参数)$/ })
     const chooser = page.waitForEvent("filechooser")
-    await form.getByRole("button", { name: /^(Source|源图)$/ }).first().click()
+    // the drop zone is named by its label, then by the hint it shows
+    await form.getByRole("button", { name: /^(Source|源图) / }).first().click()
     await (await chooser).setFiles({ name: "portrait.png", mimeType: "image/png", buffer: await makePng(page, 200, 400) })
     await page.keyboard.press(`${mod}+Enter`)
     const result = page.getByRole("region", { name: /^(Result|结果)$/ })

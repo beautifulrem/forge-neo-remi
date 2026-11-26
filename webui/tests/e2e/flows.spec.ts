@@ -87,7 +87,7 @@ test.describe("networks drawer", () => {
     // The search reaches the list after a debounce. Until then the card is further down the
     // unfiltered list, and a click there can land on the row the filtered list leaves empty.
     await expect(drawer.getByRole("option")).toHaveCount(1)
-    const card = drawer.getByRole("option", { name: /^comic_sketch_v1_700,/ })
+    const card = drawer.getByRole("option", { name: /^comic_sketch_v1_700(?!\d)/ })
     await expect(card).toBeVisible()
     await card.click()
     await expect(page.getByRole("textbox", { name: "Prompt", exact: true })).toContainText("<lora:comic_sketch_v1_700:")
