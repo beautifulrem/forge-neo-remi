@@ -134,6 +134,21 @@ describe("the focus ring token", () => {
     expect(sources["../components/ui/command.tsx"] ?? "").toMatch(/data-slot="command-item"[\s\S]*data-selected:bg-muted/)
   })
 
+  it("gives a floating surface an edge in forced colours", () => {
+    // Menus, selects, comboboxes, dialogs, sheets and tooltips draw their edge as a ring and a shadow,
+    // and forced colours draw neither: a popup sat over the fields under it with no edge at all. The
+    // forced-colours block outlines them (not while one has the focus: the focus outline is drawn then).
+    const base = css.slice(css.indexOf("@layer base {"))
+    const forced = (/@media \(forced-colors: active\) \{([\s\S]*?)\n {2}\}/.exec(base)?.[1] ?? "").replace(/\/\*[\s\S]*?\*\//g, "")
+    const rule = /\n {4}(:is\(\[data-slot="dialog-content"\][^{]*)\{([^}]*)\}/.exec(forced)
+    const slots = [...(rule?.[1] ?? "").matchAll(/\[data-slot="([a-z-]+)"\]/g)].map((m) => m[1])
+    expect(slots).toEqual(SURFACES)
+    expect(rule?.[1]?.trim().endsWith(":not(:focus-visible)")).toBe(true)
+    expect(rule?.[2]?.trim()).toBe("outline: 1px solid CanvasText !important;")
+    const kit = Object.entries(sources).filter(([file]) => file.startsWith("../components/ui/")).map(([, source]) => source).join("\n")
+    for (const slot of SURFACES) expect(kit).toContain(`data-slot="${slot}"`)
+  })
+
   it("is the only focus ring colour drawn from --ring at a share of its own", () => {
     const ownShares = Object.entries(sources)
       .filter(([, source]) => /\b(?:ring|outline)-ring\/\d+\b|var\(--ring\) \d+%/.test(source))
@@ -143,6 +158,9 @@ describe("the focus ring token", () => {
     expect(ownShares).toEqual([])
   })
 })
+
+/** The kit's floating surfaces, whose edge is a ring and a shadow (none of the popover kind, whose outline-hidden is its edge). */
+const SURFACES = ["dialog-content", "alert-dialog-content", "sheet-content", "dropdown-menu-content", "dropdown-menu-sub-content", "context-menu-content", "context-menu-sub-content", "select-content", "combobox-content", "tooltip-content"]
 
 /** The opening JSX tag around `marker` in `source`: from its `<` to the `>` outside braces and strings. */
 function tagAround(source: string, marker: string): string {

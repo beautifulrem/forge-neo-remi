@@ -399,6 +399,15 @@ test.describe("lists in forced colours", () => {
     expect(widths.filter(({ focused, width }) => !focused && width > 0)).toEqual([])
   })
 
+  test("a menu has an edge over the page", async ({ page }) => {
+    // its ring and shadow are not drawn under forced colours
+    await page.emulateMedia({ forcedColors: "active" })
+    await openGenerate(page)
+    await page.getByRole("button", { name: "Appearance" }).click()
+    await expect(page.getByRole("menu")).toBeVisible()
+    expect(await outline(page.getByRole("menu"))).toBeGreaterThanOrEqual(1)
+  })
+
   test("the command palette outlines its highlighted item and no other", async ({ page }) => {
     await page.emulateMedia({ forcedColors: "active" })
     await openGenerate(page)

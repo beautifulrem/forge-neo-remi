@@ -476,6 +476,10 @@ imperatively).
   (`[data-highlighted]`, `[data-selected="true"]`). Only the popover and
   hover-card popups keep a bare `outline-hidden`: under forced colours it is
   their edge, their ring and shadow not being drawn (`lib/design-guards.test.ts`).
+  The other floating surfaces (menus, selects, comboboxes, dialogs, sheets,
+  tooltips) draw their edge the same way, so the block gives them a 1 px
+  `CanvasText` outline while they do not have the focus; without it a popup
+  sat over the fields under it with no edge (`styles/focus-ring.test.ts`).
   `tests/e2e/a11y.spec.ts` ("visible focus in forced colours") tabs through
   txt2img, the gallery, the networks and settings under forced colours and
   fails on a stop with no 2 px outline, or an outline left at rest; "lists in
