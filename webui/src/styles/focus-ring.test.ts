@@ -136,9 +136,10 @@ describe("the focus ring token", () => {
   })
 
   it("gives a floating surface an edge in forced colours", () => {
-    // Menus, selects, comboboxes, dialogs, sheets and tooltips draw their edge as a ring and a shadow,
-    // and forced colours draw neither: a popup sat over the fields under it with no edge at all. The
-    // forced-colours block outlines them (not while one has the focus: the focus outline is drawn then).
+    // Forced colours draw no box shadow: not the ring and shadow of menus, selects and comboboxes, the
+    // ring of dialogs or the shadow of sheets; and they replace a tooltip's plain fill with the page's
+    // Canvas. A popup sat over the fields under it with no edge at all. The forced-colours block outlines
+    // them (not while one has the focus: the focus outline is drawn then).
     const base = css.slice(css.indexOf("@layer base {"))
     const forced = (/@media \(forced-colors: active\) \{([\s\S]*?)\n {2}\}/.exec(base)?.[1] ?? "").replace(/\/\*[\s\S]*?\*\//g, "")
     const rule = /\n {4}(:is\(\[data-slot="dialog-content"\][^{]*)\{([^}]*)\}/.exec(forced)
@@ -214,7 +215,11 @@ const FILLS_THE_SCREEN = [
   { file: "features/lightbox/Lightbox.tsx", look: "fixed inset-0" },
 ]
 
-/** The kit's floating surfaces, whose edge is a ring and a shadow (none of the popover kind, whose outline-hidden is its edge). */
+/**
+ * The kit's floating surfaces, whose edge forced colours do not draw: a ring and a shadow (menus, selects,
+ * comboboxes), a ring (dialogs), a shadow (sheets) or a plain fill (tooltips). None of the popover kind,
+ * whose outline-hidden is its edge.
+ */
 const SURFACES =["dialog-content", "alert-dialog-content", "sheet-content", "dropdown-menu-content", "dropdown-menu-sub-content", "context-menu-content", "context-menu-sub-content", "select-content", "combobox-content", "tooltip-content"]
 
 /** The opening JSX tag around `marker` in `source`: from its `<` to the `>` outside braces and strings. */

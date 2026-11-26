@@ -476,14 +476,26 @@ imperatively).
   (`[data-highlighted]`, `[data-selected="true"]`). Only the popover and
   hover-card popups keep a bare `outline-hidden`: under forced colours it is
   their edge, their ring and shadow not being drawn (`lib/design-guards.test.ts`).
-  The other floating surfaces (menus, selects, comboboxes, dialogs, sheets,
-  tooltips) draw their edge the same way, so the block gives them a 1 px
-  `CanvasText` outline while they do not have the focus; without it a popup
-  sat over the fields under it with no edge (`styles/focus-ring.test.ts`).
+  The other floating surfaces have no edge there either: menus, selects and
+  comboboxes draw a ring and a shadow, dialogs and alert dialogs a ring,
+  sheets a shadow, and forced colours draw none of these; a tooltip is a
+  plain `--foreground` fill, which forced colours replace with `Canvas`, the
+  page's own colour. The block gives each of them a 1 px `CanvasText`
+  outline while it does not have the focus; without it a popup sat over the
+  fields under it with no edge (`styles/focus-ring.test.ts`). The block finds
+  them by the kit's slots, so a popup or a combobox item that app code builds
+  from Base UI itself (the search select's list and its options, a network
+  card's menu) carries the slot of the kit part it stands for
+  (`combobox-content`, `combobox-item`, `dropdown-menu-content`): without it
+  the list had no edge and its highlighted option no outline. The same test
+  reads every `<X.Popup` and `<Combobox.Item` outside the kit for one; the
+  image viewer, which fills the window, has no edge to draw.
   `tests/e2e/a11y.spec.ts` ("visible focus in forced colours") tabs through
   txt2img, the gallery, the networks and settings under forced colours and
   fails on a stop with no 2 px outline, or an outline left at rest; "lists in
-  forced colours" checks the appearance menu and the command palette.
+  forced colours" checks the appearance menu, the checkpoint picker (a search
+  select) and the command palette: a solid 1 px edge on the list, and a 3 px
+  outline on its focused or highlighted item and on no other.
 - See [Visual rules](#visual-rules) for the design rules every new screen
   follows.
 - shadcn components import `cn` from the `cn` package (what the base-nova
