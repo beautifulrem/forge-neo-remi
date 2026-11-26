@@ -676,6 +676,25 @@ test.describe("selected segments", () => {
       expect(marks.filter((mark) => !("indicator" in mark) || (mark.indicator ?? 0) < 3)).toEqual([])
     })
   }
+
+  // The extension backups' selected row was the same: --accent alone on the card, 1.27:1 light, 1.16:1 dark.
+  for (const theme of ["light", "dark"] satisfies Theme[]) {
+    test(`${theme}: the selected backup stands out by 3:1`, async ({ page }) => {
+      await presetStorage(page, { theme })
+      await openRoute(page, "extensions")
+      await page.getByRole("tab", { name: "Backup and restore" }).click()
+      for (const name of ["First", "Second"]) {
+        await page.getByRole("textbox", { name: "Backup name" }).fill(name)
+        await page.getByRole("button", { name: "Back up" }).click()
+        await expect(page.getByRole("option", { name: new RegExp(`^${name}`) })).toBeVisible()
+      }
+      await page.getByRole("option", { name: /^First/ }).click()
+      await page.mouse.move(0, 0)
+      const mark = await selectedSegment(page.getByRole("listbox", { name: "Backups" }))
+      expect(mark.selected).toMatch(/^First/)
+      expect(mark.indicator).toBeGreaterThanOrEqual(3)
+    })
+  }
 })
 
 // A bar pinned over a scroller (the run bar, the apply bars, the send bar) covered the control Tab

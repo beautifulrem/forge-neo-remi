@@ -437,6 +437,24 @@ describe("selected segments", () => {
     const bare = segments.filter(({ state, classes }) => !classes.includes(`${state}:inset-ring`) || !classes.includes(`${state}:inset-ring-muted-foreground`))
     expect(bare.map(({ file }) => file)).toEqual([])
   })
+
+  it("wear the edge when a condition picks their tone", () => {
+    // frontend.md: a selected row of a list with no track takes the inset edge too. The extension
+    // backups' selected row was `bg-accent` picked by a condition (`selected && "bg-accent"`), 1.27:1
+    // against the card in the light theme and 1.16:1 in the dark one, which no state variant shows.
+    const picked = files.flatMap(({ file, source }) =>
+      openingTags(source)
+        .tags.filter(({ tag }) => /\s(?:aria-selected|aria-checked|aria-current|data-selected)=\{/.test(tag))
+        .flatMap(({ tag }) =>
+          [...tag.matchAll(/(?:&&|\?|:)\s*"([^"]*)"/g)]
+            .map((m) => m[1]!.split(/\s+/))
+            .filter((classes) => classes.some((cls) => /^bg-(?:accent|muted|card|secondary|background|popover)(?:\/\d+)?$/.test(cls)))
+            .map((classes) => ({ file, classes })),
+        ),
+    )
+    const bare = picked.filter(({ classes }) => !classes.includes("inset-ring") || !classes.includes("inset-ring-muted-foreground"))
+    expect(bare.map(({ file, classes }) => `${file}: ${classes.join(" ")}`)).toEqual([])
+  })
 })
 
 describe("colours", () => {

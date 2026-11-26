@@ -206,10 +206,9 @@ export function BackupView({ access }: { access: boolean }) {
                   const options = event.currentTarget.parentElement?.querySelectorAll<HTMLElement>("[role=option]")
                   options?.[target]?.focus()
                 }}
-                className={cn(
-                  "cursor-default rounded-lg px-3 py-2 outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-focus-ring",
-                  state.id === current && "bg-accent",
-                )}
+                // a tone and an inset edge: the tone alone is too close to the card (frontend.md); rounded-sm inside
+                // the list's rounded-md and p-1
+                className="cursor-default rounded-sm px-3 py-2 outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-focus-ring aria-selected:bg-accent aria-selected:inset-ring aria-selected:inset-ring-muted-foreground"
               >
                 <p className="truncate text-sm font-medium" title={state.name}>{state.name}</p>
                 <p className="text-xs text-muted-foreground tabular-nums">
