@@ -48,6 +48,33 @@ export function withClassConstants(tag: string, constants: Map<string, string>, 
       m[3] ?? constants.get(m[2] ?? "") ?? "",
     ]),
   )
-  const named = [...tag.matchAll(/\b[A-Za-z_]\w*\b/g)].flatMap(([name]) => (local.get(name) || constants.get(name)) ?? [])
+  // names are read outside strings: `\b` splits `ring-3` at its hyphen, which read as a name `ring`
+  const named = [...outsideStrings(tag).matchAll(/\b[A-Za-z_]\w*\b/g)].flatMap(([name]) => (local.get(name) || constants.get(name)) ?? [])
   return named.length ? `${tag} "${named.join(" ")}"` : tag
+}
+
+/** `text` without the contents of its string literals; a template literal keeps its `${…}` parts. */
+function outsideStrings(text: string): string {
+  let out = ""
+  for (let i = 0; i < text.length; i++) {
+    const quote = text[i]
+    if (quote !== '"' && quote !== "'" && quote !== "`") {
+      out += quote
+      continue
+    }
+    out += " "
+    for (i++; i < text.length && text[i] !== quote; i++) {
+      if (text[i] === "\\") i++
+      else if (quote === "`" && text[i] === "$" && text[i + 1] === "{") {
+        const start = i + 2
+        let depth = 0
+        for (i++; i < text.length; i++) {
+          if (text[i] === "{") depth++
+          else if (text[i] === "}" && --depth === 0) break
+        }
+        out += ` ${outsideStrings(text.slice(start, i))} `
+      }
+    }
+  }
+  return out
 }
