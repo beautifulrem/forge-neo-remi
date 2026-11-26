@@ -1,5 +1,11 @@
-/** Focusable drop target: drag & drop, click/Enter to browse, paste while focused or hovered. */
-import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react"
+/**
+ * Focusable drop target: drag & drop, click/Enter to browse, paste while focused or hovered.
+ *
+ * Its name is its label followed by what it shows (WCAG 2.5.3, Label in Name: someone who speaks
+ * to the computer says the words on the screen). `aria-label` is read out before the content
+ * instead of replacing it; a label elsewhere (`aria-labelledby`) is followed by the zone itself.
+ */
+import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 
 type DropZoneProps = {
@@ -21,6 +27,8 @@ export function DropZone(props: DropZoneProps) {
   const zone = useRef<HTMLDivElement>(null)
   const [dragging, setDragging] = useState(false)
   const hovered = useRef(false)
+  const ownId = useId()
+  const id = props.id ?? ownId
   const { onFiles, disabled } = props
 
   // Paste goes to the zone under the pointer too, not only the focused one. One listener for the
@@ -47,11 +55,10 @@ export function DropZone(props: DropZoneProps) {
   return (
     <div
       ref={zone}
-      id={props.id}
+      id={id}
       role="button"
       tabIndex={disabled ? -1 : 0}
-      aria-label={props["aria-label"]}
-      aria-labelledby={props["aria-labelledby"]}
+      aria-labelledby={props["aria-labelledby"] ? `${props["aria-labelledby"]} ${id}` : undefined}
       aria-describedby={props["aria-describedby"]}
       aria-invalid={props["aria-invalid"] || undefined}
       aria-disabled={disabled || undefined}
@@ -90,6 +97,7 @@ export function DropZone(props: DropZoneProps) {
         props.className,
       )}
     >
+      {props["aria-label"] && !props["aria-labelledby"] ? <span className="sr-only">{props["aria-label"]}</span> : null}
       {props.children}
       <input
         ref={input}

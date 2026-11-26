@@ -51,7 +51,7 @@ export function FileInput({ node }: { node: FileNode }) {
           onFiles={onFiles}
           accept={node.accept ?? undefined}
           disabled={disabled}
-          aria-labelledby={label ? `${labelId(id)} ${hintId}` : undefined}
+          aria-labelledby={label ? labelId(id) : undefined}
           aria-label={label ? undefined : value ? t("Replace file") : t("Choose a file")}
           aria-describedby={describedBy(id, param.info, param.error, hintRef(id, param.hint))}
           aria-invalid={Boolean(param.error)}

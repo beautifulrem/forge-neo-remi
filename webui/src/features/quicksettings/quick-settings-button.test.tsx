@@ -19,7 +19,7 @@ describe("quick settings button", () => {
         <QuickSettings />
       </QueryClientProvider>,
     )
-    const button = screen.getByRole("button", { name: "Quick settings" })
+    const button = screen.getByRole("button", { name: /^Quick settings/ })
     expect(button).toHaveClass("max-sm:size-7", "max-sm:px-0")
     expect(screen.getByText("2")).toHaveClass("max-sm:hidden")
   })

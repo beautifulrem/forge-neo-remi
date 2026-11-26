@@ -265,9 +265,9 @@ describe("input kinds", () => {
         { img: null, imgs: [], f: null },
       ),
     )
-    // Drop zones are named by the field label and described by what they do.
-    expect(screen.getByRole("button", { name: "Image" })).toHaveAccessibleDescription("Drop an image, paste, or click to browse")
-    expect(screen.getByRole("button", { name: "Images" })).toHaveAccessibleDescription("Drop images, paste, or click to browse")
+    // Drop zones are named by the field label, then by the words they show (Label in Name).
+    expect(screen.getByRole("button", { name: "Image Drop an image, paste, or click to browse" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Images Drop images, paste, or click to browse" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Model Choose a file (.safetensors)" })).toBeInTheDocument()
   })
 
@@ -276,7 +276,7 @@ describe("input kinds", () => {
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(JSON.stringify({ id: "up-1", width: 8, height: 8 }), { headers: { "Content-Type": "application/json" } }))
     const store = one({ type: "image", name: "img", label: "Image" }, { img: null })
-    const zone = screen.getByRole("button", { name: "Image" })
+    const zone = screen.getByRole("button", { name: /^Image / })
     const file = new File([new Uint8Array([1])], "a.png", { type: "image/png" })
     fireEvent.drop(zone, { dataTransfer: { files: [file] } })
     await waitFor(() => expect(core(store).img).toBe("up-1"))
@@ -284,7 +284,7 @@ describe("input kinds", () => {
     expect(request.method).toBe("POST")
     expect(new URL(request.url).pathname).toBe("/api/v2/uploads")
     expect(await screen.findByRole("button", { name: "Remove Image" })).toBeInTheDocument()
-    expect(zone).toHaveAccessibleDescription("Replace image")
+    expect(zone).toHaveAccessibleName(/^Image Replace image/)
   })
 
   // An image still uploading was not part of a submit: Extras' Process, pressed meanwhile, said "an
@@ -293,7 +293,7 @@ describe("input kinds", () => {
     let answer!: (response: Response) => void
     vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise<Response>((resolve) => (answer = resolve)))
     const store = one({ type: "image", name: "img", label: "Image" }, { img: null })
-    fireEvent.drop(screen.getByRole("button", { name: "Image" }), { dataTransfer: { files: [new File([new Uint8Array([1])], "a.png", { type: "image/png" })] } })
+    fireEvent.drop(screen.getByRole("button", { name: /^Image / }), { dataTransfer: { files: [new File([new Uint8Array([1])], "a.png", { type: "image/png" })] } })
     let flushed = false
     const flush = flushPendingWrites("txt2img").then(() => (flushed = true))
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
@@ -342,7 +342,7 @@ describe("input kinds", () => {
         { img: null },
       ),
     )
-    fireEvent.drop(screen.getByRole("button", { name: "Image" }), { dataTransfer: { files: [new File([new Uint8Array([1])], "a.png", { type: "image/png" })] } })
+    fireEvent.drop(screen.getByRole("button", { name: /^Image / }), { dataTransfer: { files: [new File([new Uint8Array([1])], "a.png", { type: "image/png" })] } })
     fireEvent.click(screen.getByRole("button", { name: "Run" }))
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
     expect(bodies).toEqual([])
