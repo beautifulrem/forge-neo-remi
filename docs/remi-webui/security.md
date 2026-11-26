@@ -477,9 +477,10 @@ narrows them too:
 - SPA: pnpm 12 writes `webui/pnpm-lock.yaml` as two YAML documents (the
   project pins its pnpm version), a format GitHub's dependency graph does not
   read. It may still list the direct dependencies from `webui/package.json`
-  (Insights → Dependency graph shows what it found), but the ones known only
-  from the lockfile, every transitive one, get no Dependabot alerts and no
-  security updates; the weekly version updates still work. `pnpm audit` in
+  (Insights → Dependency graph shows what it found), but GitHub creates no
+  Dependabot alerts and no security updates for the dependencies in the
+  lockfile, direct or transitive, and alerts it opened before may close; the
+  weekly version updates still work. `pnpm audit` in
   `webui/` lists the advisories against the whole lockfile; run it with each
   dependency change and each upstream sync.
 
