@@ -314,9 +314,26 @@ def test_a_script_that_set_the_webui_up_with_a_test_helper_cannot_save_the_owner
     owners.write_text('{"owner": 1}', encoding="utf-8")
     root = tmp_path / "app"
     root.mkdir()
-    with webui_state() if helper == "webui_state" else server_app(root):
-        pass
+    entered = webui_state() if helper == "webui_state" else server_app(root)
+    with entered, pytest.raises(RuntimeError, match="repository's"):
+        opts.save(str(owners))  # marked on entry: the script that rewrote them saved in webui_state
     assert os.environ["REMI_TEST_HELPER"]
+    with pytest.raises(RuntimeError, match="repository's"):
+        opts.save(str(owners))  # and for the rest of the process
+    assert owners.read_text(encoding="utf-8") == '{"owner": 1}'
+
+
+@pytest.mark.parametrize("mark", ["PYTEST_VERSION", "PYTEST_CURRENT_TEST", "REMI_TEST_HELPER"])
+def test_each_mark_alone_puts_the_process_under_test(tmp_path, monkeypatch, opts, mark):
+    from modules import options
+
+    owners = tmp_path / "config.json"  # stands for the repository's settings file
+    owners.write_text('{"owner": 1}', encoding="utf-8")
+    monkeypatch.setattr(options, "_REPOSITORY_SETTINGS", str(owners))
+    for name in ("PYTEST_CURRENT_TEST", "PYTEST_VERSION", "REMI_TEST_HELPER"):
+        monkeypatch.setenv(name, "")  # recorded first, so all three come back
+        monkeypatch.delenv(name)
+    monkeypatch.setenv(mark, "1")
     with pytest.raises(RuntimeError, match="repository's"):
         opts.save(str(owners))
     assert owners.read_text(encoding="utf-8") == '{"owner": 1}'
@@ -415,11 +432,13 @@ def test_a_folder_in_pytests_own_temporary_folder_is_the_tests_own(tmp_path, mon
         ("someone", "pytest-of-someone2", False),  # another user's, beside it
         ("someone", "pytest-of-unknown", False),
         (None, "pytest-of-unknown", True),  # no user name
-        ("some/one", "pytest-of-unknown", True),  # a name that cannot name a folder
+        ("some/one", "pytest-of-unknown", True),  # a name with a path separator
         ("some/one", "pytest-of-some", False),
     ],
 )
-def test_pytests_own_folder_is_found_as_pytest_finds_it(tmp_path, monkeypatch, opts, user, folder, own):
+def test_pytests_own_folder_is_named_after_the_user_or_unknown(tmp_path, monkeypatch, opts, user, folder, own):
+    # pytest falls back to pytest-of-unknown whenever it cannot make pytest-of-<user>; the guard only
+    # without a name or for one with a path separator, so where they differ a test's file is refused
     from modules import paths_internal
 
     root = tmp_path / "root"
@@ -439,6 +458,27 @@ def test_pytests_own_folder_is_found_as_pytest_finds_it(tmp_path, monkeypatch, o
     else:
         with pytest.raises(RuntimeError, match="COMMANDLINE_ARGS named"):
             opts.save(str(data / "config.json"))
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs symbolic links")
+def test_a_pytest_folder_that_is_a_link_is_not_the_tests_own(tmp_path, monkeypatch, opts):
+    # pytest refuses a pytest-of-<user> it does not own; a script outside pytest never checks, and a
+    # link planted there in a shared /tmp could lead to the owner's data folder: its files are the owner's
+    from modules import paths_internal
+
+    root = tmp_path / "root"
+    root.mkdir()
+    elsewhere = tmp_path / "owners data"
+    elsewhere.mkdir()
+    (root / "pytest-of-someone").symlink_to(elsewhere, target_is_directory=True)
+    data = root / "pytest-of-someone" / "data"
+    data.mkdir()
+    monkeypatch.setenv("PYTEST_DEBUG_TEMPROOT", str(root))
+    monkeypatch.setattr(getpass, "getuser", lambda: "someone")
+    monkeypatch.setattr(paths_internal, "commandline_args", f"--data-dir {shlex.quote(str(data))}")
+    with pytest.raises(RuntimeError, match="COMMANDLINE_ARGS named"):
+        opts.save(str(data / "config.json"))
+    assert not (elsewhere / "data" / "config.json").exists()
 
 
 def test_a_folder_elsewhere_in_the_system_temporary_folder_is_the_owners(tmp_path, monkeypatch, opts):
@@ -491,7 +531,7 @@ def test_commandline_args_the_guard_cannot_read_leave_the_repositorys_file_guard
 
 def test_importing_the_options_does_not_probe_the_temporary_folder():
     # tempfile.gettempdir() writes a probe file, and raises where no folder is writable: only the
-    # guard, under pytest, needs it
+    # guard, under test, needs it
     code = "import tempfile\n\ndef refuse():\n    raise AssertionError('the temporary folder was probed at import')\n\ntempfile.gettempdir = refuse\nimport modules.options\n"
     env = {key: value for key, value in os.environ.items() if key != "COMMANDLINE_ARGS"}
     result = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env, capture_output=True, text=True, timeout=300)

@@ -27,8 +27,8 @@ from remi import ui
 # before the conftests load, or PYTEST_CURRENT_TEST, set while a test runs; or REMI_TEST_HELPER, set
 # for the rest of the process by remi.testing.webui_state and remi.server.testing.server_app, as a
 # script that set the WebUI up with them is a test too, though importing them is not, since an
-# extension may use remi.testing's contract helpers; a WebUI process a test starts inherits all
-# three) Options.save refuses it, wherever the test's file lives
+# extension may use remi.testing's contract helpers; a WebUI process a test starts inherits the
+# ones set) Options.save refuses it, wherever the test's file lives
 # (tests/conftest.py only reaches tests/), and so the settings file COMMANDLINE_ARGS named when the
 # WebUI was imported (modules.paths_internal adds it to the command line; its --data-dir or
 # --ui-settings-file, read as the WebUI's parser reads them, abbreviations too, and a few it rejects
@@ -50,9 +50,10 @@ def _under_test() -> bool:
 
 def _pytest_temporary_folder() -> str:
     # pytest makes tmp_path in pytest-of-<user> in PYTEST_DEBUG_TEMPROOT or the system's temporary
-    # folder, resolved (pytest-of-unknown without a user name, or with one that cannot name a folder).
-    # Asked only under test: gettempdir() writes a probe file. A --basetemp elsewhere is not seen, and
-    # the guard refuses that folder's files.
+    # folder, resolved. It falls back to pytest-of-unknown whenever it cannot make that folder; this
+    # does without a user name or for one with a path separator, so where the two differ a test's file
+    # is refused, never an owner's exempted. Asked only under test: gettempdir() writes a probe file.
+    # A --basetemp elsewhere is not seen, and the guard refuses that folder's files.
     root = os.path.realpath(os.environ.get("PYTEST_DEBUG_TEMPROOT") or tempfile.gettempdir())
     try:
         user = getpass.getuser()

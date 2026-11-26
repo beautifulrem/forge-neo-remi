@@ -3,7 +3,10 @@
 Default options (no config file), an empty style database and txt2img /
 img2img script runners holding only the built-in processing scripts; no
 model, extension or UI is loaded. Everything is restored on exit, so suites
-that expect an uninitialised WebUI are unaffected.
+that expect an uninitialised WebUI are unaffected, except the test mark
+(``REMI_TEST_HELPER``): from then on the process is a test's, and
+``Options.save`` refuses the owner's settings files. For tests only: entered
+in a running WebUI it would swap out its options and refuse its own saves.
 """
 
 from __future__ import annotations
