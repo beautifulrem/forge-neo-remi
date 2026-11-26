@@ -27,11 +27,13 @@ from remi import ui
 # starts inherits both) Options.save refuses it, wherever the test's file lives (tests/conftest.py
 # only reaches tests/), and so the settings file COMMANDLINE_ARGS named when the WebUI was imported
 # (modules.paths_internal adds it to the command line; its --data-dir or --ui-settings-file, read as
-# the WebUI's parser reads them: the owner's, when a shell exports it; the files of both, when both
-# are given; a value this cannot read, which stops the WebUI too, leaves the repository's file alone
-# guarded). A settings file or data folder that COMMANDLINE_ARGS names inside the system's temporary
-# folder is the test's own (so an owner's settings kept there are not guarded), as is any data folder
-# a test passes on the command line. The WebUI itself still saves to all of them.
+# the WebUI's parser reads them, abbreviations too, and a few it rejects as ambiguous: the owner's,
+# when a shell exports it; the files of both, when both are given; a value this cannot read, which
+# stops the WebUI too, leaves the repository's file alone guarded). A settings file or data folder
+# that COMMANDLINE_ARGS names inside the system's temporary folder is the test's own (so an owner's
+# settings kept there are not guarded; a temporary folder that is the working directory exempts
+# nothing), as is any data folder a test passes on the command line. The WebUI itself still saves to
+# all of them.
 _UNDER_PYTEST = ("PYTEST_VERSION", "PYTEST_CURRENT_TEST")
 _REPOSITORY_SETTINGS = os.path.join(script_path, "config.json")
 _COMMANDLINE = argparse.ArgumentParser(add_help=False, exit_on_error=False)

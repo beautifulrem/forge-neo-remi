@@ -10,6 +10,7 @@ import os
 import shlex
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -296,12 +297,12 @@ def test_under_pytest_the_settings_file_commandline_args_named_is_refused(tmp_pa
     it takes its --data-dir or --ui-settings-file, as the WebUI's parser reads them (abbreviated
     too): the owner's settings outside the repository. The value that reached the WebUI's command
     line at import counts, not the environment at save time (tests/conftest.py drops it later)."""
-    from modules import options, paths_internal
+    from modules import paths_internal
 
     owners = tmp_path / "owner data" / "config.json"
     owners.parent.mkdir()
     owners.write_text('{"owner": 1}', encoding="utf-8")
-    monkeypatch.setattr(options, "_temporary_folder", lambda: str(tmp_path / "elsewhere"))  # the owner's folder is not a temporary one
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path / "elsewhere"))  # the owner's folder is not a temporary one
     monkeypatch.setattr(paths_internal, "commandline_args", "--cpu " + form.format(shlex.quote(str(owners.parent)), file=shlex.quote(str(owners))))
     monkeypatch.delenv("COMMANDLINE_ARGS", raising=False)
     with pytest.raises(RuntimeError, match="COMMANDLINE_ARGS named"):
@@ -314,14 +315,14 @@ def test_under_pytest_the_settings_file_commandline_args_named_is_refused(tmp_pa
 def test_a_relative_or_empty_value_names_a_file_in_the_working_directory(tmp_path, monkeypatch, opts, value, named):
     # the WebUI opens a relative --data-dir or --ui-settings-file, and an empty --data-dir, from the
     # working directory it started in
-    from modules import options, paths_internal
+    from modules import paths_internal
 
     started_in = tmp_path / "started in"
     owners = started_in / named
     owners.parent.mkdir(parents=True)
     owners.write_text('{"owner": 1}', encoding="utf-8")
     monkeypatch.setattr(paths_internal, "cwd", str(started_in))
-    monkeypatch.setattr(options, "_temporary_folder", lambda: str(tmp_path / "elsewhere"))
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path / "elsewhere"))
     monkeypatch.setattr(paths_internal, "commandline_args", value)
     with pytest.raises(RuntimeError, match="COMMANDLINE_ARGS named"):
         opts.save(str(owners))
@@ -329,16 +330,54 @@ def test_a_relative_or_empty_value_names_a_file_in_the_working_directory(tmp_pat
     opts.save(str(owners.parent / "other.json"))
 
 
-def test_a_temporary_folder_commandline_args_names_is_the_tests_own(tmp_path, monkeypatch, opts):
-    # a WebUI a test starts with COMMANDLINE_ARGS="--data-dir <its folder>" saves there
-    from modules import options, paths_internal
+def test_both_files_are_refused_when_both_options_are_given(tmp_path, monkeypatch, opts):
+    from modules import paths_internal
 
     data = tmp_path / "data"
     data.mkdir()
-    monkeypatch.setattr(options, "_temporary_folder", lambda: os.path.realpath(tmp_path))  # pytest's own may be outside the system's
+    settings = tmp_path / "settings.json"
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path / "elsewhere"))
+    monkeypatch.setattr(paths_internal, "commandline_args", f"--data-dir {shlex.quote(str(data))} --ui-settings-file {shlex.quote(str(settings))}")
+    for owners in (data / "config.json", settings):
+        with pytest.raises(RuntimeError, match="COMMANDLINE_ARGS named"):
+            opts.save(str(owners))
+        assert not owners.exists()
+
+
+def test_a_temporary_folder_commandline_args_names_is_the_tests_own(tmp_path, monkeypatch, opts):
+    # a WebUI a test starts with COMMANDLINE_ARGS="--data-dir <its folder>" saves there, whatever
+    # link the temporary folder is reached through (on macOS /var links to /private/var)
+    from modules import paths_internal
+
+    temporary = tmp_path / "temporary"
+    data = temporary / "data"
+    data.mkdir(parents=True)
+    link = tmp_path / "link to temporary"
+    try:
+        link.symlink_to(temporary, target_is_directory=True)
+    except OSError:  # no symbolic links here
+        link = temporary
+    monkeypatch.setattr(tempfile, "tempdir", str(link))  # pytest's own may be outside the system's
     monkeypatch.setattr(paths_internal, "commandline_args", f"--data-dir {shlex.quote(str(data))}")
     opts.save(str(data / "config.json"))
     assert json.loads((data / "config.json").read_text(encoding="utf-8"))
+
+
+def test_a_temporary_folder_that_is_the_working_directory_exempts_nothing(tmp_path, monkeypatch, opts):
+    # gettempdir() falls back to the working directory where no temporary folder is writable: a
+    # relative --data-dir there is still the owner's
+    from modules import paths_internal
+
+    started_in = tmp_path / "started in"
+    owners = started_in / "data" / "config.json"
+    owners.parent.mkdir(parents=True)
+    owners.write_text('{"owner": 1}', encoding="utf-8")
+    monkeypatch.setattr(paths_internal, "cwd", str(started_in))
+    monkeypatch.setattr(tempfile, "tempdir", str(started_in))
+    monkeypatch.setattr(paths_internal, "commandline_args", "--data-dir data")
+    with pytest.raises(RuntimeError, match="COMMANDLINE_ARGS named"):
+        opts.save(str(owners))
+    assert owners.read_text(encoding="utf-8") == '{"owner": 1}'
 
 
 @pytest.mark.parametrize("value", ["--data-dir 'unbalanced", "--data-dir"])
