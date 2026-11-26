@@ -20,19 +20,23 @@ passed"); `--strict`
 turns a skip into a failure, and naming the step in `--only` fails it when it
 cannot run. Logs go to `$REMI_CHECK_LOGS` (default: a temporary folder,
 printed at the end).
+Every step runs without `COMMANDLINE_ARGS`: `modules.paths_internal` would add
+it to the WebUI's command line, and a `--data-dir` a shell exports would give
+the test suites the owner's settings file.
 
 | step | what it runs |
 |---|---|
 | `env:gradio-free` | fails when the chosen interpreter can import `gradio`, `gradio_client` or `gradio_rangeslider` |
 | `ruff:remi` | ruff with the strict rule set on Remi's own Python: `remi/`, `tools/`, `webui/tools/`, `docs/` (any example or measurement script there), `tests/remi_*.py`, `tests/test_remi_*.py`, `modules/extra_networks_pages.py`, `modules/redact.py` |
 | `ruff:tests` | ruff on `tests/` and every `extensions-builtin/*/tests` (strict rules on the Remi files, Forge's legacy rules on the rest) |
-| `ruff:extensions` | ruff on every `extensions-builtin/*/scripts` and `extensions-builtin/*/lib_*` (strict rules on the files Remi wrote, such as `lib_controlnet/unit_param.py`; legacy rules on the rest) |
+| `ruff:extensions` | ruff on every `extensions-builtin/*/scripts` and `extensions-builtin/*/lib_*`, the modules at an extension's root (`extensions-builtin/*/*.py`: `install.py`, `preload.py`, `sd_forge_lora/networks.py`, ...) and `sd-webui-joycaption-modified/joycaption_lib` (strict rules on the files Remi wrote, such as `lib_controlnet/unit_param.py`; legacy rules on the rest) |
 | `ruff:core` | ruff with the legacy rules on the upstream-origin runtime Remi edits: `modules/`, `modules_forge/` (not the vendored `packages/`), `backend/`, `scripts/`, `launch.py`, `webui.py` |
 | `ruff:syntax` | the whole tree (including vendored third-party code) for syntax errors (`E9`) and Gradio imports (`TID251`) |
 | `pytest:tests` | `pytest tests --cov=remi`, failing below 92 % line coverage of `remi/` (measured 93.6 %; `tools/check_coverage.py remi`), or on a leaked resource (below) |
 | `pytest:<extension>` | `pytest extensions-builtin/<extension>/tests`, one run per directory (they share module names); a directory that collects nothing fails |
 | `pytest:coverage` | `tools/check_coverage.py strict`: each Remi file outside `remi/` (the runtime files of `pyproject.toml`'s strict list, such as `modules/redact.py`, `modules/extra_networks_pages.py`, the ControlNet unit editor in `lib_controlnet/`, `lib_stage_scheduler/params.py`, the prompt-tools extension scripts; `tools/check_coverage.py files` lists them) must reach 90 % line coverage on its own (measured: 95.6 % to 100 %, the lowest `unit_param.py`), over the combined data of every `pytest:*` step of the run (they are tested by different suites, so every pytest step measures them); a file no suite imports counts as 0 % |
 | `contract:openapi` | `tools/export_openapi.py --check`: `webui/src/api/openapi.json` matches the server |
+| `contract:sdapi` | `tools/sdapi_contract.py`: `/sdapi/v1` still matches Forge Neo's at the last absorbed upstream commit (every upstream route and model, with the same parameters and fields; Remi may add routes; documented exceptions in its `ALLOWED`). A shallow clone (CI) fetches that commit first; only when it cannot is the step a skip with the reason |
 | `contract:settings` | `tools/dump_settings.py --check`: the SPA's settings contract matches `GET /api/v2/options` |
 | `contract:schemas` | `webui/tools/dump_schemas.py --check`: the tab schema fixtures the SPA contract tests render (`webui/src/api/mock/contract/{txt2img,img2img,extras}.json`) match `tab_schema()` |
 | `contract:line-endings` | `tools/check_line_endings.py`: the files shared with Forge Neo that upstream commits with CRLF (`tools/upstream_crlf.txt`) still have CRLF, so Neo merges stay line-by-line ([upstream-absorption.md §3](upstream-absorption.md#3-procedure)) |
@@ -78,6 +82,16 @@ report to the console as Forge does; Remi's own code logs. `TID251` bans
 installs, would shadow the repository's: load helpers by path). Long lines
 are the house style (black at 1024). The coverage data files go to the log
 folder (`COVERAGE_FILE`, one per pytest step), never into the repository.
+
+**Recorded fixtures of the extension suites.** Some extension widgets redraw
+in TypeScript what Python computes, and their vitest suites compare with JSON
+the Python suites record; a change on either side fails one of them.
+`REMI_REGEN_FIXTURES=1` rewrites the fixtures of `anima-lora-stage-scheduler`
+(`_anima/schedule.fixture.json`, `stage-timeline/model.fixture.json`) and
+`anima-lora-layer-weight` (`weights.fixture.json`), and
+`REMI_UPDATE_CONTRACT=1` rewrites the ControlNet unit editor's
+`webui/src/widgets/controlnet-unit/contract.json`, when their pytest step runs
+(`tools/check.sh --only pytest:<extension>`).
 
 ## End-to-end tests (`webui/tests/e2e`)
 
@@ -128,6 +142,21 @@ already answers there, then runs:
   to Extras, and generation with Hires. fix and with the Refiner (the values
   reach the job, the infotext and the result's parameter list), and the Hires.
   fix target controls dimmed while they do not apply (`inactive_if`).
+- `auth.spec.ts`: signing in with `--auth` against the mock login: only the
+  form while signed out, signing in and out, the form in the app's language,
+  the form over the app when the session ends, and axe on the form in light
+  and dark.
+- `layout.spec.ts`: layout checks that need a real browser: the header and
+  the generate bar at 1280×720 (idle and running) and on a phone, hiding and
+  showing the generate panes, tab strips that become a select on a phone,
+  toasts clear of the bottom controls and the canvas toolbars, form and
+  toggle rows, extension pages, the img2img stage toolbar and the editor
+  toolbars that scroll, platform shortcut hints and generation warnings.
+- `workbench.spec.ts`: the workbench features: model capability badges, the
+  worker health pill and workflow advice on the generate page, gallery
+  boards, compare's parameter diff and backdrops, asset lineage, queue
+  pipelines and cross-model recipes, extension health and manifests, and the
+  JSON Builder's schema mode.
 - `a11y.spec.ts`: axe-core (`@axe-core/playwright`, WCAG 2.x A/AA + best
   practices) on every page in light and dark, plus open states (networks
   drawer, result, image viewer, gallery details, PNG Info result, queue with
