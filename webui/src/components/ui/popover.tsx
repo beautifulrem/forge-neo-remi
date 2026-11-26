@@ -85,17 +85,21 @@ function Popover({ open: openProp, defaultOpen = false, onOpenChange, children, 
 type TriggerProps = React.ComponentProps<Module["PopoverTrigger"]>
 
 /** One callback ref that sets every given ref (the popover's anchor, the consumer's, the render element's). */
-function useMergedRef<T>(...refs: (React.Ref<T> | undefined)[]): React.RefCallback<T> {
+function useMergedRef<T>(first: React.Ref<T> | undefined, second: React.Ref<T> | undefined, third: React.Ref<T> | undefined): React.RefCallback<T> {
   return React.useCallback(
     (node: T | null) => {
-      for (const ref of refs) {
-        if (typeof ref === "function") ref(node)
-        else if (ref) ref.current = node
-      }
+      setRef(first, node)
+      setRef(second, node)
+      setRef(third, node)
     },
-    // oxlint-disable-next-line react/exhaustive-deps -- the refs themselves are the dependencies
-    refs,
+    [first, second, third],
   )
+}
+
+/** Hands `node` to a callback ref or a ref object. */
+function setRef<T>(ref: React.Ref<T> | undefined, node: T | null) {
+  if (typeof ref === "function") ref(node)
+  else if (ref) ref.current = node
 }
 
 function PopoverTrigger({

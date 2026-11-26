@@ -92,6 +92,8 @@ export default function XyzValues({ value, onChange, props, disabled, id, label 
 
   useEffect(() => {
     // Once per schema load (its outputs are cleared then); after a failure, again on an axis change.
+    // `load` marks the request as pending before it starts it.
+    // oxlint-disable-next-line react/set-state-in-effect
     if (all === undefined) load()
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- `load` is recreated every render
   }, [all, action, axis])
