@@ -34,7 +34,8 @@ describe("sign-in", () => {
     expect(screen.queryByText("the app")).toBeNull()
     expect(screen.getByRole("heading", { name: "Sign in to Remi WebUI" })).toBeInTheDocument()
     fill("ann", "nope")
-    expect(await screen.findByRole("alert")).toHaveTextContent("Wrong username or password.")
+    // the alert is a live region there from the start: wait for its text, not for it
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Wrong username or password."))
     expect(screen.getByLabelText("Password")).toHaveValue("")
   })
 

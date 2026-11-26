@@ -163,8 +163,11 @@ describe("WorkflowAdviceBar", () => {
     // Resolved chip disappears cleanly
     expect(screen.queryByText("Turbo model works best at 8 steps and CFG 1.0.")).not.toBeInTheDocument()
 
-    // Click option fix
-    fireEvent.click(screen.getByRole("button", { name: "Switch Output to PNG" }))
+    // Click option fix once the first fix has finished: the bar disables every fix while one runs,
+    // and on a busy machine the test can get here before the bar has drawn the end of the first.
+    const pngFix = () => screen.getByRole("button", { name: "Switch Output to PNG" })
+    await waitFor(() => expect(pngFix()).toBeEnabled())
+    fireEvent.click(pngFix())
     await waitFor(() => expect(patchOpt).toHaveBeenCalledWith({ samples_format: "png" }))
   })
 
