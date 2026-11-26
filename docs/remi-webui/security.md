@@ -471,20 +471,25 @@ narrows them too:
   pull request only for those seven packages, and none that needs `fastapi`
   0.137 or later. An advisory on another pin is handled here by hand, as the
   runtime's are. The `groups` apply to version updates only (`applies-to`
-  defaults to them): a security update comes as a pull request of its own.
+  defaults to them): a security update comes as a pull request of its own,
+  unless grouped security updates are turned on in the repository's or the
+  organisation's settings.
 - SPA: pnpm 12 writes `webui/pnpm-lock.yaml` as two YAML documents (the
   project pins its pnpm version), a format GitHub's dependency graph does not
-  read: the SPA gets no Dependabot alerts and no security updates, only the
-  weekly version updates. `pnpm audit` in `webui/` lists the advisories
-  against the lockfile; run it with each dependency change and each upstream
-  sync.
+  read. It may still list the direct dependencies from `webui/package.json`
+  (Insights → Dependency graph shows what it found), but the ones known only
+  from the lockfile, every transitive one, get no Dependabot alerts and no
+  security updates; the weekly version updates still work. `pnpm audit` in
+  `webui/` lists the advisories against the whole lockfile; run it with each
+  dependency change and each upstream sync.
 
 ### 2026-11-26: `pnpm audit` of the SPA
 
 One low advisory, GHSA-474x-hrwr-fgx4: `fast-xml-parser` up to 5.11.2 spends
 quadratic CPU time scanning XML with an unterminated stop-node tag. It is a
 development dependency (`redoc` → `openapi-sampler`), moved to 5.12.1 within
-`openapi-sampler`'s range; `pnpm audit` then finds none. The `/redoc` page
+`openapi-sampler`'s range, with the `fast-xml-builder` 1.3.2 and `is-unsafe`
+2.0.3 it requires; `pnpm audit` then finds none. The `/redoc` page
 ships redoc 2.5.4's prebuilt `bundles/redoc.standalone.js` (`webui/vite.config.ts`),
 built before the fix with its own copy of the parser, which the lockfile does
 not change. ReDoc parses no XML a client sends: it renders the server's own

@@ -65,9 +65,12 @@ host WebUI, the models and, in one, the author of JoyCaption's prompts): one
 links to another at the same `<your-fork>` placeholder as its own install
 line, one README was written for this repository ("In Forge Neo Remi this
 extension is preinstalled"), and all were committed in the same series as Remi's own
-Anima work (2026-09-25, 17:30:25 to 17:30:28). The one hint of an earlier
-work is `sd-webui-joycaption-modified`, whose README calls it
-`sd-webui-joycaption`. It is distributed here under the repository's
+Anima work (2026-09-25, 17:30:25 to 17:30:28). The hints of an earlier
+life are few: `sd-webui-joycaption-modified`'s README calls it
+`sd-webui-joycaption`; `sd-forge-prompt-workshop` is also described on a
+public Rentry page and sends `sd-forge-prompt-workshop/1.0
+(https://github.com/)` as its User-Agent, a version with the repository left
+out of its address. It is distributed here under the repository's
 AGPL-3.0 by the maintainer who bundled it.
 
 | directory | origin | license | third-party code inside | evidence |
