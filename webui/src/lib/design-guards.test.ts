@@ -3,7 +3,7 @@
  * without any test of the component noticing. Each rule is its own test.
  */
 import { describe, expect, it } from "vitest"
-import { openingTags } from "@/test/jsx-tags"
+import { classConstants, openingTags, withClassConstants } from "@/test/jsx-tags"
 
 const sources = import.meta.glob<string>(["../**/*.{ts,tsx}", "!../**/*.test.*", "!../api/gen/**"], { query: "?raw", import: "default", eager: true })
 
@@ -45,27 +45,12 @@ function classScopes(raw: string): string[] {
   return [...new Set([...tags.map(({ tag }) => tag), ...scopes])]
 }
 
-/**
- * The class-string constants of the sources (`const FIELD_BUTTON_CLASS = "…"`), by name: a tag that names one
- * wears its classes, which a check reading the tag's own text would miss.
- */
-const CLASS_CONSTANTS = new Map(
-  files.flatMap(({ source }) => [...source.matchAll(/\bconst ([A-Z][A-Z0-9_]*)\s*=\s*"([^"\n]*\bbg-[^"\n]*)"/g)].map((m): [string, string] => [m[1] ?? "", m[2] ?? ""])),
-)
+/** The class-string constants of the sources, by name (`@/test/jsx-tags`). */
+const CLASS_CONSTANTS = classConstants(files.map(({ source }) => source))
 
-/**
- * `tag` with the classes of each class constant it names added at its end. With the `source` it is in, a name
- * that file gives one (`const tone = ON_BACKDROP`, `const ring = "…"`) counts too; such a name is only the file's.
- */
+/** `tag` with the classes of the constants it names (`@/test/jsx-tags`), and with a file's own names for them. */
 function withConstants(tag: string, source = ""): string {
-  const local = new Map(
-    [...source.matchAll(/\bconst ([A-Za-z_]\w*)\s*=\s*(?:([A-Z][A-Z0-9_]+)\b(?!\s*[.([])|"([^"\n]*\bbg-[^"\n]*)")/g)].map((m): [string, string] => [
-      m[1] ?? "",
-      m[3] ?? CLASS_CONSTANTS.get(m[2] ?? "") ?? "",
-    ]),
-  )
-  const named = [...tag.matchAll(/\b[A-Za-z_]\w*\b/g)].flatMap(([name]) => (local.get(name) || CLASS_CONSTANTS.get(name)) ?? [])
-  return named.length ? `${tag} "${named.join(" ")}"` : tag
+  return withClassConstants(tag, CLASS_CONSTANTS, source)
 }
 
 describe("type scale", () => {

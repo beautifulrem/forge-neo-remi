@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
 import { ACCENTS } from "@/lib/theme"
-import { openingTags } from "@/test/jsx-tags"
+import { classConstants, openingTags, withClassConstants } from "@/test/jsx-tags"
 
 const css = readFileSync("src/index.css", "utf8")
 
@@ -159,12 +159,17 @@ describe("the focus ring token", () => {
     // the settings' apply bar merged with the fields under it. A tag outside the kit that draws a shadow of
     // md or more carries a slot the edge rule lists, or a border of its own, which forced colours draw.
     const listed = edgeRule().selectors.flatMap((selector) => /^\[data-slot="([a-z-]+)"\]$/.exec(selector)?.[1] ?? [])
+    // a shadow under a variant too (`sm:shadow-lg`), and one a class constant the tag names carries; a border
+    // counts when it is there at every size and has a width (`border-0` is none)
     const words = (tag: string) => tag.split(/[\s"'`{}(),]+/)
-    const lifted = appTags(/./).filter(({ tag }) => words(tag).some((word) => /^shadow-(?:md|lg|xl|2xl)$/.test(word)))
+    const constants = classConstants(Object.values(scripts))
+    const lifted = appTags(/./)
+      .map((one) => ({ ...one, tag: withClassConstants(one.tag, constants, one.source) }))
+      .filter(({ tag }) => words(tag).some((word) => /^shadow-(?:md|lg|xl|2xl)$/.test(word.split(":").pop() ?? "")))
     expect(lifted.length).toBeGreaterThan(5)
     const edgeless = lifted.filter(({ file, tag }) => {
       if (listed.includes(/\sdata-slot="([a-z-]+)"/.exec(tag)?.[1] ?? "")) return false
-      if (words(tag).some((word) => /^border(?:-\d+|-\[[^\]]+\])?$/.test(word))) return false
+      if (words(tag).some((word) => /^border(?:-[1-9]\d*|-\[(?!0(?:px)?\])[^\]]+\])?$/.test(word))) return false
       return !NOT_OVER_THE_PAGE.some((own) => own.file === file && tag.includes(own.look))
     })
     expect(edgeless.map(({ file, name }) => `${file}: <${name}`)).toEqual([])
@@ -220,13 +225,13 @@ function edgeRule(): { selectors: string[]; declarations: string } {
 }
 
 /** The opening tags in the app's own code (outside the kit) whose name matches `name`, with their file. */
-function appTags(name: RegExp): { file: string; name: string; tag: string }[] {
+function appTags(name: RegExp): { file: string; name: string; tag: string; source: string }[] {
   return Object.entries(scripts)
     .filter(([file]) => !file.startsWith("../components/ui/"))
     .flatMap(([file, source]) =>
       openingTags(source)
         .tags.filter((tag) => name.test(tag.name))
-        .map((tag) => ({ file: file.replace(/^\.\.\//, ""), name: tag.name, tag: tag.tag })),
+        .map((tag) => ({ file: file.replace(/^\.\.\//, ""), name: tag.name, tag: tag.tag, source })),
     )
 }
 
