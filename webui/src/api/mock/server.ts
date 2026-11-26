@@ -712,6 +712,35 @@ const routes: [method: string, pattern: RegExp, handler: Handler][] = [
   ],
   ["GET", /^\/queue\/items$/, () => queue.map((q) => q.job)],
   ["GET", /^\/queue$/, () => queueStatus()],
+  // POST /queue/stop-forever: every generate-forever job stops after its current run (remi/jobs/queue.py)
+  [
+    "POST",
+    /^\/queue\/stop-forever$/,
+    () => {
+      for (const job of jobs) job.forever = false
+      broadcast({ type: "queue.changed", ...queueStatus() })
+      return queueStatus()
+    },
+  ],
+  // POST /interrupt: stops what runs and generate forever; `clear_queue` cancels the queued jobs too,
+  // each announced as the server does (job.failed, status "cancelled")
+  [
+    "POST",
+    /^\/interrupt$/,
+    (_m, body) => {
+      for (const job of jobs) job.forever = false
+      if ((body as { clear_queue?: boolean } | undefined)?.clear_queue) {
+        for (const { job } of queue.splice(0)) {
+          job.status = "cancelled"
+          job.finished_at = new Date().toISOString()
+          broadcast({ type: "job.failed", job_id: job.id, seq: job.seq, tab: job.tab, status: "cancelled", error: "Cancelled" })
+        }
+      }
+      running?.cancel()
+      broadcast({ type: "queue.changed", ...queueStatus() })
+      return queueStatus()
+    },
+  ],
   [
     "POST",
     /^\/queue\/(pause|resume)$/,

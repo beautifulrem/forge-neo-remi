@@ -149,3 +149,51 @@ describe("the mock's model load", () => {
     expect(events.filter(model)).toEqual([])
   })
 })
+
+// Routes the SPA calls that the mock answered 404 ("Mock: … not found"): the network preview dialog's
+// Gallery tab (GET /outputs) said it could not load the gallery, and the queue page's "Stop generate
+// forever" and "Clear the queue" (POST /queue/stop-forever, POST /interrupt) failed.
+describe("the mock's output list and queue-wide actions", () => {
+  async function call(method: string, path: string, body?: unknown) {
+    const init: RequestInit = { method, headers: { Accept: "application/json" } }
+    if (body !== undefined) Object.assign(init, { headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    return handleMockRequest(new Request(`http://localhost/api/v2${path}`, init))
+  }
+  type Page = { items: { id: string; kind: string; name: string; infotext?: string | null; created_at: string; tab?: string | null }[]; next_cursor: string | null; total: number }
+
+  it("lists the outputs newest first, a page at a time, as GET /outputs does", async () => {
+    const response = await call("GET", "/outputs?limit=5")
+    expect(response.status).toBe(200)
+    const first = (await response.json()) as Page
+    expect(first.items).toHaveLength(5)
+    expect(first.total).toBeGreaterThan(5)
+    for (const item of first.items) {
+      expect(Object.keys(item).sort()).toEqual(["created_at", "height", "id", "infotext", "job_id", "kind", "name", "tab", "width"])
+      expect(item.kind).toBe("image")
+    }
+    const times = first.items.map((item) => Date.parse(item.created_at))
+    expect(times).toEqual([...times].sort((a, b) => b - a))
+    const next = (await (await call("GET", `/outputs?limit=5&cursor=${first.next_cursor}`)).json()) as Page
+    expect(next.items.map((item) => item.id).filter((id) => first.items.some((item) => item.id === id))).toEqual([])
+    // `q` searches the infotext and the names; `tab` keeps one tab's
+    const found = (await (await call("GET", "/outputs?q=LOWRES&tab=img2img&limit=200")).json()) as Page
+    expect(found.items.length).toBeGreaterThan(0)
+    expect(found.items.every((item) => item.tab === "img2img" && /lowres/i.test(`${item.name}\n${item.infotext}`))).toBe(true)
+  })
+
+  it("stops generate forever, and clears the queue on an interrupt that asks", async () => {
+    await call("POST", "/queue/pause")
+    const queued = (await (await call("POST", "/jobs", { tab: "txt2img", core: { prompt: "a fox" }, scripts: {}, forever: true })).json()) as { job_ids?: string[]; job_id?: string }
+    const id = queued.job_ids?.[0] ?? queued.job_id ?? ""
+    expect((await (await call("GET", "/queue/items")).json()) as { id: string; forever: boolean }[]).toContainEqual(expect.objectContaining({ id, forever: true }))
+    const stopped = await call("POST", "/queue/stop-forever")
+    expect(stopped.status).toBe(200)
+    expect(await stopped.json()).toEqual(expect.objectContaining({ size: 1, paused: true }))
+    expect((await (await call("GET", "/queue/items")).json()) as { id: string; forever: boolean }[]).toContainEqual(expect.objectContaining({ id, forever: false }))
+    const cleared = await call("POST", "/interrupt", { clear_queue: true })
+    expect(cleared.status).toBe(200)
+    expect(await cleared.json()).toEqual({ size: 0, paused: true, running: null })
+    expect((await (await call("GET", `/jobs/${id}`)).json()) as { status: string }).toEqual(expect.objectContaining({ status: "cancelled" }))
+    await call("POST", "/queue/resume")
+  })
+})

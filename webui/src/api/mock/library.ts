@@ -4,7 +4,7 @@
  * stars, removal, zip, reveal, PNG Info, and the importer with a sample
  * report. Images are the dev server's SVG artwork (`mock-*` ids).
  */
-import type { GalleryItem, GalleryQuery, ImageMetadata, ImportReport, ImportSourceInfo } from "../types"
+import type { GalleryItem, GalleryQuery, ImageMetadata, ImportReport, ImportSourceInfo, OutputItem } from "../types"
 import { MockHttpError } from "./server"
 import { broadcast } from "./socket"
 import { mockBoardItemIds, mockBoardsVersion } from "./workbench"
@@ -165,6 +165,25 @@ const report: ImportReport = {
 }
 
 export const libraryRoutes: [method: string, pattern: RegExp, handler: Handler][] = [
+  // GET /outputs (remi/server/routes/files.py): the generated files, newest first; `q` searches the
+  // infotext and the names, `tab` keeps one tab's. The network preview dialog's Gallery tab reads it.
+  [
+    "GET",
+    /^\/outputs$/,
+    (_m, _body, url) => {
+      const q = (url.searchParams.get("q") ?? "").toLowerCase()
+      const tab = url.searchParams.get("tab")
+      const items = library
+        .filter((item) => (!q || `${item.name}\n${item.infotext ?? ""}`.toLowerCase().includes(q)) && (!tab || item.tab === tab))
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+      const start = Number(url.searchParams.get("cursor") ?? 0) || 0
+      const limit = Math.min(200, Number(url.searchParams.get("limit") ?? 50) || 50)
+      const page: OutputItem[] = items
+        .slice(start, start + limit)
+        .map(({ id, name, width, height, infotext, created_at, job_id, tab }) => ({ id, kind: "image", name, width, height, infotext, created_at, job_id, tab }))
+      return { items: page, next_cursor: start + limit < items.length ? String(start + limit) : null, total: items.length }
+    },
+  ],
   [
     "GET",
     /^\/gallery$/,
