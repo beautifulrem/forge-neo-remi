@@ -5,8 +5,9 @@ export const SELECT_TRIGGER_CLASS =
 /**
  * A button that sits in a row of selects (header, toolbars) wears their flat field fill. Its hover is
  * repeated under `dark:`: on a ghost button the kit's `dark:hover:bg-muted/50` (`:is(.dark *)`) outranks a
- * plain `hover:` class, and the field went darker under the pointer in the dark theme.
+ * plain `hover:` class, and the field went darker under the pointer in the dark theme. With its popover open
+ * it keeps the fill, as an open select does, instead of the kit's `aria-expanded:bg-muted`.
  */
-export const FIELD_BUTTON_CLASS = "rounded-sm border-transparent bg-field hover:bg-field-hover dark:hover:bg-field-hover"
+export const FIELD_BUTTON_CLASS = "rounded-sm border-transparent bg-field hover:bg-field-hover aria-expanded:bg-field dark:hover:bg-field-hover"
 
 export const SELECT_VALUE_CLASS = "flex flex-1 text-left"

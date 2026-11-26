@@ -83,7 +83,7 @@ function DateRange() {
   const summary = from && to ? `${format(from)} – ${format(to)}` : from ? t("Since {{date}}", { date: format(from) }) : to ? t("Until {{date}}", { date: format(to) }) : t("Any date")
   return (
     <Popover>
-      <PopoverTrigger render={<Button variant="ghost" size="sm" aria-label={t("Date range")} className={cn(FIELD_BUTTON_CLASS, "font-normal", (from || to) && "text-primary")} />}>
+      <PopoverTrigger render={<Button variant="ghost" size="sm" aria-label={t("Date range")} className={cn(FIELD_BUTTON_CLASS, "font-normal", (from || to) && "text-primary aria-expanded:text-primary")} />}>
         <CalendarRange aria-hidden />
         <span title={summary} className="max-w-36 truncate">{summary}</span>
       </PopoverTrigger>

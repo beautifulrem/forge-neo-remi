@@ -666,6 +666,26 @@ for (const theme of ["light", "dark"] satisfies Theme[]) {
       await button.hover()
       expect(await backgroundBytes(button), (await button.textContent()) ?? "").toBe(want)
     }
+    // Open, it keeps the field's fill as an open select does, not the kit's `aria-expanded:bg-muted`, and a set
+    // range keeps its primary text, not the kit's `aria-expanded:text-foreground`.
+    const css = (property: "backgroundColor" | "color", classes: string) =>
+      page.evaluate(
+        ([name, className]) => {
+          const probe = document.createElement("div")
+          probe.className = className
+          document.body.append(probe)
+          const value = getComputedStyle(probe)[name]
+          probe.remove()
+          return value
+        },
+        [property, classes] as const,
+      )
+    await dates.click()
+    await expect(dates).toHaveAttribute("aria-expanded", "true")
+    await page.getByRole("dialog", { name: "Date range" }).getByRole("button", { name: "Last 7 days" }).click()
+    await page.mouse.move(0, 0)
+    expect(await backgroundBytes(dates), "open").toBe(await srgb(page, await css("backgroundColor", "bg-field")))
+    expect(await srgb(page, await dates.evaluate((node) => getComputedStyle(node).color)), "open, a range set").toBe(await srgb(page, await css("color", "text-primary")))
   })
 }
 
