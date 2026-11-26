@@ -42,7 +42,7 @@ from typing import Any
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UPSTREAM = "upstream/neo"
 LAST_ABSORBED = "5998fb39ea347dfe3a72a8ec88a971e909ed8738"
-"""The last Forge Neo commit merged into Remi (docs/upstream-sync-2026-10-14.md);
+"""The last Forge Neo commit merged into Remi (docs/upstream-sync-2026-11-22.md);
 update it with each sync (tests/test_remi_sdapi_contract.py checks it against
 the merge base when the ``upstream`` remote is there)."""
 API = "modules/api/api.py"
