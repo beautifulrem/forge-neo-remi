@@ -489,7 +489,7 @@ Playwright with Chromium; steps `pnpm`, `i18n:spa`, `perf`, `e2e`).
 The `legacy-ui` steps are not in CI (they need a second, Gradio, environment): they run
 locally once `tools/legacy_ui_env.sh` has built that environment. Logs and the Playwright report
 are uploaded when a job fails. The workflow passes `actionlint`; it runs on
-pushes to `remi-webui`, `main` and `neo`, on pull requests and by hand
+pushes to `remi`, on pull requests and by hand
 (`workflow_dispatch`), so a run exists once the branch is pushed to GitHub.
 Until then the same steps run locally with the command CI uses:
 

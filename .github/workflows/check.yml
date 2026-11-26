@@ -7,7 +7,7 @@ name: check
 
 on:
   push:
-    branches: [remi-webui, main, neo]
+    branches: [remi]
   pull_request:
   workflow_dispatch:
 
