@@ -456,13 +456,41 @@ of the same line fixes it. Look again at each upstream sync
 ([upstream-absorption.md](upstream-absorption.md)), or sooner when Remi starts
 using a path named below.
 
-`.github/dependabot.yml` proposes updates, one grouped pull request a week
-each, for what Remi owns: the SPA's packages (`webui/`) and the server packages
-Remi adds to `requirements.txt` (`fastapi` below 0.137, see below; `starlette`,
-`uvicorn`, `python-multipart`, `websockets`, `requests`, `pytz`). It takes
-effect once the file is on the repository's default branch on GitHub;
-Dependabot alerts and security updates are repository settings.
+`.github/dependabot.yml` proposes version updates, one grouped pull request a
+week each, for what Remi owns: the SPA's packages (`webui/`) and the server
+packages Remi adds to `requirements.txt` or pins above Forge Neo's (`fastapi`,
+raised from 0.127.1 and kept below 0.137, see below; `starlette`, `uvicorn`,
+`python-multipart`, `websockets`, `requests`, `pytz`). It takes effect once
+the file is on the repository's default branch on GitHub;
 `tests/test_dependabot_config.py` keeps its list in step with these pins.
+Dependabot alerts and security updates are repository settings, and the file
+narrows them too:
+
+- Python: alerts cover every pin in `requirements.txt`, but `allow` and
+  `ignore` apply to security updates as well, so Dependabot opens a security
+  pull request only for those seven packages, and none that needs `fastapi`
+  0.137 or later. An advisory on another pin is handled here by hand, as the
+  runtime's are. The `groups` apply to version updates only (`applies-to`
+  defaults to them): a security update comes as a pull request of its own.
+- SPA: pnpm 12 writes `webui/pnpm-lock.yaml` as two YAML documents (the
+  project pins its pnpm version), a format GitHub's dependency graph does not
+  read: the SPA gets no Dependabot alerts and no security updates, only the
+  weekly version updates. `pnpm audit` in `webui/` lists the advisories
+  against the lockfile; run it with each dependency change and each upstream
+  sync.
+
+### 2026-11-26: `pnpm audit` of the SPA
+
+One low advisory, GHSA-474x-hrwr-fgx4: `fast-xml-parser` up to 5.11.2 spends
+quadratic CPU time scanning XML with an unterminated stop-node tag. It is a
+development dependency (`redoc` → `openapi-sampler`), moved to 5.12.1 within
+`openapi-sampler`'s range; `pnpm audit` then finds none. The `/redoc` page
+ships redoc 2.5.4's prebuilt `bundles/redoc.standalone.js` (`webui/vite.config.ts`),
+built before the fix with its own copy of the parser, which the lockfile does
+not change. ReDoc parses no XML a client sends: it renders the server's own
+OpenAPI document, from which `openapi-sampler` builds XML examples. redoc 3
+(3.2.0) would replace the page with a new major version, so 2.5.4 stays until
+a 2.x release carries the fix or the page moves to 3.
 
 ### 2026-11-26: Starlette 1.3.1 and FastAPI 0.136.3
 

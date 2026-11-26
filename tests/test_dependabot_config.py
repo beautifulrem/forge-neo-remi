@@ -2,7 +2,7 @@
 
 The SPA in webui/ is Remi's own. Of the Python requirements, the model runtime is shared with
 Forge Neo and its pins move with an upstream sync (security.md, "Dependency advisories"); only
-the server packages Remi adds to requirements.txt are proposed here.
+the server packages Remi adds to requirements.txt or pins above Forge Neo's are proposed here.
 """
 
 import re
@@ -11,7 +11,8 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-# requirements.txt lines Remi adds to upstream's (upstream-absorption.md, `requirements*.txt`)
+# requirements.txt pins Remi adds to upstream's, or raises (fastapi, from upstream's 0.127.1); a sync
+# adds a new one here (upstream-absorption.md, `requirements*.txt`)
 REMI_PINS = {"fastapi", "python-multipart", "pytz", "requests", "starlette", "uvicorn", "websockets"}
 
 
