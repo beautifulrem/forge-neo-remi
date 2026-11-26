@@ -6,5 +6,6 @@
   "Cancel": "取消",
   "Failed: {{error}}": "失败：{{error}}",
   "Finished": "已完成",
-  "Cancelled": "已取消"
+  "Cancelled": "已取消",
+  "{{label}}: ": "{{label}}："
 }

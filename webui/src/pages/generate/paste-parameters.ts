@@ -40,7 +40,7 @@ export function usePasteParameters() {
     if (problems.length > 0) {
       // each value's message in the UI language, by its template where it names the value
       const text = (p: (typeof problems)[number]) => validationMessage({ message: p.message, template: p.template ?? undefined, params: sentenceParams(p.params) })
-      toast.warning(t("Some values were skipped"), { description: problems.slice(0, 4).map((p) => `${p.param ?? p.owner ?? ""}: ${text(p)}`).join("\n") })
+      toast.warning(t("Some values were skipped"), { description: problems.slice(0, 4).map((p) => `${t("{{label}}: ", { label: p.param ?? p.owner ?? "" })}${text(p)}`).join("\n") })
     }
   }
   const fail = (id: string | number, error: unknown) =>

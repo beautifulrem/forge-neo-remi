@@ -202,6 +202,25 @@ describe("task-runner widget", () => {
     }
   })
 
+  // The live region joined the label and the state with a colon of its own, a half-width one in Chinese.
+  it("announces the state after its label with the UI language's colon", async () => {
+    const { i18n } = await import("@/i18n")
+    server({
+      caption: [{ __outputs__: { "task:caption": status("queued") } }],
+      __task__: [{ __outputs__: { "task:caption": null } }, { __outputs__: { "task:caption": status("running") } }],
+    })
+    await i18n.changeLanguage("zh-CN")
+    try {
+      setup()
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Caption image" }))
+      })
+      await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/^Caption image：(?:排队中|运行中…)$/))
+    } finally {
+      await i18n.changeLanguage("en")
+    }
+  })
+
   it("translates every chrome string", () => {
     const catalog = zh as Record<string, string>
     expect(widgetKeys(source).filter((key) => !catalog[key])).toEqual([])

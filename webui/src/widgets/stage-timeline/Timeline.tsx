@@ -5,6 +5,7 @@
  * (←/→ move by 0.01, Shift+←/→ by 0.05, Home/End to the bounds).
  */
 import { type KeyboardEvent, type PointerEvent, useId, useRef } from "react"
+import { useTranslation } from "react-i18next"
 import { cn } from "@/lib/utils"
 import { clamp, curvePath, fmt, type StageKind, stageWindow, type Window } from "../_anima/schedule"
 
@@ -49,6 +50,8 @@ const TICKS = [0, 0.25, 0.5, 0.75, 1]
 const KINDS: StageKind[] = ["composition", "character", "style"]
 
 export function Timeline(props: Props) {
+  // the app's "{{label}}: " (Chinese "{{label}}："): a label and its value are not joined in the source
+  const { t } = useTranslation()
   const area = useRef<HTMLDivElement>(null)
   const hatch = `${useId()}-hatch`
   const dragging = useRef<Handle | null>(null)
@@ -93,7 +96,7 @@ export function Timeline(props: Props) {
         aria-valuetext={`${fmt(at, 3)} · ${props.tick(at)}`}
         aria-disabled={props.disabled || undefined}
         data-handle={name}
-        title={`${label}: ${fmt(at, 3)}`}
+        title={`${t("{{label}}: ", { label })}${fmt(at, 3)}`}
         className={cn(
           "group/handle absolute top-0 bottom-0 z-10 -ml-2 flex w-4 justify-center outline-none",
           props.disabled ? "pointer-events-none" : "cursor-ew-resize",

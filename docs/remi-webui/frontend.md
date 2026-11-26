@@ -1808,7 +1808,14 @@ older server) nothing is shown.
   `title=` / `description=` literals (routes, commands, placeholders). No
   string concatenation: a label and its value are joined by
   `t("{{label}}: ", { label: t("Errors") })` (Chinese `{{label}}：`), never
-  `{t("Errors")}: ` with a colon of the source's own (`locales.test.ts`).
+  `{t("Errors")}: ` with a colon of the source's own, whatever the label is:
+  a `t()` call with values (`${t("{{count}} failed", …)}: `), a label held in
+  a variable (a widget's handle label, a task's name) or a name the server
+  sends (a script's, a parameter's). `locales.test.ts` ("labels") reads every
+  template literal and JSX child for a colon and a space after an
+  interpolated value; a colon between two values with no space
+  (`${kind}:${name}`, a ratio) is a key, not a label. A widget joins with
+  its own catalog's `{{label}}: ` or the app's.
   A sentence that names keys takes them from
   `formatShortcut` through a placeholder (`Undo with {{keys}} in the
   editor.`): `locales.test.ts` fails on a chrome string that spells a

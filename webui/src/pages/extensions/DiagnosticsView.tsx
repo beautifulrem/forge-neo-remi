@@ -375,7 +375,7 @@ export function DiagnosticsView() {
               const disabledReason =
                 item.disabled_reason ||
                 item.disabled_scripts
-                  ?.map((s) => (s.name && s.reason ? `${s.name}: ${s.reason}` : s.reason || s.name))
+                  ?.map((s) => (s.name && s.reason ? `${t("{{label}}: ", { label: s.name })}${s.reason}` : s.reason || s.name))
                   .filter(Boolean)
                   .join("; ")
               const manifestText =

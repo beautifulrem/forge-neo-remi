@@ -153,14 +153,53 @@ describe("JSON Builder messages", () => {
   })
 })
 
+/**
+ * Where a source joins a value it interpolates to what follows with a colon of its own: a template
+ * literal's `${label}: ` and JSX's `{label}: ` (or `{label}:` closing the element), as `file:line`. A
+ * colon between two values with no space (`${kind}:${name}`, `{w}:{h}`) is a key or a ratio, not a label.
+ */
+function colonJoins(): string[] {
+  const found: string[] = []
+  for (const [path, source] of Object.entries(sources)) {
+    const sf = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
+    const where = (node: ts.Node) => `${path.replace(/^\.\.\//, "")}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1}`
+    const visit = (node: ts.Node) => {
+      if (ts.isTemplateExpression(node)) {
+        for (const span of node.templateSpans) {
+          const text = span.literal.text
+          if (/^:\s/.test(text) || (text === ":" && ts.isTemplateTail(span.literal))) found.push(`${where(span)}: \${${span.expression.getText(sf).slice(0, 50)}}:`)
+        }
+      }
+      if (ts.isJsxElement(node) || ts.isJsxFragment(node)) {
+        const children = node.children
+        children.forEach((child, i) => {
+          const before = children[i - 1]
+          if (!before || !ts.isJsxExpression(before) || !ts.isJsxText(child)) return
+          if (/^:\s/.test(child.text) || (child.text === ":" && i === children.length - 1)) found.push(`${where(before)}: {${before.expression?.getText(sf).slice(0, 50)}}:`)
+        })
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sf)
+  }
+  return found
+}
+
 describe("labels", () => {
   // "Manifest: …" built as t("Manifest") + ": " showed a half-width colon after Chinese ("清单: …"):
-  // a label and its value are joined by the catalog's "{{label}}: " (Chinese "{{label}}：").
-  it("never join a translated label to its value with a colon of their own", () => {
-    const joined = Object.entries(sources).flatMap(([file, source]) =>
-      [...source.matchAll(/\{t\("[^"]+"\)\}:|\$\{t\("[^"]+"\)\}: /g)].map((match) => `${file.replace(/^\.\.\//, "")}: ${match[0]}`),
-    )
-    expect(joined).toEqual([])
+  // a label and its value are joined by the catalog's "{{label}}: " (Chinese "{{label}}："), whether
+  // the label is a t() call, with values or without, or a label held in a variable.
+  /** Joins that are no label shown to a user, with the reason. */
+  const NOT_SHOWN: Record<string, string> = {
+    // the message of an ApiError (logs, API clients): the parameter's path before the server's English
+    // message; the pages show errorText's sentence in the UI language instead
+    "api/http.ts": "an error's own message, not the text a page shows",
+  }
+
+  it("never join a label to its value with a colon of their own", () => {
+    const joined = colonJoins()
+    expect(joined.some((join) => join.startsWith("api/http.ts:"))).toBe(true) // the scan reads template literals
+    expect(joined.filter((join) => !(join.slice(0, join.indexOf(":")) in NOT_SHOWN))).toEqual([])
   })
 })
 

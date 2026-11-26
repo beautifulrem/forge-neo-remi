@@ -87,7 +87,7 @@ export default function TaskRunner({ props, disabled, id }: WidgetProps<null, Pr
   return (
     <div className="flex flex-col gap-2">
       <span className="sr-only" role="status" aria-live="polite" aria-atomic>
-        {announced ? `${label}: ${announced}` : ""}
+        {announced ? tw("{{label}}: ", { label }) + announced : ""}
       </span>
       <div className="flex flex-wrap items-center gap-2">
         <Button

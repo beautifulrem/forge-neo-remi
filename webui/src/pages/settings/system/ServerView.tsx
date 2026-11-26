@@ -184,7 +184,7 @@ function CheckpointHashes() {
               {running
                 ? t("Hashed {{done}} of {{total}}", { done: state.done, total: state.total })
                 : t("Finished: {{count}} checkpoints hashed", { count: state.done - state.failed.length })}
-              {state.failed.length > 0 ? ` · ${t("{{count}} failed", { count: state.failed.length })}: ${state.failed.join(", ")}` : ""}
+              {state.failed.length > 0 ? ` · ${t("{{label}}: ", { label: t("{{count}} failed", { count: state.failed.length }) })}${state.failed.join(", ")}` : ""}
             </p>
           </div>
         ) : null
