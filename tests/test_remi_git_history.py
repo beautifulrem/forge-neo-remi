@@ -12,9 +12,11 @@ reason only when that fails. Each test builds a tiny repository and a
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -95,6 +97,66 @@ def test_the_ancestry_check_gets_the_whole_history(repos):
     assert not history.is_shallow(clone)
     assert subprocess.run(["git", "merge-base", "--is-ancestor", old, "HEAD"], cwd=clone).returncode == 0
     assert history.ensure_history(clone) is None  # nothing left to fetch
+
+
+# git, except that a fetch first holds the clone's shallow.lock for a second, as a fetch of a long
+# history holds it while the pack arrives
+SLOW_FETCH = """#!/bin/sh
+if [ "$1" = fetch ]; then
+  lock="$("{git}" rev-parse --git-path shallow.lock)"
+  if ! (set -C; : >"$lock") 2>/dev/null; then
+    echo "fatal: Unable to create '$PWD/$lock': File exists." >&2
+    exit 128
+  fi
+  touch "{fetching}"
+  sleep 1
+  rm -f "$lock"
+fi
+exec "{git}" "$@"
+"""
+
+# another gate's process: ensure_history or ensure_commits, printing what it returned
+OTHER_GATE = """
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("remi_tools_git_history", sys.argv[1])
+history = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(history)
+repo, which, rev = sys.argv[2:5]
+print(history.ensure_history(repo) if which == "history" else history.ensure_commits(rev, repo=repo))
+"""
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="fetches are serialized with fcntl; the stand-in git is a shell script")
+@pytest.mark.parametrize(("first", "second"), [("history", "commits"), ("commits", "history"), ("history", "history")])
+def test_a_fetch_waits_for_another_processes_fetch_into_the_clone(repos, tmp_path, monkeypatch, first, second):
+    """tools/check.sh runs pytest:tests (the pinned-revision test fetches the whole history) and
+    contract:sdapi (one commit) side by side. A fetch into the shallow clone while the other
+    process's ran failed on git's shallow.lock, and the pinned-revision test skipped. It now waits
+    for the other fetch, then looks again: a --depth=1 fetch into the clone the other process has
+    just given its whole history would make it shallow again, and --unshallow fails on it."""
+
+    _source, clone, (old, _middle, _head) = repos
+    fetching = tmp_path / "fetching"
+    stand_in = tmp_path / "bin" / "git"
+    stand_in.parent.mkdir()
+    stand_in.write_text(SLOW_FETCH.format(git=shutil.which("git"), fetching=fetching), encoding="utf-8")
+    stand_in.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{stand_in.parent}{os.pathsep}{os.environ['PATH']}")
+    command = [sys.executable, "-c", OTHER_GATE, str(REPO / "tools" / "git_history.py"), str(clone), first, old]
+    other = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        deadline = time.monotonic() + 60
+        while not fetching.exists() and other.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert fetching.exists(), other.communicate()  # the other process's fetch is under way
+        mine = history.ensure_history(clone) if second == "history" else history.ensure_commits(old, repo=clone)
+        out, err = other.communicate(timeout=60)
+    finally:
+        if other.poll() is None:
+            other.kill()
+            other.communicate()
+    assert (out.strip(), mine) == ("None", None), err
+    assert history.has_commit(old, clone) and not history.is_shallow(clone)
 
 
 def test_a_failed_fetch_names_its_reason(repos, monkeypatch, capsys):
