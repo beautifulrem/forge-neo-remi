@@ -22,7 +22,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 CHECK = REPO / "tools" / "check.sh"
-OTHER_STEPS = "env,ruff,pytest,contract,i18n,pnpm,perf,e2e"
+OTHER_STEPS = "env,ruff,pytest,contract,i18n,pnpm,api-docs,perf,e2e"
 
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None, reason="tools/check.sh is a bash script")
 
@@ -66,7 +66,36 @@ def test_list_names_every_step_including_legacy_ui():
     assert listed.returncode == 0, listed.stderr
     steps = listed.stdout.split()
     assert "legacy-ui" in steps and "legacy-ui:fixtures" in steps
-    assert {"env:gradio-free", "ruff:remi", "pytest:tests", "contract:openapi", "pnpm:build", "pnpm:lint", "pnpm:vitest", "e2e"} <= set(steps)
+    assert {"env:gradio-free", "ruff:remi", "pytest:tests", "contract:openapi", "pnpm:build", "api-docs", "pnpm:lint", "pnpm:vitest", "e2e"} <= set(steps)
+    assert steps.index("api-docs") == steps.index("pnpm:build") + 1
+
+
+def test_the_tests_of_the_build_run_after_it_and_not_beside_it(checkout: Path, tmp_path: Path):
+    """pnpm:build empties webui/dist while it runs, so pytest:tests (another lane) leaves out the
+    tests that read it (marker spa_build), and api-docs runs them after the build, in its lane,
+    where a missing build fails them instead of skipping them (REMI_SPA_BUILT)."""
+
+    (checkout / "webui").mkdir()
+    record = tmp_path / "record.txt"
+    python = tmp_path / "bin" / "python"
+    python.parent.mkdir()
+    python.write_text(f'#!/bin/sh\necho "python ${{REMI_SPA_BUILT-unset}} $*" >> "{record}"\nexit 0\n', encoding="utf-8")
+    python.chmod(python.stat().st_mode | stat.S_IXUSR)
+    pnpm = tmp_path / "bin" / "pnpm"
+    pnpm.write_text(f'#!/bin/sh\nsleep 1\necho "pnpm $*" >> "{record}"\nexit 0\n', encoding="utf-8")
+    pnpm.chmod(pnpm.stat().st_mode | stat.S_IXUSR)
+    env = {key: value for key, value in os.environ.items() if key not in {"REMI_LEGACY_PYTHON", "REMI_CHECK_LOGS", "REMI_SPA_BUILT"}}
+    env.update(PYTHON=str(python), REMI_CHECK_LOGS=str(checkout.parent / "logs"), PATH=f"{tmp_path / 'bin'}{os.pathsep}{env.get('PATH', '')}")
+    command = ["bash", str(checkout / "tools" / "check.sh"), "--only", "pytest:tests,pnpm:build,api-docs"]
+    result = subprocess.run(command, cwd=checkout, env=env, capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stdout + result.stderr
+    calls = record.read_text(encoding="utf-8").splitlines()
+    tests = next(call for call in calls if " -m pytest tests " in call and "--cov=remi" in call)
+    assert "-m not spa_build " in tests and tests.startswith("python unset "), tests
+    # (pytest:tests runs beside the build, so its calls may come before or after it)
+    api_docs = [i for i, call in enumerate(calls) if "-m spa_build " in call]
+    assert len(api_docs) == 1 and api_docs[0] > calls.index("pnpm build"), calls
+    assert calls[api_docs[0]].startswith("python 1 -m pytest tests -m spa_build "), calls
 
 
 def test_missing_legacy_interpreter_is_reported_as_skipped(checkout: Path):
@@ -229,14 +258,16 @@ def test_serial_runs_one_step_at_a_time(checkout: Path, tmp_path: Path):
     assert record == ["python start", "python end", "pnpm start", "pnpm end"]
 
 
-def test_pytest_coverage_waits_for_both_python_lanes(checkout: Path, tmp_path: Path):
+@pytest.mark.parametrize("slow", ['*"-m pytest tests "*', "*test_remi_core_zh_cn*"], ids=["pytest:tests", "i18n:server"])
+def test_pytest_coverage_waits_for_both_python_lanes(checkout: Path, tmp_path: Path, slow: str):
     """pytest:coverage combines the coverage data of every pytest step, so it starts only after
-    pytest:tests (one lane) and the other Python steps (the other lane) have ended."""
+    pytest:tests (one lane) and the other Python steps (the other lane) have ended, whichever
+    lane takes longer."""
 
     record = tmp_path / "args.txt"
     python = tmp_path / "bin" / "python"
     python.parent.mkdir()
-    python.write_text(f'#!/bin/sh\ncase "$*" in\n  *"-m pytest tests "*|*test_remi_core_zh_cn*) sleep 1 ;;\nesac\necho "$@" >> "{record}"\nexit 0\n', encoding="utf-8")
+    python.write_text(f'#!/bin/sh\ncase "$*" in\n  {slow}) sleep 2 ;;\nesac\necho "$@" >> "{record}"\nexit 0\n', encoding="utf-8")
     python.chmod(python.stat().st_mode | stat.S_IXUSR)
     result = run(checkout, "--only", "pytest,i18n:server", python=str(python))
     assert result.returncode == 0, result.stdout + result.stderr
@@ -246,39 +277,107 @@ def test_pytest_coverage_waits_for_both_python_lanes(checkout: Path, tmp_path: P
     assert any("test_remi_core_zh_cn" in call for call in calls[:strict]), calls
 
 
+def lane_tool(path: Path, pids: Path) -> Path:
+    """A python or pnpm that, for pytest:tests, contract:sdapi and pnpm:lint (one step in each
+    lane), starts a child process, records both process ids and waits; other calls end at once."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f'#!/bin/sh\ncase "$*" in\n  *"-m pytest tests "*|*sdapi_contract*|lint) ;;\n  *) exit 0 ;;\nesac\nsleep 60 &\necho "$$ $!" >> "{pids}"\nwait\n', encoding="utf-8")
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
+    return path
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="signals")
-def test_stopping_the_run_stops_every_lane(checkout: Path, tmp_path: Path):
-    """A stopped run (a terminal's Ctrl-C, a tool stopping it) leaves no step running in the background."""
+@pytest.mark.parametrize("stop", ["SIGTERM", "SIGINT"])
+def test_stopping_the_run_stops_every_lane(checkout: Path, tmp_path: Path, stop: str):
+    """A stopped run (a terminal's Ctrl-C, a tool stopping it) leaves no step running in the
+    background, in any lane, nor what a step started; the script then ends by that signal, as a
+    stopped command does (a shell loop running it stops at Ctrl-C)."""
 
     import signal
     import time
 
+    sent = getattr(signal, stop)
+    (checkout / "webui").mkdir()
     pids = tmp_path / "pids.txt"
-    python = tmp_path / "bin" / "python"
-    python.parent.mkdir()
-    python.write_text(f'#!/bin/sh\ncase "$*" in\n  *sdapi_contract*|*test_remi_core_zh_cn*) echo $$ >> "{pids}"; sleep 60 ;;\nesac\nexit 0\n', encoding="utf-8")
-    python.chmod(python.stat().st_mode | stat.S_IXUSR)
+    python = lane_tool(tmp_path / "bin" / "python", pids)
+    lane_tool(tmp_path / "bin" / "pnpm", pids)
     env = {key: value for key, value in os.environ.items() if key not in {"REMI_LEGACY_PYTHON", "REMI_CHECK_LOGS"}}
-    env.update(PYTHON=str(python), REMI_CHECK_LOGS=str(checkout.parent / "logs"))
-    command = ["bash", str(checkout / "tools" / "check.sh"), "--only", "contract:sdapi,i18n:server"]
-    process = subprocess.Popen(command, cwd=checkout, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    env.update(PYTHON=str(python), REMI_CHECK_LOGS=str(checkout.parent / "logs"), PATH=f"{tmp_path / 'bin'}{os.pathsep}{env.get('PATH', '')}")
+    command = ["bash", str(checkout / "tools" / "check.sh"), "--only", "pytest:tests,contract:sdapi,pnpm:lint"]
+
+    def default_sigint() -> None:
+        # a shell cannot trap a signal ignored when it started, and this test may run in a lane
+        # of tools/check.sh itself, where (a background job) SIGINT is ignored
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+    process = subprocess.Popen(command, cwd=checkout, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, preexec_fn=default_sigint)
     try:
         deadline = time.monotonic() + 60
-        while time.monotonic() < deadline and not (pids.is_file() and pids.read_text(encoding="utf-8").split()):
+        while time.monotonic() < deadline and not (pids.is_file() and len(pids.read_text(encoding="utf-8").split()) == 6):
             time.sleep(0.1)
         started = [int(pid) for pid in pids.read_text(encoding="utf-8").split()]
-        assert started
-        process.send_signal(signal.SIGTERM)
-        assert process.wait(timeout=30) != 0
+        assert len(started) == 6, started  # a step and its child in each of the three lanes
+        process.send_signal(sent)
+        assert process.wait(timeout=30) == -sent
         deadline = time.monotonic() + 10
         alive = started
         while alive and time.monotonic() < deadline:
             alive = [pid for pid in started if _alive(pid)]
             time.sleep(0.1)
-        assert not alive, f"steps still running: {alive}"
+        assert not alive, f"still running: {alive} of {started}"
     finally:
         if process.poll() is None:
             process.kill()
+            process.wait()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="signals")
+def test_a_lane_whose_script_was_killed_starts_no_further_step(checkout: Path, tmp_path: Path):
+    """SIGKILL cannot be trapped: the lanes outlive the script. The step running goes on (as it did
+    when one step ran at a time), but its lane starts no other, even while the killed script is a
+    zombie its parent has not reaped."""
+
+    import signal
+    import time
+
+    record = tmp_path / "record.txt"
+    python = tmp_path / "bin" / "python"
+    python.parent.mkdir()
+    python.write_text(f'#!/bin/sh\ncase "$*" in\n  *sdapi_contract*) echo "sdapi start" >> "{record}"; sleep 2; echo "sdapi end" >> "{record}" ;;\n  *dump_settings*) echo "settings" >> "{record}" ;;\nesac\nexit 0\n', encoding="utf-8")
+    python.chmod(python.stat().st_mode | stat.S_IXUSR)
+    env = {key: value for key, value in os.environ.items() if key not in {"REMI_LEGACY_PYTHON", "REMI_CHECK_LOGS"}}
+    env.update(PYTHON=str(python), REMI_CHECK_LOGS=str(checkout.parent / "logs"))
+    command = ["bash", str(checkout / "tools" / "check.sh"), "--only", "contract:sdapi,contract:settings"]
+    process = subprocess.Popen(command, cwd=checkout, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline and not (record.is_file() and "sdapi start" in record.read_text(encoding="utf-8")):
+            time.sleep(0.1)
+        process.send_signal(signal.SIGKILL)  # not reaped until the end: a zombie meanwhile
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline and "sdapi end" not in record.read_text(encoding="utf-8"):
+            time.sleep(0.1)
+        time.sleep(1)  # the lane would start contract:settings at once
+        assert record.read_text(encoding="utf-8").splitlines() == ["sdapi start", "sdapi end"]
+    finally:
+        process.kill()
+        process.wait()
+
+
+def test_a_step_whose_lane_died_is_a_failure(checkout: Path, tmp_path: Path):
+    """A lane that died (killed) leaves its step and the steps after it without a result: each
+    is a failure in the summary, never a pass."""
+
+    python = tmp_path / "bin" / "python"
+    python.parent.mkdir()
+    python.write_text('#!/bin/sh\ncase "$*" in\n  *sdapi_contract*) kill -9 $PPID ;;\nesac\nexit 0\n', encoding="utf-8")
+    python.chmod(python.stat().st_mode | stat.S_IXUSR)
+    result = run(checkout, "--only", "contract:sdapi,contract:settings", python=str(python))
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert summary_row(result.stdout, "contract:sdapi")[1] == "FAIL"
+    assert summary_row(result.stdout, "contract:settings")[1] == "FAIL"
+    assert "2 of 2 steps failed (0 passed, 0 skipped)." in result.stdout
 
 
 def _alive(pid: int) -> bool:

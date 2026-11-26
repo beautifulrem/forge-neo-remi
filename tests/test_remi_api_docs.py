@@ -5,6 +5,7 @@ calls")."""
 
 import gzip
 import json
+import os
 import re
 
 import pytest
@@ -146,10 +147,15 @@ def test_the_openapi_description_stays_and_lists_no_docs_pages(webui, tmp_path):
         assert not {"/docs", "/redoc", "/docs/oauth2-redirect"} & set(document["paths"])
 
 
-@pytest.mark.skipif(not (DIST / MANIFEST).is_file(), reason="the SPA is not built (cd webui && pnpm build)")
+@pytest.mark.spa_build
+@pytest.mark.skipif(not (DIST / MANIFEST).is_file() and not os.environ.get("REMI_SPA_BUILT"), reason="the SPA is not built (cd webui && pnpm build)")
 def test_the_build_vendors_both_viewers():
     """``apiDocs`` in webui/vite.config.ts: pinned versions, the license
-    files next to them, no references to source maps that are not shipped."""
+    files next to them, no references to source maps that are not shipped.
+
+    Reads the real build: tools/check.sh runs it after its own build (step
+    ``api-docs``, which sets REMI_SPA_BUILT: then a missing build fails), never
+    beside it."""
 
     assets = viewer_assets(DIST)
     assert assets is not None

@@ -58,3 +58,6 @@ filterwarnings = [
     "error::ResourceWarning",
     "error::pytest.PytestUnraisableExceptionWarning",
 ]
+markers = [
+    "spa_build: reads the SPA build in webui/dist; tools/check.sh runs these after its own build (step api-docs), not in pytest:tests",
+]

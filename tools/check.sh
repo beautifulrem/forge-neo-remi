@@ -16,16 +16,18 @@
 # /sdapi/v1 (against Forge Neo's; skipped, with the reason, when a shallow clone cannot fetch the
 # upstream commit), settings and tab schema contracts, upstream line endings - the legacy ui() recorder's self-test
 # (skipped, with the reason, without its Gradio interpreter) - i18n coverage (server zh_CN catalog, SPA
-# chrome catalog) - pnpm install (frozen lockfile), build (tsc + vite), the JS bundle budget,
-# oxlint, vitest (with coverage floors), Playwright end-to-end tests and axe scans against the
-# mock backend.
+# chrome catalog) - pnpm install (frozen lockfile), build (tsc + vite), the API docs viewers that
+# build vendors, the JS bundle budget, oxlint, vitest (with coverage floors), Playwright end-to-end
+# tests and axe scans against the mock backend.
 # Steps keep running after a failure; the script ends with a summary table and exits 1
 # when any step failed (or, with --strict, was skipped).
 # Three lanes run at once, each one step after another: python (the Gradio check, ruff,
 # pytest:tests), suites (the extension suites, the contracts, the legacy ui() recorder, i18n:server)
 # and frontend (pnpm to e2e). pytest:coverage combines the coverage data of every pytest step, so
 # it runs once both Python lanes have ended. Each step prints its line when it ends; the summary
-# lists the steps in the order above. Stopping the run (Ctrl-C, SIGTERM) stops every lane.
+# lists the steps in the order above. Stopping the run (Ctrl-C, SIGTERM) stops every lane and the
+# steps they run, and the script ends by that signal; killed outright (SIGKILL), its lanes start
+# no further step (the running ones go on, as a step did when one ran at a time).
 #
 # Python: $PYTHON, else venv/ or .venv/ in the repo, else python3 - the first one with
 # requirements.txt and requirements-dev.txt (pytest, pytest-cov) installed, preferring one
@@ -239,7 +241,8 @@ pytest_cov() {
 }
 pytest_tests() {
   local status=0
-  pytest_cov pytest:tests tests --cov=remi || status=$?
+  # -m: the spa_build tests read webui/dist, which pnpm:build (another lane) empties while it runs
+  pytest_cov pytest:tests tests -m "not spa_build" --cov=remi || status=$?
   py tools/check_coverage.py remi --data "$(coverage_data pytest:tests)" --floor "$COVERAGE_FLOOR_PYTHON" || status=$((status ? status : 1))
   return $status
 }
@@ -310,6 +313,11 @@ LANE=frontend
 step pnpm:install pnpm_in_webui install --frozen-lockfile
 step i18n:spa pnpm_in_webui exec vitest run src/locales
 step pnpm:build pnpm_in_webui build
+# The tests of that build (pytest marker spa_build): the API docs viewers it vendors
+# (webui/vite.config.ts's apiDocs), as the server reads them (remi/server/api_docs.py). Right after
+# the build a missing viewer fails instead of skipping (REMI_SPA_BUILT).
+api_docs() { (export REMI_SPA_BUILT=1 && run_pytest tests -m spa_build); }
+step api-docs api_docs
 # The JS budget (scorecard dimension 5): a manifest build of the same sources, checked against
 # webui/tools/perf/budget.json (initial JS, every route and lazy entry, recorded exceptions).
 bundle_budget() {
@@ -360,10 +368,24 @@ run_step() {
   printf '==> %-44s %s\n' "$name" "$line"
 }
 
-run_lane() { # run_lane <lane>: its steps, one after another
+MAIN_PID=$$
+# Whether the script itself still runs: killed outright (SIGKILL, no trap runs), it leaves its lanes
+# behind, and each would go on with its queue. A killed process its parent has not reaped yet is a
+# zombie, which kill -0 still finds.
+main_running() {
+  kill -0 "$MAIN_PID" 2>/dev/null || return 1
+  command -v ps >/dev/null || return 0
+  case "$(ps -o stat= -p "$MAIN_PID" 2>/dev/null)" in *Z*) return 1 ;; esac
+  return 0
+}
+
+run_lane() { # run_lane <lane>: its steps, one after another, while the script runs
   local i=0
   while [ $i -lt ${#QUEUED_NAMES[@]} ]; do
-    if [ "${QUEUED_LANES[$i]}" = "$1" ]; then run_step "$i"; fi
+    if [ "${QUEUED_LANES[$i]}" = "$1" ]; then
+      main_running || return 0
+      run_step "$i"
+    fi
     i=$((i + 1))
   done
 }
@@ -386,8 +408,9 @@ stop_lanes() {
   # shellcheck disable=SC2086 # one word per process
   [ -z "${pids// /}" ] || kill $pids 2>/dev/null
 }
-trap 'stop_lanes; exit 130' INT
-trap 'stop_lanes; exit 143' TERM
+# Then it ends by that signal, as a stopped command does (a shell loop running it stops at Ctrl-C).
+trap 'stop_lanes; trap - INT; kill -INT $$' INT
+trap 'stop_lanes; trap - TERM; kill -TERM $$' TERM
 
 # The lanes run in the background and the script waits for them, so a signal stops it at once.
 if [ ${#QUEUED_NAMES[@]} -gt 0 ]; then
