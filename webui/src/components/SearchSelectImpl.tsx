@@ -143,11 +143,14 @@ export function SearchSelectImpl({ openOnMount, standInKey, ...props }: ImplProp
               {t("No matches")}
             </Combobox.Empty>
             <Combobox.List className="min-h-0 flex-1 scroll-py-1 overflow-y-auto overscroll-contain p-1 empty:hidden">
-              {(option: SelectOption) => (
+              {(option: SelectOption, index: number) => (
                 <Combobox.Item
                   // the kit's slot: forced colours outline the highlighted item by it, the focus staying in the search field
                   data-slot="combobox-item"
                   key={option.value}
+                  // registers the item at its place as it renders: without it Base UI reads the order back
+                  // from the DOM a render later, and Enter right after typing "euler" could pick "Euler a"
+                  index={index}
                   value={option}
                   className="relative flex cursor-default items-center gap-2 rounded-md py-1.5 pr-8 pl-2 text-sm outline-none select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-disabled:opacity-50"
                 >

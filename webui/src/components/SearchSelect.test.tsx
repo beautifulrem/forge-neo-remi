@@ -12,11 +12,9 @@ describe("SearchSelect", () => {
     render(<SearchSelect options={options} value="DPM++ 2M" onValueChange={onValueChange} aria-label="Sampler" />)
     await user.click(screen.getByRole("combobox", { name: "Sampler" }))
     await user.click(await screen.findByPlaceholderText("Search…"))
-    await user.keyboard("euler")
-    // Enter picks the highlighted option: on a busy machine a key pressed at once can come
-    // before the list has moved the exact match to the top and highlighted it
-    await waitFor(() => expect(screen.getByRole("option", { name: "Euler" })).toHaveAttribute("data-highlighted"))
-    await user.keyboard("{Enter}")
+    // Enter right after the last letter: each item carries its index, so the exact match that
+    // moved to the top is the one Enter picks, before Base UI has read the list's new DOM order
+    await user.keyboard("euler{Enter}")
     await waitFor(() => expect(onValueChange).toHaveBeenCalledWith("Euler"))
     expect(onValueChange).toHaveBeenCalledTimes(1)
   })
