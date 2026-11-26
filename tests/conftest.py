@@ -8,12 +8,19 @@ import tempfile
 # pytest's own arguments away from it, and give it a settings file of its
 # own: a test that saved options without redirecting shared.config_filename
 # once rewrote the owner's config.json (test_settings_file_isolation.py).
+# COMMANDLINE_ARGS (added to sys.argv by modules.paths_internal) could name
+# another file, so it goes.
 _SETTINGS_DIR = tempfile.mkdtemp(prefix="remi-tests-settings-")
 atexit.register(shutil.rmtree, _SETTINGS_DIR, True)
+os.environ.pop("COMMANDLINE_ARGS", None)
 sys.argv = sys.argv[:1] + ["--ui-settings-file", os.path.join(_SETTINGS_DIR, "config.json")]
 # As modules_forge/initialization.py does at startup (huggingface_guess, k_diffusion, ...)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "modules_forge", "packages"))
 
+# The modules that read sys.argv read it now, before a test file that resets it
+# (test_anima_reference_size.py, the *_harness.py helpers) is collected first.
+import modules.launch_utils  # noqa: E402,F401
+import modules.shared_cmd_options  # noqa: E402,F401
 import pytest  # noqa: E402
 
 

@@ -6,12 +6,15 @@ history) was rewritten with the defaults. ``tests/conftest.py`` now hands the We
 in a temporary folder before anything parses the command line.
 """
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_the_settings_file_is_outside_the_repository():
+def test_the_settings_file_is_the_conftests_own():
     from modules import launch_utils, shared, shared_cmd_options
 
     for where, path in {
@@ -20,6 +23,22 @@ def test_the_settings_file_is_outside_the_repository():
         "launch_utils.args.ui_settings_file": launch_utils.args.ui_settings_file,
     }.items():
         assert not Path(path).resolve().is_relative_to(ROOT), f"{where} is {path}"
+        assert Path(path).parent.name.startswith("remi-tests-settings-"), f"{where} is {path}"
+
+
+def test_the_settings_file_does_not_depend_on_which_test_runs_first(tmp_path):
+    # The WebUI reads sys.argv when it is first imported. Test files that reset sys.argv before
+    # importing it (test_anima_reference_size.py, the *_harness.py helpers) took the conftest's
+    # settings file away when they were collected first, and COMMANDLINE_ARGS, which
+    # modules.paths_internal adds to sys.argv, could name another file.
+    first = tmp_path / "test_resets_argv_first.py"
+    first.write_text("import sys\n\nsys.argv = sys.argv[:1]\nimport modules.shared  # noqa: E402,F401\n\n\ndef test_imported():\n    pass\n", encoding="utf-8")
+    env = {**os.environ, "COMMANDLINE_ARGS": f"--ui-settings-file {tmp_path / 'elsewhere.json'}"}
+    command = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-c", str(ROOT / "pyproject.toml"), "--rootdir", str(ROOT)]
+    command += [str(first), "tests/test_settings_file_isolation.py::test_the_settings_file_is_the_conftests_own"]
+    result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True, timeout=600)
+    assert result.returncode == 0 and "2 passed" in result.stdout, result.stdout[-4000:] + result.stderr[-2000:]
+    assert not (tmp_path / "elsewhere.json").exists()
 
 
 def test_webui_state_saves_settings_in_its_own_folder(tmp_path, monkeypatch):
