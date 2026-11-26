@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from "@testing-library/react"
 import { useRef } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { openingTags } from "@/test/jsx-tags"
 import { useScrollFade } from "./use-scroll-fade"
 
 // jsdom has no layout: each strip says how long it is through `data-length` (its content) and
@@ -86,23 +87,46 @@ describe("useScrollFade", () => {
 // The fade is a mask on the element it is given, and a mask cuts everything drawn outside that element's
 // border box: on an editor toolbar that was the floating panel (`PANEL`, `material-float`), its edge and
 // shadow went while it scrolled, and in forced colours its 1 px outline too. The panel wraps the strip.
+/** The opening tag each scroll fade of `raw` is on, by the name of the fade (read to its end, see jsx-tags). */
+function fadeStrips(raw: string) {
+  const { source, tags } = openingTags(raw)
+  return [
+    // the element a fade is on (`style={fade}`, or spread into its style)
+    ...[...source.matchAll(/\bconst (\w+) = useScrollFade\(/g)].map(([, name]) => {
+      const style = new RegExp(`style=\\{(?:${name}\\}|\\{[^}]*\\.\\.\\.${name}\\b)`)
+      return { name: name ?? "", tag: tags.find(({ tag }) => style.test(tag))?.tag ?? "" }
+    }),
+    // FadeStrip takes its classes from where it is used
+    ...tags.filter(({ name }) => name === "FadeStrip").map(({ tag }) => ({ name: "FadeStrip", tag })),
+  ]
+}
+
+const FLOATING = /\bPANEL\b|material-float|\bshadow-/
+
 describe("the strip a fade is on", () => {
   const sources = import.meta.glob<string>(["../**/*.tsx", "!../**/*.test.*"], { query: "?raw", import: "default", eager: true })
 
   it("is not a floating panel", () => {
-    const strips = Object.entries(sources).flatMap(([file, source]) => [
-      // the element a fade is on (`style={fade}`, or spread into its style)
-      ...[...source.matchAll(/\bconst (\w+) = useScrollFade\(/g)].map(([, name]) => {
-        const at = source.search(new RegExp(`style=\\{(?:${name}\\}|\\{[^}]*\\.\\.\\.${name}\\b)`))
-        const tag = at < 0 ? "" : source.slice(source.lastIndexOf("<", at), source.indexOf(">", at) + 1)
-        return { file, name, tag }
-      }),
-      // FadeStrip takes its classes from where it is used
-      ...[...source.matchAll(/<FadeStrip\b[^>]*>/g)].map(([tag]) => ({ file, name: "FadeStrip", tag })),
-    ])
+    const strips = Object.entries(sources).flatMap(([file, source]) => fadeStrips(source).map((strip) => ({ file, ...strip })))
     expect(strips.length).toBeGreaterThanOrEqual(6)
     expect(strips.filter(({ tag }) => !tag)).toEqual([])
-    expect(strips.filter(({ tag }) => /\bPANEL\b|material-float|\bshadow-/.test(tag)).map(({ file, name }) => `${file}: ${name}`)).toEqual([])
+    expect(strips.filter(({ tag }) => FLOATING.test(tag)).map(({ file, name }) => `${file}: ${name}`)).toEqual([])
+  })
+
+  // The tag was cut at its first `>`: a panel named after an arrow function or a `[&>svg]` class passed.
+  it("is read to the end of its tag", () => {
+    const source = [
+      "const fade = useScrollFade(ref, null)",
+      "const edge = useScrollFade(other, null)",
+      '<div ref={ref} style={fade} onClick={() => open()} className={cn(PANEL, "flex")}>',
+      '<div ref={other} style={{ ...edge }} className="[&>svg]:size-4 material-float">',
+      '<FadeStrip onScroll={(event) => event.stopPropagation()} className="shadow-md">',
+    ].join("\n")
+    expect(fadeStrips(source).map(({ name, tag }) => [name, FLOATING.test(tag)])).toEqual([
+      ["fade", true],
+      ["edge", true],
+      ["FadeStrip", true],
+    ])
   })
 })
 

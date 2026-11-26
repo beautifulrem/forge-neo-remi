@@ -1,8 +1,8 @@
 /**
  * The opening JSX tags of a source, scanned to the `>` outside braces and strings, and the source
  * they were read from: comments are removed first (an apostrophe in one reads as a string). The
- * source guards (lib/design-guards.test.ts, styles/focus-ring.test.ts) read class lists and
- * attributes tag by tag with it.
+ * source guards (lib/design-guards.test.ts, styles/focus-ring.test.ts, lib/use-scroll-fade.test.tsx) read
+ * class lists and attributes tag by tag with it.
  */
 export function openingTags(raw: string): { source: string; tags: { name: string; tag: string; index: number }[] } {
   const source = raw.replace(/^\s*\/\/.*$/gm, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
