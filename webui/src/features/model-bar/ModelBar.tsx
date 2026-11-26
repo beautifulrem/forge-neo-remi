@@ -192,10 +192,11 @@ function ModulesPicker({ className, segmented = false }: { className?: string; s
             variant="ghost"
             size="sm"
             className={cn(segmented ? "rounded-none bg-transparent hover:bg-field-hover focus-visible:z-10 aria-expanded:bg-transparent dark:hover:bg-field-hover" : FIELD_BUTTON_CLASS, "gap-1.5 px-2 font-normal", className)}
-            aria-label={t("VAE / Text encoders")}
           />
         }
       >
+        {/* named by what it holds: the full name, read out only, then the text it shows (the count) */}
+        <span className="sr-only">{t("VAE / Text encoders")}</span>
         <Layers className="text-muted-foreground" aria-hidden />
         <span className="hidden 2xl:inline">{t("VAE / TE")}</span>
         <span className={cn("font-mono text-xs tabular-nums", selected.length > 0 ? "font-semibold text-primary" : "text-muted-foreground")}>

@@ -97,11 +97,12 @@ export function WorkerHealthPill({ className }: { className?: string }) {
           <Button
             variant="ghost"
             size="sm"
-            aria-label={t("Worker status")}
             className={cn("gap-1.5 px-1.5 font-mono text-xs font-normal text-muted-foreground hover:text-foreground", className)}
           />
         }
       >
+        {/* named by what it holds: what the readout is, read out only, then the readout it shows */}
+        <span className="sr-only">{t("Worker status")}</span>
         {/* Single status-dot rule: quiet monochrome readout when healthy; indicator only when degraded/failed. */}
         {summary.tone !== "ok" ? (
           <span

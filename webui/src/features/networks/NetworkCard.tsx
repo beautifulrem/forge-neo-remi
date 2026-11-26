@@ -98,15 +98,17 @@ export function Preview({ item, width, className, rounded = "" }: { item: Networ
   )
 }
 
-function useAccessibleName(item: NetworkItem, active: boolean, kind: NetworkKind | undefined, mismatch: boolean) {
+/**
+ * What a card or row says only to a screen reader, after the text it shows: its state. The item
+ * is named by its own content (no `aria-label`), so its name always holds the words on the screen
+ * (WCAG 2.5.3, Label in Name), in the order they are shown.
+ */
+function StateText({ active, kind, mismatch }: { active: boolean; kind: NetworkKind | undefined; mismatch: boolean }) {
   const { t } = useTranslation()
-  const archLabel = useArchLabel()
-  const parts = [item.title]
-  if (item.arch) parts.push(archLabel(item.arch))
-  if (item.folder) parts.push(item.folder)
+  const parts: string[] = []
   if (mismatch) parts.push(t("made for another architecture"))
   if (active) parts.push(kind?.action === "checkpoint" ? t("loaded") : kind?.action === "module" ? t("selected") : t("in the prompt"))
-  return parts.join(", ")
+  return parts.length > 0 ? <span className="sr-only">{`, ${parts.join(", ")}`}</span> : null
 }
 
 /** The pointer shortcuts of a card or row (aria-hidden, out of the tab order: the item menu has them all). */
@@ -153,14 +155,12 @@ const contextMenu = (onAction: CardProps["onAction"], item: NetworkItem, index: 
 
 function CardView({ item, kind, id, index, active, cursor, mismatch, width, onApply, onAction }: CardProps) {
   const archLabel = useArchLabel()
-  const label = useAccessibleName(item, active, kind, mismatch)
   return (
     <div role="none" data-cursor={cursor || undefined} className="group/card relative size-full">
       <div
         id={id}
         role="option"
         aria-selected={active}
-        aria-label={label}
         // the caption sits under a pointer-events-none overlay and clamps: the full name and folder on hover
         title={item.folder ? `${item.title}\n${item.folder}` : item.title}
         data-index={index}
@@ -192,6 +192,7 @@ function CardView({ item, kind, id, index, active, cursor, mismatch, width, onAp
           ) : null}
           {item.subtype && item.subtype !== "LoRA" ? <span className="rounded-xs bg-black/50 px-1.5 py-px text-[0.625rem] leading-4 font-medium text-white">{item.subtype}</span> : null}
         </div>
+        <StateText active={active} kind={kind} mismatch={mismatch} />
         {active ? (
           <span aria-hidden className="absolute right-1.5 bottom-1.5 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground ring-2 ring-black/20">
             <Check className="size-3" strokeWidth={3} />
@@ -223,14 +224,12 @@ function formatDate(seconds: number | null | undefined, locale: string): string 
 function RowView({ item, kind, id, index, active, cursor, mismatch, onApply, onAction }: CardProps) {
   const { i18n } = useTranslation()
   const archLabel = useArchLabel()
-  const label = useAccessibleName(item, active, kind, mismatch)
   return (
     <div role="none" data-cursor={cursor || undefined} className="group/row relative size-full">
       <div
         id={id}
         role="option"
         aria-selected={active}
-        aria-label={label}
         data-index={index}
         data-cursor={cursor || undefined}
         data-active={active || undefined}
@@ -265,6 +264,7 @@ function RowView({ item, kind, id, index, active, cursor, mismatch, onApply, onA
         </div>
         <span className="hidden w-16 shrink-0 text-right text-xs text-muted-foreground tabular-nums @lg:block">{formatBytes(item.size) ?? ""}</span>
         <span className="hidden w-24 shrink-0 text-right text-xs text-muted-foreground tabular-nums @xl:block">{formatDate(item.mtime, i18n.language) ?? ""}</span>
+        <StateText active={active} kind={kind} mismatch={mismatch} />
       </div>
       <HoverActions
         item={item}

@@ -92,7 +92,7 @@ function UploadImageInput({ node }: { node: ImageNode }) {
           disabled={disabled}
           aria-labelledby={label ? labelId(id) : undefined}
           aria-label={label ? undefined : value ? t("Replace image") : t("Upload image")}
-          aria-describedby={describedBy(id, param.info, param.error, hintRef(id, param.hint), hintId)}
+          aria-describedby={describedBy(id, param.info, param.error, hintRef(id, param.hint))}
           aria-invalid={Boolean(param.error)}
           className="overflow-hidden"
         >
@@ -199,7 +199,7 @@ export function ImageListInput({ node }: { node: ImageListNode }) {
         disabled={disabled}
         aria-labelledby={label ? labelId(id) : undefined}
         aria-label={label ? undefined : t("Add images")}
-        aria-describedby={describedBy(id, param.info, param.error, hintRef(id, param.hint), hintId)}
+        aria-describedby={describedBy(id, param.info, param.error, hintRef(id, param.hint))}
         aria-invalid={Boolean(param.error)}
       >
         <UploadHint id={hintId} busy={busy} multiple />

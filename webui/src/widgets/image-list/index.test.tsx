@@ -90,7 +90,7 @@ describe("image-list widget", { timeout: 30_000 }, () => {
   it("appends uploads in order", async () => {
     mockUploads()
     const store = renderForm()
-    const zone = await screen.findByRole("button", { name: "Add images" }, LOAD)
+    const zone = await screen.findByRole("button", { name: /^Add images/ }, LOAD)
     const input = zone.querySelector("input[type=file]") as HTMLInputElement
     fireEvent.change(input, { target: { files: [image("1.png"), image("2.png")] } })
     await waitFor(() => expect(refs(store)).toHaveLength(2))
@@ -161,7 +161,7 @@ describe("image-list widget", { timeout: 30_000 }, () => {
   it("keeps both images of overlapping uploads", async () => {
     const held = heldUploads()
     const store = renderForm(["a"])
-    const zone = await screen.findByRole("button", { name: "Add images" }, LOAD)
+    const zone = await screen.findByRole("button", { name: /^Add images/ }, LOAD)
     const input = zone.querySelector("input[type=file]") as HTMLInputElement
     fireEvent.change(input, { target: { files: [image("1.png")] } })
     fireEvent.change(input, { target: { files: [image("2.png")] } })
@@ -177,7 +177,7 @@ describe("image-list widget", { timeout: 30_000 }, () => {
   it("holds up a submit until the images on their way are in the list", async () => {
     const held = heldUploads()
     const store = renderForm(["a"])
-    const zone = await screen.findByRole("button", { name: "Add images" }, LOAD)
+    const zone = await screen.findByRole("button", { name: /^Add images/ }, LOAD)
     fireEvent.change(zone.querySelector("input[type=file]") as HTMLInputElement, { target: { files: [image("1.png")] } })
     await waitFor(() => expect(held).toHaveLength(1))
     let flushed = false

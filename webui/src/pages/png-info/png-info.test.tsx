@@ -62,7 +62,7 @@ describe("PNG Info page", () => {
   it("asks for an image and uploads a dropped one", async () => {
     const calls = mockServer()
     renderPage()
-    const zone = screen.getByRole("button", { name: "Choose an image to read" })
+    const zone = screen.getByRole("button", { name: /^Choose an image to read/ })
     const file = new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], "cat.png", { type: "image/png" })
     fireEvent.drop(zone, { dataTransfer: { files: [file] } })
     await waitFor(() => expect(calls.some((call) => call.path === "/uploads")).toBe(true))
@@ -73,7 +73,7 @@ describe("PNG Info page", () => {
     const calls = mockServer()
     const error = vi.spyOn(toast, "error")
     renderPage()
-    const zone = screen.getByRole("button", { name: "Choose an image to read" })
+    const zone = screen.getByRole("button", { name: /^Choose an image to read/ })
     // named and typed like a PNG, but text inside: the server would answer 415
     fireEvent.drop(zone, { dataTransfer: { files: [new File(["just some notes"], "notes.png", { type: "image/png" })] } })
     await waitFor(() => expect(error).toHaveBeenCalledWith("Not an image: notes.png"))
