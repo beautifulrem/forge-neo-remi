@@ -67,11 +67,12 @@ line, one README was written for this repository ("In Forge Neo Remi this
 extension is preinstalled"), and all were committed in the same series as Remi's own
 Anima work (2026-09-25, 17:30:25 to 17:30:28). The hints of an earlier
 life are few: `sd-webui-joycaption-modified`'s README calls it
-`sd-webui-joycaption`; `sd-forge-prompt-workshop` is also described on a
-public Rentry page and sends `sd-forge-prompt-workshop/1.0
-(https://github.com/)` as its User-Agent, a version with the repository left
-out of its address. It is distributed here under the repository's
-AGPL-3.0 by the maintainer who bundled it.
+`sd-webui-joycaption`; `sd-forge-prompt-workshop` and
+`sd-forge-anima-resolutions` are also described on a public Rentry page
+(rentry.co/mpihcm3y); and `sd-forge-prompt-workshop` sends
+`sd-forge-prompt-workshop/1.0 (https://github.com/)` as its User-Agent, an
+address that names no repository. Each is distributed here under the
+repository's AGPL-3.0 by the maintainer who bundled it.
 
 | directory | origin | license | third-party code inside | evidence |
 |---|---|---|---|---|
