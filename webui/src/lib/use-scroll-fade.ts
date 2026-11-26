@@ -5,7 +5,7 @@
  * `active` changes. `axis` is the way it scrolls: "x" sideways, "y" up and down.
  * An item scrolled into view (focus, `active`) stops clear of the fade.
  */
-import { type CSSProperties, type RefObject, useEffect, useState } from "react"
+import { type CSSProperties, type RefObject, useEffect, useLayoutEffect, useState } from "react"
 
 /** The fade's depth; the room an item scrolled into view keeps from the edge is that plus its focus ring. */
 const FADE = "1.5rem"
@@ -13,8 +13,14 @@ const CLEAR = 28
 
 export function useScrollFade(ref: RefObject<HTMLElement | null>, active: unknown, axis: "x" | "y" = "x"): CSSProperties | undefined {
   const [edges, setEdges] = useState({ start: false, end: false })
+  // The element the ref holds after each render: a strip can mount after the component holding the hook (the
+  // editor's image toolbar, shown once there is an image), and one read at mount only would be none.
+  const [strip, setStrip] = useState<HTMLElement | null>(null)
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- after every render, to see a new element; it sets the state only when the element changed
+  useLayoutEffect(() => {
+    if (ref.current !== strip) setStrip(ref.current)
+  })
   useEffect(() => {
-    const strip = ref.current
     if (!strip) return
     const update = () => {
       const [offset, room, length] = axis === "x" ? [strip.scrollLeft, strip.clientWidth, strip.scrollWidth] : [strip.scrollTop, strip.clientHeight, strip.scrollHeight]
@@ -43,7 +49,7 @@ export function useScrollFade(ref: RefObject<HTMLElement | null>, active: unknow
       items.disconnect()
       strip.removeEventListener("scroll", update)
     }
-  }, [ref, axis])
+  }, [strip, axis])
   useEffect(() => {
     const strip = ref.current
     const item = strip?.querySelector<HTMLElement>("[data-active]")
@@ -57,7 +63,7 @@ export function useScrollFade(ref: RefObject<HTMLElement | null>, active: unknow
       if (top < strip.scrollTop + CLEAR) strip.scrollTop = top - CLEAR
       else if (top + item.offsetHeight > strip.scrollTop + strip.clientHeight - CLEAR) strip.scrollTop = top + item.offsetHeight - strip.clientHeight + CLEAR
     }
-  }, [ref, active, axis])
+  }, [ref, strip, active, axis])
   if (!edges.start && !edges.end) return undefined
   const mask = `linear-gradient(to ${axis === "x" ? "right" : "bottom"}, transparent, #000 ${edges.start ? FADE : "0rem"}, #000 calc(100% - ${edges.end ? FADE : "0rem"}), transparent)`
   // the browser scrolls a focused item into view this far from the edge: past the fade, its ring whole

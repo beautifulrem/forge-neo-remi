@@ -57,6 +57,24 @@ describe("useScrollFade", () => {
     await waitFor(() => expect(mask()).toBe("linear-gradient(to right, transparent, #000 0rem, #000 calc(100% - 1.5rem), transparent)"))
   })
 
+  // The editor's image toolbar shows once there is an image, after the editor that holds the hook has
+  // mounted: the hook watched the element its ref held at mount, none, and the toolbar never faded.
+  it("fades a strip that mounts after the component holding the hook", async () => {
+    measure()
+    function Late({ shown }: { shown: boolean }) {
+      const ref = useRef<HTMLDivElement>(null)
+      const fade = useScrollFade(ref, null)
+      return shown ? (
+        <div ref={ref} data-testid="strip" data-room="100" data-length="300" style={fade}>
+          <span>a</span>
+        </div>
+      ) : null
+    }
+    const view = render(<Late shown={false} />)
+    await act(async () => view.rerender(<Late shown />))
+    await waitFor(() => expect(mask()).toBe("linear-gradient(to right, transparent, #000 0rem, #000 calc(100% - 1.5rem), transparent)"))
+  })
+
   // The navigation rail scrolls up and down on a phone held sideways.
   it("fades the bottom of a strip that scrolls up and down", () => {
     measure()
@@ -64,3 +82,4 @@ describe("useScrollFade", () => {
     expect(mask()).toBe("linear-gradient(to bottom, transparent, #000 0rem, #000 calc(100% - 1.5rem), transparent)")
   })
 })
+
