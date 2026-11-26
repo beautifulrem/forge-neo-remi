@@ -8,11 +8,12 @@ updates:
     schedule:
       interval: weekly
     ignore:
-      # ReDoc 3 is another viewer: an ES module (the /redoc page loads a classic script), usage
-      # telemetry unless the page opts out, icon sets from cdn.redocly.com and no licence file
-      # for what its bundle includes. /redoc stays on ReDoc 2 until the page is ported.
+      # The /redoc page is written for ReDoc 3 (remi/server/api_docs.py, apiDocs() in
+      # webui/vite.config.ts). ReDoc 3 was another viewer than 2 (an ES module, usage telemetry
+      # unless the page opts out, icon sets from a CDN), so another major version is a port of
+      # the page, not a version update.
       - dependency-name: redoc
-        versions: [">=3.0.0"]
+        versions: [">=4.0.0"]
     groups:
       spa:
         patterns: ["*"]

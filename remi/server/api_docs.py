@@ -11,6 +11,10 @@ build vendors into ``webui/dist`` instead (``apiDocs`` in
 them), with the CSP of the server's other pages (``html_headers``): scripts
 only from the server, network requests only to it.
 
+The ReDoc page is written here (``REDOC``), not by FastAPI's
+``get_redoc_html``: ReDoc 3's bundle is an ES module, and it reports usage to
+Redocly unless the page turns that off.
+
 Without a build the pages say how to build it and link the raw API
 description (``/openapi.json``). The login for all of them is the docs login
 of the security middleware (``docs_refusal``).
@@ -24,7 +28,7 @@ import re
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html
+from fastapi.openapi.docs import get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
 from remi.server.auth import Auth, html_headers
@@ -37,6 +41,16 @@ _ASSET_RE = re.compile(r"assets/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\.(?:js|css)")
 
 SWAGGER_PARAMETERS = {"validatorUrl": None}
 """Swagger UI's default validator badge is an image from validator.swagger.io"""
+
+REDOC = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{title}</title>
+<link rel="icon" href="{favicon}">
+<style>body{{margin:0;padding:0}}</style></head>
+<body><noscript>ReDoc requires JavaScript to show the API documentation. The API description itself: <a href="{openapi}">openapi.json</a>.</noscript>
+<redoc spec-url="{openapi}" disable-telemetry="true"></redoc>
+<script type="module" src="{script}"></script></body></html>"""
+"""ReDoc 3 reads its options from the tag's attributes when its module loads
+(no inline script for the CSP to allow). ``disable-telemetry``: without it
+the viewer sends usage events to ``otel.cloud.redocly.com``."""
 
 NOT_BUILT = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{title}</title>
 <style>body{{font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem;line-height:1.5}}code{{background:#8882;padding:.1em .3em;border-radius:.25em}}</style></head>
@@ -108,14 +122,8 @@ def add_docs_routes(app: FastAPI, dist: Path, *, serve_assets: bool = False) -> 
         title = f"{app.title} - ReDoc"
         if assets is None:
             return not_built(title, openapi)
-        response = get_redoc_html(
-            openapi_url=openapi,
-            title=title,
-            redoc_js_url=f"{root}/{assets['redocJs']}",
-            redoc_favicon_url=f"{root}/favicon.svg",
-            with_google_fonts=False,
-        )
-        return page(bytes(response.body))
+        values = {"title": title, "openapi": openapi, "script": f"{root}/{assets['redocJs']}", "favicon": f"{root}/favicon.svg"}
+        return page(REDOC.format(**{key: html.escape(value) for key, value in values.items()}).encode())
 
     build = Spa(Auth(), dist)  # only its file responses: precompressed copies, immutable caching
 
