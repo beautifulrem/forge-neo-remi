@@ -284,10 +284,10 @@ def test_under_pytest_the_repositorys_own_settings_file_is_refused(tmp_path, mon
 
     # between tests and while pytest collects them (module-level code) only PYTEST_VERSION is set
     monkeypatch.delenv("PYTEST_CURRENT_TEST")
+    monkeypatch.delenv("REMI_TEST_HELPER", raising=False)  # the opts fixture's webui_state set it
     with pytest.raises(RuntimeError, match="repository's"):
         opts.save(str(owners))
     monkeypatch.delenv("PYTEST_VERSION", raising=False)  # outside pytest and its helpers: the WebUI's own save
-    monkeypatch.delenv("REMI_TEST_HELPER", raising=False)
     opts.save(str(owners))
     assert "owner" not in json.loads(owners.read_text(encoding="utf-8"))
 
