@@ -57,3 +57,15 @@ def test_license_files_the_table_names_are_there():
     for name, cells in table_rows().items():
         for file in re.findall(r"`((?:LICENSE|LICENCE|COPYING|NOTICE)[\w.-]*)`", " ".join(cells[2:])):
             assert (BUILTIN / name / file).is_file(), f"{name}: the table names {file}"
+
+
+def test_the_license_lines_the_table_quotes_are_still_in_the_readmes():
+    # The author's own words are the only license statement some bundled extensions have:
+    # sd-lock-img2img-steps lost its line when its README was rewritten
+    quoted = 0
+    for name, cells in table_rows().items():
+        for line in re.findall(r'README, which says "([^"]+)"', cells[2]):
+            readmes = " ".join(path.read_text(encoding="utf-8") for path in (BUILTIN / name).glob("README*.md"))
+            assert line in readmes, f"{name}: the table quotes {line!r}, its README no longer says it"
+            quoted += 1
+    assert quoted >= 3

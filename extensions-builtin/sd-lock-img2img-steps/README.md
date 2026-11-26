@@ -28,3 +28,7 @@ drops every programmatic write to that param (pastes, Send to, reused jobs,
 presets, action patches) and lets user edits through. The lock is part of
 the form itself, so it also holds for values sent to img2img before the
 img2img page was opened. The script has no processing hooks.
+
+## License
+
+Do whatever you want with this.
