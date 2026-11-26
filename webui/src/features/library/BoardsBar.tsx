@@ -28,6 +28,7 @@ import { useFocusAfterRetry } from "@/components/focus-after-retry"
 import { LoadFailed } from "@/components/LoadFailed"
 import { useLoadFailure } from "@/api/load-failure"
 import { errorText } from "@/features/errors/error-text"
+import { ON_BACKDROP } from "@/features/lightbox/tone"
 import { sendToReferenceWithFeedback } from "@/features/send-to/result-actions"
 import type { SendItem } from "@/features/send-to/send-to"
 import { cn } from "@/lib/utils"
@@ -415,7 +416,7 @@ export function AssignBoardPopover({ fileIds, activeBoardId, trigger, tone = "de
               size="icon-sm"
               aria-label={t("Add to board")}
               title={t("Add to board")}
-              className={cn(tone === "light" && "text-white/85 hover:bg-white/12 hover:text-white")}
+              className={cn(tone === "light" && ON_BACKDROP)}
             >
               <FolderPlus />
             </Button>

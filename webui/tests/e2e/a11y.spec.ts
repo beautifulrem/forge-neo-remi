@@ -537,6 +537,38 @@ for (const theme of ["light", "dark"] satisfies Theme[]) {
     expect(shown.squares).toHaveLength(1)
     expect(await swatch.evaluate(checker)).toEqual(shown)
   })
+
+  // The kit's ghost button adds `dark:hover:bg-muted/50`, which inside the dark-scoped chrome outranks a plain
+  // `hover:` class: a viewer button's hover was a near-black wash, and the pressed Tile toggle looked unpressed
+  // under the pointer. Hover is a 12 % white wash and pressed 25 % (frontend.md, the viewer's toggles).
+  test(`${theme}: the image viewer's buttons wash white on hover, the pressed one more`, async ({ page }) => {
+    await presetStorage(page, { theme })
+    await openRoute(page, "gallery")
+    await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" })
+    await page.getByRole("list", { name: "Images" }).getByRole("listitem").nth(1).getByRole("button").first().click()
+    const viewer = page.getByRole("dialog", { name: "Image viewer" })
+    // As sRGB bytes: Tailwind mixes `white/12` in oklab, so the computed colour is written `oklab(…)`.
+    const background = (control: Locator) =>
+      control.evaluate((element) => {
+        const context = document.createElement("canvas").getContext("2d")
+        if (!context) return "no canvas"
+        context.fillStyle = getComputedStyle(element).backgroundColor
+        context.fillRect(0, 0, 1, 1)
+        const [r, g, b, a = 0] = context.getImageData(0, 0, 1, 1).data
+        return `${r} ${g} ${b} / ${Math.round((a / 255) * 100) / 100}`
+      })
+    const fit = viewer.getByRole("button", { name: /^(Actual size|Fit to screen)$/ })
+    await fit.hover()
+    expect(await background(fit)).toBe("255 255 255 / 0.12")
+    const details = viewer.getByRole("complementary", { name: "Image details" }).getByRole("button", { name: "Star" })
+    await details.hover()
+    expect(await background(details)).toBe("255 255 255 / 0.12")
+    const tile = viewer.getByRole("button", { name: "Tile preview" })
+    await tile.click()
+    await expect(tile).toHaveAttribute("aria-pressed", "true")
+    await tile.hover()
+    expect(await background(tile)).toBe("255 255 255 / 0.25")
+  })
 }
 
 /**

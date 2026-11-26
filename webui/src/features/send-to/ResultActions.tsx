@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils"
 import { copyText, downloadFile, openInNewTab } from "@/features/gallery/files"
 import { type ResultItem, useSession } from "@/features/gallery/session-store"
+import { ON_BACKDROP } from "@/features/lightbox/tone"
 import { upscaleResult } from "@/features/progress/run-controller"
 import { applyParameters, reuseSeed, saveResults, sendToReferenceWithFeedback, sendWithFeedback } from "./result-actions"
 
@@ -37,7 +38,7 @@ function Action(props: { label: string; shortcut?: string; onClick: () => void; 
             aria-keyshortcuts={props.shortcut}
             onClick={props.onClick}
             disabled={props.disabled}
-            className={cn(props.tone === "light" && "text-white/85 hover:bg-white/12 hover:text-white", props.className)}
+            className={cn(props.tone === "light" && ON_BACKDROP, props.className)}
           />
         }
       >
@@ -133,7 +134,7 @@ export function ResultActions({ item, tab, tone, removable = true, upscalable = 
               size="icon-sm"
               aria-label={t("Save")}
               disabled={disabled}
-              className={cn(tone === "light" && "text-white/85 hover:bg-white/12 hover:text-white")}
+              className={cn(tone === "light" && ON_BACKDROP)}
             />
           }
         >
@@ -171,7 +172,7 @@ export function ResultActions({ item, tab, tone, removable = true, upscalable = 
                 size="icon-sm"
                 aria-label={t("More actions")}
                 disabled={disabled}
-                className={cn("@[34rem]/actions:hidden", tone === "light" && "text-white/85 hover:bg-white/12 hover:text-white")}
+                className={cn("@[34rem]/actions:hidden", tone === "light" && ON_BACKDROP)}
               />
             }
           >
@@ -195,7 +196,7 @@ export function ResultActions({ item, tab, tone, removable = true, upscalable = 
               variant="ghost"
               size="sm"
               disabled={disabled}
-              className={cn("gap-1 px-2", tone === "light" && "text-white/85 hover:bg-white/12 hover:text-white")}
+              className={cn("gap-1 px-2", tone === "light" && ON_BACKDROP)}
             />
           }
         >

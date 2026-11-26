@@ -168,7 +168,7 @@ export function ChipEditor({ doc, index, info, translation, config, setValue, cl
         <Button
           variant="ghost"
           size="sm"
-          className="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+          className="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20"
           onClick={() => {
             close()
             setValue(removeChip(doc, index))

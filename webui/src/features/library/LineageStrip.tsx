@@ -129,7 +129,7 @@ export function LineageStrip({ item, onSelectImage, onClose }: LineageStripProps
             size="xs"
             disabled={loadingJob}
             onClick={() => void loadSourceJob()}
-            className="h-6 gap-1 px-1.5 text-[0.6875rem] text-white/80 hover:bg-white/12 hover:text-white"
+            className="h-6 gap-1 px-1.5 text-[0.6875rem] text-white/80 hover:bg-white/12 hover:text-white dark:hover:bg-white/12"
           >
             <History className="size-3" aria-hidden />
             {t("Load source job")}

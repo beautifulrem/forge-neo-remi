@@ -84,7 +84,7 @@ export function TranslationKeyDialog({ open, onOpenChange, configured }: Transla
           </div>
           <DialogFooter>
             {configured ? (
-              <Button type="button" variant="ghost" className="mr-auto text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={busy} onClick={() => void save("")}>
+              <Button type="button" variant="ghost" className="mr-auto text-destructive hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20" disabled={busy} onClick={() => void save("")}>
                 {t("Remove the key")}
               </Button>
             ) : null}

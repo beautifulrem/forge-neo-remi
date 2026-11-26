@@ -685,6 +685,11 @@ generated interfaces (sources: Linear's
   does not read with a dark accent, are a 25 % white wash with a full-white
   glyph, well above their 12 % hover. A light theme's hover keeps the 15 % wash: a deeper one
   takes some accents' labels under 4.5:1.
+  Every button over the viewer's black backdrop takes that 12 % hover and 25 % pressed wash from
+  `features/lightbox/tone.ts`. A ghost or outline button that sets its own wash repeats it under
+  `dark:`: the kit's `dark:hover:bg-muted/50` is `:is(.dark *)`, which outranks a plain `hover:`
+  class in the dark theme, and in both themes inside the viewer's dark-scoped chrome
+  (`design-guards.test.ts`, "button washes").
   Truncated names and URLs carry their full text in a `title`. A form column (the generate parameters, an
   extension page, the JSON Builder's side column, the Extensions list) is an inspector, not a
   stack of cards: each block is a panel with a hairline above it and no box,

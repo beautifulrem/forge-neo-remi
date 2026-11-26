@@ -7,6 +7,7 @@ import type { GalleryCategory, GalleryItem } from "@/api/types"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { InfotextPanel } from "@/features/infotext/InfotextPanel"
+import { ON_BACKDROP } from "@/features/lightbox/tone"
 import { AssignBoardPopover } from "./BoardsBar"
 import { CATEGORY_LABELS, formatBytes } from "./labels"
 import { LineageStrip } from "./LineageStrip"
@@ -32,7 +33,7 @@ export function GalleryDetails({ item, onDelete, onClose, onSelectImage }: Galle
     [t("From"), t(CATEGORY_LABELS[item.category as GalleryCategory] ?? item.category)],
   ]
   if (item.model) facts.push([t("Model"), item.model])
-  const tone = "text-white/85 hover:bg-white/12 hover:text-white"
+  const tone = ON_BACKDROP
   return (
     <div className="flex flex-col gap-3 text-white/90">
       <div className="flex items-center gap-1">

@@ -21,6 +21,7 @@ import type { ResultItem } from "@/features/gallery/session-store"
 import { ResultActions } from "@/features/send-to/ResultActions"
 import { useGamepadNavigation, useWheelNavigation } from "./gamepad"
 import { type ViewerAction, viewerAction } from "./keys"
+import { ON_BACKDROP, ON_BACKDROP_PRESSED } from "./tone"
 import { clampPan, fitScale, initialView, pinchView, type Point, type Size, type ViewState, wheelFactor, zoomAt } from "./zoom"
 
 type LightboxProps = {
@@ -192,7 +193,7 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
                 aria-label={t("Tile preview")}
                 aria-keyshortcuts="T"
                 // the viewer's own pressed look (frontend.md): white on its black backdrop, well above the hover
-                className="text-white/85 hover:bg-white/12 hover:text-white aria-pressed:bg-white/25 aria-pressed:text-white"
+                className={cn(ON_BACKDROP, ON_BACKDROP_PRESSED)}
                 onClick={() => setTiled((v) => !v)}
               >
                 <Grid2x2 />
@@ -201,13 +202,13 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
                 variant="ghost"
                 size="icon-sm"
                 aria-label={isFitted ? t("Actual size") : t("Fit to screen")}
-                className="text-white/85 hover:bg-white/12 hover:text-white"
+                className={ON_BACKDROP}
                 onClick={toggleZoom}
               >
                 {isFitted ? <Maximize /> : <Minimize />}
               </Button>
               <Dialog.Close
-                render={<Button variant="ghost" size="icon-sm" aria-label={t("Close")} className="text-white/85 hover:bg-white/12 hover:text-white" />}
+                render={<Button variant="ghost" size="icon-sm" aria-label={t("Close")} className={ON_BACKDROP} />}
               >
                 <X />
               </Dialog.Close>
@@ -309,7 +310,7 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={() => go(-1)}
                   style={dim(iconOpacity)}
-                  className="dark absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-black/35 text-white opacity-(--lightbox-dim) transition-opacity hover:bg-black/55 hover:text-white hover:opacity-100 focus-visible:opacity-100"
+                  className="dark absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-black/35 text-white opacity-(--lightbox-dim) transition-opacity hover:bg-black/55 hover:text-white dark:hover:bg-black/55 hover:opacity-100 focus-visible:opacity-100"
                 >
                   <ChevronLeft />
                 </Button>
@@ -321,7 +322,7 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={() => go(1)}
                   style={dim(iconOpacity)}
-                  className="dark absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-black/35 text-white opacity-(--lightbox-dim) transition-opacity hover:bg-black/55 hover:text-white hover:opacity-100 focus-visible:opacity-100"
+                  className="dark absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-black/35 text-white opacity-(--lightbox-dim) transition-opacity hover:bg-black/55 hover:text-white dark:hover:bg-black/55 hover:opacity-100 focus-visible:opacity-100"
                 >
                   <ChevronRight />
                 </Button>

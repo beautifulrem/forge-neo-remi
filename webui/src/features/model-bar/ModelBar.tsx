@@ -191,7 +191,7 @@ function ModulesPicker({ className, segmented = false }: { className?: string; s
           <Button
             variant="ghost"
             size="sm"
-            className={cn(segmented ? "rounded-none bg-transparent hover:bg-field-hover focus-visible:z-10" : FIELD_BUTTON_CLASS, "gap-1.5 px-2 font-normal", className)}
+            className={cn(segmented ? "rounded-none bg-transparent hover:bg-field-hover focus-visible:z-10 dark:hover:bg-field-hover" : FIELD_BUTTON_CLASS, "gap-1.5 px-2 font-normal", className)}
             aria-label={t("VAE / Text encoders")}
           />
         }

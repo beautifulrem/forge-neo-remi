@@ -154,6 +154,26 @@ describe("pressed toggles", () => {
   })
 })
 
+describe("button washes", () => {
+  it("are set for the dark theme too where a ghost or outline button sets its own", () => {
+    // The kit's ghost button carries `dark:hover:bg-muted/50` and its outline button `dark:bg-input/30` and
+    // `dark:hover:bg-input/50`. `dark:` is `:is(.dark *)`, a class more than a plain `hover:` or `bg-`: a
+    // button that set its own wash (the image viewer's 12 % white, a destructive tint, a field's hover) lost
+    // it in the dark theme, and in the viewer's dark-scoped chrome in both. It repeats it under `dark:`.
+    const lost = files.flatMap(({ file, source: raw }) =>
+      openingTags(raw)
+        .tags.filter(({ name, tag }) => name === "Button" && /\bvariant="(?:ghost|outline)"/.test(tag))
+        .flatMap(({ tag }) => {
+          const outline = /\bvariant="outline"/.test(tag)
+          const own = (variant: string) => new RegExp(`(?:^|[\\s"'\`])${variant}bg-[^\\s"'\`]+`).test(tag)
+          const missing = [own("hover:") && !own("dark:hover:") && "hover", outline && own("") && !own("dark:") && "fill"].filter(Boolean)
+          return missing.length ? [`${file}: ${tag.replace(/\s+/g, " ").slice(0, 70)} (${missing.join(", ")})`] : []
+        }),
+    )
+    expect(lost).toEqual([])
+  })
+})
+
 describe("letter spacing", () => {
   // Wide tracking is the eyebrow-label look the type rules leave out. A menu's shortcut keys keep
   // shadcn's spacing: a run of key glyphs (⌘⇧K), not words.
