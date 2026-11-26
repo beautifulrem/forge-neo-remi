@@ -103,6 +103,8 @@ export function SearchSelectImpl({ openOnMount, standInKey, ...props }: ImplProp
       <Combobox.Portal>
         <Combobox.Positioner collisionPadding={collisionPadding} sideOffset={4} align="start" className="isolate z-50">
           <Combobox.Popup
+            // the kit's slot: forced colours draw no ring or shadow, and the edge they draw reads it
+            data-slot="combobox-content"
             aria-label={popupName || props.placeholder || t("Options")}
             // never narrower than the trigger, and never wider than the room beside it
             style={props.popupMinWidth ? { width: `max(var(--anchor-width), min(${props.popupMinWidth}, var(--available-width)))` } : undefined}

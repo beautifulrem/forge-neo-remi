@@ -82,6 +82,8 @@ export function ItemMenu({
       <Menu.Portal>
         <Menu.Positioner collisionPadding={collisionPadding} anchor={positionerAnchor(anchor)} side="bottom" align={atPointer ? "start" : "end"} sideOffset={atPointer ? 2 : 4} className="isolate z-50 outline-none">
           <Menu.Popup
+            // the kit's slot: forced colours draw no ring or shadow, and the edge they draw reads it
+            data-slot="dropdown-menu-content"
             id={popupId}
             // unless an item opened a dialog meanwhile (final-focus.ts)
             finalFocus={finalFocus(gridOf(lastAnchor), popupId)}
