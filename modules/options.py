@@ -3,6 +3,7 @@ import errno
 import json
 import os
 import re
+import shlex
 import shutil
 import sys
 import time
@@ -17,19 +18,37 @@ from remi import ui
 
 # Remi: the repository's own settings file (--ui-settings-file's default, as the default data folder
 # is the repository), the owner's settings: ignored by git, so in no history. A test once saved there
-# and rewrote them with the defaults. While pytest runs (PYTEST_VERSION, set from collection to the
-# end, or PYTEST_CURRENT_TEST, set while a test runs; a WebUI process a test starts inherits both) Options.save
-# refuses it, wherever the test's file lives (tests/conftest.py only reaches tests/); a data folder
-# a test passes with --data-dir is its own, and the WebUI itself still saves there.
+# and rewrote them with the defaults. While pytest runs (PYTEST_VERSION, set for the whole run from
+# before the conftests load, or PYTEST_CURRENT_TEST, set while a test runs; a WebUI process a test
+# starts inherits both) Options.save refuses it, wherever the test's file lives (tests/conftest.py
+# only reaches tests/), and so the settings file the environment's COMMANDLINE_ARGS names (its
+# --data-dir or --ui-settings-file: the owner's, when a shell exports it). A data folder a test
+# passes with --data-dir is its own, and the WebUI itself still saves to all of them.
 _UNDER_PYTEST = ("PYTEST_VERSION", "PYTEST_CURRENT_TEST")
 _REPOSITORY_SETTINGS = os.path.join(script_path, "config.json")
 
 
-def _is_repository_settings(filename) -> bool:
-    try:
-        return os.path.samefile(filename, _REPOSITORY_SETTINGS)
-    except OSError:  # either file missing
-        return os.path.realpath(filename) == os.path.realpath(_REPOSITORY_SETTINGS)
+def _owners_settings() -> list[str]:
+    files = [_REPOSITORY_SETTINGS]
+    args = shlex.split(os.environ.get("COMMANDLINE_ARGS", ""))
+    for index, arg in enumerate(args):
+        name, joined, value = arg.partition("=")
+        if name in ("--data-dir", "--ui-settings-file"):
+            value = value if joined else (args[index + 1] if index + 1 < len(args) else "")
+            if value:
+                files.append(os.path.join(value, "config.json") if name == "--data-dir" else value)
+    return files
+
+
+def _is_owners_settings(filename) -> bool:
+    for owners in _owners_settings():
+        try:
+            if os.path.samefile(filename, owners):
+                return True
+        except OSError:  # either file missing
+            if os.path.realpath(filename) == os.path.realpath(owners):
+                return True
+    return False
 
 
 class OptionInfo:
@@ -365,8 +384,8 @@ class Options:
 
     def save(self, filename):
         assert not cmd_opts.freeze_settings, "saving settings is disabled"
-        if any(name in os.environ for name in _UNDER_PYTEST) and _is_repository_settings(filename):  # Remi: see _REPOSITORY_SETTINGS
-            raise RuntimeError(f"A test cannot save settings to the repository's {_REPOSITORY_SETTINGS}: save to a file of its own (remi.testing.webui_state does)")
+        if any(name in os.environ for name in _UNDER_PYTEST) and _is_owners_settings(filename):  # Remi: see _REPOSITORY_SETTINGS
+            raise RuntimeError(f"A test cannot save settings to {filename}, the repository's settings file or the one COMMANDLINE_ARGS names: save to a file of its own (remi.testing.webui_state does)")
 
         data = dict(self.data)
         for key, (value, stored) in self._held_for_run.items():  # Remi: see hold_for_run

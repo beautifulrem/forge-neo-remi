@@ -37,6 +37,9 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 2
+# modules.paths_internal adds COMMANDLINE_ARGS to the WebUI's command line: a --data-dir a shell
+# exports would give the test suites the owner's settings file.
+unset COMMANDLINE_ARGS
 
 ONLY=""
 SKIP=""

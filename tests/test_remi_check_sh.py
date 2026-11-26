@@ -164,3 +164,20 @@ def test_the_e2e_step_keeps_the_ci_reporters(checkout: Path, tmp_path: Path, ci:
     assert result.returncode == 0, result.stdout + result.stderr
     assert summary_row(result.stdout, "e2e")[1] == "pass"
     assert record.read_text(encoding="utf-8").split() == ["exec", "playwright", "test", *reporter]
+
+
+def test_the_steps_do_not_see_commandline_args(checkout: Path, tmp_path: Path):
+    """modules.paths_internal adds COMMANDLINE_ARGS to the WebUI's command line: exported by a
+    shell, its --data-dir would give the test suites the owner's settings file (the extension
+    suites have no tests/conftest.py to drop it)."""
+
+    python = tmp_path / "bin" / "python"
+    python.parent.mkdir()
+    seen = tmp_path / "seen.txt"
+    python.write_text(f'#!/bin/sh\necho "${{COMMANDLINE_ARGS-unset}}" >> "{seen}"\nexit 0\n', encoding="utf-8")
+    python.chmod(python.stat().st_mode | stat.S_IXUSR)
+    env = {key: value for key, value in os.environ.items() if key not in {"REMI_LEGACY_PYTHON", "REMI_CHECK_LOGS"}}
+    env.update(PYTHON=str(python), REMI_CHECK_LOGS=str(checkout.parent / "logs"), COMMANDLINE_ARGS="--data-dir /the/owners/data")
+    result = subprocess.run(["bash", str(checkout / "tools" / "check.sh"), "--only", "contract:sdapi"], cwd=checkout, env=env, capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert set(seen.read_text(encoding="utf-8").splitlines()) == {"unset"}

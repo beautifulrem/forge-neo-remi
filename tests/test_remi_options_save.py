@@ -7,6 +7,7 @@ setting. Such a value is now left out of the file. ``modules/options.py`` is ups
 import errno
 import json
 import os
+import shlex
 import sys
 import time
 
@@ -283,3 +284,20 @@ def test_the_guarded_file_is_the_repositorys_default_settings_file():
     assert guarded == os.path.join(paths_internal.script_path, "config.json")
     assert cmd_args.parser.get_default("ui_settings_file") == os.path.join(paths_internal.data_path, "config.json")
     assert paths_internal.parser.get_default("data_dir") == paths_internal.script_path
+
+
+@pytest.mark.parametrize("form", ["data-dir", "data-dir=", "ui-settings-file", "ui-settings-file="])
+def test_under_pytest_the_settings_file_commandline_args_names_is_refused(tmp_path, monkeypatch, opts, form):
+    """An extension suite (no tests/conftest.py) run from a shell that exports COMMANDLINE_ARGS
+    takes its --data-dir or --ui-settings-file: the owner's settings outside the repository."""
+    owners = tmp_path / "owner data" / "config.json"
+    owners.parent.mkdir()
+    owners.write_text('{"owner": 1}', encoding="utf-8")
+    name, separator = form.rstrip("="), "=" if form.endswith("=") else " "
+    value = owners.parent if name == "data-dir" else owners
+    monkeypatch.setenv("COMMANDLINE_ARGS", f"--cpu --{name}{separator}{shlex.quote(str(value))}")
+    with pytest.raises(RuntimeError, match="COMMANDLINE_ARGS names"):
+        opts.save(str(owners))
+    assert owners.read_text(encoding="utf-8") == '{"owner": 1}'
+    monkeypatch.delenv("COMMANDLINE_ARGS")
+    opts.save(str(tmp_path / "config.json"))  # without it, a file of the test's own is saved
