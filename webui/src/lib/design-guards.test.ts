@@ -191,6 +191,18 @@ describe("button washes", () => {
     expect(checked).toBeGreaterThan(150)
     expect(lost).toEqual([])
   })
+
+  // A field-style button opens a list or a popover (Date range, VAE / TE). While it was open the kit's
+  // ghost button tinted it (`aria-expanded:bg-muted`) where an open select keeps its field fill: in each
+  // state the kit's ghost button fills, the field-style button fills with the field's own colour.
+  it("keep a field-style button's fill in each state the kit's ghost button fills", () => {
+    const ghost = /\bghost:\s*"([^"]*)"/.exec(sources["../components/ui/button.tsx"] ?? "")?.[1] ?? ""
+    const states = [...ghost.matchAll(/(?:^|\s)((?:[\w-]+:)+)bg-/g)].map((m) => m[1] ?? "")
+    expect(states).toEqual(expect.arrayContaining(["hover:", "aria-expanded:", "dark:hover:"]))
+    const field = (CLASS_CONSTANTS.get("FIELD_BUTTON_CLASS") ?? "").split(/\s+/)
+    expect(field).toContain("bg-field")
+    expect(states.filter((state) => !field.some((one) => one.startsWith(`${state}bg-field`)))).toEqual([])
+  })
 })
 
 describe("letter spacing", () => {

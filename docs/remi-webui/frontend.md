@@ -721,7 +721,10 @@ generated interfaces (sources: Linear's
   `dark:` is `:is(.dark *)`, a class more than a plain `hover:` or `bg-`, so it wins in the dark
   theme, and in both themes inside the viewer's dark-scoped chrome. A class constant
   (`FIELD_BUTTON_CLASS`) carries its `dark:` wash as well (`design-guards.test.ts`, "button
-  washes", which reads the constants a tag names).
+  washes", which reads the constants a tag names). A field-style button also keeps the field fill
+  while its list or popover is open (`aria-expanded:bg-field`), as an open select does, where the
+  kit's ghost button tints it (`aria-expanded:bg-muted`): in each state the ghost button fills, it
+  fills with the field's colour (same test).
   Truncated names and URLs carry their full text in a `title`. A form column (the generate parameters, an
   extension page, the JSON Builder's side column, the Extensions list) is an inspector, not a
   stack of cards: each block is a panel with a hairline above it and no box,
