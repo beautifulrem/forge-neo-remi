@@ -34,7 +34,7 @@ describe("drop zone", () => {
     }
     expect(pastes()).toBe(1)
 
-    const zone = container.querySelector<HTMLElement>("[aria-label=Image]")!
+    const zone = container.querySelector<HTMLElement>("[role=button]")!
     zone.focus()
     const file = new File([new Uint8Array([1])], "p.png", { type: "image/png" })
     expect(paste(file).defaultPrevented).toBe(true)

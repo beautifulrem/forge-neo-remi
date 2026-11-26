@@ -56,7 +56,7 @@ describe("deferred node views", { timeout: 30_000 }, () => {
     const zone = container.querySelector("[data-part=drop-zone]")!
     expect(classes(zone)).toEqual(expect.arrayContaining(["rounded-lg", "border", "py-6"]))
     expect(container.querySelector(".h-40")).toBeNull()
-    expect(await screen.findByRole("button", { name: "Source" }, slow)).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: /^Source / }, slow)).toBeInTheDocument()
     expect(container.querySelector("[data-part=drop-zone]")).toBeNull()
   })
 

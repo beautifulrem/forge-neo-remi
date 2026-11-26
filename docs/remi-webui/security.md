@@ -465,6 +465,10 @@ raised from 0.127.1 and kept below 0.137, see below; `starlette`, `uvicorn`,
 a comment) so that only these updates move them. It takes effect once the file
 is on the repository's default branch on GitHub;
 `tests/test_dependabot_config.py` keeps its list in step with these pins.
+`redoc` stays below 3: ReDoc 3 is another viewer (an ES module where the
+`/redoc` page loads a classic script, usage telemetry unless the page opts
+out, icon sets loaded from `cdn.redocly.com`, no licence file for what its
+bundle includes), so moving to it is a port of the page, not a version update.
 Dependabot alerts and security updates are repository settings, and the file
 narrows them too:
 

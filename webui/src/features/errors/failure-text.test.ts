@@ -8,7 +8,7 @@
  * Settings > Server view and the error boundaries each showed the English text after the helpers
  * were fixed.
  */
-import ts from "typescript"
+import ts from "@typescript/typescript6"
 import { describe, expect, it } from "vitest"
 
 const sources = import.meta.glob<string>(["../../**/*.{ts,tsx}", "!../../**/*.test.*", "!../../**/*.d.ts", "!../../api/**", "!./error-text.ts"], {

@@ -63,6 +63,7 @@ describe("settings page", { timeout: 20_000 }, () => {
   beforeEach(() => {
     // jsdom has no layout: give the virtualized list a viewport.
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(800)
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(800)
     vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(1000)
     useSettingsEditor.setState({ schema: null, saved: {}, inputs: new Map(), applying: false, notice: { restart: [], reload: [] } })
     useSettingsFilters.setState(INITIAL_FILTERS)

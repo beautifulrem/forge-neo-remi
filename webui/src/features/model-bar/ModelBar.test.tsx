@@ -20,7 +20,8 @@ function renderBar() {
 }
 
 /** The picker's own trigger (the narrow-header popover holds a second one once open). */
-const modulesTriggers = () => screen.getAllByRole("button", { name: "VAE / Text encoders" })
+// named by its full name, then the text it shows (the count)
+const modulesTriggers = () => screen.getAllByRole("button", { name: /^VAE \/ Text encoders/ })
 
 describe("model bar modules picker", () => {
   let patch: ReturnType<typeof vi.spyOn>
@@ -200,7 +201,7 @@ describe("worker health pill single-status-dot rule", () => {
         <WorkerHealthPill />
       </QueryClientProvider>,
     )
-    expect(screen.getByRole("button", { name: "Worker status" })).toHaveTextContent("MPS")
+    expect(screen.getByRole("button", { name: /^Worker status/ })).toHaveTextContent("MPS")
     expect(container.querySelector('[data-slot="worker-alert-dot"]')).toBeNull()
 
     queryClient.setQueryData(["workers"], {
@@ -215,7 +216,7 @@ describe("worker health pill single-status-dot rule", () => {
         <WorkerHealthPill />
       </QueryClientProvider>,
     )
-    expect(screen.getByRole("button", { name: "Worker status" })).toHaveTextContent("1/2 GPU")
+    expect(screen.getByRole("button", { name: /^Worker status/ })).toHaveTextContent("1/2 GPU")
     expect(container.querySelector('[data-slot="worker-alert-dot"]')).not.toBeNull()
   })
 })
@@ -236,7 +237,7 @@ describe("worker health pill states", () => {
         <WorkerHealthPill />
       </QueryClientProvider>,
     )
-    fireEvent.click(screen.getByRole("button", { name: zhCN["Worker status"] }))
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${zhCN["Worker status"]}`) }))
     const workers = await screen.findByRole("dialog")
     expect(within(workers).getByText(zhCN["Idle"])).toBeInTheDocument()
     expect(within(workers).getByText(zhCN["Restarting"])).toBeInTheDocument()
