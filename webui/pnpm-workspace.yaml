@@ -4,3 +4,7 @@
 allowBuilds:
   '@scarf/scarf': false
   core-js: false
+
+# Resolution hooks (openapi-typescript's TypeScript). Not the default .pnpmfile.cjs: the Docker
+# build context leaves out the hidden files of webui/ (.dockerignore), and the build reads none.
+pnpmfile: tools/pnpmfile.cjs
