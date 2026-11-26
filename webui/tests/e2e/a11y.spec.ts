@@ -446,6 +446,8 @@ test.describe("lists in forced colours", () => {
     await page.keyboard.press(`${mod}+K`)
     const palette = page.getByRole("dialog", { name: "Command palette" })
     await expect(palette.getByRole("combobox")).toBeFocused()
+    // its edge over the page, as every list here (the dialog itself is not focused: its search field is)
+    expect(await edge(palette)).toBe("solid 1px")
     await page.keyboard.type("theme")
     const highlighted = palette.getByRole("option", { selected: true })
     await expect(highlighted).toHaveCount(1)
