@@ -399,13 +399,45 @@ test.describe("lists in forced colours", () => {
     expect(widths.filter(({ focused, width }) => !focused && width > 0)).toEqual([])
   })
 
+  /** The outline drawn, as its style and width ("solid 1px"), or "none". */
+  const edge = (element: Locator) => element.evaluate((node) => {
+    const style = getComputedStyle(node)
+    return style.outlineStyle === "none" ? "none" : `${style.outlineStyle} ${style.outlineWidth}`
+  })
+
   test("a menu has an edge over the page", async ({ page }) => {
-    // its ring and shadow are not drawn under forced colours
+    // its ring and shadow are not drawn under forced colours: the 1 px edge, not a 3 px focus outline
     await page.emulateMedia({ forcedColors: "active" })
     await openGenerate(page)
     await page.getByRole("button", { name: "Appearance" }).click()
     await expect(page.getByRole("menu")).toBeVisible()
-    expect(await outline(page.getByRole("menu"))).toBeGreaterThanOrEqual(1)
+    expect(await edge(page.getByRole("menu"))).toBe("solid 1px")
+  })
+
+  test("the search select's list has an edge over the page", async ({ page }) => {
+    // a Base UI popup of the app's own, which carried none of the kit's slots
+    await page.emulateMedia({ forcedColors: "active" })
+    await openGenerate(page)
+    await page.getByRole("combobox", { name: "Checkpoint" }).click()
+    const list = page.getByRole("dialog", { name: "Checkpoint" })
+    await expect(list.getByRole("combobox")).toBeFocused()
+    expect(await edge(list)).toBe("solid 1px")
+  })
+
+  test("the search select outlines its highlighted option and no other", async ({ page }) => {
+    // the focus stays in its search field, and the background that marks the highlight is not drawn
+    await page.emulateMedia({ forcedColors: "active" })
+    await openGenerate(page)
+    await page.getByRole("combobox", { name: "Checkpoint" }).click()
+    const list = page.getByRole("dialog", { name: "Checkpoint" })
+    await expect(list.getByRole("combobox")).toBeFocused()
+    await page.keyboard.press("ArrowDown")
+    const highlighted = list.locator('[role="option"][data-highlighted]')
+    await expect(highlighted).toHaveCount(1)
+    expect(await edge(highlighted)).toBe("solid 3px")
+    const others = await Promise.all((await list.locator('[role="option"]:not([data-highlighted])').all()).map(outline))
+    expect(others.length).toBeGreaterThan(0)
+    expect(others.filter((width) => width > 0)).toEqual([])
   })
 
   test("the command palette outlines its highlighted item and no other", async ({ page }) => {
