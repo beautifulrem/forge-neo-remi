@@ -114,7 +114,14 @@ imperatively).
   16 px like theirs, not the 14 px of a small labelled button
   (`ICON_SQUARE_BELOW_SM` / `ICON_SQUARE_BELOW_LG` in `app/header-slot.tsx`).
   Every header button is ghost like them (no fill or edge until hovered or
-  pressed), a page's own included: an outlined one among them reads as pressed. On a phone the header's controls sit 4 px
+  pressed), a page's own included: an outlined one among them reads as pressed.
+  Two header controls are fields, not buttons, and wear a field's flat fill
+  (`--field`, `FIELD_BUTTON_CLASS`) instead: the search field from `lg` up
+  (it opens the palette, its shortcut beside it, where a search input would
+  be; the 28 px search square below `lg` is ghost) and the model bar, one
+  `--field` strip whose preset, checkpoint, VAE / TE and dtype controls are
+  its segments, the VAE / TE picker a button that reads as one of its
+  selects. On a phone the header's controls sit 4 px
   apart, and the hairline that sets the networks button apart from
   Generate's tabs is left out (its icon does that there).
 - **Command palette** (Ctrl/Cmd+K, `cmdk`, its own chunk loaded on first
@@ -536,7 +543,8 @@ generated interfaces (sources: Linear's
   tool (write a prompt, then use it) hands the filled look to the second
   step once there is a result.
 - **Structure is felt, not seen.** Group with space and surface tone before
-  borders; one border tone (`--border`); no card inside a card. Radii follow
+  borders; one border tone (`--border`), but for the selection edge below,
+  a state mark rather than a border; no card inside a card. Radii follow
   hierarchy (controls `sm`/`md`, panels `lg`), not one radius everywhere;
   shadows only on what floats (menus, dialogs, dragged items, and the
   slider's cap, the handle a drag holds); a segmented control's or a tab
@@ -561,6 +569,10 @@ generated interfaces (sources: Linear's
   by a condition in the source (`lib/design-guards.test.ts`, "selected
   segments", fails on a `bg-*` tone a condition picks on a selected, checked
   or current element without the edge).
+  The selection edge is a state mark, not structure: the one exception to
+  one border tone (it is `--muted-foreground`, since `--border` is too faint
+  to carry a state) and to one depth cue (a selected segment or row has its
+  tone and the edge, two marks of one state, and never a shadow with them).
   A line tab strip keeps its underline alone. One depth cue per element, never an edge and
   a shadow together, and no one-sided edge: a field (input, select, number,
   the prompt editor, `FIELD_BUTTON_CLASS`) is a flat fill (`--field`) with
