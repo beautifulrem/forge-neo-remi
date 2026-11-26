@@ -1,3 +1,4 @@
+import argparse
 import contextlib
 import errno
 import json
@@ -6,11 +7,14 @@ import re
 import shlex
 import shutil
 import sys
+import tempfile
 import time
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 
 from modules import errors
+from modules import paths_internal
 from modules.shared_cmd_options import cmd_opts
 from modules.paths_internal import script_path
 from remi import ui
@@ -21,22 +25,30 @@ from remi import ui
 # and rewrote them with the defaults. While pytest runs (PYTEST_VERSION, set for the whole run from
 # before the conftests load, or PYTEST_CURRENT_TEST, set while a test runs; a WebUI process a test
 # starts inherits both) Options.save refuses it, wherever the test's file lives (tests/conftest.py
-# only reaches tests/), and so the settings file the environment's COMMANDLINE_ARGS names (its
-# --data-dir or --ui-settings-file: the owner's, when a shell exports it). A data folder a test
-# passes with --data-dir is its own, and the WebUI itself still saves to all of them.
+# only reaches tests/), and so the settings file COMMANDLINE_ARGS named when the WebUI was imported
+# (modules.paths_internal adds it to the command line; its --data-dir or --ui-settings-file, read as
+# argparse reads them: the owner's, when a shell exports it). A data folder in the temporary folder
+# is the test's own, and the WebUI itself still saves to all of them.
 _UNDER_PYTEST = ("PYTEST_VERSION", "PYTEST_CURRENT_TEST")
 _REPOSITORY_SETTINGS = os.path.join(script_path, "config.json")
+_TEMPORARY = tempfile.gettempdir()
+_COMMANDLINE = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+_COMMANDLINE.add_argument("--data-dir")
+_COMMANDLINE.add_argument("--ui-settings-file")
 
 
 def _owners_settings() -> list[str]:
     files = [_REPOSITORY_SETTINGS]
-    args = shlex.split(os.environ.get("COMMANDLINE_ARGS", ""))
-    for index, arg in enumerate(args):
-        name, joined, value = arg.partition("=")
-        if name in ("--data-dir", "--ui-settings-file"):
-            value = value if joined else (args[index + 1] if index + 1 < len(args) else "")
-            if value:
-                files.append(os.path.join(value, "config.json") if name == "--data-dir" else value)
+    try:
+        named, _ = _COMMANDLINE.parse_known_args(shlex.split(paths_internal.commandline_args))
+    except (ValueError, argparse.ArgumentError, SystemExit):  # unbalanced quotes, a missing value
+        return files
+    named_files = [os.path.join(named.data_dir, "config.json") if named.data_dir is not None else None, named.ui_settings_file]
+    temporary = os.path.realpath(_TEMPORARY)
+    for named_file in filter(None, named_files):
+        named_file = os.path.realpath(os.path.join(paths_internal.cwd, named_file))
+        if not Path(named_file).is_relative_to(temporary):
+            files.append(named_file)
     return files
 
 
@@ -385,7 +397,7 @@ class Options:
     def save(self, filename):
         assert not cmd_opts.freeze_settings, "saving settings is disabled"
         if any(name in os.environ for name in _UNDER_PYTEST) and _is_owners_settings(filename):  # Remi: see _REPOSITORY_SETTINGS
-            raise RuntimeError(f"A test cannot save settings to {filename}, the repository's settings file or the one COMMANDLINE_ARGS names: save to a file of its own (remi.testing.webui_state does)")
+            raise RuntimeError(f"A test cannot save settings to {filename}, the repository's settings file or the one COMMANDLINE_ARGS named: save to a file of its own (remi.testing.webui_state does)")
 
         data = dict(self.data)
         for key, (value, stored) in self._held_for_run.items():  # Remi: see hold_for_run

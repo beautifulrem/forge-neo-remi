@@ -286,18 +286,45 @@ def test_the_guarded_file_is_the_repositorys_default_settings_file():
     assert paths_internal.parser.get_default("data_dir") == paths_internal.script_path
 
 
-@pytest.mark.parametrize("form", ["data-dir", "data-dir=", "ui-settings-file", "ui-settings-file="])
-def test_under_pytest_the_settings_file_commandline_args_names_is_refused(tmp_path, monkeypatch, opts, form):
-    """An extension suite (no tests/conftest.py) run from a shell that exports COMMANDLINE_ARGS
-    takes its --data-dir or --ui-settings-file: the owner's settings outside the repository."""
+@pytest.mark.parametrize("form", ["--data-dir {}", "--data-dir={}", "--data {}", "--ui-settings-file {file}", "--ui-settings-file={file}", "--ui-settings {file}"])
+def test_under_pytest_the_settings_file_commandline_args_named_is_refused(tmp_path, monkeypatch, opts, form):
+    """An extension suite (its conftest does not drop COMMANDLINE_ARGS) run from a shell that exports
+    it takes its --data-dir or --ui-settings-file, as argparse reads them (abbreviated too): the
+    owner's settings outside the repository. The value that reached the WebUI's command line at
+    import counts, not the environment at save time (tests/conftest.py drops it later)."""
+    from modules import options, paths_internal
+
     owners = tmp_path / "owner data" / "config.json"
     owners.parent.mkdir()
     owners.write_text('{"owner": 1}', encoding="utf-8")
-    name, separator = form.rstrip("="), "=" if form.endswith("=") else " "
-    value = owners.parent if name == "data-dir" else owners
-    monkeypatch.setenv("COMMANDLINE_ARGS", f"--cpu --{name}{separator}{shlex.quote(str(value))}")
-    with pytest.raises(RuntimeError, match="COMMANDLINE_ARGS names"):
+    monkeypatch.setattr(options, "_TEMPORARY", str(tmp_path / "elsewhere"))  # the owner's folder is not a temporary one
+    monkeypatch.setattr(paths_internal, "commandline_args", "--cpu " + form.format(shlex.quote(str(owners.parent)), file=shlex.quote(str(owners))))
+    monkeypatch.delenv("COMMANDLINE_ARGS", raising=False)
+    with pytest.raises(RuntimeError, match="COMMANDLINE_ARGS named"):
         opts.save(str(owners))
     assert owners.read_text(encoding="utf-8") == '{"owner": 1}'
-    monkeypatch.delenv("COMMANDLINE_ARGS")
-    opts.save(str(tmp_path / "config.json"))  # without it, a file of the test's own is saved
+    opts.save(str(tmp_path / "config.json"))  # a file of the test's own is saved
+
+
+def test_a_temporary_folder_commandline_args_names_is_the_tests_own(tmp_path, monkeypatch, opts):
+    # a WebUI a test starts with COMMANDLINE_ARGS="--data-dir <its folder>" saves there
+    from modules import paths_internal
+
+    data = tmp_path / "data"
+    data.mkdir()
+    monkeypatch.setattr(paths_internal, "commandline_args", f"--data-dir {shlex.quote(str(data))}")
+    opts.save(str(data / "config.json"))
+    assert json.loads((data / "config.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("value", ["--data-dir 'unbalanced", "--data-dir", "--data-dir="])
+def test_commandline_args_the_guard_cannot_read_leave_the_repositorys_file_guarded(tmp_path, monkeypatch, opts, value):
+    from modules import options, paths_internal
+
+    monkeypatch.setattr(paths_internal, "commandline_args", value)
+    owners = tmp_path / "config.json"
+    owners.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(options, "_REPOSITORY_SETTINGS", str(owners))
+    with pytest.raises(RuntimeError, match="repository's"):
+        opts.save(str(owners))
+    opts.save(str(tmp_path / "own.json"))
