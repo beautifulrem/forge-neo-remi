@@ -1,0 +1,38 @@
+# Dependency updates for what Remi owns (docs/remi-webui/security.md, "Dependency advisories").
+# Dependabot reads this file once it is on the repository's default branch on GitHub.
+version: 2
+updates:
+  # The SPA is Remi's own: all of its packages, in one pull request a week.
+  - package-ecosystem: npm
+    directory: /webui
+    schedule:
+      interval: weekly
+    groups:
+      spa:
+        patterns: ["*"]
+    open-pull-requests-limit: 2
+
+  # The model runtime's pins are Forge Neo's and move with an upstream sync; only the server
+  # packages Remi adds to requirements.txt are proposed (tests/test_dependabot_config.py).
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    allow:
+      - dependency-name: fastapi
+      - dependency-name: python-multipart
+      - dependency-name: pytz
+      - dependency-name: requests
+      - dependency-name: starlette
+      - dependency-name: uvicorn
+      - dependency-name: websockets
+    ignore:
+      # FastAPI 0.137 stopped listing included routes in app.routes, which extensions walk
+      - dependency-name: fastapi
+        versions: [">=0.137.0"]
+    groups:
+      server:
+        patterns: ["*"]
+    open-pull-requests-limit: 2
+
+# No github-actions updates: .github/workflows/check.yml is maintained by hand.

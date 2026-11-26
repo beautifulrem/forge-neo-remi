@@ -456,6 +456,14 @@ of the same line fixes it. Look again at each upstream sync
 ([upstream-absorption.md](upstream-absorption.md)), or sooner when Remi starts
 using a path named below.
 
+`.github/dependabot.yml` proposes updates, one grouped pull request a week
+each, for what Remi owns: the SPA's packages (`webui/`) and the server packages
+Remi adds to `requirements.txt` (`fastapi` below 0.137, see below; `starlette`,
+`uvicorn`, `python-multipart`, `websockets`, `requests`, `pytz`). It takes
+effect once the file is on the repository's default branch on GitHub;
+Dependabot alerts and security updates are repository settings.
+`tests/test_dependabot_config.py` keeps its list in step with these pins.
+
 ### 2026-11-26: Starlette 1.3.1 and FastAPI 0.136.3
 
 Every request goes through Starlette, so its advisories are fixed whether or
