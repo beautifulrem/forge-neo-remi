@@ -105,7 +105,7 @@ SLOW_FETCH = """#!/bin/sh
 if [ "$1" = fetch ]; then
   lock="$("{git}" rev-parse --git-path shallow.lock)"
   if ! (set -C; : >"$lock") 2>/dev/null; then
-    echo "fatal: Unable to create '$PWD/$lock': File exists." >&2
+    echo "fatal: Unable to create '$lock': File exists." >&2
     exit 128
   fi
   touch "{fetching}"
@@ -127,15 +127,20 @@ print(history.ensure_history(repo) if which == "history" else history.ensure_com
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="fetches are serialized with fcntl; the stand-in git is a shell script")
-@pytest.mark.parametrize(("first", "second"), [("history", "commits"), ("commits", "history"), ("history", "history")])
-def test_a_fetch_waits_for_another_processes_fetch_into_the_clone(repos, tmp_path, monkeypatch, first, second):
+@pytest.mark.parametrize(("first", "second", "where"), [("history", "commits", "clone"), ("commits", "history", "clone"), ("history", "history", "clone"), ("history", "commits", "worktree")])
+def test_a_fetch_waits_for_another_processes_fetch_into_the_clone(repos, tmp_path, monkeypatch, first, second, where):
     """tools/check.sh runs pytest:tests (the pinned-revision test fetches the whole history) and
     contract:sdapi (one commit) side by side. A fetch into the shallow clone while the other
     process's ran failed on git's shallow.lock, and the pinned-revision test skipped. It now waits
     for the other fetch, then looks again: a --depth=1 fetch into the clone the other process has
-    just given its whole history would make it shallow again, and --unshallow fails on it."""
+    just given its whole history would make it shallow again, and --unshallow fails on it. A
+    worktree of the clone shares its shallow file, and so the lock."""
 
     _source, clone, (old, _middle, _head) = repos
+    mine_at = clone
+    if where == "worktree":
+        mine_at = tmp_path / "worktree"
+        git("worktree", "add", "-q", "--detach", str(mine_at), cwd=clone)
     fetching = tmp_path / "fetching"
     stand_in = tmp_path / "bin" / "git"
     stand_in.parent.mkdir()
@@ -149,7 +154,7 @@ def test_a_fetch_waits_for_another_processes_fetch_into_the_clone(repos, tmp_pat
         while not fetching.exists() and other.poll() is None and time.monotonic() < deadline:
             time.sleep(0.05)
         assert fetching.exists(), other.communicate()  # the other process's fetch is under way
-        mine = history.ensure_history(clone) if second == "history" else history.ensure_commits(old, repo=clone)
+        mine = history.ensure_history(mine_at) if second == "history" else history.ensure_commits(old, repo=mine_at)
         out, err = other.communicate(timeout=60)
     finally:
         if other.poll() is None:
