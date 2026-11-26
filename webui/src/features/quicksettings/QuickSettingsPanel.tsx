@@ -25,6 +25,8 @@ export default function QuickSettingsPanel({ keys: pinned }: { keys: string[] })
   useEffect(() => {
     if (!options.data) return
     form.load(options.data, pinned)
+    // The form is loaded here: this render is the one that shows it.
+    // oxlint-disable-next-line react/set-state-in-effect
     setLoadedFrom(options.data)
     // `signature` stands for `pinned`.
     // oxlint-disable-next-line react-hooks/exhaustive-deps

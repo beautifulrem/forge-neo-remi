@@ -20,6 +20,8 @@ function useLoaded(store: FormStore, source: object, owners: () => OwnerSpec[], 
   useLayoutEffect(() => {
     store.getState().load(owners(), { conflictParams })
     afterLoad?.()
+    // The store is loaded here, before the paint: this render is the one that shows the form.
+    // oxlint-disable-next-line react/set-state-in-effect
     setLoaded(source)
     // `owners` derives from `source`.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
