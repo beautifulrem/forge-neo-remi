@@ -42,6 +42,37 @@ function openingTags(raw: string): { source: string; tags: { name: string; tag: 
   return { source, tags }
 }
 
+/** The end of the call opened at `open` (its `(`), skipping strings, or -1. */
+function callEnd(source: string, open: number): number {
+  let depth = 0
+  let quote = ""
+  for (let i = open; i < source.length; i++) {
+    const c = source[i]
+    if (quote) {
+      if (c === "\\") i++
+      else if (c === quote) quote = ""
+    } else if (c === '"' || c === "'" || c === "`") quote = c
+    else if (c === "(") depth++
+    else if (c === ")" && --depth === 0) return i
+  }
+  return -1
+}
+
+/**
+ * The class lists of a source, each with the classes that share its element: a JSX tag, or the
+ * class call (cn, cva, clsx) a class string outside a tag is in, or that string alone.
+ */
+function classScopes(raw: string): string[] {
+  const { source, tags } = openingTags(raw)
+  const calls = [...source.matchAll(/\b(?:cn|cva|clsx)\(/g)].map((m) => ({ start: m.index, end: callEnd(source, m.index + m[0].length - 1) }))
+  const outside = [...source.matchAll(/"[^"\n]*"|'[^'\n]*'|`[^`]*`/g)].filter((m) => !tags.some(({ index, tag }) => m.index >= index && m.index < index + tag.length))
+  const scopes = outside.map((m) => {
+    const call = calls.filter(({ start, end }) => start < m.index && end > m.index).at(-1)
+    return call ? source.slice(call.start, call.end + 1) : m[0]
+  })
+  return [...new Set([...tags.map(({ tag }) => tag), ...scopes])]
+}
+
 describe("type scale", () => {
   // 0.625 rem, 0.6875 rem, text-xs, 0.8 rem, text-sm, 0.9375 rem; text-xl is a theme name.
   const SCALE = new Set(["0.625rem", "0.6875rem", "0.75rem", "0.8rem", "0.875rem", "0.9375rem"])
@@ -304,22 +335,6 @@ describe("focus rings", () => {
     expect(colours.filter(({ value }) => value !== "focus-ring").map(({ file, cls }) => `${file}: ${cls}`)).toEqual([])
   })
 
-  /** The end of the call opened at `open` (its `(`), skipping strings, or -1. */
-  function callEnd(source: string, open: number): number {
-    let depth = 0
-    let quote = ""
-    for (let i = open; i < source.length; i++) {
-      const c = source[i]
-      if (quote) {
-        if (c === "\\") i++
-        else if (c === quote) quote = ""
-      } else if (c === '"' || c === "'" || c === "`") quote = c
-      else if (c === "(") depth++
-      else if (c === ")" && --depth === 0) return i
-    }
-    return -1
-  }
-
   it("take the outline off where they draw a ring", () => {
     // frontend.md: a focus nothing else marks draws a 3 px outline (the index.css base layer); a
     // control that draws its own ring takes it off (outline-none or outline-hidden), or it shows both.
@@ -345,21 +360,6 @@ describe("focus rings", () => {
     expect(drawn).toBeGreaterThan(60)
     expect(both).toEqual([])
   })
-
-  /**
-   * The class lists of a source, each with the classes that share its element: a JSX tag, or the
-   * class call (cn, cva, clsx) a class string outside a tag is in, or that string alone.
-   */
-  function classScopes(raw: string): string[] {
-    const { source, tags } = openingTags(raw)
-    const calls = [...source.matchAll(/\b(?:cn|cva|clsx)\(/g)].map((m) => ({ start: m.index, end: callEnd(source, m.index + m[0].length - 1) }))
-    const outside = [...source.matchAll(/"[^"\n]*"|'[^'\n]*'|`[^`]*`/g)].filter((m) => !tags.some(({ index, tag }) => m.index >= index && m.index < index + tag.length))
-    const scopes = outside.map((m) => {
-      const call = calls.filter(({ start, end }) => start < m.index && end > m.index).at(-1)
-      return call ? source.slice(call.start, call.end + 1) : m[0]
-    })
-    return [...new Set([...tags.map(({ tag }) => tag), ...scopes])]
-  }
 
   it("give way to the focus ring on an invalid field", () => {
     // frontend.md: on an invalid field the focus wins. Its halo (`aria-invalid:ring-3
@@ -438,6 +438,19 @@ describe("selected segments", () => {
     )
     const bare = segments.filter(({ state, classes }) => !classes.includes(`${state}:inset-ring`) || !classes.includes(`${state}:inset-ring-muted-foreground`))
     expect(bare.map(({ file }) => file)).toEqual([])
+  })
+
+  it("keep their tone inside the edge when they have a border", () => {
+    // The kit's selected tab has a 1 px transparent border: its tone ran under it (backgrounds paint the
+    // border box), and the inset edge, drawn inside the border, sat 1 px in from a rim of --card.
+    const bordered = files.flatMap(({ file, source }) =>
+      classScopes(source)
+        .map((scope): string[] => scope.match(/[^\s"'`{}(),]+/g) ?? [])
+        .filter((classes) => classes.some((cls) => /:inset-ring-muted-foreground$/.test(cls)) && classes.includes("border"))
+        .map((classes) => ({ file, clipped: classes.includes("bg-clip-padding") })),
+    )
+    expect(bordered.map(({ file }) => file)).toContain("components/ui/tabs.tsx")
+    expect(bordered.filter(({ clipped }) => !clipped).map(({ file }) => file)).toEqual([])
   })
 
   it("wear the edge when a condition picks their tone", () => {

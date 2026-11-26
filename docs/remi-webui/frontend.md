@@ -527,7 +527,10 @@ generated interfaces (sources: Linear's
   strip's selected segment (`Segmented`, the kit's tabs, the img2img
   stage's Source / Result switch and mode tiles) is a tone with an inset
   1 px edge in `--muted-foreground` (`inset-ring`, which leaves `ring-*` to
-  the focus ring), not a raised pill. The tone alone (`--card`, `--accent`
+  the focus ring), not a raised pill. A segment with a border (the kit's
+  tab, a transparent 1 px one) clips its tone to the padding box
+  (`bg-clip-padding`): the inset edge is drawn inside the border, and the
+  tone under the border showed as a 1 px rim of `--card` outside it. The tone alone (`--card`, `--accent`
   in the dark theme) is 1.18:1 against its `--muted` track in the light
   theme and 1.10:1 in the dark one, under the 3:1 a state indicator needs
   (WCAG 1.4.11); no surface tone can sit 3:1 off the track and still be a
