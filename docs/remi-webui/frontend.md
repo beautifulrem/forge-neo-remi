@@ -600,9 +600,15 @@ generated interfaces (sources: Linear's
   fixed amber. Touch screens get no number steppers (the numeric keyboard
   types the value), and controls hidden until hover take no taps while
   hidden. A scroller (the JSON Builder column, `FadeStrip`) keeps 4 px of
-  room around its controls so their focus rings are not clipped, and so does
-  a control at an edge of `main`, which clips (the queue's mode tabs: their
-  tab list's padding is as wide as a tab's focus ring). Toolbar
+  room around its controls so their focus rings are not clipped, on every
+  side: a strip that scrolls sideways clips above and below too
+  (`overflow-x-auto` makes the other axis `auto`; the lineage strips take
+  `-mt-1 p-1`), a list that scrolls keeps it above its first row and below
+  its last (the board list, `-m-1 p-1`), and a ring with an offset needs
+  its whole reach (the preview picker's tiles, 3 px past a 2 px offset:
+  `p-1.5`; `tests/e2e/layout.spec.ts`, "focus rings inside scrollers"). A
+  control at an edge of `main`, which clips, has the same room (the queue's
+  mode tabs: their tab list's padding is as wide as a tab's focus ring). Toolbar
   controls (header, settings, extensions, gallery) are one 28 px height.
   A pressed toggle wears the selection tint (`--primary` text on a 15 %
   wash, 20 % in the dark theme, 25 % there when hovered), set once in

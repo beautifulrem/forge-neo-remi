@@ -138,7 +138,8 @@ export function LineageStrip({ item, onSelectImage, onClose }: LineageStripProps
       </div>
 
       {ancestors.length > 0 || descendants.length > 0 ? (
-        <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-1">
+        // 4 px of room around the chips for their focus rings: the strip scrolls, so it clips on both axes
+        <div className="-mx-1 -mt-1 flex items-center gap-1.5 overflow-x-auto p-1">
           {ancestors.length > 0 ? (
             <>
               <div className="flex items-center gap-1" aria-label={t("Parents")}>
@@ -168,7 +169,7 @@ export function LineageStrip({ item, onSelectImage, onClose }: LineageStripProps
       {siblings.length > 0 ? (
         <div className="flex flex-col gap-1">
           <span className="text-[0.6875rem] text-white/65">{t("Siblings")}</span>
-          <div className="-mx-1 flex items-center gap-1 overflow-x-auto px-1 pb-0.5">
+          <div className="-mx-1 -mt-1 -mb-0.5 flex items-center gap-1 overflow-x-auto p-1">
             {siblings.map((node) => (
               <ThumbChip key={`sib-${node.file_id}`} node={node} onClick={() => jumpTo(node.file_id)} />
             ))}

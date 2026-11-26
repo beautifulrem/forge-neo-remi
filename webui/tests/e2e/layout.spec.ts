@@ -1561,6 +1561,83 @@ test.describe("no sideways scrolling", () => {
   })
 })
 
+/**
+ * Where a control's focus ring (its widest outer box-shadow layer, a ring offset included) is cut by the
+ * nearest ancestor that clips: the sides it reaches past that ancestor's padding box where the ancestor
+ * cannot scroll to show it (frontend.md: a scroller keeps 4 px of room around its controls).
+ */
+async function cutRing(control: Locator): Promise<string[]> {
+  await control.focus()
+  // a key press makes a focus from script a keyboard focus: the ring shows
+  await control.page().keyboard.press("Shift")
+  return control.evaluate((element) => {
+    const spreads = getComputedStyle(element)
+      .boxShadow.split(/,(?![^(]*\))/)
+      .filter((layer) => !/\binset\b/.test(layer))
+      .map((layer) => Number([...layer.matchAll(/(-?[\d.]+)px/g)][3]?.[1] ?? 0))
+    const reach = Math.max(0, ...spreads)
+    if (reach < 3) return [`no focus ring (${reach}px)`]
+    const r = element.getBoundingClientRect()
+    for (let p = element.parentElement; p; p = p.parentElement) {
+      const s = getComputedStyle(p)
+      if (s.overflowX === "visible" && s.overflowY === "visible") continue
+      const q = p.getBoundingClientRect()
+      const box = { left: q.left + parseFloat(s.borderLeftWidth), top: q.top + parseFloat(s.borderTopWidth), right: q.right - parseFloat(s.borderRightWidth), bottom: q.bottom - parseFloat(s.borderBottomWidth) }
+      const sides = [
+        r.left - reach < box.left - 0.5 && p.scrollLeft === 0 && "left",
+        r.right + reach > box.right + 0.5 && p.scrollLeft + p.clientWidth >= p.scrollWidth - 1 && "right",
+        r.top - reach < box.top - 0.5 && p.scrollTop === 0 && "top",
+        r.bottom + reach > box.bottom + 0.5 && p.scrollTop + p.clientHeight >= p.scrollHeight - 1 && "bottom",
+      ].filter((side) => side !== false)
+      return sides.map((side) => `${reach}px ring cut at the ${side} by "${String(p.className).slice(0, 50)}"`)
+    }
+    return []
+  })
+}
+
+// Strips and lists that scroll clipped the rings of the controls at their edges: the lineage strip had no
+// room above its chips, the board list none above or below its rows, and the preview picker's 2 px left
+// its tiles' 5 px ring (3 px past a 2 px offset) cut.
+test.describe("focus rings inside scrollers", () => {
+  // rings fade in (box-shadow transitions): read their end state
+  const still = (page: Page) => page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" })
+
+  test("the image viewer's lineage chips and board list", async ({ page }) => {
+    await openRoute(page, "gallery")
+    await still(page)
+    // the second image has a parent and a child
+    await page.getByRole("list", { name: "Images" }).getByRole("listitem").nth(1).getByRole("button").first().click()
+    const viewer = page.getByRole("dialog", { name: "Image viewer" })
+    // its parent and child in the strip, its sibling in a strip of their own
+    const chips = viewer.getByRole("region", { name: "Asset lineage" }).locator('button[title^="Jump to"]')
+    await expect(chips).toHaveCount(3)
+    const cut: Record<string, string[]> = {}
+    for (const [index, name] of ["parent", "child", "sibling"].entries()) cut[name] = await cutRing(chips.nth(index))
+    await viewer.getByRole("complementary", { name: "Image details" }).getByRole("button", { name: "Add to board" }).click()
+    const boards = page.getByRole("dialog", { name: "Add to board" }).getByRole("listitem").getByRole("button")
+    await expect(boards.first()).toBeVisible()
+    cut["first board"] = await cutRing(boards.first())
+    cut["last board"] = await cutRing(boards.last())
+    expect(cut).toEqual({ parent: [], child: [], sibling: [], "first board": [], "last board": [] })
+  })
+
+  test("the preview picker's tiles", async ({ page }) => {
+    // a result of this session to pick
+    await openGenerate(page)
+    await page.getByRole("button", { name: /^Generate/ }).first().click()
+    await expect(page.getByRole("img", { name: "Generated image" })).toBeVisible({ timeout: 20_000 })
+    await page.evaluate(() => (location.hash = "#/networks"))
+    await expect(page.getByRole("main").getByRole("option").first()).toBeVisible()
+    await still(page)
+    await page.getByRole("main").getByRole("option").first().click({ button: "right" })
+    await page.getByRole("menuitem", { name: "Set preview" }).click()
+    await page.getByRole("dialog").getByRole("tab", { name: "This session" }).click()
+    const tile = page.getByRole("dialog").getByRole("radiogroup", { name: "Result" }).getByRole("radio").first()
+    await expect(tile).toBeVisible()
+    expect(await cutRing(tile)).toEqual([])
+  })
+})
+
 // The viewer, the comparison and the networks sheet are portalled outside the app's shell, which pads
 // for a notch and the home indicator: on a phone held sideways their arrows, counter and Close button
 // sat under the notch.

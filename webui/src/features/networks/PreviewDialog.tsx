@@ -45,7 +45,8 @@ function Thumbs({ ids, selected, onSelect, label }: { ids: readonly string[]; se
   }
 
   return (
-    <div ref={group} role="radiogroup" aria-label={label} onKeyDown={onKeyDown} className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2 p-0.5">
+    // p-1.5: a tile's focus ring reaches 5 px (3 px past a 2 px offset), and the tab panel around the grid scrolls
+    <div ref={group} role="radiogroup" aria-label={label} onKeyDown={onKeyDown} className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2 p-1.5">
       {ids.map((id, index) => {
         const on = id === selected
         return (
@@ -159,7 +160,7 @@ export function PreviewDialog({ item, open, onOpenChange }: { item: NetworkItem 
             {galleryFailure ? (
               <LoadFailed error={galleryFailure.error} retrying={galleryFailure.retrying} message={t("Could not load the gallery")} onRetry={() => void gallery.refetch()} className="justify-center py-8" />
             ) : gallery.isPending ? (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2" aria-busy="true">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2 p-1.5" aria-busy="true">
                 {Array.from({ length: 8 }, (_, i) => (
                   <Skeleton key={i} className="aspect-square rounded-lg" />
                 ))}

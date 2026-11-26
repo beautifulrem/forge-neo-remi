@@ -426,7 +426,8 @@ export function AssignBoardPopover({ fileIds, activeBoardId, trigger, tone = "de
         <div className="flex flex-col gap-2">
           <p className="px-1 text-xs font-semibold">{t("Add to board")}</p>
           {boards.length > 0 ? (
-            <ul className="-mx-1 flex max-h-48 flex-col gap-0.5 overflow-y-auto px-1">
+            // 4 px of room around the rows for their focus rings, above the first and below the last too
+            <ul className="-m-1 flex max-h-50 flex-col gap-0.5 overflow-y-auto p-1">
               {boards.map((board) => (
                 <li key={board.id}>
                   <button
