@@ -133,10 +133,11 @@ def server_app(
     services = Services.create(root, realtime=realtime, housekeeping=False, **options)
     app = create_app(services=services, auth=auth or Auth(), sdapi=False, spa_dir=spa_dir or root / "no-dist")
     # Saving options writes shared.config_filename. Set up without webui_state, the WebUI still has
-    # the command line's file there, the owner's settings: the app saves to its own folder instead
+    # the command line's file there, the owner's settings: the app saves to its own folder instead,
+    # as it does when that file's folder is gone (a helper's, left behind; see webui_state)
     shared = sys.modules.get("modules.shared")
     settings_file = None
-    if shared is not None and shared.config_filename == shared.cmd_opts.ui_settings_file:
+    if shared is not None and (shared.config_filename == shared.cmd_opts.ui_settings_file or not Path(shared.config_filename).parent.is_dir()):
         settings_file, shared.config_filename = shared.config_filename, str(Path(root) / "config.json")
     try:
         with TestClient(app, base_url=base_url) as client:

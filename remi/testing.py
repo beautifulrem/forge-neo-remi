@@ -53,8 +53,9 @@ def webui_state(options: dict | None = None, *, script_classes=None, postprocess
     try:
         # Saving options writes shared.config_filename. Unless the test chose its own, that is the
         # command line's, the repository's config.json outside tests/: a scratch test rewrote the
-        # owner's settings that way. It goes into this folder too.
-        if shared.config_filename == shared.cmd_opts.ui_settings_file:
+        # owner's settings that way. It goes into this folder too, as does a file whose folder is
+        # gone (a helper's, left behind by a monkeypatch undone after the helper's exit).
+        if shared.config_filename == shared.cmd_opts.ui_settings_file or not Path(shared.config_filename).parent.is_dir():
             shared.config_filename = str(Path(styles_dir.name) / "config.json")
         for key, value in (options or {}).items():
             shared.opts.data[key] = value

@@ -98,3 +98,27 @@ def test_the_test_app_saves_settings_in_its_own_folder(tmp_path):
             assert shared.config_filename == str(command_line)
         finally:
             shared.cmd_opts.ui_settings_file, shared.config_filename = saved
+
+
+def test_a_settings_file_whose_folder_is_gone_is_not_taken_for_the_tests_own(tmp_path, monkeypatch):
+    # A test that set shared.config_filename inside a helper whose exit ran before monkeypatch's undo
+    # left the helper's deleted temporary path behind; the next helper took it for one the test chose
+    from modules import shared
+
+    from remi.server.testing import server_app
+    from remi.testing import webui_state
+
+    gone = tmp_path / "gone" / "config.json"
+    monkeypatch.setattr(shared, "config_filename", str(gone))
+    with webui_state() as webui:
+        assert Path(shared.config_filename).parent.is_dir()
+        webui.opts.save(shared.config_filename)
+    assert shared.config_filename == str(gone)
+
+    root = tmp_path / "app"
+    root.mkdir()
+    with webui_state():
+        shared.config_filename = str(gone)
+        with server_app(root):
+            assert shared.config_filename == str(root / "config.json")
+        assert shared.config_filename == str(gone)
