@@ -173,8 +173,9 @@ function CardView({ item, kind, id, index, active, cursor, mismatch, width, onAp
           "group-hover/card:ring-foreground/30",
           "data-active:ring-2 data-active:ring-primary",
           // the cursor is an outline on a layer over the image (after:), inside the tile: the image cannot
-          // cover it, the scroller (no top padding) cannot clip it, and the applied ring stays visible outside
-          "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] data-cursor:after:outline-3 data-cursor:after:-outline-offset-3 data-cursor:after:outline-solid data-cursor:after:outline-focus-ring",
+          // cover it, the scroller (no top padding) cannot clip it, and the applied ring stays visible outside.
+          // A keyboard cursor: drawn while the grid has the keyboard focus, not on a card a click chose
+          "after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] group-focus-visible/grid:data-cursor:after:outline-3 group-focus-visible/grid:data-cursor:after:-outline-offset-3 group-focus-visible/grid:data-cursor:after:outline-solid group-focus-visible/grid:data-cursor:after:outline-focus-ring",
         )}
       >
         <Preview item={item} width={width} className={cn("absolute inset-0 transition-[filter]", mismatch && "opacity-70 saturate-50")} />
@@ -206,7 +207,7 @@ function CardView({ item, kind, id, index, active, cursor, mismatch, width, onAp
         className={cn(
           "absolute top-1.5 right-1.5 flex flex-col gap-1 opacity-0 transition-opacity duration-150",
           // invisible buttons must not take clicks meant for the card
-          "pointer-events-none group-hover/card:pointer-events-auto group-hover/card:opacity-100 group-data-cursor/card:pointer-events-auto group-data-cursor/card:opacity-100",
+          "pointer-events-none group-hover/card:pointer-events-auto group-hover/card:opacity-100 group-focus-visible/grid:group-data-cursor/card:pointer-events-auto group-focus-visible/grid:group-data-cursor/card:opacity-100",
           "[@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100",
         )}
       />
@@ -237,8 +238,9 @@ function RowView({ item, kind, id, index, active, cursor, mismatch, onApply, onA
         onContextMenu={contextMenu(onAction, item, index)}
         className={cn(
           "flex size-full cursor-pointer items-center gap-3 rounded-lg px-2 transition-colors select-none group-hover/row:bg-muted",
-          // inset: the first row sits on the scroller's top edge, which would clip a ring outside it
-          "data-cursor:bg-accent data-cursor:ring-3 data-cursor:ring-focus-ring data-cursor:ring-inset",
+          // inset: the first row sits on the scroller's top edge, which would clip a ring outside it; a keyboard
+          // cursor, drawn while the grid has the keyboard focus
+          "group-focus-visible/grid:data-cursor:bg-accent group-focus-visible/grid:data-cursor:ring-3 group-focus-visible/grid:data-cursor:ring-focus-ring group-focus-visible/grid:data-cursor:ring-inset",
         )}
       >
         <div className="relative size-10 shrink-0">
@@ -273,7 +275,7 @@ function RowView({ item, kind, id, index, active, cursor, mismatch, onApply, onA
         // over the size and date columns, like mail rows: hover shows the actions in their place
         className={cn(
           "pointer-events-none absolute inset-y-1 right-1 flex items-center gap-0.5 rounded-md bg-muted pl-1.5 opacity-0 transition-opacity",
-          "group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-data-cursor/row:pointer-events-auto group-data-cursor/row:bg-accent group-data-cursor/row:opacity-100",
+          "group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-visible/grid:group-data-cursor/row:pointer-events-auto group-focus-visible/grid:group-data-cursor/row:bg-accent group-focus-visible/grid:group-data-cursor/row:opacity-100",
           "[@media(hover:none)]:pointer-events-auto [@media(hover:none)]:bg-transparent [@media(hover:none)]:opacity-100",
         )}
       />

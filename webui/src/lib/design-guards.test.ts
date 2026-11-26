@@ -247,8 +247,9 @@ describe("focus rings", () => {
           return drawn ? [{ file, cls, ...drawn }] : []
         }),
     )
-    // A keyboard cursor or highlight (the networks grid's current item) is drawn in the focus ring's
-    // colour under a state of its own: the width beside that colour, under the same variants.
+    // A keyboard cursor or highlight is drawn in the focus ring's colour under a state of its own: the
+    // width beside that colour, under the same variants. The networks grid's current item is drawn under
+    // the grid's keyboard focus as well (group-focus-visible/grid:data-cursor:…): it is read with the rings.
     const cursors = files.flatMap(({ file, source }) =>
       (source.match(/"[^"\n]*"|'[^'\n]*'|`[^`]*`/g) ?? []).flatMap((literal) => {
         const classes = literal.slice(1, -1).split(/\s+/)
@@ -263,7 +264,8 @@ describe("focus rings", () => {
       }),
     )
     expect(rings.filter(({ width }) => width === "3").length).toBeGreaterThan(40)
-    expect(cursors.length).toBeGreaterThan(1)
+    expect(rings.filter(({ file, cls }) => file === "features/networks/NetworkCard.tsx" && cls.includes("data-cursor:")).length).toBe(2)
+    expect(cursors.length).toBeGreaterThan(0)
     const SHADCN_EDGE = new Set(["components/ui/tabs.tsx"])
     const off = [...rings, ...cursors].filter(({ file, kind, width }) => width !== "3" && width !== "0" && !(kind === "outline" && width === "1" && SHADCN_EDGE.has(file)))
     expect(off.map(({ file, cls }) => `${file}: ${cls}`)).toEqual([])

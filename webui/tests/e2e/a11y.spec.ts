@@ -697,6 +697,38 @@ test.describe("selected segments", () => {
   }
 })
 
+/** What marks the networks grid's current item: the band (an outline on a card's after: layer, an inset ring on a row) and its shown hover actions. */
+async function networkCursor(item: Locator): Promise<{ band: number; actions: string }> {
+  return item.evaluate((element) => {
+    const after = getComputedStyle(element, "::after")
+    const outline = after.outlineStyle !== "none" ? parseFloat(after.outlineWidth) : 0
+    const ring = [...getComputedStyle(element).boxShadow.matchAll(/inset\s+0px 0px 0px (\d+(?:\.\d+)?)px|0px 0px 0px (\d+(?:\.\d+)?)px inset/g)].map((m) => Number(m[1] ?? m[2]))
+    const actions = element.parentElement?.querySelector<HTMLElement>("[role=option] ~ *")
+    return { band: Math.max(outline, ...ring, 0), actions: actions ? getComputedStyle(actions).opacity : "none" }
+  })
+}
+
+// The networks grid's keyboard cursor (a 3 px band in the focus ring's colour) showed after a mouse click
+// too: a clicked card had the applied ring and the band, and the grid had no keyboard focus. The cursor
+// shows while the grid has the keyboard focus, and comes back with the first key.
+for (const view of ["Grid", "List"] as const) {
+  test(`the networks ${view.toLowerCase()}'s cursor shows only with the keyboard`, async ({ page }) => {
+    await openRoute(page, "networks")
+    await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" })
+    await page.getByRole("main").getByRole("button", { name: view, exact: true }).click()
+    const grid = page.getByRole("main").getByRole("listbox").first()
+    const items = grid.getByRole("option")
+    await expect(items.nth(2)).toBeVisible()
+    await items.nth(1).click()
+    await page.mouse.move(0, 0)
+    expect(await grid.evaluate((element) => element.matches(":focus"))).toBe(true)
+    expect(await networkCursor(items.nth(1)), "after a click").toEqual({ band: 0, actions: "0" })
+    await page.keyboard.press(view === "Grid" ? "ArrowRight" : "ArrowDown")
+    expect(await networkCursor(items.nth(2)), "after an arrow key").toEqual({ band: 3, actions: "1" })
+    expect(await networkCursor(items.nth(1)), "the item it left").toEqual({ band: 0, actions: "0" })
+  })
+}
+
 // A bar pinned over a scroller (the run bar, the apply bars, the send bar) covered the control Tab
 // moved to: the scroller brought it to the edge of its box, under the bar (WCAG 2.4.11).
 /** The focused tile when it or its focus ring (3 px plus a 2 px offset) reaches under the gallery's selection bar. */

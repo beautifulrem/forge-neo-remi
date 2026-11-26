@@ -414,7 +414,12 @@ imperatively).
   ring is 3 px wide (`ring-3`, or a 3 px outline over an image), and so is a
   keyboard cursor drawn in the token (the networks grid's current item: an
   outline on the tile's `after:` layer, an inset ring on a list row); a 2 px
-  ring read thinner than the rings beside it. A handle rings its line on
+  ring read thinner than the rings beside it. A keyboard cursor shows while
+  its widget has the keyboard focus (`group-focus-visible/grid:data-cursor:`,
+  and so do the hover actions it reveals): a card a click chose kept the band
+  beside its applied ring, with no keyboard focus to mark; the first key
+  brings it back where the click left the cursor (`tests/e2e/a11y.spec.ts`,
+  "cursor shows only with the keyboard"). A handle rings its line on
   focus, as the kit's resize separators do (the stage timeline's start and
   end lines, the networks drawer's edge, whose 1 px line fills with the token
   so the ring reads as one band), never fills it with `--ring`: those two
