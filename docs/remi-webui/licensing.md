@@ -71,8 +71,8 @@ life are few: `sd-webui-joycaption-modified`'s README calls it
 `sd-forge-anima-resolutions` are also described on a public Rentry page
 (rentry.co/mpihcm3y); and `sd-forge-prompt-workshop` sends
 `sd-forge-prompt-workshop/1.0 (https://github.com/)` as its User-Agent, an
-address that names no repository. Each is distributed here under the
-repository's AGPL-3.0 by the maintainer who bundled it.
+address that names no repository. Each bundled extension is distributed here
+under the repository's AGPL-3.0 by the maintainer who bundled it.
 
 | directory | origin | license | third-party code inside | evidence |
 |---|---|---|---|---|
