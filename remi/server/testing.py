@@ -8,6 +8,7 @@ executor (no model) and a running app around them.
 
 from __future__ import annotations
 
+import sys
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -131,8 +132,16 @@ def server_app(
         options["validate"] = validate
     services = Services.create(root, realtime=realtime, housekeeping=False, **options)
     app = create_app(services=services, auth=auth or Auth(), sdapi=False, spa_dir=spa_dir or root / "no-dist")
+    # Saving options writes shared.config_filename. Set up without webui_state, the WebUI still has
+    # the command line's file there, the owner's settings: the app saves to its own folder instead
+    shared = sys.modules.get("modules.shared")
+    settings_file = None
+    if shared is not None and shared.config_filename == shared.cmd_opts.ui_settings_file:
+        settings_file, shared.config_filename = shared.config_filename, str(Path(root) / "config.json")
     try:
         with TestClient(app, base_url=base_url) as client:
             yield SimpleNamespace(client=client, app=app, services=services, state=state, executor=executor)
     finally:
         services.close()
+        if settings_file is not None:
+            shared.config_filename = settings_file

@@ -51,3 +51,31 @@ def test_webui_state_keeps_a_settings_file_the_test_chose(tmp_path, monkeypatch)
     monkeypatch.setattr(shared, "config_filename", str(chosen))
     with webui_state():
         assert shared.config_filename == str(chosen)
+
+
+def test_the_test_app_saves_settings_in_its_own_folder(tmp_path):
+    # A script that set the WebUI up some other way and built the test app: PATCH /api/v2/options
+    # saved to the command line's settings file. The app saves to its own folder instead.
+    import json
+
+    from modules import shared
+
+    from remi.server.testing import server_app
+    from remi.testing import webui_state
+
+    command_line = tmp_path / "config.json"  # stands for the command line's settings file
+    root = tmp_path / "app"
+    root.mkdir()
+    with webui_state() as webui:
+        saved = shared.cmd_opts.ui_settings_file, shared.config_filename
+        shared.cmd_opts.ui_settings_file = shared.config_filename = str(command_line)
+        try:
+            webui.opts.data["jpeg_quality"] = 80
+            with server_app(root) as server:
+                response = server.client.patch("/api/v2/options", json={"jpeg_quality": 90})
+                assert response.status_code == 200, response.text
+            assert not command_line.exists()
+            assert json.loads((root / "config.json").read_text(encoding="utf-8"))["jpeg_quality"] == 90
+            assert shared.config_filename == str(command_line)
+        finally:
+            shared.cmd_opts.ui_settings_file, shared.config_filename = saved
