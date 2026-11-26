@@ -526,8 +526,10 @@
     /* the floating surfaces, which sat over the page with no edge: no box shadow is drawn here,
        so not the ring and shadow of menus, selects and comboboxes, the ring of dialogs or the
        shadow of sheets, and a tooltip's plain fill is replaced with Canvas, the page's colour (the
-       popovers' bare outline-hidden is their edge); a focused one shows the focus outline instead */
-    :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"], [data-slot="sheet-content"], [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="context-menu-content"], [data-slot="context-menu-sub-content"], [data-slot="select-content"], [data-slot="combobox-content"], [data-slot="tooltip-content"]):not(:focus-visible) {
+       popovers' bare outline-hidden is their edge). Nor the shadow alone of the app's floating bars
+       and the networks drawer, or material-float's hairline, a box shadow too. A focused one shows
+       the focus outline instead */
+    :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"], [data-slot="sheet-content"], [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="context-menu-content"], [data-slot="context-menu-sub-content"], [data-slot="select-content"], [data-slot="combobox-content"], [data-slot="tooltip-content"], [data-slot="floating-bar"], [data-slot="networks-drawer"], .material-float):not(:focus-visible) {
       outline: 1px solid CanvasText !important;
     }
   }

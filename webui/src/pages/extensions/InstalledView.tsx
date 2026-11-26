@@ -430,7 +430,7 @@ export function InstalledView() {
 
       {count > 0 ? (
         <div ref={pendingBarRef} role="region" aria-label={t("Pending extension changes")} className="sticky bottom-3 z-10 flex justify-center md:bottom-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))]">
-          <div data-toast-obstacle className="flex w-full max-w-2xl flex-wrap items-center gap-2 rounded-md bg-popover px-3 py-2 shadow-lg animate-in fade-in slide-in-from-bottom-2">
+          <div data-toast-obstacle data-slot="floating-bar" className="flex w-full max-w-2xl flex-wrap items-center gap-2 rounded-md bg-popover px-3 py-2 shadow-lg animate-in fade-in slide-in-from-bottom-2">
             <p className="min-w-0 flex-1 text-sm" aria-live="polite">
               {t("{{toggles}} switched, {{updates}} to update", { toggles: Object.keys(staged.enabled).length, updates: staged.update.length })}
             </p>

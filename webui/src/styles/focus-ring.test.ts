@@ -139,16 +139,35 @@ describe("the focus ring token", () => {
     // Forced colours draw no box shadow: not the ring and shadow of menus, selects and comboboxes, the
     // ring of dialogs or the shadow of sheets; and they replace a tooltip's plain fill with the page's
     // Canvas. A popup sat over the fields under it with no edge at all. The forced-colours block outlines
-    // them (not while one has the focus: the focus outline is drawn then).
-    const base = css.slice(css.indexOf("@layer base {"))
-    const forced = (/@media \(forced-colors: active\) \{([\s\S]*?)\n {2}\}/.exec(base)?.[1] ?? "").replace(/\/\*[\s\S]*?\*\//g, "")
-    const rule = /\n {4}(:is\(\[data-slot="dialog-content"\][^{]*)\{([^}]*)\}/.exec(forced)
-    const slots = [...(rule?.[1] ?? "").matchAll(/\[data-slot="([a-z-]+)"\]/g)].map((m) => m[1])
-    expect(slots).toEqual(SURFACES)
-    expect(rule?.[1]?.trim().endsWith(":not(:focus-visible)")).toBe(true)
-    expect(rule?.[2]?.trim()).toBe("outline: 1px solid CanvasText !important;")
+    // them (not while one has the focus: the focus outline is drawn then), and so the app's floating bars,
+    // the networks drawer and the image editor's floating material, whose edge is a shadow too.
+    const rule = edgeRule()
+    expect(rule.selectors).toEqual([...[...SURFACES, ...Object.keys(APP_SURFACES)].map((slot) => `[data-slot="${slot}"]`), ".material-float"])
+    expect(rule.declarations).toBe("outline: 1px solid CanvasText !important;")
     const kit = Object.entries(sources).filter(([file]) => file.startsWith("../components/ui/")).map(([, source]) => source).join("\n")
     for (const slot of SURFACES) expect(kit).toContain(`data-slot="${slot}"`)
+    for (const [slot, files] of Object.entries(APP_SURFACES)) {
+      for (const file of files) expect(scripts[`../${file}`], file).toContain(` data-slot="${slot}"`)
+    }
+    // the material's edge is a box shadow: the utility, and the image editor's panels that take it
+    expect(css).toContain("\n@utility material-float {\n")
+    expect(scripts["../canvas/ui/controls.tsx"]).toMatch(/\bPANEL = "[^"]*\bmaterial-float\b/)
+  })
+
+  it("reaches a surface outside the kit that floats on a shadow", () => {
+    // frontend.md lets a floating bar and a drawer take the shadow alone, which forced colours do not draw:
+    // the settings' apply bar merged with the fields under it. A tag outside the kit that draws a shadow of
+    // md or more carries a slot the edge rule lists, or a border of its own, which forced colours draw.
+    const listed = edgeRule().selectors.flatMap((selector) => /^\[data-slot="([a-z-]+)"\]$/.exec(selector)?.[1] ?? [])
+    const words = (tag: string) => tag.split(/[\s"'`{}(),]+/)
+    const lifted = appTags(/./).filter(({ tag }) => words(tag).some((word) => /^shadow-(?:md|lg|xl|2xl)$/.test(word)))
+    expect(lifted.length).toBeGreaterThan(5)
+    const edgeless = lifted.filter(({ file, tag }) => {
+      if (listed.includes(/\sdata-slot="([a-z-]+)"/.exec(tag)?.[1] ?? "")) return false
+      if (words(tag).some((word) => /^border(?:-\d+|-\[[^\]]+\])?$/.test(word))) return false
+      return !NOT_OVER_THE_PAGE.some((own) => own.file === file && tag.includes(own.look))
+    })
+    expect(edgeless.map(({ file, name }) => `${file}: <${name}`)).toEqual([])
   })
 
   it("reaches the popups built outside the kit", () => {
@@ -156,8 +175,7 @@ describe("the focus ring token", () => {
     // card's menu) carried none, and sat over the page with no edge in forced colours: each takes the
     // slot of the kit popup it stands for. A popover's or hover card's edge there is its bare
     // outline-hidden (lib/design-guards.test.ts keeps that outline to those two).
-    const rule = /\n {4}(:is\(\[data-slot="dialog-content"\][^{]*)\{/.exec(forcedColours())
-    const listed = [...(rule?.[1] ?? "").matchAll(/\[data-slot="([a-z-]+)"\]/g)].map((m) => m[1]!)
+    const listed = edgeRule().selectors.flatMap((selector) => /^\[data-slot="([a-z-]+)"\]$/.exec(selector)?.[1] ?? [])
     expect(listed.length).toBeGreaterThan(5)
     const popups = appTags(/\.Popup$/)
     expect(popups.length).toBeGreaterThan(2)
@@ -195,6 +213,12 @@ function forcedColours(): string {
   return (/@media \(forced-colors: active\) \{([\s\S]*?)\n {2}\}/.exec(base)?.[1] ?? "").replace(/\/\*[\s\S]*?\*\//g, "")
 }
 
+/** The forced-colours rule that outlines the floating surfaces: its selectors (it applies to them only without the focus) and its declarations. */
+function edgeRule(): { selectors: string[]; declarations: string } {
+  const rule = /\n {4}:is\((\[data-slot="dialog-content"\][^{]*)\):not\(:focus-visible\) \{([^}]*)\}/.exec(forcedColours())
+  return { selectors: (rule?.[1] ?? "").split(",").map((selector) => selector.trim()), declarations: rule?.[2]?.trim() ?? "" }
+}
+
 /** The opening tags in the app's own code (outside the kit) whose name matches `name`, with their file. */
 function appTags(name: RegExp): { file: string; name: string; tag: string }[] {
   return Object.entries(scripts)
@@ -213,6 +237,20 @@ const OWN_EDGE = ["popover-content", "hover-card-content"]
 const FILLS_THE_SCREEN = [
   // the image viewer covers the whole window: there is no page beside it for an edge to divide it from
   { file: "features/lightbox/Lightbox.tsx", look: "fixed inset-0" },
+]
+
+/** The app's floating surfaces whose edge is their shadow alone (frontend.md), by slot, with the files that draw them. */
+const APP_SURFACES = {
+  "floating-bar": ["pages/gallery/index.tsx", "pages/settings/ApplyBar.tsx", "pages/extensions/InstalledView.tsx"],
+  "networks-drawer": ["features/networks/NetworksDrawer.tsx"],
+}
+
+/** Shadows on what does not float over the page, with the reason: `look` pins the tag to what makes it so. */
+const NOT_OVER_THE_PAGE = [
+  // the queue row a drag holds lifts inside its own list for the length of the drag
+  { file: "features/queue/PendingList.tsx", look: "border-transparent bg-popover shadow-lg" },
+  // the compare slider's handle is a control over the two pictures, whose fill forced colours draw over them
+  { file: "features/compare/CompareSlider.tsx", look: "rounded-full bg-white" },
 ]
 
 /**

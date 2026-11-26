@@ -489,13 +489,26 @@ imperatively).
   (`combobox-content`, `combobox-item`, `dropdown-menu-content`): without it
   the list had no edge and its highlighted option no outline. The same test
   reads every `<X.Popup` and `<Combobox.Item` outside the kit for one; the
-  image viewer, which fills the window, has no edge to draw.
+  image viewer, which fills the window, has no edge to draw. A floating bar
+  and the networks drawer, whose edge is their shadow alone, and
+  `material-float`, whose hairline is a box shadow, merged with the page or
+  the picture under them there as well: the bars (the settings' apply bar,
+  the extensions' pending changes, the gallery's selection) carry
+  `data-slot="floating-bar"`, the drawer `networks-drawer`, and the block
+  lists both slots and the `.material-float` class with the popups. A new
+  surface outside the kit that floats on a shadow (`shadow-md` or more)
+  carries a listed slot or a border of its own, which forced colours draw;
+  the same test fails on one with neither (a row a drag holds and the
+  compare slider's handle, which do not float over the page, are exempt).
   `tests/e2e/a11y.spec.ts` ("visible focus in forced colours") tabs through
   txt2img, the gallery, the networks and settings under forced colours and
   fails on a stop with no 2 px outline, or an outline left at rest; "lists in
   forced colours" checks the appearance menu, the checkpoint picker (a search
   select) and the command palette: a solid 1 px edge on the list, and a 3 px
-  outline on its focused or highlighted item and on no other.
+  outline on its focused or highlighted item and on no other; "floating
+  surfaces in forced colours" checks the 1 px edge of the settings' apply bar,
+  the gallery's selection bar, the networks drawer and the image editor's
+  history and zoom bar.
 - See [Visual rules](#visual-rules) for the design rules every new screen
   follows.
 - shadcn components import `cn` from the `cn` package (what the base-nova
@@ -744,7 +757,9 @@ generated interfaces (sources: Linear's
   card) keep a hairline ring with their shadow, because they
   open over anything (a busy picture, a surface of their own tone) and the
   shadow alone does not hold the outline there. A floating bar (the settings
-  apply bar, the gallery's bulk bar) and a drawer take the shadow alone. The
+  apply bar, the gallery's bulk bar) and a drawer take the shadow alone (in
+  forced colours, which draw no shadow, they and this material take a 1 px
+  outline instead; see the forced-colours rules above). The
   material stays opaque enough that its text keeps its contrast over pure
   black or white.
   Nothing else is glass: not the header, menus, popovers, the command

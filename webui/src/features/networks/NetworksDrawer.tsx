@@ -86,6 +86,7 @@ export default function NetworksDrawer({ tab, autoFocus, onClose, returnFocus }:
       role="dialog"
       aria-modal="false"
       aria-label={t("Networks")}
+      data-slot="networks-drawer"
       onKeyDown={(event) => {
         if (event.key !== "Escape" || event.defaultPrevented) return
         const target = event.target as HTMLElement

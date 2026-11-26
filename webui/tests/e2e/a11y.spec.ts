@@ -379,6 +379,12 @@ test.describe("visible focus in forced colours", () => {
   }
 })
 
+/** The outline an element draws, as its style and width ("solid 1px"), or "none". */
+const edge = (element: Locator) => element.evaluate((node) => {
+  const style = getComputedStyle(node)
+  return style.outlineStyle === "none" ? "none" : `${style.outlineStyle} ${style.outlineWidth}`
+})
+
 // A list's items carried a transparent outline at rest, which forced colours paint: a menu was a stack of
 // boxes. And the command palette's highlighted item, which does not take the focus, was not marked at all.
 test.describe("lists in forced colours", () => {
@@ -397,12 +403,6 @@ test.describe("lists in forced colours", () => {
     const widths = await Promise.all((await items.all()).map(async (item) => ({ focused: await item.evaluate((element) => element === document.activeElement), width: await outline(item) })))
     expect(widths.filter(({ focused }) => focused).map(({ width }) => width)).toEqual([3])
     expect(widths.filter(({ focused, width }) => !focused && width > 0)).toEqual([])
-  })
-
-  /** The outline drawn, as its style and width ("solid 1px"), or "none". */
-  const edge = (element: Locator) => element.evaluate((node) => {
-    const style = getComputedStyle(node)
-    return style.outlineStyle === "none" ? "none" : `${style.outlineStyle} ${style.outlineWidth}`
   })
 
   test("a menu has an edge over the page", async ({ page }) => {
@@ -453,6 +453,49 @@ test.describe("lists in forced colours", () => {
     const others = await Promise.all((await palette.getByRole("option", { selected: false }).all()).map(outline))
     expect(others.length).toBeGreaterThan(0)
     expect(others.filter((width) => width > 0)).toEqual([])
+  })
+})
+
+// Forced colours draw no box shadow: a floating bar and the networks drawer, whose edge is their shadow, and
+// the image editor's floating material, whose hairline is a box shadow, merged with the page under them.
+test.describe("floating surfaces in forced colours", () => {
+  test("the settings' apply bar has an edge over the page", async ({ page }) => {
+    await page.emulateMedia({ forcedColors: "active" })
+    await openRoute(page, "settings")
+    await page.getByRole("switch", { name: "Automatically save every generated image", exact: true }).click()
+    const bar = page.getByRole("region", { name: "Unsaved changes" }).locator("[data-toast-obstacle]")
+    await expect(bar).toBeVisible()
+    expect(await edge(bar)).toBe("solid 1px")
+  })
+
+  test("the gallery's selection bar has an edge over the page", async ({ page }) => {
+    await page.emulateMedia({ forcedColors: "active" })
+    await openRoute(page, "gallery")
+    await page.getByTestId("gallery-scroller").locator("[data-gallery-tile] button").first().focus()
+    await page.keyboard.press("Space")
+    const bar = page.getByRole("toolbar", { name: "Selected images" })
+    await expect(bar).toBeVisible()
+    expect(await edge(bar)).toBe("solid 1px")
+  })
+
+  test("the networks drawer has an edge over the page", async ({ page }) => {
+    await page.emulateMedia({ forcedColors: "active" })
+    await openRoute(page, "txt2img")
+    await page.locator("body").press("Alt+N")
+    const drawer = page.getByRole("dialog", { name: "Networks" })
+    await expect(drawer.getByRole("option").first()).toBeVisible()
+    expect(await edge(drawer)).toBe("solid 1px")
+  })
+
+  test("the image editor's floating panels have an edge over the picture", async ({ page }) => {
+    await page.emulateMedia({ forcedColors: "active" })
+    await openRoute(page, "img2img")
+    const chooser = page.waitForEvent("filechooser")
+    await page.getByRole("button", { name: "Add a source image" }).click()
+    await (await chooser).setFiles({ name: "source.png", mimeType: "image/png", buffer: SOURCE_PNG })
+    const history = page.getByRole("toolbar", { name: "History and zoom" })
+    await expect(history).toBeVisible()
+    expect(await edge(history)).toBe("solid 1px")
   })
 })
 
