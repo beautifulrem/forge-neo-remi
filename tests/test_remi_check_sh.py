@@ -168,8 +168,8 @@ def test_the_e2e_step_keeps_the_ci_reporters(checkout: Path, tmp_path: Path, ci:
 
 def test_the_steps_do_not_see_commandline_args(checkout: Path, tmp_path: Path):
     """modules.paths_internal adds COMMANDLINE_ARGS to the WebUI's command line: exported by a
-    shell, its --data-dir would give the test suites the owner's settings file (the extension
-    suites have no tests/conftest.py to drop it)."""
+    shell, its --data-dir would give the test suites the owner's settings file (tests/conftest.py
+    drops it for tests/ only, and none of the extension suites' own conftests does)."""
 
     python = tmp_path / "bin" / "python"
     python.parent.mkdir()

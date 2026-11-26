@@ -44,7 +44,7 @@ def test_the_settings_file_does_not_depend_on_which_test_runs_first(tmp_path):
         "    assert Path(shared.config_filename).parent.name.startswith('remi-tests-settings-'), shared.config_filename",
     ]
     first.write_text("\n".join(source) + "\n", encoding="utf-8")
-    env = {key: value for key, value in os.environ.items() if key != "PYTEST_ADDOPTS"}  # the outer run's -k, --lf, ...
+    env = {key: value for key, value in os.environ.items() if key != "PYTEST_ADDOPTS"}  # options given through it (-k, --lf, ...) would apply here too
     env["COMMANDLINE_ARGS"] = f"--ui-settings-file {tmp_path / 'elsewhere.json'}"
     command = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-c", str(ROOT / "pyproject.toml"), "--rootdir", str(ROOT)]
     command += [str(first), "tests/test_settings_file_isolation.py::test_the_settings_file_is_the_conftests_own"]

@@ -25,7 +25,8 @@
 # requirements.txt and requirements-dev.txt (pytest, pytest-cov) installed, preferring one
 # without Gradio (env:gradio-free fails when the chosen one can import Gradio: the WebUI
 # must start without it). Ruff is taken from that environment, then PATH, then `uvx ruff`.
-# Logs: $REMI_CHECK_LOGS (default a temporary directory, printed at the end). The
+# COMMANDLINE_ARGS is unset for every step (modules.paths_internal would add it to the WebUI's
+# command line). Logs: $REMI_CHECK_LOGS (default a temporary directory, printed at the end). The
 # real-model smoke test is separate: tools/smoke_real.py.
 # legacy-ui (the legacy ui() recorder's self-test) needs the recorder's own Gradio 4.40 interpreter,
 # built once with the network by tools/legacy_ui_env.sh: $REMI_LEGACY_PYTHON, else the one that
