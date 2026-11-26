@@ -16,8 +16,8 @@ is gone (a history rewrite), which fetching could hide.
 Standard library and git only: the legacy-UI recorder runs this under its own
 Gradio interpreter. ``tools/`` is not a package: the other tools load this file
 by path under :data:`MODULE` (one copy per process, so a failed fetch is tried
-once, and a remote that failed to give the whole history or timed out is not
-asked again by the next gate).
+once: a remote that timed out is not asked again by the next gate, nor one that
+failed to give the whole history asked for it again).
 """
 
 from __future__ import annotations
@@ -41,8 +41,10 @@ FULL_HASH = re.compile(r"[0-9a-f]{40}")
 _failures: dict[tuple[str, ...], str] = {}
 """Fetches that failed in this process, by repository and revisions: their reason, not a second attempt."""
 _unreachable: dict[str, str] = {}
-"""Repositories whose remote timed out or failed to give the whole history in
-this process: git's error, instead of another fetch for the next revisions."""
+"""Repositories whose remote timed out in this process: git's error, instead of another fetch."""
+_no_history: dict[str, str] = {}
+"""Repositories whose remote failed to give the whole history in this process:
+the error, instead of another ``--unshallow`` (a commit by hash is still fetched)."""
 
 
 def _git(repo: Path | str, *args: str, timeout: float = LOCAL_TIMEOUT) -> subprocess.CompletedProcess[str]:
@@ -94,7 +96,7 @@ def _shallow_ancestors(repo: Path | str) -> list[str]:
 
 def _fetch(repo: Path | str, *args: str) -> str | None:
     """``git fetch --no-tags *args`` in ``repo``; the error, or None. A remote
-    that timed out (or failed :func:`_unshallow`) is not asked again."""
+    that timed out is not asked again."""
 
     if (error := _unreachable.get(str(repo))) is not None:
         return error
@@ -109,6 +111,8 @@ def _fetch(repo: Path | str, *args: str) -> str | None:
 def _unshallow(repo: Path | str, name: str) -> str | None:
     """Fetch HEAD's whole history from ``name``; the error, or None."""
 
+    if (error := _no_history.get(str(repo))) is not None:
+        return error
     head = _git(repo, "rev-parse", "HEAD").stdout.strip()
     # HEAD itself first: a pull request's merge commit is on no branch the default refspec fetches
     error = _fetch(repo, "--unshallow", name, *([head] if head else []))
@@ -117,7 +121,7 @@ def _unshallow(repo: Path | str, name: str) -> str | None:
     if error is None and (left := _shallow_ancestors(repo)):
         error = f"the history still stops at {left[0][:10]}"
     if error is not None:
-        _unreachable[str(repo)] = error
+        _no_history[str(repo)] = error
     return error
 
 

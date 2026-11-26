@@ -133,10 +133,10 @@ def fetches(monkeypatch) -> list[tuple[str, ...]]:
     return seen
 
 
-def test_a_remote_that_failed_is_not_asked_again(repos, monkeypatch):
+def test_a_remote_that_failed_to_give_the_history_is_not_asked_for_it_again(repos, monkeypatch):
     """Each gate asks for its own commits; once the remote failed to give the
-    whole history, the others skip at once (a hanging remote would cost each
-    of them the fetch timeout again)."""
+    whole history, the others still fetch their commits by hash but not the
+    history again (three fetches per gate otherwise)."""
 
     _source, clone, (old, middle, _head) = repos
     git("remote", "set-url", "origin", (clone.parent / "gone").as_uri(), cwd=clone)
@@ -147,7 +147,7 @@ def test_a_remote_that_failed_is_not_asked_again(repos, monkeypatch):
     assert later.startswith(f"{middle[:10]} is not in this shallow clone and fetching it from origin failed: ")
     assert later.split(" failed: ", 1)[1] in reason  # the first failure's own words
     assert history.ensure_history(clone).startswith("this shallow clone lacks the history and fetching it from origin failed: ")
-    assert seen == []
+    assert seen == [("fetch", "--no-tags", "--depth=1", "origin", middle)]
 
 
 def test_a_fetch_that_timed_out_is_not_retried(repos, monkeypatch):
