@@ -12,6 +12,8 @@ describe("SearchSelect", () => {
     render(<SearchSelect options={options} value="DPM++ 2M" onValueChange={onValueChange} aria-label="Sampler" />)
     await user.click(screen.getByRole("combobox", { name: "Sampler" }))
     await user.click(await screen.findByPlaceholderText("Search…"))
+    // Enter right after the last letter: each item carries its index, so the exact match that
+    // moved to the top is the one Enter picks, before Base UI has read the list's new DOM order
     await user.keyboard("euler{Enter}")
     await waitFor(() => expect(onValueChange).toHaveBeenCalledWith("Euler"))
     expect(onValueChange).toHaveBeenCalledTimes(1)

@@ -84,6 +84,9 @@ test.describe("networks drawer", () => {
     const drawer = page.getByRole("dialog", { name: "Networks" })
     await expect(drawer).toBeVisible()
     await drawer.getByRole("searchbox", { name: "Search networks" }).fill("comic_sketch_v1_700")
+    // The search reaches the list after a debounce. Until then the card is further down the
+    // unfiltered list, and a click there can land on the row the filtered list leaves empty.
+    await expect(drawer.getByRole("option")).toHaveCount(1)
     const card = drawer.getByRole("option", { name: /^comic_sketch_v1_700,/ })
     await expect(card).toBeVisible()
     await card.click()

@@ -256,6 +256,34 @@ def test_serial_runs_one_step_at_a_time(checkout: Path, tmp_path: Path):
     result, record = run_two_lanes(checkout, tmp_path, "--serial", wait=1)
     assert result.returncode == 0, result.stdout + result.stderr
     assert record == ["python start", "python end", "pnpm start", "pnpm end"]
+    assert "Running 2 steps one at a time;" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("only", "first"),
+    [
+        ("contract:sdapi", "Running 1 steps one at a time;"),
+        ("pytest:tests,contract:sdapi", "Running 2 steps in two lanes at once (python, suites);"),
+        ("pytest:tests,contract:sdapi,pnpm:lint", "Running 3 steps in three lanes at once (python, suites, frontend);"),
+        ("pnpm:install,pnpm:lint", "Running 2 steps one at a time;"),
+        ("pytest:tests,pytest:coverage", "Running 2 steps one at a time;"),
+        ("pytest:coverage,pnpm:lint", "Running 2 steps in two lanes at once (frontend, after);"),
+    ],
+    ids=["one step", "python and suites", "all three", "frontend alone", "after follows python", "after beside frontend"],
+)
+def test_the_first_line_names_the_lanes_that_start_at_once(checkout: Path, tmp_path: Path, only: str, first: str):
+    """A subset can leave lanes empty (CI's SPA job runs the frontend lane alone): the line that
+    starts the run says which lanes run side by side, and "one at a time" when only one has steps."""
+
+    (checkout / "webui").mkdir()
+    record = tmp_path / "record.txt"
+    python = fake_python(tmp_path / "bin" / "python", record)
+    fake_python(tmp_path / "bin" / "pnpm", record)
+    env = {key: value for key, value in os.environ.items() if key not in {"REMI_LEGACY_PYTHON", "REMI_CHECK_LOGS"}}
+    env.update(PYTHON=str(python), REMI_CHECK_LOGS=str(checkout.parent / "logs"), PATH=f"{tmp_path / 'bin'}{os.pathsep}{env.get('PATH', '')}")
+    result = subprocess.run(["bash", str(checkout / "tools" / "check.sh"), "--only", only], cwd=checkout, env=env, capture_output=True, text=True, timeout=120)
+    started = [line for line in result.stdout.splitlines() if line.startswith("Running ")]
+    assert len(started) == 1 and started[0].startswith(first), result.stdout + result.stderr
 
 
 @pytest.mark.parametrize(("only", "build", "flag"), [("pnpm:build,api-docs", 0, "1"), ("pnpm:build,api-docs", 1, "unset"), ("api-docs", None, "unset")], ids=["built", "build failed", "no build"])

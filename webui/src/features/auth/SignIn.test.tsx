@@ -34,7 +34,8 @@ describe("sign-in", () => {
     expect(screen.queryByText("the app")).toBeNull()
     expect(screen.getByRole("heading", { name: "Sign in to Remi WebUI" })).toBeInTheDocument()
     fill("ann", "nope")
-    expect(await screen.findByRole("alert")).toHaveTextContent("Wrong username or password.")
+    // the alert is a live region there from the start: wait for its text, not for it
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Wrong username or password."))
     expect(screen.getByLabelText("Password")).toHaveValue("")
   })
 
@@ -43,7 +44,7 @@ describe("sign-in", () => {
     recordFetch(() => ({ status: 429, body: { detail: "too many failed logins; wait a minute" } }))
     render(<AuthGate>{null}</AuthGate>)
     fill("ann", "x")
-    expect(await screen.findByRole("alert")).toHaveTextContent("Too many attempts, wait a minute.")
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Too many attempts, wait a minute."))
   })
 
   it("signing in reloads the page that was asked for", async () => {

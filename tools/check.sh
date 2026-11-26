@@ -408,6 +408,14 @@ run_lane() { # run_lane <lane>: its steps, one after another, while the script r
   done
 }
 
+lane_has_steps() { # lane_has_steps <lane>: whether a step to run is in it
+  local lane
+  for lane in "${QUEUED_LANES[@]}"; do
+    [ "$lane" != "$1" ] || return 0
+  done
+  return 1
+}
+
 descendants() { # descendants <pid>: every process under it
   command -v pgrep >/dev/null || return 0
   local child
@@ -439,7 +447,21 @@ if [ ${#QUEUED_NAMES[@]} -gt 0 ]; then
       wait $!
     done
   else
-    echo "Running ${#QUEUED_NAMES[@]} steps in three lanes at once (python, suites, frontend); logs in $LOGS"
+    # The first line names the lanes that start at once: --only and --skip can leave a lane empty
+    # (CI's SPA job runs the frontend lane alone). after waits for both Python lanes, so it starts
+    # with the others only when neither of them has a step.
+    at_once=""
+    for lane in python suites frontend; do
+      if lane_has_steps "$lane"; then at_once="${at_once:+$at_once, }$lane"; fi
+    done
+    if lane_has_steps after && ! lane_has_steps python && ! lane_has_steps suites; then
+      at_once="${at_once:+$at_once, }after"
+    fi
+    case "$at_once" in
+      *,*,*) echo "Running ${#QUEUED_NAMES[@]} steps in three lanes at once ($at_once); logs in $LOGS" ;;
+      *,*) echo "Running ${#QUEUED_NAMES[@]} steps in two lanes at once ($at_once); logs in $LOGS" ;;
+      *) echo "Running ${#QUEUED_NAMES[@]} steps one at a time; logs in $LOGS" ;;
+    esac
     run_lane python &
     python_lane=$!
     run_lane suites &
