@@ -517,6 +517,12 @@
     [data-slot="slider-thumb"]:has(> input:focus-visible) {
       outline: 3px solid Highlight !important;
     }
+    /* a combobox's and the command palette's highlighted item: the focus stays in their input, and
+       the background that shows the highlight is not drawn */
+    [data-slot="combobox-item"][data-highlighted],
+    [data-slot="command-item"][data-selected="true"] {
+      outline: 3px solid Highlight !important;
+    }
   }
 }
 

@@ -379,6 +379,42 @@ test.describe("visible focus in forced colours", () => {
   }
 })
 
+// A list's items carried a transparent outline at rest, which forced colours paint: a menu was a stack of
+// boxes. And the command palette's highlighted item, which does not take the focus, was not marked at all.
+test.describe("lists in forced colours", () => {
+  const outline = (item: Locator) => item.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return style.outlineStyle === "none" ? 0 : parseFloat(style.outlineWidth)
+  })
+
+  test("a menu outlines its focused item and no other", async ({ page }) => {
+    await page.emulateMedia({ forcedColors: "active" })
+    await openGenerate(page)
+    await page.getByRole("button", { name: "Appearance" }).press("Enter")
+    const items = page.getByRole("menu").getByRole("menuitemradio")
+    await expect(items.first()).toBeVisible()
+    await page.keyboard.press("ArrowDown")
+    const widths = await Promise.all((await items.all()).map(async (item) => ({ focused: await item.evaluate((element) => element === document.activeElement), width: await outline(item) })))
+    expect(widths.filter(({ focused }) => focused).map(({ width }) => width)).toEqual([3])
+    expect(widths.filter(({ focused, width }) => !focused && width > 0)).toEqual([])
+  })
+
+  test("the command palette outlines its highlighted item and no other", async ({ page }) => {
+    await page.emulateMedia({ forcedColors: "active" })
+    await openGenerate(page)
+    await page.keyboard.press(`${mod}+K`)
+    const palette = page.getByRole("dialog", { name: "Command palette" })
+    await expect(palette.getByRole("combobox")).toBeFocused()
+    await page.keyboard.type("theme")
+    const highlighted = palette.getByRole("option", { selected: true })
+    await expect(highlighted).toHaveCount(1)
+    expect(await outline(highlighted)).toBe(3)
+    const others = await Promise.all((await palette.getByRole("option", { selected: false }).all()).map(outline))
+    expect(others.length).toBeGreaterThan(0)
+    expect(others.filter((width) => width > 0)).toEqual([])
+  })
+})
+
 // The focus ring is drawn inside the tile, over the image. The image zooms in under the pointer,
 // which lifted it onto a layer of its own over the ring: a tile focused from the keyboard showed
 // no ring while the pointer rested on it.

@@ -120,6 +120,20 @@ describe("the focus ring token", () => {
     expect(sources["../components/ui/slider.tsx"]).toMatch(/data-slot="slider-thumb"/)
   })
 
+  it("marks the highlighted item of a list whose focus stays in its input, in forced colours", () => {
+    // A combobox's and the command palette's highlighted item does not take the focus (that stays in
+    // their input) and shows the highlight as a background, which forced colours do not draw: the
+    // highlighted item was not told apart there. The forced-colours block outlines it as the focus.
+    const base = css.slice(css.indexOf("@layer base {"))
+    const forced = /@media \(forced-colors: active\) \{([\s\S]*?)\n {2}\}/.exec(base)?.[1] ?? ""
+    const rule = /\n {4}(\[data-slot="combobox-item"\][^{]*)\{([^}]*)\}/.exec(forced.replace(/\/\*[\s\S]*?\*\//g, ""))
+    expect(rule?.[1]?.split(",").map((selector) => selector.trim())).toEqual(['[data-slot="combobox-item"][data-highlighted]', '[data-slot="command-item"][data-selected="true"]'])
+    // important: the base layer loses to the utilities' outline-none otherwise
+    expect(rule?.[2]?.trim()).toBe("outline: 3px solid Highlight !important;")
+    expect(sources["../components/ui/combobox.tsx"] ?? "").toMatch(/data-slot="combobox-item"[\s\S]*data-highlighted:bg-accent/)
+    expect(sources["../components/ui/command.tsx"] ?? "").toMatch(/data-slot="command-item"[\s\S]*data-selected:bg-muted/)
+  })
+
   it("is the only focus ring colour drawn from --ring at a share of its own", () => {
     const ownShares = Object.entries(sources)
       .filter(([, source]) => /\b(?:ring|outline)-ring\/\d+\b|var\(--ring\) \d+%/.test(source))

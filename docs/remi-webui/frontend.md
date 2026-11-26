@@ -467,16 +467,19 @@ imperatively).
   2 px outline under forced colours, which the browser paints in a system
   colour on the control at rest too, so every field and button would be
   boxed before it had the focus. shadcn's menu, select, combobox and command
-  items, the command input and the popover and hover-card popups keep their
-  bare `outline-hidden` (they draw no ring; upstream's), so under forced
-  colours each of them is boxed at rest, an item list a stack of 2 px
-  boxes. A menu's or a select's focused item is told apart by its 3 px
-  `Highlight` outline (measured on the appearance menu); a combobox's and
-  the command palette's highlighted item does not take the focus, which
-  stays in their input, so that outline does not mark it. `tests/e2e/a11y.spec.ts`
-  ("visible focus in forced colours") tabs through txt2img, the gallery, the
-  networks and settings under forced colours and fails on a stop with no
-  2 px outline, or an outline left at rest.
+  items and the command input came with a bare `outline-hidden`, which made
+  every item list a stack of 2 px boxes there: they take `outline-none`
+  (a local fix), and a menu's or a select's focused item shows the 3 px
+  `Highlight` outline. A combobox's and the command palette's highlighted
+  item does not take the focus, which stays in their input, and the
+  background that marks it is not drawn: the same block outlines it
+  (`[data-highlighted]`, `[data-selected="true"]`). Only the popover and
+  hover-card popups keep a bare `outline-hidden`: under forced colours it is
+  their edge, their ring and shadow not being drawn (`lib/design-guards.test.ts`).
+  `tests/e2e/a11y.spec.ts` ("visible focus in forced colours") tabs through
+  txt2img, the gallery, the networks and settings under forced colours and
+  fails on a stop with no 2 px outline, or an outline left at rest; "lists in
+  forced colours" checks the appearance menu and the command palette.
 - See [Visual rules](#visual-rules) for the design rules every new screen
   follows.
 - shadcn components import `cn` from the `cn` package (what the base-nova

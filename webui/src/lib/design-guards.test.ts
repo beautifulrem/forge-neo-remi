@@ -366,6 +366,15 @@ describe("focus rings", () => {
     expect(both).toEqual([])
   })
 
+  it("leave no transparent outline at rest, but on a popup's edge", () => {
+    // frontend.md: a bare `outline-hidden` is a transparent outline at rest, which forced colours
+    // paint in a system colour: the kit's menu, select, combobox and command items were each boxed
+    // there, a list a stack of boxes. Only a popup keeps it: under forced colours it is the popup's
+    // edge, its ring and shadow not being drawn. The focus is drawn by the base layer's outline.
+    const bare = occurrences(/(?:^|[\s"'`])outline-hidden(?=[\s"'`]|$)/g).map(({ file }) => file)
+    expect([...new Set(bare)].sort()).toEqual(["components/ui/hover-card.tsx", "components/ui/popover-impl.tsx"])
+  })
+
   it("give way to the focus ring on an invalid field", () => {
     // frontend.md: on an invalid field the focus wins. Its halo (`aria-invalid:ring-3
     // aria-invalid:ring-destructive/20`) came after `focus-visible:ring-focus-ring` in Tailwind's CSS,
