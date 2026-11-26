@@ -237,7 +237,15 @@ imperatively).
   `lib/design-guards.test.ts`, "colours"). White and black stay for controls
   over a picture or the viewer's black backdrop; a control there that needs
   a token colour (the viewer's Remove, red on hover) carries the `dark`
-  class, so the tokens it reads are the dark theme's in either theme.
+  class, so the tokens it reads are the dark theme's in either theme. The
+  viewer's chrome over its backdrop (the toolbar, the details panel, the
+  previous / next buttons) carries it as a whole: its focus ring, the light
+  theme's there, read 2.3:1 on the near-black backdrop. A `dark` scope
+  inside the light theme re-derives the brand colours (`--primary`,
+  `--ring`, `--focus-ring`) with the dark theme's lightness for the accent
+  (`index.css`), since they are resolved where they are declared and would
+  come down as the light theme's. The stage itself keeps the page's tokens
+  (its checkerboard).
   Extra semantic colours:
   - `success`, `warning`, `destructive`, `star` (warm gold star marks, ≥ 3.5:1
     on paper), `canvas` (borderless image backdrops), utility `bg-checker`;
@@ -390,7 +398,9 @@ imperatively).
   of it in the light theme (half of it read at about 2.2:1 on the paper)
   and 60 % in the dark theme (half stayed under 3:1 on the page for some
   accents), so that it reaches 3:1 on the page and on `--canvas` for
-  every accent in both (`styles/focus-ring.test.ts`). It is re-derived
+  every accent in both, and on the viewer's backdrop, whose chrome is
+  `dark` (`styles/focus-ring.test.ts`; `tests/e2e/a11y.spec.ts`, "the image
+  viewer's focus rings"). It is re-derived
   with `--ring` wherever an accent is set. A focus ring, a keyboard
   cursor or highlight included, takes the token, never a share of `--ring`
   of its own (`ring-ring/60`; the test fails on one), nor `--ring` itself

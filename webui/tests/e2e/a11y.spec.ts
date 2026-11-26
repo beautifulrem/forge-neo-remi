@@ -347,6 +347,82 @@ test("a gallery tile shows its focus ring under the pointer", async ({ page }) =
 })
 
 /**
+ * The contrast of a focused control's ring in the image viewer (its first outer box-shadow layer 3 px or more
+ * wide, painted over what is behind it) against the surface behind it: the fills of its ancestors in the viewer
+ * over the viewer's backdrop.
+ */
+async function viewerRingContrast(element: Locator): Promise<number> {
+  return element.evaluate((node) => {
+    const canvas = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!
+    const rgba = (color: string) => {
+      canvas.clearRect(0, 0, 1, 1)
+      canvas.fillStyle = "#000"
+      canvas.fillStyle = color
+      canvas.fillRect(0, 0, 1, 1)
+      const [r, g, b, a] = canvas.getImageData(0, 0, 1, 1).data
+      return { rgb: [r!, g!, b!].map((x) => x / 255), alpha: a! / 255 }
+    }
+    const over = (color: string, under: number[]) => {
+      const { rgb, alpha } = rgba(color)
+      return rgb.map((x, i) => alpha * x + (1 - alpha) * under[i]!)
+    }
+    const luminance = (rgb: number[]) => {
+      const [r, g, b] = rgb.map((x) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)) as [number, number, number]
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+    // the surface: the fills of the element's ancestors inside the viewer, outermost first, over its backdrop
+    const fills: string[] = []
+    const popup = node.closest('[role="dialog"]')!
+    for (let p = node.parentElement; p && popup.contains(p); p = p.parentElement) fills.unshift(getComputedStyle(p).backgroundColor)
+    let surface = rgba(getComputedStyle(document.querySelector('[data-slot="viewer-backdrop"]')!).backgroundColor).rgb
+    for (const fill of fills) surface = over(fill, surface)
+    const layers = getComputedStyle(node)
+      .boxShadow.split(/,(?![^(]*\))/)
+      .filter((layer) => !/\binset\b/.test(layer))
+      .map((layer) => ({ color: /^\s*([a-z-]+\([^)]*\)|#\w+|[a-z]+)/i.exec(layer)?.[1] ?? "transparent", spread: Number([...layer.matchAll(/(-?[\d.]+)px/g)][3]?.[1] ?? 0) }))
+      .filter(({ color, spread }) => spread >= 3 && rgba(color).alpha > 0)
+    if (layers.length === 0) return 0
+    const ring = over(layers[0]!.color, surface)
+    const [hi, lo] = [luminance(ring), luminance(surface)].sort((x, y) => y - x) as [number, number]
+    return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100
+  })
+}
+
+// The viewer's backdrop is near-black in both themes, but its controls read the page's tokens: in the light
+// theme their focus ring (80 % of a dark --ring) read about 2.3:1 there for every accent. They take the dark
+// theme's tokens (frontend.md, "Colours").
+for (const theme of ["light", "dark"] satisfies Theme[]) {
+  test(`${theme}: the image viewer's focus rings reach 3:1 on its backdrop`, async ({ page }) => {
+    await presetStorage(page, { theme })
+    await openRoute(page, "gallery")
+    await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" })
+    // the second image has a parent and a child: the lineage strip shows them
+    await page.getByRole("list", { name: "Images" }).getByRole("listitem").nth(1).getByRole("button").first().click()
+    const viewer = page.getByRole("dialog", { name: "Image viewer" })
+    const lineage = viewer.getByRole("region", { name: "Asset lineage" })
+    await expect(lineage.getByText("Current")).toBeVisible()
+    const controls = {
+      close: viewer.getByRole("button", { name: "Close" }),
+      backdrop: viewer.getByRole("group", { name: "RGBA backdrop" }).getByRole("button", { name: "Pure white" }),
+      previous: viewer.getByRole("button", { name: "Previous image" }),
+      // a chip is named by its picture and its relation; its title says where it jumps
+      lineage: lineage.locator('button[title^="Jump to"]').first(),
+      star: viewer.getByRole("complementary", { name: "Image details" }).getByRole("button", { name: "Star" }),
+    }
+    const weak: Record<string, number> = {}
+    for (const [name, control] of Object.entries(controls)) {
+      await control.focus()
+      // a key press makes a focus from script a keyboard focus (:focus-visible)
+      await page.keyboard.press("Shift")
+      expect(await control.evaluate((element) => element.matches(":focus-visible")), name).toBe(true)
+      const ratio = await viewerRingContrast(control)
+      if (ratio < 3) weak[name] = ratio
+    }
+    expect(weak).toEqual({})
+  })
+}
+
+/**
  * How a field draws its state: its outer ring (the focus ring or an invalid field's halo) and its edge (its border, or
  * the inset 1 px ring of a field without one: the prompt editor), each named after the token it is drawn in
  * (`focus-ring`, `destructive`, `ring`) as the field resolves it.

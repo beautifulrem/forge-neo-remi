@@ -113,6 +113,65 @@ describe("the focus ring token", () => {
   })
 })
 
+/** The opening JSX tag around `marker` in `source`: from its `<` to the `>` outside braces and strings. */
+function tagAround(source: string, marker: string): string {
+  const at = source.indexOf(marker)
+  if (at < 0) throw new Error(`no ${marker}`)
+  const start = source.lastIndexOf("\n", source.lastIndexOf("<", at))
+  let depth = 0
+  let quote = ""
+  for (let i = source.indexOf("<", start); i < source.length; i++) {
+    const c = source[i]
+    if (quote) {
+      if (c === quote) quote = ""
+    } else if (c === '"' || c === "`") quote = c
+    else if (c === "{") depth++
+    else if (c === "}") depth--
+    else if (c === ">" && depth === 0 && source[i - 1] !== "=") return source.slice(start, i + 1)
+  }
+  throw new Error(`no end to the tag around ${marker}`)
+}
+
+/**
+ * The image viewer's backdrop is near-black in both themes (frontend.md, "Colours"). Its chrome read the
+ * page's tokens, so in the light theme its focus ring (80 % of a dark --ring) read about 2.3:1 there for
+ * every accent. The chrome carries the `dark` class: the tokens it reads are the dark theme's, and a `dark`
+ * scope inside the light theme re-derives the brand colours, which are resolved where they are declared
+ * (the root) and would otherwise come down as the light theme's.
+ */
+describe("a dark scope inside the light theme", () => {
+  it("re-derives the brand colours, with the dark theme's lightness for each accent", () => {
+    const scoped = [...css.matchAll(/^\.dark \{\n([^}]*)\}/gm)].map((m) => m[1]!)
+    const derived = scoped.find((rule) => /--ring:/.test(rule)) ?? ""
+    expect(token(derived, "ring")).toBe("oklch(var(--brand-l) var(--brand-c) var(--brand-h))")
+    expect(token(derived, "focus-ring")).toBe(FOCUS_RING)
+    expect(token(derived, "primary")).toBe("oklch(var(--brand-l) var(--brand-c) var(--brand-h))")
+    // each rule that gives the dark theme's accents their lightness names a dark scope under the accent too
+    const lightness = [...css.matchAll(/((?:^[^\n{}]+,\n)*^[^\n{}]+) \{ --brand-l: [\d.]+; \}$/gm)].map((m) => m[1]!.split(/,\n/))
+    const dark = lightness.filter((selectors) => selectors.some((selector) => selector.startsWith(".dark")))
+    expect(dark.length).toBe(3)
+    for (const selectors of dark) {
+      const accent = /\[data-accent(?:="\w+")?\]/.exec(selectors[0]!)![0]
+      expect(selectors).toContain(`${accent} .dark`)
+    }
+  })
+
+  it("reaches 3:1 for every accent on the image viewer's backdrop, whose chrome is dark", () => {
+    const lightbox = scripts["../features/lightbox/Lightbox.tsx"]!
+    const backdrop = /data-slot="viewer-backdrop" className="[^"]*\bbg-\[oklch\(([\d.]+)_([\d.]+)_([\d.]+)\)\]/.exec(lightbox)
+    expect(backdrop).not.toBeNull()
+    const surface = srgb([Number(backdrop![1]), Number(backdrop![2]), Number(backdrop![3])])
+    const weak = [...accentRings("dark")]
+      .map(([accent, color]) => ({ accent, ratio: Math.round(ringContrast(srgb(color), alpha(block(".dark")), surface) * 100) / 100 }))
+      .filter(({ ratio }) => ratio < 3)
+    expect(weak).toEqual([])
+    // the toolbar, the details panel and the previous / next buttons: what draws a focus ring over the backdrop
+    for (const marker of ['@container/actions', '<aside', 't("Previous image")', 't("Next image")']) {
+      expect(tagAround(lightbox, marker), marker).toMatch(/className=(?:"|\{cn\(")(?:[^"]* )?dark[ "]/)
+    }
+  })
+})
+
 /** An `oklch(L C H)` or `oklch(L C H / A%)` token: its colour and its alpha (0..1). */
 function oklcha(value: string | undefined): { color: [number, number, number]; alpha: number } {
   const match = /^oklch\(([\d.]+) ([\d.]+) ([\d.]+)(?: \/ ([\d.]+)%)?\)$/.exec(value ?? "")

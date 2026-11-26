@@ -162,9 +162,11 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
           className="fixed inset-0 z-50 flex flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] text-white outline-none duration-150 data-closed:animate-out data-closed:fade-out-0 data-open:animate-in data-open:fade-in-0"
         >
           <Dialog.Title className="sr-only">{t("Image viewer")}</Dialog.Title>
+          {/* the chrome over the backdrop, black in both themes, carries `dark`: the tokens it reads (its focus
+              ring) are the dark theme's; the stage keeps the page's (its checkerboard) */}
           <div
             style={dim(toolbarOpacity)}
-            className="@container/actions flex h-12 shrink-0 items-center gap-2 bg-gradient-to-b from-black/60 to-transparent px-3 opacity-(--lightbox-dim) transition-opacity focus-within:opacity-100 hover:opacity-100"
+            className="dark @container/actions flex h-12 shrink-0 items-center gap-2 bg-gradient-to-b from-black/60 to-transparent px-3 opacity-(--lightbox-dim) transition-opacity focus-within:opacity-100 hover:opacity-100"
           >
             <span className="shrink-0 text-sm whitespace-nowrap text-white/75 tabular-nums" aria-live="polite">
               {live ? t("Live preview") : items.length > 0 ? t("{{index}} of {{count}}", { index: index + 1, count: items.length }) : ""}
@@ -304,7 +306,7 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={() => go(-1)}
                   style={dim(iconOpacity)}
-                  className="absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-black/35 text-white opacity-(--lightbox-dim) transition-opacity hover:bg-black/55 hover:text-white hover:opacity-100 focus-visible:opacity-100"
+                  className="dark absolute top-1/2 left-2 -translate-y-1/2 rounded-full bg-black/35 text-white opacity-(--lightbox-dim) transition-opacity hover:bg-black/55 hover:text-white hover:opacity-100 focus-visible:opacity-100"
                 >
                   <ChevronLeft />
                 </Button>
@@ -316,7 +318,7 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={() => go(1)}
                   style={dim(iconOpacity)}
-                  className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-black/35 text-white opacity-(--lightbox-dim) transition-opacity hover:bg-black/55 hover:text-white hover:opacity-100 focus-visible:opacity-100"
+                  className="dark absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-black/35 text-white opacity-(--lightbox-dim) transition-opacity hover:bg-black/55 hover:text-white hover:opacity-100 focus-visible:opacity-100"
                 >
                   <ChevronRight />
                 </Button>
@@ -326,7 +328,7 @@ export function Lightbox({ open, onOpenChange, items, current, onNavigate, live,
           {aside && item && !live ? (
             <aside
               aria-label={t("Image details")}
-              className="max-h-[40%] shrink-0 overflow-y-auto border-t border-white/10 bg-black/40 p-3 lg:max-h-none lg:w-80 lg:border-t-0 lg:border-l xl:w-96"
+              className="dark max-h-[40%] shrink-0 overflow-y-auto border-t border-white/10 bg-black/40 p-3 lg:max-h-none lg:w-80 lg:border-t-0 lg:border-l xl:w-96"
             >
               {aside(item)}
             </aside>

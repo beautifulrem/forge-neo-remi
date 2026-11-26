@@ -220,16 +220,31 @@
 [data-accent="amber"] { --brand-h: 70; --brand-c: 0.135; --brand-l: 0.485; }
 [data-accent="coral"] { --brand-h: 32; --brand-c: 0.145; --brand-l: 0.49; }
 [data-accent="rose"] { --brand-h: 5; --brand-c: 0.145; --brand-l: 0.495; }
-/* Dark mode: calibrated lightness per accent with a deep darkroom label. */
+/* Dark mode: calibrated lightness per accent with a deep darkroom label, in a `dark` scope inside the
+   light theme too (the image viewer's chrome). */
 .dark[data-accent],
+[data-accent] .dark,
 .dark [data-accent] { --brand-l: 0.76; }
 .dark[data-accent="blue"],
+[data-accent="blue"] .dark,
 .dark [data-accent="blue"] { --brand-l: 0.75; }
 .dark[data-accent="amber"],
+[data-accent="amber"] .dark,
 .dark [data-accent="amber"] { --brand-l: 0.81; }
 
 /* Re-derive brand colours wherever an accent is set (e.g. accent swatches). */
 [data-accent] {
+  --primary: oklch(var(--brand-l) var(--brand-c) var(--brand-h));
+  --primary-hover: oklch(calc(var(--brand-l) + var(--brand-hover-dl)) var(--brand-c) var(--brand-h));
+  --primary-foreground: var(--brand-fg);
+  --ring: oklch(var(--brand-l) var(--brand-c) var(--brand-h));
+  --focus-ring: color-mix(in oklab, var(--ring) var(--focus-ring-alpha), transparent);
+}
+
+/* A `dark` scope inside the light theme (the image viewer's chrome over its black backdrop) re-derives
+   them too: they are resolved where they are declared, so they would come down as the light theme's
+   (its focus ring read 2.3:1 on the viewer's backdrop; src/styles/focus-ring.test.ts). */
+.dark {
   --primary: oklch(var(--brand-l) var(--brand-c) var(--brand-h));
   --primary-hover: oklch(calc(var(--brand-l) + var(--brand-hover-dl)) var(--brand-c) var(--brand-h));
   --primary-foreground: var(--brand-fg);
