@@ -242,20 +242,21 @@ export function ServerView({ onImport, onExport }: { onImport: () => void; onExp
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-6 sm:px-6">
       <header>
         <h1 className="font-heading text-xl font-semibold tracking-tight">{t("Server and models")}</h1>
-        {/* on a phone the link has a line of its own: a failure and its Retry beside it would wrap the line */}
-        <div className="flex flex-col items-start gap-y-1 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3">
+        {/* on a phone each link has a line of its own (a failure and its Retry beside it would wrap the line),
+            12 px apart: room for each 20 px link's 32 px target (after:) without reaching the other's */}
+        <div className="flex flex-col items-start gap-y-3 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1">
           {/* a failure takes the version's place (-my-1: its Retry does not make the line taller), so the panels stay put */}
           {statusFailure ? (
             <LoadFailed error={statusFailure.error} retrying={statusFailure.retrying} message={t("Could not read the server status")} onRetry={() => void status.refetch()} className="-my-1 py-0" />
           ) : (
             <span className="min-h-5">{status.data ? t("Version {{version}}", { version: status.data.version }) : " "}</span>
           )}
-          <a href={`${ROOT}/docs`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline-offset-4 hover:text-foreground hover:underline">
+          <a href={`${ROOT}/docs`} target="_blank" rel="noopener noreferrer" className="relative inline-flex items-center gap-1 underline-offset-4 after:absolute after:inset-x-0 after:-inset-y-1.5 hover:text-foreground hover:underline">
             <BookOpen className="size-3.5" aria-hidden />
             {t("API documentation")}
           </a>
           {source ? (
-            <a href={source} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline-offset-4 hover:text-foreground hover:underline">
+            <a href={source} target="_blank" rel="noopener noreferrer" className="relative inline-flex items-center gap-1 underline-offset-4 after:absolute after:inset-x-0 after:-inset-y-1.5 hover:text-foreground hover:underline">
               <Code className="size-3.5" aria-hidden />
               {t("Source code")}
             </a>

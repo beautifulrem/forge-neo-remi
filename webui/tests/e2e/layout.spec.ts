@@ -1963,6 +1963,29 @@ for (const width of [1440, 390, 360]) {
   })
 }
 
+// On a phone the API documentation and source code links stack: two 20 px links 4 px apart, each a
+// target smaller than its neighbour's reach (frontend.md: a small control between neighbours gets the room
+// for a 32 px box).
+test("the server view's links are 32 px targets apart on a phone @phone", async ({ page }) => {
+  await page.goto("/#/settings?view=server")
+  const header = page.getByRole("main").locator("header")
+  await expect(header.getByRole("link", { name: "Source code" })).toBeVisible()
+  const boxes = await header.getByRole("link").evaluateAll((links) =>
+    links.map((link) => {
+      const rect = link.getBoundingClientRect()
+      const after = getComputedStyle(link, "::after")
+      const offset = (value: string) => (after.content === "none" || after.position !== "absolute" ? 0 : parseFloat(value) || 0)
+      return { name: link.textContent, top: rect.top + offset(after.top), bottom: rect.bottom - offset(after.bottom), ownTop: rect.top }
+    }),
+  )
+  expect(boxes).toHaveLength(2)
+  const [docs, source] = boxes as [(typeof boxes)[number], (typeof boxes)[number]]
+  // stacked, one under the other
+  expect(source.ownTop).toBeGreaterThan(docs.ownTop)
+  for (const box of boxes) expect(Math.round(box.bottom - box.top), `${box.name}: its target`).toBeGreaterThanOrEqual(32)
+  expect(docs.bottom, "the documentation link's target reaches into the source link's").toBeLessThanOrEqual(source.top + 0.5)
+})
+
 test("the server view's panels stay put on a phone when the version arrives", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await injectFaults(page, [{ path: "^/server/status$", delay: 1500 }])
