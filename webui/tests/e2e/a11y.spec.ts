@@ -547,28 +547,61 @@ for (const theme of ["light", "dark"] satisfies Theme[]) {
     await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" })
     await page.getByRole("list", { name: "Images" }).getByRole("listitem").nth(1).getByRole("button").first().click()
     const viewer = page.getByRole("dialog", { name: "Image viewer" })
-    // As sRGB bytes: Tailwind mixes `white/12` in oklab, so the computed colour is written `oklab(…)`.
-    const background = (control: Locator) =>
-      control.evaluate((element) => {
-        const context = document.createElement("canvas").getContext("2d")
-        if (!context) return "no canvas"
-        context.fillStyle = getComputedStyle(element).backgroundColor
-        context.fillRect(0, 0, 1, 1)
-        const [r, g, b, a = 0] = context.getImageData(0, 0, 1, 1).data
-        return `${r} ${g} ${b} / ${Math.round((a / 255) * 100) / 100}`
-      })
     const fit = viewer.getByRole("button", { name: /^(Actual size|Fit to screen)$/ })
     await fit.hover()
-    expect(await background(fit)).toBe("255 255 255 / 0.12")
+    expect(await backgroundBytes(fit)).toBe("255 255 255 / 0.12")
     const details = viewer.getByRole("complementary", { name: "Image details" }).getByRole("button", { name: "Star" })
     await details.hover()
-    expect(await background(details)).toBe("255 255 255 / 0.12")
+    expect(await backgroundBytes(details)).toBe("255 255 255 / 0.12")
     const tile = viewer.getByRole("button", { name: "Tile preview" })
     await tile.click()
     await expect(tile).toHaveAttribute("aria-pressed", "true")
     await tile.hover()
-    expect(await background(tile)).toBe("255 255 255 / 0.25")
+    expect(await backgroundBytes(tile)).toBe("255 255 255 / 0.25")
   })
+
+  // A button in a row of selects (FIELD_BUTTON_CLASS) lightens on hover as the selects do. On a ghost button the
+  // kit's `dark:hover:bg-muted/50` outranked its plain `hover:` class, and the field went darker in the dark theme.
+  test(`${theme}: a field-style button lightens on hover like the selects`, async ({ page }) => {
+    await presetStorage(page, { theme })
+    await openRoute(page, "gallery")
+    await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" })
+    const search = page.getByRole("banner").getByRole("button", { name: /^Search/ })
+    const dates = page.getByRole("button", { name: "Date range" })
+    const fieldHover = await page.evaluate(() => {
+      const probe = document.createElement("div")
+      probe.className = "bg-field-hover"
+      document.body.append(probe)
+      const color = getComputedStyle(probe).backgroundColor
+      probe.remove()
+      return color
+    })
+    const want = await srgb(page, fieldHover)
+    for (const button of [search, dates]) {
+      await button.hover()
+      expect(await backgroundBytes(button), (await button.textContent()) ?? "").toBe(want)
+    }
+  })
+}
+
+/**
+ * A CSS colour as sRGB bytes and its alpha (`"255 255 255 / 0.12"`), whatever notation it is written in:
+ * Tailwind mixes `white/12` in oklab, so the browser computes it as `oklab(…)`.
+ */
+async function srgb(page: Page, color: string): Promise<string> {
+  return page.evaluate((css) => {
+    const context = document.createElement("canvas").getContext("2d")
+    if (!context) return "no canvas"
+    context.fillStyle = css
+    context.fillRect(0, 0, 1, 1)
+    const [r, g, b, a = 0] = context.getImageData(0, 0, 1, 1).data
+    return `${r} ${g} ${b} / ${Math.round((a / 255) * 100) / 100}`
+  }, color)
+}
+
+/** An element's computed background, as {@link srgb} writes it. */
+async function backgroundBytes(element: Locator): Promise<string> {
+  return srgb(element.page(), await element.evaluate((node) => getComputedStyle(node).backgroundColor))
 }
 
 /**

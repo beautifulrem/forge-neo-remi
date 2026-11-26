@@ -73,6 +73,20 @@ function classScopes(raw: string): string[] {
   return [...new Set([...tags.map(({ tag }) => tag), ...scopes])]
 }
 
+/**
+ * The class-string constants of the sources (`const FIELD_BUTTON_CLASS = "…"`), by name: a tag that names one
+ * wears its classes, which a check reading the tag's own text would miss.
+ */
+const CLASS_CONSTANTS = new Map(
+  files.flatMap(({ source }) => [...source.matchAll(/\bconst ([A-Z][A-Z0-9_]*)\s*=\s*"([^"\n]*\bbg-[^"\n]*)"/g)].map((m): [string, string] => [m[1] ?? "", m[2] ?? ""])),
+)
+
+/** `tag` with the classes of each class constant it names added at its end. */
+function withConstants(tag: string): string {
+  const named = [...tag.matchAll(/\b[A-Z][A-Z0-9_]+\b/g)].flatMap(([name]) => CLASS_CONSTANTS.get(name) ?? [])
+  return named.length ? `${tag} "${named.join(" ")}"` : tag
+}
+
 describe("type scale", () => {
   // 0.625 rem, 0.6875 rem, text-xs, 0.8 rem, text-sm, 0.9375 rem; text-xl is a theme name.
   const SCALE = new Set(["0.625rem", "0.6875rem", "0.75rem", "0.8rem", "0.875rem", "0.9375rem"])
@@ -113,7 +127,7 @@ describe("pressed toggles", () => {
   const pressedTags = toggles.flatMap(({ file, source }) =>
     openingTags(source)
       .tags.filter(({ tag }) => /\s(?:aria-)?pressed=\{/.test(tag))
-      .map(({ tag }) => ({ file, tag })),
+      .map(({ tag }) => ({ file, tag: withConstants(tag) })),
   )
 
   it("wear the selection tint instead of a hand-written one", () => {
@@ -156,6 +170,7 @@ describe("pressed toggles", () => {
 
 describe("button washes", () => {
   it("are set for the dark theme too where a ghost or outline button sets its own", () => {
+    expect(CLASS_CONSTANTS.get("FIELD_BUTTON_CLASS")).toContain("hover:bg-field-hover")
     // The kit's ghost button carries `dark:hover:bg-muted/50` and its outline button `dark:bg-input/30` and
     // `dark:hover:bg-input/50`. `dark:` is `:is(.dark *)`, a class more than a plain `hover:` or `bg-`: a
     // button that set its own wash (the image viewer's 12 % white, a destructive tint, a field's hover) lost
@@ -163,11 +178,12 @@ describe("button washes", () => {
     const lost = files.flatMap(({ file, source: raw }) =>
       openingTags(raw)
         .tags.filter(({ name, tag }) => name === "Button" && /\bvariant="(?:ghost|outline)"/.test(tag))
-        .flatMap(({ tag }) => {
+        .flatMap(({ tag: written }) => {
+          const tag = withConstants(written)
           const outline = /\bvariant="outline"/.test(tag)
           const own = (variant: string) => new RegExp(`(?:^|[\\s"'\`])${variant}bg-[^\\s"'\`]+`).test(tag)
           const missing = [own("hover:") && !own("dark:hover:") && "hover", outline && own("") && !own("dark:") && "fill"].filter(Boolean)
-          return missing.length ? [`${file}: ${tag.replace(/\s+/g, " ").slice(0, 70)} (${missing.join(", ")})`] : []
+          return missing.length ? [`${file}: ${written.replace(/\s+/g, " ").slice(0, 70)} (${missing.join(", ")})`] : []
         }),
     )
     expect(lost).toEqual([])
