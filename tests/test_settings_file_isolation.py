@@ -47,7 +47,6 @@ def test_webui_state_saves_settings_in_its_own_folder(tmp_path, monkeypatch):
     # saves to shared.config_filename, there still the command line's file. The helper keeps that
     # file in its own folder, as it does the styles.
     from modules import shared
-
     from remi.testing import webui_state
 
     data_folder = tmp_path / "config.json"  # stands for the data folder's settings file
@@ -63,7 +62,6 @@ def test_webui_state_saves_settings_in_its_own_folder(tmp_path, monkeypatch):
 
 def test_webui_state_keeps_a_settings_file_the_test_chose(tmp_path, monkeypatch):
     from modules import shared
-
     from remi.testing import webui_state
 
     chosen = tmp_path / "chosen.json"
@@ -78,7 +76,6 @@ def test_the_test_app_saves_settings_in_its_own_folder(tmp_path):
     import json
 
     from modules import shared
-
     from remi.server.testing import server_app
     from remi.testing import webui_state
 
@@ -104,7 +101,6 @@ def test_a_settings_file_whose_folder_is_gone_is_not_taken_for_the_tests_own(tmp
     # A test that set shared.config_filename inside a helper whose exit ran before monkeypatch's undo
     # left the helper's deleted temporary path behind; the next helper took it for one the test chose
     from modules import shared
-
     from remi.server.testing import server_app
     from remi.testing import webui_state
 

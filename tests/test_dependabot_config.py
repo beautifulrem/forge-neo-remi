@@ -37,7 +37,7 @@ def test_only_remis_own_python_pins_are_updated():
     allowed = {entry["dependency-name"] for entry in python["allow"]}
     assert allowed == REMI_PINS
     pinned = {m[1].lower() for m in re.finditer(r"^([A-Za-z0-9_.-]+)==", (ROOT / "requirements.txt").read_text(encoding="utf-8"), re.M)}
-    assert REMI_PINS <= pinned
+    assert REMI_PINS.issubset(pinned)
 
 
 def test_fastapi_stays_below_the_release_that_hides_included_routes():
