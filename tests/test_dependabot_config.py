@@ -33,13 +33,15 @@ def test_the_spa_is_updated_in_one_weekly_group():
     assert any(group.get("patterns") == ["*"] for group in spa["groups"].values())
 
 
-def test_redoc_stays_on_the_viewer_the_redoc_page_loads():
-    # ReDoc 3's bundle is an ES module with telemetry and CDN icon sets; remi/server/api_docs.py
-    # serves ReDoc 2's classic script, which webui/vite.config.ts vendors
+def test_redoc_is_updated_within_the_viewer_the_redoc_page_loads():
+    # The /redoc page is written for ReDoc 3 (remi/server/api_docs.py: an ES module, telemetry off
+    # by an attribute of its tag) and webui/vite.config.ts replaces what that bundle would load from
+    # outside hosts, failing the build when an update names such a host again. Updates within 3
+    # come with the weekly group; another major version is another viewer, a port of the page.
     (spa,) = _updates("npm")
-    assert {"dependency-name": "redoc", "versions": [">=3.0.0"]} in spa["ignore"]
+    assert {"dependency-name": "redoc", "versions": [">=4.0.0"]} in spa["ignore"]
     package = json.loads((ROOT / "webui" / "package.json").read_text(encoding="utf-8"))
-    assert package["devDependencies"]["redoc"].startswith("2.")
+    assert re.fullmatch(r"3\.\d+\.\d+", package["devDependencies"]["redoc"])
 
 
 def test_only_remis_own_python_pins_are_updated():

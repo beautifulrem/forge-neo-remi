@@ -160,21 +160,41 @@ function devThirdPartyNotices(): Plugin {
  */
 function apiDocs(): Plugin {
   const modules = path.resolve(import.meta.dirname, "node_modules")
-  const packages = {
+  // `notices`: a bundle the package ships without the list of what it includes. ReDoc 3's keeps
+  // its dependencies' license comments (ReDoc 2 listed them in redoc.standalone.js.LICENSE.txt,
+  // as Swagger UI does), so the build writes that file from them.
+  const packages: Record<string, { name: string; files: string[]; notices?: string }> = {
     swagger: { name: "swagger-ui-dist", files: ["swagger-ui-bundle.js", "swagger-ui.css", "swagger-ui-bundle.js.LICENSE.txt", "LICENSE", "NOTICE"] },
-    redoc: { name: "redoc", files: ["bundles/redoc.standalone.js", "bundles/redoc.standalone.js.LICENSE.txt", "LICENSE"] },
+    redoc: { name: "redoc", files: ["bundles/redoc.standalone.js", "LICENSE"], notices: "bundles/redoc.standalone.js" },
   }
-  // Resources the viewers load from outside hosts on their own, replaced by local ones: ReDoc's
-  // "API docs by Redocly" attribution shows its logo from cdn.redoc.ly (the text and link stay).
+  // What ReDoc would load from or send to outside hosts on its own, replaced by something local:
+  // - the two logos of its "API docs by Redocly" attribution (cdn.redoc.ly): the name as text, so
+  //   the attribution and its link stay;
+  // - its icon sets (cdn.redocly.com: a file-type icon on a code block's tab, a Font Awesome icon
+  //   an API description names): an empty image each, the icon's path in the fragment. The labels
+  //   beside them stay, and the server's API description shows neither;
+  // - the collector of its usage telemetry, which the /redoc page turns off (`disable-telemetry`,
+  //   remi/server/api_docs.py): no address left to send to.
   // A build whose viewer still names one of these hosts fails, so an upgrade cannot bring it back.
-  const outside: [RegExp, string][] = [[/https:\/\/cdn\.redoc\.ly\/redoc\/logo-mini\.svg/g, "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='0' height='0'/%3E"]]
-  const forbidden = /https:\/\/(?:cdn\.redoc\.ly|cdn\.jsdelivr\.net|unpkg\.com|fonts\.(?:googleapis|gstatic)\.com)\//
+  // (a data URL that also fits an unquoted CSS url(): no space, quote or bracket)
+  const svg = (body: string) => `data:image/svg+xml,${body.replace(/[ '<>#()]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)}`
+  const wordmark = (text: string, width: number) =>
+    svg(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${width} 14'><text y='11.5' textLength='${width}' lengthAdjust='spacingAndGlyphs' font-family='system-ui,sans-serif' font-size='13' font-weight='600' fill='#2467f2'>${text}</text></svg>`)
+  const outside: [RegExp, string][] = [
+    [/https:\/\/cdn\.redoc\.ly\/redoc\/logo-mini-full\.svg/g, wordmark("Redocly", 50)],
+    [/https:\/\/cdn\.redoc\.ly\/redoc\/logo-mini\.svg/g, wordmark("R", 9)],
+    [/https:\/\/cdn\.redocly\.com\/icons\/(?:fa|code)\/[\d.]+/g, `${svg("<svg xmlns='http://www.w3.org/2000/svg'/>")}#`],
+    [/https:\/\/otel\.cloud\.redocly\.com\/v1\/traces/g, "about:blank"],
+  ]
+  // redocly.com itself is where ReDoc's links go (the attribution, the OpenAPI reference); its
+  // subdomains are what the page would load from
+  const forbidden = /https:\/\/(?:(?:[a-z0-9-]+\.)+redoc\.ly|(?:[a-z0-9-]+\.)+redocly\.com|cdn\.jsdelivr\.net|unpkg\.com|fonts\.(?:googleapis|gstatic)\.com)\//
   return {
     name: "remi-api-docs",
     apply: "build",
     async generateBundle() {
       const urls: Record<string, string> = {}
-      for (const [key, { name, files }] of Object.entries(packages)) {
+      for (const [key, { name, files, notices }] of Object.entries(packages)) {
         const root = path.join(modules, name)
         const { version } = JSON.parse(await readFile(path.join(root, "package.json"), "utf8")) as { version: string }
         for (const file of files) {
@@ -187,6 +207,11 @@ function apiDocs(): Plugin {
             const remote = forbidden.exec(source)
             if (remote) this.error(`${name}/${file} loads ${remote[0]}…: add a local replacement in apiDocs()`)
             urls[`${key}${file.endsWith(".css") ? "Css" : "Js"}`] = fileName
+            if (file === notices) {
+              const comments = licenseComments(source)
+              if (comments.length === 0) this.error(`${name}/${file} has no license comments left: list what it includes another way in apiDocs()`)
+              this.emitFile({ type: "asset", fileName: `${fileName}.LICENSE.txt`, source: `${comments.join("\n\n")}\n` })
+            }
           }
           this.emitFile({ type: "asset", fileName, source })
         }
@@ -194,6 +219,16 @@ function apiDocs(): Plugin {
       this.emitFile({ type: "asset", fileName: "api-docs.json", source: `${JSON.stringify(urls, null, 2)}\n` })
     },
   }
+}
+
+/**
+ * The license comments a minified bundle keeps (`/*! … *\/`, `/** @license … *\/`), each once, in
+ * the bundle's order. One may sit in source the bundle holds as a string (a worker's), its line
+ * ends written as `\r`.
+ */
+function licenseComments(source: string): string[] {
+  const comments = source.match(/\/\*[*!]+(?=\s|\\r)[\s\S]*?\*\//g) ?? []
+  return [...new Set(comments.filter((comment) => /licen[cs]e|copyright/i.test(comment)).map((comment) => comment.replace(/\\r(?=\n)|\r/g, "")))]
 }
 
 /**
