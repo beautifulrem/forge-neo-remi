@@ -2,7 +2,8 @@
 
 The SPA in webui/ is Remi's own. Of the Python requirements, the model runtime is shared with
 Forge Neo and its pins move with an upstream sync (security.md, "Dependency advisories"); only
-the server packages Remi adds to requirements.txt or pins above Forge Neo's are proposed here.
+the server packages Remi adds to requirements.txt or pins above Forge Neo's are proposed here,
+with the workflow's actions, which check.yml pins to commit SHAs.
 """
 
 import re
@@ -46,6 +47,10 @@ def test_fastapi_stays_below_the_release_that_hides_included_routes():
     assert {"dependency-name": "fastapi", "versions": [">=0.137.0"]} in python["ignore"]
 
 
-def test_the_owners_workflow_is_not_updated_by_it():
-    # .github/workflows/check.yml is the owner's file: no github-actions updates
-    assert not _updates("github-actions")
+def test_the_workflows_pinned_actions_are_kept_current():
+    # check.yml pins its actions to commit SHAs, which only these updates move
+    (actions,) = _updates("github-actions")
+    assert actions["directory"] == "/"
+    workflow = (ROOT / ".github" / "workflows" / "check.yml").read_text(encoding="utf-8")
+    uses = re.findall(r"uses: (\S+)", workflow)
+    assert uses and all(re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", use) for use in uses), uses

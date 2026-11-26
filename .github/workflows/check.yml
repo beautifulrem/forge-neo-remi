@@ -16,7 +16,8 @@ permissions:
 
 concurrency:
   group: check-${{ github.ref }}
-  cancel-in-progress: true
+  # a newer push to a pull request replaces its run; every push to remi keeps its own
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   PYTHONUNBUFFERED: "1"
@@ -28,9 +29,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           python-version: "3.13"
           enable-cache: true
@@ -39,9 +42,10 @@ jobs:
             requirements-dev.txt
 
       - name: Install the WebUI requirements (CPU torch) and the test tools
+        # torch / torchvision: the launcher's versions (modules/launch_utils.py), as CPU builds
         run: |
           uv venv .venv
-          uv pip install --python .venv/bin/python torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          uv pip install --python .venv/bin/python torch==2.14.0 torchvision==0.29.0 --index-url https://download.pytorch.org/whl/cpu
           uv pip install --python .venv/bin/python -r requirements.txt -r requirements-dev.txt
           # ADetailer's own requirement (the pin of extensions-builtin/ADetailer-Neo/install.py), which
           # tests/test_remi_extensions_e2e.py needs for its tiny detector; torch stays the CPU build
@@ -55,7 +59,7 @@ jobs:
 
       - name: Logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: python-check-logs
           path: ${{ runner.temp }}/remi-check
@@ -68,15 +72,18 @@ jobs:
       run:
         working-directory: webui
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
           version: 12
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 26
+          # the Docker image's Node.js (docker/Dockerfile NODE_VERSION), the oldest line usage.md supports
+          node-version: 24
           cache: pnpm
           cache-dependency-path: webui/pnpm-lock.yaml
 
@@ -95,9 +102,11 @@ jobs:
 
       - name: Logs and Playwright report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: webui-check-logs
+          # the Playwright results are in node_modules/.e2e-results, a hidden folder upload-artifact leaves out
+          include-hidden-files: true
           path: |
             ${{ runner.temp }}/remi-check
             webui/node_modules/.e2e-results

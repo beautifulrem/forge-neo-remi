@@ -460,8 +460,10 @@ using a path named below.
 week each, for what Remi owns: the SPA's packages (`webui/`) and the server
 packages Remi adds to `requirements.txt` or pins above Forge Neo's (`fastapi`,
 raised from 0.127.1 and kept below 0.137, see below; `starlette`, `uvicorn`,
-`python-multipart`, `websockets`, `requests`, `pytz`). It takes effect once
-the file is on the repository's default branch on GitHub;
+`python-multipart`, `websockets`, `requests`, `pytz`), and the actions of
+`.github/workflows/check.yml`, which are pinned to commit SHAs (the version in
+a comment) so that only these updates move them. It takes effect once the file
+is on the repository's default branch on GitHub;
 `tests/test_dependabot_config.py` keeps its list in step with these pins.
 Dependabot alerts and security updates are repository settings, and the file
 narrows them too:

@@ -36,4 +36,12 @@ updates:
         patterns: ["*"]
     open-pull-requests-limit: 2
 
-# No github-actions updates: .github/workflows/check.yml is maintained by hand.
+  # The workflow's actions are pinned to commit SHAs (the version in a comment): kept current here.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    open-pull-requests-limit: 2
