@@ -446,9 +446,10 @@ torch.ones([1], device=device).mul_(2.0).cpu()
 
 
 WEBUI_DIR = Path(script_path) / "webui"
-WEBUI_SOURCES = ("package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "index.html", "vite.config.ts", "tsconfig.json", "tsconfig.app.json", "tsconfig.node.json", "src", "public", "tools/notices.mjs", "tools/shadcn-ui.LICENSE.txt", "tools/react-remove-scroll-bar.LICENSE.txt")
+WEBUI_SOURCES = ("package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "index.html", "vite.config.ts", "tsconfig.json", "tsconfig.app.json", "tsconfig.node.json", "src", "public", "tools/pnpmfile.cjs", "tools/notices.mjs", "tools/shadcn-ui.LICENSE.txt", "tools/react-remove-scroll-bar.LICENSE.txt")
 """What the SPA build depends on (hashed into the build stamp); vite.config.ts
-imports tools/notices.mjs, which reads the licence texts beside it."""
+imports tools/notices.mjs, which reads the licence texts beside it, and pnpm resolves the
+lockfile with tools/pnpmfile.cjs (pnpm-workspace.yaml)."""
 WEBUI_STAMP = ".remi-build-stamp"
 PNPM_FALLBACK = "pnpm@12"
 """pnpm run through npx when neither pnpm nor corepack is installed"""
