@@ -43,7 +43,6 @@ export default function QuickSettings() {
                   size="sm"
                   // on a phone a 28 px square like the header's other icon buttons: the count waits for sm
                   className={cn("gap-1 px-2", ICON_SQUARE_BELOW_SM)}
-                  aria-label={t("Quick settings")}
                   onPointerEnter={preloadPanel}
                   onFocus={preloadPanel}
                   {...tip.trigger}
@@ -52,6 +51,8 @@ export default function QuickSettings() {
             />
           }
         >
+          {/* named by what it holds: its name, read out only, then the count it shows from sm up */}
+          <span className="sr-only">{t("Quick settings")}</span>
           <Zap aria-hidden />
           <Badge variant="secondary" className="h-4 min-w-4 px-1 text-[0.625rem] tabular-nums max-sm:hidden">
             {pinned.length}

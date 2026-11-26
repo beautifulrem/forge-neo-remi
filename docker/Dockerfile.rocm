@@ -25,8 +25,10 @@ RUN npm install --global "pnpm@${PNPM_VERSION}"
 
 WORKDIR /src/webui
 
-# Dependencies first (cached while only the sources change)
+# Dependencies first (cached while only the sources change). tools/pnpmfile.cjs is part of what
+# the lockfile was resolved with: a frozen install compares its checksum with the lockfile's.
 COPY webui/package.json webui/pnpm-lock.yaml webui/pnpm-workspace.yaml ./
+COPY webui/tools/pnpmfile.cjs ./tools/
 RUN pnpm install --frozen-lockfile
 
 COPY webui/ ./

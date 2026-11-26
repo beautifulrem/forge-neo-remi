@@ -7,6 +7,12 @@ updates:
     directory: /webui
     schedule:
       interval: weekly
+    ignore:
+      # ReDoc 3 is another viewer: an ES module (the /redoc page loads a classic script), usage
+      # telemetry unless the page opts out, icon sets from cdn.redocly.com and no licence file
+      # for what its bundle includes. /redoc stays on ReDoc 2 until the page is ported.
+      - dependency-name: redoc
+        versions: [">=3.0.0"]
     groups:
       spa:
         patterns: ["*"]

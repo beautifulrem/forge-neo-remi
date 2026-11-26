@@ -49,6 +49,7 @@ const renderPage = () =>
 describe("queue page on a phone", () => {
   beforeEach(() => {
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(600)
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600)
     vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(390)
   })
   afterEach(() => {

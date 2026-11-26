@@ -4,7 +4,9 @@ Status: wave 1 (foundation), 2026-10-15. Binding contracts:
 [architecture.md](architecture.md) (layers, HTTP/WS API) and
 [schema-format.md](schema-format.md) (the `remi.ui` JSON the renderer draws).
 
-Stack: React 19 (React Compiler), Vite 8 (rolldown), TypeScript 6 strict,
+Stack: React 19 (React Compiler), Vite 8 (rolldown), TypeScript 7 strict (the
+native compiler; see [API layer](#api-layer-srcapi) for what still reads
+TypeScript 6's compiler API),
 Tailwind 4, shadcn/ui `base-nova` on Base UI, Zustand 5, TanStack Query 5,
 i18next, CodeMirror 6 (prompt editor), Vitest + Testing Library (jsdom).
 
@@ -873,6 +875,14 @@ generated interfaces (sources: Linear's
   (`openapi-typescript`, pinned): `$PYTHON
   tools/export_openapi.py` writes `src/api/openapi.json`, then `pnpm gen:api`
   regenerates the types; `gen/gen.test.ts` fails when they drift.
+  TypeScript 7's package has `tsc` and no JavaScript compiler API, which
+  `openapi-typescript` builds its output with: `tools/pnpmfile.cjs` (named in
+  `pnpm-workspace.yaml`) gives it `@typescript/typescript6` in place of its
+  `typescript` peer. The tests that read the sources' syntax trees
+  (`locales/locales.test.ts`, `features/errors/failure-text.test.ts`) import
+  the same package. The hook's checksum is in the lockfile, so a frozen
+  install needs the file: the Docker images copy it and the launcher's build
+  stamp hashes it (`launch_utils.WEBUI_SOURCES`).
 - `http.ts`: the path-typed client (`openapi-fetch`, pinned) on the mock
   switch's transport, `unwrap()` (data, or `ApiError` for any non-2xx: status,
   decoded body in `detail`, a readable message from Remi's

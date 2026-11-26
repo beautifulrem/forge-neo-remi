@@ -63,6 +63,7 @@ describe("gallery page", { timeout: 20_000 }, () => {
     vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(900)
     vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(900)
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(700)
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(700)
   })
   afterEach(() => {
     vi.restoreAllMocks()
@@ -288,7 +289,7 @@ describe("gallery page", { timeout: 20_000 }, () => {
     const calls = mockServer([item(1)])
     renderPage()
     await screen.findAllByRole("listitem")
-    fireEvent.click(screen.getAllByRole("button", { name: "Date range" })[0]!)
+    fireEvent.click(screen.getAllByRole("button", { name: /^Date range/ })[0]!)
     fireEvent.click(await screen.findByRole("button", { name: "Today" }))
     expect(useGalleryView.getState().from).toBe(daysAgo(0))
     expect(useGalleryView.getState().to).toBeNull()

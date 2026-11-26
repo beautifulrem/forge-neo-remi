@@ -69,7 +69,7 @@ describe("network browser", { timeout: 60_000 }, () => {
     await waitFor(() => {
       const labels = within(screen.getByRole("listbox", { name: "LoRA" }))
         .getAllByRole("option")
-        .map((option) => option.getAttribute("aria-label") ?? "")
+        .map((option) => option.textContent ?? "")
       expect(labels.length).toBeGreaterThan(0)
       expect(labels.every((label) => label.startsWith("watercolor_pastel_v2_"))).toBe(true)
     }, slow)
@@ -82,7 +82,7 @@ describe("network browser", { timeout: 60_000 }, () => {
     renderBrowser()
     const list = await listbox()
     const [first] = await within(list).findAllByRole("option", {}, slow)
-    const name = first!.getAttribute("aria-label")!.split(",")[0]!
+    const name = first!.querySelector("p")!.textContent!
     expect(first).toHaveAttribute("aria-selected", "false")
     fireEvent.click(first!)
     expect(getFormStore("txt2img").getState().values.core?.prompt).toBe(`1girl <lora:${name}:1>`)
@@ -144,7 +144,7 @@ describe("network browser", { timeout: 60_000 }, () => {
     await waitFor(() => {
       const labels = within(screen.getByRole("listbox", { name: "LoRA" }))
         .getAllByRole("option")
-        .map((option) => option.getAttribute("aria-label") ?? "")
+        .map((option) => option.textContent ?? "")
       expect(labels.every((label) => label.includes("SDXL"))).toBe(true)
     }, slow)
   })
