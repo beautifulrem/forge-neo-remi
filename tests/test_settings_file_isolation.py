@@ -18,12 +18,12 @@ def test_the_settings_file_is_the_conftests_own():
     from modules import launch_utils, shared, shared_cmd_options
 
     for where, path in {
-        "shared.config_filename": shared.config_filename,
         "cmd_opts.ui_settings_file": shared_cmd_options.cmd_opts.ui_settings_file,
         "launch_utils.args.ui_settings_file": launch_utils.args.ui_settings_file,
     }.items():
-        assert not Path(path).resolve().is_relative_to(ROOT), f"{where} is {path}"
         assert Path(path).parent.name.startswith("remi-tests-settings-"), f"{where} is {path}"
+    # a test may point shared.config_filename elsewhere for a while (a fresh process checks it whole)
+    assert not Path(shared.config_filename).resolve().is_relative_to(ROOT), shared.config_filename
 
 
 def test_the_settings_file_does_not_depend_on_which_test_runs_first(tmp_path):
@@ -32,13 +32,24 @@ def test_the_settings_file_does_not_depend_on_which_test_runs_first(tmp_path):
     # settings file away when they were collected first, and COMMANDLINE_ARGS, which
     # modules.paths_internal adds to sys.argv, could name another file.
     first = tmp_path / "test_resets_argv_first.py"
-    first.write_text("import sys\n\nsys.argv = sys.argv[:1]\nimport modules.shared  # noqa: E402,F401\n\n\ndef test_imported():\n    pass\n", encoding="utf-8")
-    env = {**os.environ, "COMMANDLINE_ARGS": f"--ui-settings-file {tmp_path / 'elsewhere.json'}"}
+    source = [
+        "import sys",
+        "from pathlib import Path",
+        "",
+        "sys.argv = sys.argv[:1]",
+        "from modules import shared  # noqa: E402",
+        "",
+        "",
+        "def test_the_settings_file_is_still_the_conftests():",
+        "    assert Path(shared.config_filename).parent.name.startswith('remi-tests-settings-'), shared.config_filename",
+    ]
+    first.write_text("\n".join(source) + "\n", encoding="utf-8")
+    env = {key: value for key, value in os.environ.items() if key != "PYTEST_ADDOPTS"}  # the outer run's -k, --lf, ...
+    env["COMMANDLINE_ARGS"] = f"--ui-settings-file {tmp_path / 'elsewhere.json'}"
     command = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-c", str(ROOT / "pyproject.toml"), "--rootdir", str(ROOT)]
     command += [str(first), "tests/test_settings_file_isolation.py::test_the_settings_file_is_the_conftests_own"]
     result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True, timeout=600)
     assert result.returncode == 0 and "2 passed" in result.stdout, result.stdout[-4000:] + result.stderr[-2000:]
-    assert not (tmp_path / "elsewhere.json").exists()
 
 
 def test_webui_state_saves_settings_in_its_own_folder(tmp_path, monkeypatch):
@@ -104,7 +115,7 @@ def test_a_settings_file_whose_folder_is_gone_is_not_taken_for_the_tests_own(tmp
     from remi.server.testing import server_app
     from remi.testing import webui_state
 
-    gone = tmp_path / "gone" / "config.json"
+    gone = tmp_path / "remi-test-styles-gone" / "config.json"  # webui_state's folder, deleted
     monkeypatch.setattr(shared, "config_filename", str(gone))
     with webui_state() as webui:
         assert Path(shared.config_filename).parent.is_dir()
@@ -118,3 +129,9 @@ def test_a_settings_file_whose_folder_is_gone_is_not_taken_for_the_tests_own(tmp
         with server_app(root):
             assert shared.config_filename == str(root / "config.json")
         assert shared.config_filename == str(gone)
+
+    # a missing folder of the test's own is the test's choice (its save fails, as it would)
+    later = tmp_path / "later" / "config.json"
+    shared.config_filename = str(later)
+    with webui_state(), server_app(root):
+        assert shared.config_filename == str(later)
