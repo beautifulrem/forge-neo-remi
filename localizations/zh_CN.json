@@ -996,6 +996,7 @@
   "reference_images[{{index}}] file not found: {{path}}": "reference_images[{{index}}] 的文件不存在：{{path}}",
   "unsupported reference image type at index {{index}}: {{type}}": "第 {{index}} 项参考图的类型不受支持：{{type}}",
   "local_model_path does not exist: {{path}}": "本地模型路径不存在：{{path}}",
+  "this model folder asks to run its own code ({{file}}), which the local upsampler does not do": "这个模型文件夹要求运行它自带的代码（{{file}}），本地提示词扩写不会这样做",
   "unsupported local Qwen3.5 PUP checkpoint format: {{path}} (expected .gguf file or HuggingFace model directory)": "不支持的本地 Qwen3.5 PUP 模型格式：{{path}}（应为 .gguf 文件或 HuggingFace 模型目录）",
   "unsupported upsample mode {{mode}}; expected one of {{modes}}": "不支持的扩写模式 {{mode}}；应为以下之一：{{modes}}",
   "reference_images entries must be data:image/... URIs; pass uploaded/output images via reference_file_ids": "reference_images 的每一项都必须是 data:image/... URI；已上传或生成的图像请通过 reference_file_ids 传递",

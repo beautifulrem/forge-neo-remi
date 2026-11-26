@@ -342,6 +342,58 @@ def test_local_qwen35_pup_runner_always_releases_vram_on_success_and_error(tmp_p
     assert empty_local.value.status == 502
 
 
+@pytest.mark.parametrize(
+    ("name", "config"),
+    [
+        # GHSA-fgcw-684q-jj6r: a LightGlue config turns trust_remote_code on for the config it nests
+        ("config.json", {"model_type": "lightglue", "keypoint_detector_config": {"model_type": "x", "trust_remote_code": True}}),
+        ("config.json", {"model_type": "qwen3", "auto_map": {"AutoModelForCausalLM": "modeling_x.Model"}}),
+        ("tokenizer_config.json", {"auto_map": {"AutoTokenizer": ["tokenization_x.Tokenizer", None]}}),
+        ("config.json", {"model_type": "qwen3", "nested": [{"trust_remote_code": True}]}),
+        # GHSA-29pf-2h5f-8g72: a Hub kernel named as the attention implementation
+        ("config.json", {"model_type": "qwen3", "_attn_implementation_internal": "someone/kernel"}),
+        # nested past what json reads: it cannot be checked
+        ("config.json", None),
+    ],
+)
+def test_a_local_model_folder_that_asks_to_run_its_own_code_is_refused(tmp_path, monkeypatch, name, config):
+    # A client names the folder (local_model_path); a config there could make from_pretrained run code
+    # from the disk or the Hub. A prompt upsampler never needs a model's own code: refused before loading.
+    import transformers
+
+    folder = tmp_path / "model"
+    folder.mkdir()
+    (folder / name).write_text(json.dumps(config) if config is not None else "[" * 100_000 + "]" * 100_000, encoding="utf-8")
+    loads = []
+    for cls in ("AutoTokenizer", "AutoProcessor", "AutoModelForCausalLM"):
+        monkeypatch.setattr(getattr(transformers, cls), "from_pretrained", lambda *args, **kwargs: loads.append(args) or (_ for _ in ()).throw(AssertionError("loaded")))
+    with pytest.raises(TranslationError) as refused:
+        pup.LocalQwen35PUPRunner(folder).generate("sys", "usr")
+    assert loads == []
+    assert refused.value.status == 422
+    assert refused.value.param == "local_model_path"
+    assert refused.value.message.template == "this model folder asks to run its own code ({{file}}), which the local upsampler does not do"
+    assert refused.value.message.params == {"file": name}
+
+
+def test_a_plain_local_model_folder_is_loaded(tmp_path, monkeypatch):
+    import transformers
+
+    folder = tmp_path / "model"
+    folder.mkdir()
+    (folder / "config.json").write_text(json.dumps({"model_type": "qwen3", "architectures": ["Qwen3ForCausalLM"], "trust_remote_code": False}), encoding="utf-8")
+    loads = []
+
+    def refuse_to_load(*args, **kwargs):
+        loads.append(args)
+        raise OSError("no weights")
+
+    monkeypatch.setattr(transformers.AutoTokenizer, "from_pretrained", refuse_to_load)
+    with pytest.raises(TranslationError):
+        pup.LocalQwen35PUPRunner(folder).generate("sys", "usr")
+    assert loads  # it got as far as loading
+
+
 def test_local_qwen35_runner_gguf_transformers_and_release_vram(tmp_path, monkeypatch):
     # Real release_vram execution across CUDA and MPS branches
     cuda_cleared = []

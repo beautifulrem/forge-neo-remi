@@ -172,10 +172,14 @@ attackers who already have a login (they are administrators by design).
   with one exception: the Prompt Upsampler's `local_model_path`
   (`POST /api/v2/prompt-tools/upsample` and a pipeline's upsample stage)
   loads a `.gguf` file (llama-cpp) or a model folder (transformers,
-  `local_files_only`, no remote code) from any path the server can read;
-  a crafted folder can still run code through transformers 4.x
-  (GHSA-fgcw-684q-jj6r, see [Dependency advisories](#dependency-advisories)),
-  so name only folders from a source you trust, as with any model file.
+  `local_files_only`, no remote code) from any path the server can read.
+  A folder whose configs ask transformers to run code (a LightGlue config,
+  `trust_remote_code`, an `auto_map`, a Hub kernel as the attention
+  implementation: GHSA-fgcw-684q-jj6r and GHSA-29pf-2h5f-8g72, see
+  [Dependency advisories](#dependency-advisories)) is refused before
+  anything loads (`remi/prompt_tools/pup.py`, `refuse_own_code`); weights
+  are still code-adjacent data, so name folders from a source you trust,
+  as with any model file.
   `--hide-ui-dir-config` refuses it (see below).
 
 ### Paths and local actions
@@ -480,14 +484,14 @@ by its `Origin` and `Sec-Fetch-Site`, as before
 
 Every fix is in a new line (transformers 5.x, diffusers 0.38; 4.57.6 and
 0.37.1 are the last of theirs), whose model-loading changes need the GPU
-regression runs. One path is open to a client, but only through a crafted
-`config.json` already in a folder on the server's disk, which a client can
-write in one corner case only (GHSA-fgcw-684q-jj6r below).
+regression runs. One path was open to a client, through a crafted
+`config.json` already in a folder on the server's disk (GHSA-fgcw-684q-jj6r
+below); the local upsampler now refuses such a folder before loading.
 
 | advisory | fixed in | why it does not apply |
 |---|---|---|
-| transformers GHSA-29pf-2h5f-8g72 (CVE-2026-4372, high): a `config.json` that names a Hub kernel as `_attn_implementation_internal` makes `from_pretrained` download and run it | 5.3.0 | the setting is read (a model folder's config reaches it), but a Hub kernel loads only through the `kernels` package, which is no requirement and not installed: the load stops with an `ImportError` before anything is downloaded. Revisit if `kernels` is ever installed |
-| transformers GHSA-fgcw-684q-jj6r (CVE-2026-5241, high): a LightGlue `config.json` turns `trust_remote_code` on for the config it nests | 5.5.0 | a client names the folder: the Prompt Upsampler's `local_model_path` is a field of `POST /api/v2/prompt-tools/upsample` and of a pipeline's upsample stage, and `remi/prompt_tools/pup.py` loads any folder the server can read. A crafted LightGlue `config.json` there runs code from another folder on the disk (checked offline with `AutoTokenizer.from_pretrained(..., local_files_only=True)`), or from a Hub repository it names, since the nested load does not pass `local_files_only` (read in `configuration_lightglue.py`, not run). A client can put such a file there in one case: the user metadata of a network whose file is named `config.*` is its `config.json` sidecar, and `PATCH /api/v2/networks/{kind}/{name}/meta` keeps keys it does not know. Otherwise uploads are stored as their SHA-256 with the extension their content shows, a save copies only outputs under the names the server gave them, JoyCaption's folder captions are `.txt`, `.caption` or `.tags`, settings take only known keys, and installing an extension (which writes anything, and is code execution already) is refused when the server listens beyond loopback (`--listen`, `--share`, `--server-name`, `--ngrok`) unless `--enable-insecure-extension-access` is given. Refused under `--hide-ui-dir-config`; the checkpoint loader reads configs only from the repository's `backend/huggingface/`, and JoyCaption downloads one fixed repository. Use model folders from sources you trust |
+| transformers GHSA-29pf-2h5f-8g72 (CVE-2026-4372, high): a `config.json` that names a Hub kernel as `_attn_implementation_internal` makes `from_pretrained` download and run it | 5.3.0 | the setting is read (a model folder's config reaches it), but a Hub kernel loads only through the `kernels` package, which is no requirement and not installed: the load stops with an `ImportError` before anything is downloaded; the local upsampler also refuses a config that names a Hub kernel (`refuse_own_code`). Revisit if `kernels` is ever installed |
+| transformers GHSA-fgcw-684q-jj6r (CVE-2026-5241, high): a LightGlue `config.json` turns `trust_remote_code` on for the config it nests | 5.5.0 | a client names the folder: the Prompt Upsampler's `local_model_path` is a field of `POST /api/v2/prompt-tools/upsample` and of a pipeline's upsample stage, and `remi/prompt_tools/pup.py` loads any folder the server can read. A crafted LightGlue `config.json` there runs code from another folder on the disk (checked offline with `AutoTokenizer.from_pretrained(..., local_files_only=True)`), or from a Hub repository it names, since the nested load does not pass `local_files_only` (read in `configuration_lightglue.py`, not run). A client can put such a file there in one case: the user metadata of a network whose file is named `config.*` is its `config.json` sidecar, and `PATCH /api/v2/networks/{kind}/{name}/meta` keeps keys it does not know. Otherwise uploads are stored as their SHA-256 with the extension their content shows, a save copies only outputs under the names the server gave them, JoyCaption's folder captions are `.txt`, `.caption` or `.tags`, settings take only known keys, and installing an extension (which writes anything, and is code execution already) is refused when the server listens beyond loopback (`--listen`, `--share`, `--server-name`, `--ngrok`) unless `--enable-insecure-extension-access` is given. Refused under `--hide-ui-dir-config`; the checkpoint loader reads configs only from the repository's `backend/huggingface/`, and JoyCaption downloads one fixed repository. Closed on Remi's side: `refuse_own_code` refuses a folder whose `config.json`, `tokenizer_config.json`, `processor_config.json`, `preprocessor_config.json` or `generation_config.json` holds a LightGlue `model_type`, `trust_remote_code: true` or an `auto_map` at any depth, or a JSON nested too deep to check, before `from_pretrained` runs (`tests/test_remi_pup.py`) |
 | transformers GHSA-x9r9-c232-4q39 (CVE-2026-80047, high): `load_custom_generate` caches a repository's `custom_generate/generate.py` before the trust check | none yet | Remi never passes `custom_generate` or `trust_remote_code`; a generation mode that moved to a Hub repository raises before anything is fetched |
 | transformers GHSA-xrqw-3rrv-vx5w (CVE-2026-9856, high): a tokenizer's or processor's `save_pretrained` writes outside its folder through chat template names | 5.10.0 | Remi never saves a tokenizer or a processor |
 | transformers GHSA-69w3-r845-3855 (CVE-2026-1839): `Trainer` loads its RNG state with `torch.load` | 5.0.0 | no training; the bundled PyTorch loads with `weights_only=True` |

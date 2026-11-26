@@ -480,6 +480,43 @@ def webui_interrupted() -> bool:
     return bool(getattr(getattr(shared, "state", None), "interrupted", False))
 
 
+# The configs from_pretrained reads in a model folder. A client names the folder (local_model_path),
+# and a config there can make transformers run code: a LightGlue config turns trust_remote_code on
+# for the config it nests (GHSA-fgcw-684q-jj6r), an auto_map names the folder's own modules, an
+# attention implementation names a Hub kernel (GHSA-29pf-2h5f-8g72). A prompt upsampler (a plain
+# causal or image-text-to-text model) needs none of it: such a folder is refused before loading.
+MODEL_CONFIGS = ("config.json", "tokenizer_config.json", "processor_config.json", "preprocessor_config.json", "generation_config.json")
+
+
+def asks_for_own_code(data: Any) -> bool:
+    stack = [data]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            if node.get("trust_remote_code") is True or "auto_map" in node or node.get("model_type") == "lightglue":
+                return True
+            for key in ("_attn_implementation_internal", "attn_implementation"):
+                if isinstance(node.get(key), str) and "/" in node[key]:
+                    return True
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    return False
+
+
+def refuse_own_code(folder: str) -> None:
+    for name in MODEL_CONFIGS:
+        try:
+            with open(os.path.join(folder, name), encoding="utf-8") as file:
+                data = json.load(file)
+        except RecursionError:
+            data = {"auto_map": None}  # nested past what can be checked: refused as one that asks
+        except (OSError, ValueError):
+            continue  # missing or not JSON: transformers reads nothing from it either
+        if asks_for_own_code(data):
+            raise TranslationError(Sentence("this model folder asks to run its own code ({{file}}), which the local upsampler does not do", file=name), 422, param="local_model_path")
+
+
 class LocalQwen35PUPRunner:
     """Optional in-process local quantized Qwen3.5 Prompt Upsampler runner.
 
@@ -661,6 +698,7 @@ class LocalQwen35PUPRunner:
         if os.path.isfile(self.model_path) and self.model_path.lower().endswith(".gguf"):
             return self._run_gguf(system, user_text, image_uris)
         if os.path.isdir(self.model_path):
+            refuse_own_code(self.model_path)
             return self._run_transformers(system, user_text, pil_images)
         raise TranslationError(
             Sentence("unsupported local Qwen3.5 PUP checkpoint format: {{path}} (expected .gguf file or HuggingFace model directory)", path=self.model_path),
