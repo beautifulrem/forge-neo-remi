@@ -118,6 +118,7 @@ describe("artist-mix-table", { timeout: 60_000 }, () => {
   // jsdom has no layout: give the scroller a size so the virtualizer renders rows
   beforeEach(() => {
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(600)
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600)
     vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(800)
   })
   afterEach(() => vi.restoreAllMocks())

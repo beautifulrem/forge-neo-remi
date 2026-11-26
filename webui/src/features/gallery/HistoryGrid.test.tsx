@@ -10,6 +10,7 @@ function layout(width: number, height: number) {
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(width)
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(width)
   vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(height)
+  vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(height)
 }
 
 describe("history grid", () => {
