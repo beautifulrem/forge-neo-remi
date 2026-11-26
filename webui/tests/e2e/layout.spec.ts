@@ -1294,6 +1294,9 @@ test("the weights in memory refresh is a 40 px target", async ({ page }) => {
   await page.getByRole("button", { name: "Show the weights in memory" }).click()
   const refresh = page.getByRole("main").locator("[aria-live=polite]").filter({ hasText: "Weights in memory" }).getByRole("button", { name: "Refresh", exact: true })
   await expect(refresh).toBeVisible()
+  // in the middle of the page's scroller: at its foot the box ran past the scroller's edge, which clips
+  // it, onto the bottom bar's More (a tap there is the bar's), as the page's header grew by 16 px
+  await refresh.evaluate((button) => button.scrollIntoView({ block: "center" }))
   const box = await refresh.evaluate((button) => {
     const rect = button.getBoundingClientRect()
     const after = getComputedStyle(button, "::after")
