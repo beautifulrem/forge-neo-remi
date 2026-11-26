@@ -526,6 +526,10 @@ overhead).
 `env`, `ruff`, `pytest` with the coverage floors, `contract`, `i18n:server`)
 and the SPA (install, build, the bundle budget, lint, Vitest with coverage,
 Playwright with Chromium; steps `pnpm`, `i18n:spa`, `perf`, `e2e`).
+Each job runs its steps in `check.sh`'s lanes, so the Python job's two Python
+lanes run at once. The SPA job keeps the Playwright browser in the Actions
+cache, one per Playwright version, and on a hit installs only the browser's
+system libraries.
 The `legacy-ui` steps are not in CI (they need a second, Gradio, environment): they run
 locally once `tools/legacy_ui_env.sh` has built that environment. Logs and the Playwright report
 are uploaded when a job fails. The workflow passes `actionlint`; it runs on
