@@ -55,10 +55,10 @@ export function modeGrid(count: number): { style: CSSProperties; className: stri
 /** The mode that opens a short second row (odd counts above 4), which starts one track in to centre the row. */
 const centredIndex = (count: number) => (count > 4 && count % 2 === 1 ? Math.ceil(count / 2) : -1)
 
-/** A mode tile among `count`, the one at `index` (checked: `data-checked`). */
+/** A mode tile among `count`, the one at `index` (checked: `data-checked`): `rounded-sm` inside the track's `rounded-md` and `p-1`. */
 export function modeTile(count: number, index: number): string {
   return cn(
-    "group/mode col-span-2 flex min-w-0 flex-col items-center justify-start gap-1 rounded-lg px-0.5 py-1.5 text-muted-foreground transition-colors outline-none select-none",
+    "group/mode col-span-2 flex min-w-0 flex-col items-center justify-start gap-1 rounded-sm px-0.5 py-1.5 text-muted-foreground transition-colors outline-none select-none",
     count <= 5 ? "@[22rem]:col-span-1" : "@[30rem]:col-span-1",
     index === centredIndex(count) && (count <= 5 ? "col-start-2 @[22rem]:col-start-auto" : "col-start-2 @[30rem]:col-start-auto"),
     "hover:bg-background/60 hover:text-foreground focus-visible:ring-3 focus-visible:ring-focus-ring",
