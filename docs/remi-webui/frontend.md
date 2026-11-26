@@ -59,7 +59,8 @@ lib/                appearance store (theme.ts), toast, media query, cn(), persi
 styles/             fonts.css, shadcn.css (keyframes and variants the vendored components use)
 test/               setup.ts (jsdom shims, jest-dom, i18n init), fake-socket.ts (WebSocket double),
                     api-fixtures.ts (complete API models), fetch-recorder.ts (records and answers
-                    the API clients' requests)
+                    the API clients' requests), says-why.ts (the text an invalid control names as
+                    its reason), jsx-tags.ts (the opening JSX tags the source guards read)
 ```
 
 `src/canvas/` is the image editor (see "Image editor"); it is the only module
@@ -708,7 +709,7 @@ generated interfaces (sources: Linear's
   (the RGBA backdrops) is ringed, as a wash would tint the swatch; the
   viewer's toggles, white on its always-black backdrop where the accent tint
   does not read with a dark accent, are a 25 % white wash with a full-white
-  glyph, well above their 12 % hover. A light theme's hover keeps the 15 % wash: a deeper one
+  glyph (the details panel's Star keeps its `--star` glyph, a star mark), well above their 12 % hover. A light theme's hover keeps the 15 % wash: a deeper one
   takes some accents' labels under 4.5:1.
   The viewer's ghost buttons (its toolbar, the details panel with its Star and copy button, the
   result and board actions) take their washes from `features/lightbox/tone.ts`: 12 % white on hover
@@ -759,7 +760,12 @@ generated interfaces (sources: Linear's
   shadow alone does not hold the outline there. A floating bar (the settings
   apply bar, the gallery's bulk bar) and a drawer take the shadow alone (in
   forced colours, which draw no shadow, they and this material take a 1 px
-  outline instead; see the forced-colours rules above). The
+  outline instead; see the forced-colours rules above). A panel of this
+  material that scrolls (the editor's tool options and image toolbar)
+  scrolls a strip inside it, and the scroll fade goes on that strip: the
+  fade is a mask, which cuts what is drawn outside its element, so on the
+  panel it took the edge, the shadow and the forced-colours outline away
+  (`use-scroll-fade.test.tsx`). The
   material stays opaque enough that its text keeps its contrast over pure
   black or white.
   Nothing else is glass: not the header, menus, popovers, the command
