@@ -839,10 +839,8 @@ export function PipelineBuilder() {
 function RunEndReason({ chain }: { chain: JobChain }) {
   const { t, i18n } = useTranslation()
   const stage = chain.stages.find((s) => s.error === chain.error) ?? chain.stages[chain.current_stage]
-  const where = stage ? t("{{label}}: ", { label: t("Stage {{n}}: {{name}}", { n: stage.index + 1, name: t(STAGE_META[stage.kind]?.label ?? stage.kind) }) }) : ""
-  return (
-    <p className={cn("mt-0.5 text-xs [overflow-wrap:anywhere]", chain.status === "failed" ? "text-destructive" : "text-muted-foreground")}>
-      {where + serverText(chain.error ?? "", i18n.language)}
-    </p>
-  )
+  const reason = serverText(chain.error ?? "", i18n.language)
+  // one colon, before the reason: "Stage 2: Upscale: CUDA out of memory" read as two labels
+  const text = stage ? t("Stage {{n}} ({{name}}): {{reason}}", { n: stage.index + 1, name: t(STAGE_META[stage.kind]?.label ?? stage.kind), reason }) : reason
+  return <p className={cn("mt-0.5 text-xs [overflow-wrap:anywhere]", chain.status === "failed" ? "text-destructive" : "text-muted-foreground")}>{text}</p>
 }

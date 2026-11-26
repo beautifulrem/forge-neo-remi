@@ -428,7 +428,8 @@ describe("starter pipelines", () => {
         <PipelineBuilder />
       </QueryClientProvider>,
     )
-    const reason = await screen.findByText(`阶段 2：${zhCN["Finish / Upscale / PiD"]}：阶段任务失败`)
+    // one colon: "Stage 2: Upscale: CUDA out of memory" read as two labels
+    const reason = await screen.findByText(`阶段 2（${zhCN["Finish / Upscale / PiD"]}）：阶段任务失败`)
     expect(reason).toHaveClass("text-destructive")
     // a run the user stopped has no reason to give
     expect(screen.getAllByText(/阶段任务失败/)).toHaveLength(1)
