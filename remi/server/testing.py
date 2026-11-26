@@ -8,6 +8,7 @@ executor (no model) and a running app around them.
 
 from __future__ import annotations
 
+import os
 import sys
 import threading
 import time
@@ -124,6 +125,10 @@ def server_app(
     from fastapi.testclient import TestClient
 
     from remi.server import Services, create_app
+
+    # From here on the process is a test's, as is a WebUI it starts (it inherits the mark): Options.save
+    # refuses the owner's settings files (modules/options.py)
+    os.environ.setdefault("REMI_TEST_HELPER", "server_app")
 
     state = state or FakeState()
     executor = executor or StubExecutor(state)

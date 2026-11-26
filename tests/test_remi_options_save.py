@@ -13,7 +13,6 @@ import subprocess
 import sys
 import tempfile
 import time
-import types
 from pathlib import Path
 
 import pytest
@@ -288,54 +287,39 @@ def test_under_pytest_the_repositorys_own_settings_file_is_refused(tmp_path, mon
     with pytest.raises(RuntimeError, match="repository's"):
         opts.save(str(owners))
     monkeypatch.delenv("PYTEST_VERSION", raising=False)  # outside pytest and its helpers: the WebUI's own save
-    monkeypatch.delitem(sys.modules, "remi.testing", raising=False)
-    monkeypatch.delitem(sys.modules, "remi.server.testing", raising=False)
+    monkeypatch.delenv("REMI_TEST_HELPER", raising=False)
     opts.save(str(owners))
     assert "owner" not in json.loads(owners.read_text(encoding="utf-8"))
 
 
-def test_the_webui_never_loads_the_test_helpers():
-    # the guard takes a process that loaded them for a test: if the WebUI's own code did, it could not
-    # save its settings to the repository's file
-    import re
-
-    helper = re.compile(r"^\s*(?:from\s+remi(?:\.server)?\s+import\s+[^#\n]*\btesting\b|(?:from|import)\s+remi(?:\.server)?\.testing\b)", re.M)
-    sources = [ROOT / "webui.py", ROOT / "launch.py"]
-    for folder in ("remi", "modules", "modules_forge", "backend", "extensions-builtin"):
-        sources += (ROOT / folder).rglob("*.py")
-    found = []
-    for path in sources:
-        relative = path.relative_to(ROOT)
-        if "tests" in relative.parts or relative.as_posix() in {"remi/testing.py", "remi/server/testing.py"}:
-            continue
-        if path.is_file() and helper.search(path.read_text(encoding="utf-8", errors="replace")):
-            found.append(relative.as_posix())
-    assert not found
-    assert helper.search("from remi.testing import webui_state") and helper.search("    from remi.server import testing")
-
-
-def test_a_script_with_the_test_helpers_loaded_cannot_save_the_owners_settings(tmp_path, monkeypatch, opts):
-    """Outside pytest, a script that sets the WebUI up with remi.testing or remi.server.testing is a
-    test as well (the WebUI never loads them); without them a save is the WebUI's own."""
+@pytest.mark.parametrize("helper", ["webui_state", "server_app"])
+def test_a_script_that_set_the_webui_up_with_a_test_helper_cannot_save_the_owners_settings(tmp_path, monkeypatch, opts, helper):
+    """Outside pytest, a script that entered remi.testing.webui_state or remi.server.testing.server_app
+    is a test as well, from then on, and so is a WebUI it starts (the mark is in the environment).
+    Importing them is not: an extension may import remi.testing for its contract helpers."""
     from modules import options
+    from remi.server.testing import server_app
+    from remi.testing import webui_state
 
     owners = tmp_path / "config.json"  # stands for the repository's settings file
     owners.write_text('{"owner": 1}', encoding="utf-8")
     monkeypatch.setattr(options, "_REPOSITORY_SETTINGS", str(owners))
-    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
-    monkeypatch.delenv("PYTEST_VERSION", raising=False)
-    monkeypatch.delitem(sys.modules, "remi.server.testing", raising=False)
-    assert "remi.testing" in sys.modules  # the opts fixture set the WebUI up with it
-    with pytest.raises(RuntimeError, match="repository's"):
-        opts.save(str(owners))
-    monkeypatch.delitem(sys.modules, "remi.testing")
-    monkeypatch.setitem(sys.modules, "remi.server.testing", types.ModuleType("remi.server.testing"))
+    for name in ("PYTEST_CURRENT_TEST", "PYTEST_VERSION", "REMI_TEST_HELPER"):
+        monkeypatch.setenv(name, "")  # recorded first, so the mark the helper sets is undone too
+        monkeypatch.delenv(name)
+    assert "remi.testing" in sys.modules and "remi.server.testing" in sys.modules
+    opts.save(str(owners))  # the WebUI's own save, with both modules loaded
+    assert "owner" not in json.loads(owners.read_text(encoding="utf-8"))
+
+    owners.write_text('{"owner": 1}', encoding="utf-8")
+    root = tmp_path / "app"
+    root.mkdir()
+    with webui_state() if helper == "webui_state" else server_app(root):
+        pass
+    assert os.environ["REMI_TEST_HELPER"]
     with pytest.raises(RuntimeError, match="repository's"):
         opts.save(str(owners))
     assert owners.read_text(encoding="utf-8") == '{"owner": 1}'
-    monkeypatch.delitem(sys.modules, "remi.server.testing")
-    opts.save(str(owners))
-    assert "owner" not in json.loads(owners.read_text(encoding="utf-8"))
 
 
 def test_the_guarded_file_is_the_repositorys_default_settings_file():
@@ -424,6 +408,39 @@ def test_a_folder_in_pytests_own_temporary_folder_is_the_tests_own(tmp_path, mon
     assert json.loads((data / "config.json").read_text(encoding="utf-8"))
 
 
+@pytest.mark.parametrize(
+    ("user", "folder", "own"),
+    [
+        ("someone", "pytest-of-someone", True),
+        ("someone", "pytest-of-someone2", False),  # another user's, beside it
+        ("someone", "pytest-of-unknown", False),
+        (None, "pytest-of-unknown", True),  # no user name
+        ("some/one", "pytest-of-unknown", True),  # a name that cannot name a folder
+        ("some/one", "pytest-of-some", False),
+    ],
+)
+def test_pytests_own_folder_is_found_as_pytest_finds_it(tmp_path, monkeypatch, opts, user, folder, own):
+    from modules import paths_internal
+
+    root = tmp_path / "root"
+    data = root / folder / "pytest-1" / "data"
+    data.mkdir(parents=True)
+    monkeypatch.setenv("PYTEST_DEBUG_TEMPROOT", str(root))
+
+    def getuser():
+        if user is None:
+            raise OSError("no user name")
+        return user
+
+    monkeypatch.setattr(getpass, "getuser", getuser)
+    monkeypatch.setattr(paths_internal, "commandline_args", f"--data-dir {shlex.quote(str(data))}")
+    if own:
+        opts.save(str(data / "config.json"))
+    else:
+        with pytest.raises(RuntimeError, match="COMMANDLINE_ARGS named"):
+            opts.save(str(data / "config.json"))
+
+
 def test_a_folder_elsewhere_in_the_system_temporary_folder_is_the_owners(tmp_path, monkeypatch, opts):
     # only pytest's own folder there is a test's: an owner may keep a data folder in /tmp
     from modules import paths_internal
@@ -440,9 +457,9 @@ def test_a_folder_elsewhere_in_the_system_temporary_folder_is_the_owners(tmp_pat
     assert owners.read_text(encoding="utf-8") == '{"owner": 1}'
 
 
-def test_a_temporary_folder_that_is_the_working_directory_exempts_nothing(tmp_path, monkeypatch, opts):
+def test_a_relative_data_folder_in_a_working_directory_that_is_the_temporary_folder_is_the_owners(tmp_path, monkeypatch, opts):
     # gettempdir() falls back to the working directory where no temporary folder is writable: a
-    # relative --data-dir there is still the owner's
+    # relative --data-dir there is still the owner's (only pytest's own folder in it is a test's)
     from modules import paths_internal
 
     started_in = tmp_path / "started in"

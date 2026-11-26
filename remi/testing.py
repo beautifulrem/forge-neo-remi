@@ -11,6 +11,7 @@ from __future__ import annotations
 import ast
 import importlib
 import json
+import os
 import tempfile
 import warnings
 from collections.abc import Iterable, Sequence
@@ -57,6 +58,10 @@ def webui_state(options: dict | None = None, *, script_classes=None, postprocess
 
     from modules import options as options_module
     from modules import shared, shared_options
+
+    # From here on the process is a test's, as is a WebUI it starts (it inherits the mark): Options.save
+    # refuses the owner's settings files (modules/options.py)
+    os.environ.setdefault("REMI_TEST_HELPER", "webui_state")
 
     saved = {name: getattr(shared, name) for name in ("opts", "options_templates", "prompt_styles", "config_filename")}
     shared.options_templates = shared_options.options_templates

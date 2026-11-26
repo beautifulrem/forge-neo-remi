@@ -24,9 +24,11 @@ from remi import ui
 # Remi: the repository's own settings file (--ui-settings-file's default, as the default data folder
 # is the repository), the owner's settings: ignored by git, so in no history. A test once saved there
 # and rewrote them with the defaults. Under test (pytest: PYTEST_VERSION, set for the whole run from
-# before the conftests load, or PYTEST_CURRENT_TEST, set while a test runs, and a WebUI process a test
-# starts inherits both; or a script that set the WebUI up with remi.testing or remi.server.testing,
-# which the WebUI never loads) Options.save refuses it, wherever the test's file lives
+# before the conftests load, or PYTEST_CURRENT_TEST, set while a test runs; or REMI_TEST_HELPER, set
+# for the rest of the process by remi.testing.webui_state and remi.server.testing.server_app, as a
+# script that set the WebUI up with them is a test too, though importing them is not, since an
+# extension may use remi.testing's contract helpers; a WebUI process a test starts inherits all
+# three) Options.save refuses it, wherever the test's file lives
 # (tests/conftest.py only reaches tests/), and so the settings file COMMANDLINE_ARGS named when the
 # WebUI was imported (modules.paths_internal adds it to the command line; its --data-dir or
 # --ui-settings-file, read as the WebUI's parser reads them, abbreviations too, and a few it rejects
@@ -35,8 +37,7 @@ from remi import ui
 # that COMMANDLINE_ARGS names inside pytest's own temporary folder (where tmp_path is made) is the
 # test's own, as is any data folder a test passes on the command line. Outside a test a save to them
 # is the WebUI's own, and goes ahead.
-_UNDER_PYTEST = ("PYTEST_VERSION", "PYTEST_CURRENT_TEST")
-_TEST_HELPERS = ("remi.testing", "remi.server.testing")
+_UNDER_TEST = ("PYTEST_VERSION", "PYTEST_CURRENT_TEST", "REMI_TEST_HELPER")
 _REPOSITORY_SETTINGS = os.path.join(script_path, "config.json")
 _COMMANDLINE = argparse.ArgumentParser(add_help=False, exit_on_error=False)
 _COMMANDLINE.add_argument("--data-dir")
@@ -44,19 +45,22 @@ _COMMANDLINE.add_argument("--ui-settings-file")
 
 
 def _under_test() -> bool:
-    return any(name in os.environ for name in _UNDER_PYTEST) or any(name in sys.modules for name in _TEST_HELPERS)
+    return any(name in os.environ for name in _UNDER_TEST)
 
 
-def _pytest_temporary_folders() -> list[str]:
-    # pytest makes tmp_path in pytest-of-<user> (pytest-of-unknown when it cannot use the name) in
-    # PYTEST_DEBUG_TEMPROOT or the system's temporary folder. Asked only under test: gettempdir() writes
-    # a probe file. A --basetemp elsewhere is not seen, and the guard refuses that folder's files.
-    root = os.environ.get("PYTEST_DEBUG_TEMPROOT") or tempfile.gettempdir()
+def _pytest_temporary_folder() -> str:
+    # pytest makes tmp_path in pytest-of-<user> in PYTEST_DEBUG_TEMPROOT or the system's temporary
+    # folder, resolved (pytest-of-unknown without a user name, or with one that cannot name a folder).
+    # Asked only under test: gettempdir() writes a probe file. A --basetemp elsewhere is not seen, and
+    # the guard refuses that folder's files.
+    root = os.path.realpath(os.environ.get("PYTEST_DEBUG_TEMPROOT") or tempfile.gettempdir())
     try:
-        user = getpass.getuser() or "unknown"
+        user = getpass.getuser()
     except (ImportError, OSError, KeyError):
+        user = None
+    if not user or any(separator in user for separator in filter(None, (os.sep, os.altsep))):
         user = "unknown"
-    return [os.path.realpath(os.path.join(root, f"pytest-of-{name}")) for name in {user, "unknown"}]
+    return os.path.join(root, f"pytest-of-{user}")
 
 
 def _owners_settings() -> list[str]:
@@ -66,10 +70,10 @@ def _owners_settings() -> list[str]:
     except (ValueError, argparse.ArgumentError, SystemExit):  # unbalanced quotes, a missing value
         return files
     named_files = [os.path.join(named.data_dir, "config.json") if named.data_dir is not None else None, named.ui_settings_file]
-    tests_own = _pytest_temporary_folders()
+    tests_own = _pytest_temporary_folder()
     for named_file in filter(None, named_files):
         named_file = os.path.realpath(os.path.join(paths_internal.cwd, named_file))
-        if not any(Path(named_file).is_relative_to(folder) for folder in tests_own):
+        if not Path(named_file).is_relative_to(tests_own):
             files.append(named_file)
     return files
 
