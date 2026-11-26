@@ -27,14 +27,22 @@ from remi import ui
 # starts inherits both) Options.save refuses it, wherever the test's file lives (tests/conftest.py
 # only reaches tests/), and so the settings file COMMANDLINE_ARGS named when the WebUI was imported
 # (modules.paths_internal adds it to the command line; its --data-dir or --ui-settings-file, read as
-# argparse reads them: the owner's, when a shell exports it). A data folder in the temporary folder
-# is the test's own, and the WebUI itself still saves to all of them.
+# the WebUI's parser reads them: the owner's, when a shell exports it; the files of both, when both
+# are given; a value this cannot read, which stops the WebUI too, leaves the repository's file alone
+# guarded). A settings file or data folder that COMMANDLINE_ARGS names inside the system's temporary
+# folder is the test's own (so an owner's settings kept there are not guarded), as is any data folder
+# a test passes on the command line. The WebUI itself still saves to all of them.
 _UNDER_PYTEST = ("PYTEST_VERSION", "PYTEST_CURRENT_TEST")
 _REPOSITORY_SETTINGS = os.path.join(script_path, "config.json")
-_TEMPORARY = tempfile.gettempdir()
 _COMMANDLINE = argparse.ArgumentParser(add_help=False, exit_on_error=False)
 _COMMANDLINE.add_argument("--data-dir")
 _COMMANDLINE.add_argument("--ui-settings-file")
+
+
+def _temporary_folder() -> str | None:
+    # asked only under pytest: gettempdir() writes a probe file, and falls back to the working directory
+    temporary = os.path.realpath(tempfile.gettempdir())
+    return None if temporary == os.path.realpath(paths_internal.cwd) else temporary
 
 
 def _owners_settings() -> list[str]:
@@ -44,10 +52,10 @@ def _owners_settings() -> list[str]:
     except (ValueError, argparse.ArgumentError, SystemExit):  # unbalanced quotes, a missing value
         return files
     named_files = [os.path.join(named.data_dir, "config.json") if named.data_dir is not None else None, named.ui_settings_file]
-    temporary = os.path.realpath(_TEMPORARY)
+    temporary = _temporary_folder()
     for named_file in filter(None, named_files):
         named_file = os.path.realpath(os.path.join(paths_internal.cwd, named_file))
-        if not Path(named_file).is_relative_to(temporary):
+        if temporary is None or not Path(named_file).is_relative_to(temporary):
             files.append(named_file)
     return files
 
