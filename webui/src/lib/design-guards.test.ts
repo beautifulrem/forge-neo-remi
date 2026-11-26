@@ -53,9 +53,18 @@ const CLASS_CONSTANTS = new Map(
   files.flatMap(({ source }) => [...source.matchAll(/\bconst ([A-Z][A-Z0-9_]*)\s*=\s*"([^"\n]*\bbg-[^"\n]*)"/g)].map((m): [string, string] => [m[1] ?? "", m[2] ?? ""])),
 )
 
-/** `tag` with the classes of each class constant it names added at its end. */
-function withConstants(tag: string): string {
-  const named = [...tag.matchAll(/\b[A-Z][A-Z0-9_]+\b/g)].flatMap(([name]) => CLASS_CONSTANTS.get(name) ?? [])
+/**
+ * `tag` with the classes of each class constant it names added at its end. With the `source` it is in, a name
+ * that file gives one (`const tone = ON_BACKDROP`, `const ring = "…"`) counts too; such a name is only the file's.
+ */
+function withConstants(tag: string, source = ""): string {
+  const local = new Map(
+    [...source.matchAll(/\bconst ([A-Za-z_]\w*)\s*=\s*(?:([A-Z][A-Z0-9_]+)\b(?!\s*[.([])|"([^"\n]*\bbg-[^"\n]*)")/g)].map((m): [string, string] => [
+      m[1] ?? "",
+      m[3] ?? CLASS_CONSTANTS.get(m[2] ?? "") ?? "",
+    ]),
+  )
+  const named = [...tag.matchAll(/\b[A-Za-z_]\w*\b/g)].flatMap(([name]) => (local.get(name) || CLASS_CONSTANTS.get(name)) ?? [])
   return named.length ? `${tag} "${named.join(" ")}"` : tag
 }
 
@@ -145,6 +154,22 @@ describe("pressed toggles", () => {
 describe("button washes", () => {
   /** The kit's buttons, by component, with the variant each draws when none is given. */
   const BUTTON_VARIANT: Record<string, string> = { Button: "default", InputGroupButton: "ghost", AlertDialogCancel: "outline" }
+  /** The app's own buttons that pass their `className` to a kit button of one variant, by the file defining them. */
+  const WRAPPERS = [
+    { name: "IconButton", file: "canvas/ui/controls.tsx", variant: "ghost" },
+    { name: "Action", file: "features/send-to/ResultActions.tsx", variant: "ghost" },
+  ]
+  /** The variants whose kit classes carry a `dark:` wash, and which: the fill too, or the hover only. */
+  const DARK_FILL = new Set(["outline", "destructive"])
+  const DARK_WASH = new Set(["ghost", ...DARK_FILL])
+
+  it("know their app wrappers' variants", () => {
+    for (const { name, file, variant } of WRAPPERS) {
+      const source = sources[`../${file}`] ?? ""
+      const body = source.slice(source.search(new RegExp(`function ${name}\\b`)))
+      expect(body.slice(0, 900), `${file}: ${name}`).toMatch(new RegExp(`<Button\\s+variant="${variant}"[\\s\\S]*?className=\\{cn\\([^)]*className\\)`))
+    }
+  })
 
   it("are set for the dark theme too where a ghost or outline button sets its own", () => {
     expect(CLASS_CONSTANTS.get("FIELD_BUTTON_CLASS")).toContain("hover:bg-field-hover")
@@ -152,23 +177,33 @@ describe("button washes", () => {
     // `dark:hover:bg-input/50`. `dark:` is `:is(.dark *)`, a class more than a plain `hover:` or `bg-`: a
     // button that set its own wash (the image viewer's 12 % white, a destructive tint, a field's hover) lost
     // it in the dark theme, and in the viewer's dark-scoped chrome in both. It repeats it under `dark:`.
+    let checked = 0
     const lost = files.flatMap(({ file, source: raw }) =>
       openingTags(raw).tags.flatMap(({ name, tag: written }) => {
-        const tag = withConstants(written)
+        const tag = withConstants(written, raw)
+        const wrapper = WRAPPERS.find(
+          (one) => one.name === name && (one.file === file || new RegExp(`import \\{[^}]*\\b${name}\\b[^}]*\\} from "[^"]*/${one.file.split("/").pop()?.replace(/\.tsx$/, "")}"`).test(raw)),
+        )
         // The variants the element may draw: a button's (a literal, or each one an expression can pick; a wrapper's
         // default), and a `buttonVariants({ variant })` call's on any element.
         const variants = new Set([...tag.matchAll(/\bbuttonVariants\(\{[^}]*\bvariant:\s*"([a-z-]+)"/g)].map((m) => m[1]))
         const attribute = /\svariant=(?:"([^"]*)"|\{([^}]*)\})/.exec(tag)
-        if (name in BUTTON_VARIANT) {
-          const picked = attribute ? (attribute[1] !== undefined ? [attribute[1]] : [...(attribute[2] ?? "").matchAll(/"([a-z-]+)"/g)].map((m) => m[1])) : [BUTTON_VARIANT[name]]
+        if (wrapper) variants.add(wrapper.variant)
+        else if (name in BUTTON_VARIANT) {
+          // a literal; each literal an expression can pick; an expression without one may pick any
+          const literals = attribute?.[2] === undefined ? [] : [...attribute[2].matchAll(/"([a-z-]+)"/g)].map((m) => m[1])
+          const picked = !attribute ? [BUTTON_VARIANT[name]] : attribute[1] !== undefined ? [attribute[1]] : literals.length ? literals : [...DARK_WASH]
           for (const variant of picked) variants.add(variant)
         }
-        if (!variants.has("ghost") && !variants.has("outline")) return []
+        if (![...variants].some((variant) => variant && DARK_WASH.has(variant))) return []
+        checked++
         const own = (variant: string) => new RegExp(`(?:^|[\\s"'\`])${variant}bg-[^\\s"'\`]+`).test(tag)
-        const missing = [own("hover:") && !own("dark:hover:") && "hover", variants.has("outline") && own("") && !own("dark:") && "fill"].filter(Boolean)
+        const fill = [...variants].some((variant) => variant && DARK_FILL.has(variant))
+        const missing = [own("hover:") && !own("dark:hover:") && "hover", fill && own("") && !own("dark:") && "fill"].filter(Boolean)
         return missing.length ? [`${file}: ${written.replace(/\s+/g, " ").slice(0, 70)} (${missing.join(", ")})`] : []
       }),
     )
+    expect(checked).toBeGreaterThan(150)
     expect(lost).toEqual([])
   })
 })
