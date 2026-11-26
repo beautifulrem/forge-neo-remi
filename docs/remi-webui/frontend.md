@@ -469,8 +469,11 @@ imperatively).
   boxed before it had the focus. shadcn's menu, select, combobox and command
   items, the command input and the popover and hover-card popups keep their
   bare `outline-hidden` (they draw no ring; upstream's), so under forced
-  colours each of them is boxed at rest, an item list a stack of boxes, the
-  focused item told apart by its 3 px `Highlight` outline. `tests/e2e/a11y.spec.ts`
+  colours each of them is boxed at rest, an item list a stack of 2 px
+  boxes. A menu's or a select's focused item is told apart by its 3 px
+  `Highlight` outline (measured on the appearance menu); a combobox's and
+  the command palette's highlighted item does not take the focus, which
+  stays in their input, so that outline does not mark it. `tests/e2e/a11y.spec.ts`
   ("visible focus in forced colours") tabs through txt2img, the gallery, the
   networks and settings under forced colours and fails on a stop with no
   2 px outline, or an outline left at rest.
