@@ -463,8 +463,10 @@ imperatively).
   2 px outline under forced colours, which the browser paints in a system
   colour on the control at rest too, so every field and button would be
   boxed before it had the focus. shadcn's menu, select, combobox and command
-  items and its popover and hover-card popups keep their bare
-  `outline-hidden` (they draw no ring; upstream's). `tests/e2e/a11y.spec.ts`
+  items, the command input and the popover and hover-card popups keep their
+  bare `outline-hidden` (they draw no ring; upstream's), so under forced
+  colours each of them is boxed at rest, an item list a stack of boxes, the
+  focused item told apart by its 3 px `Highlight` outline. `tests/e2e/a11y.spec.ts`
   ("visible focus in forced colours") tabs through txt2img, the gallery, the
   networks and settings under forced colours and fails on a stop with no
   2 px outline, or an outline left at rest.
