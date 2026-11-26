@@ -499,11 +499,24 @@
 
   /* A focus nothing else marks (a link in text, the skip link) draws the focus ring as an outline:
      3 px of --focus-ring at the edge, where ring-3 draws it, not the browser's own outline (its width
-     and colour the browser's). A control that draws a ring takes the outline off (outline-none or
-     outline-hidden, utilities, which win over this base rule). */
+     and colour the browser's). A control that draws a ring takes the outline off (outline-none, a
+     utility, which wins over this base rule; outline-hidden only under its focus variant). */
   :focus-visible {
     outline: 3px solid var(--focus-ring);
     outline-offset: 0;
+  }
+
+  /* Forced colours (Windows high contrast) draw no box shadow, so no focus ring shows there, and a
+     control that takes the outline off for its ring showed no focus at all: every keyboard focus draws
+     the outline there, in the system's highlight colour, over the utilities that take it off (an
+     important declaration of this layer wins over theirs). Not outline-hidden on each control: its
+     transparent outline is painted in a system colour on the control at rest too. */
+  @media (forced-colors: active) {
+    :focus-visible,
+    /* the slider's cap, which shows the focus of the range input nobody sees inside it */
+    [data-slot="slider-thumb"]:has(> input:focus-visible) {
+      outline: 3px solid Highlight !important;
+    }
   }
 }
 

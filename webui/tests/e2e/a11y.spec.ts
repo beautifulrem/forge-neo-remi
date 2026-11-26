@@ -325,6 +325,60 @@ test.describe("visible focus", () => {
   }
 })
 
+/**
+ * Tabs through a page in forced colours (Windows high contrast), where box shadows are not drawn, and lists
+ * the stops that show no outline (on the stop, or on a wrapper of an input nobody sees) and the stops that
+ * draw one while they do not have the focus.
+ */
+async function forcedColorFocusProblems(page: Page, presses: number): Promise<string[]> {
+  const problems = new Set<string>()
+  for (let i = 0; i < presses; i++) {
+    await page.keyboard.press("Tab")
+    const problem = await page.evaluate(() => {
+      const element = document.activeElement as HTMLElement | null
+      if (!element || element === document.body) return null
+      const name = `${element.tagName.toLowerCase()}[${element.getAttribute("role") ?? ""}] ${element.getAttribute("aria-label") || element.textContent?.trim().slice(0, 40) || ""}`
+      const outlined = (node: Element) => {
+        const style = getComputedStyle(node)
+        return style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 2
+      }
+      const style = getComputedStyle(element)
+      const unseen = style.opacity === "0" || /^rect\(0px,? 0px,? 0px,? 0px\)$/.test(style.clip) || style.clipPath === "inset(50%)"
+      if (!unseen) return outlined(element) ? null : `${name}: no outline`
+      for (let node = element.parentElement, depth = 0; node && depth < 4; node = node.parentElement, depth++) if (outlined(node)) return null
+      return `${name}: no outline on it or its wrapper`
+    })
+    if (problem) problems.add(problem)
+    // at rest (blurred), the same control draws no outline: a transparent one would be painted in a system colour
+    const resting = await page.evaluate(() => {
+      const element = document.activeElement as HTMLElement | null
+      if (!element || element === document.body) return null
+      const name = `${element.tagName.toLowerCase()} ${element.getAttribute("aria-label") || element.textContent?.trim().slice(0, 40) || ""}`
+      element.blur()
+      const style = getComputedStyle(element)
+      const drawn = style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0
+      element.focus()
+      return drawn ? `${name}: an outline at rest` : null
+    })
+    if (resting) problems.add(resting)
+  }
+  return [...problems]
+}
+
+// In forced colours box shadows are not drawn: every control that draws its focus as a ring and takes the
+// outline off for it (outline-none) showed no focus at all there. The base layer brings the outline back.
+test.describe("visible focus in forced colours", () => {
+  for (const route of ["txt2img", "gallery", "networks", "settings"]) {
+    test(`every tab stop on #/${route} shows an outline`, async ({ page }) => {
+      await page.emulateMedia({ forcedColors: "active" })
+      await openRoute(page, route)
+      await page.waitForLoadState("networkidle")
+      await page.addStyleTag({ content: "*, *::before, *::after { transition: none !important; animation: none !important; }" })
+      expect(await forcedColorFocusProblems(page, 40)).toEqual([])
+    })
+  }
+})
+
 // The focus ring is drawn inside the tile, over the image. The image zooms in under the pointer,
 // which lifted it onto a layer of its own over the ring: a tile focused from the keyboard showed
 // no ring while the pointer rested on it.

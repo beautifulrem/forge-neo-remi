@@ -437,14 +437,30 @@ imperatively).
   the token as a 3 px outline at its edge, where `ring-3` draws it (the
   `:focus-visible` rule of the `index.css` base layer), never the browser's
   own `outline: auto`, whose width and colour are the browser's. A control
-  that draws a ring takes the outline off (`outline-none` or
-  `outline-hidden`: utilities, which win over the base rule), or it shows
-  both (`lib/design-guards.test.ts`, "focus rings", reads each tag and class
+  that draws a ring takes the outline off with `outline-none` (a utility,
+  which wins over the base rule), or it shows both; `outline-hidden` only
+  under its focus variant (`focus-visible:outline-hidden`), never bare
+  (`lib/design-guards.test.ts`, "focus rings", reads each tag and class
   call that draws a focus ring for one). `tests/e2e/a11y.spec.ts` ("visible focus") tabs through every main
   page and measures each stop's indicator: a 3 px ring or outline in
   `--focus-ring`, on the stop or on the wrapper that draws it, and fails on
   the browser's outline, a 1 or 2 px one, another colour, or an outline and
   a ring together.
+- Forced colours (Windows high contrast) draw no box shadow, so no ring
+  shows there, and a control that takes the outline off showed no focus at
+  all (38 stops of txt2img). The base layer's `@media (forced-colors:
+  active)` rule draws every `:focus-visible` as a 3 px `Highlight` outline,
+  important, so it wins over `outline-none`; the slider's cap takes it for
+  the range input inside it (`styles/focus-ring.test.ts`). Not a bare
+  `outline-hidden` on each control instead: Tailwind gives it a transparent
+  2 px outline under forced colours, which the browser paints in a system
+  colour on the control at rest too, so every field and button would be
+  boxed before it had the focus. shadcn's menu, select, combobox and command
+  items and its popover and hover-card popups keep their bare
+  `outline-hidden` (they draw no ring; upstream's). `tests/e2e/a11y.spec.ts`
+  ("visible focus in forced colours") tabs through txt2img, the gallery, the
+  networks and settings under forced colours and fails on a stop with no
+  2 px outline, or an outline left at rest.
 - See [Visual rules](#visual-rules) for the design rules every new screen
   follows.
 - shadcn components import `cn` from the `cn` package (what the base-nova

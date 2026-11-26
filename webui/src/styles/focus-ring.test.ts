@@ -103,6 +103,23 @@ describe("the focus ring token", () => {
     expect(base).toMatch(/\n {2}:focus-visible \{\n {4}outline: 3px solid var\(--focus-ring\);\n {4}outline-offset: 0;\n {2}\}/)
   })
 
+  it("comes back as an outline in forced colours, over the controls that take the outline off", () => {
+    // forced colours draw no box shadow, so a ring-3 control that takes the outline off
+    // (outline-none) showed no focus there. The base layer draws the outline back with an important
+    // declaration, which wins over the utilities' normal ones, in the system's highlight colour. The
+    // slider's cap shows the focus of the range input nobody sees inside it. The a11y e2e ("visible
+    // focus in forced colours") tabs through the main pages under forced colours.
+    const base = css.slice(css.indexOf("@layer base {"))
+    const forced = /@media \(forced-colors: active\) \{([\s\S]*?)\n {2}\}/.exec(base)?.[1] ?? ""
+    const selectors = forced.slice(0, forced.indexOf("{")).replace(/\/\*[\s\S]*?\*\//g, "")
+    expect(selectors.split(",").map((selector) => selector.trim())).toEqual([
+      ":focus-visible",
+      '[data-slot="slider-thumb"]:has(> input:focus-visible)',
+    ])
+    expect(forced).toMatch(/\{\s*outline: 3px solid Highlight !important;\s*\}/)
+    expect(sources["../components/ui/slider.tsx"]).toMatch(/data-slot="slider-thumb"/)
+  })
+
   it("is the only focus ring colour drawn from --ring at a share of its own", () => {
     const ownShares = Object.entries(sources)
       .filter(([, source]) => /\b(?:ring|outline)-ring\/\d+\b|var\(--ring\) \d+%/.test(source))

@@ -337,11 +337,16 @@ describe("focus rings", () => {
 
   it("take the outline off where they draw a ring", () => {
     // frontend.md: a focus nothing else marks draws a 3 px outline (the index.css base layer); a
-    // control that draws its own ring takes it off (outline-none or outline-hidden), or it shows both.
+    // control that draws its own ring takes it off (outline-none, or outline-hidden under its focus
+    // variant), or it shows both.
     // shadcn's 1 px outline inside the tabs' ring is an edge, not a second ring. Read per element:
     // a JSX tag, or the class call (cn, cva) a class string outside one is in.
     const RING = /(?:^|[\s"'`])(?:dark:)?(?:focus|focus-visible):ring-(?:[1-9]\d*|\[\d+px\])(?=[\s"'`]|$)/
     const OFF = /(?:^|[\s"'`:])outline-(?:none|hidden)(?=[\s"'`]|$)|(?:^|[\s"'`])focus-visible:outline-1(?=[\s"'`]|$)/
+    // Not with a bare `outline-hidden`: its transparent outline is painted in a system colour under
+    // forced colours, so the control is boxed at rest there; the base layer brings the outline back
+    // under the focus instead. Under a focus variant (`focus-visible:outline-hidden`) it is the focus.
+    const HIDDEN_AT_REST = /(?:^|[\s"'`])outline-hidden(?=[\s"'`]|$)/
     let drawn = 0
     const both = files.flatMap(({ file, source: raw }) => {
       const { source, tags } = openingTags(raw)
@@ -355,7 +360,7 @@ describe("focus rings", () => {
         })
       const ringed = [...fromTags, ...fromCalls]
       drawn += ringed.length
-      return ringed.filter(({ scope }) => !OFF.test(scope)).map(({ where }) => `${file}: ${where}`)
+      return ringed.filter(({ scope }) => !OFF.test(scope) || HIDDEN_AT_REST.test(scope)).map(({ where }) => `${file}: ${where}`)
     })
     expect(drawn).toBeGreaterThan(60)
     expect(both).toEqual([])
