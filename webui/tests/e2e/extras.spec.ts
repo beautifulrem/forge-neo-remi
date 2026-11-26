@@ -134,8 +134,12 @@ test.describe("hires fix and refiner", () => {
     const upscaleBy = section.getByRole("textbox", { name: "Upscale by" })
     await upscaleBy.fill("1.5")
     await upscaleBy.press("Tab")
-    await section.getByRole("combobox", { name: "Upscaler" }).click()
+    const upscaler = section.getByRole("combobox", { name: "Upscaler" })
+    await upscaler.click()
     await page.getByRole("option", { name: "R-ESRGAN 4x+" }).click()
+    // Until the closing list gives the focus back, a key goes to the chosen option, which takes the
+    // Enter for itself (some 50 ms; the run under a full e2e load pressed it in that window)
+    await expect(upscaler).toBeFocused()
 
     await page.keyboard.press(`${mod}+Enter`)
     await expect(page.getByRole("img", { name: "Generated image" })).toBeVisible({ timeout: 15_000 })
