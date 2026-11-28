@@ -262,7 +262,7 @@ class QwenImage21Transformer2DModel(nn.Module):
                 return False
         return not any(getattr(m, "weight_function", None) or getattr(m, "bias_function", None) for m in self._prefix_modules())
 
-    def _prefix_weight_key(self) -> tuple:
+    def _prefix_weight_probes(self) -> list[torch.Tensor]:
         probes = [
             self.txt_in.text_norm.weight,
             self.txt_in.in_layer.weight,
@@ -287,7 +287,12 @@ class QwenImage21Transformer2DModel(nn.Module):
                 probes.append(raw.img_mlp.gate_up.weight)
             else:
                 probes.extend((raw.img_mlp.gate_layer.weight, raw.img_mlp.proj.weight))
-        return tuple((id(w), w.data_ptr(), _tensor_version(w), w.device, w.dtype) for w in probes)
+        return probes
+
+    def _prefix_weight_key(self, probes: list[torch.Tensor] | None = None) -> tuple:
+        if probes is None:
+            probes = self._prefix_weight_probes()
+        return tuple((w.data_ptr(), _tensor_version(w), w.device, w.dtype) for w in probes)
 
     def _prefix_kv_fits_budget(self, batch: int, prefix_len: int, device: torch.device, dtype: torch.dtype) -> bool:
         kv_bytes = batch * len(self.transformer_blocks) * 2 * prefix_len * self.inner_dim * dtype.itemsize
@@ -445,7 +450,8 @@ class QwenImage21Transformer2DModel(nn.Module):
         if prefix_len == 0:
             return [], 0
 
-        weight_key = self._prefix_weight_key()
+        weight_probes = self._prefix_weight_probes()
+        weight_key = self._prefix_weight_key(weight_probes)
         meta_key = (
             batch,
             tuple(context.shape),
@@ -463,6 +469,8 @@ class QwenImage21Transformer2DModel(nn.Module):
         # torch.cat tensors produced each step by sampling_function.cond_cat).
         for cache_key, entry in list(self._prefix_kv_cache.items()):
             if entry["meta_key"] != meta_key:
+                continue
+            if not all(wr() is w for wr, w in zip(entry["weight_weakrefs"], weight_probes)):
                 continue
             same_ctx = (
                 entry["ctx_weakref"]() is context
@@ -495,9 +503,11 @@ class QwenImage21Transformer2DModel(nn.Module):
         except TypeError:
             ctx_wref = lambda: None
 
+        weight_weakrefs = tuple(weakref.ref(w) for w in weight_probes)
         entry_id = (meta_key, id(prefix_kv))
         self._prefix_kv_cache[entry_id] = {
             "meta_key": meta_key,
+            "weight_weakrefs": weight_weakrefs,
             "ctx_weakref": ctx_wref,
             "ctx_ptr": context.data_ptr(),
             "ctx_ver": _tensor_version(context),

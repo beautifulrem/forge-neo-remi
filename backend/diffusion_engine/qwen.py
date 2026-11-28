@@ -68,7 +68,9 @@ class QwenImage(ForgeDiffusionEngine):
             image_prompts.append(p)
 
         dynamic_args.ref_latents = ref_latents.copy()
-        return self.text_processing_engine_qwen(["\n".join([*image_prompts, *prompt])], images=images_vl)
+        prompts = [prompt] if isinstance(prompt, str) else list(prompt)
+        batched_prompts = ["\n".join([*image_prompts, item]) for item in prompts]
+        return self.text_processing_engine_qwen(batched_prompts, images=images_vl)
 
     @torch.inference_mode()
     def get_prompt_lengths_on_ui(self, prompt: str) -> tuple[int, int]:

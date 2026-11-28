@@ -178,6 +178,9 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
         return sigmas.cpu()
 
     def sample_img2img(self, p, x, noise, conditioning, unconditional_conditioning, steps=None, image_conditioning=None):
+        if getattr(p, "denoising_strength", 1.0) <= 0:
+            return x
+
         unet_patcher = self.model_wrap.inner_model.forge_objects.unet
         sampling_prepare(self.model_wrap.inner_model.forge_objects.unet, x=x)
 
@@ -185,6 +188,8 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
 
         sigmas = self.get_sigmas(p, steps).to(x.device)
         sigma_sched = sigmas[steps - t_enc - 1 :]
+        if len(sigma_sched) < 2:
+            return x
 
         x = x.to(noise)
 

@@ -25,7 +25,10 @@ from backend.nn.anima_diffusers import (
     _load_component_sd,
     _read_json,
 )
-from backend.nn.dit_registry import diffusers_checkpoint_info, is_diffusers_checkpoint_dir  # noqa: F401 -- backward-compat re-export
+from backend.nn.dit_registry import (  # noqa: F401 -- backward-compat re-export
+    diffusers_checkpoint_info,
+    is_diffusers_checkpoint_dir,
+)
 
 
 def _dir_primary_safetensors(directory: str) -> str | None:
@@ -51,9 +54,8 @@ def moss_diffusers_primary_file(directory: os.PathLike | str) -> str | None:
 
     root = os.fspath(directory)
     transformer_dir = os.path.join(root, "transformer")
-    if os.path.isdir(transformer_dir):
-        if primary := _dir_primary_safetensors(transformer_dir):
-            return primary
+    if os.path.isdir(transformer_dir) and (primary := _dir_primary_safetensors(transformer_dir)):
+        return primary
     return _dir_primary_safetensors(root)
 
 

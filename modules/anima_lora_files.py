@@ -10,9 +10,14 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from modules.anima_artifacts import file_version
 from backend.nn.anima_layout import declared_depth
-from modules.anima_lora_support import anima_lora_block_count, block_index_from_key, module_from_key, qwen_layer_index
+from modules.anima_artifacts import file_version
+from modules.anima_lora_support import (
+    anima_lora_block_count,
+    block_index_from_key,
+    module_from_key,
+    qwen_layer_index,
+)
 
 LORA_MARKERS = (".lora_a.weight", ".lora_b.weight", ".lora_down.weight", ".lora_up.weight")
 LOKR_MARKERS = (".lokr_",)

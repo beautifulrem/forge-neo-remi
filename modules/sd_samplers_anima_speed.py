@@ -56,7 +56,6 @@ from modules.anima_guidance_state import reset_stateful_guidance
 from modules.anima_support import clamp, require_anima_flow_denoiser, to_float
 from modules.sd_samplers_anima import denoise_step, euler_step, sample_anima_flow_euler
 
-
 # Paper defaults: S = 2 stages (0.5, 1.0), delta = 0.01, DCT basis.
 _COARSE_SCALE = 0.5
 _DELTA = 0.01
@@ -148,7 +147,7 @@ def _coarse_size(height: int, width: int) -> tuple[int, int]:
     """Half-resolution grid, snapped to Anima's 2 x 2 patches."""
 
     def snap(size: int) -> int:
-        return max(2, int(round(_COARSE_SCALE * size)) // 2 * 2)
+        return max(2, round(_COARSE_SCALE * size) // 2 * 2)
 
     return snap(height), snap(width)
 

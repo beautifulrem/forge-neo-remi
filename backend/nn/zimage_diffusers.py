@@ -84,9 +84,7 @@ def is_zimage_state_dict(state_dict: Mapping[str, torch.Tensor]) -> bool:
     if "layers.0.adaLN_modulation.0.weight" in keys or "all_x_embedder.2-1.weight" in keys:
         return True
     cap_w = keys.get("cap_embedder.1.weight")
-    if isinstance(cap_w, torch.Tensor) and cap_w.ndim == 2 and int(cap_w.shape[0]) == 3840:
-        return True
-    return False
+    return isinstance(cap_w, torch.Tensor) and cap_w.ndim == 2 and int(cap_w.shape[0]) == 3840
 
 
 def is_diffusers_zimage_transformer(state_dict: Mapping[str, torch.Tensor]) -> bool:
@@ -250,7 +248,9 @@ def load_zimage_diffusers_dir(directory: os.PathLike | str) -> tuple[dict[str, t
     if os.path.isdir(vae_dir):
         vae_sd, _ = _load_component_sd(vae_dir)
         if "decoder.up_blocks.0.resnets.0.norm1.weight" in vae_sd:
-            from modules_forge.packages.huggingface_guess.diffusers_convert import convert_vae_state_dict
+            from modules_forge.packages.huggingface_guess.diffusers_convert import (
+                convert_vae_state_dict,
+            )
 
             vae_sd = convert_vae_state_dict(vae_sd)
         for key, value in vae_sd.items():

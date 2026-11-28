@@ -56,6 +56,7 @@ class ZImage(ForgeDiffusionEngine):
         return refs[:ZIMAGE_MAX_REFERENCES]
 
     def clear_references(self):
+        dynamic_args.zimage = False
         dynamic_args.ref_latents.clear()
         dit = getattr(getattr(getattr(self, "forge_objects", None), "unet", None), "model", None)
         dit = getattr(dit, "diffusion_model", None)
@@ -74,6 +75,7 @@ class ZImage(ForgeDiffusionEngine):
                 dynamic_args.ref_latents = refs
                 self.ini_latent = None
             else:
+                dynamic_args.zimage = False
                 dynamic_args.ref_latents.clear()
         return self.text_processing_engine_qwen(prompt)
 

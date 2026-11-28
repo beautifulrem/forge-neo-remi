@@ -50,6 +50,8 @@ def normal_scheduler(n, sigma_min, sigma_max, inner_model, device, sgm=False, fl
 
 
 def simple_scheduler(n, sigma_min, sigma_max, inner_model, device):
+    if n <= 0:
+        return torch.FloatTensor([0.0]).to(device)
     sigs = []
     ss = len(inner_model.sigmas) / n
     for x in range(n):
@@ -100,7 +102,7 @@ def get_align_your_steps_sigmas(n, sigma_min, sigma_max, device):
 
 
 def linear_quadratic(n, sigma_min, sigma_max, device, *, threshold_noise=0.025):
-    if n == 1:
+    if n <= 1:
         sigma_schedule = [1.0, 0.0]
     else:
         linear_steps = n // 2
@@ -117,6 +119,8 @@ def linear_quadratic(n, sigma_min, sigma_max, device, *, threshold_noise=0.025):
 
 
 def kl_optimal(n, sigma_min, sigma_max, device):
+    if n <= 0:
+        return torch.zeros([1], dtype=torch.float32, device=device)
     alpha_min = torch.arctan(torch.tensor(sigma_min, device=device))
     alpha_max = torch.arctan(torch.tensor(sigma_max, device=device))
     step_indices = torch.arange(n + 1, device=device)
@@ -125,6 +129,8 @@ def kl_optimal(n, sigma_min, sigma_max, device):
 
 
 def ddim_scheduler(n, sigma_min, sigma_max, inner_model, device):
+    if n <= 0:
+        return torch.FloatTensor([0.0]).to(device)
     sigs = []
     ss = max(len(inner_model.sigmas) // n, 1)
     x = 1
@@ -169,6 +175,8 @@ def beta57_scheduler(n, sigma_min, sigma_max, inner_model, device):
 
 
 def turbo_scheduler(n, sigma_min, sigma_max, inner_model, device):
+    if n <= 0:
+        return torch.zeros([1], dtype=torch.float32, device=device)
     unet = inner_model.inner_model.forge_objects.unet
     timesteps = torch.flip(torch.arange(1, n + 1) * float(1000.0 / n) - 1, (0,)).round().long().clip(0, 999)
     # Remi: the schedule's sigmas at those indices, not ``sigma(index)``: a flow predictor's
@@ -179,11 +187,17 @@ def turbo_scheduler(n, sigma_min, sigma_max, inner_model, device):
 
 
 def get_bong_tangent_sigmas(steps, slope, pivot, start, end):
+    if steps <= 0:
+        return []
+    if steps == 1:
+        return [float(start)]
     smax = ((2 / pi) * atan(-slope * (0 - pivot)) + 1) / 2
     smin = ((2 / pi) * atan(-slope * ((steps - 1) - pivot)) + 1) / 2
 
     srange = smax - smin
     sscale = start - end
+    if srange == 0:
+        return [float(start) - sscale * (x / (steps - 1)) for x in range(steps)]
 
     sigmas = [((((2 / pi) * atan(-slope * (x - pivot)) + 1) / 2) - smin) * (1 / srange) * sscale + end for x in range(steps)]
 
@@ -192,6 +206,16 @@ def get_bong_tangent_sigmas(steps, slope, pivot, start, end):
 
 def bong_tangent_scheduler(n, sigma_min, sigma_max, device, *, start=1.0, middle=0.5, end=0.0, pivot_1=0.6, pivot_2=0.6, slope_1=0.2, slope_2=0.2, pad=False):
     """https://github.com/ClownsharkBatwing/RES4LYF/blob/main/sigmas.py#L4076"""
+    if n <= 0:
+        sigmas = [float(end)]
+        if pad:
+            sigmas.append(0.0)
+        return torch.tensor(sigmas, dtype=torch.float32, device=device)
+    if n == 1:
+        sigmas = [float(start), float(end)]
+        if pad:
+            sigmas.append(0.0)
+        return torch.tensor(sigmas, dtype=torch.float32, device=device)
     n += 2
 
     midpoint = int((n * pivot_1 + n * pivot_2) / 2)
@@ -207,7 +231,8 @@ def bong_tangent_scheduler(n, sigma_min, sigma_max, device, *, start=1.0, middle
     tan_sigmas_1 = get_bong_tangent_sigmas(stage_1_len, slope_1, pivot_1, start, middle)
     tan_sigmas_2 = get_bong_tangent_sigmas(stage_2_len, slope_2, pivot_2 - stage_1_len, middle, end)
 
-    tan_sigmas_1 = tan_sigmas_1[:-1]
+    if tan_sigmas_1 and tan_sigmas_2:
+        tan_sigmas_1 = tan_sigmas_1[:-1]
     if pad:
         tan_sigmas_2 = tan_sigmas_2 + [0]
 

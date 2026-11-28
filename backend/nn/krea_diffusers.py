@@ -153,9 +153,8 @@ def krea2_diffusers_primary_file(directory: os.PathLike | str) -> str | None:
 
     root = os.fspath(directory)
     transformer_dir = os.path.join(root, "transformer")
-    if os.path.isdir(transformer_dir):
-        if primary := _dir_primary_safetensors(transformer_dir):
-            return primary
+    if os.path.isdir(transformer_dir) and (primary := _dir_primary_safetensors(transformer_dir)):
+        return primary
     return _dir_primary_safetensors(root)
 
 

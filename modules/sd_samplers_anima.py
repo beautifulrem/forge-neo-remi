@@ -35,7 +35,6 @@ from tqdm.auto import trange
 
 from modules.anima_support import anima_auxiliary_denoiser, require_anima_flow_denoiser
 
-
 _EPS = 1e-6
 _TAIL_SIGMA = 0.10
 _TAIL_GAP = 0.65

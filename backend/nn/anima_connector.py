@@ -230,7 +230,7 @@ class SemanticResampler(nn.Module):
     ) -> torch.Tensor:
         time = self.time_mlp(timestep_embedding(timesteps, self.dim).to(device=device, dtype=dtype))
         queries = self.query_tokens.to(device=device, dtype=dtype).expand(batch, -1, -1)
-        for block, kv in zip(self.blocks, source_kv):
+        for block, kv in zip(self.blocks, source_kv, strict=True):
             queries = block(queries, None, time, source_mask, source_kv=kv)
         return self.output_projection(self.output_norm(queries))
 
@@ -306,7 +306,7 @@ class SemanticConnector(nn.Module):
         for block in self.semantic_resampler.blocks:
             modules.extend((block.source_norm, block.cross_attention, block.cross_attention.k_proj, block.cross_attention.v_proj))
             params.extend((block.source_norm.weight, block.source_norm.bias, block.cross_attention.k_proj.weight, block.cross_attention.v_proj.weight))
-        for norm, attn in zip(self.quality_anchor.source_norms, self.quality_anchor.semantic_attentions):
+        for norm, attn in zip(self.quality_anchor.source_norms, self.quality_anchor.semantic_attentions, strict=True):
             modules.extend((norm, attn, attn.k_proj, attn.k_norm, attn.v_proj))
             params.extend((norm.weight, attn.k_proj.weight, attn.k_norm.weight, attn.v_proj.weight))
         if any(_has_dynamic_hooks(module) for module in modules):

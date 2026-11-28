@@ -287,8 +287,15 @@ def attention_pytorch(q, k, v, heads, mask=None, attn_precision=None, skip_resha
 
     if mask is not None:
         if mask.ndim == 2:
-            mask = mask.unsqueeze(0)
-        if mask.ndim == 3:
+            q_len = q.shape[2]
+            k_len = k.shape[2]
+            if mask.shape == (q_len, k_len) and mask.shape[0] != b:
+                mask = mask.unsqueeze(0).unsqueeze(0)
+            elif mask.shape[0] == b and mask.shape[1] == k_len:
+                mask = mask.unsqueeze(1).unsqueeze(1)
+            else:
+                mask = mask.unsqueeze(0).unsqueeze(0)
+        elif mask.ndim == 3:
             mask = mask.unsqueeze(1)
 
     sdpa_keys = ("scale", "enable_gqa")

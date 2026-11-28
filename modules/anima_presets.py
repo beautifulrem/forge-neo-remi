@@ -15,7 +15,6 @@ from collections.abc import Iterable
 
 from remi.ui.sentence import Sentence
 
-
 SAFE_BASE_AESTHETIC_LABEL = "Official Base/Aesthetic — Safe (Recommended)"
 
 SAFE_BASE_AESTHETIC_PRESET: dict[str, object] = {
@@ -223,15 +222,13 @@ ANIMA_3_8B_OVERRIDES: dict[str, object] = {
 
 # Label -> overrides applied on top of SAFE_BASE_AESTHETIC_PRESET, in menu
 # order. Overrides only name fields of the base preset.
-PRESETS: dict[str, dict[str, object]] = dict(
-    (
-        (SAFE_BASE_AESTHETIC_LABEL, {}),
-        (TURBO_LABEL, TURBO_OVERRIDES),
-        (TURBO_NAG_LABEL, TURBO_NAG_OVERRIDES),
-        (ANIMA_2_9B_LABEL, ANIMA_2_9B_OVERRIDES),
-        (ANIMA_3_8B_LABEL, ANIMA_3_8B_OVERRIDES),
-    )
-)
+PRESETS: dict[str, dict[str, object]] = {
+    SAFE_BASE_AESTHETIC_LABEL: {},
+    TURBO_LABEL: TURBO_OVERRIDES,
+    TURBO_NAG_LABEL: TURBO_NAG_OVERRIDES,
+    ANIMA_2_9B_LABEL: ANIMA_2_9B_OVERRIDES,
+    ANIMA_3_8B_LABEL: ANIMA_3_8B_OVERRIDES,
+}
 
 PRESET_DESCRIPTIONS: dict[str, str] = {
     SAFE_BASE_AESTHETIC_LABEL: (
@@ -382,9 +379,8 @@ def anima_workflow_advice(p, *, opts=None) -> list[str]:
     messages: list[str] = []
     cfg_scale = getattr(p, "cfg_scale", None)
     steps = getattr(p, "steps", None)
-    if cfg_scale is not None and steps is not None:
-        if advice := turbo_settings_advice(checkpoint, float(cfg_scale), int(steps), prompts=prompts):
-            messages.append(advice)
+    if cfg_scale is not None and steps is not None and (advice := turbo_settings_advice(checkpoint, float(cfg_scale), int(steps), prompts=prompts)):
+        messages.append(advice)
 
     init_images = getattr(p, "init_images", None) or ()
     has_ref_latents = False

@@ -96,10 +96,9 @@ def detect_dit_control_family(state_dict_or_keys: Mapping[str, Any] | Iterable[s
 
     # Anima LLLite / Control-LoRA / VACE
     if any(
-        k.startswith("lllite_dit")
+        k.startswith(("lllite_dit", "control_blocks.0.block.self_attn."))
         or k.endswith("control_embedder.proj.weight")
         or k == "control_embedder.proj.1.weight"
-        or k.startswith("control_blocks.0.block.self_attn.")
         for k in keys
     ):
         return "anima"
@@ -391,7 +390,7 @@ class Qwen21FunControlNet(nn.Module):
         }
 
     @classmethod
-    def from_state_dict(cls, state_dict: Mapping[str, torch.Tensor], metadata: Mapping[str, Any] | None = None) -> "Qwen21FunControlNet":
+    def from_state_dict(cls, state_dict: Mapping[str, torch.Tensor], metadata: Mapping[str, Any] | None = None) -> Qwen21FunControlNet:
         sd = _normalize_control_block_sd(strip_control_prefix(state_dict), nested_block_key="attn.")
         cfg = cls.infer_config(sd, metadata)
         dtype = next((v.dtype for v in sd.values() if isinstance(v, torch.Tensor) and v.is_floating_point()), torch.float32)
@@ -673,7 +672,7 @@ class ZImageFunControlNet(nn.Module):
         }
 
     @classmethod
-    def from_state_dict(cls, state_dict: Mapping[str, torch.Tensor], metadata: Mapping[str, Any] | None = None) -> "ZImageFunControlNet":
+    def from_state_dict(cls, state_dict: Mapping[str, torch.Tensor], metadata: Mapping[str, Any] | None = None) -> ZImageFunControlNet:
         sd = normalize_zimage_control_state_dict(state_dict)
         cfg = cls.infer_config(sd, metadata)
         dtype = next((v.dtype for v in sd.values() if isinstance(v, torch.Tensor) and v.is_floating_point()), torch.float32)

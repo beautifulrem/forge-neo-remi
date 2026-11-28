@@ -48,7 +48,11 @@ def keep_sensitive_weights_precise(model: nn.Module, dtype: torch.dtype) -> int:
         converted = False
         for param_name, param in list(module.named_parameters(recurse=False)):
             if param.dtype in _FP8_DTYPES:
-                setattr(module, param_name, nn.Parameter(param.detach().to(dtype), requires_grad=False))
+                if param.device.type == "mps":
+                    precise = param.detach().cpu().to(dtype).to(param.device)
+                else:
+                    precise = param.detach().to(dtype)
+                setattr(module, param_name, nn.Parameter(precise, requires_grad=False))
                 converted = True
                 kept += 1
         if converted and hasattr(module, "parameters_manual_cast"):
@@ -105,18 +109,23 @@ def scale_fp8_state_dict(state_dict: dict[str, torch.Tensor], *, fp8_matmul: boo
     rowwise_full_gemm = _comfy_quant_conf({"format": "float8_e4m3fn_rowwise", "full_precision_matrix_mult": True})
     force_full_gemm = cap.fp8_full_precision_matmul_filter
 
+    from backend import memory_management
+
+    cast_on_cpu = device is not None and not memory_management.supports_cast(device, torch.float8_e4m3fn)
     quantized = 0
     for key, prefix, weight in _block_linear_weights(state_dict, cap):
         weight = weight.to(device=device, dtype=torch.float32)
         if cap.fp8_rowwise:
             scale = weight.abs().amax(dim=-1, keepdim=True).clamp_min(1e-12) / _FP8_E4M3_MAX
-            state_dict[key] = (weight / scale).clamp_(-_FP8_E4M3_MAX, _FP8_E4M3_MAX).to(torch.float8_e4m3fn).cpu()
+            q = (weight / scale).clamp_(-_FP8_E4M3_MAX, _FP8_E4M3_MAX)
+            state_dict[key] = q.cpu().to(torch.float8_e4m3fn) if cast_on_cpu else q.to(torch.float8_e4m3fn).cpu()
             state_dict[f"{prefix}weight_scale"] = scale.cpu()
             use_fp8_matmul = fp8_matmul and not (force_full_gemm is not None and force_full_gemm(key))
             state_dict[f"{prefix}comfy_quant"] = rowwise_fp8_gemm if use_fp8_matmul else rowwise_full_gemm
         else:
             scale = weight.abs().amax().clamp_min(1e-12) / _FP8_E4M3_MAX
-            state_dict[key] = (weight / scale).clamp_(-_FP8_E4M3_MAX, _FP8_E4M3_MAX).to(torch.float8_e4m3fn).cpu()
+            q = (weight / scale).clamp_(-_FP8_E4M3_MAX, _FP8_E4M3_MAX)
+            state_dict[key] = q.cpu().to(torch.float8_e4m3fn) if cast_on_cpu else q.to(torch.float8_e4m3fn).cpu()
             state_dict[f"{prefix}weight_scale"] = scale.cpu()
             use_fp8_matmul = fp8_matmul and not (force_full_gemm is not None and force_full_gemm(key))
             state_dict[f"{prefix}comfy_quant"] = fp8_gemm if use_fp8_matmul else full_gemm
@@ -188,16 +197,27 @@ def quantize_on_load(state_dict: dict[str, torch.Tensor], mode: str, load_device
     if not memory_management.should_use_bf16(load_device):
         logger.warning(f"{label} {mode} needs a bf16-capable device ; loading without it")
         return
+    is_mps = memory_management.is_device_mps(load_device)
     if mode == ANIMA_QUANT_SCALED_FP8:
+        if not memory_management.supports_cast(load_device, torch.float8_e4m3fn):
+            if is_mps and cap is not None and cap.int8_convrot_filter is not None:
+                logger.warning(f"{label}: scaled FP8 is not supported on {load_device}; falling back to INT8 (ConvRot)")
+                quantized = quantize_int8_convrot_state_dict(state_dict, device=memory_management.cpu)
+                logger.info(f"{label}: stored {quantized} weights as INT8 (ConvRot, CPU-rotated fallback for MPS)")
+            else:
+                logger.warning(f"{label}: scaled FP8 is not supported on {load_device}; loading at full precision")
+            return
         fp8_matmul = args.fast_fp8 and memory_management.supports_fp8_compute(load_device)
         quantized = scale_fp8_state_dict(state_dict, fp8_matmul=fp8_matmul, device=load_device)
         logger.info(f"{label}: stored {quantized} weights as scaled FP8" + (" (FP8 matmul)" if fp8_matmul else ""))
     elif mode == ANIMA_QUANT_INT8_CONVROT:
-        if not int8_matmul_available(load_device):
+        if not int8_matmul_available(load_device) and not is_mps:
             logger.warning(f"{label} INT8 needs comfy-kitchen's INT8 GEMM (CUDA 13 build or --enable-triton-backend, SM 8.0+) ; loading at full precision")
             return
-        quantized = quantize_int8_convrot_state_dict(state_dict, device=load_device)
-        logger.info(f"{label}: stored {quantized} weights as INT8 (ConvRot)")
+        # On MPS, CPU rotation is 3-40x faster and _MPSDequantCache handles dequantized matmul
+        quant_device = memory_management.cpu if is_mps else load_device
+        quantized = quantize_int8_convrot_state_dict(state_dict, device=quant_device)
+        logger.info(f"{label}: stored {quantized} weights as INT8 (ConvRot)" + (" (CPU-rotated for MPS)" if is_mps else ""))
     else:
         logger.warning(f"Unknown {label} quantization mode {mode!r}")
 

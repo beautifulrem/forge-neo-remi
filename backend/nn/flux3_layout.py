@@ -279,7 +279,7 @@ def reference_size(width: int, height: int, num_references: int) -> tuple[int, i
     budget = {1: 1024 * 1024, 2: 724 * 724}.get(num_references, 512 * 512)
 
     def floor(value):
-        return max(32, int(math.floor(value / 32)) * 32)
+        return max(32, math.floor(value / 32) * 32)
 
     w = max(32, round(width / 32) * 32)
     h = max(32, round(height / 32) * 32)

@@ -16,6 +16,8 @@ from backend.memory_management import (
     logger,
     minimum_inference_memory,
     register_cache_clear_hook,
+    supports_cast,
+    supports_int8_compute,
 )
 
 from .operations import (
@@ -146,6 +148,8 @@ class _MPSDequantCache:
             }
 
     def get_or_dequantize(self, module: torch.nn.Module, weight: QuantizedTensor, target_dtype: torch.dtype) -> torch.Tensor | None:
+        if not is_device_mps(weight.device):
+            return None
         key = self._make_key(module, weight, target_dtype)
         with self._lock:
             cached = self._entries.get(key)
@@ -159,9 +163,7 @@ class _MPSDequantCache:
         if budget <= 0 or entry_bytes > budget:
             return None
 
-        dequant = weight.dequantize()
-        if dequant.dtype != target_dtype:
-            dequant = dequant.to(dtype=target_dtype)
+        dequant = _dequantize_quantized_weight(weight, weight.device, target_dtype)
         actual_bytes = dequant.nbytes
         if actual_bytes > budget:
             return dequant
@@ -204,7 +206,17 @@ def mps_dequant_cache_stats() -> dict[str, int]:
 
 def _convrot_rotate_input(module: torch.nn.Linear, x: torch.Tensor) -> bool:
     weight = module.weight
-    return module._full_precision_mm and isinstance(weight, QuantizedTensor) and weight._layout_cls == "TensorWiseINT8Layout" and getattr(weight._params, "convrot", False) and not getattr(weight._params, "transposed", False) and not isinstance(x, QuantizedTensor) and x.numel() // max(x.shape[-1], 1) < module.out_features and len(module.weight_function) == 0 and not getattr(module, "forge_force_cast_weights", False)
+    return (
+        isinstance(weight, QuantizedTensor)
+        and (module._full_precision_mm or _mps_unsupported_quant(weight, x.device))
+        and weight._layout_cls == "TensorWiseINT8Layout"
+        and getattr(weight._params, "convrot", False)
+        and not getattr(weight._params, "transposed", False)
+        and not isinstance(x, QuantizedTensor)
+        and x.numel() // max(x.shape[-1], 1) < module.out_features
+        and len(module.weight_function) == 0
+        and not getattr(module, "forge_force_cast_weights", False)
+    )
 
 
 def _convrot_linear(x: torch.Tensor, weight: QuantizedTensor, bias: torch.Tensor) -> torch.Tensor:
@@ -212,12 +224,40 @@ def _convrot_linear(x: torch.Tensor, weight: QuantizedTensor, bias: torch.Tensor
     group_size = weight._params.convrot_groupsize
     x = ck.tensor.int8_utils._rotate_activation(x, ck.tensor.int8_utils._build_hadamard(group_size, device=x.device, dtype=x.dtype), group_size)
     scale = scale.to(device=x.device, dtype=x.dtype).reshape(-1)
+    qdata_f = qdata.to(device=x.device, dtype=x.dtype)
     if x.dtype == torch.float16:
-        w = qdata.to(dtype=x.dtype)
-        w.mul_(scale.reshape(-1, 1))
-        return torch.nn.functional.linear(x, w, bias)
-    out = torch.nn.functional.linear(x, qdata.to(dtype=x.dtype)) * scale
+        qdata_f.mul_(scale.reshape(-1, 1))
+        return torch.nn.functional.linear(x, qdata_f, bias)
+    out = torch.nn.functional.linear(x, qdata_f) * scale
     return out if bias is None else out + bias
+
+
+def _mps_unsupported_quant(weight: QuantizedTensor, device: torch.device | str) -> bool:
+    if not is_device_mps(device):
+        return False
+    check_device = torch.device(device) if isinstance(device, str) else device
+    qdata = weight._qdata
+    if qdata.dtype in (torch.float8_e4m3fn, torch.float8_e5m2) and not supports_cast(check_device, qdata.dtype):
+        return True
+    layout_cls = getattr(weight, "_layout_cls", None)
+    if layout_cls in ("TensorCoreNVFP4Layout", "TensorCoreMXFP8Layout", "AsymW4A8Int8Layout") and not supports_cast(check_device, torch.float8_e4m3fn):
+        return True
+    if layout_cls == "TensorWiseINT8Layout" and not supports_int8_compute(check_device):
+        return True
+    params = getattr(weight, "_params", None)
+    for field in ("scale", "block_scale"):
+        tensor = getattr(params, field, None)
+        if isinstance(tensor, torch.Tensor) and tensor.dtype in (torch.float8_e4m3fn, torch.float8_e5m2, torch.float8_e8m0fnu) and not supports_cast(check_device, tensor.dtype):
+            return True
+    return False
+
+
+def _dequantize_quantized_weight(weight: QuantizedTensor, target_device: torch.device | str, target_dtype: torch.dtype) -> torch.Tensor:
+    if _mps_unsupported_quant(weight, weight.device) or _mps_unsupported_quant(weight, target_device):
+        dequant = weight.cpu().dequantize()
+    else:
+        dequant = weight.dequantize()
+    return dequant.to(device=target_device, dtype=target_dtype)
 
 
 @torch.compiler.disable
@@ -249,6 +289,9 @@ def _load_quantized_module(module: torch.nn.Module, super_load, state_dict: dict
     compute_dtype = module.factory_kwargs["dtype"]
     disabled_formats = module._disabled_formats
     layer_name = prefix.rstrip(".")
+    _is_mps_target = getattr(device, "type", None) == "mps" or (isinstance(device, str) and device.startswith("mps"))
+    dequant_on_cpu = False
+    target_device = device
 
     weight = state_dict.pop(f"{prefix}weight", None)
     if weight is None:
@@ -260,7 +303,7 @@ def _load_quantized_module(module: torch.nn.Module, super_load, state_dict: dict
         key = f"{prefix}{name}"
         v = state_dict.pop(key, None)
         if v is not None:
-            v = v.to(device=device)
+            v = v.to(device=target_device)
             if dtype is not None:
                 v = v.view(dtype=dtype)
             manually_loaded_keys.append(key)
@@ -285,6 +328,16 @@ def _load_quantized_module(module: torch.nn.Module, super_load, state_dict: dict
         qconfig = QUANT_ALGOS[module.quant_format]
         module.layout_type = qconfig["comfy_tensor_layout"]
         layout_cls = get_layout_class(module.layout_type)
+        if _is_mps_target:
+            target_check_device = torch.device(device) if isinstance(device, str) else device
+            storage_t = qconfig["storage_t"]
+            if (
+                (storage_t in (torch.float8_e4m3fn, torch.float8_e5m2) and not supports_cast(target_check_device, storage_t))
+                or (module.quant_format == "nvfp4" and not supports_cast(target_check_device, torch.float8_e4m3fn))
+                or (module.quant_format in _GROUPED_INT8_FORMATS and not supports_cast(target_check_device, torch.float8_e4m3fn))
+            ):
+                dequant_on_cpu = True
+                target_device = torch.device("cpu")
 
         if module.quant_format in ("float8_e4m3fn", "float8_e5m2", "float8_e4m3fn_rowwise", "float8_e5m2_rowwise"):
             scale = pop_scale("weight_scale")
@@ -352,10 +405,13 @@ def _load_quantized_module(module: torch.nn.Module, super_load, state_dict: dict
             raise ValueError(f"Unsupported quantization format: {module.quant_format}")
 
         params = layout_cls.Params(**scales, orig_dtype=compute_dtype, orig_shape=module._orig_shape)
-        module.weight = torch.nn.Parameter(
-            QuantizedTensor(weight.to(device=device, dtype=qconfig["storage_t"]), module.layout_type, params),
-            requires_grad=False,
-        )
+        qtensor = QuantizedTensor(weight.to(device=target_device).to(dtype=qconfig["storage_t"]), module.layout_type, params)
+        if dequant_on_cpu:
+            module.weight = torch.nn.Parameter(qtensor.dequantize().to(device=device, dtype=compute_dtype), requires_grad=False)
+            module.layout_type = None
+            module.quant_format = None
+        else:
+            module.weight = torch.nn.Parameter(qtensor, requires_grad=False)
 
         if load_extra_params:
             for param_name in qconfig["parameters"]:
@@ -365,7 +421,8 @@ def _load_quantized_module(module: torch.nn.Module, super_load, state_dict: dict
                 _v = state_dict.pop(param_key, None)
                 if _v is None:
                     continue
-                module.register_parameter(param_name, torch.nn.Parameter(_v.to(device=device), requires_grad=False))
+                if not dequant_on_cpu:
+                    module.register_parameter(param_name, torch.nn.Parameter(_v.to(device=device), requires_grad=False))
                 manually_loaded_keys.append(param_key)
 
     super_load(state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs)
@@ -460,11 +517,11 @@ def mixed_precision_ops(quant_config={}, compute_dtype=torch.bfloat16, full_prec
                 assert not input.requires_grad
 
                 weight_param = self.weight
+                mps_unsupported = isinstance(weight_param, QuantizedTensor) and not isinstance(input, QuantizedTensor) and _mps_unsupported_quant(weight_param, input.device)
                 if (
-                    self._full_precision_mm
-                    and isinstance(weight_param, QuantizedTensor)
+                    isinstance(weight_param, QuantizedTensor)
                     and not isinstance(input, QuantizedTensor)
-                    and is_device_mps(weight_param.device)
+                    and (mps_unsupported or (self._full_precision_mm and is_device_mps(weight_param.device)))
                     and is_device_mps(input.device)
                     and len(self.weight_function) == 0
                     and len(self.bias_function) == 0
@@ -473,14 +530,12 @@ def mixed_precision_ops(quant_config={}, compute_dtype=torch.bfloat16, full_prec
                     bias = self.bias
                     if bias is not None:
                         bias = cast_to_device(bias, input.device, input.dtype)
-                    cached_weight = _mps_dequant_cache.get_or_dequantize(self, weight_param, input.dtype)
+                    cached_weight = _mps_dequant_cache.get_or_dequantize(self, weight_param, input.dtype) if is_device_mps(weight_param.device) else None
                     if cached_weight is not None:
                         return torch.nn.functional.linear(input, cached_weight, bias)
                     if _convrot_rotate_input(self, input):
                         return _convrot_linear(input, weight_param, bias)
-                    dequant = weight_param.dequantize()
-                    if dequant.dtype != input.dtype:
-                        dequant = dequant.to(dtype=input.dtype)
+                    dequant = _dequantize_quantized_weight(weight_param, input.device, input.dtype)
                     return torch.nn.functional.linear(input, dequant, bias)
 
                 input_shape = input.shape
@@ -489,6 +544,7 @@ def mixed_precision_ops(quant_config={}, compute_dtype=torch.bfloat16, full_prec
                 _use_quantized = (
                     getattr(self, "layout_type", None) is not None
                     and not isinstance(input, QuantizedTensor)
+                    and not mps_unsupported
                     and not self._full_precision_mm
                     and not getattr(self, "forge_force_cast_weights", False)
                     and len(self.weight_function) == 0
@@ -514,6 +570,17 @@ def mixed_precision_ops(quant_config={}, compute_dtype=torch.bfloat16, full_prec
                         if isinstance(weight, QuantizedTensor):
                             return _convrot_linear(input, weight, bias)
                         return torch.nn.functional.linear(input, weight.to(dtype=input.dtype), bias)
+
+                if mps_unsupported:
+                    dequant_weight = _dequantize_quantized_weight(weight_param, input.device, input.dtype)
+                    for fn in self.weight_function:
+                        dequant_weight = fn(dequant_weight)
+                    bias = self.bias
+                    if bias is not None:
+                        bias = cast_to_device(bias, input.device, input.dtype)
+                        for fn in self.bias_function:
+                            bias = fn(bias)
+                    return torch.nn.functional.linear(input, dequant_weight, bias)
 
                 if weight_only_quant:
                     weight, bias, signal = weights_manual_cast(self, x=None, dtype=weight_param.dtype, device=input.device, bias_dtype=input.dtype)
@@ -610,31 +677,52 @@ def mixed_precision_ops(quant_config={}, compute_dtype=torch.bfloat16, full_prec
             def _forward(self, input):
                 weight = self.weight
 
-                if isinstance(weight, QuantizedTensor) and len(self.weight_function) == 0:
-                    qdata, _, signal = weights_manual_cast(self, device=input.device, dtype=weight.dtype)
-                    if isinstance(qdata, QuantizedTensor):
-                        params = qdata._params
-                        scale = params.scale
-                        qdata = qdata._qdata
-                    else:
-                        params = weight._params
-                        scale = None
+                if isinstance(weight, QuantizedTensor):
+                    if is_device_mps(input.device) and _mps_unsupported_quant(weight, input.device):
+                        if len(self.weight_function) == 0 and weight._qdata.dtype in (torch.float8_e4m3fn, torch.float8_e5m2):
+                            target_dtype = weight._params.orig_dtype
+                            idx_cpu = input.cpu()
+                            qdata_cpu = weight._qdata.cpu()
+                            scale = weight._params.scale
+                            x = torch.nn.functional.embedding(idx_cpu, qdata_cpu, self.padding_idx, self.max_norm, self.norm_type, self.scale_grad_by_freq, self.sparse).to(dtype=target_dtype)
+                            if scale is not None:
+                                scale_cpu = scale.cpu()
+                                if scale_cpu.dim() >= 2 and scale_cpu.shape[0] == self.num_embeddings:
+                                    x = x * torch.nn.functional.embedding(idx_cpu, scale_cpu.to(dtype=target_dtype))
+                                elif not (scale_cpu.numel() == 1 and (getattr(self, "_scale_is_unit", False) or scale_cpu.item() == 1.0)):
+                                    x = x * scale_cpu.to(dtype=target_dtype)
+                            return x.to(device=input.device)
+                        if len(self.weight_function) > 0 or getattr(self, "quant_format", None) != "int8_tensorwise":
+                            target_dtype = getattr(weight._params, "orig_dtype", None) or MixedPrecisionOps._compute_dtype
+                            w = _dequantize_quantized_weight(weight, input.device, target_dtype)
+                            for fn in self.weight_function:
+                                w = fn(w)
+                            return torch.nn.functional.embedding(input, w, self.padding_idx, self.max_norm, self.norm_type, self.scale_grad_by_freq, self.sparse)
+                    if len(self.weight_function) == 0:
+                        qdata, _, signal = weights_manual_cast(self, device=input.device, dtype=weight.dtype)
+                        if isinstance(qdata, QuantizedTensor):
+                            params = qdata._params
+                            scale = params.scale
+                            qdata = qdata._qdata
+                        else:
+                            params = weight._params
+                            scale = None
 
-                    with main_stream_worker(qdata, None, signal):
-                        if self.quant_format == "int8_tensorwise":
-                            return get_layout_class(self.layout_type).dequantize_embedding(qdata, params, input)
+                        with main_stream_worker(qdata, None, signal):
+                            if self.quant_format == "int8_tensorwise":
+                                return get_layout_class(self.layout_type).dequantize_embedding(qdata, params, input)
 
-                        x = torch.nn.functional.embedding(input, qdata, self.padding_idx, self.max_norm, self.norm_type, self.scale_grad_by_freq, self.sparse)
+                            x = torch.nn.functional.embedding(input, qdata, self.padding_idx, self.max_norm, self.norm_type, self.scale_grad_by_freq, self.sparse)
 
-                    target_dtype = weight._params.orig_dtype
-                    x = x.to(dtype=target_dtype)
-                    if scale is not None:
-                        if scale.dim() >= 2 and scale.shape[0] == self.num_embeddings:
-                            x = x * torch.nn.functional.embedding(input, scale.to(device=x.device, dtype=target_dtype))
-                        elif not (scale.numel() == 1 and (getattr(self, "_scale_is_unit", False) or (scale.device.type == "cpu" and scale.item() == 1.0))):
-                            x = x * scale.to(device=x.device, dtype=target_dtype)
+                        target_dtype = weight._params.orig_dtype
+                        x = x.to(dtype=target_dtype)
+                        if scale is not None:
+                            if scale.dim() >= 2 and scale.shape[0] == self.num_embeddings:
+                                x = x * torch.nn.functional.embedding(input, scale.to(device=x.device, dtype=target_dtype))
+                            elif not (scale.numel() == 1 and (getattr(self, "_scale_is_unit", False) or (scale.device.type == "cpu" and scale.item() == 1.0))):
+                                x = x * scale.to(device=x.device, dtype=target_dtype)
 
-                    return x
+                        return x
 
                 return super().forward(input)
 
@@ -687,7 +775,7 @@ def linear_input_act(linear: torch.nn.Linear, x: torch.Tensor, input_act: str, a
     weight = linear.weight
     full_precision_mm = getattr(linear, "_full_precision_mm", False)
 
-    if not isinstance(weight, QuantizedTensor) or weight._layout_cls != "TensorWiseINT8Layout" or getattr(weight._params, "transposed", False) or full_precision_mm:
+    if not isinstance(weight, QuantizedTensor) or weight._layout_cls != "TensorWiseINT8Layout" or getattr(weight._params, "transposed", False) or full_precision_mm or not supports_int8_compute(x.device):
         if not isinstance(weight, QuantizedTensor) and not full_precision_mm and _fp16_linear_wanted(x) and getattr(weight, "gguf_cls", None) is None:
             weight, bias, offload_stream = weights_manual_cast(linear, x)
             with main_stream_worker(weight, bias, offload_stream):

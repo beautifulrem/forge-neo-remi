@@ -324,10 +324,18 @@ if args.use_pytorch_cross_attention:
     FLASH_IS_AVAILABLE = False
 
 
+def _should_enable_mps_sdpa(is_mps: bool, env=None) -> bool:
+    source = os.environ if env is None else env
+    return bool(is_mps and source.get("REMI_MPS_SDPA") == "1")
+
+
 if is_nvidia() and torch_version_numeric[0] >= 2:
     ENABLE_PYTORCH_ATTENTION = True
 elif is_intel_xpu():
     ENABLE_PYTORCH_ATTENTION = True
+elif _should_enable_mps_sdpa(cpu_state is CPUState.MPS):
+    ENABLE_PYTORCH_ATTENTION = True
+    logger.info("Using PyTorch SDPA on MPS (REMI_MPS_SDPA=1)")
 
 
 SUPPORT_FP8_OPS: bool = None
@@ -1061,12 +1069,17 @@ def cast_to(weight: torch.nn.Parameter, dtype: torch.dtype = None, device: torch
     if device is None or _same_device(weight.device, device):
         if not copy and (dtype is None or weight.dtype == dtype):
             return weight
+        if is_device_mps(weight.device) and dtype is not None and weight.dtype != dtype and (not supports_cast(weight.device, weight.dtype) or not supports_cast(weight.device, dtype)):
+            return weight.cpu().to(dtype=dtype).to(device=weight.device)
         with context or nullcontext():
             return weight.to(dtype=dtype, copy=copy)
 
     if type(weight) not in (torch.Tensor, torch.nn.Parameter, QuantizedTensor):  # GGUF
         with context or nullcontext():
             return weight.to(dtype=dtype, device=device, non_blocking=non_blocking, copy=copy)
+
+    if is_device_mps(device) and dtype is not None and not supports_cast(device, dtype):
+        return weight.cpu().to(dtype=dtype).to(device=device)
 
     with context or nullcontext():
         r = torch.empty_like(weight, dtype=dtype, device=device)
@@ -1207,6 +1220,8 @@ def mps_mode() -> bool:
 
 
 def is_device_type(device: torch.device, type: str) -> bool:
+    if isinstance(device, str):
+        return device.split(":", 1)[0] == type
     return getattr(device, "type", False) == type
 
 

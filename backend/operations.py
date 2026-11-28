@@ -725,6 +725,7 @@ def using_forge_operations(
 
     global current_device, current_dtype, current_manual_cast_enabled
 
+    previous = (current_device, current_dtype, current_manual_cast_enabled)
     current_device, current_dtype, current_manual_cast_enabled = device, dtype, manual_cast_enabled
 
     if isinstance(extra_dtype, dict):
@@ -763,6 +764,7 @@ def using_forge_operations(
     finally:
         for op_name in op_names:
             setattr(torch.nn, op_name, backups[op_name])
+        current_device, current_dtype, current_manual_cast_enabled = previous
 
 
 from functools import wraps

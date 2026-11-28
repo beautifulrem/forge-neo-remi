@@ -39,10 +39,17 @@ def get_loaded_vae_hash() -> str:
 
 def store_base_vae(model):
     global base_vae, checkpoint_info
-    assert loaded_vae_file is None
+    if model is None or getattr(model, "first_stage_model", None) is None:
+        return
+    model_info = getattr(model, "sd_checkpoint_info", None)
+    if base_vae is not None and checkpoint_info == model_info:
+        return
     memory_management.logger.debug("Storing Original VAE...")
-    base_vae = deepcopy(model.first_stage_model.state_dict())
-    checkpoint_info = model.sd_checkpoint_info
+    base_vae = {
+        k: v.detach().cpu().clone() if isinstance(v, torch.Tensor) else deepcopy(v)
+        for k, v in model.first_stage_model.state_dict().items()
+    }
+    checkpoint_info = model_info
 
 
 def delete_base_vae():
@@ -55,9 +62,11 @@ def delete_base_vae():
 def restore_base_vae(model):
     global loaded_vae_file
     if base_vae is None:
+        loaded_vae_file = None
         return
-    memory_management.logger.debug("Restoring Original VAE...")
-    _load_vae_dict(model, base_vae)
+    if model is not None and getattr(model, "first_stage_model", None) is not None:
+        memory_management.logger.debug("Restoring Original VAE...")
+        _load_vae_dict(model, base_vae)
     loaded_vae_file = None
     delete_base_vae()
 
@@ -90,12 +99,14 @@ def refresh_vae_list():
 
 
 def reload_vae_weights(vae: str) -> bool:
-    if vae in (None, "None"):
+    global loaded_vae_file
+    if vae in (None, "None") or shared.sd_model is None:
         return False
 
     store_base_vae(shared.sd_model)
     vae_sd = utils.load_torch_file(vae)
     _load_vae_dict(shared.sd_model, vae_sd)
+    loaded_vae_file = vae
     return True
 
 

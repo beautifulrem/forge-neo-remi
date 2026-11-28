@@ -106,7 +106,9 @@ class Flux3Block(nn.Module):
         self.norm = Flux3QKNorm(self.head_dim)
         self.pre_norm = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
 
-    def forward(self, x: torch.Tensor, spans, pe: torch.Tensor, transformer_options={}) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, spans, pe: torch.Tensor, transformer_options: dict | None = None) -> torch.Tensor:
+        if transformer_options is None:
+            transformer_options = {}
         B, N, _ = x.shape
         normed = self.pre_norm(x)
         if len(spans) == 1:
@@ -190,10 +192,12 @@ class Flux3(nn.Module):
         self.early_stream_modulations = nn.ModuleDict({mode: Flux3Modulation(hidden_size) for mode in MODES})
         self.single_stream_modulations = nn.ModuleDict({mode: Flux3Modulation(hidden_size) for mode in MODES})
 
-        block = lambda: Flux3Block(hidden_size, num_heads, mlp_ratio, fused_qkv=fused_qkv)
-        self.content_mode_blocks = nn.ModuleDict({mode: nn.ModuleList([block() for _ in range(depth)]) for mode in CONTENT_MODES})
-        self.txt_mode_blocks = nn.ModuleList([block() for _ in range(depth)])
-        self.single_blocks = nn.ModuleList([block() for _ in range(depth_single_blocks)])
+        def make_block():
+            return Flux3Block(hidden_size, num_heads, mlp_ratio, fused_qkv=fused_qkv)
+
+        self.content_mode_blocks = nn.ModuleDict({mode: nn.ModuleList([make_block() for _ in range(depth)]) for mode in CONTENT_MODES})
+        self.txt_mode_blocks = nn.ModuleList([make_block() for _ in range(depth)])
+        self.single_blocks = nn.ModuleList([make_block() for _ in range(depth_single_blocks)])
 
         self.final_input = nn.Identity()  # Spectrum pre-head capture seam
         self.final_layer = nn.ModuleDict({"image": Flux3LastLayer(hidden_size, in_channels)})
@@ -277,9 +281,12 @@ class Flux3(nn.Module):
             probes += (block.mlp_in.weight, block.qkv.weight if block.fused_qkv else block.q_proj.weight)
         return tuple((w.data_ptr(), _tensor_version(w)) for w in probes)
 
-    def preprocess_conds(self, context: torch.Tensor, ref_latents: list[torch.Tensor] | None, vec_target: torch.Tensor | None, transformer_options={}):
+    def preprocess_conds(self, context: torch.Tensor, ref_latents: list[torch.Tensor] | None, vec_target: torch.Tensor | None, transformer_options: dict | None = None):
         """The per-mode blocks of the text and the references (timestep 0): they
         depend on the conditioning alone (and, for a flow map, the target time)."""
+
+        if transformer_options is None:
+            transformer_options = {}
 
         device, dtype = context.device, context.dtype
         if ref_latents:
@@ -318,7 +325,7 @@ class Flux3(nn.Module):
             self._cond_weight_key(),
         )
         entry = self._cond_cache.get(key)
-        if entry is not None and entry[0]() is context and all(ref() is orig for ref, orig in zip(entry[1], ref_latents or ())):
+        if entry is not None and entry[0]() is context and all(ref() is orig for ref, orig in zip(entry[1], ref_latents or (), strict=True)):
             return entry[2], entry[3]
         txt, refs = self.preprocess_conds(context, ref_latents, vec_target, transformer_options)
         if len(self._cond_cache) >= 4:  # CFG cond + uncond stay warm across steps
@@ -337,7 +344,9 @@ class Flux3(nn.Module):
         out = self.final_layer["image"](feature, vec)
         return out.transpose(1, 2).reshape(feature.shape[0], self.in_channels, H, W)
 
-    def forward(self, x: torch.Tensor, timestep: torch.Tensor, context: torch.Tensor, transformer_options={}, **kwargs) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, timestep: torch.Tensor, context: torch.Tensor, transformer_options: dict | None = None, **kwargs) -> torch.Tensor:
+        if transformer_options is None:
+            transformer_options = {}
         squeeze = x.ndim == 5
         if squeeze:
             x = x.squeeze(2)

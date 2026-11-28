@@ -73,3 +73,24 @@ def test_sd_uniform_schedules_are_unchanged():
     expected = torch.cat([linker.t_to_sigma(torch.linspace(999, 0, 10)), torch.zeros(1)])
 
     assert torch.allclose(linker.get_sigmas(10), expected)
+
+
+@pytest.mark.parametrize("n", [0, 1, 2, 3, 20])
+def test_bong_tangent_scheduler_handles_small_and_zero_steps(n):
+    from modules import shared
+
+    # Import safely with opts stubbed if needed
+    if getattr(shared, "opts", None) is None:
+        shared.opts = SimpleNamespace(hide_schedulers=[])
+    from modules.sd_schedulers import bong_tangent_scheduler
+
+    for pad in (False, True):
+        sigmas = bong_tangent_scheduler(n, 14.6, 0.03, "cpu", pad=pad)
+        assert torch.isfinite(sigmas).all()
+        assert sigmas[-1].item() == 0.0
+        assert len(sigmas) == (n + 2 if pad else n + 1)
+        assert (sigmas[:-1] >= sigmas[1:]).all()
+
+    # Zero slope / zero srange should also not divide by zero
+    sigmas_flat_slope = bong_tangent_scheduler(5, 14.6, 0.03, "cpu", slope_1=0.0, slope_2=0.0)
+    assert torch.isfinite(sigmas_flat_slope).all() and sigmas_flat_slope[-1].item() == 0.0

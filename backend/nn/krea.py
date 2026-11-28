@@ -261,9 +261,9 @@ class SingleStreamDiT(nn.Module):
         )
         # Step-invariant zero-loss caches (cleared on sampling_cleanup).
         # Bounded to 4 entries so CFG cond + uncond both stay warm across steps.
-        self._txt_cache: dict[tuple, tuple[weakref.ReferenceType, torch.Tensor]] = {}
+        self._txt_cache: dict[tuple, tuple[weakref.ReferenceType, tuple[weakref.ReferenceType, ...], torch.Tensor]] = {}
         self._rope_cache: dict[tuple, torch.Tensor] = {}
-        self._ref_cache: dict[tuple, tuple[tuple[weakref.ReferenceType, ...], list[torch.Tensor], list[tuple[int, int]]]] = {}
+        self._ref_cache: dict[tuple, tuple[tuple[weakref.ReferenceType, ...], weakref.ReferenceType, list[torch.Tensor], list[tuple[int, int]]]] = {}
 
     def clear_caches(self) -> None:
         self._txt_cache.clear()
@@ -294,13 +294,17 @@ class SingleStreamDiT(nn.Module):
             _tensor_version(mlp_w),
         )
         entry = self._txt_cache.get(cache_key)
-        if entry is not None and entry[0]() is context:
-            return entry[1]
+        if entry is not None and entry[0]() is context and entry[1][0]() is proj_w and entry[1][1]() is lw0_w and entry[1][2]() is mlp_w:
+            return entry[2]
 
         encoded = self.txtmlp(self.txtfusion(context, mask=None, transformer_options=transformer_options))
         if len(self._txt_cache) >= 4:
             self._txt_cache.pop(next(iter(self._txt_cache)))
-        self._txt_cache[cache_key] = (weakref.ref(context), encoded)
+        self._txt_cache[cache_key] = (
+            weakref.ref(context),
+            (weakref.ref(proj_w), weakref.ref(lw0_w), weakref.ref(mlp_w)),
+            encoded,
+        )
         return encoded
 
     def _encode_refs_cached(
@@ -326,8 +330,8 @@ class SingleStreamDiT(nn.Module):
         )
         if not torch.is_grad_enabled():
             entry = self._ref_cache.get(cache_key)
-            if entry is not None and all(ref_w() is orig for ref_w, orig in zip(entry[0], ref_latents)):
-                return entry[1], entry[2]
+            if entry is not None and entry[1]() is first_w and all(ref_w() is orig for ref_w, orig in zip(entry[0], ref_latents)):
+                return entry[2], entry[3]
 
         refs: list[torch.Tensor] = []
         ref_grids: list[tuple[int, int]] = []
@@ -343,7 +347,7 @@ class SingleStreamDiT(nn.Module):
         if not torch.is_grad_enabled():
             if len(self._ref_cache) >= 4:
                 self._ref_cache.pop(next(iter(self._ref_cache)))
-            self._ref_cache[cache_key] = (tuple(weakref.ref(r) for r in ref_latents), refs, ref_grids)
+            self._ref_cache[cache_key] = (tuple(weakref.ref(r) for r in ref_latents), weakref.ref(first_w), refs, ref_grids)
         return refs, ref_grids
 
     def _compute_freqs_cached(

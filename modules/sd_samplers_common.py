@@ -42,12 +42,16 @@ class SamplerData(SamplerDataTuple):
 
 def setup_img2img_steps(p, steps=None):
     if opts.img2img_fix_steps or steps is not None:
-        requested_steps = steps or p.steps
-        steps = int(requested_steps / min(p.denoising_strength, 0.999)) if p.denoising_strength > 0 else 0
-        t_enc = requested_steps - 1
+        requested_steps = max(1, int(steps or p.steps or 1))
+        if p.denoising_strength > 0:
+            steps = max(1, int(requested_steps / min(p.denoising_strength, 0.999)))
+            t_enc = requested_steps - 1
+        else:
+            steps = requested_steps
+            t_enc = 0
     else:
-        steps = p.steps
-        t_enc = int(min(p.denoising_strength, 0.999) * steps)
+        steps = max(1, int(p.steps or 1))
+        t_enc = int(min(max(p.denoising_strength, 0.0), 0.999) * steps)
 
     return steps, t_enc
 

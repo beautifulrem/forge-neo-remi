@@ -12,7 +12,6 @@ import urllib.request
 
 from modules.anima_user_data import atomic_replace
 
-
 # One lock per target file: a long download or first hash of one artifact
 # must not block callers that need another, already verified one.
 _LOCKS_GUARD = threading.Lock()
@@ -79,7 +78,7 @@ def ensure_pinned_download(*, path: str, url: str, sha256: str, maximum_bytes: i
         def download(output):
             digest = hashlib.sha256()
             total = 0
-            request = urllib.request.Request(url, headers={"User-Agent": user_agent})  # noqa: S310 - https only, checked above
+            request = urllib.request.Request(url, headers={"User-Agent": user_agent})
             with _open(request, timeout) as response:
                 for chunk in iter(lambda: response.read(1024 * 1024), b""):
                     total += len(chunk)

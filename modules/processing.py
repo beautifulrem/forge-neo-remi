@@ -1634,8 +1634,8 @@ class StableDiffusionProcessingTxt2Img(StableDiffusionProcessing):
         self.hr_c = None
         self.hr_uc = None
         if not opts.persistent_cond_cache:
-            StableDiffusionProcessingTxt2Img.cached_hr_uc = [None, None]
-            StableDiffusionProcessingTxt2Img.cached_hr_c = [None, None]
+            StableDiffusionProcessingTxt2Img.cached_hr_uc = [None, None, None]
+            StableDiffusionProcessingTxt2Img.cached_hr_c = [None, None, None]
 
     def setup_prompts(self):
         super().setup_prompts()

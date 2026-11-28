@@ -16,7 +16,6 @@ from collections.abc import Mapping
 from contextlib import contextmanager
 from types import SimpleNamespace
 
-
 _AUXILIARY_DENOISER_ATTRIBUTE = "_anima_auxiliary_denoiser"
 
 
@@ -144,7 +143,12 @@ def negpip_extra_prompts(process) -> list[str]:
     ``process_batch``) encodes nothing, whatever order the scripts ran in.
     """
 
-    from modules.anima_feature_conflicts import ARTIST_MIXER, FREEFUSE, REGIONAL, is_feature_active
+    from modules.anima_feature_conflicts import (
+        ARTIST_MIXER,
+        FREEFUSE,
+        REGIONAL,
+        is_feature_active,
+    )
 
     spatial = (FREEFUSE, REGIONAL, ARTIST_MIXER)
     active = [feature for feature in spatial if is_feature_active(process, feature)]
@@ -581,7 +585,7 @@ class BranchRows:
     (Regional regions, Artist Mixer artists); the other rows keep the base
     output. ``rows`` None means every row. See :func:`positive_rows`."""
 
-    __slots__ = ("markers", "rows", "index")
+    __slots__ = ("index", "markers", "rows")
 
     def __init__(self, markers, rows=None, index=None):
         self.markers = markers
@@ -774,14 +778,14 @@ def script_arguments(owner: str, names, values, *, defaults=None) -> SimpleNames
     values = tuple(values)
     if len(values) > len(names):
         raise TypeError(f"{owner} takes {len(names)} script arguments, got {len(values)}")
-    arguments = dict(zip(names, values))
+    arguments = dict(zip(names, values, strict=False))
     if len(values) < len(names):
         if isinstance(defaults, Mapping):
             fill = defaults
         elif defaults is not None:
             if len(defaults) != len(names):
                 raise ValueError(f"{owner} has {len(defaults)} script argument defaults for {len(names)} names")
-            fill = dict(zip(names, defaults))
+            fill = dict(zip(names, defaults, strict=True))
         else:
             fill = {}
         missing = [name for name in names[len(values) :] if name not in fill]

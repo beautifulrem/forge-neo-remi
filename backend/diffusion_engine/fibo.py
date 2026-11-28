@@ -89,7 +89,7 @@ class Fibo2(ForgeDiffusionEngine):
         super().clear_references()
 
     @torch.inference_mode()
-    def get_learned_conditioning(self, prompt: "SdConditioning"):
+    def get_learned_conditioning(self, prompt: SdConditioning):
         memory_management.load_model_gpu(self.forge_objects.clip.patcher)
 
         is_neg = bool(getattr(prompt, "is_negative_prompt", False))

@@ -570,6 +570,10 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
             else:
                 computation_dtype = memory_management.inference_cast(weight_dtype=storage_dtype, inference_device=load_device, supported_dtypes=guess.supported_inference_dtypes)
 
+            if storage_dtype in (torch.float8_e4m3fn, torch.float8_e5m2) and not memory_management.supports_cast(load_device, storage_dtype):
+                logger.warning(f"{storage_dtype} storage is not supported on {load_device}; falling back to {computation_dtype}")
+                storage_dtype = computation_dtype
+
             backend.args.dynamic_args.ops = None
 
             if storage_dtype == "gguf":

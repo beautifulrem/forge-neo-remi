@@ -8,7 +8,6 @@ from typing import Any
 
 import torch
 
-
 ANIMA_ATTENTION_MODIFIERS = "anima_attention_modifiers"
 # Set for cross-attention while modifiers are active: ``project_kv(context)``
 # projects another text context with this layer's K/V weights (e.g. NAG's

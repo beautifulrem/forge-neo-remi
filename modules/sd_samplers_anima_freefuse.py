@@ -5,11 +5,11 @@ from __future__ import annotations
 import logging
 
 import torch
+from k_diffusion.sampling import sample_euler
 from tqdm.auto import trange
 
 from modules.anima_guidance_state import reset_stateful_guidance
 from modules.sd_samplers_anima import denoise_step, euler_step
-from k_diffusion.sampling import sample_euler
 
 logger = logging.getLogger("AnimaFreeFuseSampler")
 

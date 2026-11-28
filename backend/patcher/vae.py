@@ -190,12 +190,18 @@ class VAE:
         n.memory_used_encode = self.memory_used_encode
         n.memory_used_decode = self.memory_used_decode
         n.downscale_ratio = self.downscale_ratio
+        n.upscale_ratio = self.upscale_ratio
+        n.upscale_index_formula = self.upscale_index_formula
+        n.downscale_index_formula = self.downscale_index_formula
+        n.latent_dim = self.latent_dim
         n.latent_channels = self.latent_channels
         n.first_stage_model = self.first_stage_model
         n.device = self.device
         n.vae_dtype = self.vae_dtype
         n.output_device = self.output_device
         n.is_wan = self.is_wan
+        if hasattr(self, "pad_channel_value"):
+            n.pad_channel_value = self.pad_channel_value
         return n
 
     def decode_tiled_(self, samples, tile_x=64, tile_y=64, overlap=16):

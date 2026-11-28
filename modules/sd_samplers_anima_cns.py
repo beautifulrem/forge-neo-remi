@@ -41,7 +41,6 @@ from modules import paths_internal
 from modules.anima_artifacts import ensure_pinned_download, sha256_file
 from modules.anima_support import clamp, require_anima_flow_denoiser, to_float
 
-
 GAMMA_URL = (
     "https://github.com/sorryhyun/ComfyUI-Spectrum-KSampler/releases/"
     "download/0530/cns_gamma.npz"
@@ -165,7 +164,7 @@ class CNSRecolorer:
         self.bin_cache: dict[tuple[int, int, str], torch.Tensor] = {}
 
     @classmethod
-    def calibrated(cls, strength: float, arrays: dict[str, np.ndarray]) -> "CNSRecolorer":
+    def calibrated(cls, strength: float, arrays: dict[str, np.ndarray]) -> CNSRecolorer:
         return cls(arrays["gamma"], arrays["aspects"], arrays["sigmas"], strength)
 
     @classmethod

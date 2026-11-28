@@ -12,7 +12,16 @@ import re
 from dataclasses import dataclass, field
 
 from backend.nn import anima_layout as _anima_layout
-from modules.anima_support import block_index_token, clamp, fold_weight_text, is_plain_number, parse_block_list, plain_number, sigma_value, to_float
+from modules.anima_support import (
+    block_index_token,
+    clamp,
+    fold_weight_text,
+    is_plain_number,
+    parse_block_list,
+    plain_number,
+    sigma_value,
+    to_float,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +61,7 @@ def install_add_patches_hook(key: str, implementation) -> bool:
     from backend.patcher.base import ModelPatcher
 
     def make_wrapper(original):
-        def wrapper(self, patches: list[dict], strength_patch: float = 1.0, strength_model: float = 1.0, *, filename: str = None, online_mode: bool = None):
+        def wrapper(self, patches: list[dict], strength_patch: float = 1.0, strength_model: float = 1.0, *, filename: str | None = None, online_mode: bool | None = None):
             return script_hooks[key](original, self, patches, strength_patch, strength_model, filename, online_mode)
 
         return wrapper
@@ -185,7 +194,7 @@ def _prompt_record(p, create=False) -> dict | None:
 
 def _note_rewrite(p, attribute: str, start: int, before, after) -> None:
     entries = _prompt_record(p, create=True).setdefault(attribute, {})
-    for index, (old, new) in enumerate(zip(before, after), start):
+    for index, (old, new) in enumerate(zip(before, after, strict=True), start):
         entry = entries.get(index)
         # Rewritten again (the other adapter kind, another Anima LoRA script):
         # it keeps the text as the user wrote it

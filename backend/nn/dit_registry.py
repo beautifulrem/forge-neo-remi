@@ -19,10 +19,10 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from remi.ui.sentence import Sentence, sentence_fields
-
 import torch
 from torch import nn
+
+from remi.ui.sentence import Sentence, sentence_fields
 
 
 @dataclass(frozen=True)
@@ -697,19 +697,18 @@ def _evaluate_krea2_advice(
                     action_label="Set Turbo (8 steps · CFG 1.0)",
                 )
             )
-    elif is_raw_only:
-        if (isinstance(steps, (int, float)) and steps <= 12) or (isinstance(cfg, (int, float)) and cfg <= 1.0):
-            items.append(
-                AdviceItem(
-                    code="krea2.raw_low_steps",
-                    severity="warning",
-                    message=(
-                        Sentence("Krea-2-Raw detected with steps={{steps}}, cfg={{cfg}}: the undistilled Raw base typically needs ~28-52 steps and CFG 3.5-4.5 (or a Krea-2 Turbo LoRA for 8-step CFG 1.0).", steps=steps, cfg=cfg)
-                    ),
-                    patch={"sampler.steps": {"value": 32}, "cfg_scale": {"value": 4.0}},
-                    action_label="Set Raw (32 steps · CFG 4.0)",
-                )
+    elif is_raw_only and ((isinstance(steps, (int, float)) and steps <= 12) or (isinstance(cfg, (int, float)) and cfg <= 1.0)):
+        items.append(
+            AdviceItem(
+                code="krea2.raw_low_steps",
+                severity="warning",
+                message=(
+                    Sentence("Krea-2-Raw detected with steps={{steps}}, cfg={{cfg}}: the undistilled Raw base typically needs ~28-52 steps and CFG 3.5-4.5 (or a Krea-2 Turbo LoRA for 8-step CFG 1.0).", steps=steps, cfg=cfg)
+                ),
+                patch={"sampler.steps": {"value": 32}, "cfg_scale": {"value": 4.0}},
+                action_label="Set Raw (32 steps · CFG 4.0)",
             )
+        )
     if combined and _KREA2_EDIT_RE.search(combined) and not do_ref and not has_refs:
         items.append(
             AdviceItem(
@@ -781,19 +780,18 @@ def _evaluate_flux3_advice(
                     action_label="Set Distilled (16 steps · CFG 1.0)",
                 )
             )
-    elif distilled is False:
-        if (isinstance(steps, (int, float)) and steps < 28) or (isinstance(cfg, (int, float)) and cfg <= 1.0):
-            items.append(
-                AdviceItem(
-                    code="flux3.base_low_steps",
-                    severity="warning",
-                    message=(
-                        Sentence("FLUX.3 Klein Base with steps={{steps}}, cfg={{cfg}}: the undistilled base typically needs about 50 steps with CFG around 3.5 (use the distilled Klein checkpoint for 16-step CFG 1 sampling).", steps=steps, cfg=cfg)
-                    ),
-                    patch={"sampler.steps": {"value": 50}, "cfg_scale": {"value": 3.5}},
-                    action_label="Set Base (50 steps · CFG 3.5)",
-                )
+    elif distilled is False and ((isinstance(steps, (int, float)) and steps < 28) or (isinstance(cfg, (int, float)) and cfg <= 1.0)):
+        items.append(
+            AdviceItem(
+                code="flux3.base_low_steps",
+                severity="warning",
+                message=(
+                    Sentence("FLUX.3 Klein Base with steps={{steps}}, cfg={{cfg}}: the undistilled base typically needs about 50 steps with CFG around 3.5 (use the distilled Klein checkpoint for 16-step CFG 1 sampling).", steps=steps, cfg=cfg)
+                ),
+                patch={"sampler.steps": {"value": 50}, "cfg_scale": {"value": 3.5}},
+                action_label="Set Base (50 steps · CFG 3.5)",
             )
+        )
 
     if ref_count > 0 and not bool(getattr(opts, "flux3_do_reference", True) if opts is not None else True):
         items.append(
@@ -815,20 +813,19 @@ def _evaluate_flux3_advice(
             )
         )
 
-    if isinstance(prompt, str) and (not require_non_empty_prompt_for_short or prompt.strip()):
-        if len(re.findall(r"[\w']+", prompt)) < 8 and "[" not in prompt:
-            items.append(
-                AdviceItem(
-                    code="flux3.short_prompt",
-                    severity="info",
-                    message=(
-                        "FLUX.3 is trained on long, detailed captions (about 100-350 words, as written by its prompt upsampler); a short "
-                        "prompt leaves the scene under-specified. Describe medium, scene, subjects and layout, or place elements with the "
-                        "FLUX.3 Layout panel."
-                    ),
-                    patch=None,
-                )
+    if isinstance(prompt, str) and (not require_non_empty_prompt_for_short or prompt.strip()) and len(re.findall(r"[\w']+", prompt)) < 8 and "[" not in prompt:
+        items.append(
+            AdviceItem(
+                code="flux3.short_prompt",
+                severity="info",
+                message=(
+                    "FLUX.3 is trained on long, detailed captions (about 100-350 words, as written by its prompt upsampler); a short "
+                    "prompt leaves the scene under-specified. Describe medium, scene, subjects and layout, or place elements with the "
+                    "FLUX.3 Layout panel."
+                ),
+                patch=None,
             )
+        )
     return items
 
 
@@ -891,19 +888,18 @@ def _evaluate_qwen21_advice(
                     action_label="Set Turbo (8 steps · CFG 1.0)",
                 )
             )
-    elif is_turbo is False:
-        if (isinstance(steps, (int, float)) and steps <= 12) and (isinstance(cfg, (int, float)) and cfg <= 1.0):
-            items.append(
-                AdviceItem(
-                    code="qwen21.base_low_steps",
-                    severity="warning",
-                    message=(
-                        Sentence("Qwen-Image-2.1 Base detected with steps={{steps}}, cfg={{cfg}}: the undistilled Base model typically needs ~32-40 steps and CFG 2.5-4.0 (use Qwen-Image-2.1-Turbo or a Turbo LoRA for 8-step CFG 1.0).", steps=steps, cfg=cfg)
-                    ),
-                    patch={"sampler.steps": {"value": 32}, "cfg_scale": {"value": 2.5}},
-                    action_label="Set Base (32 steps · CFG 2.5)",
-                )
+    elif is_turbo is False and (isinstance(steps, (int, float)) and steps <= 12) and (isinstance(cfg, (int, float)) and cfg <= 1.0):
+        items.append(
+            AdviceItem(
+                code="qwen21.base_low_steps",
+                severity="warning",
+                message=(
+                    Sentence("Qwen-Image-2.1 Base detected with steps={{steps}}, cfg={{cfg}}: the undistilled Base model typically needs ~32-40 steps and CFG 2.5-4.0 (use Qwen-Image-2.1-Turbo or a Turbo LoRA for 8-step CFG 1.0).", steps=steps, cfg=cfg)
+                ),
+                patch={"sampler.steps": {"value": 32}, "cfg_scale": {"value": 2.5}},
+                action_label="Set Base (32 steps · CFG 2.5)",
             )
+        )
 
     if ref_count > 0 and not bool(getattr(opts, "qwen21_do_reference", True) if opts is not None else True):
         items.append(
@@ -1046,13 +1042,13 @@ def _extract_form_state(
     for owner_key, owner_vals in raw.items():
         if not isinstance(owner_vals, Mapping):
             continue
-        if owner_key in ("imagestitch_integrated", "image_stitch", "imagestitch") or (
-            "references" in owner_vals and "enable" in owner_vals
+        if (
+            (owner_key in ("imagestitch_integrated", "image_stitch", "imagestitch") or ("references" in owner_vals and "enable" in owner_vals))
+            and owner_vals.get("enable")
         ):
-            if owner_vals.get("enable"):
-                refs_val = owner_vals.get("references")
-                if isinstance(refs_val, (list, tuple)):
-                    stitch_refs += len([r for r in refs_val if r])
+            refs_val = owner_vals.get("references")
+            if isinstance(refs_val, (list, tuple)):
+                stitch_refs += len([r for r in refs_val if r])
 
     has_init_img = tab == "img2img" and bool(core.get("init_img"))
     ref_count = stitch_refs + (1 if has_init_img else 0)
@@ -1264,7 +1260,10 @@ def _is_anima_engine(model) -> bool:
 
 
 def _is_moss_dir(path: os.PathLike | str) -> bool:
-    from backend.nn.moss_diffusers import is_moss_diffusers_dir, is_sharded_moss_transformer_dir
+    from backend.nn.moss_diffusers import (
+        is_moss_diffusers_dir,
+        is_sharded_moss_transformer_dir,
+    )
 
     return is_moss_diffusers_dir(path) or is_sharded_moss_transformer_dir(path)
 
@@ -1282,7 +1281,10 @@ def _load_moss_dir(path: os.PathLike | str) -> tuple[dict[str, torch.Tensor], di
 
 
 def _is_krea2_dir(path: os.PathLike | str) -> bool:
-    from backend.nn.krea_diffusers import is_krea2_diffusers_dir, is_sharded_krea2_transformer_dir
+    from backend.nn.krea_diffusers import (
+        is_krea2_diffusers_dir,
+        is_sharded_krea2_transformer_dir,
+    )
 
     return is_krea2_diffusers_dir(path) or is_sharded_krea2_transformer_dir(path)
 
@@ -1418,7 +1420,7 @@ register_dit_capability(
         ),
         sensitive_module_types=("RMSNorm", "SimpleModulation", "DoubleSharedModulation"),
         matches_state_dict=_is_krea2_state_dict,
-        block_linear_filter=lambda k: (k.startswith("blocks.") or k.startswith(("txtfusion.layerwise_blocks.", "txtfusion.refiner_blocks."))) and k.endswith(".weight"),
+        block_linear_filter=lambda k: k.startswith(("blocks.", "txtfusion.layerwise_blocks.", "txtfusion.refiner_blocks.")) and k.endswith(".weight"),
         fp8_rowwise=True,
         int8_convrot_filter=lambda k: k.startswith("blocks.") and k.endswith(_KREA2_INT8_LINEAR_SUFFIXES),
         diffusers_arch="krea-2/diffusers",

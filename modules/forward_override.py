@@ -6,11 +6,10 @@ import threading
 import weakref
 from contextlib import contextmanager
 
-
 _NO_INSTANCE_FORWARD = object()
 # module -> number of overrides installed on it and not yet restored. Lets
 # e.g. torch.compile wrappers notice per-step patches inside a compiled graph.
-_ACTIVE: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
+_ACTIVE: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 _ACTIVE_LOCK = threading.Lock()
 
 

@@ -1,5 +1,6 @@
 # https://github.com/Comfy-Org/ComfyUI/blob/v0.38.0/comfy_extras/nodes_qwen.py
 
+import hashlib
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -93,12 +94,19 @@ class QwenImage21(ForgeDiffusionEngine):
 
         return self.text_processing_engine_qwen(prompt)
 
+    @staticmethod
+    def _vision_cache_key(images: list[torch.Tensor]) -> tuple:
+        key = []
+        for img in images:
+            cpu_bytes = img.detach().cpu().contiguous()
+            view = cpu_bytes.to(torch.uint8) if cpu_bytes.dtype == torch.bool else cpu_bytes.view(torch.uint8)
+            digest = hashlib.blake2b(view.numpy(), digest_size=16).digest()
+            key.append((tuple(img.shape), img.dtype, digest))
+        return (getattr(shared.opts, "reference_max_side", 0), tuple(key))
+
     @torch.inference_mode()
     def get_learned_conditioning_with_image(self, prompt: list[str], images: list[torch.Tensor]):
-        cache_key = (
-            getattr(shared.opts, "reference_max_side", 0),
-            tuple((id(img), img.data_ptr(), tuple(img.shape), img.dtype) for img in images),
-        )
+        cache_key = self._vision_cache_key(images)
         if self._vision_cache is not None and self._vision_cache[0] == cache_key:
             images_vl, ref_latents = self._vision_cache[1], self._vision_cache[2]
         else:

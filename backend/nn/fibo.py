@@ -250,7 +250,9 @@ class FiboAttention(nn.Module):
         self.norm_k = nn.RMSNorm(self.head_dim, eps=eps)
         self.to_out = nn.ModuleList([nn.Linear(dim, dim, bias=False)])
 
-    def forward(self, x: torch.Tensor, pe: torch.Tensor, transformer_options: dict = {}) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, pe: torch.Tensor, transformer_options: dict | None = None) -> torch.Tensor:
+        if transformer_options is None:
+            transformer_options = {}
         b, n, _ = x.shape
         q = self.to_q(x).view(b, n, self.num_heads, self.head_dim)
         k = self.to_k(x).view(b, n, self.num_heads, self.head_dim)
@@ -285,7 +287,9 @@ class FiboTransformerBlock(nn.Module):
         self.mlp = FiboFeedForward(dim, int(dim * mlp_ratio))
         self.adaln = nn.Sequential(nn.SiLU(), nn.Linear(dim, 6 * dim, bias=True))
 
-    def forward(self, x: torch.Tensor, temb: torch.Tensor, pe: torch.Tensor, transformer_options: dict = {}) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, temb: torch.Tensor, pe: torch.Tensor, transformer_options: dict | None = None) -> torch.Tensor:
+        if transformer_options is None:
+            transformer_options = {}
         shift1, scale1, gate1, shift2, scale2, gate2 = self.adaln(temb).unsqueeze(1).chunk(6, dim=-1)
         x = x + gate1.tanh() * self.attn(self.norm1(x) * (1.0 + scale1) + shift1, pe, transformer_options=transformer_options)
         x = x + gate2.tanh() * self.mlp(self.norm2(x) * (1.0 + scale2) + shift2)
@@ -466,7 +470,7 @@ class FiboTransformer2DModel(nn.Module):
         context: torch.Tensor,
         guidance: torch.Tensor | None = None,
         ref_latents: list[torch.Tensor] | None = None,
-        transformer_options: dict = {},
+        transformer_options: dict | None = None,
         **kwargs,
     ) -> torch.Tensor:
         b, _, h, w = x.shape
@@ -502,7 +506,7 @@ class FiboTransformer2DModel(nn.Module):
         for i, block in enumerate(self.transformer_blocks):
             opts["block_index"] = i
             if ("single_block", i) in blocks_replace:
-                def block_wrap(args):
+                def block_wrap(args, block=block):
                     return {"img": block(args["img"], args["vec"], args["pe"], args["transformer_options"])}
 
                 hidden = blocks_replace[("single_block", i)]({"img": hidden, "vec": temb, "pe": pe, "transformer_options": opts}, {"original_block": block_wrap})["img"]
@@ -636,7 +640,9 @@ def load_fibo_diffusers_dir(directory: os.PathLike | str) -> tuple[dict[str, tor
     if os.path.isdir(vae_dir):
         vae_sd, _ = _load_component_sd(vae_dir)
         if "decoder.up_blocks.0.resnets.0.norm1.weight" in vae_sd:
-            from modules_forge.packages.huggingface_guess.diffusers_convert import convert_vae_state_dict
+            from modules_forge.packages.huggingface_guess.diffusers_convert import (
+                convert_vae_state_dict,
+            )
 
             vae_sd = convert_vae_state_dict(vae_sd)
         for key, value in vae_sd.items():

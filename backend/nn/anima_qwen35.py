@@ -22,7 +22,14 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 
-from backend.nn.llm.llama import MLP, GatedAttention, GatedDeltaNet, Qwen35_9BConfig, attention_function, precompute_freqs_cis
+from backend.nn.llm.llama import (
+    MLP,
+    GatedAttention,
+    GatedDeltaNet,
+    Qwen35_9BConfig,
+    attention_function,
+    precompute_freqs_cis,
+)
 
 SEMANTIC_LAYERS = (7, 15, 23, 31)
 QWEN35_4B_HIDDEN_SIZE = 2560
@@ -53,11 +60,12 @@ def is_qwen35_4b_state_dict(state_dict: Mapping[str, torch.Tensor]) -> bool:
     """True when ``state_dict`` holds Qwen3.5 4B (hidden_size 2560) in release,
     HuggingFace, or GGUF-remapped layout."""
 
-    for prefix in ("", "model.language_model.", "language_model.", "model."):
-        if f"{prefix}layers.0.linear_attn.A_log" in state_dict and (norm := state_dict.get(f"{prefix}layers.0.input_layernorm.weight")) is not None:
-            if norm.shape[0] == QWEN35_4B_HIDDEN_SIZE:
-                return True
-    return False
+    return any(
+        f"{prefix}layers.0.linear_attn.A_log" in state_dict
+        and (norm := state_dict.get(f"{prefix}layers.0.input_layernorm.weight")) is not None
+        and norm.shape[0] == QWEN35_4B_HIDDEN_SIZE
+        for prefix in ("", "model.language_model.", "language_model.", "model.")
+    )
 
 
 def normalize_qwen35_4b_state_dict(state_dict: Mapping[str, torch.Tensor]) -> tuple[dict[str, torch.Tensor], bool]:

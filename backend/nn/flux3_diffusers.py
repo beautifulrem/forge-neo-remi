@@ -19,7 +19,12 @@ import os
 
 import torch
 
-from backend.nn.anima_diffusers import _DIFFUSERS_INDEX_FILES, _SHARD_INDEX_FILES, _load_component_sd, _read_json
+from backend.nn.anima_diffusers import (
+    _DIFFUSERS_INDEX_FILES,
+    _SHARD_INDEX_FILES,
+    _load_component_sd,
+    _read_json,
+)
 
 DIFFUSERS_CLASS = "Flux3Transformer2DModel"
 
@@ -205,7 +210,9 @@ def load_flux3_diffusers_dir(directory: os.PathLike | str) -> tuple[dict[str, to
     if os.path.isdir(vae_dir):
         vae_sd, _ = _load_component_sd(vae_dir)
         if "decoder.up_blocks.0.resnets.0.norm1.weight" in vae_sd:
-            from modules_forge.packages.huggingface_guess.diffusers_convert import convert_vae_state_dict
+            from modules_forge.packages.huggingface_guess.diffusers_convert import (
+                convert_vae_state_dict,
+            )
 
             vae_sd = convert_vae_state_dict(vae_sd)
         for key, value in vae_sd.items():

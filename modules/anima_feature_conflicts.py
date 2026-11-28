@@ -12,7 +12,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-
 STANDARD_GUIDANCE = "Standard / preserve existing"
 SMC_GUIDANCE = "SMC-CFG"
 FDG_GUIDANCE = "FDG (experimental)"
@@ -158,7 +157,7 @@ def resolve_exclusive_features(
     if selected in names and values[names.index(selected)]:
         winner = selected
     else:
-        winner = next((name for name, value in zip(names, values) if value), None)
+        winner = next((name for name, value in zip(names, values, strict=True) if value), None)
 
     if winner is None:
         return ExclusiveFeatureState(
