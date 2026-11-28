@@ -27,7 +27,7 @@ Forge Neo Remi is a downstream distribution of [Forge Neo](https://github.com/Ha
 - **End-to-end creative loop.** Organize outputs with **Gallery Boards**, trace parent/child **Asset Lineage**, inspect two runs via pixel slider plus structured **Parameter Diff**, check alpha transparency with **Lightbox 4-backdrop** switching (`B`), **Send to Reference Image** with model-aware slot badges (`<image_1>`, `ref_image_0`, `ref_0`), iterate locally via **Canvas In-Place Staging**, expand prompts with the **Multimodal/Local Prompt Upsampler (PUP)**, and compose structured layouts in **JSON Builder** (MOSS-Image, FLUX.3 Layout, and Bria Fibo 2.0 VGL 2.0).
 - **Anima-first inference & conflict-safe runtime.** Full 2B / 2.9B / 3.8B support (28/40/52-block layouts + native Qwen3.5 semantic connector), cross-depth LoRA and ControlNet-LLLite remapping, Control-LoRA / VACE, native samplers, guidance, spatial controls, and **Anima Remi Presets** safe baselines—with mutually exclusive stacks locked before sampling in both the browser and API ([details](docs/remi-webui/usage.md#anima-integration)).
 - **Worker isolation, multi-GPU pools & Apple Silicon support.** Run in-process by default or opt into isolated inference via `WorkerProtocol`: `--worker-process` (crash/OOM auto-recovery and zero UI/WebSocket GIL contention), `--worker-gpus 0,1` (multi-GPU worker pool), and `--worker-mlx` (optional Apple Silicon MLX / `mflux` sidecar). These flags are a preview: they list the workers in the Workers monitor, but the queue does not dispatch to them and still runs every job in-process. Includes Apple Silicon MPS dequantized-weight caching, unified-memory awareness, and the reproducible `tools/perf/bench_inference.py` benchmark suite.
-- **Stable Extension API v1 & upstream governance.** Versioned `remi.ui` (`REMI_API_VERSION = "1.0"`), optional `remi-extension.json` manifests, per-extension **Diagnostics** (load times, hook/action errors and timeouts), the public `remi.testing` contract verifier, and automated upstream divergence tracking (`tools/upstream_forks.py budget`, `FORKED <= 6`).
+- **Stable Extension API v1 & in-tree runtime governance.** Versioned `remi.ui` (`REMI_API_VERSION = "1.0"`), optional `remi-extension.json` manifests, per-extension **Diagnostics** (load times, hook/action errors and timeouts), the public `remi.testing` contract verifier, and automated pinning-test verification (`tools/upstream_forks.py budget`) as Remi progressively decouples from Forge Neo.
 - **Batteries included.** Frequently used extensions ship as [built-ins](docs/remi-webui/usage.md#built-in-extensions), ported to `remi.ui` and guarded by automated Python, Vitest, and Playwright + axe gates.
 
 ## Screenshots
@@ -85,7 +85,7 @@ Use the upstream [model download guide](https://github.com/Haoming02/sd-webui-fo
 - [Extension developer guide (`remi.ui` v1, manifests, `remi.testing`)](docs/remi-webui/extension-guide.md)
 - [Security](docs/remi-webui/security.md) and [Docker](docker/README.md)
 - [WebUI architecture](docs/remi-webui/architecture.md) and [Anima feature seams](docs/remi-architecture-notes.md)
-- [Absorbing Forge Neo updates](docs/remi-webui/upstream-absorption.md) and [Upstream PR roadmap & code-bloat audit](docs/remi-webui/upstream-pr-candidates.md)
+- [Runtime lineage & Neo decoupling notes](docs/remi-webui/upstream-absorption.md) and [In-tree runtime divergence & code-bloat audit](docs/remi-webui/upstream-pr-candidates.md)
 - [Inference & memory benchmarks](docs/research/inference-performance.md) and [UI performance measurements](docs/research/ui-performance.md)
 - [2026 Q4–2027 Q2 roadmap](docs/research/roadmap-2026-q4.zh-CN.md) (zh-CN), [competitive & architecture research](docs/research/competitive-and-architecture-research-2026-11.zh-CN.md) (zh-CN), and [Anima optimization research](docs/research/anima-generation-optimizations.md)
 - [Documentation index](docs/remi-webui/README.md)
@@ -101,9 +101,9 @@ Before opening an issue, reproduce it on the current `remi` branch with third-pa
 - Launch arguments (including any `--worker-*` flags) and relevant generation parameters
 - Full console traceback, browser console output for UI issues, or a minimal reproduction
 
-Use the [Remi issue tracker](https://github.com/beautifulrem/forge-neo-remi/issues) for Remi-specific behavior. Upstream-only issues should be reproduced against [Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo) before being reported there.
+Use the [Remi issue tracker](https://github.com/beautifulrem/forge-neo-remi/issues) for all bugs and feature requests encountered in Remi. Remi is progressively decoupling from Forge Neo and maintains its runtime fixes directly in-tree — please do **not** report Remi issues or submit pull requests to upstream repositories on Remi's behalf.
 
-Contributions should declare model behavior via `ModelCapability` / `remi.ui`, keep upstream-shared runtime diffs minimal (`python tools/upstream_forks.py budget` enforces `FORKED <= 6`), preserve upstream CRLF line endings (`tools/check_line_endings.py`), and add regression tests. `tools/check.sh` runs all Python, contract, i18n, bundle-budget, lint, Vitest, and Playwright + axe gates.
+Contributions should declare model behavior via `ModelCapability` / `remi.ui`, record shared-origin runtime fixes in `tools/upstream_forks.py` (`python tools/upstream_forks.py budget` verifies 100% pinning-test coverage on disk), preserve CRLF line endings where tracked (`tools/check_line_endings.py`), and add regression tests. `tools/check.sh` runs all Python, contract, i18n, bundle-budget, lint, Vitest, and Playwright + axe gates.
 
 ## Upstream and Acknowledgements
 

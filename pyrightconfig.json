@@ -18,6 +18,7 @@
     "**/node_modules",
     "venv",
     ".venv",
+    "extensions-builtin/forge_legacy_preprocessors/annotator",
     "models",
     "extensions",
     "extension-data",
@@ -32,7 +33,7 @@
     "modules_forge/packages"
   ],
   "venvPath": ".",
-  "venv": "venv",
+  "venv": ".venv",
   "pythonVersion": "3.13",
   "pythonPlatform": "All",
   "typeCheckingMode": "standard",
@@ -42,6 +43,5 @@
   "reportPossiblyUnboundVariable": "error",
   "reportOptionalMemberAccess": "error",
   "reportRedeclaration": "error",
-  "enableTypeIgnoreComments": true,
-  "failOnWarnings": false
+  "enableTypeIgnoreComments": true
 }

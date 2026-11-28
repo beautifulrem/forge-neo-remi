@@ -32,12 +32,12 @@ from the Gradio UI, security and troubleshooting.
 | [score-history.md](score-history.md) | independent scoring rounds and the final scores |
 | [testing.md](testing.md) / [integration-checklist.md](integration-checklist.md) | the quality gates (`tools/check.sh`), the real-server smoke test and browser audit, and the last full browser walk-through with its evidence |
 
-## Maintaining Remi against Forge Neo
+## Runtime Lineage & Progressive Neo Decoupling
 
 | document | for |
 |---|---|
-| [upstream-absorption.md](upstream-absorption.md) | where every upstream UI and runtime file went, how to translate each kind of upstream change, `tools/upstream_forks.py` (`review` / `restore` / `budget`), the merge procedure and checklist |
-| [upstream-pr-candidates.md](upstream-pr-candidates.md) | code-level audit of all 32 `DIVERGED` files (Wave 1–4 upstream PR roadmap from 32 → ≤ 20) and Python/TypeScript code-bloat refactoring priorities |
+| [upstream-absorption.md](upstream-absorption.md) | how Forge Neo UI and runtime files mapped into Remi, in-tree runtime divergence & pinning-test governance (`tools/upstream_forks.py`), and reference notes for optional historical comparisons |
+| [upstream-pr-candidates.md](upstream-pr-candidates.md) | in-tree runtime divergence inventory (`remi-runtime-fix` & `remi-architecture-hook`, maintained directly in Remi with zero upstream issues/PRs) and Python/TypeScript refactoring priorities |
 | [upstream-sync-2026-11-22.md](../upstream-sync-2026-11-22.md) · [2026-11-18](../upstream-sync-2026-11-18.md) · [2026-10-27](../upstream-sync-2026-10-27.md) | recent Forge Neo merges into `remi` |
 | [upstream-sync-2026-10-14.md](../upstream-sync-2026-10-14.md) | the last Git merge of `neo` (`46af880c`) before the UI rewrite |
 | [upstream-sync-2026-10-02.md](../upstream-sync-2026-10-02.md) | the earlier selective port |

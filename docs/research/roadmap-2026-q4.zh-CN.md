@@ -41,9 +41,9 @@
 
 1. **硬件甜点区原则**：重投 **2B–12B** 可在 8–24GB 消费级 GPU 或 24–64GB Apple Silicon 流畅交互的模型；30B+ 超大模型仅采取“跟随上游合并 + 低成本套壳”，绝不抢跑重度自研。
 2. **新模型准入闸门（Model Admission Gate）**：任何新增模型或模型深改立项前，须同时满足：① 符合硬件甜点区；② 全部规则沉淀于能力注册表 + 独立模块，上游共享文件改动 **≤ 3 行**；③ 确认上游 Forge Neo 短期（~30 天）不会原生合入相同改动；④ 随附实测基准数据、SPA 闭环与回归单测。
-3. **上游分叉债预算（Divergence Budget）**：
-   - 冻结 `FORKED` 数量 **≤ 6**（新增任何全文件 fork 前必须先消解或归还一项）；
-   - 通过主动向上游 Forge Neo 提交确定性 bug 修复 PR，在 P1 阶段将 `DIVERGED` 从 **32 个文件压降至 ≤ 20**。
+3. **逐步与 `neo` 解耦及内聚回归治理（In-Tree Decoupling Governance）**：
+   - Remi 逐步与上游 `neo` 分支解耦，所有运行时缺陷修复与架构升级均在 Remi 仓内直接落地维护，**不向上游提交任何 Issue 或 PR**；
+   - 通过 `tools/upstream_forks.py budget` 强制保障每一处共享来源运行时改动均具备磁盘可验证的回归固定测试（pinning test 存活率 100%）。
 4. **实测驱动优化原则**：所有推理加速（Spectrum 扩展、TaylorSeer/MagCache、4-bit 量化、MPS 优化）必须基于统一基准套件输出速度 + 峰值显存 + 固定 seed 视觉指标（LPIPS/PSNR）数据，无实证收益不合入主干。
 5. **端到端闭环交付原则**：任何后端能力必须同步交付 SPA 交互、双语（en / zh-CN）文案、自动生成契约（`openapi.json` / `schema.d.ts` / mock contract）与自动化测试，不留“只有改代码/看日志才知道”的半成品。
 
@@ -63,7 +63,7 @@ flowchart LR
         P11["P1.1 非节点工作流 (Recipes + 多阶段链 + 画布Staging)"]
         P12["P1.2 remi.ui 扩展 API v1 稳定化与契约套件"]
         P13["P1.3 通用 DiTControlPatch + Z-Image/Kromoss 接入"]
-        P14["P1.4 上游减债专项 (DIVERGED 32 -> <=20)"]
+        P14["P1.4 逐步与 Neo 解耦及内聚回归治理"]
     end
 
     subgraph P2["P2 (2027 Q1-Q2): 扩展上限突破与按需扩张"]
@@ -148,12 +148,12 @@ flowchart LR
   2. **`Z-Image` 全家桶（Base / Turbo / Omni / Edit）升级**：完全通过新版 `ModelCapability` 接入（Diffusers/Unsloth 加载、敏感层量化保护、跨步文本/RoPE 缓存、per-block compile、Spectrum 接缝与参考图管线），同步交付 `tests/test_remi_zimage.py` 与 P0.1 基准数据；
   3. **`MOSS-Image / lodestones/Kromoss` + 8 步 DMD2 LoRA 适配**：补齐结构化工作流建议（自动提示一键切至 `8 steps + CFG 1.0`）、加载核验与回归单测。
 
-#### P1.4 上游维护压力治理专项（Divergence Budget & Upstream-First）（收益 4.5/5 · 成本 2.5/5）
-- **解决痛点**：主动化解 Remi 最大的长期工程风险，确保后续同步 Forge Neo 不再线性变慢。
+#### P1.4 运行时解耦与内聚回归治理专项（Progressive Neo Decoupling）（收益 4.5/5 · 成本 2/5）
+- **解决痛点**：确立向独立代码库逐步演进的治理边界，不再受上游合并表面积束缚，同时保持 100% 可复现回归测试保护。
 - **核心交付**：
-  1. **确定性修复回馈上游**：将 `tools/upstream_forks.py` `DIVERGED` 清单中通用性强、无 UI 耦合的 bug 修复（如 MPS OOM 处理、attention 4D 掩码、flow 调度器/采样器保护、ControlNet 缓存键、LoRA 清理与失败恢复等）整理为干净 PR 提交至上游 Forge Neo，目标将 **`DIVERGED` 从 32 压降至 ≤ 20**；
-  2. **自动化分叉债审计门禁**：在 `tools/upstream_forks.py` 增加 `budget` 子命令（检查 `FORKED ≤ 6`、统计每轮同步净增/净减 `DIVERGED`、核查每条分叉的 pinning test 存活率），纳入 `tools/check.sh` 报告；
-  3. **规范化定期同步节奏**：维持每 2–3 周一次小批量吸收 Forge Neo（避免积压 100+ commits 一次性冲突）。
+  1. **全部修复在仓内独立闭环**：Remi 逐步与 Forge Neo `neo` 分支解耦，确定性修复与运行时增强直接在 Remi 内落地维护，**绝不向上游提交任何 Issue 或 PR**；
+  2. **自动化固定测试审计门禁**：通过 `tools/upstream_forks.py budget` 核查每条共享来源改动分类（`remi-runtime-fix` / `remi-architecture-hook`）与磁盘 pinning test 100% 存活率；
+  3. **按需选择性参考**：历史参考对比仅通过只读 diff 审查并在必要时附回归单测吸收。
 
 ---
 
@@ -213,7 +213,7 @@ flowchart LR
 | **P1** | **P1.1** | 非节点式可组合工作流（Recipes + 线性多阶段链 + 画布 Staging + Boards） | **5/5 · 4/5** | `remi/jobs/store.py`、`remi/ui`、`webui/src/canvas/`、`library.py` | 3 周 | ① 跨模型 Recipes 增删改查与导入导出可用；② 2–4 阶段 `JobChain` 改动后段重跑时命中前段缓存产物；③ 画布支持原地 1–4 候选 Staging 合并；④ Gallery 支持自定义 Boards 与 Playwright e2e + axe 全绿 |
 | **P1** | **P1.2** | `remi.ui` 扩展 API v1 稳定化与契约治理 | **4/5 · 3/5** | `remi/ui/`、`remi_port_harness.py`、`extensions_admin.py` | 2 周 | ① 落地 `REMI_API_VERSION`、`remi-extension.json` 与 SemVer 策略；② 公开 `remi.testing` 契约包与模板扩展；③ Extensions 页面上线健康诊断与 Action 超时隔离 |
 | **P1** | **P1.3** | 通用 `DiTControlPatch`（`Fun-Controlnet-Union`）+ `Z-Image` / `Kromoss` 升级 | **4.5/5 · 3/5** | `anima_vace.py`、新版 `ModelCapability`、`lumina.py`、`moss_diffusers.py` | 2 周 | ① 单文件识别 Qwen-2.1 / Z-Image 8 条件 + 129ch Inpaint 且零门控恒等；② Z-Image 全家桶以 ≤3 行上游钩子完成接入；③ Kromoss + 8-step DMD2 提示与单测就绪；④ 通过 P0.1 基准验收 |
-| **P1** | **P1.4** | 上游维护压力治理专项（Divergence Budget） | **4.5/5 · 2.5/5** | `tools/upstream_forks.py`、`upstream-absorption.md` | 持续（首轮 1–2 周） | ① `FORKED ≤ 6` 自动化门禁生效；② 向上游回馈确定性修复 PR，`DIVERGED` 由 32 压降至 ≤ 20；③ 每次 Neo 同步保持 `tools/check.sh --strict` 零回归 |
+| **P1** | **P1.4** | 运行时解耦与内聚回归治理专项（Progressive Neo Decoupling） | **4.5/5 · 2/5** | `tools/upstream_forks.py`、`upstream-absorption.md` | 持续 | ① 所有共享来源修复直接在仓内维护（零上游 Issue/PR）；② `DIVERGED` 全部具备磁盘可验证的回归固定测试（100% 存活）；③ 全门禁 `tools/check.sh` 零回归 |
 | **P2** | **P2.1** | 推理 Worker 进程隔离（`WorkerProtocol` + 单进程外 Worker） | **5/5 · 4/5** | `remi/jobs/queue.py`（DI 边界）、`services.py`、`realtime.py` | 3–4 周 | ① 控制面不再直读 `shared.state`/`sd_model`；② `--worker-process` 下模拟 Worker OOM/崩溃可自动恢复且队列不丢；③ 高负载下浏览器与 WS 步间抖动显著下降（以 `step_segments.py` 验证） |
 | **P2** | **P2.2** | Apple Silicon MPS 优化 + 基于 `WorkerProtocol` 的可选 MLX Sidecar POC | **4/5 · 3.5/5** | `operations_mixed_precision.py`、`memory_management.py`、`WorkerProtocol` | 2–3 周 | ① 输出 MPS 优化前后吞吐与统一内存实测对比；② 产出基于 `WorkerProtocol` 的 MLX Sidecar 可运行原型与决策文档 |
 | **P2** | **P2.3** | 实证驱动加速栈扩展 & 高协同模型按需准入（ERNIE / Fibo 2.0 / Anima 跟进） | **3.5/5 · 3/5** | `sd_forge_spectrum`、`svdq.py`、`JSON Builder`、`ModelCapability` | 按需迭代 | ① 任何新加速算法须在 P0.1 基准证明净收益；② 新模型严格满足准入闸门（≤3 行上游侵入 + 全量单测 + 许可提示清晰）；③ GGUF 全引擎回归绿灯 |
@@ -225,7 +225,7 @@ flowchart LR
 每次推进上述任一路线图项，合并前须满足以下 **7 条不可妥协基线**：
 
 1. **能力单一入口**：新 DiT 能力、面板可见性、事前冲突与工作流建议统一声明于 [`backend/nn/dit_registry.py`](../../backend/nn/dit_registry.py) 与 `remi.ui`，共享架构接缝同步更新 [`docs/remi-architecture-notes.md`](../remi-architecture-notes.md)。
-2. **分叉债与上游规范**：严格遵守 `FORKED ≤ 6` 红线；任何上游共享文件改动须登记 [`tools/upstream_forks.py`](../../tools/upstream_forks.py) 与 [`docs/remi-webui/upstream-absorption.md`](../remi-webui/upstream-absorption.md)，并保留上游 CRLF 换行符（`tools/check_line_endings.py`）。
+2. **解耦与回归固定规范**：Remi 逐步与 Forge Neo 解耦，不向上游提交任何 Issue 或 PR；任何共享来源文件改动须登记 [`tools/upstream_forks.py`](../../tools/upstream_forks.py) 与 [`docs/remi-webui/upstream-absorption.md`](../remi-webui/upstream-absorption.md) 并随附固定单测，同时保留已追踪文件的 CRLF 换行符（`tools/check_line_endings.py`）。
 3. **基准与回归证据**：涉及推理、量化、加速或 Worker 调度的改动，必须附带可复现基准或 CPU/GPU 回归测试证据，禁止凭体感合并。
 4. **契约自动生成不手改**：后端路由、设置或扩展参数变更后，重新生成 `openapi.json`、`schema.d.ts`、mock contract 与 settings contract。
 5. **双语与可访问性**：新增服务端标签同步补齐 `localizations/zh_CN.json`，SPA 字符串同步补齐 `webui/src/locales/zh-CN.json`，视觉改动通过 `/ui-audit` 与 Playwright + axe 零违规检查。

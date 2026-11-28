@@ -1,27 +1,23 @@
-"""Keep Remi's version of the upstream files it forked while merging Forge Neo.
+"""Audit Remi's in-tree runtime forks and divergences as Remi decouples from Forge Neo.
 
-Most files Remi shares with Forge Neo are merged as usual. A few built-ins had
-their processing rewritten by Remi (docs/remi-webui/upstream-absorption.md
-§1.1): for them the rule is *keep Remi's version and port upstream's fixes
-selectively*. A conflict there is easy to see, but Git merges a forked file
-without a conflict whenever Remi left it as it was at the merge base (Remi's
-``lib_spectrum/__init__.py`` only holds a logger, so upstream's 2026 rewrite of
-it would come in silently and import a ``Spectrum`` class Remi's
-``forecaster.py`` does not have). So after ``git merge --no-commit`` every
-forked path the merge touched, conflicted or not, goes back to Remi's version
-here, and the tool prints the upstream diff to read for the selective port.
+Remi originated from Forge Neo and is progressively decoupling into an
+independent codebase. All runtime fixes, DiT hooks, and architectural upgrades
+are owned and maintained directly in Remi — no issues or pull requests are
+submitted to upstream.
 
-The files where Remi fixed an upstream bug but otherwise keeps upstream's code
-(§1.2, ``DIVERGED``) are not restored: they merge as usual, ``review`` lists the
-upstream commits on them, and the test each §1.2 row names fails if a merge
-dropped the fix.
+For optional historical diff inspection or selective cherry-picks during the
+transition:
+- ``FORKED`` (§1.1 of ``docs/remi-webui/upstream-absorption.md``) lists subsystems
+  whose processing Remi rewrote; ``restore`` resets them back to Remi's ``HEAD``
+  during a manual merge so upstream changes never overwrite Remi silently.
+- ``DIVERGED`` (§1.2) lists shared-origin files carrying Remi runtime fixes or
+  architecture hooks, each backed by a mandatory ``test_*.py`` pinning test on disk.
 
-    $PYTHON tools/upstream_forks.py review               # before the merge: upstream commits and
-                                                         # diffstat on the forked paths
-    $PYTHON tools/upstream_forks.py restore --dry-run    # during the merge: what restore would do
-    $PYTHON tools/upstream_forks.py restore              # during the merge: forked paths back to HEAD
-    $PYTHON tools/upstream_forks.py budget               # governance check: FORKED cap, §1.2 pinning
-                                                         # tests, and DIVERGED classification
+    $PYTHON tools/upstream_forks.py review               # optional diffstat against a reference rev
+    $PYTHON tools/upstream_forks.py restore --dry-run    # during a manual merge: what restore would do
+    $PYTHON tools/upstream_forks.py restore              # during a manual merge: forked paths back to HEAD
+    $PYTHON tools/upstream_forks.py budget               # governance check: doc parity, classification,
+                                                         # and 100% pinning-test verification on disk
 
 ``restore`` refuses to run outside a merge (no ``MERGE_HEAD``), and should run
 right after ``git merge`` (it also undoes edits to these paths made since).
@@ -42,12 +38,14 @@ from typing import Any, NamedTuple
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UPSTREAM = "upstream/neo"
 DOC_REL_PATH = os.path.join("docs", "remi-webui", "upstream-absorption.md")
-DEFAULT_MAX_FORKED = 6
-DEFAULT_TARGET_DIVERGED = 20
+DEFAULT_MAX_FORKED: int | None = None
+DEFAULT_TARGET_DIVERGED: int | None = None
 
-UPSTREAM_PR_CANDIDATE = "upstream-pr-candidate"
+REMI_RUNTIME_FIX = "remi-runtime-fix"
 REMI_ARCHITECTURE_HOOK = "remi-architecture-hook"
-DIVERGED_CATEGORIES = frozenset({UPSTREAM_PR_CANDIDATE, REMI_ARCHITECTURE_HOOK})
+# Legacy alias accepted in synthetic tests; repo entries use REMI_RUNTIME_FIX.
+UPSTREAM_PR_CANDIDATE = REMI_RUNTIME_FIX
+DIVERGED_CATEGORIES = frozenset({REMI_RUNTIME_FIX, REMI_ARCHITECTURE_HOOK, "upstream-pr-candidate"})
 
 FORKED = (
     "extensions-builtin/sd_forge_spectrum/lib_spectrum",
@@ -62,9 +60,17 @@ file or folder; ``tests/test_remi_upstream_forks.py`` keeps the two in step."""
 
 DIVERGED = (
     "backend/attention.py",
+    "backend/diffusion_engine/krea.py",
+    "backend/diffusion_engine/qwen.py",
+    "backend/diffusion_engine/qwen21.py",
+    "backend/diffusion_engine/zimage.py",
+    "backend/loader.py",
     "backend/memory_management.py",
     "backend/nn/krea.py",
     "backend/nn/qwen21.py",
+    "backend/operations.py",
+    "backend/operations_mixed_precision.py",
+    "backend/patcher/vae.py",
     "backend/sampling/sampling_function.py",
     "backend/text_processing/anima_engine.py",
     "extensions-builtin/forge_preprocessor_inpaint/scripts/preprocessor_inpaint.py",
@@ -77,72 +83,98 @@ DIVERGED = (
     "extensions-builtin/sd_forge_controlnet/lib_controlnet/global_state.py",
     "extensions-builtin/sd_forge_controlnet/scripts/controlnet.py",
     "extensions-builtin/sd_forge_image_stitch/scripts/image_stitch.py",
+    "extensions-builtin/sd_forge_ipadapter/scripts/forge_ipadapter.py",
     "extensions-builtin/sd_forge_lora/networks.py",
     "extensions-builtin/sd_forge_lora_schedule/scripts/control.py",
+    "extensions-builtin/sd_forge_multidiffusion/lib_multidiffusion/tiled_diffusion.py",
     "extensions-builtin/sd_forge_radial/scripts/forge_radial.py",
     "extensions-builtin/soft-inpainting/scripts/soft_inpainting.py",
     "modules/api/api.py",
+    "modules/config_states.py",
     "modules/extras.py",
     "modules/images.py",
     "modules/img2img.py",
     "modules/infotext_utils.py",
+    "modules/initialize.py",
+    "modules/launch_utils.py",
     "modules/ngrok.py",
     "modules/options.py",
     "modules/processing.py",
     "modules/processing_scripts/refiner.py",
+    "modules/progress.py",
     "modules/sd_samplers.py",
     "modules/sd_samplers_common.py",
+    "modules/sd_samplers_kdiffusion.py",
     "modules/sd_schedulers.py",
+    "modules/sd_vae.py",
+    "modules/styles.py",
     "modules_forge/packages/comfy/lora.py",
     "modules_forge/packages/k_diffusion/external.py",
     "modules_forge/supported_controlnet.py",
 )
-"""Upstream files that keep upstream's code but carry Remi's fixes of upstream bugs
+"""Shared-origin files carrying Remi's in-tree runtime fixes or architecture hooks
 (upstream-absorption.md §1.2, one row per file naming the test that pins the fix).
-They merge normally, and ``restore`` never touches them: a merge that conflicts
-there keeps the fix, and the pinning tests fail if a clean merge drops one."""
+Maintained directly in Remi as it decouples from Forge Neo; ``restore`` never
+touches them and every row is guarded by a verified pinning test on disk."""
 
 DIVERGED_CLASSIFICATION: dict[str, str] = {
-    "backend/attention.py": UPSTREAM_PR_CANDIDATE,
-    "backend/memory_management.py": UPSTREAM_PR_CANDIDATE,
+    "backend/attention.py": REMI_RUNTIME_FIX,
+    "backend/diffusion_engine/krea.py": REMI_RUNTIME_FIX,
+    "backend/diffusion_engine/qwen.py": REMI_RUNTIME_FIX,
+    "backend/diffusion_engine/qwen21.py": REMI_RUNTIME_FIX,
+    "backend/diffusion_engine/zimage.py": REMI_ARCHITECTURE_HOOK,
+    "backend/loader.py": REMI_ARCHITECTURE_HOOK,
+    "backend/memory_management.py": REMI_ARCHITECTURE_HOOK,
     "backend/nn/krea.py": REMI_ARCHITECTURE_HOOK,
     "backend/nn/qwen21.py": REMI_ARCHITECTURE_HOOK,
+    "backend/operations.py": REMI_RUNTIME_FIX,
+    "backend/operations_mixed_precision.py": REMI_ARCHITECTURE_HOOK,
+    "backend/patcher/vae.py": REMI_RUNTIME_FIX,
     "backend/sampling/sampling_function.py": REMI_ARCHITECTURE_HOOK,
     "backend/text_processing/anima_engine.py": REMI_ARCHITECTURE_HOOK,
-    "extensions-builtin/forge_preprocessor_inpaint/scripts/preprocessor_inpaint.py": UPSTREAM_PR_CANDIDATE,
-    "extensions-builtin/forge_preprocessor_reference/scripts/forge_reference.py": UPSTREAM_PR_CANDIDATE,
-    "extensions-builtin/forge_preprocessor_tile/scripts/preprocessor_tile.py": UPSTREAM_PR_CANDIDATE,
-    "extensions-builtin/sd_forge_controlllite/lib_controllllite/lib_controllllite.py": UPSTREAM_PR_CANDIDATE,
+    "extensions-builtin/forge_preprocessor_inpaint/scripts/preprocessor_inpaint.py": REMI_RUNTIME_FIX,
+    "extensions-builtin/forge_preprocessor_reference/scripts/forge_reference.py": REMI_RUNTIME_FIX,
+    "extensions-builtin/forge_preprocessor_tile/scripts/preprocessor_tile.py": REMI_RUNTIME_FIX,
+    "extensions-builtin/sd_forge_controlllite/lib_controllllite/lib_controllllite.py": REMI_RUNTIME_FIX,
     "extensions-builtin/sd_forge_controlllite/lib_controllllite/lib_controllllite_anima.py": REMI_ARCHITECTURE_HOOK,
     "extensions-builtin/sd_forge_controlllite/scripts/forge_controllllite.py": REMI_ARCHITECTURE_HOOK,
-    "extensions-builtin/sd_forge_controlnet/lib_controlnet/api.py": UPSTREAM_PR_CANDIDATE,
-    "extensions-builtin/sd_forge_controlnet/lib_controlnet/global_state.py": UPSTREAM_PR_CANDIDATE,
+    "extensions-builtin/sd_forge_controlnet/lib_controlnet/api.py": REMI_RUNTIME_FIX,
+    "extensions-builtin/sd_forge_controlnet/lib_controlnet/global_state.py": REMI_RUNTIME_FIX,
     "extensions-builtin/sd_forge_controlnet/scripts/controlnet.py": REMI_ARCHITECTURE_HOOK,
-    "extensions-builtin/sd_forge_image_stitch/scripts/image_stitch.py": UPSTREAM_PR_CANDIDATE,
+    "extensions-builtin/sd_forge_image_stitch/scripts/image_stitch.py": REMI_RUNTIME_FIX,
+    "extensions-builtin/sd_forge_ipadapter/scripts/forge_ipadapter.py": REMI_RUNTIME_FIX,
     "extensions-builtin/sd_forge_lora/networks.py": REMI_ARCHITECTURE_HOOK,
-    "extensions-builtin/sd_forge_lora_schedule/scripts/control.py": UPSTREAM_PR_CANDIDATE,
-    "extensions-builtin/sd_forge_radial/scripts/forge_radial.py": UPSTREAM_PR_CANDIDATE,
-    "extensions-builtin/soft-inpainting/scripts/soft_inpainting.py": UPSTREAM_PR_CANDIDATE,
+    "extensions-builtin/sd_forge_lora_schedule/scripts/control.py": REMI_RUNTIME_FIX,
+    "extensions-builtin/sd_forge_multidiffusion/lib_multidiffusion/tiled_diffusion.py": REMI_RUNTIME_FIX,
+    "extensions-builtin/sd_forge_radial/scripts/forge_radial.py": REMI_RUNTIME_FIX,
+    "extensions-builtin/soft-inpainting/scripts/soft_inpainting.py": REMI_RUNTIME_FIX,
     "modules/api/api.py": REMI_ARCHITECTURE_HOOK,
-    "modules/extras.py": UPSTREAM_PR_CANDIDATE,
-    "modules/images.py": UPSTREAM_PR_CANDIDATE,
-    "modules/img2img.py": UPSTREAM_PR_CANDIDATE,
-    "modules/infotext_utils.py": UPSTREAM_PR_CANDIDATE,
-    "modules/ngrok.py": UPSTREAM_PR_CANDIDATE,
-    "modules/options.py": UPSTREAM_PR_CANDIDATE,
+    "modules/config_states.py": REMI_RUNTIME_FIX,
+    "modules/extras.py": REMI_RUNTIME_FIX,
+    "modules/images.py": REMI_RUNTIME_FIX,
+    "modules/img2img.py": REMI_RUNTIME_FIX,
+    "modules/infotext_utils.py": REMI_RUNTIME_FIX,
+    "modules/initialize.py": REMI_ARCHITECTURE_HOOK,
+    "modules/launch_utils.py": REMI_RUNTIME_FIX,
+    "modules/ngrok.py": REMI_RUNTIME_FIX,
+    "modules/options.py": REMI_ARCHITECTURE_HOOK,
     "modules/processing.py": REMI_ARCHITECTURE_HOOK,
-    "modules/processing_scripts/refiner.py": UPSTREAM_PR_CANDIDATE,
-    "modules/sd_samplers.py": UPSTREAM_PR_CANDIDATE,
-    "modules/sd_samplers_common.py": UPSTREAM_PR_CANDIDATE,
+    "modules/processing_scripts/refiner.py": REMI_RUNTIME_FIX,
+    "modules/progress.py": REMI_ARCHITECTURE_HOOK,
+    "modules/sd_samplers.py": REMI_RUNTIME_FIX,
+    "modules/sd_samplers_common.py": REMI_RUNTIME_FIX,
+    "modules/sd_samplers_kdiffusion.py": REMI_RUNTIME_FIX,
     "modules/sd_schedulers.py": REMI_ARCHITECTURE_HOOK,
+    "modules/sd_vae.py": REMI_RUNTIME_FIX,
+    "modules/styles.py": REMI_RUNTIME_FIX,
     "modules_forge/packages/comfy/lora.py": REMI_ARCHITECTURE_HOOK,
-    "modules_forge/packages/k_diffusion/external.py": UPSTREAM_PR_CANDIDATE,
-    "modules_forge/supported_controlnet.py": UPSTREAM_PR_CANDIDATE,
+    "modules_forge/packages/k_diffusion/external.py": REMI_RUNTIME_FIX,
+    "modules_forge/supported_controlnet.py": REMI_RUNTIME_FIX,
 }
-"""Governance classification of every ``DIVERGED`` path: ``upstream-pr-candidate``
-(pure deterministic Forge Neo bug fix eligible to drop out of ``DIVERGED`` once
-upstreamed) vs ``remi-architecture-hook`` (carries Remi-specific runtime hooks or
-DiT architecture extensions; see ``docs/remi-webui/upstream-pr-candidates.md``)."""
+"""Governance classification of every ``DIVERGED`` path: ``remi-runtime-fix``
+(self-contained deterministic runtime/bug fix owned in Remi) vs
+``remi-architecture-hook`` (carries Remi-specific runtime hooks or DiT
+architecture extensions; see ``docs/remi-webui/upstream-pr-candidates.md``)."""
 
 
 class DocumentedDivergence(NamedTuple):
@@ -176,11 +208,11 @@ class DivergedAuditRow(NamedTuple):
 
 class BudgetReport(NamedTuple):
     forked_count: int
-    max_forked: int
+    max_forked: int | None
     forked_ok: bool
     forked_paths: tuple[str, ...]
     diverged_count: int
-    target_diverged: int
+    target_diverged: int | None
     over_target: int
     within_target: bool
     counts_by_category: dict[str, int]
@@ -277,10 +309,10 @@ def audit_budget(
     forked: tuple[str, ...] = FORKED,
     diverged: tuple[str, ...] = DIVERGED,
     classifications: dict[str, str] | None = None,
-    max_forked: int = DEFAULT_MAX_FORKED,
-    target_diverged: int = DEFAULT_TARGET_DIVERGED,
+    max_forked: int | None = DEFAULT_MAX_FORKED,
+    target_diverged: int | None = DEFAULT_TARGET_DIVERGED,
 ) -> BudgetReport:
-    """Enforce the FORKED guardrail and audit DIVERGED rows against §1.2 and disk."""
+    """Audit FORKED/DIVERGED doc parity, categories, and §1.2 pinning tests on disk."""
 
     root_path = Path(root)
     doc = Path(doc_path) if doc_path is not None else root_path / DOC_REL_PATH
@@ -289,8 +321,8 @@ def audit_budget(
     errors: list[str] = []
     warnings: list[str] = []
 
-    forked_ok = len(forked) <= max_forked
-    if not forked_ok:
+    forked_ok = max_forked is None or len(forked) <= max_forked
+    if max_forked is not None and not forked_ok:
         errors.append(f"FORKED guardrail exceeded: {len(forked)} > max {max_forked}")
 
     for dup in _duplicates(forked):
@@ -335,7 +367,7 @@ def audit_budget(
         errors.append(f"classification entry not in DIVERGED: {extra}")
 
     counts_by_category: dict[str, int] = {
-        UPSTREAM_PR_CANDIDATE: 0,
+        REMI_RUNTIME_FIX: 0,
         REMI_ARCHITECTURE_HOOK: 0,
     }
     rows: list[DivergedAuditRow] = []
@@ -353,7 +385,9 @@ def audit_budget(
             elif category not in DIVERGED_CATEGORIES:
                 errors.append(f"invalid classification for {path}: {category!r}")
             else:
-                counts_by_category[category] += 1
+                norm_cat = REMI_RUNTIME_FIX if category == "upstream-pr-candidate" else category
+                counts_by_category[norm_cat] += 1
+                category = norm_cat
 
         file_exists = (root_path / path).is_file()
         if in_code and not file_exists:
@@ -389,13 +423,14 @@ def audit_budget(
             )
         )
 
-    over_target = max(0, len(diverged) - target_diverged)
-    within_target = len(diverged) <= target_diverged
-    if not within_target:
-        warnings.append(
-            f"DIVERGED count {len(diverged)} exceeds target <= {target_diverged} "
-            f"({over_target} over target; {counts_by_category[UPSTREAM_PR_CANDIDATE]} {UPSTREAM_PR_CANDIDATE} eligible)"
-        )
+    if target_diverged is None:
+        over_target = 0
+        within_target = True
+    else:
+        over_target = max(0, len(diverged) - target_diverged)
+        within_target = len(diverged) <= target_diverged
+        if not within_target:
+            warnings.append(f"DIVERGED count {len(diverged)} exceeds target <= {target_diverged} ({over_target} over target)")
 
     return BudgetReport(
         forked_count=len(forked),
@@ -419,13 +454,21 @@ def audit_budget(
 def format_budget_report(report: BudgetReport, *, verbose: bool = False) -> str:
     """Format a concise governance summary suitable for ``tools/check.sh``."""
 
-    forked_state = "OK" if report.forked_ok else f"EXCEEDED by {report.forked_count - report.max_forked}"
-    diverged_state = "ON TARGET" if report.within_target else f"{report.over_target} over target"
+    if report.max_forked is None:
+        forked_line = f"  FORKED:        {report.forked_count} [OK]"
+    else:
+        forked_state = "OK" if report.forked_ok else f"EXCEEDED by {report.forked_count - report.max_forked}"
+        forked_line = f"  FORKED:        {report.forked_count} / max {report.max_forked} [{forked_state}]"
+    if report.target_diverged is None:
+        diverged_line = f"  DIVERGED:      {report.diverged_count} [in-tree owned]"
+    else:
+        diverged_state = "ON TARGET" if report.within_target else f"{report.over_target} over target"
+        diverged_line = f"  DIVERGED:      {report.diverged_count} / target <= {report.target_diverged} [{diverged_state}]"
     out = [
-        "Upstream divergence budget:",
-        f"  FORKED:        {report.forked_count} / max {report.max_forked} [{forked_state}]",
-        f"  DIVERGED:      {report.diverged_count} / target <= {report.target_diverged} [{diverged_state}]",
-        f"  Classes:       {report.counts_by_category[UPSTREAM_PR_CANDIDATE]} {UPSTREAM_PR_CANDIDATE}, "
+        "In-tree runtime divergence audit:",
+        forked_line,
+        diverged_line,
+        f"  Classes:       {report.counts_by_category[REMI_RUNTIME_FIX]} {REMI_RUNTIME_FIX}, "
         f"{report.counts_by_category[REMI_ARCHITECTURE_HOOK]} {REMI_ARCHITECTURE_HOOK}",
         f"  Pinning tests: {report.pinning_tests_verified} / {report.pinning_tests_total} verified on disk",
     ]
@@ -443,7 +486,7 @@ def format_budget_report(report: BudgetReport, *, verbose: bool = False) -> str:
     elif report.warnings:
         out.append(f"Status: PASS (guardrails met; {report.over_target} diverged file(s) above target)")
     else:
-        out.append("Status: PASS (all guardrails and divergence target met)")
+        out.append("Status: PASS (all pinning tests and divergence records verified)")
     return "\n".join(out)
 
 
@@ -520,9 +563,9 @@ def main(argv: list[str] | None = None) -> int:
     shown.add_argument("--upstream", default=UPSTREAM, help="upstream revision (default: %(default)s)")
     back = sub.add_parser("restore", help="during a merge: every forked path the merge touched back to HEAD")
     back.add_argument("--dry-run", action="store_true", help="only list what would be restored")
-    cap = sub.add_parser("budget", help="enforce the FORKED cap, audit §1.2 pinning tests, and classify DIVERGED files")
-    cap.add_argument("--max-forked", type=int, default=DEFAULT_MAX_FORKED, help="maximum allowed FORKED paths (default: %(default)s)")
-    cap.add_argument("--target-diverged", type=int, default=DEFAULT_TARGET_DIVERGED, help="target ceiling for DIVERGED files (default: %(default)s)")
+    cap = sub.add_parser("budget", help="verify doc parity, classify DIVERGED files, and audit §1.2 pinning tests on disk")
+    cap.add_argument("--max-forked", type=int, default=DEFAULT_MAX_FORKED, help="optional ceiling for FORKED paths (default: unlimited)")
+    cap.add_argument("--target-diverged", type=int, default=DEFAULT_TARGET_DIVERGED, help="optional advisory ceiling for DIVERGED files (default: unlimited)")
     cap.add_argument("--json", action="store_true", dest="as_json", help="emit machine-readable JSON governance report")
     cap.add_argument("-v", "--verbose", action="store_true", help="list every classified DIVERGED file and pinning test")
     options = parser.parse_args(argv)
@@ -532,9 +575,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if options.command == "budget":
-        if options.max_forked < 0:
+        if options.max_forked is not None and options.max_forked < 0:
             parser.error("--max-forked must be >= 0")
-        if options.target_diverged < 0:
+        if options.target_diverged is not None and options.target_diverged < 0:
             parser.error("--target-diverged must be >= 0")
         report = audit_budget(max_forked=options.max_forked, target_diverged=options.target_diverged)
         if options.as_json:

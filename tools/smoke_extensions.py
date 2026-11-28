@@ -101,8 +101,8 @@ class GitFixture:
         index = {
             "tags": {"localization": "Localization", "script": "Script"},
             "extensions": [
-                {"name": "Remi smoke extension", "url": self.url("remi-smoke-ext"), "description": "Ships a right-to-left catalog.", "tags": ["localization"], "added": "2026-10-01", "stars": 1},
-                {"name": "Remi smoke index extension", "url": self.url("remi-smoke-index-ext"), "description": "Installed from the index.", "tags": ["script"], "added": "2026-10-02", "stars": 2},
+                {"name": "Remi smoke extension", "url": self.url("remi-smoke-ext"), "description": "Ships a right-to-left catalog.", "tags": ["localization"], "added": "2026-10-01", "commit_time": "2026-10-01T00:00:00Z", "stars": 1},
+                {"name": "Remi smoke index extension", "url": self.url("remi-smoke-index-ext"), "description": "Installed from the index.", "tags": ["script"], "added": "2026-10-02", "commit_time": "2026-10-02T00:00:00Z", "stars": 2},
             ],
         }
         (self.served / "index.json").write_text(json.dumps(index), encoding="utf-8")

@@ -194,20 +194,25 @@ def _setup_synthetic_repo(
 def test_budget_passes_on_repository_and_classifies_all_divergences(capsys):
     report = forks.audit_budget()
     assert report.ok, report.errors
-    assert report.forked_count == len(forks.FORKED) <= forks.DEFAULT_MAX_FORKED
+    assert report.forked_count == len(forks.FORKED)
+    assert report.max_forked is None
+    assert report.forked_ok is True
     assert report.diverged_count == len(forks.DIVERGED)
+    assert report.target_diverged is None
+    assert report.within_target is True
+    assert report.over_target == 0
+    assert report.warnings == ()
     assert report.pinning_tests_verified == len(forks.DIVERGED)
     assert report.missing_pinning_tests == ()
     assert set(forks.DIVERGED_CLASSIFICATION) == set(forks.DIVERGED)
     assert sum(report.counts_by_category.values()) == len(forks.DIVERGED)
-    # Enough upstream PR candidates exist to achieve the P1.4 reduction target (32 -> <= 20)
-    assert report.diverged_count - report.counts_by_category[forks.UPSTREAM_PR_CANDIDATE] <= forks.DEFAULT_TARGET_DIVERGED
 
     code = forks.main(["budget"])
     out = capsys.readouterr().out
     assert code == 0
-    assert "Upstream divergence budget:" in out
-    assert f"FORKED:        {len(forks.FORKED)} / max 6 [OK]" in out
+    assert "In-tree runtime divergence audit:" in out
+    assert f"FORKED:        {len(forks.FORKED)} [OK]" in out
+    assert f"DIVERGED:      {len(forks.DIVERGED)} [in-tree owned]" in out
     assert f"Pinning tests: {len(forks.DIVERGED)} / {len(forks.DIVERGED)} verified on disk" in out
     assert "Status: PASS" in out
 
@@ -215,7 +220,7 @@ def test_budget_passes_on_repository_and_classifies_all_divergences(capsys):
     verbose_out = capsys.readouterr().out
     assert code_verbose == 0
     assert "backend/attention.py" in verbose_out
-    assert forks.UPSTREAM_PR_CANDIDATE in verbose_out
+    assert forks.REMI_RUNTIME_FIX in verbose_out
     assert forks.REMI_ARCHITECTURE_HOOK in verbose_out
 
 

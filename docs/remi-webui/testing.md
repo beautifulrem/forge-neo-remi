@@ -9,13 +9,16 @@ tools/check.sh --only ruff,pytest   # only these steps ("pytest" = core + every 
 tools/check.sh --list               # step names
 tools/check.sh --strict             # a skipped step fails the run too
 tools/check.sh --serial             # one step at a time
+tools/check.sh --e2e-workers N      # override Playwright worker count
 ```
 
 Three lanes run at once, each one step after another: `python`
 (`env:gradio-free`, the ruff steps, `pytest:tests`), `suites` (the extension
 suites, the contracts, the `legacy-ui` steps, `i18n:server`) and `frontend`
-(`pnpm:install` to `e2e`). `pytest:coverage` combines the coverage data of
-every pytest step, so it runs once both Python lanes have ended. The build
+(`pnpm:install` to `pnpm:vitest`). `pytest:coverage` combines the coverage data of
+every pytest step, so it runs once both Python lanes have ended, and `e2e` runs
+after the parallel lanes drain so Playwright does not contend with CPU-torch
+subprocesses or Vitest on 24 GiB machines. The build
 empties `webui/dist` while it runs, so the tests that read it (pytest marker
 `spa_build`) are not in `pytest:tests` but in `api-docs`, after the build in
 its lane; and fetches into a shallow clone (CI) take turns
@@ -49,9 +52,9 @@ the test suites the owner's settings file.
 | `ruff:extensions` | ruff on every `extensions-builtin/*/scripts` and `extensions-builtin/*/lib_*`, the modules at an extension's root (`extensions-builtin/*/*.py`: `install.py`, `preload.py`, `sd_forge_lora/networks.py`, ...) and `sd-webui-joycaption-modified/joycaption_lib` (strict rules on the files Remi wrote, such as `lib_controlnet/unit_param.py`; legacy rules on the rest) |
 | `ruff:core` | ruff with the legacy rules on the upstream-origin runtime Remi edits: `modules/`, `modules_forge/` (not the vendored `packages/`), `backend/`, `scripts/`, `launch.py`, `webui.py` |
 | `ruff:syntax` | the whole tree (including vendored third-party code) for syntax errors (`E9`) and Gradio imports (`TID251`) |
-| `pytest:tests` | `pytest tests -m "not spa_build" --cov=remi`, failing below 92 % line coverage of `remi/` (measured 93.6 %; `tools/check_coverage.py remi`), or on a leaked resource (below) |
+| `pytest:tests` | `pytest tests -m "not spa_build" --cov=remi`, failing below 92 % line coverage of `remi/` (measured 95.4 %; `tools/check_coverage.py remi`), or on a leaked resource (below) |
 | `pytest:<extension>` | `pytest extensions-builtin/<extension>/tests`, one run per directory (they share module names); a directory that collects nothing fails |
-| `pytest:coverage` | `tools/check_coverage.py strict`: each Remi file outside `remi/` (the runtime files of `pyproject.toml`'s strict list, such as `modules/redact.py`, `modules/extra_networks_pages.py`, the ControlNet unit editor in `lib_controlnet/`, `lib_stage_scheduler/params.py`, the prompt-tools extension scripts; `tools/check_coverage.py files` lists them) must reach 90 % line coverage on its own (measured: 95.6 % to 100 %, the lowest `unit_param.py`), over the combined data of every `pytest:*` step of the run (they are tested by different suites, so every pytest step measures them); a file no suite imports counts as 0 % |
+| `pytest:coverage` | `tools/check_coverage.py strict`: each Remi file outside `remi/` (the runtime files of `pyproject.toml`'s strict list, such as `modules/redact.py`, `modules/extra_networks_pages.py`, the ControlNet unit editor in `lib_controlnet/`, `lib_stage_scheduler/params.py`, the prompt-tools extension scripts; `tools/check_coverage.py files` lists them) must reach 90 % line coverage on its own (measured: 95.8 % to 100.0 %), over the combined data of every `pytest:*` step of the run (they are tested by different suites, so every pytest step measures them); a file no suite imports counts as 0 % |
 | `contract:openapi` | `tools/export_openapi.py --check`: `webui/src/api/openapi.json` matches the server |
 | `contract:sdapi` | `tools/sdapi_contract.py`: `/sdapi/v1` still matches Forge Neo's at the last absorbed upstream commit (every upstream route and model, with the same parameters and fields; Remi may add routes; documented exceptions in its `ALLOWED`). A shallow clone (CI) fetches that commit first; only when it cannot is the step a skip with the reason |
 | `contract:settings` | `tools/dump_settings.py --check`: the SPA's settings contract matches `GET /api/v2/options` |
@@ -64,7 +67,7 @@ the test suites the owner's settings file.
 | `i18n:spa` | `src/locales/locales.test.ts`: every chrome key has a zh-CN translation with the same placeholders |
 | `pnpm:build` | `tsc -b` (app, Vite config, e2e specs) and the production build |
 | `api-docs` | `pytest tests -m spa_build`: the tests of that build (`pytest:tests`, in another lane, leaves them out), the API docs viewers it vendors (`webui/vite.config.ts`'s `apiDocs`) as the server reads them (`remi/server/api_docs.py`). Once `pnpm:build` has passed in this run, a missing viewer fails instead of skipping (`REMI_SPA_BUILT`); without a build in this run (`--skip pnpm`) they read the build there is, or skip without one |
-| `perf:bundle` | a `--manifest` build of the same sources into the log directory, checked by `webui/tools/perf/bundle.mjs --check` against `webui/tools/perf/budget.json`: the initial JS ≤ 300 KB gzip, every route and every other lazy entry ≤ 150 KB on top of it, the exempt editor chunks and the recorded exception (the default Generate route, capped); the report is `bundle.json` in the logs (`docs/research/ui-performance.md`, "Bundle") |
+| `perf:bundle` | reuses `pnpm:build`'s `webui/dist/.vite/manifest.json` when built in the same run (otherwise builds with `--manifest` into the log directory), checked by `webui/tools/perf/bundle.mjs --check` against `webui/tools/perf/budget.json`: the initial JS ≤ 300 KB gzip, every route and every other lazy entry ≤ 150 KB on top of it, the exempt editor chunks and the recorded exception (the default Generate route, capped); the report is `bundle.json` in the logs (`docs/research/ui-performance.md`, "Bundle") |
 | `pnpm:lint` | oxlint with `--deny-warnings --report-unused-disable-directives` (correctness and suspicious categories, React hooks rules, `typescript/no-explicit-any`; `webui/.oxlintrc.json`) |
 | `pnpm:vitest` | the Vitest suites (jsdom) with V8 coverage, failing below the floors in `webui/vite.config.ts` (lines 85 %, statements 79.5 %, functions 75 %, branches 69.5 %; measured 86.1 / 80.6 / 76.2 / 70.6 %) |
 | `e2e` | Playwright against the mock backend, including the axe scans |
@@ -446,14 +449,17 @@ $PYTHON tools/smoke_extensions.py [--browser] [--report docs/research/smoke/exte
   `tests/test_remi_smoke_extensions.py` checks the fixture itself (the
   installer's clone, the update check, reset and restore over it).
 
-Recorded run: `docs/research/smoke/extensions-2026-10-21.json`, 17 of 17
-checks (12 API, 5 browser).
+Recorded run: `docs/research/smoke/extensions-2026-10-26.json` (revision `2668a114`, 17 of 17
+checks: 12 API, 5 browser; earlier baseline `docs/research/smoke/extensions-2026-10-21.json` also passed 17 of 17).
 
 ### Last recorded run
 
 `--report docs/research/smoke/<date>.json` keeps every run's checks with the
 date and revision; the latest is the record.
 
+Latest real-model run: `docs/research/smoke/2026-10-27.json` (`--features --models`,
+revision `78f325d3`, MPS, Anima Turbo, the server interpreter without Gradio):
+**103 of 103 checks passed**. The latest run that also exercised `--browser` is
 `docs/research/smoke/2026-10-21.json` (`--features --models --browser`,
 revision `9b8682e5`; `uncommitted_changes` is true only for the test fix
 below and these docs, the server code is that commit's; MPS, Anima Turbo,
@@ -530,16 +536,19 @@ overhead).
 
 `.github/workflows/check.yml` runs `tools/check.sh` in two jobs: Python
 (CPU torch, `requirements.txt` + `requirements-dev.txt`, no Gradio; steps
-`env`, `ruff`, `pytest` with the coverage floors, `contract`, `i18n:server`)
-and the SPA (install, build, the bundle budget, lint, Vitest with coverage,
-Playwright with Chromium; steps `pnpm`, `i18n:spa`, `perf`, `e2e`).
+`env`, `ruff`, `pytest` with the coverage floors, `contract`, `i18n:server`,
+plus scoped `ty` typecheck) and the SPA (install, Python `.venv` for
+`api-docs`, build, `api-docs`, the bundle budget, lint, Vitest with coverage,
+Playwright with Chromium and `reducedMotion: "reduce"`; steps `pnpm`,
+`i18n:spa`, `api-docs`, `perf`, `e2e`).
 Each job runs its steps in `check.sh`'s lanes, so the Python job's two Python
 lanes run at once. The SPA job keeps the Playwright browser in the Actions
 cache, one per Playwright version, and on a hit installs only the browser's
 system libraries.
 The `legacy-ui` steps are not in CI (they need a second, Gradio, environment): they run
-locally once `tools/legacy_ui_env.sh` has built that environment. Nor is `api-docs`: the
-Python job does not build the SPA, and the SPA job has no Python. Logs and the Playwright report
+locally once `tools/legacy_ui_env.sh` has built that environment. For Linux CPU
+and NVIDIA CUDA remote validation (Modal SDK 1.6.4), see `tools/remote/README.md`
+and `tools/remote/modal_validate.py`. Logs and the Playwright report
 are uploaded when a job fails. The workflow passes `actionlint`; it runs on
 pushes to `remi`, on pull requests and by hand
 (`workflow_dispatch`), so a run exists once the branch is pushed to GitHub.
@@ -547,5 +556,5 @@ Until then the same steps run locally with the command CI uses:
 
 ```sh
 PYTHON=/path/to/gradio-free/python tools/check.sh --only env,ruff,pytest,contract,i18n:server
-tools/check.sh --only pnpm,i18n:spa,perf,e2e
+PYTHON=/path/to/gradio-free/python tools/check.sh --only pnpm,i18n:spa,api-docs,perf,e2e
 ```

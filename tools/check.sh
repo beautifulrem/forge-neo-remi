@@ -7,6 +7,7 @@
 #   tools/check.sh --list             # list the steps
 #   tools/check.sh --strict           # a skipped step (a missing optional interpreter) fails the run
 #   tools/check.sh --serial           # one step at a time, to rule out two steps getting in each other's way
+#   tools/check.sh --e2e-workers N    # override Playwright workers (sets REMI_E2E_WORKERS)
 #
 # Steps: a Gradio-free Python - ruff (Remi code strict, test suites, the built-in extensions'
 # scripts and libraries, the upstream-origin runtime, the whole tree for syntax errors and
@@ -55,10 +56,13 @@ SKIP=""
 LIST=0
 STRICT=0
 SERIAL=0
+E2E_WORKERS=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --strict) STRICT=1; shift ;;
     --serial) SERIAL=1; shift ;;
+    --e2e-workers) [ $# -ge 2 ] || { echo "--e2e-workers needs a value (see --help)" >&2; exit 2; }; E2E_WORKERS="$2"; shift 2 ;;
+    --e2e-workers=*) E2E_WORKERS="${1#*=}"; shift ;;
     --only) [ $# -ge 2 ] || { echo "--only needs a value (see --help)" >&2; exit 2; }; ONLY="$2"; shift 2 ;;
     --only=*) ONLY="${1#*=}"; shift ;;
     --skip) [ $# -ge 2 ] || { echo "--skip needs a value (see --help)" >&2; exit 2; }; SKIP="$2"; shift 2 ;;
@@ -92,8 +96,8 @@ pick_python() {
   [ -n "$fallback" ] && echo "$fallback"
 }
 
-# Python steps fail (with this message) when there is none; frontend-only runs do not need it.
-PY="$(pick_python)"
+# Python steps fail (with this message) when there is none; frontend-only and --list runs do not need it.
+PY=""
 py() {
   if [ -z "$PY" ]; then
     echo "No Python with the WebUI requirements and pytest found: set PYTHON=/path/to/python" >&2
@@ -102,30 +106,38 @@ py() {
   "$PY" "$@"
 }
 
-if [ -n "$PY" ] && "$PY" -m ruff --version >/dev/null 2>&1; then
-  RUFF=("$PY" -m ruff)
-elif command -v ruff >/dev/null 2>&1; then
-  RUFF=(ruff)
-else
-  RUFF=(uvx ruff)
-fi
-
-# The legacy ui() recorder's Gradio 4.40 interpreter (tools/legacy_ui_env.sh's default location).
+RUFF=(ruff)
 LEGACY_DEFAULT="$(cd "$ROOT/.." && pwd)/remi-gradio-env/bin/python"
-if [ -n "${REMI_LEGACY_PYTHON:-}" ]; then
-  LEGACY_PY="$REMI_LEGACY_PYTHON"
-elif [ -x "$LEGACY_DEFAULT" ]; then
-  LEGACY_PY="$LEGACY_DEFAULT"
-else
-  LEGACY_PY=""
-fi
+LEGACY_PY=""
+LOGS="${REMI_CHECK_LOGS:-}"
 
-LOGS="${REMI_CHECK_LOGS:-$(mktemp -d "${TMPDIR:-/tmp}/remi-check.XXXXXX")}"
-mkdir -p "$LOGS"
-# pytest-cov's data file goes with the logs, not into the repository.
-export COVERAGE_FILE="$LOGS/.coverage"
+if [ "$LIST" != 1 ]; then
+  PY="$(pick_python)"
+  if [ -n "$PY" ] && "$PY" -m ruff --version >/dev/null 2>&1; then
+    RUFF=("$PY" -m ruff)
+  elif command -v ruff >/dev/null 2>&1; then
+    RUFF=(ruff)
+  else
+    RUFF=(uvx ruff)
+  fi
+
+  # The legacy ui() recorder's Gradio 4.40 interpreter (tools/legacy_ui_env.sh's default location).
+  if [ -n "${REMI_LEGACY_PYTHON:-}" ]; then
+    LEGACY_PY="$REMI_LEGACY_PYTHON"
+  elif [ -x "$LEGACY_DEFAULT" ]; then
+    LEGACY_PY="$LEGACY_DEFAULT"
+  fi
+
+  LOGS="${REMI_CHECK_LOGS:-$(mktemp -d "${TMPDIR:-/tmp}/remi-check.XXXXXX")}"
+  mkdir -p "$LOGS"
+  # pytest-cov's data file goes with the logs, not into the repository.
+  export COVERAGE_FILE="$LOGS/.coverage"
+fi
 # Port of the e2e test's own mock dev server: away from a developer's `pnpm dev` (5173/5199).
 export REMI_E2E_PORT="${REMI_E2E_PORT:-5299}"
+if [ -n "$E2E_WORKERS" ]; then
+  export REMI_E2E_WORKERS="$E2E_WORKERS"
+fi
 # A real-server try (playwright.config.ts) would replace the mock suite with the few @real tests.
 unset REMI_E2E_BASE_URL REMI_E2E_GREP
 export PYTHONDONTWRITEBYTECODE=1
@@ -309,10 +321,26 @@ step i18n:server run_pytest tests/test_remi_core_zh_cn.py
 
 pnpm_in_webui() { (cd "$ROOT/webui" && pnpm "$@"); }
 
+step_queued() {
+  local name="$1" queued
+  for queued in "${QUEUED_NAMES[@]+"${QUEUED_NAMES[@]}"}"; do
+    [ "$queued" = "$name" ] && return 0
+  done
+  return 1
+}
+
+build_spa() {
+  if step_queued perf:bundle; then
+    pnpm_in_webui build --manifest
+  else
+    pnpm_in_webui build
+  fi
+}
+
 LANE=frontend
 step pnpm:install pnpm_in_webui install --frozen-lockfile
 step i18n:spa pnpm_in_webui exec vitest run src/locales
-step pnpm:build pnpm_in_webui build
+step pnpm:build build_spa
 # The tests of that build (pytest marker spa_build): the API docs viewers it vendors
 # (webui/vite.config.ts's apiDocs), as the server reads them (remi/server/api_docs.py). When this
 # run built the SPA, a missing viewer fails instead of skipping (REMI_SPA_BUILT); without a build
@@ -336,10 +364,14 @@ api_docs() {
   fi
 }
 step api-docs api_docs
-# The JS budget (scorecard dimension 5): a manifest build of the same sources, checked against
-# webui/tools/perf/budget.json (initial JS, every route and lazy entry, recorded exceptions).
+# The JS budget (scorecard dimension 5): reuses pnpm:build's manifest when built in this run,
+# otherwise runs a manifest build into the log directory, checked against webui/tools/perf/budget.json.
 bundle_budget() {
   local out="$LOGS/bundle-dist"
+  if built_this_run && [ -f "$ROOT/webui/dist/.vite/manifest.json" ]; then
+    (cd "$ROOT/webui" && node tools/perf/bundle.mjs dist --check --json "$LOGS/bundle.json")
+    return
+  fi
   pnpm_in_webui exec vite build --manifest --outDir "$out" --emptyOutDir --logLevel warn &&
     (cd "$ROOT/webui" && node tools/perf/bundle.mjs "$out" --check --json "$LOGS/bundle.json")
 }
@@ -350,6 +382,7 @@ step pnpm:vitest pnpm_in_webui exec vitest run --coverage
 # the config's own reporters run, which also write the HTML report the workflow uploads.
 E2E_REPORTER=()
 [ -n "${CI:-}" ] || E2E_REPORTER=(--reporter=line)
+LANE=e2e
 step e2e pnpm_in_webui exec playwright test ${E2E_REPORTER[@]+"${E2E_REPORTER[@]}"}
 
 # endregion
@@ -442,20 +475,23 @@ trap 'stop_lanes; trap - TERM; kill -TERM $$' TERM
 if [ ${#QUEUED_NAMES[@]} -gt 0 ]; then
   if [ "$SERIAL" = 1 ]; then
     echo "Running ${#QUEUED_NAMES[@]} steps one at a time; logs in $LOGS"
-    for lane in python suites after frontend; do
+    for lane in python suites after frontend e2e; do
       run_lane "$lane" &
       wait $!
     done
   else
     # The first line names the lanes that start at once: --only and --skip can leave a lane empty
-    # (CI's SPA job runs the frontend lane alone). after waits for both Python lanes, so it starts
-    # with the others only when neither of them has a step.
+    # (CI's SPA job runs the frontend lane alone). after waits for both Python lanes, and e2e waits
+    # for python/suites/after/frontend to drain so Playwright does not contend on 24 GiB hosts.
     at_once=""
     for lane in python suites frontend; do
       if lane_has_steps "$lane"; then at_once="${at_once:+$at_once, }$lane"; fi
     done
     if lane_has_steps after && ! lane_has_steps python && ! lane_has_steps suites; then
       at_once="${at_once:+$at_once, }after"
+    fi
+    if lane_has_steps e2e && ! lane_has_steps python && ! lane_has_steps suites && ! lane_has_steps after && ! lane_has_steps frontend; then
+      at_once="${at_once:+$at_once, }e2e"
     fi
     case "$at_once" in
       *,*,*) echo "Running ${#QUEUED_NAMES[@]} steps in three lanes at once ($at_once); logs in $LOGS" ;;
@@ -472,6 +508,8 @@ if [ ${#QUEUED_NAMES[@]} -gt 0 ]; then
     run_lane after &
     wait $!
     wait $frontend_lane
+    run_lane e2e &
+    wait $!
   fi
 fi
 

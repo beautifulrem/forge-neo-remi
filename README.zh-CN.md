@@ -27,7 +27,7 @@ Forge Neo Remi 是 [Forge Neo](https://github.com/Haoming02/sd-webui-forge-class
 - **端到端图像创作闭环。** 内置**图库看板（Boards）**、父子**资产血缘（Lineage）**追踪、像素滑块 + 结构化**参数 Diff 对比**、**查看器 RGBA 四色底板**切换（快捷键 `B`）、一键**发送到参考图**及模型感知槽位标记（`<image_1>`、`ref_image_0`、`ref_0`）、**画布原地 Staging** 局部重绘候选审阅、支持多模态参考图/BBox 与本地量化的**提示词扩写（PUP）**，以及支持 MOSS-Image、FLUX.3 布局与 Bria Fibo 2.0 VGL 2.0 的 **JSON Builder**。
 - **Anima 深度护城河与冲突安全运行时。** 完整覆盖 Anima 2B / 2.9B / 3.8B（28/40/52 层与原生 Qwen3.5 语义连接器）、跨深度 LoRA 与 ControlNet-LLLite 重映射、Control-LoRA / VACE、原生采样器、引导、空间控制与 **Anima Remi 预设**安全基线；互斥功能在浏览器和 API 任务中均会在采样前锁定或解析（[详见 Anima 集成](docs/remi-webui/usage.zh-CN.md#anima-集成)）。
 - **Worker 进程隔离、多 GPU 池与 Apple Silicon 优化。** 默认向后兼容进程内模式，同时通过 `WorkerProtocol` 提供按需隔离后端：`--worker-process`（独立子进程崩溃/OOM 自愈并消除界面/WebSocket 的 GIL 争用）、`--worker-gpus 0,1`（本机多 GPU Worker 池）与 `--worker-mlx`（可选 Apple Silicon MLX / `mflux` Sidecar）。这几个参数目前是预览：Worker 会出现在 Workers 监控里，但队列不会把任务派给它们，仍在进程内执行所有任务。内置 Apple Silicon MPS 反量化权重缓存、统一内存预算感知及可复现跨平台基准套件 `tools/perf/bench_inference.py`。
-- **稳定的扩展 API v1 与上游分叉治理。** 显式声明 `REMI_API_VERSION = "1.0"`、可选 `remi-extension.json` 清单、扩展页面**健康诊断**（加载耗时、hook/action 错误与超时统计）、公开契约验证工具包 `remi.testing`，以及自动化上游分叉债预算门禁（`tools/upstream_forks.py budget`，硬约束 `FORKED <= 6`）。
+- **稳定的扩展 API v1 与内聚运行时治理。** 显式声明 `REMI_API_VERSION = "1.0"`、可选 `remi-extension.json` 清单、扩展页面**健康诊断**（加载耗时、hook/action 错误与超时统计）、公开契约验证工具包 `remi.testing`，以及在逐步与 Forge Neo 解耦过程中保障 100% 回归固定测试覆盖的自动化治理检查（`tools/upstream_forks.py budget`）。
 - **常用能力开箱即用。** 高频扩展已作为[内置扩展](docs/remi-webui/usage.zh-CN.md#内置扩展)移植到 `remi.ui`，并由 Python、Vitest 与 Playwright + axe 自动化门禁持续守护。
 
 ## 界面截图
@@ -85,7 +85,7 @@ checkpoint、VAE 和文本编码器的目录规范请参考上游[模型下载�
 - [扩展开发指南（`remi.ui` v1、Manifest、`remi.testing`）](docs/remi-webui/extension-guide.md)
 - [安全](docs/remi-webui/security.md)与 [Docker](docker/README.md)
 - [WebUI 架构](docs/remi-webui/architecture.md)与 [Anima 功能接入点](docs/remi-architecture-notes.md)
-- [吸收 Forge Neo 更新](docs/remi-webui/upstream-absorption.md)与[上游 PR 减债路线图及代码精简审计](docs/remi-webui/upstream-pr-candidates.md)
+- [运行时谱系与 Neo 解耦说明](docs/remi-webui/upstream-absorption.md)与[内聚运行时变更清单及代码精简审计](docs/remi-webui/upstream-pr-candidates.md)
 - [推理与显存性能基准](docs/research/inference-performance.md)及 [UI 性能实测报告](docs/research/ui-performance.md)
 - [2026 Q4–2027 Q2 演进路线图](docs/research/roadmap-2026-q4.zh-CN.md)、[竞品与架构深度调研](docs/research/competitive-and-architecture-research-2026-11.zh-CN.md)及 [Anima 生成优化调研](docs/research/anima-generation-optimizations.md)
 - [文档索引](docs/remi-webui/README.md)
@@ -103,9 +103,9 @@ checkpoint、VAE 和文本编码器的目录规范请参考上游[模型下载�
 - 启动参数（含任意 `--worker-*` 参数）和相关生成参数
 - 完整控制台 traceback、界面问题的浏览器控制台输出，或最小复现
 
-Remi 特有问题请提交到 [Remi Issues](https://github.com/beautifulrem/forge-neo-remi/issues)。仅与上游有关的问题，请先在 [Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo) 中复现后再向上游反馈。
+在 Remi 中遇到的所有问题与功能诉求请直接提交到 [Remi Issues](https://github.com/beautifulrem/forge-neo-remi/issues)。Remi 正逐步与 Forge Neo 解耦，所有运行时修复均在本仓库内独立维护——请**不要**就 Remi 的行为向上游仓库提交 Issue 或 Pull Request。
 
-贡献代码时请通过 `ModelCapability` / `remi.ui` 声明模型能力，保持共享运行时改动最小化（`python tools/upstream_forks.py budget` 强制执行 `FORKED <= 6`），保留上游 CRLF 换行符（`tools/check_line_endings.py`），并补充回归测试。`tools/check.sh` 会运行全部 Python、契约、i18n、包体积预算、lint、Vitest 与 Playwright + axe 检查。
+贡献代码时请通过 `ModelCapability` / `remi.ui` 声明模型能力，将共享来源运行时的修复登记至 `tools/upstream_forks.py`（`python tools/upstream_forks.py budget` 会校验 100% 回归固定测试覆盖），保留已追踪文件的 CRLF 换行符（`tools/check_line_endings.py`），并补充回归测试。`tools/check.sh` 会运行全部 Python、契约、i18n、包体积预算、lint、Vitest 与 Playwright + axe 检查。
 
 ## 上游与致谢
 

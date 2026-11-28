@@ -239,7 +239,8 @@ A script's values may also be a JSON array: its params in argument order
   "scripts": [Script, ...],                // in render order
   "conflict_params": ["sampler.sampler_name", "core.enable_hr", ...],  // txt2img/img2img only
   "capabilities": {...},                   // the loaded model's capabilities (architecture.md "Full-stack ModelCapability")
-  "advice": [AdviceItem, ...]              // advice for the form as it is, before a run
+  "advice": [AdviceItem, ...],             // advice for the form as it is, before a run
+  "advice_params": ["core.prompt", ...]    // "owner.param" references that affect live advice
 }
 Script = {
   "id": "seed",                            // owner id: unique per tab, stable (slug of the title); never "core" or "settings"
