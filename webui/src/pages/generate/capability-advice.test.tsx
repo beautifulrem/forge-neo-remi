@@ -74,6 +74,98 @@ describe("capability-aware ScriptsPanel", () => {
     fireEvent.click(trigger)
     expect(screen.getByText("Requires Anima engine hooks (active model: Qwen-Image-2.1)")).toBeVisible()
     expect(within(drawer).getByText("Anima DAVE")).toBeVisible()
+    // Controls inside the inapplicable drawer are disabled so users cannot edit them.
+    const enableSwitch = within(drawer).getByRole("switch", { name: "Enable Anima DAVE" })
+    expect(enableSwitch).toHaveAttribute("aria-disabled", "true")
+    fireEvent.click(within(drawer).getByRole("button", { name: "Anima DAVE" }))
+    expect(within(drawer).getByLabelText("Strength", { selector: "input:not([type=range])" })).toBeDisabled()
+  })
+
+  it("disables Section ModifiedDot reset button inside inapplicable scripts and leaves store unchanged on click", () => {
+    const schema = makeSchemaWithCapabilities()
+    const store = createFormStore("cap-inapp-reset", { persistDrafts: false })
+    store.getState().load(tabOwners(schema), { capabilities: schema.capabilities })
+    store.getState().setValue("anima_dave", "strength", 0.9)
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <FormProvider formId="txt2img" store={store}>
+          <ScriptsPanel schema={schema} scriptChoice={null} />
+        </FormProvider>
+      </QueryClientProvider>,
+    )
+
+    const drawer = document.querySelector("[data-slot=inapplicable-scripts]") as HTMLElement
+    expect(drawer).toBeTruthy()
+    fireEvent.click(within(drawer).getByRole("button", { name: /Not applicable for active model/ }))
+
+    const resetButton = within(drawer).getByRole("button", { name: "Reset Anima DAVE to default" })
+    expect(resetButton).toBeDisabled()
+    fireEvent.click(resetButton)
+    expect(store.getState().values.anima_dave?.strength).toBe(0.9)
+  })
+
+  it("filters inapplicable selectable scripts from the dropdown and surfaces their reason", async () => {
+    const base = makeSchemaWithCapabilities()
+    const inapplicableSelectable: ScriptSchema = {
+      id: "anima_xyz",
+      title: "Anima XYZ Matrix",
+      kind: "selectable",
+      section: "scripts",
+      order: 10,
+      requires_capabilities: ["anima_hooks"],
+      applicable: false,
+      inapplicable_reason: "Requires Anima engine hooks (active model: Qwen-Image-2.1)",
+      visible_if: { param: "core.script", eq: "Anima XYZ Matrix" },
+      layout: {
+        type: "column",
+        children: [{ type: "toggle", name: "grid", label: "Draw grid" }],
+      },
+      defaults: { grid: true },
+    }
+    const schema: TabSchema = { ...base, scripts: [...base.scripts, inapplicableSelectable] }
+    const store = createFormStore("cap-selectable-test", { persistDrafts: false })
+    store.getState().load(tabOwners(schema), { capabilities: schema.capabilities })
+    const scriptChoice = {
+      type: "choice" as const,
+      name: "script",
+      label: "Script",
+      choices: [
+        { value: "None", label: "None" },
+        { value: "X/Y/Z plot", label: "X/Y/Z plot" },
+        { value: "Anima XYZ Matrix", label: "Anima XYZ Matrix" },
+      ],
+    }
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const { rerender } = render(
+      <QueryClientProvider client={client}>
+        <FormProvider formId="txt2img" store={store}>
+          <ScriptsPanel schema={schema} scriptChoice={scriptChoice} />
+        </FormProvider>
+      </QueryClientProvider>,
+    )
+
+    const scriptSection = screen.getByRole("region", { name: "Script" })
+    const inapplicableNotice = scriptSection.querySelector("[data-slot=inapplicable-selectable-scripts]") as HTMLElement
+    expect(inapplicableNotice).toBeTruthy()
+    expect(within(inapplicableNotice).getByText("Anima XYZ Matrix")).toBeVisible()
+    expect(within(inapplicableNotice).getByText(/Requires Anima engine hooks/)).toBeVisible()
+
+    // Open the Script dropdown: the inapplicable script is filtered out while None and X/Y/Z plot remain.
+    fireEvent.click(within(scriptSection).getByRole("combobox", { name: "Script" }))
+    expect(await screen.findByRole("option", { name: "X/Y/Z plot" })).toBeInTheDocument()
+    expect(screen.queryByRole("option", { name: "Anima XYZ Matrix" })).not.toBeInTheDocument()
+
+    // If an inapplicable selectable script was already selected (e.g. from a draft), its controls are disabled.
+    act(() => store.getState().setValue("core", "script", "Anima XYZ Matrix"))
+    rerender(
+      <QueryClientProvider client={client}>
+        <FormProvider formId="txt2img" store={store}>
+          <ScriptsPanel schema={schema} scriptChoice={scriptChoice} />
+        </FormProvider>
+      </QueryClientProvider>,
+    )
+    expect(within(scriptSection).getByRole("switch", { name: "Draw grid" })).toHaveAttribute("aria-disabled", "true")
   })
 })
 

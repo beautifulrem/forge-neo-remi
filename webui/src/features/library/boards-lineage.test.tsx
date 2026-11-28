@@ -1,11 +1,13 @@
 import { QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api } from "@/api/endpoints"
 import { tabSchema } from "@/api/mock/fixtures"
 import { queryClient } from "@/api/queries"
 import type { GalleryItem } from "@/api/types"
 import type { ResultItem } from "@/features/gallery/session-store"
+import { i18n } from "@/i18n"
+import zhCN from "@/locales/zh-CN.json"
 import { getFormStore } from "@/ui/form-store"
 import { tabOwners } from "@/ui/tab"
 import { Lightbox } from "@/features/lightbox/Lightbox"
@@ -152,5 +154,56 @@ describe("Gallery Boards, Lineage & Lightbox RGBA 4-backdrop", () => {
     expect(document.querySelector('[data-backdrop="checker"]')).toBeInTheDocument()
     fireEvent.keyDown(dialog, { key: "B" })
     expect(document.querySelector('[data-backdrop="black"]')).toBeInTheDocument()
+  })
+
+  it("translates the target tab name when loading a source job", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          file_id: "cur-1",
+          item: { file_id: "cur-1", relation: "self", depth: 0, job_id: "job-77", name: "current.png" },
+          ancestors: [],
+          siblings: [],
+          descendants: [],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    )
+    vi.spyOn(api.jobs, "get").mockResolvedValue({
+      id: "job-77",
+      seq: 77,
+      tab: "img2img",
+      status: "completed",
+      created_at: "",
+      outputs: [],
+      priority: 0,
+      forever: false,
+      starred: false,
+      replayable: true,
+      notes: [],
+      warnings: [],
+      core: { prompt: "from job" },
+      scripts: {},
+      layout_hash: "h",
+      schema_version: 1,
+    })
+    getFormStore("img2img").getState().load(tabOwners(tabSchema("img2img")))
+    const { toast } = await import("sonner")
+    const success = vi.spyOn(toast, "success")
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <LineageStrip item={ITEM} onClose={() => {}} />
+        </QueryClientProvider>,
+      )
+      fireEvent.click(await screen.findByRole("button", { name: zhCN["Load source job"] }))
+      await waitFor(() =>
+        expect(success).toHaveBeenCalledWith(zhCN["Source job loaded into {{tab}}"].replace("{{tab}}", zhCN.img2img), undefined),
+      )
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
   })
 })

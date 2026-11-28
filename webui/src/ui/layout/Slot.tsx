@@ -48,7 +48,13 @@ export function Slot({ section }: { section: string }) {
   const scripts = use(ScriptsContext)
   const slots = useFormState((s) => s.index.slots)
   // Non-applicable scripts move into the quiet "Not applicable for active model" drawer in ScriptsPanel.
-  const placed = scriptsForSlot(scripts, section, slots).filter((script) => script.applicable !== false)
+  const allPlaced = scriptsForSlot(scripts, section, slots).filter((script) => script.applicable !== false)
+  const visibleMask = useFormState((s) =>
+    allPlaced
+      .map((script) => (script.layout && evaluate(script.visible_if, script.id, (o, n) => s.values[o]?.[n]) ? "1" : "0"))
+      .join(""),
+  )
+  const placed = allPlaced.filter((_, index) => visibleMask[index] === "1")
   if (placed.length === 0) return null
   return (
     <div className="flex flex-col gap-3" data-slot-section={section}>

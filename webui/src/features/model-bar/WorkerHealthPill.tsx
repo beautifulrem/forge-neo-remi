@@ -1,56 +1,19 @@
 /**
  * Compact Worker / Multi-GPU / MLX health pill in the Model Bar.
- * Talks to `GET /api/v2/workers` cleanly (gracefully hides when unavailable
- * on older servers or unit tests without worker endpoints).
+ * Shares `keys.workers` (`GET /api/v2/workers`) with DiagnosticsView via the typed OpenAPI client.
  */
 import { useQuery } from "@tanstack/react-query"
 import { Cpu } from "@/components/icons"
 import { useId } from "react"
 import { useTranslation } from "react-i18next"
-import { apiUrl, MOCK } from "@/api/http"
+import { ApiError, RequestError } from "@/api/http"
+import { workersQuery } from "@/api/queries"
 import { Button } from "@/components/ui/button"
+import { LoadFailed } from "@/components/LoadFailed"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { serverText } from "@/features/errors/error-text"
 import { cn } from "@/lib/utils"
-import { type WorkersStatus, workersSummary } from "./model-badges"
-
-const MOCK_WORKERS: WorkersStatus = {
-  mode: "inprocess",
-  workers: [
-    {
-      worker_id: "worker-0",
-      state: "ready",
-      backend: "pytorch",
-      device: "mps",
-      gpu_name: "Apple Silicon Unified",
-      vram_total_mb: 24576,
-      vram_free_mb: 16384,
-      loaded_model: "animagine-xl-4.0.safetensors",
-      jobs_completed: 12,
-      jobs_failed: 0,
-      restarts: 0,
-    },
-  ],
-  mlx: {
-    available: false,
-    platform_supported: true,
-    unified_memory_mb: 24576,
-    supported_families: ["flux3", "qwen21", "zimage"],
-    reason: "Optional sidecar idle",
-  },
-}
-
-async function fetchWorkers(signal?: AbortSignal): Promise<WorkersStatus | null> {
-  if (MOCK) return MOCK_WORKERS
-  try {
-    const response = await fetch(apiUrl("/workers"), { headers: { Accept: "application/json" }, signal })
-    if (!response.ok) return null
-    const data = (await response.json()) as unknown
-    if (!data || typeof data !== "object" || !Array.isArray((data as WorkersStatus).workers)) return null
-    return data as WorkersStatus
-  } catch {
-    return null
-  }
-}
+import { workersSummary } from "./model-badges"
 
 function formatMemGb(mb: number | null | undefined): string | null {
   if (typeof mb !== "number" || !Number.isFinite(mb) || mb <= 0) return null
@@ -78,16 +41,41 @@ const STATE_LABELS: Record<string, string> = {
 }
 
 export function WorkerHealthPill({ className }: { className?: string }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const id = useId()
-  const { data } = useQuery({
-    queryKey: ["workers"],
-    queryFn: ({ signal }) => fetchWorkers(signal),
-    staleTime: 30_000,
-    retry: false,
-  })
+  const { data, error, isError, refetch, isFetching } = useQuery(workersQuery)
 
-  if (!data || data.workers.length === 0) return null
+  if (isError && !data) {
+    // Older servers (404) or offline/unmocked environments hide the optional pill cleanly;
+    // unexpected server failures (e.g. 500) stay visible with retry instead of disappearing silently.
+    if (error instanceof RequestError || (error instanceof ApiError && error.status === 404)) return null
+    return (
+      <Popover>
+        <PopoverTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn("gap-1.5 px-1.5 font-mono text-xs font-normal text-muted-foreground hover:text-foreground", className)}
+            />
+          }
+        >
+          <span className="sr-only">{t("Worker status")}</span>
+          <span aria-hidden data-slot="worker-alert-dot" className="size-1.5 shrink-0 rounded-full bg-destructive" />
+          <Cpu className="size-3.5 shrink-0" aria-hidden />
+          <span className="tabular-nums">GPU</span>
+        </PopoverTrigger>
+        <PopoverContent aria-labelledby={`${id}-err-title`} align="end" className="w-[min(22rem,calc(100vw-2rem))] gap-2.5 p-3">
+          <p id={`${id}-err-title`} className="text-sm font-semibold">
+            {t("Inference workers")}
+          </p>
+          <LoadFailed error={error} retrying={isFetching} onRetry={() => void refetch()} />
+        </PopoverContent>
+      </Popover>
+    )
+  }
+
+  if (!data || !Array.isArray(data.workers) || data.workers.length === 0) return null
   const summary = workersSummary(data)
 
   return (
@@ -121,6 +109,7 @@ export function WorkerHealthPill({ className }: { className?: string }) {
           </p>
           <span className="font-mono text-[0.6875rem] text-muted-foreground">{t(MODE_LABELS[data.mode] ?? data.mode)}</span>
         </div>
+        {data.note ? <p className="text-[0.6875rem] leading-snug text-muted-foreground">{serverText(data.note, i18n.language)}</p> : null}
         <ul className="flex flex-col gap-2">
           {data.workers.map((worker) => {
             const totalGb = formatMemGb(worker.vram_total_mb)
@@ -141,7 +130,14 @@ export function WorkerHealthPill({ className }: { className?: string }) {
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center justify-between font-mono text-[0.6875rem] text-muted-foreground tabular-nums">
                       <span>{freeGb ? t("{{free}} free of {{total}}", { free: freeGb, total: totalGb }) : totalGb}</span>
-                      {typeof worker.jobs_completed === "number" ? <span>{t("{{count}} done", { count: worker.jobs_completed })}</span> : null}
+                      <span className="flex items-center gap-2">
+                        {typeof worker.jobs_completed === "number" ? <span>{t("{{count}} done", { count: worker.jobs_completed })}</span> : null}
+                        {typeof worker.jobs_failed === "number" && worker.jobs_failed > 0 ? (
+                          <span className="text-destructive">
+                            {t("{{label}}: ", { label: t("Failed") })}{worker.jobs_failed}
+                          </span>
+                        ) : null}
+                      </span>
                     </div>
                     {usedRatio !== null ? (
                       <div className="h-1 w-full overflow-hidden rounded-full bg-background">
@@ -149,6 +145,11 @@ export function WorkerHealthPill({ className }: { className?: string }) {
                       </div>
                     ) : null}
                   </div>
+                ) : null}
+                {worker.current_job_id ? (
+                  <p className="truncate font-mono text-[0.6875rem] text-muted-foreground">
+                    {t("{{label}}: ", { label: t("Running") })}{worker.current_job_id}
+                  </p>
                 ) : null}
               </li>
             )

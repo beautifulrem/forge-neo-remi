@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils"
 import { getFormStore } from "@/ui/form-store"
 import { lockNote } from "@/ui/locks"
 import { type LineageNode, lineageQuery } from "./boards-api"
+import { CATEGORY_LABELS } from "./labels"
 import { openInPngInfo } from "./queries"
 
 type LineageStripProps = {
@@ -96,7 +97,7 @@ export function LineageStrip({ item, onSelectImage, onClose }: LineageStripProps
       const { locked } = await deliver(tab, entries, {})
       onClose()
       const note = lockNote(getFormStore(tab).getState().index, locked)
-      toast.success(t("Source job loaded into {{tab}}", { tab }), note ? { description: note } : undefined)
+      toast.success(t("Source job loaded into {{tab}}", { tab: t(CATEGORY_LABELS[tab]) }), note ? { description: note } : undefined)
     } catch (error) {
       toast.error(t("Could not load source job"), { description: errorText(error) })
     } finally {

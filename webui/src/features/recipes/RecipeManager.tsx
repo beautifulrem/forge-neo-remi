@@ -5,11 +5,12 @@
  * Lazily loaded.
  */
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query"
-import { BookOpen, ClipboardPaste, Download, Plus, Search, Trash2, Upload } from "@/components/icons"
+import { BookOpen, ClipboardPaste, Download, Pencil, Plus, Search, Trash2, Upload } from "@/components/icons"
 import { useDeferredValue, useRef, useState } from "react"
 import { useRouteParams, useRouteSearch } from "@/app/route-params"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { queryClient, schemaQuery } from "@/api/queries"
 import type { FormTab } from "@/api/types"
 import { Segmented } from "@/components/Segmented"
 import {
@@ -27,13 +28,15 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
 import { errorText } from "@/features/errors/error-text"
+import { PRESET_LABELS, presetLabel } from "@/features/model-bar/model-options"
 import { noteText } from "@/features/queue/notes"
 import { noteLines } from "@/lib/toast"
 import { cn } from "@/lib/utils"
+import { ensureSchemaLoaded, schemaSettled } from "@/pages/generate/use-form-loader"
 import { getFormStore } from "@/ui/form-store"
 import { lockNote } from "@/ui/locks"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
-import { applyRecipeApi, createRecipeApi, deleteRecipeApi, exportRecipesApi, importRecipesApi, recipesQuery, refreshRecipes } from "./api"
+import { applyRecipeApi, createRecipeApi, deleteRecipeApi, exportRecipesApi, importRecipesApi, recipesQuery, refreshRecipes, updateRecipeApi } from "./api"
 import { CATEGORY_LABELS } from "@/features/library/labels"
 import { appliedRecipeValues, applyRecipeEntries, type CapturedOverrides, captureTabOverrides, conflictOverrides, countRecipeParams, recipeHighlights } from "./capture"
 import type { Recipe } from "./types"
@@ -41,7 +44,12 @@ import { LoadFailed } from "@/components/LoadFailed"
 import { useLoadFailure } from "@/api/load-failure"
 import { recipeFileName } from "./file-name"
 
-const FAMILIES = ["", "anima", "qwen21", "flux3", "moss", "zimage", "sdxl"] as const
+const PRIORITY_FAMILIES = ["anima", "qwen21", "flux3", "moss", "fibo"] as const
+const FAMILIES = [
+  "",
+  ...PRIORITY_FAMILIES,
+  ...Object.keys(PRESET_LABELS).filter((id) => !(PRIORITY_FAMILIES as readonly string[]).includes(id)),
+] as const
 
 function downloadJson(filename: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
@@ -71,6 +79,12 @@ export function RecipeManager() {
   const [modelFamily, setModelFamily] = useState("")
   const [tagsText, setTagsText] = useState("")
   const [deleting, setDeleting] = useState<Recipe | null>(null)
+  const [editing, setEditing] = useState<Recipe | null>(null)
+  const editNameRef = useRef<HTMLInputElement>(null)
+  const [editName, setEditName] = useState("")
+  const [editDescription, setEditDescription] = useState("")
+  const [editModelFamily, setEditModelFamily] = useState("")
+  const [editTagsText, setEditTagsText] = useState("")
   const importInputRef = useRef<HTMLInputElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -122,6 +136,17 @@ export function RecipeManager() {
     onError: (error) => toast.error(t("Could not save recipe"), { description: errorText(error) }),
   })
 
+  const update = useMutation({
+    mutationFn: ({ id, ...body }: { id: string; name: string; description: string; model_family: string | null; tags: string[] }) =>
+      updateRecipeApi(id, body),
+    onSuccess: () => {
+      refreshRecipes()
+      setEditing(null)
+      toast.success(t("Recipe saved"))
+    },
+    onError: (error) => toast.error(t("Could not save recipe"), { description: errorText(error) }),
+  })
+
   const remove = useMutation({
     mutationFn: (id: string) => deleteRecipeApi(id),
     onSuccess: () => {
@@ -134,7 +159,10 @@ export function RecipeManager() {
 
   const apply = useMutation({
     mutationFn: async (recipe: Recipe) => {
-      const store = getFormStore(recipe.tab).getState()
+      const formStore = getFormStore(recipe.tab)
+      if (formStore.getState().revision === 0) ensureSchemaLoaded(formStore, await queryClient.ensureQueryData(schemaQuery(recipe.tab)))
+      await schemaSettled(formStore)
+      const store = formStore.getState()
       // the server checks conflicts and capabilities: a failed apply is reported, not replaced by a local one
       const res = await applyRecipeApi(recipe.id, {
         tab: recipe.tab,
@@ -220,6 +248,7 @@ export function RecipeManager() {
               key={item || "all"}
               type="button"
               aria-pressed={family === item}
+              title={item ? presetLabel(item) : undefined}
               onClick={() => setFamily(item)}
               className={cn(
                 "h-7 rounded-sm px-2 text-xs font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-focus-ring",
@@ -350,6 +379,22 @@ export function RecipeManager() {
                       variant="ghost"
                       size="icon-sm"
                       className="size-7 text-muted-foreground hover:text-foreground"
+                      aria-label={t("Edit {{name}}", { name: recipe.name })}
+                      title={t("Edit")}
+                      onClick={() => {
+                        setEditing(recipe)
+                        setEditName(recipe.name)
+                        setEditDescription(recipe.description ?? "")
+                        setEditModelFamily(recipe.model_family ?? "")
+                        setEditTagsText((recipe.tags ?? []).join(", "))
+                      }}
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="size-7 text-muted-foreground hover:text-foreground"
                       aria-label={t("Export this recipe")}
                       title={t("Export this recipe")}
                       onClick={() => downloadJson(recipeFileName(recipe), { version: 1, recipes: [recipe] })}
@@ -447,6 +492,58 @@ export function RecipeManager() {
               </Button>
               <Button type="submit" size="sm" disabled={!name.trim() || save.isPending || !capture?.overrides}>
                 {t("Save recipe")}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent className="sm:max-w-lg" initialFocus={editNameRef}>
+          <DialogHeader>
+            <DialogTitle>{t("Edit {{name}}", { name: editing?.name ?? "" })}</DialogTitle>
+          </DialogHeader>
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={(event) => {
+              event.preventDefault()
+              if (!editing || !editName.trim() || update.isPending) return
+              update.mutate({
+                id: editing.id,
+                name: editName.trim(),
+                description: editDescription.trim(),
+                model_family: editModelFamily.trim() || null,
+                tags: editTagsText
+                  .split(",")
+                  .map((tag) => tag.trim())
+                  .filter(Boolean),
+              })
+            }}
+          >
+            <label className="flex flex-col gap-1 text-xs font-medium">
+              {t("Recipe name")}
+              <Input ref={editNameRef} value={editName} onChange={(event) => setEditName(event.target.value)} placeholder={t("Recipe name")} className="h-8" required />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-medium">
+              {t("Description")}
+              <Input value={editDescription} onChange={(event) => setEditDescription(event.target.value)} placeholder={t("Description")} className="h-8" />
+            </label>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label className="flex flex-col gap-1 text-xs font-medium">
+                {t("Model family")}
+                <Input value={editModelFamily} onChange={(event) => setEditModelFamily(event.target.value)} placeholder="anima / qwen21 / flux3" className="h-8" />
+              </label>
+              <label className="flex flex-col gap-1 text-xs font-medium">
+                {t("Tags (comma-separated)")}
+                <Input value={editTagsText} onChange={(event) => setEditTagsText(event.target.value)} placeholder="turbo, portrait" className="h-8" />
+              </label>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(null)}>
+                {t("Cancel")}
+              </Button>
+              <Button type="submit" size="sm" disabled={!editName.trim() || update.isPending}>
+                {t("Save")}
               </Button>
             </DialogFooter>
           </form>

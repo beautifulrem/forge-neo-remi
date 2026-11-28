@@ -10,7 +10,7 @@ import type { ResultItem } from "@/features/gallery/session-store"
 import { t } from "@/i18n"
 import { applyRemoved, applyStars, batches, galleryKeys, MAX_BATCH, PAGE_SIZE, refreshFacets, refreshGallery } from "./cache"
 import { errorText } from "@/features/errors/error-text"
-import { boardKeys, boardsQuery, lineageQuery, listBoardGalleryPage, refreshBoards } from "./boards-api"
+import { boardKeys, boardsQuery, lineageQuery, refreshBoards } from "./boards-api"
 import type { ExtendedGalleryQuery } from "./filters"
 
 export { boardKeys, boardsQuery, galleryKeys, lineageQuery, MAX_BATCH, PAGE_SIZE, refreshBoards }
@@ -19,9 +19,7 @@ export const galleryListQuery = (query: ExtendedGalleryQuery) =>
   infiniteQueryOptions({
     queryKey: galleryKeys.list(query),
     queryFn: ({ pageParam, signal }) =>
-      query.board_id
-        ? listBoardGalleryPage({ ...query, limit: PAGE_SIZE, ...(pageParam ? { cursor: pageParam } : {}) }, signal)
-        : api.gallery.list({ ...query, limit: PAGE_SIZE, ...(pageParam ? { cursor: pageParam } : {}) }, signal),
+      api.gallery.list({ ...query, limit: PAGE_SIZE, ...(pageParam ? { cursor: pageParam } : {}) }, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (page) => page.next_cursor ?? undefined,
     staleTime: 15_000,
@@ -74,6 +72,7 @@ export async function removeOutputs(ids: readonly string[], deleteFiles: boolean
   } finally {
     applyRemoved(done)
     refreshFacets()
+    refreshBoards()
   }
 }
 

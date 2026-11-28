@@ -8,6 +8,8 @@ import { useProgress } from "@/api/progress"
 import { keys, queryClient } from "@/api/queries"
 import { i18n } from "@/i18n"
 import zhCN from "@/locales/zh-CN.json"
+import { navigate } from "@/app/router"
+import { getFormStore } from "@/ui/form-store"
 import ModelBar, { MODULES_HELP_URL } from "./ModelBar"
 import { WorkerHealthPill } from "./WorkerHealthPill"
 
@@ -261,5 +263,58 @@ describe("model bar loading stage", () => {
     const statuses = await screen.findAllByRole("status")
     expect(statuses.some((status) => status.textContent === "Loading")).toBe(true)
     expect(statuses.some((status) => status.textContent === "loading")).toBe(false)
+  })
+})
+
+describe("model badges route reactivity", () => {
+  beforeEach(() => {
+    queryClient.setQueryData(keys.app, structuredClone(bootstrap))
+    queryClient.setQueryData(keys.models, models)
+    vi.spyOn(api, "app").mockResolvedValue(structuredClone(bootstrap))
+  })
+  afterEach(() => {
+    getFormStore("txt2img").getState().setCapabilities(null)
+    getFormStore("img2img").getState().setCapabilities(null)
+    vi.restoreAllMocks()
+    queryClient.clear()
+  })
+
+  it("updates capability badges immediately when navigating between txt2img and img2img", async () => {
+    getFormStore("txt2img").getState().setCapabilities({
+      preset: "xl",
+      dit_name: null,
+      engine_label: "SDXL",
+      capabilities: [],
+      max_references: 0,
+      reference_slot_format: null,
+      supports_rgba: false,
+      supports_control_blocks: false,
+      badges: ["Diffusers"],
+    })
+    getFormStore("img2img").getState().setCapabilities({
+      preset: "qwen21",
+      dit_name: "qwen21",
+      engine_label: "Qwen-Image-2.1",
+      capabilities: ["rgba_output"],
+      max_references: 10,
+      reference_slot_format: "<image_{i}>",
+      supports_rgba: true,
+      supports_control_blocks: true,
+      badges: ["Turbo", "RGBA"],
+    })
+
+    act(() => navigate({ name: "generate", tab: "txt2img" }))
+    renderBar()
+    const badges = document.querySelector('[data-slot="model-badges"]') as HTMLElement
+    expect(badges).toHaveTextContent("Diffusers")
+    expect(badges).not.toHaveTextContent("RGBA")
+
+    act(() => navigate({ name: "generate", tab: "img2img" }))
+    await waitFor(() => {
+      const updated = document.querySelector('[data-slot="model-badges"]') as HTMLElement
+      expect(updated).toHaveTextContent("Turbo")
+      expect(updated).toHaveTextContent("RGBA")
+      expect(updated).not.toHaveTextContent("Diffusers")
+    })
   })
 })

@@ -429,8 +429,9 @@ describe("Recipes capture and manager UI", () => {
   it("counts one imported recipe in the singular", async () => {
     const { toast } = await import("sonner")
     const success = vi.spyOn(toast, "success")
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
-      if (init?.method === "POST") return Response.json({ added: 1, updated: 0, skipped: 0, items: [SAMPLE_RECIPE] })
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const method = init?.method ?? (input instanceof Request ? input.method : "GET")
+      if (method === "POST") return Response.json({ added: 1, updated: 0, skipped: 0, items: [SAMPLE_RECIPE] })
       return Response.json({ items: [SAMPLE_RECIPE], total: 1 })
     })
     const { container } = render(
@@ -500,5 +501,75 @@ describe("Recipes capture and manager UI", () => {
     await waitFor(() => expect(error).toHaveBeenCalled())
     expect(success).not.toHaveBeenCalled()
     expect(getFormStore("txt2img").getState().values.core?.cfg_scale).toBe(7)
+  })
+
+  it("loads and settles an unopened target tab schema before calling /recipes/{id}/apply", async () => {
+    const schema = tabSchema("img2img")
+    const defaults = tabOwners(schema).find((spec) => spec.owner === "core")!.defaults
+    getFormStore("img2img").setState({ revision: 0, values: { core: { ...defaults, denoising_strength: 0.42 } } })
+    const img2imgRecipe: Recipe = { ...SAMPLE_RECIPE, id: "r-img", tab: "img2img" }
+    let applyPayload: { tab?: string; core?: Record<string, unknown> } | null = null
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (url.includes("/schema/img2img")) return Response.json(schema)
+      if (url.includes("/actions/core/__conflicts__")) return Response.json({})
+      if (url.includes("/recipes/r-img/apply")) {
+        applyPayload = JSON.parse(await (input as Request).clone().text()) as { tab?: string; core?: Record<string, unknown> }
+        return Response.json({ recipe: img2imgRecipe, tab: "img2img", patch: {}, core: img2imgRecipe.core_patch, scripts: img2imgRecipe.scripts_patch, conflicts: {}, warnings: [] })
+      }
+      return Response.json({ items: [img2imgRecipe], total: 1 })
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    await screen.findByText("Qwen Turbo 8-step")
+    fireEvent.click(screen.getByRole("button", { name: "Apply recipe" }))
+    await waitFor(() => expect(applyPayload).not.toBeNull())
+    expect(applyPayload!.core?.denoising_strength).toBe(0.42)
+    expect(getFormStore("img2img").getState().revision).toBe(1)
+  })
+
+  it("edits a recipe via PATCH /api/v2/recipes/{id} and exposes canonical family filter chips", async () => {
+    let recipes = [SAMPLE_RECIPE]
+    let patchBody: Record<string, unknown> | null = null
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request
+      const url = new URL(req.url, "http://x")
+      if (url.pathname.endsWith("/recipes/r1") && req.method === "PATCH") {
+        patchBody = JSON.parse(await req.clone().text()) as Record<string, unknown>
+        const updated = { ...SAMPLE_RECIPE, ...patchBody } as Recipe
+        recipes = [updated]
+        return Response.json(updated)
+      }
+      return Response.json({ items: recipes, total: recipes.length })
+    })
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RecipeManager />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText("Qwen Turbo 8-step")).toBeInTheDocument()
+
+    // Canonical family chips: xl (not sdxl), flux, klein, ernie, fibo, krea, wan, lumina
+    const familyGroup = screen.getByRole("group", { name: "Model family" })
+    for (const fam of ["xl", "flux", "klein", "ernie", "fibo", "krea", "wan", "lumina"]) {
+      expect(within(familyGroup).getByRole("button", { name: fam })).toBeInTheDocument()
+    }
+    expect(within(familyGroup).queryByRole("button", { name: "sdxl" })).toBeNull()
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit Qwen Turbo 8-step" }))
+    const dialog = await screen.findByRole("dialog", { name: "Edit Qwen Turbo 8-step" })
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Recipe name" }), { target: { value: "Qwen Turbo Updated" } })
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Model family" }), { target: { value: "flux3" } })
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Tags (comma-separated)" }), { target: { value: "fast, portrait" } })
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }))
+
+    await waitFor(() => expect(patchBody).toEqual({ name: "Qwen Turbo Updated", description: "Fast 8-step setup", model_family: "flux3", tags: ["fast", "portrait"] }))
+    expect(await screen.findByText("Qwen Turbo Updated")).toBeInTheDocument()
   })
 })

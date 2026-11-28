@@ -1,79 +1,33 @@
-/** Non-node multi-stage linear pipeline types (matching backend contract #12). */
-import type { FormTab, ParamValues } from "@/api/types"
+/** Non-node multi-stage linear pipeline types aligned with `@/api/types`. */
+import type {
+  ChainListResponse as ApiChainListResponse,
+  ChainPreviewResponse,
+  ChainPreviewStage,
+  ChainStatus,
+  ChainTemplate,
+  JobChain as ApiJobChain,
+  StageKind,
+  StageRun as ApiStageRun,
+  StageSpec,
+  StageStatus,
+} from "@/api/types"
 
-export type StageKind = "prompt_upsample" | "generate" | "refine" | "finish"
-
-export type StageStatus = "pending" | "running" | "cached" | "completed" | "failed" | "skipped" | "cancelled"
-
-export type ChainStatus = "queued" | "running" | "paused" | "completed" | "failed" | "cancelled"
-
-export type StageSpec = {
-  index?: number
-  kind: StageKind
-  name?: string
-  enabled?: boolean
-  tab?: FormTab
-  core?: ParamValues
-  scripts?: Record<string, ParamValues>
-  config?: Record<string, unknown>
+export type {
+  ChainPreviewResponse,
+  ChainPreviewStage,
+  ChainStatus,
+  ChainTemplate,
+  StageKind,
+  StageSpec,
+  StageStatus,
 }
 
-export type StageRun = StageSpec & {
-  index: number
-  status: StageStatus
-  stage_hash: string
-  cached: boolean
-  job_id?: string | null
-  output_file_ids: string[]
-  output_prompt?: string | null
-  infotext?: string | null
-  error?: string | null
-  started_at?: string | null
-  finished_at?: string | null
-}
+export type StageRun = Omit<ApiStageRun, "name" | "enabled" | "tab" | "core" | "scripts" | "config"> & StageSpec
 
-export type JobChain = {
-  id: string
-  name: string
-  status: ChainStatus
-  current_stage: number
-  total_stages: number
+export type JobChain = Omit<ApiJobChain, "stages"> & {
   stages: StageRun[]
-  created_at: string
-  updated_at: string
-  started_at?: string | null
-  finished_at?: string | null
-  error?: string | null
 }
 
-export type ChainListResponse = {
+export type ChainListResponse = Omit<ApiChainListResponse, "items"> & {
   items: JobChain[]
-  next_cursor?: string | null
-  total: number
-}
-
-export type ChainPreviewStage = {
-  index: number
-  kind: StageKind
-  name: string
-  enabled: boolean
-  stage_hash: string
-  cache_hit: boolean
-  cached_outputs: string[]
-  cached_prompt?: string | null
-}
-
-export type ChainPreviewResponse = {
-  stages: ChainPreviewStage[]
-}
-
-export type ChainTemplate = {
-  id: string
-  name: string
-  description: string
-  model_family: string
-  stages: StageSpec[]
-  tags: string[]
-  created_at: string
-  updated_at: string
 }

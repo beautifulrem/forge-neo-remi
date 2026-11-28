@@ -62,7 +62,7 @@ function Popover({ open: openProp, defaultOpen = false, onOpenChange, children, 
   const [anchor, setAnchor] = React.useState<HTMLElement | null>(null)
   // when a press on the trigger (an outside press for the open popup) last closed the popover: the
   // click that follows must not open it again
-  const closedAt = React.useRef(0)
+  const closedAt = React.useRef(-Infinity)
   const popupId = React.useId()
   const setOpen = (next: boolean, details?: ChangeDetails) => {
     if (!next && details?.reason === "outside-press" && pressedOn(anchor, details.event)) closedAt.current = performance.now()

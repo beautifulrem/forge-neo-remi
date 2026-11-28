@@ -14,11 +14,13 @@ import {
   ChevronRight,
   ClipboardPaste,
   History,
+  Pause,
   Play,
   Plus,
   RotateCw,
   Save,
   Trash2,
+  XCircle,
 } from "@/components/icons"
 import { type ComponentProps, Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -45,6 +47,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { CATEGORY_LABELS } from "@/features/library/labels"
 import { errorText, failureText, serverText } from "@/features/errors/error-text"
+import { PUP_MODE_LABELS, type PupMode } from "@/features/prompt-editor/pup"
 import { captureTabOverrides } from "@/features/recipes/capture"
 import { cn } from "@/lib/utils"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
@@ -56,9 +59,11 @@ import {
   chainTemplatesQuery,
   createChainApi,
   deleteChainTemplateApi,
+  pauseChainApi,
   previewChainApi,
   refreshChains,
   rerunChainApi,
+  resumeChainApi,
   saveChainTemplateApi,
   storeChainRun,
 } from "./api"
@@ -121,8 +126,10 @@ function StageNumber({ value, onCommit, ...props }: Omit<ComponentProps<typeof I
   )
 }
 
-/** A run still moving: it can be cancelled, not started again. */
-const ACTIVE_STATUSES = new Set(["queued", "running"])
+/** A run still moving (or paused): it can be paused/resumed or cancelled, not started again. */
+const ACTIVE_STATUSES = new Set<ChainStatus>(["queued", "running", "paused"])
+
+const PIPELINE_PUP_MODES = ["auto", "t2i", "i2i", "t2i_bbox", "vgl_json"] as const satisfies readonly PupMode[]
 
 function stepNumber(index: number): string {
   return String(index + 1).padStart(2, "0")
@@ -131,16 +138,19 @@ function stepNumber(index: number): string {
 const STARTER_IDS = new Set(STARTER_PIPELINES.map((starter) => starter.id))
 
 export function PipelineBuilder() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { name: draftName, setName, stages, setStages, activeRunId, setActiveRunId } = usePipelineDraft()
   const name = draftName ?? t(STARTER_PIPELINES[0]!.name)
   const activeRunQuery = useQuery({ ...chainRunQuery(activeRunId ?? ""), enabled: activeRunId !== null })
+  const activeRunFailure = useLoadFailure(activeRunQuery)
   const activeRun = activeRunId !== null ? (activeRunQuery.data ?? null) : null
   const followRun = (chain: JobChain) => {
     storeChainRun(chain)
     setActiveRunId(chain.id)
   }
   const [serverPreview, setServerPreview] = useState<{ sig: string; stages: ChainPreviewStage[] } | null>(null)
+  const [previewError, setPreviewError] = useState<unknown>(null)
+  const [previewNonce, setPreviewNonce] = useState(0)
   const [saveOpen, setSaveOpen] = useState(false)
   // focused through the popover (`initialFocus`), not `autoFocus`, which made it the place to give the focus back to
   const templateRef = useRef<HTMLInputElement>(null)
@@ -172,18 +182,27 @@ export function PipelineBuilder() {
   useEffect(() => {
     const controller = new AbortController()
     const timer = setTimeout(() => {
-      void previewChainApi(stages, activeRunId ?? undefined, controller.signal).then((res) => {
-        if (!controller.signal.aborted) {
-          setServerPreview(res?.stages ? { sig: stagesSignature, stages: res.stages } : null)
-        }
-      })
+      void previewChainApi(stages, activeRunId ?? undefined, controller.signal).then(
+        (res) => {
+          if (!controller.signal.aborted) {
+            setPreviewError(null)
+            setServerPreview(res?.stages ? { sig: stagesSignature, stages: res.stages } : null)
+          }
+        },
+        (error: unknown) => {
+          if (!controller.signal.aborted) {
+            setServerPreview(null)
+            setPreviewError(error)
+          }
+        },
+      )
     }, 250)
     return () => {
       clearTimeout(timer)
       controller.abort()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewKey])
+  }, [previewKey, previewNonce])
 
   const activeServerPreview = serverPreview?.sig === stagesSignature ? serverPreview.stages : null
   const plan = useMemo(
@@ -207,6 +226,26 @@ export function PipelineBuilder() {
       toast.success(t("Pipeline started"))
     },
     onError: (error) => toast.error(t("Could not start pipeline"), { description: errorText(error, { 404: t("The pipeline was deleted meanwhile.") }) }),
+  })
+
+  const pause = useMutation({
+    mutationFn: (id: string) => pauseChainApi(id),
+    onSuccess: (chain) => {
+      followRun(chain)
+      refreshChains()
+      toast.info(t("Paused"))
+    },
+    onError: (error) => toast.error(t("Action failed"), { description: errorText(error, { 404: t("The pipeline was deleted meanwhile.") }) }),
+  })
+
+  const resume = useMutation({
+    mutationFn: (id: string) => resumeChainApi(id),
+    onSuccess: (chain) => {
+      followRun(chain)
+      refreshChains()
+      toast.success(t("Pipeline started"))
+    },
+    onError: (error) => toast.error(t("Action failed"), { description: errorText(error, { 404: t("The pipeline was deleted meanwhile.") }) }),
   })
 
   const cancel = useMutation({
@@ -328,6 +367,7 @@ export function PipelineBuilder() {
 
   // the built-in starters always, then the templates the server keeps (only saved ones)
   const savedTemplates = (templates.data ?? []).filter((tpl) => !STARTER_IDS.has(tpl.id))
+  const pupModeItems = PIPELINE_PUP_MODES.map((mode) => ({ value: mode, label: t(PUP_MODE_LABELS[mode]) }))
 
   return (
     <div className="flex flex-col gap-5">
@@ -433,10 +473,41 @@ export function PipelineBuilder() {
             {t("{{cached}} cached · {{execute}} to run", { cached: cachedCount, execute: executeCount })}
           </span>
           {activeRun && ACTIVE_STATUSES.has(activeRun.status) ? (
-            <Button variant="destructive" size="sm" className="h-7 gap-1.5 px-3 text-xs" disabled={cancel.isPending} onClick={() => cancel.mutate(activeRun.id)}>
-              <Ban className="size-3.5" aria-hidden />
-              {t("Cancel pipeline")}
-            </Button>
+            <>
+              {activeRun.status === "paused" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 px-3 text-xs"
+                  disabled={resume.isPending || cancel.isPending}
+                  onClick={() => resume.mutate(activeRun.id)}
+                >
+                  <Play className="size-3.5" aria-hidden />
+                  {t("Resume")}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 px-3 text-xs"
+                  disabled={pause.isPending || cancel.isPending}
+                  onClick={() => pause.mutate(activeRun.id)}
+                >
+                  <Pause className="size-3.5" aria-hidden />
+                  {t("Pause")}
+                </Button>
+              )}
+              <Button
+                variant="destructive"
+                size="sm"
+                className="h-7 gap-1.5 px-3 text-xs"
+                disabled={cancel.isPending || pause.isPending || resume.isPending}
+                onClick={() => cancel.mutate(activeRun.id)}
+              >
+                <Ban className="size-3.5" aria-hidden />
+                {t("Cancel pipeline")}
+              </Button>
+            </>
           ) : (
             <Button
               size="sm"
@@ -452,13 +523,34 @@ export function PipelineBuilder() {
         </div>
       </div>
 
+      {activeRunId !== null && (activeRunFailure !== null || activeRunQuery.isError) ? (
+        <LoadFailed
+          error={activeRunFailure?.error ?? activeRunQuery.error}
+          retrying={activeRunFailure?.retrying ?? activeRunQuery.isFetching}
+          onRetry={() => void activeRunQuery.refetch()}
+          className="py-1"
+        />
+      ) : null}
+
+      {previewError ? (
+        <LoadFailed
+          error={previewError}
+          onRetry={() => {
+            setPreviewError(null)
+            setPreviewNonce((n) => n + 1)
+          }}
+          className="py-1"
+        />
+      ) : null}
+
       {/* Connected linear stage track */}
       <ol ref={trackRef} className="grid grid-cols-1 gap-x-4 gap-y-5 lg:grid-cols-2 xl:flex xl:items-stretch xl:gap-0">
         {stages.map((stage, index) => {
           const planned = plan[index]!
-          // the run's stage at this place only while this card still is that stage (not after a move or an edit)
+          // the run's stage at this place only while this card still is that stage (not after a move or an edit),
+          // or when that stage failed so its error stays visible on the card
           const atIndex = activeRun?.stages[index]
-          const runStage = atIndex && atIndex.kind === stage.kind && planned.decision !== "execute" ? atIndex : undefined
+          const runStage = atIndex && atIndex.kind === stage.kind && (planned.decision !== "execute" || atIndex.status === "failed") ? atIndex : undefined
           const enabled = stage.enabled !== false
           const core = stage.core ?? {}
           const sampler = stage.scripts?.sampler ?? {}
@@ -493,7 +585,12 @@ export function PipelineBuilder() {
 
                 {/* Whisper-quiet inline cache/execution status */}
                 <div className="flex items-center justify-between gap-2">
-                  {planned.decision === "cached" ? (
+                  {runStage?.status === "failed" ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-destructive">
+                      <span className="size-1.5 shrink-0 rounded-full bg-destructive" aria-hidden />
+                      {t("Failed")}
+                    </span>
+                  ) : planned.decision === "cached" ? (
                     <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success">
                       <span className="size-1.5 shrink-0 rounded-full bg-success" aria-hidden />
                       {t("Reused from cached output")}
@@ -512,8 +609,14 @@ export function PipelineBuilder() {
 
                   {runStage?.status === "completed" || runStage?.status === "cached" ? (
                     <CheckCircle2 className="size-3.5 shrink-0 text-success" aria-label={t("Stage completed")} />
+                  ) : runStage?.status === "failed" ? (
+                    <XCircle className="size-3.5 shrink-0 text-destructive" aria-label={t("Failed")} />
                   ) : null}
                 </div>
+
+                {runStage?.status === "failed" && runStage.error ? (
+                  <p className="text-xs text-destructive [overflow-wrap:anywhere]">{serverText(runStage.error, i18n.language)}</p>
+                ) : null}
 
                 {/* Stage parameters & cached preview */}
                 <div className="flex flex-1 flex-col gap-2.5 text-xs">
@@ -548,6 +651,7 @@ export function PipelineBuilder() {
                       <label className="flex flex-col gap-1">
                         <span className="text-[0.6875rem] font-medium text-muted-foreground">{t("PUP mode")}</span>
                         <Select
+                          items={pupModeItems}
                           value={String(stage.config?.mode ?? "auto")}
                           disabled={!enabled}
                           onValueChange={(value) =>
@@ -558,11 +662,11 @@ export function PipelineBuilder() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="auto">auto</SelectItem>
-                            <SelectItem value="t2i">t2i</SelectItem>
-                            <SelectItem value="i2i">i2i</SelectItem>
-                            <SelectItem value="t2i_bbox">t2i_bbox</SelectItem>
-                            <SelectItem value="vgl_json">vgl_json</SelectItem>
+                            {pupModeItems.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </label>

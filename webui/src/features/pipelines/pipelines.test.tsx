@@ -98,11 +98,13 @@ describe("PipelineBuilder UI", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = typeof input === "string" ? input : (input as Request).url
       const method = init?.method ?? (typeof input === "string" ? "GET" : (input as Request).method)
+      const readBody = async () =>
+        init?.body ? String(init.body) : input instanceof Request && method !== "GET" ? await input.clone().text() : "{}"
       if (url.includes("/chains/templates")) return new Response(JSON.stringify([]), { status: 200 })
       if (url.includes("/chains/preview")) return new Response(JSON.stringify({ stages: [] }), { status: 200 })
       if (url.endsWith("/chains") && method === "GET") return new Response(JSON.stringify({ items: [], total: 0 }), { status: 200 })
       if (url.endsWith("/chains") && method === "POST") {
-        const body = JSON.parse(String(init?.body ?? "{}")) as { name: string; stages: StageSpec[] }
+        const body = JSON.parse((await readBody()) || "{}") as { name: string; stages: StageSpec[] }
         runPayload.push(body)
         return new Response(JSON.stringify(completedRun(body.stages)), { status: 201 })
       }
@@ -143,10 +145,12 @@ describe("PipelineBuilder UI", () => {
     let created: JobChain | null = null
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = typeof input === "string" ? input : (input as Request).url
-      const method = init?.method ?? "GET"
+      const method = init?.method ?? (typeof input === "string" ? "GET" : (input as Request).method)
+      const readBody = async () =>
+        init?.body ? String(init.body) : input instanceof Request && method !== "GET" ? await input.clone().text() : "{}"
       if (url.includes("/chains/templates")) return new Response(JSON.stringify([]), { status: 200 })
       if (url.includes("/chains/preview")) {
-        const body = JSON.parse(String(init?.body ?? "{}")) as { stages: StageSpec[]; chain_id?: string }
+        const body = JSON.parse((await readBody()) || "{}") as { stages: StageSpec[]; chain_id?: string }
         previews.push(body)
         // the server says nothing is cached (say the seed is random and this is a new run)
         const stages = body.stages.map((st, index) => ({ index, kind: st.kind, name: st.name ?? "", enabled: true, stage_hash: `h${index}`, cache_hit: false, cached_outputs: [] }))
@@ -154,7 +158,7 @@ describe("PipelineBuilder UI", () => {
       }
       if (url.endsWith("/chains") && method === "GET") return new Response(JSON.stringify({ items: [], total: 0 }), { status: 200 })
       if (url.endsWith("/chains") && method === "POST") {
-        const body = JSON.parse(String(init?.body ?? "{}")) as { stages: StageSpec[] }
+        const body = JSON.parse((await readBody()) || "{}") as { stages: StageSpec[] }
         created = withStatus(completedRun(body.stages), "running", "running")
         return new Response(JSON.stringify(created), { status: 201 })
       }
@@ -318,8 +322,9 @@ describe("PipelineBuilder UI", () => {
         cancels++
         return new Promise<Response>(() => {})
       }
+      const method = init?.method ?? (input instanceof Request ? input.method : "GET")
       if (url.includes("/chains/chain-run")) return new Response(JSON.stringify(running), { status: 200 })
-      return new Response(JSON.stringify(init?.method === "POST" ? {} : []), { status: 200 })
+      return new Response(JSON.stringify(method === "POST" ? {} : []), { status: 200 })
     })
     usePipelineDraft.setState({ activeRunId: "chain-run" })
     render(
@@ -332,6 +337,104 @@ describe("PipelineBuilder UI", () => {
     await waitFor(() => expect(cancel).toBeDisabled())
     fireEvent.click(cancel)
     expect(cancels).toBe(1)
+  })
+
+  it("shows stage error details even when planned decision is execute and stage failed", async () => {
+    const failedRun: JobChain = {
+      ...completedRun(usePipelineDraft.getState().stages),
+      id: "chain-stage-fail",
+      status: "failed",
+      current_stage: 1,
+      error: "CUDA out of memory",
+    }
+    failedRun.stages[1] = { ...failedRun.stages[1]!, status: "failed", error: "CUDA out of memory", output_file_ids: [] }
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (url.includes("/chains/chain-stage-fail")) return Response.json(failedRun)
+      if (url.includes("/chains/preview")) return Response.json({ stages: [] })
+      if (url.includes("/chains")) return Response.json({ items: [failedRun], total: 1 })
+      return Response.json([])
+    })
+    usePipelineDraft.setState({ activeRunId: "chain-stage-fail" })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PipelineBuilder />
+      </QueryClientProvider>,
+    )
+    const refineCard = screen.getAllByRole("listitem").find((el) => el.dataset.stageIndex === "1")!
+    expect(refineCard).toHaveAttribute("data-cache-decision", "execute")
+    expect(await within(refineCard).findByText("Failed")).toBeInTheDocument()
+    expect(within(refineCard).getByText("CUDA out of memory")).toBeInTheDocument()
+  })
+
+  it("supports Pause and Resume controls on active and paused runs", async () => {
+    const running: JobChain = { ...completedRun(usePipelineDraft.getState().stages), id: "chain-pr", status: "running" }
+    const paused: JobChain = { ...running, status: "paused", updated_at: "2026-11-22T12:01:00Z" }
+    const resumed: JobChain = { ...running, status: "running", updated_at: "2026-11-22T12:02:00Z" }
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (url.includes("/chains/chain-pr/pause")) return Response.json(paused)
+      if (url.includes("/chains/chain-pr/resume")) return Response.json(resumed)
+      if (url.includes("/chains/chain-pr")) return Response.json(running)
+      if (url.includes("/chains/preview")) return Response.json({ stages: [] })
+      if (url.includes("/chains")) return Response.json({ items: [], total: 0 })
+      return Response.json([])
+    })
+    usePipelineDraft.setState({ activeRunId: "chain-pr" })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PipelineBuilder />
+      </QueryClientProvider>,
+    )
+    const pauseBtn = await screen.findByRole("button", { name: "Pause" })
+    fireEvent.click(pauseBtn)
+    const resumeBtn = await screen.findByRole("button", { name: "Resume" })
+    expect(screen.getByRole("button", { name: "Cancel pipeline" })).toBeInTheDocument()
+    fireEvent.click(resumeBtn)
+    await screen.findByRole("button", { name: "Pause" })
+  })
+
+  it("surfaces activeRunQuery and /chains/preview errors instead of swallowing them", async () => {
+    let failPreview = true
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url
+      if (url.includes("/chains/chain-err")) return Response.json({ detail: "run lookup failed" }, { status: 400 })
+      if (url.includes("/chains/preview")) {
+        return failPreview ? Response.json({ detail: "preview rejected" }, { status: 422 }) : Response.json({ stages: [] })
+      }
+      if (url.includes("/chains")) return Response.json({ items: [], total: 0 })
+      return Response.json([])
+    })
+    usePipelineDraft.setState({ activeRunId: "chain-err" })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PipelineBuilder />
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText("The request failed (400).")).toBeInTheDocument()
+    const previewMsg = await screen.findByText("The server rejected the request.")
+    expect(previewMsg.closest('[role="alert"]')).toBeInTheDocument()
+
+    failPreview = false
+    fireEvent.click(within(previewMsg.closest('[role="alert"]') as HTMLElement).getByRole("button", { name: "Retry" }))
+    await waitFor(() => expect(screen.queryByText("The server rejected the request.")).toBeNull())
+  })
+
+  it("displays localized PUP_MODE_LABELS on prompt_upsample stages", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json([]))
+    usePipelineDraft.setState({ stages: [defaultStage("prompt_upsample"), defaultStage("generate")] })
+    i18n.addResourceBundle("zh-CN", "chrome", zhCN, true, true)
+    await act(() => i18n.changeLanguage("zh-CN"))
+    try {
+      render(
+        <QueryClientProvider client={queryClient}>
+          <PipelineBuilder />
+        </QueryClientProvider>,
+      )
+      expect(screen.getByRole("combobox", { name: zhCN["PUP mode"] })).toHaveTextContent(zhCN.Auto)
+    } finally {
+      await act(() => i18n.changeLanguage("en"))
+    }
   })
 })
 

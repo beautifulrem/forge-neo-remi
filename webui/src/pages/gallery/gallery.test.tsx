@@ -337,4 +337,51 @@ describe("gallery page", { timeout: 20_000 }, () => {
     renderPage()
     expect(await screen.findByText("No images yet")).toBeInTheDocument()
   })
+
+  it("fetches an off-page lineage relative into Lightbox before falling back to PNG Info", async () => {
+    const offPage = item(99, { name: "parent-99.png", infotext: "off page parent\nSteps: 20, Model: anima" })
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(typeof input === "string" ? input : (input as Request).url, location.origin)
+      const path = url.pathname.replace("/api/v2", "")
+      if (path === "/gallery") return Response.json({ items: [item(1)], next_cursor: null, total: 1 })
+      if (path === "/gallery/facets") return Response.json({ models: [], categories: [], oldest: null, newest: null, total: 1, starred: 0 })
+      if (path === "/boards") return Response.json({ items: [], total: 0 })
+      if (path === "/gallery/img1/lineage") {
+        return Response.json({
+          file_id: "img1",
+          item: { file_id: "img1", relation: "self", depth: 0, name: "00001.png" },
+          ancestors: [{ file_id: "img99", relation: "init_img", depth: -1, name: "parent-99.png" }],
+          siblings: [],
+          descendants: [{ file_id: "missing-99", relation: "upscale", depth: 1, name: "missing-99.png" }],
+        })
+      }
+      if (path === "/gallery/img99") return Response.json(offPage)
+      if (path === "/gallery/img99/lineage") {
+        return Response.json({
+          file_id: "img99",
+          item: { file_id: "img99", relation: "self", depth: 0, name: "parent-99.png" },
+          ancestors: [],
+          siblings: [],
+          descendants: [{ file_id: "missing-99", relation: "upscale", depth: 1, name: "missing-99.png" }],
+        })
+      }
+      if (path === "/gallery/missing-99") return Response.json({ detail: "not found" }, { status: 404 })
+      return Response.json({})
+    })
+
+    renderPage()
+    fireEvent.click(await screen.findByRole("button", { name: "prompt number 1" }))
+    const jumpParent = await screen.findByTitle("Jump to parent-99.png")
+    fireEvent.click(jumpParent)
+
+    // Lightbox stays open and displays the fetched off-page item details.
+    expect(await screen.findByText("parent-99.png")).toBeInTheDocument()
+    expect(screen.getByRole("dialog", { name: "Image viewer" })).toBeInTheDocument()
+
+    // Clicking a relative whose fetch fails falls back to #/png-info?file=...
+    location.hash = "#/gallery"
+    fireEvent.click(await screen.findByTitle("Jump to missing-99.png"))
+    await waitFor(() => expect(location.hash).toBe("#/png-info?file=missing-99"))
+    location.hash = ""
+  })
 })

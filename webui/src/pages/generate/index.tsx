@@ -26,7 +26,7 @@ import { NetworksDrawerHost } from "@/features/networks/NetworksDrawerHost"
 import { GenerateBar } from "./GenerateBar"
 import { HistoryPane } from "./HistoryPane"
 import { useOwnRunningJob } from "./hooks"
-import { ResetFormDialog } from "./ResetFormDialog"
+import { useResetRequest } from "./reset-request"
 import { useGenerateCommands, useGenerateRuntime } from "./runtime"
 import { useGenerateShortcuts } from "./shortcuts"
 import { Stage } from "./Stage"
@@ -43,6 +43,7 @@ const ParamsPane = retryableLazy(() => loadParamsPane().then((m) => ({ default: 
 
 // The viewer's chunk loads on first open.
 const Lightbox = retryableLazy(() => import("@/features/lightbox/Lightbox").then((m) => ({ default: m.Lightbox })))
+const ResetFormDialog = retryableLazy(() => import("./ResetFormDialog").then((m) => ({ default: m.ResetFormDialog })))
 
 /** txt2img ↔ img2img: two links set as tabs on the header's bottom edge (they are navigation). */
 function ModeSwitch({ tab }: { tab: GenerateTab }) {
@@ -309,6 +310,7 @@ export default function GeneratePage({ route }: { route: Extract<Route, { name: 
   const desktop = useIsDesktop()
   const wide = useMediaQuery("(min-width: 72rem)")
   const { openViewer, viewer } = useViewer(tab)
+  const resetPending = useResetRequest((s) => s.tab !== null)
   useGenerateShortcuts(tab)
   useGenerateCommands(tab, openViewer)
 
@@ -325,7 +327,11 @@ export default function GeneratePage({ route }: { route: Extract<Route, { name: 
         <PhoneLayout tab={tab} openViewer={openViewer} />
       )}
       {viewer}
-      <ResetFormDialog />
+      {resetPending ? (
+        <Suspense fallback={null}>
+          <ResetFormDialog />
+        </Suspense>
+      ) : null}
     </>
   )
 }

@@ -5,7 +5,7 @@
  * the generation parameters.
  */
 import { ChevronDown, Expand, Radio } from "@/components/icons"
-import { type ReactNode, useEffect, useRef, useState } from "react"
+import { Suspense, type ReactNode, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { useStore } from "zustand"
 import { useClientOption } from "@/api/app-options"
@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button"
 import { useKeyboardHints, useMediaQuery } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
 import { selectedItem, useSession } from "@/features/gallery/session-store"
-import { InfotextPanel } from "@/features/infotext/InfotextPanel"
 import { formatShortcut } from "@/app/commands"
 import { ExposureSheet } from "@/features/progress/ExposureSheet"
 import { formatEta, stepText } from "@/features/progress/effects"
@@ -25,9 +24,12 @@ import { useShowsStageProgress } from "@/features/progress/stage-overlay"
 import { ResultActions } from "@/features/send-to/ResultActions"
 import { Img2imgStage } from "@/canvas"
 import { getFormStore } from "@/ui/form-store"
+import { retryableLazy } from "@/lib/retryable-lazy"
 import { useOwnRunningJob } from "./hooks"
 import { LivePreview } from "./LivePreview"
 import { viewfinderMetrics } from "./viewfinder"
+
+const InfotextPanel = retryableLazy(() => import("@/features/infotext/InfotextPanel").then((m) => ({ default: m.InfotextPanel })))
 
 /** A short window (a phone held sideways): the empty viewfinder gives up its frame's room, the progress its block. */
 const SHORT_WINDOW = "(max-height: 32rem)"
@@ -290,7 +292,12 @@ export function Stage({ tab, onOpenViewer, className, leading, trailing, toolbar
 
   // Never more than about a quarter of the stage: the image keeps the room. It scrolls only up and
   // down: the copy button's hit box reaches past the panel's 4 px of room.
-  const info = infoOpen && item && !live ? <InfotextPanel infotext={item.infotext} className="max-h-[max(4.5rem,min(12rem,25%))] shrink-0 overflow-x-hidden overflow-y-auto rounded-sm px-1 py-1.5" /> : null
+  const info =
+    infoOpen && item && !live ? (
+      <Suspense fallback={null}>
+        <InfotextPanel infotext={item.infotext} className="max-h-[max(4.5rem,min(12rem,25%))] shrink-0 overflow-x-hidden overflow-y-auto rounded-sm px-1 py-1.5" />
+      </Suspense>
+    ) : null
   const toolbarRow = toolbar ? (
     <div className="flex items-center gap-1">
       {leading}

@@ -1,9 +1,10 @@
+import { renderHook } from "@testing-library/react"
 import { toast } from "sonner"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { tabSchema } from "@/api/mock/fixtures"
 import { createFormStore } from "@/ui/form-store"
-import type { TabSchema } from "@/ui/schema"
-import { loadSchema } from "./use-form-loader"
+import type { TabSchema } from "@/api/types"
+import { loadSchema, schemaSettled, useFormLoader } from "./use-form-loader"
 
 /** The img2img mock schema with other core defaults (as after a UI preset switch). */
 function withDefaults(schema: TabSchema, defaults: Record<string, unknown>): TabSchema {
@@ -11,6 +12,7 @@ function withDefaults(schema: TabSchema, defaults: Record<string, unknown>): Tab
 }
 
 describe("loadSchema", () => {
+  afterEach(() => vi.restoreAllMocks())
   it("keeps uploads and lets untouched params follow new defaults on a reload", () => {
     const store = createFormStore("loader-test", { persistDrafts: false })
     const schema = tabSchema("img2img")
@@ -44,5 +46,33 @@ describe("loadSchema", () => {
     const store = createFormStore("loader-first", { persistDrafts: false })
     loadSchema(store, tabSchema("img2img"))
     expect(store.getState().values.core?.init_img).toBeNull()
+  })
+
+  it("refreshes advice on initial form load when hydrated drafts differ from defaults", async () => {
+    const base = tabSchema("txt2img")
+    const schema: TabSchema = {
+      ...base,
+      advice_params: ["core.cfg_scale", "sampler.steps"],
+      advice: [{ code: "qwen21.turbo_mismatch", severity: "warning", message: "Default-derived stale warning" }],
+    }
+    const store = createFormStore("loader-draft-advice", { persistDrafts: false })
+    // Simulate persisted draft values hydrated before schema load (already fixed to CFG 1 / 8 steps).
+    store.setState({ values: { core: { cfg_scale: 1 }, sampler: { steps: 8 } } })
+
+    const calls: { url: string; body: Record<string, unknown> }[] = []
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const req = input as Request
+      calls.push({ url: new URL(req.url).pathname, body: (await req.json()) as Record<string, unknown> })
+      return Response.json({ __advice__: [] })
+    })
+
+    renderHook(() => useFormLoader(store, schema))
+
+    await schemaSettled(store)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.url).toBe("/api/v2/actions/core/__advice__")
+    expect(calls[0]!.body.values).toMatchObject({ cfg_scale: 1 })
+    expect((calls[0]!.body.scripts as Record<string, Record<string, unknown>>).sampler).toMatchObject({ steps: 8 })
+    expect(store.getState().advice).toEqual([])
   })
 })

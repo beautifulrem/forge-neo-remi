@@ -22,6 +22,10 @@ export class MockSocket implements SocketLike {
 
   send(data: string) {
     const message = JSON.parse(data) as { type?: string }
+    if (message.type === "ping") {
+      this.deliver(JSON.stringify({ type: "pong" }))
+      return
+    }
     if (message.type !== "hello") return
     this.deliver(JSON.stringify({ type: "hello", features: ["events.v1", "preview.binary"], version: "remi-mock" }))
     // Like the server: a snapshot of the queue follows the hello.

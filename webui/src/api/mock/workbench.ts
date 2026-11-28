@@ -11,8 +11,7 @@
  */
 import { diffInfotext } from "@/features/compare/param-diff"
 import { computeStageHashes, STAGE_META } from "@/features/pipelines/cache-hash"
-import type { ChainTemplate, JobChain, StageRun, StageSpec } from "@/features/pipelines/types"
-import type { Recipe } from "@/features/recipes/types"
+import type { ChainTemplate, JobChain, Recipe, StageRun, StageSpec } from "../types"
 import { mockAdviceFor, mockCapabilitiesForPreset, normalizeMockPreset } from "./capabilities"
 import { bootstrap } from "./fixtures"
 import { findLibraryItem } from "./library"
@@ -35,7 +34,7 @@ const CAPABILITY_LABELS: Record<string, string> = {
   video: "Video generation",
 }
 
-type Handler = (match: RegExpExecArray, body: unknown, url: URL) => unknown | Promise<unknown>
+type Handler = (match: RegExpExecArray, body: unknown, url: URL, headers: Headers) => unknown | Promise<unknown>
 type Values = Record<string, unknown>
 
 // ---------------------------------------------------------------- recipes store
@@ -95,6 +94,7 @@ let templateSeq = 0
 let chains: JobChain[] = []
 let templates: ChainTemplate[] = []
 const stageCache = new Map<string, { outputs: string[]; prompt: string | null; infotext: string | null }>()
+const keyedChains = new Map<string, JobChain>()
 
 
 function executeMockStages(
@@ -112,7 +112,7 @@ function executeMockStages(
     const enabled = spec.enabled !== false
     const hash = hashes[index]!
     const name = spec.name?.trim() || STAGE_META[spec.kind].label
-    const tab = spec.tab ?? STAGE_META[spec.kind].defaultTab ?? "txt2img"
+    const tab = spec.tab || STAGE_META[spec.kind].defaultTab || "txt2img"
     if (!enabled) {
       return {
         ...spec,
@@ -333,6 +333,7 @@ const MOCK_DIAGNOSTICS = {
       action_timeouts: 0,
       last_error: null,
       last_error_at: null,
+      recent_errors: [],
       manifest_status: "valid",
       manifest: {
         api_version: "1.0",
@@ -345,7 +346,6 @@ const MOCK_DIAGNOSTICS = {
       manifest_errors: [],
       manifest_warnings: [],
       disabled_scripts: [],
-      disabled_reason: null,
     },
     {
       name: "sd_forge_anima_dave",
@@ -359,6 +359,7 @@ const MOCK_DIAGNOSTICS = {
       action_timeouts: 0,
       last_error: null,
       last_error_at: null,
+      recent_errors: [],
       manifest_status: "valid",
       manifest: {
         api_version: "1.0",
@@ -369,7 +370,6 @@ const MOCK_DIAGNOSTICS = {
       manifest_errors: [],
       manifest_warnings: [],
       disabled_scripts: [],
-      disabled_reason: null,
     },
     {
       name: "sd_forge_spectrum",
@@ -383,6 +383,13 @@ const MOCK_DIAGNOSTICS = {
       action_timeouts: 0,
       last_error: "Spectrum cache bypassed: incompatible with active CFG-distilled 1-step schedule",
       last_error_at: "2026-11-20T10:15:00.000Z",
+      recent_errors: [
+        {
+          kind: "hook_warning",
+          message: "Spectrum cache bypassed: incompatible with active CFG-distilled 1-step schedule",
+          timestamp: "2026-11-20T10:15:00.000Z",
+        },
+      ],
       manifest_status: "valid",
       manifest: {
         api_version: "1.0",
@@ -393,7 +400,6 @@ const MOCK_DIAGNOSTICS = {
       manifest_errors: [],
       manifest_warnings: [],
       disabled_scripts: [],
-      disabled_reason: null,
     },
     {
       // needs a newer Remi (a prerelease build): incompatible, still loaded; its reason quotes the
@@ -409,6 +415,7 @@ const MOCK_DIAGNOSTICS = {
       action_timeouts: 0,
       last_error: null,
       last_error_at: null,
+      recent_errors: [],
       manifest_status: "incompatible",
       manifest: {
         api_version: "1.0",
@@ -427,7 +434,6 @@ const MOCK_DIAGNOSTICS = {
       ],
       manifest_warnings: [],
       disabled_scripts: [],
-      disabled_reason: null,
     },
     {
       name: "legacy_gradio_plugin",
@@ -441,12 +447,12 @@ const MOCK_DIAGNOSTICS = {
       action_timeouts: 0,
       last_error: null,
       last_error_at: null,
+      recent_errors: [],
       manifest_status: "missing",
       manifest: null,
       manifest_errors: [],
       manifest_warnings: [],
-      disabled_scripts: [{ name: "legacy.py", reason: "declares ui() instead of params()" }],
-      disabled_reason: "Declares ui() (Gradio controls) instead of params()",
+      disabled_scripts: [{ kind: "script", id: "legacy", title: "legacy.py", tab: null, reason: "declares ui() instead of params()" }],
     },
   ],
 }
@@ -458,6 +464,7 @@ export function resetMockWorkbench() {
   chainSeq = 0
   templateSeq = 0
   stageCache.clear()
+  keyedChains.clear()
   templates = [] // the server lists saved templates only; the built-in starters live in the SPA
   chains = []
   boardSeq = 0
@@ -488,6 +495,24 @@ function lineageNodeFor(fileId: string, relation: string, depth: number) {
     created_at: item.created_at,
     exists: true,
   }
+}
+
+/** Coerces scalar infotext strings into numbers/booleans like `remi/library.py:_coerce_scalar`. */
+export function coerceCompareScalar(value: string | null): string | number | boolean | null {
+  if (value === null) return null
+  const text = value.trim()
+  const low = text.toLowerCase()
+  if (low === "true") return true
+  if (low === "false") return false
+  if (text !== "" && !text.includes(".") && !low.includes("e")) {
+    const intVal = Number(text)
+    if (Number.isInteger(intVal) && /^-?\d+$/.test(text)) return intVal
+  }
+  if (text !== "") {
+    const numVal = Number(text)
+    if (Number.isFinite(numVal)) return numVal
+  }
+  return value
 }
 
 function buildAdoptPatch(rawParams: Record<string, string>) {
@@ -601,7 +626,7 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
         if (tag && !item.tags.includes(tag)) return false
         if (capability && !item.capabilities.includes(capability)) return false
         if (!q) return true
-        return `${item.name} ${item.description} ${item.model_family} ${item.tags.join(" ")}`.toLowerCase().includes(q)
+        return `${item.name} ${item.description} ${item.model_family ?? ""} ${item.tags.join(" ")}`.toLowerCase().includes(q)
       })
       return { items, total: items.length }
     },
@@ -873,7 +898,10 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
   [
     "POST",
     /^\/chains$/,
-    (_m, body) => {
+    (_m, body, _url, headers) => {
+      const key = headers.get("Idempotency-Key")
+      const existing = key ? keyedChains.get(key) : undefined
+      if (existing) return existing
       const b = (body ?? {}) as { name?: string; stages?: StageSpec[]; run_now?: boolean; model_fingerprint?: string }
       const specs = Array.isArray(b.stages) ? b.stages : []
       if (specs.length === 0) throw new MockHttpError(422, { detail: "stages must not be empty" })
@@ -894,6 +922,10 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
         error: null,
       }
       chains.unshift(chain)
+      if (key) {
+        keyedChains.set(key, chain)
+        if (keyedChains.size > 100) keyedChains.delete(keyedChains.keys().next().value!)
+      }
       for (const stage of stages) {
         if (stage.status === "completed" || stage.status === "cached") {
           broadcast({
@@ -1142,6 +1174,16 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
         id_b: b.id_b ?? null,
         infotext_a: textA,
         infotext_b: textB,
+        core_diffs: diff.core_diffs.map((row) => ({
+          ...row,
+          a: coerceCompareScalar(row.a as string | null),
+          b: coerceCompareScalar(row.b as string | null),
+        })),
+        extension_diffs: diff.extension_diffs.map((row) => ({
+          ...row,
+          a: coerceCompareScalar(row.a as string | null),
+          b: coerceCompareScalar(row.b as string | null),
+        })),
         adopt_a_patch: buildAdoptPatch(diff.adopt_a_patch?.raw_params ?? {}),
         adopt_b_patch: buildAdoptPatch(diff.adopt_b_patch?.raw_params ?? {}),
       }
@@ -1157,6 +1199,9 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
     /^\/workers$/,
     () => ({
       mode: "subprocess",
+      dispatch_active: false,
+      preview: true,
+      note: "Preview only: queued jobs still run in-process (worker pool dispatch is inactive).",
       workers: workers.map((w) => ({
         ...w,
         loaded_model: String(bootstrap.options.sd_model_checkpoint ?? w.loaded_model ?? ""),
@@ -1187,7 +1232,7 @@ export const workbenchRoutes: [method: string, pattern: RegExp, handler: Handler
       worker.state = "idle"
       worker.current_job_id = null
       worker.last_heartbeat = new Date().toISOString()
-      return { ok: true, worker: { ...worker } }
+      return { ok: true, dispatch_active: false, note: null, worker: { ...worker } }
     },
   ],
 

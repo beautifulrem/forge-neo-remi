@@ -6,11 +6,11 @@
  */
 import { useLayoutEffect } from "react"
 import { useStore } from "zustand"
-import { CONFLICTS_ACTION, runAction } from "@/ui/actions"
+import type { TabSchema } from "@/api/types"
+import { ADVICE_ACTION, CONFLICTS_ACTION, hasModifiedAdviceParam, runAction, setAdviceParams } from "@/ui/actions"
 import { jsonEqual, splitRef } from "@/ui/conditions"
 import type { FormIndex } from "@/ui/form-index"
 import { type FormState, type FormStore, isModified, type OwnerValues } from "@/ui/form-store"
-import type { TabSchema } from "@/ui/schema"
 import { tabOwners } from "@/ui/tab"
 import { isPersisted } from "@/ui/values"
 
@@ -49,7 +49,7 @@ export function schemaSettled(store: FormStore): Promise<void> {
   return settling.get(store) ?? Promise.resolve()
 }
 
-export function loadSchema(store: FormStore, schema: TabSchema) {
+export function loadSchema(store: FormStore, schema: TabSchema, { refreshAdvice = false }: { refreshAdvice?: boolean } = {}) {
   const before = store.getState()
   const snapshot: Snapshot | null = before.revision > 0 ? { values: before.values, defaults: before.defaults, index: before.index } : null
   before.load(tabOwners(schema), {
@@ -57,6 +57,7 @@ export function loadSchema(store: FormStore, schema: TabSchema) {
     capabilities: schema.capabilities ?? null,
     advice: schema.advice ?? [],
   })
+  setAdviceParams(store, schema.advice_params)
   if (snapshot) {
     // defaults nobody asked for: a lock keeps its value without a word
     for (const [owner, values] of Object.entries(carryOver(snapshot, store.getState()))) store.getState().setValues(owner, values, { quiet: true })
@@ -64,7 +65,24 @@ export function loadSchema(store: FormStore, schema: TabSchema) {
   // Patch locks are not persisted: re-derive them when the form holds a non-default conflict param.
   const state = store.getState()
   const conflicts = (schema.conflict_params ?? []).some((ref) => isModified(state, ...splitRef(ref, "core")))
-  settling.set(store, conflicts ? runAction({ store, tab: schema.tab }, "core", CONFLICTS_ACTION).then(() => undefined) : Promise.resolve())
+  const needsAdvice = refreshAdvice && hasModifiedAdviceParam(store, schema)
+  if (!conflicts && !needsAdvice) {
+    settling.set(store, Promise.resolve())
+    return
+  }
+  settling.set(
+    store,
+    (async () => {
+      let adviceRefreshed = false
+      if (conflicts) {
+        const res = await runAction({ store, tab: schema.tab }, "core", CONFLICTS_ACTION)
+        if (res && res.advice !== undefined) adviceRefreshed = true
+      }
+      if (needsAdvice && !adviceRefreshed) {
+        await runAction({ store, tab: schema.tab }, "core", ADVICE_ACTION)
+      }
+    })(),
+  )
 }
 
 /** The schema each store was last loaded with. */
@@ -75,10 +93,10 @@ const loadedWith = new WeakMap<FormStore, TabSchema>()
  * paint, and code that reads a form away from its page (capturing a recipe on the Queue page) does
  * it first too, since until then the store holds only the drafts, with no defaults to compare them to.
  */
-export function ensureSchemaLoaded(store: FormStore, schema: TabSchema) {
+export function ensureSchemaLoaded(store: FormStore, schema: TabSchema, options: { refreshAdvice?: boolean } = {}) {
   if (loadedWith.get(store) === schema) return
   loadedWith.set(store, schema)
-  loadSchema(store, schema)
+  loadSchema(store, schema, options)
 }
 
 /**
@@ -90,6 +108,16 @@ export function ensureSchemaLoaded(store: FormStore, schema: TabSchema) {
 export function useFormLoader(store: FormStore, schema: TabSchema): TabSchema | null {
   // Read the revision into the result so a memoising compiler re-evaluates after `load`.
   const revision = useStore(store, (s) => s.revision)
-  useLayoutEffect(() => ensureSchemaLoaded(store, schema), [store, schema])
+  useLayoutEffect(() => {
+    const alreadyLoaded = loadedWith.get(store) === schema
+    ensureSchemaLoaded(store, schema, { refreshAdvice: true })
+    if (alreadyLoaded && hasModifiedAdviceParam(store, schema)) {
+      const prev = settling.get(store) ?? Promise.resolve()
+      settling.set(
+        store,
+        prev.then(() => runAction({ store, tab: schema.tab }, "core", ADVICE_ACTION).then(() => undefined)),
+      )
+    }
+  }, [store, schema])
   return revision > 0 ? (loadedWith.get(store) ?? null) : null
 }

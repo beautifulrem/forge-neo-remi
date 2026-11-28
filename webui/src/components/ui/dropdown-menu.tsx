@@ -73,7 +73,7 @@ function DropdownMenu({ open: openProp, defaultOpen = false, onOpenChange, child
   const [anchor, setAnchor] = React.useState<HTMLElement | null>(null)
   // when a press on the trigger (an outside press for the open popup) last closed the menu: the
   // click that follows must not open it again
-  const closedAt = React.useRef(0)
+  const closedAt = React.useRef(-Infinity)
   const triggerId = React.useId()
   const popupId = React.useId()
   const setOpen = (next: boolean, details?: ChangeDetails) => {

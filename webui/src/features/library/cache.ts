@@ -18,6 +18,7 @@ import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
 import { queryClient } from "@/api/queries"
 import type { GalleryItem, GalleryQuery, Page } from "@/api/types"
+import { refreshBoards } from "./boards-api"
 
 export const PAGE_SIZE = 120
 /** Ids the server takes per star / delete / zip request. */
@@ -144,6 +145,7 @@ export async function onNewOutputs() {
 export async function onOutputsChanged(ids: readonly string[] | undefined) {
   if (ids && isEcho(ids)) return
   refreshFacets()
+  refreshBoards()
   if (!ids || ids.length === 0 || ids.length >= EVENT_IDS) return refreshGallery()
   const cached = new Set(lists().flatMap((query) => query.state.data?.pages.flatMap((page) => page.items.map((item) => item.id)) ?? []))
   const shown = ids.filter((id) => cached.has(id))

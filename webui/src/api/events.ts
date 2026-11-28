@@ -1,5 +1,11 @@
 /** JSON events on /api/v2/ws (see docs/remi-webui/architecture.md). */
-import type { FormTab, JobNote, JobOutput } from "./types"
+import type { ChainStatus, FormTab, JobChain, JobNote, JobOutput, StageKind, StageStatus } from "./types"
+
+/** Client-to-server JSON control messages on /api/v2/ws (`remi/server/ws.py`). */
+export type WsClientMessage =
+  | { type: "hello"; features: string[]; visible?: boolean }
+  | { type: "visibility"; visible: boolean }
+  | { type: "ping" }
 
 type JobRef = {
   job_id: string
@@ -34,9 +40,18 @@ export type WsEventMap = {
   /** A model load finished (successfully or not); ends `model.loading`. */
   "model.loaded": { model?: string; error?: string | null }
   /** A pipeline changed; the rest of the fields are the whole chain, as `GET /chains/{id}` returns it. */
-  "chain.updated": { chain_id: string; status: string; id?: string; updated_at?: string; stages?: unknown[] }
+  "chain.updated": { chain_id: string; status: ChainStatus | string } & Partial<JobChain>
   /** A pipeline stage ended (ran, reused its cached output, failed or was cancelled). */
-  "chain.stage_completed": { chain_id: string; stage_index: number; status: string; cached?: boolean; output_file_ids?: string[] }
+  "chain.stage_completed": {
+    chain_id: string
+    stage_index: number
+    kind?: StageKind
+    status: StageStatus | string
+    cached?: boolean
+    job_id?: string | null
+    output_file_ids?: string[]
+    output_prompt?: string | null
+  }
 }
 
 export type WsEventType = keyof WsEventMap
@@ -45,6 +60,7 @@ export type WsEvent = { [K in WsEventType]: { type: K } & WsEventMap[K] }[WsEven
 type Fields = Record<string, unknown>
 
 const isString = (v: unknown) => typeof v === "string"
+const isBoolean = (v: unknown) => typeof v === "boolean"
 const isNumber = (v: unknown) => typeof v === "number" && Number.isFinite(v)
 const optional = (check: (v: unknown) => boolean) => (v: unknown) => v === undefined || v === null || check(v)
 const isStringArray = (v: unknown) => Array.isArray(v) && v.every(isString)
@@ -69,8 +85,15 @@ const SHAPES: { [K in WsEventType]: Record<string, (v: unknown) => boolean> } = 
   pong: {},
   "model.loading": { stage: isString },
   "model.loaded": {},
-  "chain.updated": { chain_id: isString, status: isString },
-  "chain.stage_completed": { chain_id: isString, stage_index: isNumber, status: isString },
+  "chain.updated": { chain_id: isString, status: isString, stages: optional(Array.isArray) },
+  "chain.stage_completed": {
+    chain_id: isString,
+    stage_index: isNumber,
+    kind: optional(isString),
+    status: isString,
+    cached: optional(isBoolean),
+    output_file_ids: optional(isStringArray),
+  },
 }
 
 /**

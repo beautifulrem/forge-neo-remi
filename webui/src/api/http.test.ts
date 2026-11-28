@@ -42,6 +42,21 @@ describe("http errors", () => {
     ])
     expect(validationErrors(new ApiError(422, "x", { errors: [{ owner: null, param: null, message: 5 }] }))).toBeNull()
   })
+
+  it("propagates 422 ValidationErrorBody on workbench endpoints instead of HTTP 422", async () => {
+    reply({ errors: [{ owner: null, param: "prompt", message: "describe the image first" }] }, 422)
+    const pupError = await api.promptTools.upsample({ prompt: "" }).catch((e: unknown) => e)
+    expect(pupError).toBeInstanceOf(ApiError)
+    expect((pupError as ApiError).status).toBe(422)
+    expect((pupError as ApiError).message).toBe("prompt: describe the image first")
+    expect(validationErrors(pupError)).toEqual([{ owner: "", param: "prompt", message: "describe the image first" }])
+
+    reply({ errors: [{ owner: "core", param: "steps", message: "must be positive" }] }, 422)
+    const chainError = await api.chains.create({ stages: [{ kind: "generate" }] }).catch((e: unknown) => e)
+    expect(chainError).toBeInstanceOf(ApiError)
+    expect((chainError as ApiError).message).toBe("steps: must be positive")
+    expect(validationErrors(chainError)).toEqual([{ owner: "core", param: "steps", message: "must be positive" }])
+  })
 })
 
 describe("generated client requests", () => {

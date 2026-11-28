@@ -1,12 +1,11 @@
 /**
  * Multimodal Prompt Upsampler (PUP) client and form-context helpers.
- * Talks to `POST /api/v2/prompt-tools/upsample` (with an offline mock fallback
- * when `VITE_MOCK=1`).
+ * Talks to `POST /api/v2/prompt-tools/upsample` via the typed OpenAPI client
+ * (`api.promptTools.upsample`).
  */
-import { MOCK } from "@/api/http"
-import { workbenchRequest } from "@/features/pipelines/workbench-http"
+import { api } from "@/api/endpoints"
+import type { PromptUpsampled, PromptUpsampleRequest, PromptUpsampleWarning } from "@/api/types"
 import type { FormState } from "@/ui/form-store"
-import type { SentenceParams } from "@/ui/schema"
 
 export const PUP_FAMILIES = ["auto", "flux3", "qwen21", "moss", "fibo", "zimage", "ernie", "anima"] as const
 export type PupFamily = (typeof PUP_FAMILIES)[number]
@@ -37,31 +36,9 @@ export const PUP_MODE_LABELS: Record<PupMode, string> = {
   vgl_json: "VGL JSON",
 }
 
-export type PupRequest = {
-  prompt: string
-  model_family?: PupFamily | string
-  reference_file_ids?: string[]
-  aspect_ratio?: string | null
-  mode?: PupMode
-  instructions?: string
-  negative?: boolean
-}
-
-export type PupResponse = {
-  prompt: string
-  original_prompt: string
-  model_family: string
-  mode: string
-  backend: string
-  used_reference_count: number
-  aspect_ratio: string | null
-  layout_rows: unknown[] | null
-  vgl_json: Record<string, unknown> | null
-  /** English, with the catalog key and values the UI translates (as model advice). */
-  warnings: PupWarning[]
-}
-
-export type PupWarning = { message: string; template?: string | null; params?: SentenceParams | null }
+export type PupRequest = PromptUpsampleRequest
+export type PupResponse = PromptUpsampled
+export type PupWarning = PromptUpsampleWarning
 
 /** Detects the best PUP model family from the active preset, checkpoint name, or schema capability family. */
 export function detectPupFamily(preset?: string | null, checkpoint?: string | null, capabilityFamily?: string | null): PupFamily {
@@ -127,54 +104,7 @@ export function collectFormReferenceIds(state: Pick<FormState, "values" | "index
   return out
 }
 
-function mockUpsample(body: PupRequest): PupResponse {
-  const family = body.model_family && body.model_family !== "auto" ? body.model_family : "flux3"
-  const refs = body.reference_file_ids ?? []
-  const mode = body.mode && body.mode !== "auto" ? body.mode : family === "fibo" ? "vgl_json" : refs.length > 0 ? "i2i" : "t2i"
-  const base = body.prompt.trim()
-  const ratioNote = body.aspect_ratio ? ` framed for a ${body.aspect_ratio} composition` : ""
-  const refNote =
-    refs.length > 0
-      ? family === "qwen21" || family === "moss"
-        ? ` preserving visual identity from ${refs.map((_, i) => `<image_${i + 1}>`).join(" and ")}`
-        : ` guided by ${refs.map((_, i) => `ref_image_${i}`).join(", ")}`
-      : ""
-  const note = body.instructions?.trim() ? ` (${body.instructions.trim()})` : ""
-  const prompt =
-    mode === "vgl_json"
-      ? JSON.stringify(
-          {
-            short_description: base,
-            objects: [{ description: base, location: "center", relationship: "primary subject", relative_size: "large" }],
-            background_setting: "clean studio environment",
-            lighting: { conditions: "balanced studio lighting", direction: "front-left key light", shadows: "soft diffused shadows" },
-            aesthetics: { composition: body.aspect_ratio ?? "1:1", color_scheme: "natural harmonious palette", mood_atmosphere: "calm and focused" },
-            photographic_characteristics: { depth_of_field: "moderate depth of field", focus: "sharp focus on primary subject", camera_angle: "eye-level", lens_focal_length: "50mm standard" },
-            style_medium: "photograph",
-          },
-          null,
-          2,
-        )
-      : family === "anima"
-        ? `${base}, cinematic lighting, finely detailed textures, crisp focal depth, balanced studio composition${note}`
-        : `A richly detailed studio-lit photograph of ${base}${ratioNote}${refNote}, captured with crisp micro-contrast, natural material textures, and balanced depth of field.${note}`
-  return {
-    prompt,
-    original_prompt: body.prompt,
-    model_family: family,
-    mode,
-    backend: "mock_vlm",
-    used_reference_count: refs.length,
-    aspect_ratio: body.aspect_ratio ?? null,
-    layout_rows: null,
-    vgl_json: mode === "vgl_json" ? (JSON.parse(prompt) as Record<string, unknown>) : null,
-    warnings: [],
-  }
-}
-
-/** Calls `POST /api/v2/prompt-tools/upsample`. */
+/** Calls `POST /api/v2/prompt-tools/upsample` via the typed OpenAPI client. */
 export async function upsamplePromptRequest(body: PupRequest, signal?: AbortSignal): Promise<PupResponse> {
-  if (MOCK) return mockUpsample(body)
-  // the shared transport: an expired session opens the sign-in like every other request
-  return workbenchRequest<PupResponse>("/prompt-tools/upsample", { method: "POST", body, signal })
+  return api.promptTools.upsample(body, signal)
 }

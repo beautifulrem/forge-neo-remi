@@ -73,6 +73,111 @@ const CASES: Record<string, Case> = {
   "gallery.remove": { call: () => api.gallery.remove(["f1"]), method: "POST", path: "/api/v2/gallery/delete", body: { ids: ["f1"], delete_files: false } },
   "gallery.zip": { call: () => api.gallery.zip(["f1", "f2"]), method: "POST", path: "/api/v2/gallery/zip", body: { ids: ["f1", "f2"] } },
   "gallery.reveal": { call: () => api.gallery.reveal("f1"), method: "POST", path: "/api/v2/gallery/f1/reveal" },
+  "gallery.lineage": { call: () => api.gallery.lineage("f/1"), method: "GET", path: "/api/v2/gallery/f%2F1/lineage" },
+  "gallery.compare": {
+    call: () => api.gallery.compare({ id_a: "f1", id_b: "f2" }),
+    method: "POST",
+    path: "/api/v2/gallery/compare",
+    body: { id_a: "f1", id_b: "f2" },
+  },
+  "boards.list": { call: () => api.boards.list(), method: "GET", path: "/api/v2/boards" },
+  "boards.get": { call: () => api.boards.get("b 1"), method: "GET", path: "/api/v2/boards/b%201" },
+  "boards.create": { call: () => api.boards.create({ name: "Mood" }), method: "POST", path: "/api/v2/boards", body: { name: "Mood", description: "" } },
+  "boards.update": { call: () => api.boards.update("b1", { name: "Mood 2" }), method: "PATCH", path: "/api/v2/boards/b1", body: { name: "Mood 2" } },
+  "boards.delete": { call: () => api.boards.delete("b1"), method: "DELETE", path: "/api/v2/boards/b1" },
+  "boards.addItems": { call: () => api.boards.addItems("b1", ["f1"]), method: "POST", path: "/api/v2/boards/b1/items", body: { file_ids: ["f1"] } },
+  "boards.removeItems": { call: () => api.boards.removeItems("b1", ["f1"]), method: "POST", path: "/api/v2/boards/b1/items/remove", body: { file_ids: ["f1"] } },
+  "boards.removeItem": { call: () => api.boards.removeItem("b1", "f1"), method: "DELETE", path: "/api/v2/boards/b1/items/f1" },
+  "chains.list": { call: () => api.chains.list({ status: "completed", limit: 10 }), method: "GET", path: "/api/v2/chains", query: { status: "completed", limit: "10" } },
+  "chains.templates": { call: () => api.chains.templates(), method: "GET", path: "/api/v2/chains/templates" },
+  "chains.getTemplate": { call: () => api.chains.getTemplate("t1"), method: "GET", path: "/api/v2/chains/templates/t1" },
+  "chains.createTemplate": {
+    call: () => api.chains.createTemplate({ name: "Base", stages: [{ kind: "generate", tab: "txt2img" }] }),
+    method: "POST",
+    path: "/api/v2/chains/templates",
+    body: {
+      name: "Base",
+      description: "",
+      tags: [],
+      stages: [{ kind: "generate", name: "", enabled: true, tab: "txt2img", core: {}, scripts: {}, config: {} }],
+    },
+  },
+  "chains.deleteTemplate": { call: () => api.chains.deleteTemplate("t1"), method: "DELETE", path: "/api/v2/chains/templates/t1" },
+  "chains.preview": {
+    call: () => api.chains.preview({ stages: [{ kind: "generate" }], chain_id: "c1" }),
+    method: "POST",
+    path: "/api/v2/chains/preview",
+    body: {
+      chain_id: "c1",
+      stages: [{ kind: "generate", name: "", enabled: true, tab: "", core: {}, scripts: {}, config: {} }],
+    },
+  },
+  "chains.create": {
+    call: () => api.chains.create({ name: "Run", stages: [{ kind: "generate" }] }),
+    method: "POST",
+    path: "/api/v2/chains",
+    body: {
+      name: "Run",
+      run_now: true,
+      priority: 0,
+      stages: [{ kind: "generate", name: "", enabled: true, tab: "", core: {}, scripts: {}, config: {} }],
+    },
+  },
+  "chains.get": { call: () => api.chains.get("c1"), method: "GET", path: "/api/v2/chains/c1" },
+  "chains.rerun": {
+    call: () => api.chains.rerun("c1", { from_stage: 1 }),
+    method: "POST",
+    path: "/api/v2/chains/c1/rerun",
+    body: { from_stage: 1, force_stages: [] },
+  },
+  "chains.pause": { call: () => api.chains.pause("c1"), method: "POST", path: "/api/v2/chains/c1/pause" },
+  "chains.resume": { call: () => api.chains.resume("c1"), method: "POST", path: "/api/v2/chains/c1/resume" },
+  "chains.cancel": { call: () => api.chains.cancel("c1"), method: "POST", path: "/api/v2/chains/c1/cancel" },
+  "chains.delete": { call: () => api.chains.delete("c1"), method: "DELETE", path: "/api/v2/chains/c1" },
+  "recipes.list": { call: () => api.recipes.list({ model_family: "anima", q: "fox" }), method: "GET", path: "/api/v2/recipes", query: { model_family: "anima", q: "fox" } },
+  "recipes.get": { call: () => api.recipes.get("r1"), method: "GET", path: "/api/v2/recipes/r1" },
+  "recipes.create": {
+    call: () => api.recipes.create({ name: "Balanced", core_patch: { cfg_scale: 4 } }),
+    method: "POST",
+    path: "/api/v2/recipes",
+    body: { name: "Balanced", description: "", capabilities: [], tab: "txt2img", core_patch: { cfg_scale: 4 }, scripts_patch: {}, tags: [] },
+  },
+  "recipes.update": { call: () => api.recipes.update("r1", { name: "Balanced v2" }), method: "PATCH", path: "/api/v2/recipes/r1", body: { name: "Balanced v2" } },
+  "recipes.delete": { call: () => api.recipes.delete("r1"), method: "DELETE", path: "/api/v2/recipes/r1" },
+  "recipes.apply": {
+    call: () => api.recipes.apply("r1", { tab: "txt2img" }),
+    method: "POST",
+    path: "/api/v2/recipes/r1/apply",
+    body: { tab: "txt2img", core: {}, scripts: {}, check_conflicts: true },
+  },
+  "recipes.exportRecipes": { call: () => api.recipes.exportRecipes(), method: "GET", path: "/api/v2/recipes/export" },
+  "recipes.importRecipes": {
+    call: () => api.recipes.importRecipes({ recipes: [{ name: "X" }] }),
+    method: "POST",
+    path: "/api/v2/recipes/import",
+    body: { version: 1, overwrite: false, recipes: [{ name: "X" }] },
+  },
+  "workers.status": { call: () => api.workers.status(), method: "GET", path: "/api/v2/workers" },
+  "workers.get": { call: () => api.workers.get("worker-0"), method: "GET", path: "/api/v2/workers/worker-0" },
+  "workers.restart": { call: () => api.workers.restart("worker-0"), method: "POST", path: "/api/v2/workers/worker-0/restart" },
+  "promptTools.config": { call: () => api.promptTools.config(), method: "GET", path: "/api/v2/prompt-tools/config" },
+  "promptTools.refresh": { call: () => api.promptTools.refresh(), method: "POST", path: "/api/v2/prompt-tools/refresh" },
+  "promptTools.upsample": {
+    call: () => api.promptTools.upsample({ prompt: "red fox" }),
+    method: "POST",
+    path: "/api/v2/prompt-tools/upsample",
+    body: {
+      prompt: "red fox",
+      reference_file_ids: [],
+      reference_images: [],
+      mode: "auto",
+      current: "",
+      negative: false,
+      instructions: "",
+      temperature: 0.7,
+      max_tokens: 1024,
+    },
+  },
   scanOutputs: { call: () => api.scanOutputs(), method: "POST", path: "/api/v2/outputs/refresh" },
   pngInfo: { call: () => api.pngInfo("f1"), method: "POST", path: "/api/v2/pnginfo", body: { file_id: "f1" } },
   outputs: { call: () => api.outputs({ q: "x", cursor: null }), method: "GET", path: "/api/v2/outputs", query: { q: "x" } },
@@ -125,6 +230,7 @@ const CASES: Record<string, Case> = {
   "styles.remove": { call: () => api.styles.remove("s"), method: "DELETE", path: "/api/v2/styles/s" },
   validateOptions: { call: () => api.validateOptions({ a: 1 }), method: "POST", path: "/api/v2/options/validate", body: { a: 1 } },
   "extensions.list": { call: () => api.extensions.list(), method: "GET", path: "/api/v2/extensions" },
+  "extensions.diagnostics": { call: () => api.extensions.diagnostics(), method: "GET", path: "/api/v2/extensions/diagnostics" },
   "extensions.configure": {
     call: () => api.extensions.configure({ disable_all: "extra" }),
     method: "PATCH",
@@ -265,5 +371,15 @@ describe("api endpoints", () => {
     const error = await api.jobs.updateParams("j1", { core: {}, scripts: {} }).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(ApiError)
     expect(error).toMatchObject({ status: 409, message: "the job already started" })
+  })
+
+  it("sends chain creation with a fresh or caller-supplied Idempotency-Key", async () => {
+    const fetch = recordFetch(() => ({ status: 201, body: { id: "c1" } }))
+    await api.chains.create({ stages: [{ kind: "generate" }] })
+    await api.chains.create({ stages: [{ kind: "generate" }] }, "chain-key-1")
+    await api.chains.create({ stages: [{ kind: "generate" }] }, null)
+    expect(fetch.requests[0]!.headers.get("Idempotency-Key")).toMatch(/^[\w-]{16,}$/)
+    expect(fetch.requests[1]!.headers.get("Idempotency-Key")).toBe("chain-key-1")
+    expect(fetch.requests[2]!.headers.get("Idempotency-Key")).toBeNull()
   })
 })

@@ -18,11 +18,13 @@ describe("normalizeEvent", () => {
     expect(normalizeEvent("text")).toBeNull()
   })
 
-  it("passes pipeline events on (the builder follows its run with them)", () => {
+  it("passes pipeline events and pong heartbeats on", () => {
     const chain = { type: "chain.updated", chain_id: "c", id: "c", status: "running", stages: [] }
     expect(normalizeEvent(chain)).toEqual(chain)
-    expect(normalizeEvent({ type: "chain.stage_completed", chain_id: "c", stage_index: 1, status: "cached" })).toMatchObject({ stage_index: 1 })
+    expect(normalizeEvent({ type: "chain.stage_completed", chain_id: "c", stage_index: 1, kind: "generate", status: "cached", cached: true, output_file_ids: ["f1"] })).toMatchObject({ stage_index: 1, cached: true })
+    expect(normalizeEvent({ type: "pong" })).toEqual({ type: "pong" })
     expect(normalizeEvent({ type: "chain.updated", status: "running" })).toBeNull()
+    expect(normalizeEvent({ type: "chain.stage_completed", chain_id: "c", stage_index: 1, status: "cached", cached: "yes" })).toBeNull()
   })
 
   it("fills optional lists of terminal job events", () => {

@@ -1,12 +1,14 @@
 /**
  * Thin typed API client for Gallery Boards (`/api/v2/boards`) and Asset
- * Lineage (`/api/v2/gallery/{file_id}/lineage`), backed by `workbenchRequest`
- * (which automatically routes `VITE_MOCK=1` through `@/api/mock/workbench`).
+ * Lineage (`/api/v2/gallery/{file_id}/lineage`), backed by `@/api/endpoints`.
  */
 import { queryOptions } from "@tanstack/react-query"
+import { api } from "@/api/endpoints"
+import { ApiError } from "@/api/http"
 import { queryClient } from "@/api/queries"
-import type { GalleryItem, Page } from "@/api/types"
-import { ApiError, workbenchRequest } from "@/features/pipelines/workbench-http"
+import type { Board, BoardCreate, BoardItemsResult, BoardList, BoardUpdate, LineageNode, LineageResponse } from "@/api/types"
+
+export type { Board, LineageNode, LineageResponse }
 
 export const boardKeys = {
   all: ["gallery", "boards"] as const,
@@ -15,41 +17,6 @@ export const boardKeys = {
 
 export function refreshBoards() {
   void queryClient.invalidateQueries({ queryKey: boardKeys.all })
-}
-
-export type Board = {
-  id: string
-  name: string
-  description: string
-  color?: string | null
-  item_count: number
-  cover_file_id?: string | null
-  created_at: string
-  updated_at: string
-}
-
-export type LineageNode = {
-  file_id: string
-  relation: string
-  depth: number
-  job_id?: string | null
-  chain_id?: string | null
-  stage_index?: number | null
-  name?: string | null
-  width?: number | null
-  height?: number | null
-  tab?: string | null
-  model?: string | null
-  created_at?: string | null
-  exists?: boolean
-}
-
-export type LineageResponse = {
-  file_id: string
-  item?: LineageNode | null
-  ancestors: LineageNode[]
-  siblings: LineageNode[]
-  descendants: LineageNode[]
 }
 
 // ---------------------------------------------------------------- boards API
@@ -61,7 +28,7 @@ function absent(error: unknown): boolean {
 
 export async function listBoards(signal?: AbortSignal): Promise<Board[]> {
   try {
-    const data = await workbenchRequest<Board[] | { items?: Board[] }>("/boards", { signal })
+    const data = (await api.boards.list(signal)) as BoardList | Board[] | undefined
     if (Array.isArray(data)) return data
     if (data && typeof data === "object" && Array.isArray(data.items)) return data.items
     return []
@@ -71,50 +38,31 @@ export async function listBoards(signal?: AbortSignal): Promise<Board[]> {
   }
 }
 
-export async function createBoardApi(body: { name: string; description?: string; color?: string | null }): Promise<Board> {
-  return workbenchRequest<Board>("/boards", { method: "POST", body })
+export async function createBoardApi(body: BoardCreate): Promise<Board> {
+  return api.boards.create(body)
 }
 
-export async function updateBoardApi(boardId: string, body: { name?: string; description?: string; color?: string | null }): Promise<Board> {
-  return workbenchRequest<Board>(`/boards/${encodeURIComponent(boardId)}`, { method: "PATCH", body })
+export async function updateBoardApi(boardId: string, body: BoardUpdate): Promise<Board> {
+  return api.boards.update(boardId, body)
 }
 
 export async function deleteBoardApi(boardId: string): Promise<void> {
-  await workbenchRequest<void>(`/boards/${encodeURIComponent(boardId)}`, { method: "DELETE" })
+  await api.boards.delete(boardId)
 }
 
-export async function addBoardItemsApi(boardId: string, fileIds: readonly string[]): Promise<{ board_id: string; count: number }> {
-  return workbenchRequest<{ board_id: string; count: number }>(`/boards/${encodeURIComponent(boardId)}/items`, {
-    method: "POST",
-    body: { file_ids: [...fileIds] },
-  })
+export async function addBoardItemsApi(boardId: string, fileIds: readonly string[]): Promise<BoardItemsResult> {
+  return api.boards.addItems(boardId, fileIds)
 }
 
-export async function removeBoardItemsApi(boardId: string, fileIds: readonly string[]): Promise<{ board_id: string; count: number }> {
-  return workbenchRequest<{ board_id: string; count: number }>(`/boards/${encodeURIComponent(boardId)}/items/remove`, {
-    method: "POST",
-    body: { file_ids: [...fileIds] },
-  })
-}
-
-/** Fetches the gallery page filtered by `board_id` (plus standard gallery query params). */
-export async function listBoardGalleryPage(
-  query: Record<string, string | number | boolean | null | undefined>,
-  signal?: AbortSignal,
-): Promise<Page<GalleryItem>> {
-  const data = await workbenchRequest<Page<GalleryItem>>("/gallery", { query, signal })
-  return {
-    items: Array.isArray(data?.items) ? data.items : [],
-    next_cursor: data?.next_cursor ?? null,
-    total: data?.total ?? null,
-  }
+export async function removeBoardItemsApi(boardId: string, fileIds: readonly string[]): Promise<BoardItemsResult> {
+  return api.boards.removeItems(boardId, fileIds)
 }
 
 // ---------------------------------------------------------------- lineage API
 
 export async function fetchLineage(fileId: string, signal?: AbortSignal): Promise<LineageResponse | null> {
   try {
-    const data = await workbenchRequest<LineageResponse>(`/gallery/${encodeURIComponent(fileId)}/lineage`, { signal })
+    const data = await api.gallery.lineage(fileId, signal)
     if (!data || typeof data !== "object" || !Array.isArray(data.ancestors) || !Array.isArray(data.descendants)) {
       return null
     }

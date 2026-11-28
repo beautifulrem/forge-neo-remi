@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { deriveModelBadges, workersSummary, type WorkersStatus } from "./model-badges"
+import { deriveModelBadges, workersSummary, type WorkersResponse, type WorkersStatus } from "./model-badges"
 
 describe("deriveModelBadges", () => {
   it("combines server capabilities badges with filename and dtype heuristics", () => {
@@ -55,5 +55,31 @@ describe("workersSummary", () => {
 
     const down: WorkersStatus = { mode: "subprocess", workers: [{ worker_id: "w0", state: "error", device: "cuda:0" }] }
     expect(workersSummary(down).tone).toBe("error")
+
+    const fullResponse: WorkersResponse = {
+      mode: "subprocess",
+      dispatch_active: false,
+      preview: true,
+      workers: [
+        {
+          worker_id: "w0",
+          state: "idle",
+          backend: "mlx-mflux",
+          device: "mps:0",
+          supported_families: ["flux3"],
+          quant_formats: ["bf16"],
+          jobs_completed: 3,
+          jobs_failed: 0,
+          restarts: 0,
+          uptime_s: 120,
+        },
+      ],
+      mlx: {
+        available: true,
+        platform_supported: true,
+        supported_families: ["flux3"],
+      },
+    }
+    expect(workersSummary(fullResponse)).toEqual({ healthy: 1, total: 1, tone: "ok", label: "MPS" })
   })
 })

@@ -1,22 +1,26 @@
 /**
  * WebSocket client store: one connection to /api/v2/ws, JSON events fanned out
- * to subscribers, binary preview frames turned into object URLs (the previous
- * URL is revoked as soon as a newer frame arrives), automatic reconnect with
- * exponential backoff and a feature handshake. The page's visibility goes to
- * the server (in the hello and on every change): a hidden page gets no
- * previews, and while no page is shown the server encodes none.
+ * to subscribers, binary preview frames turned into object URLs (retained in a
+ * 2-slot buffer matching LivePreview's double-buffer and revoked once evicted),
+ * client ping/pong heartbeat watchdog, automatic reconnect with exponential
+ * backoff and a feature handshake. The page's visibility goes to the server
+ * (in the hello and on every change): a hidden page gets no previews, and while
+ * no page is shown the server encodes none.
  */
 import { create } from "zustand"
 import { API_BASE } from "./http"
-import { normalizeEvent, type WsEvent, type WsEventType } from "./events"
+import { normalizeEvent, type WsClientMessage, type WsEvent, type WsEventType } from "./events"
 import { FrameError, parseFrame } from "./frames"
 import { flushPaintBatch, holdPaint, paintBatch } from "./paint-batch"
 
 /** What this client understands; sent in the hello message. */
 export const CLIENT_FEATURES = ["events.v1", "preview.binary", "preview.jpeg", "preview.webp"] as const
 
-/** A message to the server: its `type` (`hello`, `visibility`, a server command, …) and fields. */
-export type ClientMessage = { type: string } & Record<string, unknown>
+/** A typed message from client to server (`hello`, `visibility`, `ping`). */
+export type ClientMessage = WsClientMessage
+
+export const HEARTBEAT_INTERVAL_MS = 25_000
+export const PONG_TIMEOUT_MS = 10_000
 
 export type WsStatus = "idle" | "connecting" | "open" | "reconnecting" | "closed"
 
@@ -112,7 +116,16 @@ function pageVisible(): boolean {
 
 let socket: SocketLike | null = null
 let retryTimer: ReturnType<typeof setTimeout> | undefined
+let heartbeatTimer: ReturnType<typeof setTimeout> | undefined
+let pongTimer: ReturnType<typeof setTimeout> | undefined
 let wanted = false
+
+function clearHeartbeat() {
+  clearTimeout(heartbeatTimer)
+  clearTimeout(pongTimer)
+  heartbeatTimer = undefined
+  pongTimer = undefined
+}
 /**
  * Bumped by every `start()` and `disconnect()`. Opening a socket is async (the
  * mock is a lazy import), so a connect → disconnect → connect sequence (React
@@ -148,11 +161,22 @@ export const useWs = create<WsState>()((set, get) => {
    */
   let arrived = 0
   let shown = 0
+  /** Keeps the active and previous frame URLs alive while LivePreview double-buffers them. */
+  let previewBuffer: string[] = []
 
   function setPreview(next: LivePreview | null) {
-    const previous = get().preview
+    if (next === null) {
+      set({ preview: null })
+      for (const url of previewBuffer) URL.revokeObjectURL(url)
+      previewBuffer = []
+      return
+    }
+    previewBuffer.push(next.url)
     set({ preview: next })
-    if (previous) URL.revokeObjectURL(previous.url)
+    while (previewBuffer.length > 2) {
+      const evicted = previewBuffer.shift()
+      if (evicted && evicted !== next.url) URL.revokeObjectURL(evicted)
+    }
   }
 
   function handleBinary(buffer: ArrayBuffer) {
@@ -202,6 +226,43 @@ export const useWs = create<WsState>()((set, get) => {
     retryTimer = setTimeout(() => void start(), backoffDelay(attempt))
   }
 
+  function dropDeadSocket(ws: SocketLike, code: number, reason: string) {
+    if (socket !== ws) return
+    clearHeartbeat()
+    socket = null
+    try {
+      ws.close(code, reason)
+    } catch {
+      // Half-open sockets may throw on close; reconnect regardless.
+    }
+    if (wanted) scheduleReconnect()
+    else set({ status: "closed" })
+  }
+
+  function scheduleHeartbeat(ws: SocketLike) {
+    clearHeartbeat()
+    if (!wanted || socket !== ws) return
+    heartbeatTimer = setTimeout(() => {
+      if (!wanted || socket !== ws || ws.readyState !== 1) return
+      const ping: WsClientMessage = { type: "ping" }
+      try {
+        ws.send(JSON.stringify(ping))
+      } catch {
+        dropDeadSocket(ws, 4000, "heartbeat send failed")
+        return
+      }
+      // MockSocket replies `{ type: "pong" }` synchronously inside `send()`, rescheduling
+      // the heartbeat before this returns; skip arming `pongTimer` in mock mode.
+      if (import.meta.env.VITE_MOCK === "1") {
+        scheduleHeartbeat(ws)
+        return
+      }
+      pongTimer = setTimeout(() => {
+        dropDeadSocket(ws, 4000, "heartbeat timeout")
+      }, PONG_TIMEOUT_MS)
+    }, HEARTBEAT_INTERVAL_MS)
+  }
+
   async function start() {
     if (!wanted || socket) return
     const token = ++attemptToken
@@ -221,15 +282,24 @@ export const useWs = create<WsState>()((set, get) => {
     ws.binaryType = "arraybuffer"
     ws.onopen = () => {
       set({ status: "open", attempt: 0 })
-      ws.send(JSON.stringify({ type: "hello", features: CLIENT_FEATURES, visible: pageVisible() }))
+      const hello: WsClientMessage = { type: "hello", features: [...CLIENT_FEATURES], visible: pageVisible() }
+      try {
+        ws.send(JSON.stringify(hello))
+      } catch {
+        dropDeadSocket(ws, 4000, "hello send failed")
+        return
+      }
+      scheduleHeartbeat(ws)
     }
     ws.onmessage = (ev) => {
+      scheduleHeartbeat(ws)
       if (typeof ev.data === "string") handleText(ev.data)
       else if (ev.data instanceof ArrayBuffer) handleBinary(ev.data)
     }
     ws.onclose = () => {
       // A socket that was already replaced or dropped must not schedule anything.
       if (socket !== ws) return
+      clearHeartbeat()
       socket = null
       if (wanted) scheduleReconnect()
       else set({ status: "closed" })
@@ -256,14 +326,21 @@ export const useWs = create<WsState>()((set, get) => {
       wanted = false
       attemptToken++
       clearTimeout(retryTimer)
+      clearHeartbeat()
       const ws = socket
       socket = null
       ws?.close(1000, "client disconnect")
       set({ status: "closed" })
     },
     send(message) {
-      if (!socket || socket.readyState !== 1) return false
-      socket.send(JSON.stringify(message))
+      const ws = socket
+      if (!ws || ws.readyState !== 1) return false
+      try {
+        ws.send(JSON.stringify(message))
+      } catch {
+        dropDeadSocket(ws, 4000, "send failed")
+        return false
+      }
       return true
     },
     clearPreview() {

@@ -64,7 +64,7 @@ describe("useWs", () => {
     useWs.getState().disconnect()
   })
 
-  it("turns preview frames into object URLs and revokes the previous one", async () => {
+  it("turns preview frames into object URLs and revokes them only when leaving the 2-slot buffer", async () => {
     const created: string[] = []
     const revoked: string[] = []
     vi.spyOn(URL, "createObjectURL").mockImplementation(() => {
@@ -80,18 +80,24 @@ describe("useWs", () => {
     socket.receive(encodeFrame(FrameFormat.Jpeg, 1, 5, new Uint8Array([1, 2, 3])))
     await painted()
     expect(useWs.getState().preview).toEqual({ jobSeq: 1, step: 5, url: "blob:test/0" })
+    expect(revoked).toEqual([])
     socket.receive(encodeFrame(FrameFormat.Webp, 1, 6, new Uint8Array([4])))
     await painted()
     expect(useWs.getState().preview?.url).toBe("blob:test/1")
+    // Frame 0 stays valid while mounted as LivePreview's `previous` backdrop.
+    expect(revoked).toEqual([])
+    socket.receive(encodeFrame(FrameFormat.Webp, 1, 7, new Uint8Array([5])))
+    await painted()
+    expect(useWs.getState().preview?.url).toBe("blob:test/2")
     expect(revoked).toEqual(["blob:test/0"])
     useWs.getState().clearPreview()
-    expect(revoked).toEqual(["blob:test/0", "blob:test/1"])
+    expect(revoked).toEqual(["blob:test/0", "blob:test/1", "blob:test/2"])
     // A frame still on its way when the preview is cleared (the job ended) never shows.
-    socket.receive(encodeFrame(FrameFormat.Jpeg, 2, 1, new Uint8Array([5])))
+    socket.receive(encodeFrame(FrameFormat.Jpeg, 2, 1, new Uint8Array([6])))
     useWs.getState().clearPreview()
     await painted()
     expect(useWs.getState().preview).toBeNull()
-    expect(revoked).toEqual(["blob:test/0", "blob:test/1", "blob:test/2"])
+    expect(revoked).toEqual(["blob:test/0", "blob:test/1", "blob:test/2", "blob:test/3"])
     useWs.getState().disconnect()
   })
 
@@ -186,6 +192,103 @@ describe("useWs", () => {
     await vi.advanceTimersByTimeAsync(20_000)
     expect(FakeSocket.instances).toHaveLength(2)
     expect(useWs.getState().status).toBe("open")
+    useWs.getState().disconnect()
+  })
+
+  it("sends ping heartbeats when idle and stays open on pong", async () => {
+    const { useWs, socket, HEARTBEAT_INTERVAL_MS, PONG_TIMEOUT_MS } = await setup()
+    socket.open()
+    await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS)
+    expect(socket.sent.map((m) => JSON.parse(m) as { type: string }).filter((m) => m.type === "ping")).toHaveLength(1)
+    socket.receive(JSON.stringify({ type: "pong" }))
+    await vi.advanceTimersByTimeAsync(PONG_TIMEOUT_MS)
+    expect(useWs.getState().status).toBe("open")
+    expect(FakeSocket.instances).toHaveLength(1)
+    useWs.getState().disconnect()
+  })
+
+  it("reconnects when a ping receives no pong before the deadline", async () => {
+    const { useWs, socket, HEARTBEAT_INTERVAL_MS, PONG_TIMEOUT_MS } = await setup()
+    socket.open()
+    await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS)
+    expect(socket.sent.map((m) => JSON.parse(m) as { type: string }).filter((m) => m.type === "ping")).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(PONG_TIMEOUT_MS)
+    expect(useWs.getState().status).toBe("reconnecting")
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(FakeSocket.instances).toHaveLength(2)
+    useWs.getState().disconnect()
+  })
+
+  it("resets the heartbeat timer on incoming server messages", async () => {
+    const { useWs, socket, HEARTBEAT_INTERVAL_MS } = await setup()
+    socket.open()
+    await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS - 5_000)
+    socket.receive(JSON.stringify({ type: "job.progress", job_id: "j1", step: 1, steps: 4 }))
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(socket.sent.map((m) => JSON.parse(m) as { type: string }).filter((m) => m.type === "ping")).toHaveLength(0)
+    await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS - 10_000)
+    expect(socket.sent.map((m) => JSON.parse(m) as { type: string }).filter((m) => m.type === "ping")).toHaveLength(1)
+    useWs.getState().disconnect()
+  })
+
+  it("closes and schedules reconnect when ws.send throws synchronously during ping", async () => {
+    const { useWs, socket, HEARTBEAT_INTERVAL_MS } = await setup()
+    socket.open()
+    const origSend = socket.send.bind(socket)
+    socket.send = (data: string) => {
+      if ((JSON.parse(data) as { type?: string }).type === "ping") {
+        throw new Error("Socket broken during ping")
+      }
+      origSend(data)
+    }
+
+    await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS)
+    expect(useWs.getState().status).toBe("reconnecting")
+    expect(socket.readyState).toBe(3)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(FakeSocket.instances).toHaveLength(2)
+    useWs.getState().disconnect()
+  })
+
+  it("drops the socket and schedules reconnect when useWs.send throws synchronously (e.g. visibilitychange)", async () => {
+    const { useWs, socket } = await setup()
+    socket.open()
+    const origSend = socket.send.bind(socket)
+    socket.send = (data: string) => {
+      if ((JSON.parse(data) as { type?: string }).type === "visibility") {
+        throw new Error("Socket broken on visibility")
+      }
+      origSend(data)
+    }
+
+    expect(useWs.getState().send({ type: "visibility", visible: false })).toBe(false)
+    expect(useWs.getState().status).toBe("reconnecting")
+    expect(socket.readyState).toBe(3)
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(FakeSocket.instances).toHaveLength(2)
+    const nextSocket = FakeSocket.instances[1]!
+    nextSocket.open()
+    nextSocket.send = () => {
+      throw new Error("Socket broken on visibilitychange event")
+    }
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden")
+    expect(() => document.dispatchEvent(new Event("visibilitychange"))).not.toThrow()
+    expect(useWs.getState().status).toBe("reconnecting")
+    useWs.getState().disconnect()
+  })
+
+  it("drops the socket and schedules reconnect when ws.onopen hello send throws synchronously", async () => {
+    const { useWs, socket } = await setup()
+    socket.send = () => {
+      throw new Error("Socket broken during hello")
+    }
+
+    expect(() => socket.open()).not.toThrow()
+    expect(useWs.getState().status).toBe("reconnecting")
+    expect(socket.readyState).toBe(3)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(FakeSocket.instances).toHaveLength(2)
     useWs.getState().disconnect()
   })
 })

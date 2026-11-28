@@ -1,5 +1,5 @@
-import { act, render, screen } from "@testing-library/react"
-import { afterEach, describe, expect, it } from "vitest"
+import { act, fireEvent, render, screen } from "@testing-library/react"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { useWs } from "@/api/ws"
 import { ConnectionDot, Header } from "./Header"
 import { HeaderSlot } from "./header-slot"
@@ -104,5 +104,33 @@ describe("the header on a phone, on a page with its own tabs", () => {
     render(<Header title="Generate" locales={[]} />)
     const controls = screen.getAllByRole("button", { name: "Search" })[0]!.parentElement!
     expect(controls).toHaveClass("gap-1.5", "max-sm:gap-1")
+  })
+})
+
+describe("header control ErrorBoundary recovery", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+    vi.doUnmock("./ModelQuickBar")
+  })
+
+  it("shows a compact retry control when a header widget throws and recovers on retry", async () => {
+    let shouldThrow = true
+    vi.resetModules()
+    vi.doMock("./ModelQuickBar", () => ({
+      default: () => {
+        if (shouldThrow) throw new Error("model bar boom")
+        return <div data-testid="recovered-model-bar">Model ready</div>
+      },
+    }))
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const { Header: MockedHeader } = await import("./Header")
+    render(<MockedHeader title="Generate" locales={[]} />)
+
+    const retry = await screen.findByRole("button", { name: "Model (Try again)" })
+    expect(retry).toHaveClass("h-7")
+    shouldThrow = false
+    fireEvent.click(retry)
+    expect(await screen.findByTestId("recovered-model-bar")).toHaveTextContent("Model ready")
   })
 })

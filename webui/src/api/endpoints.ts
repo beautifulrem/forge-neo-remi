@@ -5,14 +5,28 @@
  * URLs themselves.
  */
 import { apiUrl, client, idempotencyKey, RequestError, ROOT, unwrap } from "./http"
+import type { components } from "./gen/schema"
 import type {
   ActionRequest,
   ActionResponse,
+  BoardCreate,
+  BoardUpdate,
   Bootstrap,
+  ChainCreateRequest,
+  ChainListQuery,
+  ChainListResponse,
+  ChainPreviewRequest,
+  ChainRerunRequest,
+  ChainTemplate,
+  ChainTemplateCreate,
+  ChainTemplateList,
+  CompareRequest,
+  CompareResult,
   FormTab,
   GalleryQuery,
   ImportSource,
   InfotextParsed,
+  JobChain,
   JobsQuery,
   JobRequest,
   NetworkQuery,
@@ -20,9 +34,34 @@ import type {
   PageSchema,
   ParamValues,
   PromptStyle,
+  PromptUpsampleRequest,
+  Recipe,
+  RecipeApplyRequest,
+  RecipeApplyResponse,
+  RecipeCreate,
+  RecipeExportBundle,
+  RecipeImportRequest,
+  RecipeImportResponse,
+  RecipeListResponse,
+  RecipeQuery,
+  RecipeUpdate,
+  StageSpec,
   TabSchema,
   TokenCountRequest,
 } from "./types"
+
+function normalizeStage(stage: StageSpec): components["schemas"]["StageSpecModel"] {
+  return {
+    ...(stage.index !== undefined ? { index: stage.index } : {}),
+    kind: stage.kind,
+    name: stage.name ?? "",
+    enabled: stage.enabled ?? true,
+    tab: stage.tab ?? "",
+    core: stage.core ?? {},
+    scripts: stage.scripts ?? {},
+    config: stage.config ?? {},
+  }
+}
 
 const enc = encodeURIComponent
 
@@ -122,6 +161,125 @@ export const api = {
     zip: (ids: string[]) => unwrap(client.POST("/api/v2/gallery/zip", { body: { ids } })),
     /** Shows the file in the WebUI machine's file manager (403 for remote browsers). */
     reveal: (id: string) => unwrap(client.POST("/api/v2/gallery/{file_id}/reveal", { params: { path: { file_id: id } } })),
+    /** Ancestors, siblings, and descendants of a gallery output. */
+    lineage: (id: string, signal?: AbortSignal) =>
+      unwrap(client.GET("/api/v2/gallery/{file_id}/lineage", { params: { path: { file_id: id } }, signal })),
+    /** Structured parameter diff between two gallery outputs or infotexts. */
+    compare: (body: CompareRequest, signal?: AbortSignal) =>
+      unwrap(client.POST("/api/v2/gallery/compare", { body, signal })) as Promise<CompareResult>,
+  },
+
+  /** Gallery project boards (`features/library/boards-api`). */
+  boards: {
+    list: (signal?: AbortSignal) => unwrap(client.GET("/api/v2/boards", { signal })),
+    get: (id: string, signal?: AbortSignal) => unwrap(client.GET("/api/v2/boards/{board_id}", { params: { path: { board_id: id } }, signal })),
+    create: (body: BoardCreate) => unwrap(client.POST("/api/v2/boards", { body: { description: "", ...body } })),
+    update: (id: string, body: BoardUpdate) => unwrap(client.PATCH("/api/v2/boards/{board_id}", { params: { path: { board_id: id } }, body })),
+    delete: (id: string) => unwrap(client.DELETE("/api/v2/boards/{board_id}", { params: { path: { board_id: id } } })),
+    addItems: (id: string, fileIds: readonly string[]) =>
+      unwrap(client.POST("/api/v2/boards/{board_id}/items", { params: { path: { board_id: id } }, body: { file_ids: [...fileIds] } })),
+    removeItems: (id: string, fileIds: readonly string[]) =>
+      unwrap(client.POST("/api/v2/boards/{board_id}/items/remove", { params: { path: { board_id: id } }, body: { file_ids: [...fileIds] } })),
+    removeItem: (id: string, fileId: string) =>
+      unwrap(client.DELETE("/api/v2/boards/{board_id}/items/{file_id}", { params: { path: { board_id: id, file_id: fileId } } })),
+  },
+
+  /** Multi-stage linear pipelines and stage cache (`features/pipelines`). */
+  chains: {
+    list: (query: ChainListQuery = {}, signal?: AbortSignal) =>
+      unwrap(client.GET("/api/v2/chains", { params: { query }, signal })) as Promise<ChainListResponse>,
+    templates: (signal?: AbortSignal) => unwrap(client.GET("/api/v2/chains/templates", { signal })) as Promise<ChainTemplateList>,
+    getTemplate: (id: string, signal?: AbortSignal) =>
+      unwrap(client.GET("/api/v2/chains/templates/{template_id}", { params: { path: { template_id: id } }, signal })) as Promise<ChainTemplate>,
+    createTemplate: (body: ChainTemplateCreate) =>
+      unwrap(
+        client.POST("/api/v2/chains/templates", {
+          body: { description: "", tags: [], ...body, stages: body.stages.map(normalizeStage) },
+        }),
+      ) as Promise<ChainTemplate>,
+    deleteTemplate: (id: string) =>
+      unwrap(client.DELETE("/api/v2/chains/templates/{template_id}", { params: { path: { template_id: id } } })),
+    preview: (body: ChainPreviewRequest, signal?: AbortSignal) =>
+      unwrap(client.POST("/api/v2/chains/preview", { body: { ...body, stages: body.stages.map(normalizeStage) }, signal })),
+    create: (body: ChainCreateRequest, key: string | null = idempotencyKey()) =>
+      unwrap(
+        client.POST("/api/v2/chains", {
+          params: { header: key ? { "idempotency-key": key } : undefined },
+          body: { name: "", run_now: true, priority: 0, ...body, stages: body.stages.map(normalizeStage) },
+        }),
+      ) as Promise<JobChain>,
+    get: (id: string, signal?: AbortSignal) =>
+      unwrap(client.GET("/api/v2/chains/{chain_id}", { params: { path: { chain_id: id } }, signal })) as Promise<JobChain>,
+    rerun: (id: string, body: ChainRerunRequest = {}) => {
+      const { stages, ...rest } = body
+      return unwrap(
+        client.POST("/api/v2/chains/{chain_id}/rerun", {
+          params: { path: { chain_id: id } },
+          body: { force_stages: [], ...rest, ...(stages ? { stages: stages.map(normalizeStage) } : {}) },
+        }),
+      ) as Promise<JobChain>
+    },
+    pause: (id: string) => unwrap(client.POST("/api/v2/chains/{chain_id}/pause", { params: { path: { chain_id: id } } })) as Promise<JobChain>,
+    resume: (id: string) => unwrap(client.POST("/api/v2/chains/{chain_id}/resume", { params: { path: { chain_id: id } } })) as Promise<JobChain>,
+    cancel: (id: string) => unwrap(client.POST("/api/v2/chains/{chain_id}/cancel", { params: { path: { chain_id: id } } })) as Promise<JobChain>,
+    delete: (id: string) => unwrap(client.DELETE("/api/v2/chains/{chain_id}", { params: { path: { chain_id: id } } })),
+  },
+
+  /** Cross-model parameter recipes (`features/recipes`). */
+  recipes: {
+    list: (query: RecipeQuery = {}, signal?: AbortSignal) =>
+      unwrap(client.GET("/api/v2/recipes", { params: { query }, signal })) as Promise<RecipeListResponse>,
+    get: (id: string, signal?: AbortSignal) =>
+      unwrap(client.GET("/api/v2/recipes/{recipe_id}", { params: { path: { recipe_id: id } }, signal })) as Promise<Recipe>,
+    create: (body: RecipeCreate) =>
+      unwrap(
+        client.POST("/api/v2/recipes", {
+          body: { description: "", capabilities: [], tab: "txt2img", core_patch: {}, scripts_patch: {}, tags: [], ...body },
+        }),
+      ) as Promise<Recipe>,
+    update: (id: string, body: RecipeUpdate) =>
+      unwrap(client.PATCH("/api/v2/recipes/{recipe_id}", { params: { path: { recipe_id: id } }, body })) as Promise<Recipe>,
+    delete: (id: string) => unwrap(client.DELETE("/api/v2/recipes/{recipe_id}", { params: { path: { recipe_id: id } } })),
+    apply: (id: string, body: RecipeApplyRequest = {}) =>
+      unwrap(
+        client.POST("/api/v2/recipes/{recipe_id}/apply", {
+          params: { path: { recipe_id: id } },
+          body: { core: {}, scripts: {}, check_conflicts: true, ...body },
+        }),
+      ) as Promise<RecipeApplyResponse>,
+    exportRecipes: (signal?: AbortSignal) => unwrap(client.GET("/api/v2/recipes/export", { signal })) as Promise<RecipeExportBundle>,
+    importRecipes: (body: RecipeImportRequest) =>
+      unwrap(client.POST("/api/v2/recipes/import", { body: { version: 1, overwrite: false, ...body } })) as Promise<RecipeImportResponse>,
+  },
+
+  /** Inference worker pool & MLX sidecar telemetry. */
+  workers: {
+    status: (signal?: AbortSignal) => unwrap(client.GET("/api/v2/workers", { signal })),
+    get: (id: string, signal?: AbortSignal) => unwrap(client.GET("/api/v2/workers/{worker_id}", { params: { path: { worker_id: id } }, signal })),
+    restart: (id: string) => unwrap(client.POST("/api/v2/workers/{worker_id}/restart", { params: { path: { worker_id: id } } })),
+  },
+
+  /** Prompt tools & Multimodal Prompt Upsampler (`features/prompt-editor/pup`). */
+  promptTools: {
+    config: (signal?: AbortSignal) => unwrap(client.GET("/api/v2/prompt-tools/config", { signal })),
+    refresh: () => unwrap(client.POST("/api/v2/prompt-tools/refresh")),
+    upsample: (body: PromptUpsampleRequest, signal?: AbortSignal) =>
+      unwrap(
+        client.POST("/api/v2/prompt-tools/upsample", {
+          body: {
+            reference_file_ids: [],
+            reference_images: [],
+            mode: "auto",
+            current: "",
+            negative: false,
+            instructions: "",
+            temperature: 0.7,
+            max_tokens: 1024,
+            ...body,
+          },
+          signal,
+        }),
+      ),
   },
   /** Indexes images in the output folders that the gallery does not know yet. */
   scanOutputs: () => unwrap(client.POST("/api/v2/outputs/refresh")),
@@ -215,6 +373,7 @@ export const api = {
   /** Extensions management; writes answer 403 when the server disallows extension access. */
   extensions: {
     list: (signal?: AbortSignal) => unwrap(client.GET("/api/v2/extensions", { signal })),
+    diagnostics: (signal?: AbortSignal) => unwrap(client.GET("/api/v2/extensions/diagnostics", { signal })),
     configure: (body: { disabled?: string[]; disable_all?: "none" | "extra" | "all" }) => unwrap(client.PATCH("/api/v2/extensions", { body })),
     /** One extension's update check (clients check one at a time to show progress). */
     check: (name: string) => unwrap(client.POST("/api/v2/extensions/{name}/check", { params: { path: { name } } })),

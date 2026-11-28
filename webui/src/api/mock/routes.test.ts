@@ -102,9 +102,8 @@ it("answers every route the SPA calls", async () => {
     unread.push(...workbench.unread)
   }
   expect(unread).toEqual([])
-  // 28 call sites in boards, pipelines, recipes, compare, diagnostics and the upsampler
-  expect(read).toBeGreaterThanOrEqual(28)
-  expect([...calls].filter((call) => call.startsWith("PATCH /api/v2/boards/"))).toEqual(["PATCH /api/v2/boards/{id}"])
+  expect(read).toBe(0)
+  expect([...calls]).toContain("PATCH /api/v2/boards/{board_id}")
   const missing: string[] = []
   for (const call of calls) {
     const [method = "", path = ""] = call.split(" ")

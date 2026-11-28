@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { resetParams } from "../actions"
-import { useForm, useFormState, useOwner, useParam } from "../hooks"
+import { useForm, useFormState, useInheritedEnabled, useOwner, useParam } from "../hooks"
 import { errorTextId } from "../a11y"
 import { FieldError, ModifiedDot } from "../Field"
 import { inputsIn, sectionKey } from "../form-index"
@@ -54,6 +54,7 @@ export function Section({ node }: { node: SectionNode }) {
   const id = useId()
   const { store, formId } = useForm()
   const owner = useOwner()
+  const inheritedEnabled = useInheritedEnabled()
   const key = sectionKey(owner, node)
   const open = useFormState((s) => s.open[key] ?? node.open ?? false)
   const inputs = inputsIn(node)
@@ -97,6 +98,7 @@ export function Section({ node }: { node: SectionNode }) {
         {modified ? (
           <ModifiedDot
             label={title}
+            disabled={!inheritedEnabled}
             onReset={() => resetParams({ store, tab: formId }, owner, names)}
           />
         ) : null}

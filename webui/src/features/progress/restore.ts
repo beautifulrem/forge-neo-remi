@@ -14,13 +14,16 @@
 import { api } from "@/api/endpoints"
 import { ApiError } from "@/api/http"
 import { useProgress } from "@/api/progress"
+import { keys, queryClient } from "@/api/queries"
 import type { Job } from "@/api/types"
-import { onWsEvent } from "@/api/ws"
+import { onWsEvent, useWs, type WsStatus } from "@/api/ws"
 import { useSession } from "@/features/gallery/session-store"
 import { sessionIsOwn } from "@/lib/tab-identity"
-import { dispatchRun, forgetStoredRun, GENERATE_FORMS, type GenerateTab, type PersistedRun, persistedRun, useRuns } from "./run-controller"
+import { dispatchRun, forgetStoredRun, GENERATE_FORMS, type GenerateTab, hasActiveRuns, type PersistedRun, persistedRun, useRuns } from "./run-controller"
 import type { JobOutcome } from "./run-machine"
 import { loopRunsElsewhere } from "./loop-owner"
+
+export const POLL_INTERVAL_MS = 2_000
 
 let restoring: Promise<void> | null = null
 
@@ -78,12 +81,40 @@ function reconcile(tab: GenerateTab, jobId: string, job: Job | null) {
   // A vanished job counts as failed: it ends forever / repeats instead of looping on nothing.
   const outcome = job ? outcomeOf(job.status, run.interrupting) : "failed"
   if (!outcome) {
-    if (job?.status === "running" && run.running !== jobId) dispatchRun(tab, { type: "started", jobId })
+    if (job?.status === "running") {
+      if (run.running !== jobId) dispatchRun(tab, { type: "started", jobId })
+      if (job.progress) {
+        const progress = useProgress.getState()
+        if (progress.running?.jobId !== jobId) {
+          progress.started({ job_id: jobId, seq: job.seq, steps: job.progress.steps, job_count: job.progress.job_count })
+        }
+        useProgress.getState().progress({
+          job_id: jobId,
+          seq: job.seq,
+          step: job.progress.step,
+          steps: job.progress.steps,
+          eta: job.progress.eta,
+          job_no: job.progress.job_no,
+          job_count: job.progress.job_count,
+          text: job.progress.text ?? undefined,
+        })
+      }
+    }
     return
   }
   // The live progress of a job that has ended must not linger.
   if (useProgress.getState().running?.jobId === jobId) useProgress.getState().syncRunning(null)
-  if (job && outcome !== "failed") useSession.getState().addJob({ jobId, tab, outputs: job.outputs, infotext: job.infotext })
+  if (job && outcome !== "failed") {
+    useSession.getState().addJob({ jobId, tab, outputs: job.outputs, infotext: job.infotext })
+    useProgress.getState().completed({ job_id: jobId, seq: job.seq, outputs: job.outputs, infotext: job.infotext, status: job.status })
+  } else if (job && outcome === "failed") {
+    useProgress.getState().failed({ job_id: jobId, seq: job.seq, error: job.error ?? "Failed", status: job.status, errors: job.errors })
+  }
+  void queryClient.invalidateQueries({ queryKey: keys.jobs })
+  void queryClient.invalidateQueries({ queryKey: keys.queueItems })
+  if (job && outcome === "completed" && job.outputs.length > 0) {
+    void queryClient.invalidateQueries({ queryKey: ["outputs"] })
+  }
   dispatchRun(tab, { type: "finished", jobId, outcome })
 }
 
@@ -115,31 +146,90 @@ export async function resyncRuns(tabs: readonly GenerateTab[] = GENERATE_FORMS):
 }
 
 let wired = false
+let pollTimer: ReturnType<typeof setTimeout> | undefined
+let polling = false
+let cleanups: (() => void)[] = []
+
+function isWsUnhealthy(status: WsStatus): boolean {
+  return status === "reconnecting" || status === "closed"
+}
+
+function stopPolling() {
+  clearTimeout(pollTimer)
+  pollTimer = undefined
+}
+
+function schedulePoll() {
+  if (!wired || pollTimer !== undefined) return
+  if (!hasActiveRuns() || !isWsUnhealthy(useWs.getState().status)) return
+  pollTimer = setTimeout(() => {
+    pollTimer = undefined
+    void runPoll()
+  }, POLL_INTERVAL_MS)
+}
+
+async function runPoll() {
+  if (!wired || polling) return
+  if (!hasActiveRuns() || !isWsUnhealthy(useWs.getState().status)) return
+  polling = true
+  try {
+    const [queue] = await Promise.all([api.queue.status().catch(() => null), resyncRuns()])
+    if (queue) {
+      const runningId = useProgress.getState().running?.jobId
+      const activeInForm = runningId !== undefined && GENERATE_FORMS.some((tab) => useRuns.getState().runs[tab].running === runningId)
+      if (!activeInForm) useProgress.getState().syncRunning(queue.running ?? null)
+    }
+  } finally {
+    polling = false
+    schedulePoll()
+  }
+}
 
 /**
  * Resyncs after every `hello` (a reconnect: events sent while the socket was
- * down are lost) and when `queue.changed` names a running job other than the
- * one a form believes runs.
+ * down are lost), when `queue.changed` names a running job other than the
+ * one a form believes runs, and polls over HTTP while the WebSocket is
+ * unhealthy/disconnected during active runs.
  */
 export function wireRunSync() {
   if (wired) return
   wired = true
-  onWsEvent("hello", () => void resyncRuns())
-  onWsEvent("queue.changed", (e) => {
-    if (e.running === undefined) return
-    const running = e.running
-    const { runs } = useRuns.getState()
-    for (const tab of GENERATE_FORMS) {
-      const run = runs[tab]
-      // The job this form believes runs has ended without its event reaching us.
-      if (run.running && run.running !== running) void resyncRuns([tab])
-      if (running && run.jobs.includes(running) && run.running !== running) dispatchRun(tab, { type: "started", jobId: running })
-    }
-  })
+  cleanups = [
+    onWsEvent("hello", () => {
+      stopPolling()
+      void resyncRuns()
+    }),
+    onWsEvent("queue.changed", (e) => {
+      if (e.running === undefined) return
+      const running = e.running
+      const { runs } = useRuns.getState()
+      for (const tab of GENERATE_FORMS) {
+        const run = runs[tab]
+        // The job this form believes runs has ended without its event reaching us.
+        if (run.running && run.running !== running) void resyncRuns([tab])
+        if (running && run.jobs.includes(running) && run.running !== running) dispatchRun(tab, { type: "started", jobId: running })
+      }
+    }),
+    useWs.subscribe((s, prev) => {
+      if (s.status === prev.status) return
+      if (isWsUnhealthy(s.status)) schedulePoll()
+      else if (s.status === "open") stopPolling()
+    }),
+    useRuns.subscribe(() => {
+      if (hasActiveRuns()) schedulePoll()
+      else stopPolling()
+    }),
+  ]
+  schedulePoll()
 }
 
 /** Tests only. */
 export function resetRestore() {
   restoring = null
   checking.clear()
+  stopPolling()
+  polling = false
+  for (const off of cleanups) off()
+  cleanups = []
+  wired = false
 }

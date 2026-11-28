@@ -4,10 +4,16 @@
  * after `tools/export_openapi.py`); only the free-form JSON the server types
  * as `dict` (schemas, param values, action patches) is refined here.
  */
-import type { ChoiceOption, PageSchema, SettingsSchema, TabSchema } from "@/ui/schema"
+import type { AdviceItem, ChoiceOption, ModelCapabilitySummary, PageSchema, SettingsSchema, TabSchema as UiTabSchema } from "@/ui/schema"
 import type { components, paths } from "./gen/schema"
 
-export type { PageSchema, SettingsSchema, TabSchema }
+export type { PageSchema, SettingsSchema }
+
+/** `GET /schema/{tab}`: UI tab schema plus server-declared `advice_params` triggers. */
+export type TabSchema = UiTabSchema & {
+  /** `"owner.param"` references whose edits trigger debounced `core/__advice__`. */
+  advice_params?: string[] | null
+}
 
 type Schemas = components["schemas"]
 
@@ -155,6 +161,10 @@ export type ActionReserved = {
   __outputs__?: Record<string, unknown>
   /** Settings the action already stored on the server; the client only updates its cache. */
   __settings__?: Record<string, unknown>
+  /** Pre-submit workflow advice items (`__advice__`). */
+  __advice__?: AdviceItem[]
+  /** Updated active model capability summary (`__capabilities__`). */
+  __capabilities__?: ModelCapabilitySummary
 }
 
 /**
@@ -169,8 +179,8 @@ export type ActionExtra =
   | { selected?: string }
   /** `__preset__`: the Anima preset label. */
   | { label: string }
-  /** `__forge_preset__`: the UI preset. */
-  | { preset: string }
+  /** `__forge_preset__` / `__advice__`: the UI preset. */
+  | { preset?: string }
 
 export type ActionRequest = {
   /** The form that invoked the action: txt2img / img2img / extras, or `page:<id>`. */
@@ -182,3 +192,123 @@ export type ActionRequest = {
   /** Every other non-core owner's values in the form, by owner id (cross-owner actions). */
   scripts?: Record<string, ParamValues>
 } & ActionExtra
+
+// ---------------------------------------------------------------- Boards, Lineage & Compare
+
+export type Board = Schemas["BoardItem"]
+export type BoardCreate = Defaulted<Schemas["BoardCreate"], "description">
+export type BoardUpdate = Schemas["BoardUpdate"]
+export type BoardList = Schemas["BoardList"]
+export type BoardItemsResult = Schemas["BoardItemsResult"]
+
+export type LineageNode = Schemas["LineageNode"]
+export type LineageResponse = Schemas["AssetLineage"]
+
+export type CompareRequest = Schemas["CompareRequest"]
+export type CompareDiffKind = Schemas["CoreParamDiff"]["kind"]
+export type PromptTokenDiff = Schemas["PromptTokenDiff"]
+export type CoreParamDiff = Schemas["CoreParamDiff"]
+export type LoraDiff = Schemas["LoraDiff"]
+export type ExtensionParamDiff = Schemas["ExtensionParamDiff"]
+export type AdoptPatch = Defaulted<Omit<Schemas["AdoptPatch"], "core" | "scripts">, "raw_params"> & {
+  core: ParamValues
+  scripts: Record<string, ParamValues>
+}
+export type CompareResult = Omit<Schemas["CompareResult"], "adopt_a_patch" | "adopt_b_patch"> & {
+  adopt_a_patch: AdoptPatch
+  adopt_b_patch: AdoptPatch
+}
+
+// ---------------------------------------------------------------- Multi-stage Chains
+
+export type StageKind = Schemas["StageSpecModel"]["kind"]
+export type StageStatus = Schemas["StageRunModel"]["status"]
+export type ChainStatus = Schemas["JobChainModel"]["status"]
+
+export type StageSpec = Defaulted<Omit<Schemas["StageSpecModel"], "index" | "tab" | "core" | "scripts">, "name" | "enabled" | "config"> & {
+  index?: number
+  tab?: FormTab
+  core?: ParamValues
+  scripts?: Record<string, ParamValues>
+}
+
+export type StageRun = Omit<Schemas["StageRunModel"], "tab" | "core" | "scripts"> & {
+  tab: FormTab
+  core: ParamValues
+  scripts: Record<string, ParamValues>
+}
+
+export type JobChain = Omit<Schemas["JobChainModel"], "stages"> & {
+  stages: StageRun[]
+}
+
+export type ChainListQuery = NonNullable<paths["/api/v2/chains"]["get"]["parameters"]["query"]>
+export type ChainListResponse = Omit<Schemas["Page_JobChainModel_"], "items"> & { items: JobChain[] }
+export type ChainPreviewStage = Schemas["StageCachePlan"]
+export type ChainPreviewRequest = Omit<Schemas["ChainPreviewRequest"], "stages"> & { stages: readonly StageSpec[] }
+export type ChainPreviewResponse = Schemas["ChainPreviewResult"]
+export type ChainCreateRequest = Defaulted<Omit<Schemas["ChainCreateRequest"], "stages">, "name" | "run_now" | "priority"> & {
+  stages: readonly StageSpec[]
+}
+export type ChainRerunRequest = Defaulted<Omit<Schemas["ChainRerunRequest"], "stages">, "force_stages"> & {
+  stages?: readonly StageSpec[] | null
+}
+export type ChainTemplate = Omit<Schemas["ChainTemplateModel"], "stages"> & { stages: StageSpec[] }
+export type ChainTemplateCreate = Defaulted<Omit<Schemas["ChainTemplateCreate"], "stages">, "description" | "tags"> & {
+  stages: readonly StageSpec[]
+}
+export type ChainTemplateList = Omit<Schemas["ChainTemplateList"], "items"> & { items: ChainTemplate[] }
+
+// ---------------------------------------------------------------- Recipes
+
+export type Recipe = Omit<Schemas["RecipeItem"], "core_patch" | "scripts_patch"> & {
+  core_patch: ParamValues
+  scripts_patch: Record<string, ParamValues>
+}
+export type RecipeQuery = NonNullable<paths["/api/v2/recipes"]["get"]["parameters"]["query"]>
+export type RecipeCreate = Defaulted<Omit<Schemas["RecipeCreate"], "core_patch" | "scripts_patch">, "description" | "capabilities" | "tab" | "tags"> & {
+  core_patch?: ParamValues
+  scripts_patch?: Record<string, ParamValues>
+}
+export type RecipeUpdate = Omit<Schemas["RecipeUpdate"], "core_patch" | "scripts_patch"> & {
+  core_patch?: ParamValues | null
+  scripts_patch?: Record<string, ParamValues> | null
+}
+export type RecipeListResponse = Omit<Schemas["RecipeList"], "items"> & { items: Recipe[] }
+export type RecipeExportBundle = Omit<Schemas["RecipeExport"], "recipes"> & { recipes: Recipe[] }
+export type RecipeImportRequest = Defaulted<Schemas["RecipeImportRequest"], "version" | "overwrite">
+export type RecipeImportResponse = Omit<Schemas["RecipeImportResult"], "items"> & { items: Recipe[] }
+export type RecipeApplyRequest = Defaulted<Omit<Schemas["RecipeApplyRequest"], "core" | "scripts">, "check_conflicts"> & {
+  core?: ParamValues
+  scripts?: Record<string, ParamValues>
+}
+export type RecipeApplyResponse = Omit<Schemas["RecipeApplyResult"], "recipe" | "core" | "scripts"> & {
+  recipe: Recipe
+  core: ParamValues
+  scripts: Record<string, ParamValues>
+}
+
+// ---------------------------------------------------------------- Workers & Diagnostics
+
+export type WorkerInfo = Schemas["WorkerStatusModel"]
+export type MlxStatus = Schemas["MlxEnvironmentModel"]
+export type WorkersResponse = Schemas["WorkersResponse"]
+export type WorkerRestartResponse = Schemas["WorkerRestartResponse"]
+
+export type ExtensionManifest = Schemas["ExtensionManifestModel"]
+export type ExtensionErrorEntry = Schemas["ExtensionErrorEntry"]
+export type DisabledScriptInfo = Schemas["DisabledScriptInfo"]
+export type ManifestErrorDetail = Schemas["ManifestErrorDetail"]
+export type ExtensionDiagnosticItem = Schemas["ExtensionDiagnosticItem"]
+export type DiagnosticsSummary = Schemas["ExtensionDiagnosticsSummary"]
+export type ExtensionDiagnosticsResponse = Schemas["ExtensionDiagnosticsResponse"]
+
+// ---------------------------------------------------------------- Prompt Tools (PUP)
+
+export type PromptToolsConfig = Schemas["PromptToolsConfig"]
+export type PromptUpsampleRequest = Defaulted<
+  Schemas["PromptUpsampleRequest"],
+  "reference_file_ids" | "reference_images" | "mode" | "current" | "negative" | "instructions" | "temperature" | "max_tokens"
+>
+export type PromptUpsampleWarning = Schemas["PromptUpsampleWarning"]
+export type PromptUpsampled = Schemas["PromptUpsampled"]

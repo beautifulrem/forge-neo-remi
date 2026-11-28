@@ -77,4 +77,17 @@ describe("popover (implementation loaded on demand)", { timeout: 30_000 }, () =>
     expect(await screen.findByRole("dialog", { name: "Settings" }, slow)).toHaveTextContent("Body")
     expect(screen.getByRole("button", { name: "Open" })).toHaveAttribute("aria-expanded", "true")
   })
+
+  it("opens on first press even when performance.now() is under 400 ms", async () => {
+    const nowSpy = vi.spyOn(performance, "now").mockReturnValue(150)
+    try {
+      render(<Panel />)
+      const trigger = screen.getByRole("button", { name: "Aspect ratio" })
+      fireEvent.click(trigger)
+      expect(trigger).toHaveAttribute("aria-expanded", "true")
+      expect(await screen.findByRole("dialog", { name: "Aspect ratio" }, slow)).toBeInTheDocument()
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
 })

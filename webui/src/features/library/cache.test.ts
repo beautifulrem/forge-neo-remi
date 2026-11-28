@@ -2,6 +2,7 @@ import { InfiniteQueryObserver } from "@tanstack/react-query"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { queryClient } from "@/api/queries"
 import type { GalleryItem, GalleryQuery } from "@/api/types"
+import { boardKeys } from "./boards-api"
 import { batches, galleryKeys, MAX_BATCH, onNewOutputs, onOutputsChanged } from "./cache"
 import { downloadZip, galleryListQuery, removeOutputs, starOutputs } from "./queries"
 
@@ -87,14 +88,16 @@ describe("gallery batches", () => {
     expect(cached(query).pages[0]!.total).toBe(1)
   })
 
-  it("removes more than 2000 images in batches and drops them from the pages", async () => {
+  it("removes more than 2000 images in batches, drops them from the pages, and invalidates boards", async () => {
     const query: GalleryQuery = { sort: "newest" }
     seed(query, [[item("i0"), item("keep")], [item("i2001")]], 3)
+    queryClient.setQueryData(boardKeys.all, [{ id: "b1", name: "Heroes", description: "", item_count: 2, cover_file_id: "i0", created_at: "", updated_at: "" }])
     const calls = mockFetch((call) => ({ count: (call.body as { ids?: string[] } | undefined)?.ids?.length ?? 0 }))
     expect(await removeOutputs(ids(2500), true)).toBe(true)
     expect(calls.filter((call) => call.path === "/gallery/delete").map((call) => (call.body as { ids: string[] }).ids.length)).toEqual([2000, 500])
     expect(cached(query).pages.flatMap((page) => page.items.map((entry) => entry.id))).toEqual(["keep"])
     expect(cached(query).pages[0]!.total).toBe(1)
+    expect(queryClient.getQueryState(boardKeys.all)?.isInvalidated).toBe(true)
   })
 
   it("packs at most 2000 images into a zip", async () => {
@@ -132,9 +135,10 @@ describe("gallery cache sync", () => {
     expect(calls.filter((call) => call.path === "/gallery")).toEqual([])
   })
 
-  it("patches an image changed by another client from the server", async () => {
+  it("patches an image changed by another client from the server and invalidates boards", async () => {
     const query: GalleryQuery = { sort: "newest" }
     seed(query, [[item("a"), item("b")]], 2)
+    queryClient.setQueryData(boardKeys.all, [{ id: "b1", name: "Heroes", description: "", item_count: 2, cover_file_id: "b", created_at: "", updated_at: "" }])
     const calls = mockFetch((call) =>
       call.path === "/gallery/a" ? item("a", { starred: true }) : call.path === "/gallery/b" ? new Response(JSON.stringify({ detail: "gone" }), { status: 404, headers: { "Content-Type": "application/json" } }) : {},
     )
@@ -143,5 +147,6 @@ describe("gallery cache sync", () => {
     expect(fetched).toEqual(expect.arrayContaining(["/gallery/a", "/gallery/b"]))
     expect(fetched).not.toContain("/gallery/not-loaded") // not shown anywhere: nothing to patch
     expect(cached(query).pages[0]!.items).toEqual([item("a", { starred: true })])
+    expect(queryClient.getQueryState(boardKeys.all)?.isInvalidated).toBe(true)
   })
 })

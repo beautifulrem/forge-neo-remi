@@ -106,7 +106,7 @@ test.describe("extension management on a real server", () => {
     await main.getByRole("button", { name: "Check for updates" }).click()
     await expect(main.getByRole("progressbar", { name: "Checking for updates" })).toBeVisible()
     await expect(main.getByText(/^Checked \d+ of 2/)).toBeVisible()
-    await expect(page.getByText("1 updates available")).toBeVisible({ timeout: SLOW })
+    await expect(page.getByText("1 update available")).toBeVisible({ timeout: SLOW })
     await expect(main.getByText("Update available")).toHaveCount(1)
 
     await main.getByRole("checkbox", { name: "Update" }).check()
@@ -177,7 +177,9 @@ test.describe("browser features on a real server, no model", () => {
     const viewer = page.getByRole("dialog", { name: "Image viewer" })
     const position = viewer.getByText(/^\d+ of 3$/)
     const start = Number((await position.textContent())!.split(" ")[0])
-    const box = (await viewer.getByRole("img").first().boundingBox())!
+    const img = viewer.getByRole("img", { name: "Generated image" })
+    await expect(img).toBeVisible({ timeout: SLOW })
+    const box = (await img.boundingBox())!
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
     // A sideways wheel (tilt wheel, horizontal swipe) turns the page; a vertical one zooms.
     const step = start < 3 ? 1 : -1

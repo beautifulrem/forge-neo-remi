@@ -197,3 +197,25 @@ describe("the mock's output list and queue-wide actions", () => {
     await call("POST", "/queue/resume")
   })
 })
+
+describe("MockSocket", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("replies with pong on ping and hello + queue.changed on hello", async () => {
+    vi.useFakeTimers()
+    const socket = new MockSocket()
+    const received: Record<string, unknown>[] = []
+    socket.onmessage = (event) => {
+      if (typeof event.data === "string") received.push(JSON.parse(event.data) as Record<string, unknown>)
+    }
+    await vi.advanceTimersByTimeAsync(200)
+    socket.send(JSON.stringify({ type: "hello" }))
+    socket.send(JSON.stringify({ type: "ping" }))
+    socket.send(JSON.stringify({ type: "visibility", visible: false }))
+    socket.close()
+
+    expect(received.map((m) => m.type)).toEqual(["hello", "queue.changed", "pong"])
+  })
+})

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { useOptionWrite } from "@/features/model-bar/model-options"
 import { api } from "./endpoints"
 import { bootstrap, models } from "./mock/fixtures"
-import { keys, modelsQuery, queryClient } from "./queries"
+import { keys, modelsQuery, queryClient, workersQuery } from "./queries"
 
 // The server usually runs on this machine: a laptop that drops its Wi-Fi still reaches it, so the
 // browser's offline flag must not hold requests back.
@@ -46,5 +46,15 @@ describe("the app's query client while the browser reports offline", () => {
     act(() => onlineManager.setOnline(false))
     act(() => onlineManager.setOnline(true))
     await waitFor(() => expect(load).toHaveBeenCalledTimes(2))
+  })
+
+  it("shares the unified ['workers'] query key via api.workers.status", async () => {
+    const payload = { mode: "inprocess", dispatch_active: false, preview: false, workers: [], mlx: { available: false, platform_supported: false } }
+    const status = vi.spyOn(api.workers, "status").mockResolvedValue(payload as never)
+    expect(keys.workers).toEqual(["workers"])
+    expect(workersQuery.queryKey).toEqual(["workers"])
+    const data = await queryClient.fetchQuery(workersQuery)
+    expect(status).toHaveBeenCalledTimes(1)
+    expect(data).toEqual(payload)
   })
 })

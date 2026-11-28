@@ -234,6 +234,12 @@ export function upscaleResult(source: UpscaleSource) {
   dispatchRun("txt2img", { type: "upscale", source })
 }
 
+/** Whether any generation tab currently has jobs in flight. */
+export function hasActiveRuns(): boolean {
+  const { runs } = useRuns.getState()
+  return GENERATE_FORMS.some((tab) => runs[tab].jobs.length > 0)
+}
+
 /** Tests: back to idle, nothing persisted. */
 export function resetRunControllers() {
   early.clear()

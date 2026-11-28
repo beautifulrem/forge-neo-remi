@@ -34,6 +34,8 @@ export const keys = {
   options: ["options"] as const,
   models: ["models"] as const,
   styles: ["styles"] as const,
+  workers: ["workers"] as const,
+  chains: ["chains"] as const,
 }
 
 export const bootstrapQuery = queryOptions({
@@ -65,6 +67,14 @@ export const modelsQuery = queryOptions({ queryKey: keys.models, queryFn: ({ sig
 export const optionsQuery = queryOptions({ queryKey: keys.options, queryFn: ({ signal }) => api.options(signal) })
 
 export const stylesQuery = queryOptions({ queryKey: keys.styles, queryFn: ({ signal }) => api.styles.list(signal) })
+
+/** Inference worker pool & MLX sidecar status; shared by ModelBar and DiagnosticsView. */
+export const workersQuery = queryOptions({
+  queryKey: keys.workers,
+  queryFn: ({ signal }) => api.workers.status(signal),
+  staleTime: 15_000,
+  retry: false,
+})
 
 export const useBootstrap = () => useQuery(bootstrapQuery)
 export const useSchema = (tab: FormTab) => useSuspenseQuery(schemaQuery(tab))

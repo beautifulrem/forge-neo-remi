@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Keyboard, Languages, Monitor, Moon, Rows3, Rows4, Sun } from "@/components/icons"
 import { Suspense, useEffect, useMemo } from "react"
 import { useTranslation } from "react-i18next"
+import { toast } from "sonner"
 import { bootstrapQuery } from "@/api/queries"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { PageSkeleton } from "@/components/PageSkeleton"
@@ -26,7 +27,7 @@ import { navigate, routeKey, useRoute } from "./router"
 import { toastSideOffsets, useToastBottomOffset } from "./toast-offset"
 import { useUserStylesheet } from "./user-stylesheet"
 import { useWsBridge } from "./ws-bridge"
-import { retryableLazy } from "@/lib/retryable-lazy"
+import { retryFailedLoads, retryableLazy } from "@/lib/retryable-lazy"
 import { useSafeAreaInsets } from "@/lib/safe-area"
 
 const CommandPalette = retryableLazy(() => import("./CommandPalette"))
@@ -97,13 +98,15 @@ function AppToaster() {
   )
 }
 
-export function App() {
+function AppShell() {
   const { t } = useTranslation()
   const route = useRoute()
   const bootstrap = useQuery(bootstrapQuery)
   const chosen = useLocale((s) => s.chosen)
   const direction = useLocale((s) => s.direction)
+  const paletteOpen = useCommands((s) => s.palette)
   const paletteLoaded = useCommands((s) => s.paletteLoaded)
+  const shortcutsOpen = useShortcutsHelp((s) => s.open)
   const shortcutsLoaded = useShortcutsHelp((s) => s.loaded)
 
   useApplyAppearance()
@@ -146,7 +149,9 @@ export function App() {
         <div className="flex h-dvh overflow-hidden pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]">
           <NavRail items={nav} route={route} />
           <div className="flex min-w-0 flex-1 flex-col">
-            <Header title={title} locales={locales} />
+            <ErrorBoundary resetKey={routeKey(route)} inline>
+              <Header title={title} locales={locales} />
+            </ErrorBoundary>
             <main id="main" tabIndex={-1} className="relative min-h-0 flex-1 overflow-clip outline-none">
               <ErrorBoundary resetKey={routeKey(route)}>
                 <Suspense fallback={<PageSkeleton />}>
@@ -159,14 +164,30 @@ export function App() {
           </div>
         </div>
         {paletteLoaded ? (
-          <ErrorBoundary fallback={null}>
+          <ErrorBoundary
+            fallback={null}
+            resetKey={paletteOpen}
+            onError={() => {
+              retryFailedLoads()
+              toast.error(t("The dialog could not be shown"))
+              useCommands.getState().setPalette(false)
+            }}
+          >
             <Suspense fallback={null}>
               <CommandPalette />
             </Suspense>
           </ErrorBoundary>
         ) : null}
         {shortcutsLoaded ? (
-          <ErrorBoundary fallback={null}>
+          <ErrorBoundary
+            fallback={null}
+            resetKey={shortcutsOpen}
+            onError={() => {
+              retryFailedLoads()
+              toast.error(t("The dialog could not be shown"))
+              useShortcutsHelp.getState().setOpen(false)
+            }}
+          >
             <Suspense fallback={null}>
               <ShortcutsDialog />
             </Suspense>
@@ -177,5 +198,13 @@ export function App() {
       </TooltipProvider>
       </MotionRoot>
     </DirectionProvider>
+  )
+}
+
+export function App() {
+  return (
+    <ErrorBoundary>
+      <AppShell />
+    </ErrorBoundary>
   )
 }

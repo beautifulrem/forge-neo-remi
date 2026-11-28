@@ -11,7 +11,7 @@ import { claimTabId, resetTabIdentity, TAB_CHANNEL, TAB_ID_KEY, type TabClaim } 
 import { FakeSocket } from "@/test/fake-socket"
 import { forgetCopiedRuns } from "./copied-runs"
 import { loopRunsElsewhere } from "./loop-owner"
-import { resetRestore, restoreRuns, wireRunSync } from "./restore"
+import { resetRestore, restoreRuns, wireRunSync, POLL_INTERVAL_MS } from "./restore"
 import { dispatchRun, MAX_RUNS, persistedJobs, persistedRun, persistKey, resetRunControllers, useRuns, wireRunControllers } from "./run-controller"
 import { phaseOf } from "./run-machine"
 import { created, jobDetail } from "@/test/api-fixtures"
@@ -379,5 +379,91 @@ describe("a damaged stored run", () => {
   it.each(["{not json", "null", "5", '"j1"', '{"jobs": "j1", "forever": "yes", "repeatLeft": "3"}', '{"jobs": [1, null], "repeatLeft": null}'])("restores no run from %s", (raw) => {
     sessionStorage.setItem(persistKey("txt2img"), raw)
     expect(persistedRun("txt2img")).toEqual({ jobs: [], forever: false, repeatLeft: 0 })
+  })
+})
+
+describe("HTTP polling fallback when WebSocket is unhealthy", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("polls active jobs via HTTP while WS is reconnecting and stops once jobs finish", async () => {
+    vi.useFakeTimers()
+    const ws = await socket()
+    vi.spyOn(api.jobs, "create").mockResolvedValue(created("p1"))
+    vi.spyOn(api.queue, "status").mockResolvedValue({ size: 0, paused: false, running: "p1" })
+    const get = vi
+      .spyOn(api.jobs, "get")
+      .mockResolvedValueOnce({
+        ...job("p1", "running"),
+        progress: { step: 3, steps: 10, eta: 5, job_no: 0, job_count: 1, text: null },
+      })
+      .mockResolvedValueOnce(job("p1", "completed", [{ id: "out-poll", kind: "image" }]))
+
+    dispatchRun("txt2img", { type: "generate" })
+    await vi.waitFor(() => expect(useRuns.getState().runs.txt2img.jobs).toEqual(["p1"]))
+
+    // Drop the WebSocket while a job is active.
+    ws.drop()
+    expect(useWs.getState().status).toBe("reconnecting")
+
+    // First poll: updates progress from JobDetail.
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+    expect(get).toHaveBeenCalledTimes(1)
+    expect(useProgress.getState().running).toMatchObject({ jobId: "p1", step: 3, steps: 10 })
+    expect(phaseOf(useRuns.getState().runs.txt2img)).toBe("running")
+
+    // Second poll: settles completed job, files outputs, and stops polling.
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+    expect(get).toHaveBeenCalledTimes(2)
+    expect(phaseOf(useRuns.getState().runs.txt2img)).toBe("idle")
+    expect(useSession.getState().items.map((item) => item.fileId)).toEqual(["out-poll"])
+
+    // No extra polls after idle.
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
+    expect(get).toHaveBeenCalledTimes(2)
+  })
+
+  it("does not let stale queue.status(running: null) wipe freshly reconciled progress in runPoll", async () => {
+    vi.useFakeTimers()
+    const ws = await socket()
+    vi.spyOn(api.jobs, "create").mockResolvedValue(created("job-race"))
+
+    let resolveQueue!: (value: { size: number; paused: boolean; running: string | null }) => void
+    const queuePromise = new Promise<{ size: number; paused: boolean; running: string | null }>((resolve) => {
+      resolveQueue = resolve
+    })
+    let resolveJob!: (value: JobDetail) => void
+    const jobPromise = new Promise<JobDetail>((resolve) => {
+      resolveJob = resolve
+    })
+    const queueSpy = vi.spyOn(api.queue, "status").mockReturnValue(queuePromise)
+    const jobSpy = vi.spyOn(api.jobs, "get").mockReturnValue(jobPromise)
+
+    dispatchRun("txt2img", { type: "generate" })
+    await vi.waitFor(() => expect(useRuns.getState().runs.txt2img.jobs).toEqual(["job-race"]))
+
+    ws.drop()
+    expect(useWs.getState().status).toBe("reconnecting")
+
+    // Trigger first HTTP fallback poll; both requests start.
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+    expect(jobSpy).toHaveBeenCalledWith("job-race")
+    expect(queueSpy).toHaveBeenCalledTimes(1)
+
+    // Jobs endpoint resolves first with active progress, then stale queue.status resolves with running: null.
+    resolveJob({
+      ...job("job-race", "running"),
+      progress: { step: 4, steps: 10, eta: 3, job_no: 0, job_count: 1, text: null },
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    resolveQueue({ size: 0, paused: false, running: null })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(useProgress.getState().running?.jobId).toBe("job-race")
+    expect(useProgress.getState().running?.step).toBe(4)
   })
 })

@@ -150,26 +150,34 @@ for (const theme of ["light", "dark"] satisfies Theme[]) {
       expect(await scan(page)).toEqual([])
     })
 
-    test("header and form popups are named dialogs without violations", async ({ page }) => {
+    test("header Quick settings popup is a named dialog without violations", async ({ page }) => {
       // Quick settings appear once a setting is pinned.
       await openRoute(page, "settings")
       await page.getByRole("button", { name: "Pin Automatically save every generated image to quick settings" }).click()
       await page.evaluate(() => (location.hash = "#/txt2img"))
       await expect(page.getByRole("textbox", { name: "Prompt", exact: true })).toBeVisible()
-      const popups = [
-        { trigger: page.getByRole("button", { name: "Quick settings" }), dialog: "Quick settings" },
-        { trigger: page.getByRole("button", { name: "VAE / Text encoders" }), dialog: "VAE / Text encoders" },
-        { trigger: page.getByRole("combobox", { name: "Checkpoint" }), dialog: "Checkpoint" },
-        { trigger: page.getByRole("main").getByRole("combobox", { name: "Sampling method" }), dialog: "Sampling method" },
-      ]
-      for (const popup of popups) {
-        await popup.trigger.click()
-        await expect(page.getByRole("dialog", { name: popup.dialog })).toBeVisible()
-        expect(await scan(page), popup.dialog).toEqual([])
-        await page.keyboard.press("Escape")
-        await expect(page.getByRole("dialog", { name: popup.dialog })).toBeHidden()
-      }
+      await page.getByRole("button", { name: "Quick settings" }).click()
+      await expect(page.getByRole("dialog", { name: "Quick settings" })).toBeVisible()
+      expect(await scan(page), "Quick settings").toEqual([])
+      await page.keyboard.press("Escape")
+      await expect(page.getByRole("dialog", { name: "Quick settings" })).toBeHidden()
     })
+
+    for (const popup of [
+      { name: "VAE / Text encoders", role: "button" as const, inMain: false },
+      { name: "Checkpoint", role: "combobox" as const, inMain: false },
+      { name: "Sampling method", role: "combobox" as const, inMain: true },
+    ]) {
+      test(`popup "${popup.name}" is a named dialog without violations`, async ({ page }) => {
+        await openGenerate(page, "txt2img")
+        const trigger = (popup.inMain ? page.getByRole("main") : page).getByRole(popup.role, { name: popup.name })
+        await trigger.click()
+        await expect(page.getByRole("dialog", { name: popup.name })).toBeVisible()
+        expect(await scan(page), popup.name).toEqual([])
+        await page.keyboard.press("Escape")
+        await expect(page.getByRole("dialog", { name: popup.name })).toBeHidden()
+      })
+    }
   })
 }
 

@@ -81,13 +81,17 @@ function TokenDiffRow({ title, diff }: { title: string; diff: TokenDiff }) {
   )
 }
 
+function hasDiffValue(value: unknown): boolean {
+  return value !== null && value !== undefined && value !== ""
+}
+
 /**
  * A value with a soft break after each separator of a name (`.`, `_`, `/`, `\`): in the narrow
  * columns of a phone a model or file name wraps between its parts ("anima-v1." / "safetensors"),
  * and inside a part (`overflow-wrap: anywhere`) only when that part alone is wider than the column.
  */
-function nameBreaks(value: string): ReactNode {
-  return value
+function nameBreaks(value: unknown): ReactNode {
+  return String(value)
     .split(/(?<=[._/\\])/)
     .filter(Boolean)
     .map((part, index) => (
@@ -207,7 +211,12 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
       </div>
 
       <CollapsibleContent>
-        <div className="-mx-1 mt-2 max-h-60 overflow-y-auto px-1">
+        <div
+          role="region"
+          aria-label={t("Parameters diff")}
+          tabIndex={0}
+          className="-mx-1 mt-2 max-h-60 overflow-y-auto rounded-sm px-1 outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
+        >
           {!hasMetadata ? (
             <p className="py-3 text-xs text-muted-foreground">{t("No parameter metadata available for either image.")}</p>
           ) : diff ? (
@@ -234,19 +243,23 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border/50 font-mono tabular-nums">
-                        {coreRows.map((row) => (
-                          <tr key={row.key}>
-                            <td className="px-2.5 py-1 font-sans font-medium text-muted-foreground" title={infotextKeyLabel(t, row.key) === row.key ? undefined : row.key}>
-                              {infotextKeyLabel(t, row.key)}
-                            </td>
-                            <td className={cn("px-2.5 py-1 [overflow-wrap:anywhere]", row.changed && row.a && "bg-diff-del-bg/60 text-diff-del")}>
-                              {row.a ? nameBreaks(row.a) : "—"}
-                            </td>
-                            <td className={cn("px-2.5 py-1 [overflow-wrap:anywhere]", row.changed && row.b && "bg-diff-add-bg/60 font-medium text-diff-add")}>
-                              {row.b ? nameBreaks(row.b) : "—"}
-                            </td>
-                          </tr>
-                        ))}
+                        {coreRows.map((row) => {
+                          const hasA = hasDiffValue(row.a)
+                          const hasB = hasDiffValue(row.b)
+                          return (
+                            <tr key={row.key}>
+                              <td className="px-2.5 py-1 font-sans font-medium text-muted-foreground" title={infotextKeyLabel(t, row.key) === row.key ? undefined : row.key}>
+                                {infotextKeyLabel(t, row.key)}
+                              </td>
+                              <td className={cn("px-2.5 py-1 [overflow-wrap:anywhere]", row.changed && hasA && "bg-diff-del-bg/60 text-diff-del")}>
+                                {hasA ? nameBreaks(row.a) : "—"}
+                              </td>
+                              <td className={cn("px-2.5 py-1 [overflow-wrap:anywhere]", row.changed && hasB && "bg-diff-add-bg/60 font-medium text-diff-add")}>
+                                {hasB ? nameBreaks(row.b) : "—"}
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -260,19 +273,23 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
                     {/* fixed: a third per column, so a long name is cut (its title has it whole) instead of widening the table */}
                     <table className="w-full table-fixed border-collapse text-xs font-mono tabular-nums">
                       <tbody className="divide-y divide-border/50">
-                        {diff.lora_diffs.map((lora) => (
-                          <tr key={lora.name}>
-                            <td className="w-1/3 truncate px-2.5 py-1 font-sans font-medium text-foreground" title={lora.name}>
-                              {lora.name}
-                            </td>
-                            <td className={cn("w-1/3 px-2.5 py-1", lora.a ? "bg-diff-del-bg/60 text-diff-del" : "text-muted-foreground")}>
-                              {lora.a ?? "—"}
-                            </td>
-                            <td className={cn("w-1/3 px-2.5 py-1", lora.b ? "bg-diff-add-bg/60 font-medium text-diff-add" : "text-muted-foreground")}>
-                              {lora.b ?? "—"}
-                            </td>
-                          </tr>
-                        ))}
+                        {diff.lora_diffs.map((lora) => {
+                          const hasA = hasDiffValue(lora.a)
+                          const hasB = hasDiffValue(lora.b)
+                          return (
+                            <tr key={lora.name}>
+                              <td className="w-1/3 truncate px-2.5 py-1 font-sans font-medium text-foreground" title={lora.name}>
+                                {lora.name}
+                              </td>
+                              <td className={cn("w-1/3 px-2.5 py-1", hasA ? "bg-diff-del-bg/60 text-diff-del" : "text-muted-foreground")}>
+                                {hasA ? String(lora.a) : "—"}
+                              </td>
+                              <td className={cn("w-1/3 px-2.5 py-1", hasB ? "bg-diff-add-bg/60 font-medium text-diff-add" : "text-muted-foreground")}>
+                                {hasB ? String(lora.b) : "—"}
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -286,23 +303,27 @@ export function ParamDiffPanel({ a, b, onApplied }: ParamDiffPanelProps) {
                     {/* fixed: a third per column, so a long value wraps in its column instead of widening the table */}
                     <table className="w-full table-fixed border-collapse text-xs font-mono tabular-nums">
                       <tbody className="divide-y divide-border/50">
-                        {diff.extension_diffs.map((ext) => (
-                          <tr key={`${ext.group}:${ext.key}`}>
-                            <td className="w-1/3 px-2.5 py-1 font-sans text-muted-foreground [overflow-wrap:anywhere]">
-                              <span className="font-mono text-[0.6875rem] text-foreground">{ext.group}</span>
-                              <span className="mx-1 text-muted-foreground/50" aria-hidden>
-                                /
-                              </span>
-                              {ext.key}
-                            </td>
-                            <td className={cn("w-1/3 px-2.5 py-1 [overflow-wrap:anywhere]", ext.a ? "bg-diff-del-bg/60 text-diff-del" : "text-muted-foreground")}>
-                              {ext.a ? nameBreaks(ext.a) : "—"}
-                            </td>
-                            <td className={cn("w-1/3 px-2.5 py-1 [overflow-wrap:anywhere]", ext.b ? "bg-diff-add-bg/60 font-medium text-diff-add" : "text-muted-foreground")}>
-                              {ext.b ? nameBreaks(ext.b) : "—"}
-                            </td>
-                          </tr>
-                        ))}
+                        {diff.extension_diffs.map((ext) => {
+                          const hasA = hasDiffValue(ext.a)
+                          const hasB = hasDiffValue(ext.b)
+                          return (
+                            <tr key={`${ext.group}:${ext.key}`}>
+                              <td className="w-1/3 px-2.5 py-1 font-sans text-muted-foreground [overflow-wrap:anywhere]">
+                                <span className="font-mono text-[0.6875rem] text-foreground">{ext.group}</span>
+                                <span className="mx-1 text-muted-foreground/50" aria-hidden>
+                                  /
+                                </span>
+                                {ext.key}
+                              </td>
+                              <td className={cn("w-1/3 px-2.5 py-1 [overflow-wrap:anywhere]", hasA ? "bg-diff-del-bg/60 text-diff-del" : "text-muted-foreground")}>
+                                {hasA ? nameBreaks(ext.a) : "—"}
+                              </td>
+                              <td className={cn("w-1/3 px-2.5 py-1 [overflow-wrap:anywhere]", hasB ? "bg-diff-add-bg/60 font-medium text-diff-add" : "text-muted-foreground")}>
+                                {hasB ? nameBreaks(ext.b) : "—"}
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>

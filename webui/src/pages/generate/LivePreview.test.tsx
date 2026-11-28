@@ -1,3 +1,4 @@
+import { StrictMode } from "react"
 import { render, screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 import { LivePreview } from "./LivePreview"
@@ -33,5 +34,22 @@ describe("live preview", () => {
     const { container, rerender } = render(<LivePreview src="blob:1" alt="Live preview" />)
     rerender(<LivePreview src="blob:1" alt="Live preview" />)
     expect(frames(container)).toEqual([["blob:1", "current", false]])
+  })
+
+  it("handles double-buffered frame transitions cleanly under React StrictMode", () => {
+    const { container, rerender } = render(
+      <StrictMode>
+        <LivePreview src="blob:10" alt="Live preview" />
+      </StrictMode>,
+    )
+    rerender(
+      <StrictMode>
+        <LivePreview src="blob:11" alt="Live preview" />
+      </StrictMode>,
+    )
+    expect(frames(container)).toEqual([
+      ["blob:10", "previous", false],
+      ["blob:11", "current", false],
+    ])
   })
 })

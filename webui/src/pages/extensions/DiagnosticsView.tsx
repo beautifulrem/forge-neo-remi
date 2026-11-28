@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PRESSED_TINT_CLASS } from "@/components/ui/toggle"
-import { errorText } from "@/features/errors/error-text"
+import { errorText, serverText } from "@/features/errors/error-text"
 import { i18n } from "@/i18n"
 import { cn } from "@/lib/utils"
 import { panelClass, panelTitleClass } from "@/ui/layout/panel"
@@ -53,6 +53,19 @@ function workerDotTone(state: string): string {
   if (s === "idle" || s === "ready" || s === "running") return "bg-success"
   if (s === "error" || s === "crashed" || s === "dead" || s === "stopped") return "bg-destructive"
   return "bg-warning"
+}
+
+const WORKER_STATE_LABELS: Record<string, string> = {
+  starting: "Starting",
+  idle: "Idle",
+  busy: "Busy",
+  restarting: "Restarting",
+  stopped: "Stopped",
+  error: "Error",
+  unavailable: "Unavailable",
+  ready: "Ready",
+  running: "Running",
+  crashed: "Crashed",
 }
 
 function HealthIndicator({ health }: { health: ExtensionDiagnosticItem["health"] }) {
@@ -97,9 +110,9 @@ export function DiagnosticsView() {
 
   const restart = useMutation({
     mutationFn: (workerId: string) => restartWorkerApi(workerId),
-    onSuccess: () => {
+    onSuccess: (res) => {
       refreshDiagnostics()
-      toast.success(t("Worker restarted"))
+      toast.success(t("Worker restarted"), res.note ? { description: serverText(res.note, language) } : undefined)
     },
     onError: (error) => toast.error(t("Could not restart worker"), { description: errorText(error) }),
   })
@@ -119,7 +132,9 @@ export function DiagnosticsView() {
     if (filter === "manifest" && item.manifest_status === "missing") return false
     if (filter === "disabled" && item.enabled && item.health !== "disabled") return false
     if (terms.length === 0) return true
-    const haystack = `${item.name} ${item.last_error ?? ""} ${item.disabled_reason ?? ""} ${item.manifest?.requires_capabilities?.join(" ") ?? ""}`.toLowerCase()
+    const scriptsText = (item.disabled_scripts ?? []).map((s) => [s.title, s.id, s.kind, s.tab, s.reason].filter(Boolean).join(" ")).join(" ")
+    const errorsText = (item.recent_errors ?? []).map((entry) => `${entry.kind} ${entry.message}`).join(" ")
+    const haystack = `${item.name} ${item.last_error ?? ""} ${scriptsText} ${errorsText} ${item.manifest?.requires_capabilities?.join(" ") ?? ""}`.toLowerCase()
     return terms.every((term) => haystack.includes(term))
   })
 
@@ -192,9 +207,12 @@ export function DiagnosticsView() {
 
       {/* Worker / Multi-GPU / MLX monitor: an inspector panel, not a card */}
       <section className={cn("flex flex-col gap-1", panelClass(0))} aria-label={t("Runtime & workers")}>
-        <div className="flex min-h-8 items-center justify-between">
+        <div className="flex min-h-8 items-center justify-between gap-2">
           <h2 className={panelTitleClass(0)}>{t("Runtime & workers")}</h2>
         </div>
+        {workers.data?.note ? (
+          <p className="pb-1 text-xs text-muted-foreground">{serverText(workers.data.note, language)}</p>
+        ) : null}
 
         {workers.isPending ? (
           <div className="py-2">
@@ -204,7 +222,7 @@ export function DiagnosticsView() {
           <p className="py-2 text-sm text-muted-foreground">{t("Workers status unavailable on this server.")}</p>
         ) : (
           <div className="divide-y divide-border/70">
-            {workers.data.workers.length === 0 ? (
+            {!workers.data || !Array.isArray(workers.data.workers) || workers.data.workers.length === 0 ? (
               <p className="py-2 text-sm text-muted-foreground">{t("No workers reported")}</p>
             ) : (
               workers.data.workers.map((worker) => {
@@ -213,6 +231,8 @@ export function DiagnosticsView() {
                     ? Math.max(0, worker.vram_total_mb - worker.vram_free_mb)
                     : null
                 const usedPct = usedMb != null && worker.vram_total_mb ? Math.min(100, (usedMb / worker.vram_total_mb) * 100) : null
+                const isInProcess = workers.data.mode === "inprocess" || worker.backend === "inprocess"
+                const stateKey = WORKER_STATE_LABELS[worker.state.toLowerCase()]
                 return (
                   <div key={worker.worker_id} className="flex flex-col gap-2.5 py-3">
                     {/* Row 1: identity, backend/device, live status dot, restart action */}
@@ -225,13 +245,14 @@ export function DiagnosticsView() {
                       {sep}
                       <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
                         <span className={cn("size-1.5 shrink-0 rounded-full", workerDotTone(worker.state))} aria-hidden />
-                        <span className="capitalize">{worker.state}</span>
+                        <span>{stateKey ? t(stateKey) : worker.state}</span>
                       </span>
                       <Button
                         variant="outline"
                         size="sm"
                         className="ml-auto h-7 gap-1.5 px-2.5 text-xs"
-                        disabled={restart.isPending}
+                        disabled={restart.isPending || isInProcess}
+                        title={isInProcess ? (workers.data.note ? serverText(workers.data.note, language) : t("In-process")) : undefined}
                         onClick={() => restart.mutate(worker.worker_id)}
                       >
                         <RotateCw className="size-3" aria-hidden />
@@ -249,8 +270,16 @@ export function DiagnosticsView() {
                             {t("{{label}}: ", { label: t("Loaded model") })}<span className="font-mono text-foreground">{worker.loaded_model}</span>
                           </span>
                         ) : null}
+                        {worker.current_job_id ? (
+                          <span className="min-w-0 truncate" title={worker.current_job_id}>
+                            {t("{{label}}: ", { label: t("Running") })}<span className="font-mono text-foreground">{worker.current_job_id}</span>
+                          </span>
+                        ) : null}
                         <span>
                           {t("{{label}}: ", { label: t("Jobs completed") })}<span className="font-mono text-foreground">{worker.jobs_completed}</span>
+                        </span>
+                        <span>
+                          {t("{{label}}: ", { label: t("Failed") })}<span className={cn("font-mono", worker.jobs_failed > 0 ? "text-destructive" : "text-foreground")}>{worker.jobs_failed}</span>
                         </span>
                         <span>
                           {t("{{label}}: ", { label: t("Restarts") })}<span className="font-mono text-foreground">{worker.restarts}</span>
@@ -313,7 +342,7 @@ export function DiagnosticsView() {
                     </>
                   ) : null}
                 </div>
-                {workers.data.mlx.reason ? <span className="text-muted-foreground">{workers.data.mlx.reason}</span> : null}
+                {workers.data.mlx.reason ? <span className="text-muted-foreground">{serverText(workers.data.mlx.reason, language)}</span> : null}
               </div>
             ) : null}
           </div>
@@ -372,12 +401,17 @@ export function DiagnosticsView() {
           <ul className="divide-y divide-border/70">
             {items.map((item) => {
               const totalErrors = (item.hook_errors ?? 0) + (item.action_errors ?? 0) + (item.action_timeouts ?? 0)
-              const disabledReason =
-                item.disabled_reason ||
-                item.disabled_scripts
-                  ?.map((s) => (s.name && s.reason ? `${t("{{label}}: ", { label: s.name })}${s.reason}` : s.reason || s.name))
-                  .filter(Boolean)
-                  .join("; ")
+              const disabledScripts = (item.disabled_scripts ?? [])
+                .map((s) => {
+                  const label = s.title || s.id || s.kind || ""
+                  const scope = s.tab ? `${label} (${s.tab})` : label
+                  if (scope && s.reason) return `${t("{{label}}: ", { label: scope })}${s.reason}`
+                  return s.reason || scope
+                })
+                .filter(Boolean)
+                .join("; ")
+              const recentErrors = item.recent_errors ?? []
+              const showLastError = Boolean(item.last_error) && !recentErrors.some((entry) => entry.message === item.last_error)
               const manifestText =
                 item.manifest_status === "valid"
                   ? `v${item.manifest?.api_version ?? "1.0"}`
@@ -438,10 +472,10 @@ export function DiagnosticsView() {
                     </div>
                   </div>
 
-                  {disabledReason ? (
+                  {disabledScripts ? (
                     <p className="mt-1.5 border-l-2 border-border pl-2.5 text-xs text-muted-foreground">
                       <span className="font-medium text-foreground/85">{t("{{label}}: ", { label: t("Disabled reason") })}</span>
-                      {disabledReason}
+                      {disabledScripts}
                     </p>
                   ) : null}
 
@@ -453,10 +487,21 @@ export function DiagnosticsView() {
                     </p>
                   ) : null}
 
-                  {item.last_error ? (
+                  {showLastError ? (
                     <p className="mt-1.5 overflow-x-auto border-l-2 border-destructive/70 pl-2.5 font-mono text-xs text-destructive">
                       {item.last_error}
                     </p>
+                  ) : null}
+
+                  {recentErrors.length > 0 ? (
+                    <ul className="mt-1.5 flex flex-col gap-1 border-l-2 border-destructive/70 pl-2.5 font-mono text-xs text-destructive">
+                      {recentErrors.map((entry, idx) => (
+                        <li key={`${entry.kind}-${entry.timestamp ?? idx}`} className="overflow-x-auto">
+                          <span className="text-muted-foreground">[{entry.kind}]</span> {entry.message}
+                          {entry.timestamp ? <span className="ml-2 text-muted-foreground">{entry.timestamp}</span> : null}
+                        </li>
+                      ))}
+                    </ul>
                   ) : null}
                 </li>
               )

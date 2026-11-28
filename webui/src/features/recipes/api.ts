@@ -1,24 +1,27 @@
 /**
  * Thin typed API client for Cross-Model Parameter Recipes (`/api/v2/recipes`),
- * backed by `workbenchRequest` (which routes `VITE_MOCK=1` through `@/api/mock/workbench`).
+ * backed by `@/api/endpoints`.
  */
 import { queryOptions } from "@tanstack/react-query"
+import { api } from "@/api/endpoints"
 import { queryClient } from "@/api/queries"
-import type { FormTab, ParamValues } from "@/api/types"
-import { workbenchRequest } from "@/features/pipelines/workbench-http"
-import type { Recipe, RecipeApplyResponse, RecipeCreate, RecipeExportBundle, RecipeImportResponse, RecipeListResponse } from "./types"
+import type {
+  Recipe,
+  RecipeApplyRequest,
+  RecipeApplyResponse,
+  RecipeCreate,
+  RecipeExportBundle,
+  RecipeImportResponse,
+  RecipeListResponse,
+  RecipeQuery,
+  RecipeUpdate,
+} from "./types"
+
+export type { RecipeQuery }
 
 export const recipeKeys = {
   all: ["recipes"] as const,
   list: (filters: RecipeQuery = {}) => ["recipes", "list", filters] as const,
-}
-
-export type RecipeQuery = {
-  q?: string
-  model_family?: string
-  tab?: FormTab
-  tag?: string
-  capability?: string
 }
 
 export function refreshRecipes() {
@@ -26,7 +29,7 @@ export function refreshRecipes() {
 }
 
 export async function listRecipes(query: RecipeQuery = {}, signal?: AbortSignal): Promise<RecipeListResponse> {
-  const data = await workbenchRequest<RecipeListResponse | Recipe[]>("/recipes", { query, signal })
+  const data = (await api.recipes.list(query, signal)) as RecipeListResponse | Recipe[] | undefined
   if (Array.isArray(data)) return { items: data, total: data.length }
   return { items: Array.isArray(data?.items) ? data.items : [], total: typeof data?.total === "number" ? data.total : 0 }
 }
@@ -39,27 +42,29 @@ export const recipesQuery = (query: RecipeQuery = {}) =>
   })
 
 export async function createRecipeApi(body: RecipeCreate): Promise<Recipe> {
-  return workbenchRequest<Recipe>("/recipes", { method: "POST", body })
+  return api.recipes.create(body)
+}
+
+export async function updateRecipeApi(id: string, body: RecipeUpdate): Promise<Recipe> {
+  return api.recipes.update(id, body)
 }
 
 export async function deleteRecipeApi(id: string): Promise<void> {
-  await workbenchRequest<void>(`/recipes/${encodeURIComponent(id)}`, { method: "DELETE" })
+  await api.recipes.delete(id)
 }
 
 export async function exportRecipesApi(): Promise<RecipeExportBundle> {
-  return workbenchRequest<RecipeExportBundle>("/recipes/export")
+  return api.recipes.exportRecipes()
 }
 
 export async function importRecipesApi(bundle: { version?: number; recipes: Partial<Recipe>[]; overwrite?: boolean }): Promise<RecipeImportResponse> {
-  return workbenchRequest<RecipeImportResponse>("/recipes/import", { method: "POST", body: bundle })
+  return api.recipes.importRecipes({
+    version: bundle.version ?? 1,
+    overwrite: bundle.overwrite ?? false,
+    recipes: bundle.recipes as Record<string, unknown>[],
+  })
 }
 
-export async function applyRecipeApi(
-  id: string,
-  body: { tab?: FormTab; core?: ParamValues; scripts?: Record<string, ParamValues>; check_conflicts?: boolean } = {},
-): Promise<RecipeApplyResponse> {
-  return workbenchRequest<RecipeApplyResponse>(`/recipes/${encodeURIComponent(id)}/apply`, {
-    method: "POST",
-    body: { check_conflicts: true, ...body },
-  })
+export async function applyRecipeApi(id: string, body: RecipeApplyRequest = {}): Promise<RecipeApplyResponse> {
+  return api.recipes.apply(id, body)
 }

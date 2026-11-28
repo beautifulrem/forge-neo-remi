@@ -6,66 +6,46 @@
  *   Active Extensions, and builds a one-click patch to adopt A's or B's deltas.
  */
 import { api } from "@/api/endpoints"
-import type { FormTab, ParamValues } from "@/api/types"
+import { isAbort } from "@/api/http"
+import type {
+  AdoptPatch,
+  CompareDiffKind,
+  CompareResult,
+  CoreParamDiff,
+  ExtensionParamDiff,
+  FormTab,
+  LoraDiff as ApiLoraDiff,
+  ParamValues,
+  PromptTokenDiff,
+} from "@/api/types"
 import { splitInfotext } from "@/features/infotext/display"
 import { type PasteEntry, type PasteResult } from "@/features/infotext/paste"
-import { workbenchRequest } from "@/features/pipelines/workbench-http"
 import { deliver } from "@/features/send-to/send-to"
 
-export type DiffKind = "added" | "removed" | "changed"
+export type DiffKind = CompareDiffKind
 
-export type TokenDiff = {
-  a: string
-  b: string
-  added: string[]
-  removed: string[]
-  unchanged: string[]
-}
+export type TokenDiff = PromptTokenDiff
 
-export type FieldDiff = {
-  key: string
-  field?: string
-  a: string | null
-  b: string | null
-  kind: DiffKind
-}
+export type FieldDiff = CoreParamDiff
 
-export type LoraDiff = {
-  name: string
-  a: string | null
-  b: string | null
-  kind: DiffKind
-}
+export type LoraDiff = ApiLoraDiff
 
-export type ExtensionDiff = {
-  group: string
-  key: string
-  a: string | null
-  b: string | null
-  kind: DiffKind
-}
+export type ExtensionDiff = ExtensionParamDiff
 
-export type AdoptPatch = {
-  core: ParamValues
-  scripts: Record<string, ParamValues>
-  raw_params: Record<string, string>
-}
+export type { AdoptPatch }
 
-export type CompareDiffResult = {
-  id_a?: string | null
-  id_b?: string | null
+export type CompareDiffResult = Omit<CompareResult, "infotext_a" | "infotext_b" | "adopt_a_patch" | "adopt_b_patch"> & {
   infotext_a?: string | null
   infotext_b?: string | null
-  identical: boolean
-  prompt_diff: TokenDiff
-  negative_diff: TokenDiff
-  core_diffs: FieldDiff[]
-  lora_diffs: LoraDiff[]
-  extension_diffs: ExtensionDiff[]
   /** Every parsed param from both sides so "Show all" can render unchanged rows too. */
-  all_core?: { key: string; a: string | null; b: string | null; changed: boolean }[]
+  all_core?: { key: string; a?: unknown; b?: unknown; changed: boolean }[]
   adopt_a_patch?: AdoptPatch
   adopt_b_patch?: AdoptPatch
+}
+
+export type LocalCompareDiffResult = CompareDiffResult & {
+  adopt_a_patch: AdoptPatch & { raw_params: Record<string, string> }
+  adopt_b_patch: AdoptPatch & { raw_params: Record<string, string> }
 }
 
 const CORE_PARAM_KEYS = new Set([
@@ -202,7 +182,7 @@ function diffKind(a: string | null, b: string | null): DiffKind {
 }
 
 /** Pure client-side structured parameter diff from two infotext strings. */
-export function diffInfotext(infotextA: string | null | undefined, infotextB: string | null | undefined): CompareDiffResult {
+export function diffInfotext(infotextA: string | null | undefined, infotextB: string | null | undefined): LocalCompareDiffResult {
   const aRaw = infotextA?.trim() ?? ""
   const bRaw = infotextB?.trim() ?? ""
   const aParts = aRaw ? splitInfotext(aRaw) : { prompt: "", negative: "", params: [] }
@@ -302,23 +282,23 @@ export async function fetchCompareDiff(
 ): Promise<CompareDiffResult> {
   const local = diffInfotext(a.infotext, b.infotext)
   try {
-    const server = await workbenchRequest<CompareDiffResult>("/gallery/compare", {
-      method: "POST",
-      body: {
+    const server = await api.gallery.compare(
+      {
         ...(a.id ? { id_a: a.id } : {}),
         ...(b.id ? { id_b: b.id } : {}),
         ...(a.infotext ? { infotext_a: a.infotext } : {}),
         ...(b.infotext ? { infotext_b: b.infotext } : {}),
       },
       signal,
-    })
+    )
     if (server && typeof server === "object" && "prompt_diff" in server && "core_diffs" in server) {
       // Preserve client-side `all_core` table for "Show all" toggle while trusting server diff & patches.
       const fallbackAll = diffInfotext(server.infotext_a ?? a.infotext, server.infotext_b ?? b.infotext).all_core
-      return { ...server, all_core: server.all_core ?? fallbackAll }
+      return { ...server, all_core: fallbackAll }
     }
     return local
-  } catch {
+  } catch (err) {
+    if (signal?.aborted || isAbort(err) || (err instanceof Error && err.name === "AbortError")) throw err
     return local
   }
 }

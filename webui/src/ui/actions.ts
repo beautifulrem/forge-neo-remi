@@ -5,12 +5,12 @@
 import { api } from "@/api/endpoints"
 import { sentenceParams } from "@/api/http"
 import { keys, queryClient } from "@/api/queries"
-import type { ActionExtra, ActionRequest, ActionResponse, ActionToast, Bootstrap, ParamPatch, ParamValues } from "@/api/types"
+import type { ActionExtra, ActionRequest, ActionResponse, ActionToast, Bootstrap, ParamPatch, ParamValues, TabSchema } from "@/api/types"
 import { errorText } from "@/features/errors/error-text"
 import { i18n, t } from "@/i18n"
 import { showToast } from "@/lib/toast"
 import { splitRef } from "./conditions"
-import type { FormStore } from "./form-store"
+import { type FormState, type FormStore, isModified } from "./form-store"
 import { lockNote } from "./locks"
 import { isMessage, toastText } from "./messages"
 import type { AdviceItem, AdviceSeverity, ModelCapabilitySummary } from "./schema"
@@ -121,6 +121,90 @@ export function actionRequest(ctx: ActionContext, owner: string, extra: ActionEx
 }
 
 const generations = new Map<string, number>()
+const presetEpochs = new WeakMap<FormStore, number>()
+
+function bumpGeneration(key: string): number {
+  const next = (generations.get(key) ?? 0) + 1
+  generations.set(key, next)
+  return next
+}
+
+function getPresetEpoch(store: FormStore): number {
+  return presetEpochs.get(store) ?? 0
+}
+
+function bumpPresetEpoch(store: FormStore): number {
+  const next = getPresetEpoch(store) + 1
+  presetEpochs.set(store, next)
+  return next
+}
+const adviceParamsByStore = new WeakMap<FormStore, ReadonlySet<string>>()
+const adviceTimers = new WeakMap<FormStore, ReturnType<typeof setTimeout>>()
+const ADVICE_DEBOUNCE_MS = 150
+const CORE_ADVICE_PARAMS = new Set(["prompt", "hr_prompt", "cfg_scale", "steps", "init_img", "checkpoint"])
+
+/** Records server-declared `TabSchema.advice_params` for `store` (or clears to fallback heuristics when absent). */
+export function setAdviceParams(store: FormStore, params?: readonly string[] | null) {
+  if (Array.isArray(params)) adviceParamsByStore.set(store, new Set(params))
+  else adviceParamsByStore.delete(store)
+}
+
+function clearAdviceTimer(store: FormStore) {
+  const timer = adviceTimers.get(store)
+  if (timer !== undefined) {
+    clearTimeout(timer)
+    adviceTimers.delete(store)
+  }
+}
+
+function supportsAdvice(tab: string, state: FormState, store: FormStore): boolean {
+  return (tab === "txt2img" || tab === "img2img") && (state.capabilities !== null || adviceParamsByStore.has(store))
+}
+
+/** Whether editing `owner.name` can affect pre-submit workflow advice (`core.__advice__`). */
+export function isAdviceParam(store: FormStore, state: FormState, owner: string, name: string): boolean {
+  const declared = adviceParamsByStore.get(store)
+  if (declared) {
+    if (declared.has(`${owner}.${name}`)) return true
+    if (declared.size === 0) return false
+  }
+  if (owner === "core" && CORE_ADVICE_PARAMS.has(name)) return true
+  if (owner === "sampler" && name === "steps") return true
+  const nodes = state.index.inputs.get(owner)
+  const node = nodes?.get(name)
+  if (node?.type === "image_list" || name === "references") return true
+  if (name === "enable" && nodes && ([...nodes.values()].some((n) => n.type === "image_list") || nodes.has("references"))) return true
+  return false
+}
+
+/** True when any advice-relevant input in `store` currently differs from its schema default. */
+export function hasModifiedAdviceParam(store: FormStore, schema: Pick<TabSchema, "tab" | "advice_params">): boolean {
+  const state = store.getState()
+  if (!supportsAdvice(schema.tab, state, store)) return false
+  const declared = Array.isArray(schema.advice_params) ? schema.advice_params : adviceParamsByStore.get(store)
+  if (declared) {
+    const refs = [...declared]
+    if (refs.some((ref) => isModified(state, ...splitRef(ref, "core")))) return true
+    if (refs.length === 0) return false
+  }
+  for (const [owner, nodes] of state.index.inputs) {
+    for (const name of nodes.keys()) {
+      if (isAdviceParam(store, state, owner, name) && isModified(state, owner, name)) return true
+    }
+  }
+  return false
+}
+
+function scheduleAdviceRefresh(ctx: ActionContext) {
+  clearAdviceTimer(ctx.store)
+  adviceTimers.set(
+    ctx.store,
+    setTimeout(() => {
+      adviceTimers.delete(ctx.store)
+      void runAction(ctx, "core", ADVICE_ACTION)
+    }, ADVICE_DEBOUNCE_MS),
+  )
+}
 
 /**
  * Runs `owner.action` and applies its patch. Responses that were overtaken by
@@ -132,21 +216,40 @@ export async function runAction(
   action: string,
   extra: ActionExtra = {},
 ): Promise<SplitResponse | null> {
+  if (owner === "core" && (action === ADVICE_ACTION || action === "__forge_preset__")) {
+    clearAdviceTimer(ctx.store)
+  }
   const key = `${ctx.tab}/${owner}/${action}`
-  const generation = (generations.get(key) ?? 0) + 1
-  generations.set(key, generation)
+  const generation = bumpGeneration(key)
+  const isPresetSwitch = owner === "core" && action === "__forge_preset__"
+  const isPresetSensitive = owner === "core" && (action === ADVICE_ACTION || action === CONFLICTS_ACTION)
+  const startPresetEpoch = isPresetSensitive ? getPresetEpoch(ctx.store) : 0
+  if (isPresetSwitch) {
+    // Discard any in-flight advice/conflicts from before the preset switch so stale responses
+    // cannot overwrite the new preset's capabilities, advice, or param patches.
+    bumpGeneration(`${ctx.tab}/core/${ADVICE_ACTION}`)
+    bumpGeneration(`${ctx.tab}/core/${CONFLICTS_ACTION}`)
+  }
 
   let response: ActionResponse
   try {
     response = await api.action(owner, action, actionRequest(ctx, owner, extra))
   } catch (error) {
-    if (generations.get(key) === generation) {
+    if (generations.get(key) === generation && (!isPresetSensitive || getPresetEpoch(ctx.store) === startPresetEpoch)) {
       // the server's details are English, for its log: the status says what failed
       showToast("error", t("Action failed"), errorText(error))
     }
     return null
   }
   if (generations.get(key) !== generation) return null
+  if (isPresetSensitive && getPresetEpoch(ctx.store) !== startPresetEpoch) return null
+
+  if (isPresetSwitch) {
+    clearAdviceTimer(ctx.store)
+    bumpPresetEpoch(ctx.store)
+    bumpGeneration(`${ctx.tab}/core/${ADVICE_ACTION}`)
+    bumpGeneration(`${ctx.tab}/core/${CONFLICTS_ACTION}`)
+  }
 
   const split = splitResponse(owner, response)
   // the conflicts pass (on load, after a paste, on conflict param edits) leaves locks unnamed
@@ -180,12 +283,18 @@ export const ADVICE_ACTION = "__advice__"
 /** Applies an `AdviceItem`'s one-click patch (form params and/or server `__options__`). */
 export async function applyAdvicePatch(ctx: ActionContext, item: AdviceItem): Promise<boolean> {
   if (!item.patch) return false
+  clearAdviceTimer(ctx.store)
+  const startPresetEpoch = getPresetEpoch(ctx.store)
+  const patchKey = `${ctx.tab}/core/__apply_advice_patch__`
+  const patchGeneration = bumpGeneration(patchKey)
+  bumpGeneration(`${ctx.tab}/core/${ADVICE_ACTION}`)
   const { __options__: optionUpdates, ...rest } = item.patch
   const split = splitResponse("core", rest)
   // The server options first: a fix the server refuses (frozen settings) leaves the form as it
   // was, never half applied.
   if (isRecord(optionUpdates) && Object.keys(optionUpdates).length > 0) {
     await api.patchOptions(optionUpdates)
+    if (getPresetEpoch(ctx.store) !== startPresetEpoch || generations.get(patchKey) !== patchGeneration) return false
     queryClient.setQueryData<Bootstrap>(keys.app, (app) => (app ? { ...app, options: { ...app.options, ...optionUpdates } } : app))
     void queryClient.invalidateQueries({ queryKey: keys.options })
   }
@@ -232,17 +341,24 @@ export function runBulkChangeEffects(ctx: ActionContext, changes: readonly Param
   const state = ctx.store.getState()
   const actions = new Map<string, [owner: string, action: string]>()
   const conflicts: string[] = []
+  const canAdvise = supportsAdvice(ctx.tab, state, ctx.store)
+  let adviceChanged = false
   for (const { owner, names } of changes) {
     const nodes = state.index.inputs.get(owner)
     for (const name of names) {
       const action = nodes?.get(name)?.on_change
       if (action) actions.set(`${owner}\0${action}`, [owner, action])
       if (state.conflictParams.has(`${owner}.${name}`)) conflicts.push(`${owner}.${name}`)
+      if (canAdvise && isAdviceParam(ctx.store, state, owner, name)) adviceChanged = true
     }
   }
   for (const [owner, action] of actions.values()) void runAction(ctx, owner, action)
   if (conflicts.length > 0) {
-    void runAction(ctx, "core", CONFLICTS_ACTION, conflicts.length === 1 ? { selected: conflicts[0] } : {})
+    void runAction(ctx, "core", CONFLICTS_ACTION, conflicts.length === 1 ? { selected: conflicts[0] } : {}).then((res) => {
+      if (adviceChanged && res && res.advice === undefined) scheduleAdviceRefresh(ctx)
+    })
+  } else if (adviceChanged) {
+    scheduleAdviceRefresh(ctx)
   }
 }
 

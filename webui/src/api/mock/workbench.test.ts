@@ -5,12 +5,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { bootstrap, tabSchema } from "./fixtures"
 import { handleMockRequest } from "./server"
-import { mockAdviceFor, mockCapabilitiesForPreset, resetMockWorkbench } from "./workbench"
+import { coerceCompareScalar, mockAdviceFor, mockCapabilitiesForPreset, resetMockWorkbench } from "./workbench"
 
-async function call(method: string, path: string, body?: unknown) {
-  const init: RequestInit = { method, headers: { Accept: "application/json" } }
+async function call(method: string, path: string, body?: unknown, headers?: Record<string, string>) {
+  const init: RequestInit = { method, headers: { Accept: "application/json", ...headers } }
   if (body !== undefined) {
-    init.headers = { Accept: "application/json", "Content-Type": "application/json" }
+    init.headers = { Accept: "application/json", "Content-Type": "application/json", ...headers }
     init.body = JSON.stringify(body)
   }
   const response = await handleMockRequest(new Request(`http://localhost/api/v2${path}`, init))
@@ -183,12 +183,17 @@ describe("mock workbench routes", () => {
     expect(preview1.status).toBe(200)
     expect(preview1.data.stages.every((s: { cache_hit: boolean }) => !s.cache_hit)).toBe(true)
 
-    const created = await call("POST", "/chains", { name: "Fox pipeline", stages })
+    const created = await call("POST", "/chains", { name: "Fox pipeline", stages }, { "Idempotency-Key": "chain-idem-1" })
     expect(created.status).toBe(200)
     const chainId = created.data.id as string
     expect(created.data.status).toBe("completed")
     expect(created.data.stages[0].output_prompt).toContain("red fox")
     expect(created.data.stages[3].status).toBe("skipped")
+
+    // Replaying the same Idempotency-Key returns the same chain without creating a duplicate
+    const replayed = await call("POST", "/chains", { name: "Fox pipeline", stages }, { "Idempotency-Key": "chain-idem-1" })
+    expect(replayed.status).toBe(200)
+    expect(replayed.data.id).toBe(chainId)
 
     // Preview after tweaking ONLY stage 2 (Refine) -> stages 0 & 1 hit cache, stage 2 misses!
     const tweaked = structuredClone(stages)
@@ -275,8 +280,31 @@ describe("mock workbench routes", () => {
     })
     expect(cmpText.status).toBe(200)
     expect(cmpText.data.prompt_diff.added).toContain("sunset")
+    expect(cmpText.data.core_diffs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "Steps", a: 20, b: 30, kind: "changed" }),
+        expect.objectContaining({ key: "CFG scale", a: 5, b: 4, kind: "changed" }),
+        expect.objectContaining({ key: "Denoising strength", a: null, b: 0.4, kind: "added" }),
+      ]),
+    )
     expect(cmpText.data.adopt_b_patch.core).toMatchObject({ cfg_scale: 4, denoising_strength: 0.4, width: 1024, height: 1024 })
     expect(cmpText.data.adopt_b_patch.scripts.sampler).toMatchObject({ steps: 30, sampler_name: "Euler a", scheduler: "Karras" })
+
+    const cmpPrimitives = await call("POST", "/gallery/compare", {
+      infotext_a: "a fox\nSteps: 20, CFG scale: 0, Anima lock: true",
+      infotext_b: "a fox\nSteps: 0, CFG scale: 4.5, Anima lock: false",
+    })
+    expect(cmpPrimitives.status).toBe(200)
+    expect(cmpPrimitives.data.core_diffs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "Steps", a: 20, b: 0 }),
+        expect.objectContaining({ key: "CFG scale", a: 0, b: 4.5 }),
+      ]),
+    )
+    expect(cmpPrimitives.data.extension_diffs).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: "Anima lock", a: true, b: false })]),
+    )
+
     expect((await call("POST", "/gallery/compare", {})).status).toBe(422)
     expect((await call("POST", "/gallery/compare", { id_a: "missing" })).status).toBe(404)
   })
@@ -286,9 +314,14 @@ describe("mock workbench routes", () => {
     expect(diag.status).toBe(200)
     expect(diag.data.api_version).toBe("1.0")
     expect(diag.data.summary.total).toBe(4)
+    expect(Array.isArray(diag.data.items[0].recent_errors)).toBe(true)
+    expect("disabled_reason" in diag.data.items[4]).toBe(false)
 
     const workers = await call("GET", "/workers")
     expect(workers.status).toBe(200)
+    expect(workers.data.dispatch_active).toBe(false)
+    expect(workers.data.preview).toBe(true)
+    expect(typeof workers.data.note).toBe("string")
     expect(workers.data.workers.length).toBe(1)
     const wid = workers.data.workers[0].worker_id as string
     expect((await call("GET", `/workers/${wid}`)).data.worker_id).toBe(wid)
@@ -296,9 +329,17 @@ describe("mock workbench routes", () => {
     const restarted = await call("POST", `/workers/${wid}/restart`)
     expect(restarted.status).toBe(200)
     expect(restarted.data.ok).toBe(true)
+    expect(restarted.data.dispatch_active).toBe(false)
     expect(restarted.data.worker.restarts).toBe(1)
     expect((await call("GET", "/workers/missing")).status).toBe(404)
     expect((await call("POST", "/workers/missing/restart")).status).toBe(404)
+
+    expect(coerceCompareScalar("20")).toBe(20)
+    expect(coerceCompareScalar("4.5")).toBe(4.5)
+    expect(coerceCompareScalar("true")).toBe(true)
+    expect(coerceCompareScalar("false")).toBe(false)
+    expect(coerceCompareScalar("Euler a")).toBe("Euler a")
+    expect(coerceCompareScalar(null)).toBeNull()
 
     // PUP upsample across modes & families
     const pupQwen = await call("POST", "/prompt-tools/upsample", {

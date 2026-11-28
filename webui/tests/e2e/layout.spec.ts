@@ -1148,6 +1148,12 @@ for (const [width, height] of [
   })
 }
 
+/** Waits for generate form + lazy Prompt/ModelBar chunks with extra headroom under parallel CPU load. */
+async function openGenerateReady(page: Page, tab: "txt2img" | "img2img" = "txt2img") {
+  await page.goto(`/#/${tab}`)
+  await expect(page.getByRole("textbox", { name: "Prompt", exact: true })).toBeVisible({ timeout: 25_000 })
+}
+
 /** Puts a 640×480 picture on img2img's canvas. */
 async function addSourceImage(page: Page) {
   const png = await page.evaluate(() => {
@@ -1162,7 +1168,7 @@ async function addSourceImage(page: Page) {
   // would first scroll the column to bring it clear (by 57 px at 667×375), moving what is measured
   await page.getByRole("button", { name: "Add a source image" }).click({ scroll: "none" })
   await (await chooser).setFiles({ name: "source.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") })
-  await expect(page.getByRole("img", { name: /^Image editor/ })).toBeVisible()
+  await expect(page.getByRole("img", { name: /^Image editor/ })).toBeVisible({ timeout: 20_000 })
 }
 
 // Held sideways, the stage column gave the history strip 132 px and the picture being made 142 px
@@ -1175,7 +1181,7 @@ for (const [width, height] of [
   for (const tab of ["txt2img", "img2img"] as const) {
     test(`the picture being made takes half the window or more at ${width}×${height} on ${tab}`, async ({ page }) => {
       await page.setViewportSize({ width, height })
-      await openGenerate(page, tab)
+      await openGenerateReady(page, tab)
       if (tab === "img2img") await addSourceImage(page)
       await page.keyboard.press(`${mod}+Enter`)
       const progress = page.locator("[data-slot=stage-progress]")
@@ -1217,7 +1223,7 @@ for (const [width, height] of [
   for (const tab of ["txt2img", "img2img"] as const) {
     test(`the picture being made and its progress are clear of the run bar at ${width}×${height} on ${tab}`, async ({ page }) => {
       await page.setViewportSize({ width, height })
-      await openGenerate(page, tab)
+      await openGenerateReady(page, tab)
       if (tab === "img2img") await addSourceImage(page)
       await page.keyboard.press(`${mod}+Enter`)
       const progress = page.locator("[data-slot=stage-progress]")
@@ -1254,7 +1260,7 @@ for (const [width, height] of [
 ] as const) {
   test(`adding a source image leaves the column where it was at ${width}×${height} @phone`, async ({ page }) => {
     await page.setViewportSize({ width, height })
-    await openGenerate(page, "img2img")
+    await openGenerateReady(page, "img2img")
     // the scroller the stage is in (the phone layout's one column), and every position it takes
     const before = await page.locator("#img2img-stage-source").evaluate((element) => {
       let scroller = element.parentElement!

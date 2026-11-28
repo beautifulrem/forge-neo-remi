@@ -3,7 +3,10 @@
  * (`Diffusers`, `INT8-ConvRot`, `FP8`, `NVFP4`, `GGUF`, `SVDQuant`, `Turbo`, `RGBA`)
  * from active `ModelCapabilitySummary.badges` with filename/dtype/preset heuristics as fallback.
  */
+import type { MlxStatus, WorkerInfo, WorkersResponse } from "@/api/types"
 import type { ModelCapabilitySummary } from "@/ui/schema"
+
+export type { MlxStatus, WorkerInfo, WorkersResponse }
 
 export type ModelBadge = {
   label: string
@@ -83,37 +86,14 @@ export function deriveModelBadges(input: {
   })
 }
 
-export type WorkerInfo = {
-  worker_id: string
-  pid?: number | null
-  state: string
-  backend?: string | null
-  device?: string | null
-  gpu_name?: string | null
-  vram_total_mb?: number | null
-  vram_free_mb?: number | null
-  loaded_model?: string | null
-  current_job_id?: string | null
-  jobs_completed?: number
-  jobs_failed?: number
-  restarts?: number
-  uptime_s?: number | null
-}
-
-export type MlxStatus = {
-  available: boolean
-  platform_supported: boolean
-  mlx_version?: string | null
-  mflux_version?: string | null
-  unified_memory_mb?: number | null
-  supported_families?: string[]
-  reason?: string | null
-}
-
-export type WorkersStatus = {
-  mode: "inprocess" | "subprocess" | "pool" | string
-  workers: WorkerInfo[]
-  mlx?: MlxStatus | null
+/** Structural input for `workersSummary`: accepts full `WorkersResponse` or partial worker snapshots. */
+export type WorkersStatus = Pick<WorkersResponse, "mode"> & {
+  workers: readonly (Pick<WorkerInfo, "worker_id"> & {
+    state: WorkerInfo["state"] | string
+    backend?: WorkerInfo["backend"] | string | null
+    device?: WorkerInfo["device"] | string | null
+  })[]
+  mlx?: Partial<MlxStatus> | null
 }
 
 export function workersSummary(status: WorkersStatus): { healthy: number; total: number; tone: "ok" | "warn" | "error"; label: string } {

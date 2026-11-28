@@ -10,7 +10,7 @@ import { FormProvider } from "@/ui/context"
 import { createFormStore } from "@/ui/form-store"
 import { tabOwners } from "@/ui/tab"
 import { diffPromptTokens } from "./diff"
-import { collectFormReferenceIds, detectPupFamily, formatAspectRatio, PUP_FAMILY_LABELS } from "./pup"
+import { collectFormReferenceIds, detectPupFamily, formatAspectRatio, PUP_FAMILY_LABELS, upsamplePromptRequest } from "./pup"
 import { PupTrigger } from "./PupTrigger"
 import PupUpsamplerDialog from "./PupUpsamplerDialog"
 
@@ -104,7 +104,9 @@ describe("PupTrigger & lazy PupUpsamplerDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Upsample" }))
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1))
-    const body = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body))
+    const firstArg = fetchSpy.mock.calls[0]?.[0]
+    const rawBody = firstArg instanceof Request ? await firstArg.clone().text() : String(fetchSpy.mock.calls[0]?.[1]?.body)
+    const body = JSON.parse(rawBody)
     expect(body).toMatchObject({ prompt: "orange cat", model_family: "flux3", reference_file_ids: ["up-ref-1"], aspect_ratio: "1:1" })
 
     expect(await screen.findByText("Before")).toBeVisible()
@@ -248,6 +250,20 @@ describe("PupTrigger & lazy PupUpsamplerDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Upsample" }))
     expect(await screen.findByText("The image is no longer there.")).toBeVisible()
   }, 20_000)
+
+  it("propagates structured 422 validation errors through the typed OpenAPI client", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ errors: [{ owner: null, param: "prompt", message: "describe the image first" }] }),
+        { status: 422, headers: { "Content-Type": "application/json" } },
+      ),
+    )
+    await expect(upsamplePromptRequest({ prompt: "" })).rejects.toMatchObject({
+      name: "ApiError",
+      status: 422,
+      message: "prompt: describe the image first",
+    })
+  })
 
   // On a phone the footer's own row of Close and Apply (and the Revert beside it) kept DialogFooter from
   // stacking its buttons full width: each group is a column below sm, as the footer is.

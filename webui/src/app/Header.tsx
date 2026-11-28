@@ -1,5 +1,5 @@
-import { Palette, Search } from "@/components/icons"
-import { Suspense } from "react"
+import { Palette, Search, TriangleAlert } from "@/components/icons"
+import { type ReactNode, Suspense, useState } from "react"
 import { useTranslation } from "react-i18next"
 import type { LocaleInfo } from "@/api/types"
 import { progressFraction, useProgress } from "@/api/progress"
@@ -12,7 +12,8 @@ import { cn } from "@/lib/utils"
 import { formatShortcut, useCommands } from "./commands"
 import { useHeaderSlotTarget } from "./header-slot-store"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
-import { retryableLazy } from "@/lib/retryable-lazy"
+import { renderFailureText } from "@/features/errors/error-text"
+import { retryFailedLoads, retryableLazy } from "@/lib/retryable-lazy"
 
 // Menus and the model picker pull in Base UI's menu/combobox; load them after first paint.
 const AppearanceMenu = retryableLazy(() => import("./AppearanceMenu"))
@@ -100,6 +101,39 @@ function HeaderProgress() {
   )
 }
 
+function HeaderControlBoundary({ label, children }: { label: string; children: ReactNode }) {
+  const { t, i18n } = useTranslation()
+  const [attempt, setAttempt] = useState(0)
+  const [error, setError] = useState<Error | null>(null)
+  const retry = () => {
+    retryFailedLoads()
+    setError(null)
+    setAttempt((n) => n + 1)
+  }
+  return (
+    <ErrorBoundary
+      resetKey={attempt}
+      onError={setError}
+      fallback={
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={retry}
+          title={error ? `${label} · ${renderFailureText(error, i18n.language)}` : label}
+          aria-label={`${label} (${t("Try again")})`}
+          className="h-7 gap-1 px-2 text-xs text-destructive"
+        >
+          <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
+          <span className="hidden sm:inline">{t("Try again")}</span>
+        </Button>
+      }
+    >
+      {children}
+    </ErrorBoundary>
+  )
+}
+
 export function Header({ title, locales }: { title: string; locales: LocaleInfo[] }) {
   const { t } = useTranslation()
   const setSlot = useHeaderSlotTarget((s) => s.setElement)
@@ -123,17 +157,17 @@ export function Header({ title, locales }: { title: string; locales: LocaleInfo[
       {/* 4 px apart on a phone: room for a page's tabs beside four of them at 320 px */}
       <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 max-sm:gap-1 max-sm:group-has-data-page-tabs/header:shrink sm:shrink">
         <div className="hidden min-w-0 sm:block">
-          <ErrorBoundary fallback={null}>
+          <HeaderControlBoundary label={t("Model")}>
             <Suspense fallback={<div aria-hidden className="h-7 w-[min(22rem,40vw)] rounded-sm bg-field" />}>
               <ModelQuickBar />
             </Suspense>
-          </ErrorBoundary>
+          </HeaderControlBoundary>
         </div>
-        <ErrorBoundary fallback={null}>
+        <HeaderControlBoundary label={t("Quick settings")}>
           <Suspense fallback={null}>
             <QuickSettings />
           </Suspense>
-        </ErrorBoundary>
+        </HeaderControlBoundary>
         <span aria-hidden className="mx-0.5 hidden h-4 w-px shrink-0 bg-border sm:block" />
         <Button
           variant="ghost"
@@ -149,7 +183,7 @@ export function Header({ title, locales }: { title: string; locales: LocaleInfo[
           <Search />
         </Button>
         <ConnectionDot />
-        <ErrorBoundary fallback={null}>
+        <HeaderControlBoundary label={t("Appearance")}>
           <Suspense
             fallback={
               <Button variant="ghost" size="icon-sm" disabled aria-label={t("Appearance")}>
@@ -159,7 +193,7 @@ export function Header({ title, locales }: { title: string; locales: LocaleInfo[
           >
             <AppearanceMenu locales={locales} />
           </Suspense>
-        </ErrorBoundary>
+        </HeaderControlBoundary>
       </div>
       <HeaderProgress />
     </header>

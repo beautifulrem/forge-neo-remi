@@ -23,7 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { errorText, serverText } from "@/features/errors/error-text"
 import { FIELD_BUTTON_CLASS } from "@/components/ui/select-styles"
 import { cn } from "@/lib/utils"
-import { currentRoute } from "@/app/router"
+import { useRoute } from "@/app/router"
 import { getFormStore } from "@/ui/form-store"
 import { useStore } from "zustand"
 import { deriveModelBadges } from "./model-badges"
@@ -317,7 +317,7 @@ function ModelBadges({ className, limit }: { className?: string; limit?: number 
   const checkpoint = useClientOption("sd_model_checkpoint")
   const dtype = useClientOption("forge_unet_storage_dtype")
   const preset = useClientOption("forge_preset")
-  const route = currentRoute()
+  const route = useRoute()
   const tab = route.name === "generate" ? route.tab : "txt2img"
   const capabilities = useStore(getFormStore(tab), (s) => s.capabilities)
   const all = deriveModelBadges({ checkpoint, dtype, preset, capabilities })

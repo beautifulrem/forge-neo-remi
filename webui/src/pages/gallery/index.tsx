@@ -9,7 +9,7 @@
  */
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { Columns2, Download, GalleryVerticalEnd, Images, RefreshCw, Star, StarOff, Trash2, X } from "@/components/icons"
-import { Suspense, useEffect, useEffectEvent, useState } from "react"
+import { Suspense, useEffect, useEffectEvent, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { api } from "@/api/endpoints"
@@ -105,13 +105,20 @@ export default function GalleryPage() {
   // Selected ids that left the list (deleted, filtered out) do not count.
   const selection = prune(stored, order)
   const [viewing, setViewing] = useState<string | null>(null)
+  const [extraViewed, setExtraViewed] = useState<Record<string, GalleryItem>>({})
+  const lineageRequest = useRef(0)
   const [deleting, setDeleting] = useState<readonly string[] | null>(null)
   const [comparing, setComparing] = useState<readonly [CompareImage, CompareImage] | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
   const selectedIds = ordered(selection, order)
   const byId = new Map(items.map((item) => [item.id, item]))
-  const viewed = viewing ? byId.get(viewing) : undefined
+  const viewedItem = (id: string) => byId.get(id) ?? extraViewed[id]
+  const viewed = viewing ? viewedItem(viewing) : undefined
+  const closeViewing = () => {
+    lineageRequest.current++
+    setViewing(null)
+  }
 
   const rescan = async () => {
     setRefreshing(true)
@@ -266,8 +273,8 @@ export default function GalleryPage() {
         <Suspense fallback={null}>
           <Lightbox
             open
-            onOpenChange={(open) => !open && setViewing(null)}
-            items={items.map(asResult)}
+            onOpenChange={(open) => !open && closeViewing()}
+            items={[...items, ...Object.values(extraViewed).filter((extra) => !byId.has(extra.id))].map(asResult)}
             current={viewing}
             onNavigate={(key) => {
               setViewing(key)
@@ -276,18 +283,30 @@ export default function GalleryPage() {
             }}
             tab={viewed?.tab === "img2img" ? "img2img" : "txt2img"}
             aside={(result) => {
-              const item = byId.get(result.fileId)
+              const item = viewedItem(result.fileId)
               return item ? (
                 <GalleryDetails
                   item={item}
                   onDelete={(target) => setDeleting([target.id])}
-                  onClose={() => setViewing(null)}
+                  onClose={closeViewing}
                   onSelectImage={(fileId) => {
-                    if (byId.has(fileId)) setViewing(fileId)
-                    else {
-                      setViewing(null)
-                      openInPngInfo(fileId)
+                    if (viewedItem(fileId)) {
+                      setViewing(fileId)
+                      return
                     }
+                    const req = ++lineageRequest.current
+                    void api.gallery.get(fileId).then(
+                      (fetched) => {
+                        if (req !== lineageRequest.current) return
+                        setExtraViewed((prev) => ({ ...prev, [fetched.id]: fetched }))
+                        setViewing(fetched.id)
+                      },
+                      () => {
+                        if (req !== lineageRequest.current) return
+                        closeViewing()
+                        openInPngInfo(fileId)
+                      },
+                    )
                   }}
                 />
               ) : null
@@ -301,6 +320,12 @@ export default function GalleryPage() {
         onCancel={() => setDeleting(null)}
         onConfirm={(ids, deleteFiles) => {
           setDeleting(null)
+          setExtraViewed((prev) => {
+            if (!ids.some((id) => id in prev)) return prev
+            const next = { ...prev }
+            for (const id of ids) delete next[id]
+            return next
+          })
           if (viewing && ids.includes(viewing)) {
             // Keep the viewer open on the next image.
             const next = order.find((id, index) => index > order.indexOf(viewing) && !ids.includes(id)) ?? order.find((id) => !ids.includes(id)) ?? null

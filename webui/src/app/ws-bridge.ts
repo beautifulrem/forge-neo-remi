@@ -5,6 +5,7 @@ import { flushPaintBatch } from "@/api/paint-batch"
 import { createProgressGate } from "@/api/progress-gate"
 import { useProgress } from "@/api/progress"
 import { keys, queryClient } from "@/api/queries"
+import type { JobChain, StageStatus } from "@/api/types"
 import { onPreviewFrame, onWsEvent, useWs } from "@/api/ws"
 import { jobErrorText, serverText } from "@/features/errors/error-text"
 import { onNewOutputs, onOutputsChanged } from "@/features/library/cache"
@@ -61,6 +62,7 @@ export function useWsBridge() {
         progress.completed(e)
         useWs.getState().clearPreview()
         void queryClient.invalidateQueries({ queryKey: keys.jobs })
+        void queryClient.invalidateQueries({ queryKey: keys.workers })
         void queryClient.invalidateQueries({ queryKey: ["outputs"] })
         // The gallery merges the new outputs in (refetching every loaded page would be slow).
         if (e.outputs?.length) void onNewOutputs()
@@ -72,6 +74,7 @@ export function useWsBridge() {
         progress.failed(e)
         useWs.getState().clearPreview()
         void queryClient.invalidateQueries({ queryKey: keys.jobs })
+        void queryClient.invalidateQueries({ queryKey: keys.workers })
         // Cancelled / interrupted jobs (e.g. the queue was cleared) are not failures.
         const stopped = e.status === "cancelled" || e.status === "interrupted"
         if (mine && !stopped) {
@@ -99,6 +102,7 @@ export function useWsBridge() {
         // form stores keep every value that still fits the new schema.
         void queryClient.invalidateQueries({ queryKey: ["schema"] })
         void queryClient.invalidateQueries({ queryKey: ["page"] })
+        void queryClient.invalidateQueries({ queryKey: keys.workers })
       }),
       onWsEvent("model.loading", (e) => {
         if (TERMINAL_STAGES.has(e.stage.toLowerCase())) return modelIdle()
@@ -108,7 +112,43 @@ export function useWsBridge() {
       }),
       onWsEvent("model.loaded", (e) => {
         modelIdle()
+        void queryClient.invalidateQueries({ queryKey: keys.workers })
         if (e.error) toast.error(t("Could not load the model"), { description: serverText(e.error) })
+      }),
+      onWsEvent("chain.updated", (e) => {
+        const { type: _type, chain_id: chainId, ...rest } = e
+        const chain = rest as Partial<JobChain>
+        const runKey = [...keys.chains, "run", chainId] as const
+        if (typeof chain.id === "string" && Array.isArray(chain.stages) && typeof chain.updated_at === "string" && chain.updated_at.length > 0) {
+          const known = queryClient.getQueryData<JobChain>(runKey)
+          if (!known?.updated_at || known.updated_at <= chain.updated_at) {
+            queryClient.setQueryData(runKey, chain as JobChain)
+          }
+        } else {
+          void queryClient.invalidateQueries({ queryKey: runKey })
+        }
+        void queryClient.invalidateQueries({ queryKey: [...keys.chains, "list"] })
+      }),
+      onWsEvent("chain.stage_completed", (e) => {
+        const runKey = [...keys.chains, "run", e.chain_id] as const
+        const known = queryClient.getQueryData<JobChain>(runKey)
+        if (known && Array.isArray(known.stages)) {
+          const stages = known.stages.map((stage) =>
+            stage.index === e.stage_index
+              ? {
+                  ...stage,
+                  status: e.status as StageStatus,
+                  ...(e.cached !== undefined ? { cached: e.cached } : {}),
+                  ...(e.job_id !== undefined ? { job_id: e.job_id } : {}),
+                  ...(e.output_file_ids !== undefined ? { output_file_ids: e.output_file_ids } : {}),
+                  ...(e.output_prompt !== undefined ? { output_prompt: e.output_prompt } : {}),
+                }
+              : stage,
+          )
+          queryClient.setQueryData<JobChain>(runKey, { ...known, stages })
+        }
+        void queryClient.invalidateQueries({ queryKey: runKey })
+        void queryClient.invalidateQueries({ queryKey: [...keys.chains, "list"] })
       }),
       onWsEvent("networks.changed", () => {
         void queryClient.invalidateQueries({ queryKey: ["networks"] })

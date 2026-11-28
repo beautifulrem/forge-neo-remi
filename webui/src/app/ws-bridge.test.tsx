@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { useProgress } from "@/api/progress"
 import { queryClient } from "@/api/queries"
 import { useWs } from "@/api/ws"
+import { storeChainRun } from "@/features/pipelines/api"
+import type { JobChain } from "@/features/pipelines/types"
 import { FakeSocket } from "@/test/fake-socket"
 import { MODEL_LOADING_TIMEOUT_MS, useWsBridge } from "./ws-bridge"
 
@@ -211,5 +213,165 @@ describe("ws-bridge", () => {
       queryClient.removeQueries({ queryKey: keys.schema("txt2img") })
       await i18n.changeLanguage("en")
     }
+  })
+
+  it("invalidates unified ['workers'] cache on options.changed, model.loaded, job.completed, and job.failed", async () => {
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue()
+    const { hook, send } = await connected()
+    const workerCalls = () => invalidate.mock.calls.filter(([f]) => f?.queryKey?.[0] === "workers").length
+
+    send({ type: "options.changed", keys: ["sd_model_checkpoint"] })
+    expect(workerCalls()).toBe(1)
+    send({ type: "model.loaded", model: "anima.safetensors" })
+    expect(workerCalls()).toBe(2)
+    send({ type: "job.completed", job_id: "j-ok", outputs: [] })
+    expect(workerCalls()).toBe(3)
+    send({ type: "job.failed", job_id: "j-bad", status: "failed", error: "oom" })
+    expect(workerCalls()).toBe(4)
+    hook.unmount()
+  })
+
+  it("updates and invalidates chain caches on chain.updated and chain.stage_completed", async () => {
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue()
+    const { hook, send } = await connected()
+
+    const fullChain = {
+      id: "chain-1",
+      name: "Test pipeline",
+      status: "running",
+      current_stage: 0,
+      total_stages: 2,
+      stages: [
+        { index: 0, kind: "generate", status: "running", stage_hash: "h0", cached: false, output_file_ids: [] },
+        { index: 1, kind: "refine", status: "pending", stage_hash: "h1", cached: false, output_file_ids: [] },
+      ],
+      created_at: "2026-11-27T00:00:00Z",
+      updated_at: "2026-11-27T00:00:05Z",
+    }
+    send({ type: "chain.updated", chain_id: "chain-1", ...fullChain })
+    expect(queryClient.getQueryData(["chains", "run", "chain-1"])).toMatchObject({ id: "chain-1", status: "running" })
+    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toContainEqual(["chains", "list"])
+
+    // Stale chain.updated does not overwrite newer cache entry.
+    send({ type: "chain.updated", chain_id: "chain-1", ...fullChain, status: "queued", updated_at: "2026-11-27T00:00:01Z" })
+    expect((queryClient.getQueryData(["chains", "run", "chain-1"]) as { status: string }).status).toBe("running")
+
+    invalidate.mockClear()
+    send({
+      type: "chain.stage_completed",
+      chain_id: "chain-1",
+      stage_index: 0,
+      kind: "generate",
+      status: "completed",
+      cached: false,
+      job_id: "job-0",
+      output_file_ids: ["file-0"],
+    })
+    const updated = queryClient.getQueryData(["chains", "run", "chain-1"]) as typeof fullChain
+    expect(updated.stages[0]).toMatchObject({ status: "completed", job_id: "job-0", output_file_ids: ["file-0"] })
+    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual(
+      expect.arrayContaining([["chains", "run", "chain-1"], ["chains", "list"]]),
+    )
+    queryClient.removeQueries({ queryKey: ["chains"] })
+    hook.unmount()
+  })
+
+  it("ignores missing updated_at on chain.updated / storeChainRun and invalidates run cache instead", async () => {
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue()
+    const { hook, send } = await connected()
+
+    const seeded: JobChain = {
+      id: "chain-1",
+      name: "Test pipeline",
+      status: "failed",
+      current_stage: 0,
+      total_stages: 2,
+      stages: [
+        { index: 0, kind: "generate", status: "failed", stage_hash: "h0", cached: false, output_file_ids: [] },
+        { index: 1, kind: "refine", status: "pending", stage_hash: "h1", cached: false, output_file_ids: [] },
+      ],
+      created_at: "2026-11-27T10:00:00Z",
+      updated_at: "2026-11-27T10:05:00Z",
+    }
+    queryClient.setQueryData(["chains", "run", "chain-1"], seeded)
+
+    // WS chain.updated omitting updated_at must not overwrite cached failed status.
+    send({
+      type: "chain.updated",
+      chain_id: "chain-1",
+      id: "chain-1",
+      name: "Test pipeline",
+      status: "running",
+      current_stage: 0,
+      total_stages: 2,
+      stages: seeded.stages,
+      created_at: "2026-11-27T10:00:00Z",
+    })
+    expect((queryClient.getQueryData(["chains", "run", "chain-1"]) as JobChain).status).toBe("failed")
+    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual(
+      expect.arrayContaining([["chains", "run", "chain-1"], ["chains", "list"]]),
+    )
+
+    // storeChainRun with missing updated_at likewise preserves cached chain and invalidates.
+    invalidate.mockClear()
+    const withoutTimestamp = { ...seeded, status: "running" } as unknown as JobChain
+    delete (withoutTimestamp as unknown as Record<string, unknown>).updated_at
+    storeChainRun(withoutTimestamp)
+    expect((queryClient.getQueryData(["chains", "run", "chain-1"]) as JobChain).status).toBe("failed")
+    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toContainEqual(["chains", "run", "chain-1"])
+
+    queryClient.removeQueries({ queryKey: ["chains"] })
+    hook.unmount()
+  })
+
+  it("ignores empty-string updated_at on chain.updated / storeChainRun for both seeded and empty caches", async () => {
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue()
+    const { hook, send } = await connected()
+
+    const seeded: JobChain = {
+      id: "chain-1",
+      name: "Test pipeline",
+      status: "failed",
+      current_stage: 0,
+      total_stages: 2,
+      stages: [
+        { index: 0, kind: "generate", status: "failed", stage_hash: "h0", cached: false, output_file_ids: [] },
+        { index: 1, kind: "refine", status: "pending", stage_hash: "h1", cached: false, output_file_ids: [] },
+      ],
+      created_at: "2026-11-27T10:00:00Z",
+      updated_at: "2026-11-27T10:05:00Z",
+    }
+
+    // 1. Seeded failed cache + chain.updated with updated_at: ""
+    queryClient.setQueryData(["chains", "run", "chain-1"], seeded)
+    send({ type: "chain.updated", chain_id: "chain-1", ...seeded, status: "running", updated_at: "" })
+    expect((queryClient.getQueryData(["chains", "run", "chain-1"]) as JobChain).status).toBe("failed")
+    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual(
+      expect.arrayContaining([["chains", "run", "chain-1"], ["chains", "list"]]),
+    )
+
+    // 2. Seeded failed cache + storeChainRun with updated_at: ""
+    invalidate.mockClear()
+    storeChainRun({ ...seeded, status: "running", updated_at: "" })
+    expect((queryClient.getQueryData(["chains", "run", "chain-1"]) as JobChain).status).toBe("failed")
+    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toContainEqual(["chains", "run", "chain-1"])
+
+    // 3. Empty cache + chain.updated with updated_at: "" must invalidate rather than cache ""
+    queryClient.removeQueries({ queryKey: ["chains"] })
+    invalidate.mockClear()
+    send({ type: "chain.updated", chain_id: "chain-1", ...seeded, status: "running", updated_at: "" })
+    expect(queryClient.getQueryData(["chains", "run", "chain-1"])).toBeUndefined()
+    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual(
+      expect.arrayContaining([["chains", "run", "chain-1"], ["chains", "list"]]),
+    )
+
+    // 4. Empty cache + storeChainRun with updated_at: "" must invalidate rather than cache ""
+    invalidate.mockClear()
+    storeChainRun({ ...seeded, status: "running", updated_at: "" })
+    expect(queryClient.getQueryData(["chains", "run", "chain-1"])).toBeUndefined()
+    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toContainEqual(["chains", "run", "chain-1"])
+
+    queryClient.removeQueries({ queryKey: ["chains"] })
+    hook.unmount()
   })
 })

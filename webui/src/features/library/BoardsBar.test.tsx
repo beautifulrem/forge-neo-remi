@@ -82,8 +82,9 @@ describe("Boards bar", () => {
   it("selects a board it has just created", async () => {
     const board = (id: string, name: string) => ({ id, name, description: "", item_count: 0, cover_file_id: null, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" })
     const boards = [board("b1", "Portraits")]
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
-      if (init?.method === "POST") {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const method = init?.method ?? (input instanceof Request ? input.method : "GET")
+      if (method === "POST") {
         const created = board("b2", "Night")
         boards.push(created)
         return new Response(JSON.stringify(created), { status: 200 })
@@ -106,11 +107,12 @@ describe("Boards bar", () => {
   // A name already taken is a 409, which read "It changed meanwhile; refresh and try again."
   it("says a board name is taken", async () => {
     const board = { id: "b1", name: "Portraits", description: "", item_count: 0, cover_file_id: null, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" }
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) =>
-      init?.method === "POST"
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const method = init?.method ?? (input instanceof Request ? input.method : "GET")
+      return method === "POST"
         ? new Response(JSON.stringify({ detail: "a board named 'Portraits' already exists" }), { status: 409 })
-        : new Response(JSON.stringify([board]), { status: 200 }),
-    )
+        : new Response(JSON.stringify([board]), { status: 200 })
+    })
     const error = vi.spyOn(toast, "error").mockReturnValue(0)
     render(
       <QueryClientProvider client={queryClient}>

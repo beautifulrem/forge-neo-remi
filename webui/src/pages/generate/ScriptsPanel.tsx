@@ -15,14 +15,14 @@ import { Toggle } from "@/components/ui/toggle"
 import { cn } from "@/lib/utils"
 import { resetOwners, resetParams } from "@/ui/actions"
 import { evaluate } from "@/ui/conditions"
-import { OwnerProvider } from "@/ui/context"
+import { EnabledProvider, OwnerProvider } from "@/ui/context"
 import { DEFAULT_SLOT, inputsIn, scriptsForSlot } from "@/ui/form-index"
 import { anyModified, type FormState } from "@/ui/form-store"
 import { useForm, useFormState } from "@/ui/hooks"
 import { PanelDepthContext, panelClass, panelTitleClass, usePanelDepth } from "@/ui/layout/panel"
 import { RenderLayout, RenderNode } from "@/ui/Renderer"
 import { sentenceText } from "@/ui/messages"
-import type { ChoiceNode, Node, ScriptSchema, TabSchema } from "@/ui/schema"
+import type { ChoiceNode, ChoiceOption, Node, ScriptSchema, TabSchema } from "@/ui/schema"
 
 function scriptNames(script: ScriptSchema): string[] {
   return inputsIn(script.layout).map((input) => input.name)
@@ -35,6 +35,30 @@ function isActive(s: FormState, script: ScriptSchema): boolean {
   return false
 }
 
+function scriptReason(
+  script: ScriptSchema,
+  t: ReturnType<typeof useTranslation>["t"],
+  i18n: ReturnType<typeof useTranslation>["i18n"],
+): string | null {
+  return (
+    (script.inapplicable_reason
+      ? sentenceText(i18n, script.inapplicable_reason, script.inapplicable_template, script.inapplicable_params, i18n.language)
+      : null) ??
+    (script.requires_capabilities?.length
+      ? t("Requires: {{capabilities}}", { capabilities: script.requires_capabilities.join(", ") })
+      : null)
+  )
+}
+
+function matchSelectableScript(choice: ChoiceOption, scripts: readonly ScriptSchema[]): ScriptSchema | undefined {
+  const key = String(choice.value)
+  return scripts.find((script) => {
+    if (script.title === key || script.title === choice.label) return true
+    const cond = script.visible_if
+    return Boolean(cond && typeof cond === "object" && "param" in cond && cond.param === "core.script" && "eq" in cond && String(cond.eq) === key)
+  })
+}
+
 function ScriptCard({ script, reason }: { script: ScriptSchema; reason?: string | null }) {
   const { t } = useTranslation()
   const { store, formId } = useForm()
@@ -43,6 +67,7 @@ function ScriptCard({ script, reason }: { script: ScriptSchema; reason?: string 
   const visible = useFormState((s) => evaluate(script.visible_if, script.id, (o, n) => s.values[o]?.[n]))
   const depth = usePanelDepth()
   if (!visible || !script.layout) return null
+  const inapplicable = script.applicable === false
   const layout = script.layout
   const titled = layout.type === "section" || (layout.type === "group" && Boolean(layout.title))
   const body: Node = layout.type === "group" && !titled ? { ...layout, type: "column" } : layout
@@ -50,7 +75,7 @@ function ScriptCard({ script, reason }: { script: ScriptSchema; reason?: string 
   const collapsed: Node | null = !titled && script.kind !== "selectable" ? { type: "section", title: script.title, open: false, children: [body] } : null
   return (
     <OwnerProvider owner={script.id}>
-      <div data-script={script.id} data-applicable={script.applicable === false ? "false" : undefined} className="min-w-0">
+      <div data-script={script.id} data-applicable={inapplicable ? "false" : undefined} aria-disabled={inapplicable || undefined} className="min-w-0">
         {reason ? (
           <p className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
             <Info className="size-3 shrink-0" aria-hidden />
@@ -59,29 +84,32 @@ function ScriptCard({ script, reason }: { script: ScriptSchema; reason?: string 
             </span>
           </p>
         ) : null}
-        {titled ? (
-          <RenderLayout layout={layout} />
-        ) : collapsed ? (
-          <RenderLayout layout={collapsed} />
-        ) : (
-          <div role="group" aria-label={t(script.title)} className={cn("flex flex-col gap-3", panelClass(depth))}>
-            <div className="flex min-h-8 items-center gap-2">
-              <span className={panelTitleClass(depth)}>{t(script.title)}</span>
-              {modified ? (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="relative after:absolute after:-inset-2 ml-auto"
-                  aria-label={t("Reset {{label}} to default", { label: t(script.title) })}
-                  onClick={() => resetParams({ store, tab: formId }, script.id, names)}
-                >
-                  <RotateCcw />
-                </Button>
-              ) : null}
+        <EnabledProvider enabled={!inapplicable}>
+          {titled ? (
+            <RenderLayout layout={layout} />
+          ) : collapsed ? (
+            <RenderLayout layout={collapsed} />
+          ) : (
+            <div role="group" aria-label={t(script.title)} className={cn("flex flex-col gap-3", panelClass(depth))}>
+              <div className="flex min-h-8 items-center gap-2">
+                <span className={panelTitleClass(depth)}>{t(script.title)}</span>
+                {modified ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    disabled={inapplicable}
+                    className="relative after:absolute after:-inset-2 ml-auto"
+                    aria-label={t("Reset {{label}} to default", { label: t(script.title) })}
+                    onClick={() => resetParams({ store, tab: formId }, script.id, names)}
+                  >
+                    <RotateCcw />
+                  </Button>
+                ) : null}
+              </div>
+              <RenderLayout layout={body} />
             </div>
-            <RenderLayout layout={body} />
-          </div>
-        )}
+          )}
+        </EnabledProvider>
       </div>
     </OwnerProvider>
   )
@@ -105,12 +133,39 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
 
   // Applicable unslotted extensions render normally; any non-selectable script marked
   // `applicable === false` (unslotted OR slotted) moves into the quiet collapsed drawer.
+  // Scripts whose `visible_if` evaluates to false are hidden from counts, lists, and drawers.
   const allNonSelectable = schema.scripts.filter((script) => script.kind !== "selectable" && script.layout)
-  const listed = scriptsForSlot(schema.scripts, DEFAULT_SLOT, slots).filter(
+  const allListed = scriptsForSlot(schema.scripts, DEFAULT_SLOT, slots).filter(
     (script) => script.kind !== "selectable" && script.layout && script.applicable !== false,
   )
-  const inapplicable = allNonSelectable.filter((script) => script.applicable === false)
+  const allInapplicable = allNonSelectable.filter((script) => script.applicable === false)
+  const visibleListedMask = useFormState((s) =>
+    allListed.map((script) => (evaluate(script.visible_if, script.id, (o, n) => s.values[o]?.[n]) ? "1" : "0")).join(""),
+  )
+  const visibleInapplicableMask = useFormState((s) =>
+    allInapplicable.map((script) => (evaluate(script.visible_if, script.id, (o, n) => s.values[o]?.[n]) ? "1" : "0")).join(""),
+  )
+  const listed = allListed.filter((_, index) => visibleListedMask[index] === "1")
+  const inapplicable = allInapplicable.filter((_, index) => visibleInapplicableMask[index] === "1")
   const selectable = schema.scripts.filter((script) => script.kind === "selectable")
+  const allInapplicableSelectable = selectable.filter((script) => script.applicable === false && script.visible_if !== false)
+  const renderedInCardMask = useFormState((s) =>
+    allInapplicableSelectable
+      .map((script) => (script.layout && evaluate(script.visible_if, script.id, (o, n) => s.values[o]?.[n]) ? "1" : "0"))
+      .join(""),
+  )
+  const inapplicableSelectable = allInapplicableSelectable.filter((_, index) => renderedInCardMask[index] !== "1")
+  const selectedScript = useFormState((s) => (scriptChoice ? s.values.core?.[scriptChoice.name] : undefined))
+  const effectiveScriptChoice: ChoiceNode | null = scriptChoice
+    ? {
+        ...scriptChoice,
+        choices: scriptChoice.choices.filter((choice) => {
+          const matched = matchSelectableScript(choice, selectable)
+          if (!matched || matched.applicable !== false) return true
+          return selectedScript !== undefined && selectedScript !== null && String(selectedScript) === String(choice.value)
+        }),
+      }
+    : null
   const modifiedIds = useFormState((s) => listed.filter((script) => anyModified(s, script.id, scriptNames(script))).map((script) => script.id).join(" "))
   const activeCount = useFormState((s) => listed.filter((script) => isActive(s, script)).length)
   const inapplicableActiveCount = useFormState((s) => inapplicable.filter((script) => isActive(s, script)).length)
@@ -204,18 +259,7 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
                 <Collapsible.Panel className="-mx-1 flex flex-col gap-2.5 px-1 pt-1 opacity-85">
                   <PanelDepthContext value={1}>
                     {shownInapplicable.map((script) => (
-                      <ScriptCard
-                        key={script.id}
-                        script={script}
-                        reason={
-                          (script.inapplicable_reason
-                            ? sentenceText(i18n, script.inapplicable_reason, script.inapplicable_template, script.inapplicable_params, i18n.language)
-                            : null) ??
-                          (script.requires_capabilities?.length
-                            ? t("Requires: {{capabilities}}", { capabilities: script.requires_capabilities.join(", ") })
-                            : null)
-                        }
-                      />
+                      <ScriptCard key={script.id} script={script} reason={scriptReason(script, t, i18n)} />
                     ))}
                   </PanelDepthContext>
                 </Collapsible.Panel>
@@ -225,16 +269,33 @@ export function ScriptsPanel({ schema, scriptChoice }: { schema: TabSchema; scri
         </Collapsible.Root>
       ) : null}
 
-      {scriptChoice ? (
+      {effectiveScriptChoice ? (
         <section aria-label={t("Script")} className={cn("flex flex-col gap-3", panelClass(0))}>
           <OwnerProvider owner="core">
-            <RenderNode node={scriptChoice} />
+            <RenderNode node={effectiveScriptChoice} />
           </OwnerProvider>
           <PanelDepthContext value={1}>
             {selectable.map((script) => (
-              <ScriptCard key={script.id} script={script} />
+              <ScriptCard key={script.id} script={script} reason={script.applicable === false ? scriptReason(script, t, i18n) : null} />
             ))}
           </PanelDepthContext>
+          {inapplicableSelectable.length > 0 ? (
+            <div data-slot="inapplicable-selectable-scripts" className="flex flex-col gap-1 border-t border-border/60 pt-2 text-xs text-muted-foreground">
+              <span className="font-medium">{t("Not applicable for active model")}</span>
+              {inapplicableSelectable.map((script) => {
+                const reason = scriptReason(script, t, i18n)
+                return (
+                  <p key={script.id} data-script={script.id} data-applicable="false" className="flex items-start gap-1.5">
+                    <Info className="mt-0.5 size-3 shrink-0" aria-hidden />
+                    <span className="min-w-0">
+                      <span className="font-medium text-foreground/80">{t(script.title)}</span>
+                      {reason ? <span className="text-muted-foreground"> — {reason}</span> : null}
+                    </span>
+                  </p>
+                )
+              })}
+            </div>
+          ) : null}
         </section>
       ) : null}
     </div>

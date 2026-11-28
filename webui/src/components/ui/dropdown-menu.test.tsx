@@ -108,4 +108,17 @@ describe("dropdown menu (implementation loaded on demand)", { timeout: 30_000 },
     expect(within(await screen.findByRole("menu", {}, slow)).getByRole("menuitem", { name: "One" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Open" })).toHaveAttribute("aria-expanded", "true")
   })
+
+  it("opens on first press even when performance.now() is under 400 ms", async () => {
+    const nowSpy = vi.spyOn(performance, "now").mockReturnValue(150)
+    try {
+      render(<Menu />)
+      const trigger = screen.getByRole("button", { name: "More actions" })
+      fireEvent.click(trigger)
+      expect(trigger).toHaveAttribute("aria-expanded", "true")
+      expect(await screen.findByRole("menu", {}, slow)).toBeInTheDocument()
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
 })

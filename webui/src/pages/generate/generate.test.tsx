@@ -141,6 +141,6 @@ describe("generate page", () => {
     // shown without motion's feature chunk (rendered here without it): a motion element starting
     // at opacity 0 stayed invisible for the session when that chunk failed to load
     expect(image.style.opacity).not.toBe("0")
-    expect(screen.getByText("a cat")).toBeInTheDocument()
+    expect(await screen.findByText("a cat")).toBeInTheDocument()
   })
 })
