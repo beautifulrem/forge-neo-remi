@@ -6,9 +6,8 @@ import json
 from types import SimpleNamespace
 
 import pytest
-
-from test_runtime_dispatch import _run_args, _sampling_pass, mixer, runtime
 from test_remi_params import harness, layout_of
+from test_runtime_dispatch import _run_args, _sampling_pass, mixer, runtime
 
 
 def _row(artist, weight=1.0, blocks="0-51", start=0.0, end=1.0, peak=0.5, curve=mixer.CURVE_HOLD, stage=mixer.PRESET_CUSTOM, auto=False, enabled=True):
@@ -20,7 +19,8 @@ def _panel(language="en", hires_independent=True, disable_hires_mixing=False):
     auto-shifted stage) and two independent hires rows. ``language``: the
     labels its options are given in (templates and API callers may use the
     Gradio panel's labels in either language)."""
-    label = lambda group, key: mixer._option_label(group, key, language)
+    def label(group, key):
+        return mixer._option_label(group, key, language)
     yes, no = mixer._bool_label(True, language), mixer._bool_label(False, language)
     base = [
         _row('artist "quoted", 米山舞', 0.35, "0,3,5-12", 0.1, 0.8, 0.3, label("curve", mixer.CURVE_TRIANGLE), label("stage", mixer.PRESET_CUSTOM), no, yes),
@@ -126,7 +126,7 @@ def test_pasting_the_infotext_restores_the_panel(record_language, start):
     assert args.enable is True and args.base_row_count == 2 and args.hires_row_count == 2
     # The options are pasted as their internal values
     assert (args.optimization, args.combine_mode, args.fusion_mode) == (mixer.OPT_QUALITY, mixer.COMBINE_CONCAT, mixer.FUSION_QUALITY_DELTA)
-    values = dict(zip(mixer.PARAM_NAMES, pasted))
+    values = dict(zip(mixer.PARAM_NAMES, pasted, strict=True))
     assert values["base_rows"][0]["curve"] == mixer.CURVE_TRIANGLE and values["base_rows"][0]["enabled"] is True
     # The text-encoding cache is a preference, not part of the image
     assert values["enable_cache"] is (start == "defaults")

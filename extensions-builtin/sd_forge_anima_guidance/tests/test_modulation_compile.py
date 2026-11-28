@@ -17,10 +17,11 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT.parent / "sd_forge_compile"))
 
-from anima_block_compile import AnimaBlockCompileManager
-from backend import memory_management, operations
-from backend.nn.anima import Anima
-from lib_anima_guidance.modulation import ModulationPatch
+from anima_block_compile import AnimaBlockCompileManager  # noqa: E402
+from lib_anima_guidance.modulation import ModulationPatch  # noqa: E402
+
+from backend import memory_management, operations  # noqa: E402
+from backend.nn.anima import Anima  # noqa: E402
 
 _BLOCKS = 4
 _HIDDEN = 128
@@ -96,7 +97,7 @@ class ModulationUnderBlockCompileTests(unittest.TestCase):
         self.kmodel = _KModel(self.model)
         self.backend = _CountingBackend()
         self.fallbacks = []
-        config = dict(backend=self.backend, dynamic=False, fullgraph=False, options={"guard_filter_fn": _guard_filter})
+        config = {"backend": self.backend, "dynamic": False, "fullgraph": False, "options": {"guard_filter_fn": _guard_filter}}
         AnimaBlockCompileManager.install(self.kmodel, config, on_fallback=self.fallbacks.append)
 
         generator = torch.Generator().manual_seed(9)

@@ -271,7 +271,7 @@ def test_a_configuration_error_aborts_the_sampler(monkeypatch):
     assert patched is not unet and "transformer_options" not in unet.model_options
     rejected = patched.model_options["transformer_options"]["anima_freefuse_state"]
     assert isinstance(rejected, RejectedFreeFuseState)
-    with pytest.raises(RuntimeError, match="Anima FreeFuse configuration failed: .*two or three active subjects"):
+    with pytest.raises(RuntimeError, match=r"Anima FreeFuse configuration failed: .*two or three active subjects"):
         rejected.configure_steps(20)
     assert p.extra_generation_params["Anima FreeFuse"] == "error: ValueError"
 

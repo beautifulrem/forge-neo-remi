@@ -103,7 +103,7 @@ def test_the_same_set_under_another_alias_names_the_failure_as_this_prompt_does(
 
 
 def test_a_lora_that_does_not_fit_is_reported_without_a_traceback(networks, monkeypatch):
-    module, model = networks
+    module, _model = networks
     reports = []
     monkeypatch.setattr(module.errors, "report", lambda *args, **kwargs: reports.append(args))
 
@@ -126,7 +126,7 @@ def test_a_lora_that_does_not_fit_is_reported_without_a_traceback(networks, monk
 
 
 def test_src_override_reaches_the_loader(networks, monkeypatch):
-    module, model = networks
+    module, _model = networks
     seen = {}
 
     def apply(unet, clip, lora_sd, *args, anima_declared_blocks=None, **kwargs):

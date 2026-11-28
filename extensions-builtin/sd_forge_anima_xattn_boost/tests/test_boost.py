@@ -11,10 +11,11 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from backend import operations
-from backend.nn.anima import Block, _fn
-from lib_anima_xattn_boost.boost import BoostState, apply_xattn_boost_patch, renorm_scale, row_gains
-from modules import spectrum_force
+from lib_anima_xattn_boost.boost import BoostState, apply_xattn_boost_patch, renorm_scale, row_gains  # noqa: E402
+
+from backend import operations  # noqa: E402
+from backend.nn.anima import Block, _fn  # noqa: E402
+from modules import spectrum_force  # noqa: E402
 
 B, T, H, W, D, CTX = 2, 1, 3, 4, 32, 16
 
@@ -450,7 +451,7 @@ def _count_calls(modules):
 def test_captured_modulation_is_bit_identical_to_the_recompute(renorm, monkeypatch):
     from lib_anima_xattn_boost import boost
 
-    block, _, captured, _ = _boosted(renorm=renorm)
+    _block, _, captured, _ = _boosted(renorm=renorm)
     # A block that does not run its modulation Linears through the capture
     # gets the gates recomputed: the old path, bit for bit.
     monkeypatch.setattr(boost, "_modulation_linear", lambda *_a: None)

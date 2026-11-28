@@ -28,7 +28,7 @@ def test_the_infotext_replays_into_the_same_script_args(enabled):
     layout = harness.script_layout(hires_guard.AnimaHiresGuardScript())
     defaults = layout.values_to_args({})
     args = [enabled, *CHANGED[1:]]
-    assert all(value != default for value, default in zip(args[1:], defaults[1:]))
+    assert all(value != default for value, default in zip(args[1:], defaults[1:], strict=True))
     params = _record(args)
     # Off records nothing: the paste and the API leave the panel at its defaults
     expected = args if enabled else defaults
@@ -40,6 +40,6 @@ def test_the_infotext_replays_into_the_same_script_args(enabled):
         assert params["Anima Hires align"] is False and "align 1," in params["Anima Hires limits"]
         assert params["Anima Hires adjustments"].startswith(hires_guard.REPORT_ONLY_PREFIX)
         # Onto a panel that was set otherwise, the recorded values win
-        assert harness.replayed_args(layout, params, start=dict(zip(layout.names, defaults))) == args
+        assert harness.replayed_args(layout, params, start=dict(zip(layout.names, defaults, strict=True))) == args
     else:
         assert params == {}

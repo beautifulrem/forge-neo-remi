@@ -79,9 +79,8 @@ def test_the_control_is_added_to_the_generated_frame_of_every_batched_copy(lib):
 
 @pytest.fixture
 def lllite(monkeypatch):
-    from remi.testing import webui_state
-
     from modules_forge import shared as forge_shared
+    from remi.testing import webui_state
 
     with webui_state():
         monkeypatch.setattr(forge_shared, "supported_control_models", list(forge_shared.supported_control_models))

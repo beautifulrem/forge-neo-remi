@@ -1,6 +1,7 @@
 import pathlib
 import sys
 import unittest
+import unittest.mock
 from types import SimpleNamespace
 
 import torch
@@ -8,7 +9,7 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib_spectrum.forecaster import ChebyshevForecaster, SpectrumNode
+from lib_spectrum.forecaster import ChebyshevForecaster, SpectrumNode  # noqa: E402
 
 
 class ForecasterTests(unittest.TestCase):
@@ -45,7 +46,7 @@ class ForecasterTests(unittest.TestCase):
         features = [torch.randn(2, 3) for _ in range(5)]
         blended = ChebyshevForecaster(degree=2, history_size=5, lam=1e-3, steps=12, weight=0.3)
         chebyshev = ChebyshevForecaster(degree=2, history_size=5, lam=1e-3, steps=12, weight=1.0)
-        for step, feature in zip((0, 1, 2, 4, 5), features):
+        for step, feature in zip((0, 1, 2, 4, 5), features, strict=True):
             blended.update(step, feature)
             chebyshev.update(step, feature)
 
@@ -60,11 +61,11 @@ class ForecasterTests(unittest.TestCase):
             generator = torch.Generator().manual_seed(1)
             forecasters = [ChebyshevForecaster(degree=2, history_size=5, lam=1e-3, steps=12, weight=weight) for weight in (0.3, 1.0)]
             histories = [[(torch.randn(1, 4, 3, generator=generator) * 8.0).to(dtype) for _ in range(5)] for _ in forecasters]
-            for forecaster, history in zip(forecasters, histories):
-                for step, feature in zip((0, 1, 2, 4, 5), history):
+            for forecaster, history in zip(forecasters, histories, strict=True):
+                for step, feature in zip((0, 1, 2, 4, 5), history, strict=True):
                     forecaster.update(step, feature)
 
-            def reference(forecaster):
+            def reference(forecaster, dtype=dtype):
                 # A float32 accumulator cast afterwards, as before the preallocated output.
                 output = torch.empty(forecaster.shape, dtype=torch.float32)
                 return forecaster.predict(7, out=output).to(dtype)
@@ -480,7 +481,7 @@ def run_anima_pass(steps=8, warmup=3, tail=2):
 
 class TailTests(unittest.TestCase):
     def test_no_feature_history_is_kept_once_forecasting_has_ended(self):
-        state, armed, kept, kept_steps, outputs = run_anima_pass()
+        state, armed, kept, kept_steps, _outputs = run_anima_pass()
         stop_at = state.stop_at
         self.assertEqual(stop_at, 6)
         cached = [step for step, flag in enumerate(armed) if flag is None]
@@ -494,6 +495,79 @@ class TailTests(unittest.TestCase):
             self.assertTrue(all(time < stop_at - 1 for time in kept_steps[step]), kept_steps)
             if step >= stop_at:
                 self.assertEqual(kept[step], 0, kept)  # freed through the tail, VAE decode and Hires
+
+
+class OptimizationScopeTests(unittest.TestCase):
+    def test_magcache_observe_actual_batches_syncs_and_matches_l2_ratio(self):
+        from lib_spectrum.modes import MagCacheTracker
+
+        tracker = MagCacheTracker()
+        prev = torch.randn(2, 4, 8)
+        cur = prev + 0.1 * torch.randn(2, 4, 8)
+        expected_ratio = (
+            torch.linalg.vector_norm(cur.float() - prev.float()).item()
+            / max(torch.linalg.vector_norm(prev.float()).item(), 1e-8)
+        )
+
+        orig_item = torch.Tensor.item
+        orig_tolist = torch.Tensor.tolist
+        item_calls = []
+        tolist_calls = []
+
+        def count_item(t):
+            item_calls.append(tuple(t.shape))
+            return orig_item(t)
+
+        def count_tolist(t):
+            tolist_calls.append(tuple(t.shape))
+            return orig_tolist(t)
+
+        with unittest.mock.patch.object(torch.Tensor, "item", count_item), unittest.mock.patch.object(torch.Tensor, "tolist", count_tolist):
+            ratio = tracker.observe_actual(cur, prev)
+
+        self.assertIsNotNone(ratio)
+        self.assertAlmostEqual(ratio, expected_ratio, places=6)
+        self.assertEqual(item_calls, [])
+        self.assertEqual(tolist_calls, [(3,)])
+
+    def test_acc_buf_preallocated_only_for_non_float32(self):
+        from lib_spectrum.modes import MagCacheForecaster, TaylorSeerForecaster
+
+        for cls, kwargs in (
+            (ChebyshevForecaster, {"degree": 1, "history_size": 4, "lam": 1e-4, "steps": 10, "weight": 0.5}),
+            (TaylorSeerForecaster, {"order": 1, "history_size": 3}),
+            (MagCacheForecaster, {"decay": 0.95}),
+        ):
+            fp32 = cls(**kwargs)
+            for step in range(3):
+                fp32.update(step, torch.full((1, 4), float(step + 1), dtype=torch.float32))
+            fp32.predict(3)
+            self.assertIsNone(fp32._acc_buf)
+
+            bf16 = cls(**kwargs)
+            for step in range(3):
+                bf16.update(step, torch.full((1, 4), float(step + 1), dtype=torch.bfloat16))
+            first = bf16.predict(3)
+            buf1 = bf16._acc_buf
+            self.assertIsNotNone(buf1)
+            self.assertEqual(buf1.dtype, torch.float32)
+            second = bf16.predict(4)
+            self.assertIs(bf16._acc_buf, buf1)
+            self.assertEqual((first.dtype, second.dtype), (torch.bfloat16, torch.bfloat16))
+
+    def test_call_samples_memoized_detects_inplace_mutation_in_inference_mode(self):
+        from lib_spectrum.forecaster import SpectrumState, _call_samples_memoized
+
+        state = SpectrumState(steps=10, window_size=2, flex_window=0.0, warmup_steps=1, tail_actual_steps=1, schedule="linear", sea_beta=0.0, sea_calibration=None, verbose=False)
+        with torch.inference_mode():
+            ctx = torch.ones((2, 4, 8), dtype=torch.float32)
+            sigma = torch.tensor([0.5, 0.5])
+            _, sig1 = _call_samples_memoized(state, sigma, {"c_crossattn": ctx}, [0, 1])
+            ctx.mul_(5.0)
+            _, sig2 = _call_samples_memoized(state, sigma, {"c_crossattn": ctx}, [0, 1])
+        self.assertIsNotNone(sig1)
+        self.assertIsNotNone(sig2)
+        self.assertNotEqual(sig1, sig2)
 
 
 if __name__ == "__main__":

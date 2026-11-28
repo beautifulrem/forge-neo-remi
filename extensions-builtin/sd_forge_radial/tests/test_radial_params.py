@@ -73,3 +73,78 @@ def test_cleanup_puts_back_wan_attention(radial):
         assert radial.wan.attention is radial.ORIG_ATTENTION
     finally:
         radial.wan.attention = radial.ORIG_ATTENTION
+
+
+def test_patch_chains_previous_wrapper_and_restores_wan_attention(radial, monkeypatch):
+    import torch
+
+    class WanModel:
+        patch_size = (1, 2, 2)
+
+    class FakeModel:
+        def __init__(self, previous):
+            self.model_options = {"transformer_options": {}, "model_function_wrapper": previous}
+            self.wrapper = None
+
+        def clone(self):
+            cloned = FakeModel(self.model_options["model_function_wrapper"])
+            cloned.model_options = {
+                "transformer_options": dict(self.model_options["transformer_options"]),
+                "model_function_wrapper": self.model_options["model_function_wrapper"],
+            }
+            return cloned
+
+        def get_model_object(self, name):
+            assert name == "diffusion_model"
+            return WanModel()
+
+        def set_model_unet_function_wrapper(self, wrapper):
+            self.wrapper = wrapper
+            self.model_options["model_function_wrapper"] = wrapper
+
+    monkeypatch.setattr(radial, "get_radial_attn_func", lambda *args: (lambda *a, **kw: None))
+    events = []
+
+    def previous_wrapper(model_function, kwargs):
+        events.append(("previous", radial.wan.attention is not radial.ORIG_ATTENTION))
+        return model_function(kwargs["input"], kwargs["timestep"], **kwargs["c"])
+
+    def model_function(x, t, **c):
+        events.append(("model", radial.wan.attention is not radial.ORIG_ATTENTION))
+        return x
+
+    patched = radial.PatchRadialAttn.patch_radial_attn(
+        FakeModel(previous_wrapper),
+        dense_block=0,
+        dense_timestep=0,
+        last_dense_timestep=0,
+        block_size=64,
+        decay_factor=0.5,
+        allow_compile=True,
+    )
+    sigmas = torch.tensor([1.0, 0.5, 0.0])
+    # Step index 1 is a radial step even with last_dense_timestep=0
+    patched.wrapper(
+        model_function,
+        {
+            "input": torch.zeros(1, 4, 1, 4, 4),
+            "timestep": torch.tensor([0.5]),
+            "c": {"transformer_options": {"sampling_sigmas": sigmas, "radial_attn": patched.model_options["transformer_options"]["radial_attn"]}},
+        },
+    )
+    assert events == [("previous", True), ("model", True)]
+    assert radial.wan.attention is radial.ORIG_ATTENTION
+
+    def failing_model(x, t, **c):
+        raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        patched.wrapper(
+            failing_model,
+            {
+                "input": torch.zeros(1, 4, 1, 4, 4),
+                "timestep": torch.tensor([0.5]),
+                "c": {"transformer_options": {"sampling_sigmas": sigmas, "radial_attn": patched.model_options["transformer_options"]["radial_attn"]}},
+            },
+        )
+    assert radial.wan.attention is radial.ORIG_ATTENTION

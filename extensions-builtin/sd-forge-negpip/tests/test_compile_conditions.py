@@ -12,8 +12,9 @@ for path in (str(EXTENSION_PATH.parents[1]), str(EXTENSION_PATH)):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from backend.sampling import condition, sampling_function  # noqa: E402
 from lib_negpip import anima as negpip_anima  # noqa: E402
+
+from backend.sampling import condition, sampling_function  # noqa: E402
 
 
 @pytest.fixture

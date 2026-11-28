@@ -53,7 +53,9 @@ _migrate_legacy_presets()
 
 
 def _sanitize(name: str) -> str:
-    name = (name or "").strip()
+    if not isinstance(name, str):
+        return ""
+    name = name.strip()
     keep = [c for c in name if c.isalnum() or c in (" ", "-", "_", "(", ")")]
     return "".join(keep).strip()[:64]
 
@@ -381,7 +383,8 @@ class PostProcessSuite(scripts.Script):
 
     @ui.action
     def preset_load(self, ctx, values):
-        name = values.get("preset") or ""
+        raw = values.get("preset")
+        name = raw if isinstance(raw, str) else ""
         preset = load_preset_file(name) if name else None
         if not preset:
             return ui.toast("Pick a saved preset first", "warning")
@@ -399,7 +402,8 @@ class PostProcessSuite(scripts.Script):
 
     @ui.action
     def preset_delete(self, ctx, values):
-        name = values.get("preset") or ""
+        raw = values.get("preset")
+        name = raw if isinstance(raw, str) else ""
         if not name or name not in list_presets():
             return ui.toast("Pick a saved preset first", "warning")
         lut = _preset_lut(name)
@@ -413,20 +417,21 @@ class PostProcessSuite(scripts.Script):
         """Runs the pipeline on the result ``file_id`` (the action's own
         argument); answers the processed image's upload id as the output ``sent``."""
 
-        from modules import images
-
-        path = _upload_path(ctx, ctx.extra.get("file_id"))
-        if path is None:
+        store = _file_store(ctx)
+        try:
+            image = store.image(ctx.extra.get("file_id"))
+        except Exception as e:
+            print(f"[PP Suite] send-to-img2img image load failed: {e}")
+            image = None
+        if image is None:
             return ui.toast("Select a generated image first", "warning")
         args = self._pipeline_args(ctx, values)
-        image = images.read(path)
-        image.load()
         try:
             result = P.run_pipeline(image, args)
         except Exception as e:
             print(f"[PP Suite] send-to-img2img failed: {e}")
             result = image
-        return {"__outputs__": {"sent": _file_store(ctx).store_image(result, "post-processed.png")}}
+        return {"__outputs__": {"sent": store.store_image(result, "post-processed.png")}}
 
     # ---- processing --------------------------------------------------------
     def _apply_mode(self, args):

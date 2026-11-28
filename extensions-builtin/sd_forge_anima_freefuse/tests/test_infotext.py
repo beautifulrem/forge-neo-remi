@@ -71,7 +71,7 @@ def test_the_infotext_replays_into_the_same_script_args(freefuse, subjects, off)
     # An inactive subject records only its switch: the replay leaves its texts at their defaults
     expected = list(args)
     expected[3 * off - 1 : 3 * off + 1] = defaults[3 * off - 1 : 3 * off + 1]
-    assert all(value != default for value, default in zip(SETTINGS, defaults[10:]))
+    assert all(value != default for value, default in zip(SETTINGS, defaults[10:], strict=True))
 
     params = harness.assert_infotext_round_trip(layout, args, _recorder(freefuse), expected)
     assert params["Anima FreeFuse"] == "2 subjects, two-pass same-noise"

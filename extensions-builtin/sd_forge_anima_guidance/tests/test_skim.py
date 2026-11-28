@@ -9,13 +9,13 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib_anima_guidance.advanced import (
+from lib_anima_guidance.advanced import (  # noqa: E402
     fdg_combine,
     make_fdg_cfg_function,
     make_guidance_range_cfg_function,
     standard_cfg_residual,
 )
-from lib_anima_guidance.skim import apply_skim_to_predictions, make_skim_cfg_function, skim_prediction
+from lib_anima_guidance.skim import apply_skim_to_predictions, make_skim_cfg_function, skim_prediction  # noqa: E402
 
 
 def _inputs():
@@ -97,10 +97,10 @@ class SkimCFGFunctionChainTests(unittest.TestCase):
         }
 
     def _skim(self, previous, **overrides):
-        options = dict(
-            sigma_start=0.8, sigma_end=0.2, skimming_scale=2.0,
-            full_skim_negative=False, disable_flipping_filter=False, flip_sigma=None,
-        )
+        options = {
+            "sigma_start": 0.8, "sigma_end": 0.2, "skimming_scale": 2.0,
+            "full_skim_negative": False, "disable_flipping_filter": False, "flip_sigma": None,
+        }
         options.update(overrides)
         return make_skim_cfg_function(previous, **options)
 

@@ -246,6 +246,32 @@ def test_apply_and_send_post_processes_the_selected_result(pp, files):
         call(script, "apply_send", {"sepia_strength": "strong"}, files, file_id=source.id)
 
 
+def test_non_string_preset_and_non_image_or_corrupt_apply_send_never_crash(pp, files, presets, monkeypatch):
+    script = make(pp)
+
+    for bad_preset in (123, ["x"], {"a": 1}, True):
+        assert call(script, "preset_save", {"preset": bad_preset}, files)["__toast__"]["level"] == "warning"
+        assert call(script, "preset_load", {"preset": bad_preset}, files)["__toast__"]["level"] == "warning"
+        assert call(script, "preset_delete", {"preset": bad_preset}, files)["__toast__"]["level"] == "warning"
+
+    txt = files.add_upload_bytes(b"not an image", "notes.txt")
+    assert call(script, "apply_send", {"enable": True}, files, file_id=txt.id)["__toast__"]["level"] == "warning"
+
+    corrupt = files.add_upload_bytes(_png_bytes_for_test(), "corrupt.png")
+    Path(corrupt.path).write_bytes(b"\x89PNG\r\n\x1a\ncorrupt_payload")
+    assert call(script, "apply_send", {"enable": True}, files, file_id=corrupt.id)["__toast__"]["level"] == "warning"
+
+    bomb = files.add_upload_bytes(_png_bytes_for_test(), "bomb.png")
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 10)
+    assert call(script, "apply_send", {"enable": True}, files, file_id=bomb.id)["__toast__"]["level"] == "warning"
+
+
+def _png_bytes_for_test():
+    buffer = __import__("io").BytesIO()
+    Image.new("RGB", (16, 16), (40, 90, 200)).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 def test_ported_without_javascript():
     contract.assert_ported(SCRIPT)
     assert not (EXT / "javascript").exists()

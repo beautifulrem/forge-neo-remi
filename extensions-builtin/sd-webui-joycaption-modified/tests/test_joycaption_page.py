@@ -201,6 +201,28 @@ def test_caption_type_editor(page, jc):
     builtin = harness.run_action(page, "delete_type", ctx, {"edit_name": "Straightforward"})
     assert builtin["__outputs__"]["edit_status"]["text"] == "❗ '{{name}}' is built-in. Delete only removes user overrides."
 
+    for bad_val in (["bad"], {"a": 1}, 123, None):
+        unhash = harness.run_action(page, "load_type", ctx, {"edit_select": bad_val})
+        assert unhash == {
+            "edit_name": {"value": ""},
+            "edit_any": {"value": ""},
+            "edit_word": {"value": ""},
+            "edit_length": {"value": ""},
+        }
+        assert harness.run_action(page, "save_type", ctx, {"edit_name": bad_val})["__outputs__"]["edit_status"] == {"text": "❗ Name is required"}
+    assert jc.jcp.load_user_caption_types() == {}
+
+
+def test_caption_rejects_corrupt_image_with_validation_error(page, engine, tmp_path):
+    from remi import ui
+
+    files = harness.FakeFiles(tmp_path)
+    ctx = harness.fake_ctx(page, files)
+    corrupt_id = files.add_upload_bytes(b"\x89PNG\r\n\x1a\ncorrupt", "corrupt.png").id
+    with pytest.raises(ui.ValidationError) as exc_info:
+        harness.run_action(page, "caption", ctx, {"image": corrupt_id})
+    assert exc_info.value.errors[0].param == "image"
+
 
 # text UTF-8 cannot write (an unpaired surrogate) raised in the middle of the write: the file was left
 # empty and every saved caption type was gone

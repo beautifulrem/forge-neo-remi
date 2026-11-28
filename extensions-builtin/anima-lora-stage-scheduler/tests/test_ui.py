@@ -4,7 +4,6 @@ and hand-edited templates (templates.json) are bounded before a run reads them.
 Each test has its own template store (conftest.py)."""
 
 import pytest
-
 from lib_stage_scheduler import options, templates, ui
 
 
@@ -107,3 +106,30 @@ def test_the_timeline_lists_the_builders_presets_and_every_template():
     assert list(props["templates"]) == templates._template_names() and "mine" in props["templates"]
     assert props["shift"] == ["core.hr_distilled_cfg", "core.distilled_cfg_scale"] and props["template_param"] == "hr_template"
     assert [curve["value"] for curve in props["curves"]] == options.CURVE_CHOICES
+
+
+def test_unhashable_template_name_and_bad_timing_are_rejected_cleanly():
+    import importlib.util
+    from pathlib import Path
+
+    from remi import ui as remi_ui
+
+    for bad_name in (["bad"], {"a": 1}, 123, None):
+        assert templates._template_config(bad_name) == {}
+        assert isinstance(ui.apply_template(bad_name, 3.0), dict)
+    assert templates._normalize_template_part({"stage": options.STAGE_CHARACTER, "mode": ["bad"]}) is None
+
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "anima_lora_stage_scheduler.py"
+    spec = importlib.util.spec_from_file_location("anima_lora_stage_scheduler_ui_test", script_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    script = mod.Script()
+    ctx = remi_ui.ActionContext(tab="txt2img", owner="anima_lora_stage_scheduler", extra={"name": "t1", "panel": "base", "auto": True})
+
+    for bad_timing in (456, "bad", [1, 2]):
+        with pytest.raises(remi_ui.ValidationError) as exc_info:
+            remi_ui.call_action(script, "template_save", ctx, {"base_timing": bad_timing})
+        assert exc_info.value.errors[0].param == "base_timing"
+
+    assert "base_timing" in remi_ui.call_action(script, "base_template_changed", ctx, {"base_template": ["bad"]})
+    assert "hr_timing" in remi_ui.call_action(script, "hr_template_changed", ctx, {"hr_template": {"a": 1}})

@@ -10,7 +10,7 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib_anima_guidance.dcw import ALL_BANDS, DCWState, band_masked_diff, haar_dwt_2d, haar_idwt_2d, parse_band_mask
+from lib_anima_guidance.dcw import ALL_BANDS, DCWState, band_masked_diff, haar_dwt_2d, haar_idwt_2d, parse_band_mask  # noqa: E402
 
 
 class DCWTests(unittest.TestCase):

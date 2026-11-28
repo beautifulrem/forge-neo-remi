@@ -79,7 +79,10 @@ class Script(scripts.Script):
         """Save a panel (``panel``: base / hr) as template ``name``; ``auto``
         saves it as an auto-timing template."""
         prefix = _panel(ctx)
-        edit = save_template(_text(ctx, "name"), bool(ctx.extra.get("auto", True)), values.get(f"{prefix}_template"), values.get(f"{prefix}_timing"))
+        try:
+            edit = save_template(_text(ctx, "name"), bool(ctx.extra.get("auto", True)), values.get(f"{prefix}_template"), values.get(f"{prefix}_timing"))
+        except ValueError as error:
+            raise ui.ValidationError([ui.ParamError(str(error), owner=ctx.owner or None, param=f"{prefix}_timing")]) from None
         return self._after_edit(ctx, values, edit)
 
     @ui.action("template_combo")

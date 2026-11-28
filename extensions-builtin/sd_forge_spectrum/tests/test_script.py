@@ -36,26 +36,26 @@ class _FakePatcher:
 
 
 def _process(**overrides):
-    values = dict(
-        is_hr_pass=False,
-        steps=20,
-        sampler_name="Euler",
-        scheduler="Simple",
-        cfg_scale=4.0,
-        distilled_cfg_scale=3.0,
-        hr_second_pass_steps=10,
-        hr_sampler_name=None,
-        hr_scheduler="Simple",
-        hr_cfg=4.0,
-        hr_distilled_cfg=3.0,
-    )
+    values = {
+        "is_hr_pass": False,
+        "steps": 20,
+        "sampler_name": "Euler",
+        "scheduler": "Simple",
+        "cfg_scale": 4.0,
+        "distilled_cfg_scale": 3.0,
+        "hr_second_pass_steps": 10,
+        "hr_sampler_name": None,
+        "hr_scheduler": "Simple",
+        "hr_cfg": 4.0,
+        "hr_distilled_cfg": 3.0,
+    }
     values.update(overrides)
     sd_model = SimpleNamespace(forge_objects=SimpleNamespace(unet=_FakePatcher()))
     return SimpleNamespace(sd_model=sd_model, extra_generation_params={}, **values)
 
 
 def _args(**controls):
-    values = dict(zip(INFOTEXT_KEYS, DEFAULTS))
+    values = dict(zip(INFOTEXT_KEYS, DEFAULTS, strict=True))
     values.update(controls)
     return [values[key] for key in INFOTEXT_KEYS]
 

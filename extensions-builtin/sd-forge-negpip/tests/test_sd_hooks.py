@@ -13,8 +13,9 @@ for path in (str(EXTENSION_PATH.parents[1]), str(EXTENSION_PATH)):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from backend.nn.unet import CrossAttention  # noqa: E402
 from lib_negpip import sd as negpip_sd  # noqa: E402
+
+from backend.nn.unet import CrossAttention  # noqa: E402
 from modules.forward_override import install_forward_override, overridden_modules  # noqa: E402
 
 
@@ -66,7 +67,7 @@ def test_patch_hooks_cross_attention_and_unpatch_restores_forward(unet):
         assert "forward" not in block.attn1.__dict__
     assert len(negpip_sd._PATCHED_MODULES) == 2
     with torch.inference_mode():
-        for block, want in zip(unet.blocks, expected):
+        for block, want in zip(unet.blocks, expected, strict=True):
             assert torch.allclose(block.attn2(x, context), want, atol=1e-6)
 
     negpip_sd.patch_sd_negpip(_instance(), _NegPiP)  # already patched: no second layer

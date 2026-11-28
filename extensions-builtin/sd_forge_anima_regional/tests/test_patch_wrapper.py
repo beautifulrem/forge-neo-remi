@@ -7,8 +7,9 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib_anima_regional.regional import apply_regional_patch
-from modules import spectrum_force
+from lib_anima_regional.regional import apply_regional_patch  # noqa: E402
+
+from modules import spectrum_force  # noqa: E402
 
 
 class _Patcher:

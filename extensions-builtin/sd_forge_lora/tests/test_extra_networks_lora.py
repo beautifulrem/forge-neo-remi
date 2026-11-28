@@ -3,8 +3,8 @@
 import importlib.util
 import sys
 import types
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 import pytest
 

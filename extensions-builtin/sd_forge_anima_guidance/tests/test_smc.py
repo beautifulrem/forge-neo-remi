@@ -9,7 +9,7 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib_anima_guidance.smc import SMCCFGState, make_smc_cfg_function
+from lib_anima_guidance.smc import SMCCFGState, make_smc_cfg_function  # noqa: E402
 
 
 class SMCCFGTests(unittest.TestCase):

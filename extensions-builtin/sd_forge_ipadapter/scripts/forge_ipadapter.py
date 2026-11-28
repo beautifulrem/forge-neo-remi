@@ -56,7 +56,6 @@ class PreprocessorInsightFaceForInstantID(Preprocessor):
         self.name = name
         self.tags = ["Instant-ID"]
         self.model_filename_filters = ["Instant-ID", "Instant_ID"]
-        self.sorting_priority = 20
         self.slider_resolution = PreprocessorParameter(visible=False)
         self.corp_image_with_a1111_mask_when_in_img2img_inpaint_tab = False
         self.show_control_mode = False
@@ -85,18 +84,26 @@ add_supported_preprocessor(PreprocessorInsightFaceForInstantID(name="InsightFace
 class IPAdapterPatcher(ControlModelPatcher):
     @staticmethod
     def try_build_from_state_dict(state_dict, ckpt_path):
+        if not isinstance(state_dict, dict):
+            return None
         model = state_dict
+        ckpt_lower = str(ckpt_path).lower()
 
-        if ckpt_path.lower().endswith(".safetensors"):
+        has_flat_keys = "ip_adapter" not in model and any(isinstance(k, str) and k.startswith("ip_adapter.") for k in model)
+        if ckpt_lower.endswith((".safetensors", ".sft")) or has_flat_keys:
             st_model = {"image_proj": {}, "ip_adapter": {}}
-            for key in model.keys():
+            for key, value in model.items():
+                if not isinstance(key, str):
+                    continue
                 if key.startswith("image_proj."):
-                    st_model["image_proj"][key.replace("image_proj.", "")] = model[key]
+                    st_model["image_proj"][key.removeprefix("image_proj.")] = value
                 elif key.startswith("ip_adapter."):
-                    st_model["ip_adapter"][key.replace("ip_adapter.", "")] = model[key]
+                    st_model["ip_adapter"][key.removeprefix("ip_adapter.")] = value
             model = st_model
 
-        if "ip_adapter" not in model.keys() or len(model["ip_adapter"]) == 0:
+        ip_adapter_sd = model.get("ip_adapter")
+        image_proj_sd = model.get("image_proj")
+        if not isinstance(ip_adapter_sd, dict) or len(ip_adapter_sd) == 0 or not isinstance(image_proj_sd, dict):
             return None
 
         o = IPAdapterPatcher(model)
@@ -116,7 +123,11 @@ class IPAdapterPatcher(ControlModelPatcher):
         return
 
     def process_before_every_sampling(self, process, cond, mask, *args, **kwargs):
+        if not isinstance(cond, dict):
+            raise ValueError("IP-Adapter requires an IP-Adapter preprocessor (such as CLIP-ViT-H or InsightFace)")
+
         unet = process.sd_model.forge_objects.unet
+        attn_mask = (mask[:, 0] if getattr(mask, "ndim", 0) == 4 and mask.shape[1] == 1 else mask) if mask is not None else None
 
         unet = IPAdapterApply.apply_ipadapter(
             ipadapter=self.ip_adapter,
@@ -126,7 +137,7 @@ class IPAdapterPatcher(ControlModelPatcher):
             end_at=self.end_percent,
             faceid_v2=self.faceid_v2,
             weight_v2=self.weight_v2,
-            attn_mask=mask.squeeze(1) if mask is not None else None,
+            attn_mask=attn_mask,
             **cond,
         )
 

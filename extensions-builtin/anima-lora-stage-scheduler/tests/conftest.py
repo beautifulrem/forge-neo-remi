@@ -22,8 +22,9 @@ def fresh_extension_state(tmp_path, monkeypatch):
     lib_stage_scheduler.runtime, which all the tests share), with its own
     template store (seeded from the bundled templates.json under
     ``tmp_path``) and with online LoRA off."""
-    from backend.args import dynamic_args
     from lib_stage_scheduler import runtime
+
+    from backend.args import dynamic_args
     from modules import paths_internal
 
     for name in ("_ACTIVE_STATE", "_RELEASED_PATCHES", "_TEXT_ENCODER_SIGNATURE"):

@@ -79,6 +79,7 @@ class TaylorSeerForecaster:
         self.features: list[torch.Tensor] = []
         self.times: list[float] = []
         self.shape: tuple[int, ...] | None = None
+        self._acc_buf: torch.Tensor | None = None
 
     @property
     def ready(self) -> bool:
@@ -113,7 +114,14 @@ class TaylorSeerForecaster:
         latest = recent_features[-1]
         if out is None:
             out = torch.empty(self.shape, dtype=latest.dtype, device=latest.device)
-        acc = out if out.dtype == torch.float32 else torch.empty(self.shape, dtype=torch.float32, device=out.device)
+        if out.dtype == torch.float32:
+            acc = out
+        else:
+            buf = self._acc_buf
+            if buf is None or tuple(buf.shape) != self.shape or buf.device != out.device:
+                buf = torch.empty(self.shape, dtype=torch.float32, device=out.device)
+                self._acc_buf = buf
+            acc = buf
         acc.zero_()
         for weight, feat in zip(weights, recent_features):
             acc.add_(feat.reshape(self.shape), alpha=float(weight))
@@ -125,6 +133,7 @@ class TaylorSeerForecaster:
         self.features.clear()
         self.times.clear()
         self.shape = None
+        self._acc_buf = None
 
 
 class MagCacheTracker:
@@ -154,16 +163,19 @@ class MagCacheTracker:
         """Record an actual forward feature and return its relative L2 drift ratio."""
 
         cur_f = current.detach().float()
-        cur_norm = float(torch.linalg.vector_norm(cur_f).item())
+        cur_norm_t = torch.linalg.vector_norm(cur_f)
         ratio: float | None = None
         if previous is not None and previous.shape == current.shape:
             prev_f = previous.detach().float()
-            prev_norm = float(torch.linalg.vector_norm(prev_f).item())
-            diff_norm = float(torch.linalg.vector_norm(cur_f - prev_f).item())
+            prev_norm_t = torch.linalg.vector_norm(prev_f)
+            diff_norm_t = torch.linalg.vector_norm(cur_f - prev_f)
+            cur_norm, prev_norm, diff_norm = (float(v) for v in torch.stack((cur_norm_t, prev_norm_t, diff_norm_t)).cpu().tolist())
             ratio = diff_norm / max(prev_norm, _EPS)
             if math.isfinite(ratio):
                 self.last_ratio = ratio
                 self.ratios.append(ratio)
+        else:
+            cur_norm = float(cur_norm_t.cpu().tolist())
         self.prev_norm = cur_norm
         self.accumulated_error = 0.0
         self.consecutive_skips = 0
@@ -196,6 +208,7 @@ class MagCacheForecaster:
         self.features: list[torch.Tensor] = []
         self.times: list[float] = []
         self.shape: tuple[int, ...] | None = None
+        self._acc_buf: torch.Tensor | None = None
 
     @property
     def ready(self) -> bool:
@@ -230,7 +243,14 @@ class MagCacheForecaster:
         ahead = max(0.0, float(step) - self.times[-1])
         # Geometric sum of decayed residual steps: dampens drift as gap grows.
         damped_scale = (ahead / dt) * (self.decay ** max(1.0, ahead))
-        acc = out if out.dtype == torch.float32 else torch.empty(self.shape, dtype=torch.float32, device=out.device)
+        if out.dtype == torch.float32:
+            acc = out
+        else:
+            buf = self._acc_buf
+            if buf is None or tuple(buf.shape) != self.shape or buf.device != out.device:
+                buf = torch.empty(self.shape, dtype=torch.float32, device=out.device)
+                self._acc_buf = buf
+            acc = buf
         acc.copy_(latest.reshape(self.shape))
         acc.add_(latest.reshape(self.shape) - self.features[-2].reshape(self.shape), alpha=float(damped_scale))
         if acc is not out:
@@ -241,3 +261,4 @@ class MagCacheForecaster:
         self.features.clear()
         self.times.clear()
         self.shape = None
+        self._acc_buf = None

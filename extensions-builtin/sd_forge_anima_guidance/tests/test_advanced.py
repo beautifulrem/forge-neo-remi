@@ -9,7 +9,8 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib_anima_guidance.advanced import (
+from lib_anima_guidance.advanced import (  # noqa: E402
+    IGNORES_UNCOND,
     APGState,
     CFGZeroStarState,
     MomentumGuidanceState,
@@ -20,7 +21,6 @@ from lib_anima_guidance.advanced import (
     fdg_combine,
     make_apg_cfg_function,
     make_cfg_zero_star_cfg_function,
-    IGNORES_UNCOND,
     make_fdg_cfg_function,
     make_guidance_range_cfg_function,
     make_guidance_range_uncond_skip,
@@ -425,7 +425,7 @@ def _tcfg_svd_reference(cond, uncond):
     """TCFG's damping as the paper states it: a full SVD of [uncond; cond] per sample, in float64."""
 
     damped = []
-    for c, u in zip(cond.double(), uncond.double()):
+    for c, u in zip(cond.double(), uncond.double(), strict=True):
         _, _, vh = torch.linalg.svd(torch.stack([u.flatten(), c.flatten()]), full_matrices=False)
         v1 = vh[0]
         damped.append(((u.flatten() @ v1) * v1).reshape(u.shape))
@@ -538,7 +538,8 @@ class GuidanceRangeTests(unittest.TestCase):
         x = torch.full((1, 1, 1, 1), 10.0)
         cond = torch.full_like(x, 3.0)
         uncond = torch.full_like(x, 1.0)
-        previous = lambda args: torch.full_like(x, 5.0)
+        def previous(_args):
+            return torch.full_like(x, 5.0)
         hook = make_guidance_range_cfg_function(previous, sigma_start=0.2, sigma_end=0.8)
         base = {"input": x, "cond_denoised": cond, "uncond_denoised": uncond, "cond_scale": 4.0}
         self.assertTrue(torch.equal(hook({**base, "sigma": torch.tensor([0.5])}), torch.full_like(x, 5.0)))

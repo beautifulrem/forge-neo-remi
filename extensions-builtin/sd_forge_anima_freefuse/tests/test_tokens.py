@@ -1,7 +1,6 @@
 import importlib.util
 from pathlib import Path
 
-
 MODULE_PATH = Path(__file__).parents[1] / "lib_anima_freefuse" / "tokens.py"
 SPEC = importlib.util.spec_from_file_location("anima_freefuse_tokens", MODULE_PATH)
 TOKENS = importlib.util.module_from_spec(SPEC)

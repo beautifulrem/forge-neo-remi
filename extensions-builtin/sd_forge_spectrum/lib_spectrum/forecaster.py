@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import math
 import threading
+import weakref
 from collections.abc import Hashable, Sequence
 
 import torch
@@ -46,6 +47,7 @@ class ChebyshevForecaster:
         self.features: list[torch.Tensor] = []
         self.times: list[float] = []
         self.shape = None
+        self._acc_buf: torch.Tensor | None = None
 
     def _tau(self, value):
         return 2.0 * value / self.steps - 1.0
@@ -115,8 +117,15 @@ class ChebyshevForecaster:
         if out is None:
             out = torch.empty(self.shape, dtype=original_dtype, device=self.features[-1].device)
         # Accumulate in float32: straight into ``out`` when that is float32,
-        # else in one scratch cast into ``out`` at the end.
-        prediction = out if out.dtype == torch.float32 else torch.empty(self.shape, dtype=torch.float32, device=out.device)
+        # else in a preallocated float32 scratch buffer cast into ``out`` at the end.
+        if out.dtype == torch.float32:
+            prediction = out
+        else:
+            buf = self._acc_buf
+            if buf is None or tuple(buf.shape) != self.shape or buf.device != out.device:
+                buf = torch.empty(self.shape, dtype=torch.float32, device=out.device)
+                self._acc_buf = buf
+            prediction = buf
         prediction.zero_()
         for weight, feature in zip(weights, self.features):
             prediction.add_(feature.reshape(self.shape), alpha=float(weight))
@@ -128,6 +137,7 @@ class ChebyshevForecaster:
         self.features.clear()
         self.times.clear()
         self.shape = None
+        self._acc_buf = None
 
 
 def predict_branches(forecasters: Sequence[ChebyshevForecaster], step: int) -> torch.Tensor:
@@ -195,6 +205,36 @@ def _safe_simple_branches(branches: Sequence[int]) -> bool:
     return len(branches) in (1, 2) and len(set(branches)) == len(branches) and all(item in (0, 1) for item in branches)
 
 
+_SAMPLE_INDEX_CACHE: dict[tuple[int, int, torch.device], tuple[torch.Tensor, int]] = {}
+_SAMPLE_INDEX_CACHE_MAX = 32
+_SIG_MEMO_SIZE = 4
+
+
+def _sample_index(per_branch: int, count: int, device: torch.device) -> tuple[torch.Tensor, int]:
+    key = (per_branch, count, device)
+    cached = _SAMPLE_INDEX_CACHE.get(key)
+    if cached is not None:
+        return cached
+    stride = max(1, per_branch // 16)
+    offsets = torch.arange(0, per_branch, stride, device=device)[:16]
+    index = (torch.arange(count, device=device)[:, None] * per_branch + offsets).reshape(-1)
+    result = (index, int(offsets.numel()))
+    if len(_SAMPLE_INDEX_CACHE) >= _SAMPLE_INDEX_CACHE_MAX:
+        _SAMPLE_INDEX_CACHE.clear()
+    _SAMPLE_INDEX_CACHE[key] = result
+    return result
+
+
+def _read_sigma(timestep) -> float:
+    if torch.is_tensor(timestep) and timestep.numel() > 0:
+        return float(timestep.detach().reshape(-1)[:1].cpu().tolist()[0])
+    return sigma_value(timestep)
+
+
+def _tensor_version(tensor: torch.Tensor):
+    return None if tensor.is_inference() else tensor._version
+
+
 def _call_samples(timestep, conditioning, branches: Sequence[int]):
     """A model call's sigma and its per-branch conditioning signatures (None
     when the conditioning cannot be split), read with one host transfer.
@@ -218,16 +258,39 @@ def _call_samples(timestep, conditioning, branches: Sequence[int]):
     parts = [timestep.detach().reshape(-1)[:1].to(work_dtype)] if fused else []
     size = 0
     if per_branch:
-        stride = max(1, per_branch // 16)
-        offsets = torch.arange(0, per_branch, stride, device=context.device)[:16]
-        index = (torch.arange(count, device=context.device)[:, None] * per_branch + offsets).reshape(-1)
+        index, size = _sample_index(per_branch, count, context.device)
         parts.append(context.detach().reshape(-1).index_select(0, index).to(work_dtype))
-        size = offsets.numel()
     values = torch.cat(parts).cpu().tolist() if parts else []
     sigma = float(values.pop(0)) if fused else sigma_value(timestep)
     samples = [tuple(round(float(value), 6) for value in values[i * size : (i + 1) * size]) for i in range(count)]
     dtype = str(context.dtype)
     return sigma, {key: (shape, dtype, sample) for key, sample in zip(branches, samples)}
+
+
+def _call_samples_memoized(state: SpectrumState, timestep, conditioning, keys: Sequence):
+    context = conditioning.get("c_crossattn") if isinstance(conditioning, dict) and keys else None
+    if not torch.is_tensor(context) or context.shape[0] % len(keys):
+        return _read_sigma(timestep), None
+    keys_key = tuple(keys)
+    version = _tensor_version(context)
+    shape = tuple(context.shape)
+    dtype = context.dtype
+    if version is not None:
+        for ref, seen_version, seen_keys, seen_shape, seen_dtype, cached_sigs in state._sig_memo:
+            if ref() is context and seen_version == version and seen_keys == keys_key and seen_shape == shape and seen_dtype == dtype:
+                return _read_sigma(timestep), cached_sigs
+    current_sigma, signatures = _call_samples(timestep, conditioning, keys)
+    if signatures is not None and version is not None:
+        try:
+            ref = weakref.ref(context)
+        except TypeError:
+            ref = None
+        if ref is not None:
+            state._sig_memo = (
+                (ref, version, keys_key, shape, dtype, signatures),
+                *(entry for entry in state._sig_memo if entry[0]() is not None and not (entry[0]() is context and entry[2] == keys_key)),
+            )[:_SIG_MEMO_SIZE]
+    return current_sigma, signatures
 
 
 def _replaced_blocks(transformer_options) -> tuple:
@@ -310,6 +373,7 @@ class SpectrumState:
         self.sea_accumulated = 0.0
         self.sea_distances.clear()
         self.was_forced = False
+        self._sig_memo: tuple = ()
 
     def advance(self, sigma: float, latent: torch.Tensor, copies: int = 1) -> bool:
         """``copies``: how many branch chunks (cond, uncond, AND sub-prompts)
@@ -515,11 +579,23 @@ class SpectrumNode:
             sigma = args["timestep"]
             branches, valid_branches = _branch_info(args, input_x.shape[0])
             keys = _branch_keys(branches)
-            current_sigma, signatures = _call_samples(sigma, args.get("c") if valid_branches else None, keys)
             transformer_options = args.get("c", {}).get("transformer_options", {})
+            policy_compatible = valid_branches and (
+                compat_policy == "Legacy / fastest"
+                or (_safe_simple_branches(branches) and (old_wrapper is None or bool(getattr(old_wrapper, "__spectrum_cache_safe__", False))))
+            )
+            sampled_signatures = policy_compatible and not state.forecasting_ended
+            if sampled_signatures:
+                current_sigma, signatures = _call_samples_memoized(state, sigma, args.get("c"), keys)
+            else:
+                current_sigma = _read_sigma(sigma)
+                signatures = None
+            new_step = state.advance(current_sigma, input_x, len(branches) if valid_branches else 1)
+            if policy_compatible and not sampled_signatures and not state.forecasting_ended:
+                # A higher sigma triggered state.reset() on an otherwise ended state.
+                _, signatures = _call_samples_memoized(state, sigma, args.get("c"), keys)
             if signatures is not None and (replaced := _replaced_blocks(transformer_options)):
                 signatures = {key: (*signature, replaced) for key, signature in signatures.items()}
-            new_step = state.advance(current_sigma, input_x, len(branches) if valid_branches else 1)
             # When one CFG batch does not fit, Forge runs uncond and cond as
             # separate calls at the same sigma (uncond first): each branch's
             # first call at a sigma is its step, not a repeated-sigma call.

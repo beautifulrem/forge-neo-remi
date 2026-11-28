@@ -415,7 +415,8 @@ class JoyCaptionPage(pages.Page):
 
     @ui.action("load_type")
     def load_type(self, ctx, values):
-        name = values.get("edit_select") or ""
+        raw = values.get("edit_select")
+        name = raw if isinstance(raw, str) else ""
         types = jcp.all_caption_types()
         prompts = types.get(name, ["", "", ""]) if name else ["", "", ""]
         return {
@@ -435,7 +436,8 @@ class JoyCaptionPage(pages.Page):
 
     @ui.action("save_type")
     def save_type(self, ctx, values):
-        name = str(values.get("edit_name") or "").strip()
+        raw = values.get("edit_name")
+        name = raw.strip() if isinstance(raw, str) else ""
         if not name:
             return {"__outputs__": {"edit_status": ui.message("❗ Name is required")}}
         if name == jcp.NONE_CAPTION_TYPE:
@@ -447,7 +449,8 @@ class JoyCaptionPage(pages.Page):
 
     @ui.action("delete_type")
     def delete_type(self, ctx, values):
-        name = str(values.get("edit_name") or "").strip()
+        raw = values.get("edit_name")
+        name = raw.strip() if isinstance(raw, str) else ""
         user = jcp.load_user_caption_types()
         if not name:
             status = ui.message("❗ Nothing selected")
@@ -474,7 +477,12 @@ class JoyCaptionPage(pages.Page):
 
     @ui.action("caption")
     def caption(self, ctx, values):
-        resolved = self.values(ctx, values)
+        from PIL import Image, UnidentifiedImageError
+
+        try:
+            resolved = self.values(ctx, values)
+        except (UnidentifiedImageError, Image.DecompressionBombError, OSError):
+            raise ui.ValidationError([ui.ParamError("cannot read the image", owner=ctx.owner or None, param="image")]) from None
         image = resolved["image"]
         if image is None:
             return ui.toast("❗ No image provided.", "warning")

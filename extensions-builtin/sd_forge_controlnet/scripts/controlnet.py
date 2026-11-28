@@ -554,7 +554,8 @@ class ControlNetForForgeOfficial(scripts.Script):
 
     @torch.no_grad()
     def process_unit_after_every_sampling(self, p: StableDiffusionProcessing, unit: ControlNetUnit, params: ControlNetCachedParameters, *args, **kwargs):
-        params.preprocessor.process_after_every_sampling(p, params, *args, **kwargs)
+        if params.preprocessor is not None:
+            params.preprocessor.process_after_every_sampling(p, params, *args, **kwargs)
         if params.model is not None:
             params.model.process_after_every_sampling(p, params, *args, **kwargs)
 
@@ -593,18 +594,32 @@ class ControlNetForForgeOfficial(scripts.Script):
 
     @torch.no_grad()
     def process_before_every_sampling(self, p, *args, **kwargs):
+        if getattr(p, "control_net_disabled", False):
+            return
+
+        current_params = getattr(self, "current_params", None) or {}
         for i, unit in enumerate(self.get_enabled_units(args)):
-            self.process_unit_before_every_sampling(p, unit, self.current_params[i], *args, **kwargs)
+            if (params := current_params.get(i)) is not None:
+                self.process_unit_before_every_sampling(p, unit, params, *args, **kwargs)
 
     @torch.no_grad()
     def postprocess_batch_list(self, p, pp, *args, **kwargs):
+        if getattr(p, "control_net_disabled", False):
+            return
+
+        current_params = getattr(self, "current_params", None) or {}
         for i, unit in enumerate(self.get_enabled_units(args)):
-            self.process_unit_after_every_sampling(p, unit, self.current_params[i], pp, *args, **kwargs)
+            if (params := current_params.get(i)) is not None:
+                self.process_unit_after_every_sampling(p, unit, params, pp, *args, **kwargs)
 
     def postprocess(self, p, processed, *args):
+        if getattr(p, "control_net_disabled", False):
+            return
         self.current_params = {}
 
     def cleanup(self, p, *args, **kwargs):
+        if getattr(p, "control_net_disabled", False):
+            return
         # A generation that raised never reached postprocess_batch_list: a model that patched the
         # model's own modules (Anima ControlNet-LLLite) would keep its control in every later
         # generation. The models' after-sampling hook undoes it and is idempotent.

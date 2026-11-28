@@ -9,8 +9,9 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib_anima_regional.regional import rectangle_token_mask
-from modules.anima_support import parse_block_list
+from lib_anima_regional.regional import rectangle_token_mask  # noqa: E402
+
+from modules.anima_support import parse_block_list  # noqa: E402
 
 
 class RegionalTests(unittest.TestCase):
@@ -53,7 +54,7 @@ class RegionalTests(unittest.TestCase):
 
         seen_batches = []
 
-        def attention(x, context=None, rope_emb=None, transformer_options={}):
+        def attention(x, context=None, rope_emb=None, transformer_options=None):
             seen_batches.append(x.shape[0])
             return x * context.mean(dim=(1, 2)).view(-1, 1, 1)
 
@@ -96,7 +97,7 @@ class RegionalTests(unittest.TestCase):
         state = RegionalState([region], {0}, 0.02, 0.0, 0.0, 1.0)
         state.prepare_masks(torch.zeros(1, 4, 1, 8, 8), type("Dit", (), {"patch_temporal": 1, "patch_spatial": 2})())
 
-        def attention(x, context=None, rope_emb=None, transformer_options={}):
+        def attention(x, context=None, rope_emb=None, transformer_options=None):
             return x * context.mean(dim=(1, 2)).view(-1, 1, 1)
 
         x, context = torch.randn(1, 32, 4), torch.randn(1, 3, 4)
@@ -129,7 +130,7 @@ class RegionalTests(unittest.TestCase):
         state = RegionalState([region], {0}, 0.02, 0.0, 0.0, 1.0, step_of=lambda: step)
         dit = type("Dit", (), {"patch_temporal": 1, "patch_spatial": 2})()
 
-        def attention(x, context=None, rope_emb=None, transformer_options={}):
+        def attention(x, context=None, rope_emb=None, transformer_options=None):
             return x * context.mean(dim=(1, 2)).view(-1, 1, 1)
 
         x, context = torch.randn(1, 16, 4), torch.randn(1, 3, 4)
@@ -148,7 +149,7 @@ class RegionalTests(unittest.TestCase):
         first, second = torch.randn(1, 3, 4), torch.randn(1, 3, 4)
         x, context = torch.randn(1, 1024, 4), torch.randn(1, 3, 4)
 
-        def attention(x, context=None, rope_emb=None, transformer_options={}):
+        def attention(x, context=None, rope_emb=None, transformer_options=None):
             return x * context.mean(dim=(1, 2)).view(-1, 1, 1)
 
         def blended(strength, feather, overlap=False):
@@ -177,7 +178,7 @@ class RegionalTests(unittest.TestCase):
         state = RegionalState(regions, {0}, feather, base_preserve, 0.0, 1.0)
         state.prepare_masks(torch.zeros(1, 4, 1, 128, 128), type("Dit", (), {"patch_temporal": 1, "patch_spatial": 2})())
 
-        def attention(x, context=None, rope_emb=None, transformer_options={}):
+        def attention(x, context=None, rope_emb=None, transformer_options=None):
             return x * context.mean(dim=(1, 2)).view(-1, 1, 1)
 
         out = _make_cross_attention_wrapper(attention, state)(torch.ones(1, 64 * 64, 1), context=torch.zeros(1, 3, 4), transformer_options={})
@@ -229,7 +230,7 @@ class RegionalTests(unittest.TestCase):
 
     def test_placement_and_feather_that_are_not_finite_numbers_read_as_zero(self):
         nan = float("nan")
-        kwargs = dict(latent_t=1, latent_h=8, latent_w=8, patch_t=1, patch_h=2, y=0.0, height=1.0, device="cpu", dtype=torch.float32)
+        kwargs = {"latent_t": 1, "latent_h": 8, "latent_w": 8, "patch_t": 1, "patch_h": 2, "y": 0.0, "height": 1.0, "device": "cpu", "dtype": torch.float32}
         hard = rectangle_token_mask(x=0.0, width=0.5, feather=0.0, **kwargs)
         self.assertTrue(torch.equal(rectangle_token_mask(x=nan, width=0.5, feather=nan, **kwargs), hard))
         self.assertTrue(torch.equal(rectangle_token_mask(x=0.0, width=0.5, feather=float("-inf"), **kwargs), hard))
@@ -242,7 +243,7 @@ class RegionalTests(unittest.TestCase):
         state = RegionalState([Region(torch.randn(1, 3, 4), 0.0, 0.0, 1.0, 1.0, 1.0)], {0}, 0.02, 0.0, 0.0, 1.0)
         state.prepare_masks(torch.zeros(3, 4, 1, 8, 8), type("Dit", (), {"patch_temporal": 1, "patch_spatial": 2})())
 
-        def attention(x, context=None, rope_emb=None, transformer_options={}):
+        def attention(x, context=None, rope_emb=None, transformer_options=None):
             return x * context.mean(dim=(1, 2)).view(-1, 1, 1)
 
         x = torch.randn(3, 16, 4)
@@ -257,6 +258,7 @@ class RegionalTests(unittest.TestCase):
 
     def test_each_region_context_gets_its_own_negpip_mask(self):
         from lib_anima_regional.regional import Region, RegionalState, _make_cross_attention_wrapper
+
         from modules.anima_support import NEGPIP_CONTEXT_MASK_KEY, NEGPIP_MASK_KEY
 
         torch.manual_seed(0)
@@ -269,7 +271,7 @@ class RegionalTests(unittest.TestCase):
         state.prepare_masks(torch.zeros(4, 4, 1, 8, 8), type("Dit", (), {"patch_temporal": 1, "patch_spatial": 2})())
         seen = []
 
-        def attention(x, context=None, rope_emb=None, transformer_options={}):
+        def attention(x, context=None, rope_emb=None, transformer_options=None):
             seen.append(dict(transformer_options))
             return x * context.mean(dim=(1, 2)).view(-1, 1, 1)
 

@@ -12,11 +12,12 @@ sys.path.insert(0, str(ROOT))
 
 negpip = harness.load_script(ROOT / "scripts" / "negpip.py", "negpip_under_test")
 
+from lib_negpip import anima as negpip_anima  # noqa: E402
+from lib_negpip import sd as negpip_sd  # noqa: E402
+
 from backend.nn.anima import SelfCrossAttention  # noqa: E402
 from backend.nn.unet import CrossAttention  # noqa: E402
 from backend.sampling import condition, sampling_function  # noqa: E402
-from lib_negpip import anima as negpip_anima  # noqa: E402
-from lib_negpip import sd as negpip_sd  # noqa: E402
 
 
 class _Model:
@@ -136,7 +137,7 @@ def test_a_hires_checkpoint_is_hooked_and_its_conditioning_encoded_again(anima):
 
 
 def test_the_same_model_in_hires_keeps_its_conditioning(anima):
-    model, dit, originals = anima
+    model, _dit, _originals = anima
     script = negpip.NegPiP()
     p = _hires_process(model)
     script.process_batch(p)
@@ -186,7 +187,7 @@ def test_anima_text_the_parser_reads_as_no_negative_weight_installs_nothing(anim
 
 @pytest.mark.parametrize("prompt", list(_NEGATIVE))
 def test_anima_negative_weights_install_the_hooks(anima, prompt):
-    model, dit, originals = anima
+    model, _dit, _originals = anima
     script = negpip.NegPiP()
     p = _process(model, prompt)
     script.process_batch(p)
@@ -348,7 +349,7 @@ _NESTED_ONLY = "a cat, (red, (dog):-1)"
 
 
 def test_anima_a_nested_negative_weight_installs_the_hooks(anima):
-    model, dit, originals = anima
+    model, _dit, originals = anima
     script = negpip.NegPiP()
     p = _process(model, _NESTED_ONLY)
     script.process_batch(p)
@@ -400,7 +401,7 @@ def test_sd_an_edited_group_next_to_a_plain_one_moves_only_the_plain_one(sd):
 
 
 def test_sd_a_hires_prompt_target_turns_negpip_on_when_the_base_one_has_none(sd):
-    model, script, encoded = sd
+    model, script, _encoded = sd
     p = _sd_process(model, "a cat, (dog [big:small:5]:-1)")
     p.hr_prompts = ["a cat, (tree:-1)"]
     script.process_batch(p)
@@ -424,11 +425,10 @@ def test_sd_targets_follow_the_entry_forge_picks_for_the_main_prompt(sd, prompt,
     # prompt's entry holds, as Forge builds the schedule (the sampler's total
     # steps; Hires counting on from the base pass) and as reconstruct_cond_batch
     # picks the entry (first end >= the denoiser's call counter)
+    from modules.anima_support import schedule_index
     from modules.prompt_parser import get_learned_conditioning_prompt_schedules
 
-    from modules.anima_support import schedule_index
-
-    model, script, encoded = sd
+    model, script, _encoded = sd
     steps, hr_steps = 10, 6
     p = _sd_process(model, "a cat" if hires else prompt)
     p.steps, p.sampler_name = steps, sampler

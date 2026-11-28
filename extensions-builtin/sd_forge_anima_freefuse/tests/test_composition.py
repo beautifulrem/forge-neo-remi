@@ -13,11 +13,12 @@ for name in ("sd_forge_anima_freefuse", "sd_forge_anima_xattn_boost", "sd_forge_
     if str(EXTENSIONS / name) not in sys.path:
         sys.path.insert(0, str(EXTENSIONS / name))
 
-from backend import operations  # noqa: E402
-from backend.nn.anima import Block, _fn  # noqa: E402
 from lib_anima_freefuse import runtime  # noqa: E402
 from lib_anima_regional.regional import Region, RegionalState, apply_regional_patch  # noqa: E402
 from lib_anima_xattn_boost.boost import BoostState, apply_xattn_boost_patch  # noqa: E402
+
+from backend import operations  # noqa: E402
+from backend.nn.anima import Block, _fn  # noqa: E402
 
 B, T, H, W, D, CTX, TEXT = 2, 1, 3, 4, 32, 16, 5
 MARKERS = [0, 1]  # row 0 positive, row 1 negative

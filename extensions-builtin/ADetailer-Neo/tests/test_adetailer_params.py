@@ -710,3 +710,46 @@ def test_an_inner_run_that_raises_still_re_arms_the_outer_scripts(ad, monkeypatc
     with pytest.raises(RuntimeError):
         script.postprocess_image(p, SimpleNamespace(image=None))
     assert calls == ["postprocess", "before_process", "process", ("params.txt", "outer params")]
+
+
+def test_get_i2i_p_preserves_distilled_cfg_scale_and_three_slot_prompt_caches(ad):
+    from PIL import Image
+
+    script = ad.AfterDetailerScript()
+    args = ad.ADetailerArgs(ad_model="face_yolov8n.pt")
+    p = SimpleNamespace(
+        sd_model=None,
+        outpath_samples="",
+        outpath_grids="",
+        styles=[],
+        iteration=0,
+        batch_size=1,
+        batch_index=0,
+        seed=42,
+        subseed=7,
+        subseed_strength=0.0,
+        seed_resize_from_h=0,
+        seed_resize_from_w=0,
+        sampler_name="Euler",
+        scheduler="Automatic",
+        steps=20,
+        cfg_scale=7.0,
+        distilled_cfg_scale=5.75,
+        width=512,
+        height=512,
+        tiling=False,
+        extra_generation_params={},
+        all_seeds=[42],
+        all_subseeds=[7],
+        scripts=SimpleNamespace(alwayson_scripts=[]),
+        script_args=[],
+    )
+    img = Image.new("RGB", (64, 64))
+    i2i = script.get_i2i_p(p, args, img)
+    assert i2i.distilled_cfg_scale == 5.75
+    assert i2i.cached_c == [None, None, None]
+    assert i2i.cached_uc == [None, None, None]
+
+    script.fix_p2(p, i2i, SimpleNamespace(image=img), args, SimpleNamespace(bboxes=[[0, 0, 32, 32]]), 0)
+    assert i2i.cached_c == [None, None, None]
+    assert i2i.cached_uc == [None, None, None]

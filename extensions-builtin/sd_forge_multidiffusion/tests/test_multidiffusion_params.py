@@ -146,3 +146,54 @@ def test_each_tile_gets_the_anima_tensors_of_its_prompts(multidiffusion, monkeyp
     diffusion(model, {"input": x, "timestep": torch.ones(2, device=device), "c": c, "cond_or_uncond": [0, 1]})
 
     assert seen and all(len(set(batch.values())) == 1 for batch in seen), seen
+
+
+def test_apply_chains_previous_wrapper_and_uses_vae_downscale_ratio(multidiffusion, monkeypatch):
+    import torch
+    from lib_multidiffusion import tiled_diffusion
+
+    from modules import processing, shared
+
+    class FakeModel:
+        def __init__(self, previous=None):
+            self.model_options = {"model_function_wrapper": previous} if previous is not None else {}
+
+        def clone(self):
+            cloned = FakeModel()
+            cloned.model_options = dict(self.model_options)
+            return cloned
+
+        def set_model_unet_function_wrapper(self, wrapper):
+            self.model_options["model_function_wrapper"] = wrapper
+
+    chained = []
+
+    def previous_wrapper(model_function, args):
+        chained.append(tuple(args["input"].shape))
+        return model_function(args["input"], args["timestep"], **args["c"])
+
+    monkeypatch.setattr(processing, "opt_f", 8)
+    monkeypatch.setattr(shared, "sd_model", SimpleNamespace(forge_objects=SimpleNamespace(vae=SimpleNamespace(downscale_ratio=16))), raising=False)
+
+    patched = tiled_diffusion.TiledDiffusion.apply(FakeModel(previous_wrapper), "MultiDiffusion", 1024, 512, 64, 1)
+    wrapper = patched.model_options["model_function_wrapper"]
+    assert tiled_diffusion.opt_f == 16
+    assert (wrapper.tile_width, wrapper.tile_height, wrapper.tile_overlap) == (64, 32, 4)
+
+    device = tiled_diffusion._dev
+    x = torch.randn(1, 16, 1, 64, 64, device=device)
+    out = wrapper(lambda xt, tt, **c: xt, {"input": x, "timestep": torch.ones(1, device=device), "c": {"c_crossattn": torch.randn(1, 4, 8, device=device)}, "cond_or_uncond": [0]})
+    assert out.shape == x.shape and chained
+
+    # process_controlnet scales latent dims by resolved downscale ratio (16), not hardcoded 8
+    hint = torch.ones(1, 3, 64 * 16, 64 * 16, device=device)
+    control = SimpleNamespace(cond_hint_original=hint, cond_hint=None, manual_cast_dtype=torch.float32, device=device, previous_controlnet=None)
+    wrapper.process_controlnet(x.shape, torch.float32, {"control_model": control}, [0], [tiled_diffusion.BBox(0, 0, 32, 32)], 1, 0)
+    assert control.cond_hint.shape == (1, 3, 32 * 16, 32 * 16)
+
+    # Fallback to processing.opt_f when vae lacks downscale_ratio
+    monkeypatch.setattr(shared, "sd_model", SimpleNamespace(forge_objects=SimpleNamespace(vae=None)), raising=False)
+    monkeypatch.setattr(processing, "opt_f", 12)
+    fallback_patched = tiled_diffusion.TiledDiffusion.apply(FakeModel(), "Mixture of Diffusers", 768, 768, 48, 1)
+    assert tiled_diffusion.opt_f == 12
+    assert fallback_patched.model_options["model_function_wrapper"].tile_width == 64

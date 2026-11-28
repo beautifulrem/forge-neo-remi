@@ -18,7 +18,7 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib_spectrum.forecaster import SpectrumNode
+from lib_spectrum.forecaster import SpectrumNode  # noqa: E402
 
 STEPS = 16
 DEGREE = 1

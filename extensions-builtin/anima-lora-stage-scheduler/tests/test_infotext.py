@@ -312,6 +312,7 @@ def test_a_template_deleted_from_the_other_tab_runs_as_the_default(module, caplo
 
 def test_selecting_a_template_applies_its_timing(module):
     from lib_stage_scheduler import ui
+
     from remi import ui as remi_ui
 
     ctx = remi_ui.ActionContext(tab="txt2img", core={"distilled_cfg_scale": 3.0, "hr_distilled_cfg": 6.0})

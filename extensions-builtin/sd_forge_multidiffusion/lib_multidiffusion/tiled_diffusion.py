@@ -102,17 +102,30 @@ class AbstractDiffusion:
         self.draw_background: bool = True
         self.control_tensor_cpu = False
         self.weights = None
+        self.previous_wrapper = None
+        self.opt_f: Optional[int] = None
+
+    def _scale_factor(self) -> int:
+        if isinstance(self.opt_f, int) and not isinstance(self.opt_f, bool) and self.opt_f > 0:
+            return self.opt_f
+        if isinstance(opt_f, int) and not isinstance(opt_f, bool) and opt_f > 0:
+            return opt_f
+        return 8
 
     def reset(self):
         tile_width = self.tile_width
         tile_height = self.tile_height
         tile_overlap = self.tile_overlap
         tile_batch_size = self.tile_batch_size
+        previous_wrapper = self.previous_wrapper
+        local_opt_f = self.opt_f
         self.__init__()
         self.tile_width = tile_width
         self.tile_height = tile_height
         self.tile_overlap = tile_overlap
         self.tile_batch_size = tile_batch_size
+        self.previous_wrapper = previous_wrapper
+        self.opt_f = local_opt_f
 
     def repeat_tensor(self, x: Tensor, n: int, concat=False, concat_to=0) -> Tensor:
         if n == 1:
@@ -185,6 +198,7 @@ class AbstractDiffusion:
         if not refresh:
             if self.control_tensor_batch is not None or self.control_params is not None:
                 return
+        scale = self._scale_factor()
         tensors = [tensor]
         self.org_control_tensor_batch = tensors
         self.control_tensor_batch = []
@@ -196,7 +210,7 @@ class AbstractDiffusion:
                 for bbox in bboxes:
                     if len(control_tensor.shape) == 3:
                         control_tensor.unsqueeze_(0)
-                    control_tile = control_tensor[:, :, bbox[1] * opt_f : bbox[3] * opt_f, bbox[0] * opt_f : bbox[2] * opt_f]
+                    control_tile = control_tensor[:, :, bbox[1] * scale : bbox[3] * scale, bbox[0] * scale : bbox[2] * scale]
                     single_batch_tensors.append(control_tile)
                 control_tile = torch.cat(single_batch_tensors, dim=0)
                 if self.control_tensor_cpu:
@@ -209,7 +223,7 @@ class AbstractDiffusion:
                 for bbox in self.custom_bboxes:
                     if len(control_tensor.shape) == 3:
                         control_tensor.unsqueeze_(0)
-                    control_tile = control_tensor[:, :, bbox[1] * opt_f : bbox[3] * opt_f, bbox[0] * opt_f : bbox[2] * opt_f]
+                    control_tile = control_tensor[:, :, bbox[1] * scale : bbox[3] * scale, bbox[0] * scale : bbox[2] * scale]
                     if self.control_tensor_cpu:
                         control_tile = control_tile.cpu()
                     custom_control_tile_list.append(control_tile)
@@ -231,10 +245,11 @@ class AbstractDiffusion:
     def process_controlnet(self, x_shape: torch.Size, x_dtype: torch.dtype, c_in: dict, cond_or_uncond: list[int], bboxes: list[BBox], batch_size: int, batch_id: int):
         control: ControlNet = c_in["control_model"]
         param_id = -1
+        scale = self._scale_factor()
         tuple_key = tuple(cond_or_uncond) + tuple(x_shape)
         while control is not None:
             param_id += 1
-            PH, PW = self.h * 8, self.w * 8
+            PH, PW = self.h * scale, self.w * scale
 
             if self.control_params.get(tuple_key, None) is None:
                 self.control_params[tuple_key] = [[None]]
@@ -262,7 +277,7 @@ class AbstractDiffusion:
                 cond_hint_pre_tile = control.cond_hint
                 if control.cond_hint.shape[0] < batch_size:
                     cond_hint_pre_tile = self.repeat_tensor(control.cond_hint, ceildiv(batch_size, control.cond_hint.shape[0]))[:batch_size]
-                cns = [cond_hint_pre_tile[:, :, bbox[1] * opt_f : bbox[3] * opt_f, bbox[0] * opt_f : bbox[2] * opt_f] for bbox in bboxes]
+                cns = [cond_hint_pre_tile[:, :, bbox[1] * scale : bbox[3] * scale, bbox[0] * scale : bbox[2] * scale] for bbox in bboxes]
                 control.cond_hint = torch.cat(cns, dim=0)
                 self.control_params[tuple_key][param_id][batch_id] = control.cond_hint
             else:
@@ -270,7 +285,8 @@ class AbstractDiffusion:
             control = control.previous_controlnet
 
     def process_controllllite(self, x_shape: torch.Size, x_dtype: torch.dtype, c_in: dict, cond_or_uncond: list[int], bboxes: list[BBox], batch_size: int, batch_id: int):
-        PH, PW = self.h * opt_f, self.w * opt_f
+        scale = self._scale_factor()
+        PH, PW = self.h * scale, self.w * scale
         tuple_key = tuple(cond_or_uncond) + tuple(x_shape)
 
         if patches_dict := c_in.get("transformer_options", {}).get("patches", {}):  # SDXL
@@ -284,7 +300,7 @@ class AbstractDiffusion:
 
                 if self.refresh:
                     patch.clear_cache()
-                patch.prepare_tiled(bboxes, opt_f, PH, PW, batch_size, batch_id, x_dtype, tuple_key)
+                patch.prepare_tiled(bboxes, scale, PH, PW, batch_size, batch_id, x_dtype, tuple_key)
 
                 seen.add(pid)
 
@@ -292,7 +308,7 @@ class AbstractDiffusion:
             for instance in active_dits:
                 if self.refresh:
                     instance.clear_tiled_cache()
-                instance.prepare_tiled(bboxes, opt_f, PH, PW, batch_size, batch_id, x_dtype, tuple_key)
+                instance.prepare_tiled(bboxes, scale, PH, PW, batch_size, batch_id, x_dtype, tuple_key)
 
 
 def gaussian_weights(tile_w: int, tile_h: int) -> Tensor:
@@ -371,7 +387,10 @@ class MultiDiffusion(AbstractDiffusion):
                             control.cond_hint = control.cond_hint.unsqueeze(2)
                         control = control.previous_controlnet
 
-                x_tile_out = model_function(x_tile, ts_tile, **c_tile)
+                if self.previous_wrapper is not None:
+                    x_tile_out = self.previous_wrapper(model_function, {**args, "input": x_tile, "timestep": ts_tile, "c": c_tile})
+                else:
+                    x_tile_out = model_function(x_tile, ts_tile, **c_tile)
 
                 if is_5d:
                     x_tile_out = x_tile_out.squeeze(2)
@@ -489,7 +508,10 @@ class MixtureOfDiffusers(AbstractDiffusion):
                             control.cond_hint = control.cond_hint.unsqueeze(2)
                         control = control.previous_controlnet
 
-                x_tile_out = model_function(x_tile, t_tile, **c_tile)
+                if self.previous_wrapper is not None:
+                    x_tile_out = self.previous_wrapper(model_function, {**args, "input": x_tile, "timestep": t_tile, "c": c_tile})
+                else:
+                    x_tile_out = model_function(x_tile, t_tile, **c_tile)
 
                 if is_5d:
                     x_tile_out = x_tile_out.squeeze(2)
@@ -509,7 +531,25 @@ class MixtureOfDiffusers(AbstractDiffusion):
 class TiledDiffusion:
 
     @staticmethod
-    def apply(model: ModelPatcher, method: str, tile_width: int, tile_height: int, tile_overlap: int, tile_batch_size: int):
+    def _resolve_downscale_ratio(vae=None) -> int:
+        from modules import processing, shared
+
+        if vae is None:
+            vae = getattr(getattr(getattr(shared, "sd_model", None), "forge_objects", None), "vae", None)
+        ratio = getattr(vae, "downscale_ratio", None)
+        if isinstance(ratio, int) and not isinstance(ratio, bool) and ratio > 0:
+            return ratio
+        if isinstance(ratio, (tuple, list)) and len(ratio) >= 2:
+            spatial = ratio[-1]
+            if isinstance(spatial, int) and not isinstance(spatial, bool) and spatial > 0:
+                return spatial
+        fallback = getattr(processing, "opt_f", None)
+        if isinstance(fallback, int) and not isinstance(fallback, bool) and fallback > 0:
+            return fallback
+        return 8
+
+    @staticmethod
+    def apply(model: ModelPatcher, method: str, tile_width: int, tile_height: int, tile_overlap: int, tile_batch_size: int, vae=None):
         match method:
             case "MultiDiffusion":
                 implement = MultiDiffusion()
@@ -518,17 +558,17 @@ class TiledDiffusion:
             case _:
                 raise SystemError
 
-        from modules import processing
-
         global opt_f
-        opt_f = processing.opt_f
+        opt_f = TiledDiffusion._resolve_downscale_ratio(vae)
 
+        implement.opt_f = opt_f
         implement.tile_width = tile_width // opt_f
         implement.tile_height = tile_height // opt_f
         implement.tile_overlap = tile_overlap // opt_f
         implement.tile_batch_size = tile_batch_size
 
         model = model.clone()
+        implement.previous_wrapper = model.model_options.get("model_function_wrapper")
         model.set_model_unet_function_wrapper(implement)
         model.model_options["tiled_diffusion"] = True
         return model

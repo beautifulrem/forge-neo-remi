@@ -3,7 +3,6 @@ from pathlib import Path
 
 import torch
 
-
 MODULE_PATH = Path(__file__).parents[1] / "lib_anima_freefuse" / "masks.py"
 SPEC = importlib.util.spec_from_file_location("anima_freefuse_masks", MODULE_PATH)
 MASKS = importlib.util.module_from_spec(SPEC)

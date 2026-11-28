@@ -16,11 +16,12 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT.parent / "sd_forge_anima_guidance"))
 
-from anima_block_compile import RECOMPILE_LIMIT, AnimaBlockCompileManager, block_compile_config
-from backend import memory_management, operations
-from backend.nn.anima import Anima
-from lib_anima_guidance.modulation import _block_deltas
-from modules.forward_override import forward_overrides
+from anima_block_compile import RECOMPILE_LIMIT, AnimaBlockCompileManager, block_compile_config  # noqa: E402
+from lib_anima_guidance.modulation import _block_deltas  # noqa: E402
+
+from backend import memory_management, operations  # noqa: E402
+from backend.nn.anima import Anima  # noqa: E402
+from modules.forward_override import forward_overrides  # noqa: E402
 
 _BLOCKS = 12  # more than Dynamo's recompile limit (8): one graph per block would fall back
 
@@ -83,7 +84,7 @@ class AnimaBlockCompileDynamoTests(unittest.TestCase):
         self.kmodel = _KModel(self.model)
         self.backend = _CountingBackend()
         self.fallbacks = []
-        config = dict(backend=self.backend, dynamic=False, fullgraph=False, options={"guard_filter_fn": _guard_filter})
+        config = {"backend": self.backend, "dynamic": False, "fullgraph": False, "options": {"guard_filter_fn": _guard_filter}}
         AnimaBlockCompileManager.install(self.kmodel, config, on_fallback=self.fallbacks.append)
 
     def _both(self, seed):

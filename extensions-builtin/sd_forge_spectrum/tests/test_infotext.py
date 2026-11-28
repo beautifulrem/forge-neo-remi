@@ -149,7 +149,7 @@ def test_a_recorded_run_pastes_back_enabled_with_the_same_settings(layout):
     enable, *args, preset_name = _replay(layout, params)
 
     assert enable is True and preset_name == ""
-    assert dict(zip(INFOTEXT_KEYS, args)) == SETTINGS
+    assert dict(zip(INFOTEXT_KEYS, args, strict=True)) == SETTINGS
     # Running the pasted args records the same infotext again.
     assert _record(enable, *args, preset_name) == params
 
@@ -162,7 +162,7 @@ def test_infotext_without_the_enable_key_leaves_the_switch_alone(layout, switch)
     enable, *args, _ = _replay(layout, params, start={"enable": switch})
 
     assert enable is switch
-    assert dict(zip(INFOTEXT_KEYS, args)) == SETTINGS
+    assert dict(zip(INFOTEXT_KEYS, args, strict=True)) == SETTINGS
 
 
 def test_every_infotext_key_reads_back_into_its_setting(layout):

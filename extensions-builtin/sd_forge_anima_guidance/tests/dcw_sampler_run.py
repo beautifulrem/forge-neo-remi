@@ -23,8 +23,12 @@ sys.path.insert(0, str(REPO / "modules_forge" / "packages"))  # k_diffusion, as 
 
 import torch  # noqa: E402
 
-from modules import shared  # noqa: E402  (first: options imports it circularly)
-from modules import options, shared_options, shared_state  # noqa: E402
+from modules import (  # noqa: E402
+    options,
+    shared,
+    shared_options,
+    shared_state,
+)
 
 # What shared_init.initialize() sets, without loading the user's config.
 shared.options_templates = shared_options.options_templates
@@ -32,11 +36,14 @@ shared.restricted_opts = shared_options.restricted_opts
 shared.opts = options.Options(shared_options.options_templates, shared_options.restricted_opts)
 shared.state = shared_state.State()
 
-from modules import processing  # noqa: E402,F401  (the WebUI's import order)
-from modules import prompt_parser  # noqa: E402
-from modules.sd_samplers_cfg_denoiser import CFGDenoiser  # noqa: E402
-from backend.patcher.base import set_model_options_post_cfg_function  # noqa: E402
 from k_diffusion.sampling import sample_euler  # noqa: E402
+
+from backend.patcher.base import set_model_options_post_cfg_function  # noqa: E402
+from modules import (  # noqa: E402
+    processing,  # noqa: F401
+    prompt_parser,
+)
+from modules.sd_samplers_cfg_denoiser import CFGDenoiser  # noqa: E402
 
 spec = importlib.util.spec_from_file_location("anima_guidance_dcw_run", Path(__file__).parents[1] / "scripts" / "anima_guidance.py")
 script = importlib.util.module_from_spec(spec)

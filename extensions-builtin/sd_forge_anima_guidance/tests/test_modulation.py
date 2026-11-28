@@ -13,7 +13,7 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib_anima_guidance.modulation import (
+from lib_anima_guidance.modulation import (  # noqa: E402
     ModulationPatch,
     _add_delta,
     _expand_rows,

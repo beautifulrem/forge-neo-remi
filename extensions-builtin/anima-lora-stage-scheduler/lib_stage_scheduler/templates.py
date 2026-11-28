@@ -93,10 +93,12 @@ def _template_names() -> list[str]:
 
 
 def _template_config(name: str) -> dict:
+    if not isinstance(name, str):
+        return {}
     if name in BUILTIN_TEMPLATES:
         return dict(BUILTIN_TEMPLATES[name])
     data = _load_custom_templates()
-    value = data.get(str(name or ""), {})
+    value = data.get(name, {})
     return dict(value) if isinstance(value, dict) else {}
 
 
@@ -108,7 +110,7 @@ def _normalize_template_part(part) -> dict | None:
 
     stage = part.get("stage")
     mode = part.get("mode", PART_ALLOW)
-    if stage not in STAGE_CHOICES or mode not in {PART_ALLOW, PART_BAN}:
+    if stage not in STAGE_CHOICES or mode not in (PART_ALLOW, PART_BAN):
         return None
 
     return {

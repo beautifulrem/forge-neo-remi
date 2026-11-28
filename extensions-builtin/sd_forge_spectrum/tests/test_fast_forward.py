@@ -16,10 +16,11 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from backend import operations
-from backend.modules.k_prediction import PredictionDiscreteFlow
-from backend.nn.anima import Anima
-from lib_spectrum.forecaster import _ensure_capture_hook, _fast_forward
+from lib_spectrum.forecaster import _ensure_capture_hook, _fast_forward  # noqa: E402
+
+from backend import operations  # noqa: E402
+from backend.modules.k_prediction import PredictionDiscreteFlow  # noqa: E402
+from backend.nn.anima import Anima  # noqa: E402
 
 
 def _tiny_anima():

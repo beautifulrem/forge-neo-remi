@@ -61,7 +61,7 @@ def test_the_infotext_replays_into_the_same_script_args(regional, regions):
         if not region[0]:
             start = len(SETTINGS) + index * len(region)
             expected[start + 1 : start + len(region)] = defaults[start + 1 : start + len(region)]
-    assert all(value != default for value, default in zip(SETTINGS, defaults))
+    assert all(value != default for value, default in zip(SETTINGS, defaults, strict=False))
 
     params = harness.assert_infotext_round_trip(layout, args, _recorder(regional), expected)
     off = 1 if regions is REGION_ONE_OFF else 3

@@ -2,10 +2,10 @@
 unreadable template file is never overwritten."""
 
 import pytest
-
-from remi import ui
 from test_remi_params import layout_of
 from test_runtime_dispatch import mixer
+
+from remi import ui
 
 
 def _values(artist="wlop", **changes):

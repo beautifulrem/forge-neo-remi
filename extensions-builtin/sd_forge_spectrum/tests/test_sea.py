@@ -13,9 +13,9 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib_spectrum import forecaster, sea
-from lib_spectrum.forecaster import SpectrumState
-from lib_spectrum.sea import (
+from lib_spectrum import forecaster, sea  # noqa: E402
+from lib_spectrum.forecaster import SpectrumState  # noqa: E402
+from lib_spectrum.sea import (  # noqa: E402
     SeaCalibration,
     count_refreshes,
     flow_time,
@@ -68,7 +68,7 @@ class SeaTests(unittest.TestCase):
             sea_gain(8, 12, 0.5, 2.0, "cpu")
             sea_gain(8, 10, 0.5, 3.0, "cpu")
             self.assertEqual(built.call_count, 3)  # new size, new beta
-        for t, gain in zip((0.9, 0.5, 0.1), gains):
+        for t, gain in zip((0.9, 0.5, 0.1), gains, strict=True):
             spectrum = sea.radial_frequency(8, 10, "cpu").clamp_min(1.0 / 10).pow(-2.0)
             expected = (1 - t) * spectrum / ((1 - t) ** 2 * spectrum + t * t + 1e-8)
             self.assertTrue(torch.equal(gain, expected / expected.mean()))

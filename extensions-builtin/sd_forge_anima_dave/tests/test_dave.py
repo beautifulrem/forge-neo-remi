@@ -8,8 +8,9 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib_anima_dave.dave import DaveState, apply_dave_patch, attenuate_dc, in_window, model_blocks, window_steps
-from modules import spectrum_force
+from lib_anima_dave.dave import DaveState, apply_dave_patch, attenuate_dc, in_window, model_blocks, window_steps  # noqa: E402
+
+from modules import spectrum_force  # noqa: E402
 
 
 def test_attenuation_scales_the_token_mean_and_keeps_the_residual():
@@ -140,9 +141,9 @@ def test_blocks_are_attenuated_only_inside_the_window_and_restored():
     patched = apply_dave_patch(_Patcher(dit), DaveState(blocks=(1,), strength=0.5, tau=0.1))
     wrapper = patched.model_options["model_function_wrapper"]
 
-    out, overridden = wrapper(_run_blocks(dit), _args(1.0))
+    _out, overridden = wrapper(_run_blocks(dit), _args(1.0))
     assert overridden == [False, True, False]
-    out, overridden = wrapper(_run_blocks(dit), _args(float(SIGMAS[1])))
+    _out, overridden = wrapper(_run_blocks(dit), _args(float(SIGMAS[1])))
     assert overridden == [False, False, False]
     assert all("forward" not in block.__dict__ for block in dit.blocks)
 

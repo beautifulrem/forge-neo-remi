@@ -108,7 +108,7 @@ def test_a_runs_infotext_restores_every_control(module):
 
     values = harness.pasted(layout, params)
     recorded = [name for name in module.SCRIPT_ARG_NAMES if layout.by_name[name].infotext]
-    expected = dict(zip(recorded, _recorded(args)))
+    expected = dict(zip(recorded, _recorded(args), strict=True))
     # LoKR block / Qwen text with its switch off: not recorded, left alone
     del expected["lokr_block_weights"], expected["lokr_text_layer_weights"]
     assert values == expected

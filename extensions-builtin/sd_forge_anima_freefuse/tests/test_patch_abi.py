@@ -1,12 +1,12 @@
 import importlib
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 import torch
-
 
 EXTENSION_PATH = Path(__file__).parents[1]
 
@@ -106,7 +106,7 @@ def test_overlapping_adapter_selectors_are_refused():
     state = _state(runtime)
     state.adapters = [runtime.AdapterSpec("A", "cat", "cat"), runtime.AdapterSpec("B", "/elsewhere/cat.safetensors", "dog")]
 
-    with pytest.raises(ValueError, match="^FreeFuse adapter selectors overlap: A/B$"):
+    with pytest.raises(ValueError, match=r"^FreeFuse adapter selectors overlap: A/B$"):
         state.validate_patches(patcher)
 
 
@@ -417,7 +417,7 @@ def test_non_plain_adapters_keep_the_dense_merge():
     assert runtime._plain_lora_factors([0.7, plain, 1.0, None, None], torch.randn(8, 6)) is None
 
     # A DoRA patch still goes through merge_lora_to_weight in the forward.
-    layer, forward = _lora_forward(runtime, ModelPatcher, dora)
+    _layer, forward = _lora_forward(runtime, ModelPatcher, dora)
     merges = []
     original_merge = runtime.merge_lora_to_weight
     runtime.merge_lora_to_weight = lambda *args, **kwargs: merges.append(args) or original_merge(*args, **kwargs)
@@ -542,8 +542,9 @@ def _quantized_linear(kind):
     torch.manual_seed(0)
     weight, bias = torch.randn(4, 256), torch.randn(4)
     if kind == "gguf":
-        from backend.operations_gguf import ParameterGGUF, dequantize_tensor
         import gguf
+
+        from backend.operations_gguf import ParameterGGUF, dequantize_tensor
 
         packed = ParameterGGUF(
             torch.from_numpy(gguf.quantize(weight.numpy(), gguf.GGMLQuantizationType.Q8_0)),

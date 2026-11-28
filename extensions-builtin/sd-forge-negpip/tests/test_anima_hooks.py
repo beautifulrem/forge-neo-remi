@@ -12,9 +12,10 @@ for path in (str(EXTENSION_PATH.parents[1]), str(EXTENSION_PATH)):
     if path not in sys.path:
         sys.path.insert(0, path)
 
+from lib_negpip import anima as negpip_anima  # noqa: E402
+
 from backend.nn.anima import SelfCrossAttention  # noqa: E402
 from backend.sampling import condition, sampling_function  # noqa: E402
-from lib_negpip import anima as negpip_anima  # noqa: E402
 from modules.anima_support import NEGPIP_CONTEXT_MASK_KEY, NEGPIP_MASK_KEY  # noqa: E402
 
 
@@ -250,6 +251,7 @@ def test_patch_and_unpatch_round_trip(monkeypatch, negatives_seen):
 @pytest.mark.parametrize("regional_first", [False, True])
 def test_extra_prompts_of_a_feature_that_yields_do_not_enable_negpip(regional_first):
     from lib_negpip.utils import any_negative
+
     from modules.anima_feature_conflicts import ARTIST_MIXER, REGIONAL, set_feature_active
     from modules.anima_support import register_negpip_prompts
 

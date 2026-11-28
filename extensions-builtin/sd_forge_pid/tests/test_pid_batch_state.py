@@ -7,7 +7,7 @@ import types
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from pid_state import batch_value, result_sink
+from pid_state import batch_value, result_sink  # noqa: E402
 
 
 def test_batch_value_prefers_current_batch():

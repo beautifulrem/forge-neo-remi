@@ -213,7 +213,7 @@ def test_a_misspelt_tag_rescans_the_lora_folders_once_per_run(module, monkeypatc
     networks = SimpleNamespace(available_networks={}, available_network_aliases={}, forbidden_network_aliases={"none"}, update_available_networks_by_names=update_available_networks_by_names)
     monkeypatch.setitem(sys.modules, "networks", networks)
     written = ["<lora:cta:0-9=0.5>", "<lora:cta:0-9=0.5>"]
-    args = [True, "", True, "all=1.0", False, "", False, "", False, "", "", ""] + [True, "", True, "all=1.0", False, "", False, "", False, "", "", ""]
+    args = [True, "", True, "all=1.0", False, "", False, "", False, "", "", "", True, "", True, "all=1.0", False, "", False, "", False, "", "", ""]
     script = module.Script()
 
     p = SimpleNamespace(batch_size=1, all_prompts=list(written), all_hr_prompts=list(written), extra_generation_params={})
@@ -269,7 +269,7 @@ def test_the_infotext_keeps_the_inline_rules_as_written(module, monkeypatch):
     written = ["a <lora:cat:0-9=0.5;modules=mlp=0.2>", "b <lora:cat:1,1,0.5>"]
     loaded = ["a <lora:cat:1.0>", "b <lora:cat:1.0>"]
     p = SimpleNamespace(iteration=1, batch_size=1, all_prompts=list(written), all_hr_prompts=list(written), extra_generation_params={})
-    args = [True, "", True, "all=1.0", False, "", False, "", False, "", "", ""] + [False, "", True, "all=1.0", False, "", False, "", False, "", "", ""]
+    args = [True, "", True, "all=1.0", False, "", False, "", False, "", "", "", False, "", True, "all=1.0", False, "", False, "", False, "", "", ""]
     script = module.Script()
 
     # The second batch, in the order of processing.process_images_inner

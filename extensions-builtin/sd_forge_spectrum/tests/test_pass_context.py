@@ -3,7 +3,6 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-
 MODULE_PATH = Path(__file__).parents[1] / "lib_spectrum" / "pass_context.py"
 SPEC = importlib.util.spec_from_file_location("spectrum_pass_context", MODULE_PATH)
 MODULE = importlib.util.module_from_spec(SPEC)

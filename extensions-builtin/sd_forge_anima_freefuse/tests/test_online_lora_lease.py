@@ -46,8 +46,9 @@ def test_online_lora_stays_on_until_freefuse_and_the_stage_scheduler_both_end(mo
 
 
 def _run_process(monkeypatch, module, *, hook_installed, tagged):
-    from backend.args import dynamic_args
     from lib_anima_freefuse import runtime
+
+    from backend.args import dynamic_args
     from modules import anima_online_lora
 
     monkeypatch.setattr(anima_online_lora, "_leases", set())

@@ -133,7 +133,7 @@ def render_pose(ctx: ui.ActionContext, index: int) -> dict[str, Any]:
             return ui.toast("The pose file is too large", "error")
         try:
             pose = json.loads(pose)
-        except ValueError:
+        except (ValueError, RecursionError):
             return ui.toast("The pose is not valid JSON", "error")
     try:
         check_finite_json(pose)

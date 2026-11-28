@@ -5,7 +5,6 @@ from types import SimpleNamespace
 
 import pytest
 import torch
-
 from lib_artist_mixer import runtime
 
 

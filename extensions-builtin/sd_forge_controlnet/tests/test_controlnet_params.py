@@ -865,6 +865,9 @@ def test_check_pose_reads_the_openpose_json_shapes(cn):
         ({"canvas_width": openpose.MAX_CANVAS + 1, "canvas_height": 32}, "The pose's canvas_width must be a size"),
         ({**pose, "people": {}}, "The pose's people must be a list"),
         ({**pose, "animals": "cat"}, "The pose's animals must be a list"),
+        ({**pose, "people": [123]}, "Not an OpenPose pose"),
+        ({**pose, "people": [None]}, "Not an OpenPose pose"),
+        ({**pose, "animals": [123]}, "Not an OpenPose pose"),
     ):
         with pytest.raises(ValueError, match=message) as refused:
             openpose.check_pose(bad)
@@ -884,6 +887,64 @@ def test_a_refused_pose_says_why_in_a_sentence_the_ui_translates(cn, files):
     assert call(script, "render_pose", {}, files, unit=0, pose=[])["__toast__"]["message"] == "The pose list is empty"
     finite = call(script, "render_pose", {}, files, unit=0, pose={"canvas_width": float("inf"), "canvas_height": 8})["__toast__"]["message"]
     assert finite == {"text": "{{path}} must be a finite number, got {{value}}", "params": {"path": "value.canvas_width", "value": "inf"}}
+
+
+def test_render_pose_and_normalize_survive_deep_json_without_recursion_error(cn, files, monkeypatch):
+    """deeply nested pose strings/objects return a validation toast or normalize
+    without raising RecursionError."""
+    from lib_controlnet import unit_actions
+    from lib_controlnet.unit_param import normalize
+
+    script = cn.ControlNetForForgeOfficial()
+    deep_str = "[" * 2000 + "1" + "]" * 2000
+    toast_str = call(script, "render_pose", {}, files, unit=0, pose=deep_str)["__toast__"]
+    assert toast_str["level"] == "error"
+    assert toast_str["message"] in ("The pose is not valid JSON", "A pose is a JSON object")
+
+    monkeypatch.setattr(unit_actions.json, "loads", lambda _s: (_ for _ in ()).throw(RecursionError("depth")))
+    toast_rec = call(script, "render_pose", {}, files, unit=0, pose="[]")["__toast__"]
+    assert toast_rec == {"level": "error", "message": "The pose is not valid JSON"}
+
+    deep_dict: dict = {"leaf": 1}
+    for _ in range(1199):
+        deep_dict = {"child": deep_dict}
+    toast_dict = call(script, "render_pose", {}, files, unit=0, pose=deep_dict)["__toast__"]
+    assert toast_dict["level"] == "error"
+
+    normalized = normalize({"enabled": False, "pose": deep_dict}, is_img2img=False)
+    assert normalized["pose"] is deep_dict
+
+
+def test_render_pose_rejects_malformed_entries_and_out_of_range_coordinates(cn, files):
+    """non-dict people, non-list animals, and large keypoint coordinates
+    raise ValueError(Sentence(...)) in openpose.render_pose and return error toasts."""
+    from lib_controlnet import openpose
+
+    from remi import ui
+
+    script = cn.ControlNetForForgeOfficial()
+    bad_poses = [
+        {"canvas_width": 512, "canvas_height": 512, "people": [123]},
+        {"canvas_width": 512, "canvas_height": 512, "people": [None]},
+        {"canvas_width": 512, "canvas_height": 512, "people": [{}]},
+        {"canvas_width": 512, "canvas_height": 512, "people": [], "animals": [123]},
+        {"canvas_width": 512, "canvas_height": 512, "people": [], "animals": [[1e15, 1e15, 1.0] * 17]},
+        {"canvas_width": 512, "canvas_height": 512, "people": [{"pose_keypoints_2d": [1e200, 1e200, 1.0] + [0.0, 0.0, 1.0] * 17}]},
+    ]
+    for bad in bad_poses:
+        with pytest.raises(ValueError) as refused:
+            openpose.render_pose(bad)
+        assert isinstance(refused.value.args[0], ui.Sentence)
+        assert refused.value.args[0].template in POSE_REASONS
+
+        toast = call(script, "render_pose", {}, files, unit=0, pose=bad)["__toast__"]
+        assert toast["level"] == "error"
+
+    human_img = openpose.render_pose({"canvas_width": 64, "canvas_height": 32, "people": [{"pose_keypoints_2d": [10, 10, 1, 20, 20, 1] + [0, 0, 0] * 16}]})
+    assert human_img.shape == (32, 64, 3) and human_img.dtype == np.uint8 and human_img.any()
+    animal = [coord for i in range(17) for coord in (8 + 3 * i, 4 + i, 1)]
+    animal_img = openpose.render_pose({"canvas_width": 64, "canvas_height": 32, "people": [], "animals": [animal]})
+    assert animal_img.shape == (32, 64, 3) and animal_img.dtype == np.uint8 and animal_img.any()
 
 
 # endregion
@@ -1431,4 +1492,35 @@ def test_the_model_list_only_holds_control_models_for_the_loaded_architecture(cn
     assert global_state.get_filtered_controlnet_names("depth") == ["None", "anima-lllite-depth-1", "anima_pose_depth"]
     monkeypatch.setattr(dynamic_args, "anima", False, raising=False)
     assert global_state.get_filtered_controlnet_names("depth") == ["None", "control_sd15_depth"]
+
+
+def test_control_net_disabled_skips_sampling_and_postprocess_hooks(cn):
+    from lib_controlnet.external_code import ControlNetUnit
+
+    script = cn.ControlNetForForgeOfficial()
+    unit = ControlNetUnit(enabled=True)
+    p = SimpleNamespace(control_net_disabled=True, clear_prompt_cache=lambda: None)
+
+    # Without current_params initialized (e.g. ADetailer inner run with ControlNet = None)
+    script.process(p, unit)
+    script.process_batch(p, unit)
+    script.process_before_every_sampling(p, unit)
+    script.postprocess_batch_list(p, SimpleNamespace(images=[]), unit)
+    script.postprocess(p, SimpleNamespace(), unit)
+    script.cleanup(p, unit)
+
+    # With stale/partial current_params, control_net_disabled=True still skips and preserves outer state
+    sentinel = object()
+    script.current_params = {0: sentinel}
+    script.process_before_every_sampling(p, unit)
+    script.postprocess_batch_list(p, SimpleNamespace(images=[]), unit)
+    script.postprocess(p, SimpleNamespace(), unit)
+    script.cleanup(p, unit)
+    assert script.current_params == {0: sentinel}
+
+    # Even with ControlNet enabled, missing index in current_params does not raise KeyError
+    enabled_p = SimpleNamespace(control_net_disabled=False)
+    script.current_params = {}
+    script.process_before_every_sampling(enabled_p, unit)
+    script.postprocess_batch_list(enabled_p, SimpleNamespace(images=[]), unit)
 

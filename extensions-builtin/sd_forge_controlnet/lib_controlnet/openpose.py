@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
+import cv2
 import numpy as np
 
 from remi.ui import Sentence
@@ -31,6 +32,10 @@ def check_pose(pose: Any) -> dict:
     for key in ("people", "animals"):
         if not isinstance(pose.get(key, []), list):
             raise ValueError(Sentence("The pose's {{key}} must be a list", key=key))
+    if any(not isinstance(person, dict) for person in pose.get("people", [])):
+        raise ValueError(Sentence("Not an OpenPose pose: {{error}}", error="people entries must be JSON objects"))
+    if any(not isinstance(animal, list) for animal in pose.get("animals", [])):
+        raise ValueError(Sentence("Not an OpenPose pose: {{error}}", error="animals entries must be lists"))
     return pose
 
 
@@ -48,6 +53,6 @@ def render_pose(pose: Any) -> np.ndarray:
         if poses:
             return draw_poses(poses, height, width, draw_body=True, draw_hand=True, draw_face=True)
         return draw_animalposes(animals, height, width)
-    except (AssertionError, KeyError, TypeError, IndexError) as error:
+    except (AssertionError, AttributeError, KeyError, TypeError, IndexError, OverflowError, ValueError, cv2.error) as error:
         # the decoder's own error: text no catalog has
         raise ValueError(Sentence("Not an OpenPose pose: {{error}}", error=str(error))) from None

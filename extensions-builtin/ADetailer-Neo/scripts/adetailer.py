@@ -522,6 +522,7 @@ class AfterDetailerScript(scripts.Script):
             n_iter=1,
             steps=steps,
             cfg_scale=cfg_scale,
+            distilled_cfg_scale=getattr(p, "distilled_cfg_scale", 3.5),
             width=width,
             height=height,
             restore_faces=args.ad_restore_face,
@@ -532,8 +533,8 @@ class AfterDetailerScript(scripts.Script):
             override_settings=override_settings,
         )
 
-        i2i.cached_c = [None, None]
-        i2i.cached_uc = [None, None]
+        i2i.cached_c = [None, None, None]
+        i2i.cached_uc = [None, None, None]
         i2i.scripts, i2i.script_args = self.script_filter(p, args)
         i2i._ad_disabled = True
         i2i._ad_inner = True
@@ -719,8 +720,8 @@ class AfterDetailerScript(scripts.Script):
             p2.denoising_strength, pred.bboxes[j], pp.image.size
         )
 
-        p2.cached_c = [None, None]
-        p2.cached_uc = [None, None]
+        p2.cached_c = [None, None, None]
+        p2.cached_uc = [None, None, None]
 
         if not args.ad_use_inpaint_width_height:
             p2.width, p2.height = self.get_optimal_crop_image_size(

@@ -56,7 +56,7 @@ def test_the_infotext_replays_into_the_same_script_args(enable):
     layout = harness.script_layout(dave.AnimaDaveScript())
     defaults = layout.values_to_args({})
     args = [enable, *(True, 0.15, 0.05, "0-5, 12")[1:]]
-    assert all(value != default for value, default in zip(args[1:], defaults[1:]))
+    assert all(value != default for value, default in zip(args[1:], defaults[1:], strict=True))
     # Off records nothing: the paste and the API leave the panel at its defaults
     expected = args if enable else defaults
     params = harness.assert_infotext_round_trip(layout, args, _record, expected)

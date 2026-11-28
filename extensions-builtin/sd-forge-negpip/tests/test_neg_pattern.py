@@ -7,8 +7,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from backend.text_processing.parsing import parse_prompt_attention, re_attention  # noqa: E402
 from lib_negpip.utils import has_negative, negative_weights  # noqa: E402
+
+from backend.text_processing.parsing import parse_prompt_attention, re_attention  # noqa: E402
 
 
 @pytest.mark.parametrize(

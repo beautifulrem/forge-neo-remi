@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 import torch
-
 from lib_artist_mixer import runtime
 
 sys.argv = sys.argv[:1]
@@ -38,9 +37,10 @@ class _Attention:
         self.calls = []
         self.fail = fail
 
-    def __call__(self, x, context=None, rope_emb=None, transformer_options={}):
-        self.calls.append((x.shape[0], context, dict(transformer_options)))
-        if self.fail and transformer_options.get("anima_nag_skip"):
+    def __call__(self, x, context=None, rope_emb=None, transformer_options=None):
+        opts = transformer_options or {}
+        self.calls.append((x.shape[0], context, dict(opts)))
+        if self.fail and opts.get("anima_nag_skip"):
             raise RuntimeError("artist forward failed")
         return attend(x, context)
 
@@ -77,7 +77,7 @@ def test_output_avg_blends_weighted_artists_into_positive_rows(batched):
 
     base = attend(x, context)
     weights = [0.6 / 0.9, 0.3 / 0.9]
-    artist = sum(w * attend(x, a.cond.expand(2, -1, -1)) for w, a in zip(weights, state.artists))
+    artist = sum(w * attend(x, a.cond.expand(2, -1, -1)) for w, a in zip(weights, state.artists, strict=True))
     strength = 0.8 * 0.9
     assert torch.allclose(out[0], base[0] * (1.0 - strength) + artist[0] * strength, atol=1e-6)
     assert torch.equal(out[1], base[1])  # negative-prompt row
@@ -140,7 +140,7 @@ def test_quality_delta_limits_the_artist_delta():
 
     base = attend(x, context)
     weights = [0.6 / 0.9, 0.3 / 0.9]
-    artist = sum(w * attend(x, a.cond.expand(2, -1, -1)) for w, a in zip(weights, state.artists))
+    artist = sum(w * attend(x, a.cond.expand(2, -1, -1)) for w, a in zip(weights, state.artists, strict=True))
     expected = runtime._norm_limited_delta(base, artist, 0.8 * 0.9)
     assert torch.allclose(out[0], expected[0], atol=1e-6)
     assert torch.equal(out[1], base[1])
@@ -188,7 +188,7 @@ def test_artist_mixer_yields_to_regional_in_headless_runs():
 class _CrossAttn(torch.nn.Module):
     context_dim = 4
 
-    def forward(self, x, context=None, rope_emb=None, transformer_options={}):
+    def forward(self, x, context=None, rope_emb=None, transformer_options=None):
         return attend(x, context)
 
 
@@ -205,7 +205,9 @@ class _Unet:
 
 def _run_args(enable_hires_rows=False, disable_hires_mixing=False):
     width = len(mixer.TABLE_HEADERS)
-    row = lambda artist: [True, artist, 1.0, "0-51", 0.0, 1.0, 0.5, mixer.CURVE_HOLD, mixer.PRESET_CUSTOM, False]
+
+    def row(artist):
+        return [True, artist, 1.0, "0-51", 0.0, 1.0, 0.5, mixer.CURVE_HOLD, mixer.PRESET_CUSTOM, False]
     base = row("(base artist:-1)") + [None] * (width * (mixer.MAX_ARTIST_ROWS - 1))
     hires = row("hires artist") + [None] * (width * (mixer.MAX_ARTIST_ROWS - 1))
     head = [True, 1, 1, enable_hires_rows, disable_hires_mixing, 3.0, 3.0, 0.7, mixer.OPT_BALANCE, runtime.COMBINE_OUTPUT_AVG, runtime.FUSION_INTERPOLATE, False, False]
@@ -235,7 +237,7 @@ def test_superseded_and_finished_runs_release_their_device_tensors(monkeypatch):
     try:
         first = run_and_use()
         second = run_and_use()  # e.g. the hires pass
-        assert runtime._RUN_STATES == [second]
+        assert [second] == runtime._RUN_STATES
         assert not first.call_contexts and not first.row_masks and not any(artist.on_device for artist in first.artists)
 
         mixer.Script().postprocess(p, None, *_run_args())
@@ -317,7 +319,7 @@ def test_prompt_editing_resolves_per_step_in_the_artist_branch(monkeypatch, prom
 
 
 def test_artist_overrides_exist_only_during_a_model_call(monkeypatch):
-    p, unet, attention = _sampling_pass(monkeypatch)
+    _p, unet, attention = _sampling_pass(monkeypatch)
     try:
         assert "forward" not in attention.__dict__  # nothing is installed for the whole pass
         patched, out = _model_call(unet, attention)
@@ -333,7 +335,7 @@ def test_artist_overrides_exist_only_during_a_model_call(monkeypatch):
 
 
 def test_artist_overrides_are_restored_when_the_model_call_raises(monkeypatch):
-    p, unet, attention = _sampling_pass(monkeypatch)
+    _p, unet, attention = _sampling_pass(monkeypatch)
 
     def interrupted(input, timestep, **c):
         assert "forward" in attention.__dict__
@@ -363,7 +365,7 @@ def test_nothing_is_mixed_after_sampling_not_even_in_an_adetailer_inner_run(monk
         x, context = _inputs()
         assert not patched and torch.equal(out, attend(x, context))
         assert state.wrapper_checks == 0 and state.dispatch_calls == 0
-        assert runtime._RUN_STATES == [state]  # kept for postprocess's run summary
+        assert [state] == runtime._RUN_STATES  # kept for postprocess's run summary
     finally:
         runtime._cleanup_runtime()
 
@@ -565,7 +567,7 @@ def test_base_fusion_contexts_are_built_once_per_model_call():
     for block in (0, 1):  # two blocks of one model call
         runtime._dispatch_cross_attn(forward, block, state, x, context=context, transformer_options=options)
     first, second = forward.calls[:2], forward.calls[3:5]
-    for one, two in zip(first, second):
+    for one, two in zip(first, second, strict=True):
         assert one[1] is two[1] and one[2]["negpip_context_mask"] is two[2]["negpip_context_mask"]
 
 
@@ -605,7 +607,7 @@ def test_artist_forwards_skip_the_negative_rows():
     assert all(call[2]["cond_or_uncond"] == [0] for call in forward.calls[:2])
     base = attend(x, context)
     weights = [0.6 / 0.9, 0.3 / 0.9]
-    artist = sum(w * attend(x, a.cond.expand(4, -1, -1)) for w, a in zip(weights, state.artists))
+    artist = sum(w * attend(x, a.cond.expand(4, -1, -1)) for w, a in zip(weights, state.artists, strict=True))
     strength = 0.8 * 0.9
     assert torch.equal(out[:2], base[:2])
     assert torch.allclose(out[2:], base[2:] * (1.0 - strength) + artist[2:] * strength, atol=1e-6)
@@ -646,7 +648,8 @@ def test_rows_mixing_into_no_block_take_no_slot_of_the_artist_cap(monkeypatch):
 def test_a_rows_strength_is_its_weight_times_the_inline_multiplier(monkeypatch):
     # The help text: "the final row strength is `Weight x inline multiplier`"
     width = len(mixer.TABLE_HEADERS)
-    row = lambda artist, weight: [True, artist, weight, "0-51", 0.0, 1.0, 0.5, mixer.CURVE_HOLD, mixer.PRESET_CUSTOM, False]
+    def row(artist, weight):
+        return [True, artist, weight, "0-51", 0.0, 1.0, 0.5, mixer.CURVE_HOLD, mixer.PRESET_CUSTOM, False]
     base = row("(alpha:1.5)", 0.8) + row("beta", 0.5) + row("gamma:0.5", 1.0) + [None] * (width * (mixer.MAX_ARTIST_ROWS - 3))
     head = [True, 3, 1, False, False, 3.0, 3.0, 0.7, mixer.OPT_BALANCE, runtime.COMBINE_OUTPUT_AVG, runtime.FUSION_INTERPOLATE, False, False]
     args = head + base + [None] * (width * mixer.MAX_ARTIST_ROWS)

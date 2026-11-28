@@ -2,7 +2,6 @@ import math
 import sys
 
 import pytest
-
 from lib_anima_hires import GuardLimits, guard_dimensions
 
 
@@ -188,7 +187,7 @@ def _guard_script(monkeypatch, anima=True):
 def _process(**fields):
     from types import SimpleNamespace
 
-    defaults = dict(width=1536, height=1536, enable_hr=True, hr_scale=1.5, hr_resize_x=0, hr_resize_y=0, extra_generation_params={})
+    defaults = {"width": 1536, "height": 1536, "enable_hr": True, "hr_scale": 1.5, "hr_resize_x": 0, "hr_resize_y": 0, "extra_generation_params": {}}
     return SimpleNamespace(**{**defaults, **fields})
 
 

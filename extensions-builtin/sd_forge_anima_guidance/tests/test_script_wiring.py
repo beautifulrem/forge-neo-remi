@@ -9,11 +9,11 @@ from pathlib import Path
 import pytest
 import remi_script_harness as harness
 import torch
-
 from lib_anima_guidance.advanced import APGState, CFGZeroStarState
 from lib_anima_guidance.dcw import DCWState
 from lib_anima_guidance.modulation import resolve_artifact as resolve_artifact_under_test
 from lib_anima_guidance.smc import SMCCFGState
+
 from modules import anima_guidance_state
 from modules.anima_feature_conflicts import (
     APG_GUIDANCE,
@@ -78,42 +78,42 @@ class FakeProcess:
         self.sd_model = types.SimpleNamespace(forge_objects=types.SimpleNamespace(unet=unet or FakeUnet()))
 
 
-DEFAULTS = dict(
-    enable=True,
-    guidance_mode=STANDARD_GUIDANCE,
-    smc_alpha=0.2,
-    smc_lambda=5.0,
-    skim_enable=False,
-    skim_scale=2.5,
-    full_negative=False,
-    disable_flip_filter=False,
-    start_percent=0.0,
-    end_percent=1.0,
-    flip_percent=0.0,
-    dcw_enable=False,
-    dcw_lambda=-0.015,
-    dcw_schedule="one_minus_sigma",
-    dcw_bands="LL",
-    cns_strength=1.0,
-    flow_unipc_solver_type="bh2",
-    flow_unipc_disable_corrector_first=0,
-    flow_unipc_thresholding=False,
-    flow_unipc_dynamic_thresholding_ratio=0.995,
-    flow_unipc_sample_max_value=1.0,
-    flow_pc3_gamma=1.0,
-    flow_pc3_tolerance=0.005,
-    modulation_enable=False,
-    modulation_weight=3.0,
-    modulation_start=0,
-    modulation_end=-1,
-    modulation_base="",
-    modulation_positive="",
-    modulation_negative="",
-    adapter_mode="Auto-download pinned",
-    adapter_path="",
-    clip_mode="Auto-download pinned",
-    clip_path="",
-)
+DEFAULTS = {
+    "enable": True,
+    "guidance_mode": STANDARD_GUIDANCE,
+    "smc_alpha": 0.2,
+    "smc_lambda": 5.0,
+    "skim_enable": False,
+    "skim_scale": 2.5,
+    "full_negative": False,
+    "disable_flip_filter": False,
+    "start_percent": 0.0,
+    "end_percent": 1.0,
+    "flip_percent": 0.0,
+    "dcw_enable": False,
+    "dcw_lambda": -0.015,
+    "dcw_schedule": "one_minus_sigma",
+    "dcw_bands": "LL",
+    "cns_strength": 1.0,
+    "flow_unipc_solver_type": "bh2",
+    "flow_unipc_disable_corrector_first": 0,
+    "flow_unipc_thresholding": False,
+    "flow_unipc_dynamic_thresholding_ratio": 0.995,
+    "flow_unipc_sample_max_value": 1.0,
+    "flow_pc3_gamma": 1.0,
+    "flow_pc3_tolerance": 0.005,
+    "modulation_enable": False,
+    "modulation_weight": 3.0,
+    "modulation_start": 0,
+    "modulation_end": -1,
+    "modulation_base": "",
+    "modulation_positive": "",
+    "modulation_negative": "",
+    "adapter_mode": "Auto-download pinned",
+    "adapter_path": "",
+    "clip_mode": "Auto-download pinned",
+    "clip_path": "",
+}
 
 
 @pytest.fixture(autouse=True)
@@ -171,7 +171,8 @@ def test_skim_then_range_then_zero_init_outermost(monkeypatch):
         "make_guidance_range_uncond_skip",
     ]
     # Each wrapper wraps the previous one's result.
-    for (_, _, inner), (_, wrapped, _) in zip(calls, calls[1:]):
+    from itertools import pairwise
+    for (_, _, inner), (_, wrapped, _) in pairwise(calls):
         assert wrapped is inner
     installed = calls[3][2]
     assert unet.model_options["sampler_cfg_function"] is installed
@@ -202,13 +203,13 @@ def test_uncond_skip_is_bound_to_the_installed_hook():
 @pytest.mark.parametrize(
     ("overrides", "disables_cfg1", "states"),
     [
-        (dict(guidance_mode=SMC_GUIDANCE), False, [SMCCFGState]),
-        (dict(guidance_mode=FDG_GUIDANCE), True, []),
-        (dict(guidance_mode=CFG_ZERO_STAR_GUIDANCE), False, [CFGZeroStarState]),
-        (dict(guidance_mode=APG_GUIDANCE), False, [APGState]),
-        (dict(guidance_mode=TCFG_GUIDANCE), False, []),
-        (dict(skim_enable=True), False, []),
-        (dict(guidance_range_enable=True), False, []),
+        ({"guidance_mode": SMC_GUIDANCE}, False, [SMCCFGState]),
+        ({"guidance_mode": FDG_GUIDANCE}, True, []),
+        ({"guidance_mode": CFG_ZERO_STAR_GUIDANCE}, False, [CFGZeroStarState]),
+        ({"guidance_mode": APG_GUIDANCE}, False, [APGState]),
+        ({"guidance_mode": TCFG_GUIDANCE}, False, []),
+        ({"skim_enable": True}, False, []),
+        ({"guidance_range_enable": True}, False, []),
     ],
 )
 def test_cfg1_optimization_is_disabled_only_for_fdg(overrides, disables_cfg1, states):
@@ -306,66 +307,66 @@ def _modulation_fails(monkeypatch):
 
 # (sampler, existing CFG hook, setup, overrides) of representative runs.
 INFOTEXT_CONFIGS = {
-    "disabled": ("Euler", None, None, dict(enable=False, skim_enable=True, nag_enable=True)),
-    "smc_alpha_zero": ("Euler", None, None, dict(guidance_mode=SMC_GUIDANCE, smc_alpha=0.0)),
+    "disabled": ("Euler", None, None, {"enable": False, "skim_enable": True, "nag_enable": True}),
+    "smc_alpha_zero": ("Euler", None, None, {"guidance_mode": SMC_GUIDANCE, "smc_alpha": 0.0}),
     "standard_extras": (
         "Euler",
         None,
         None,
-        dict(
-            nag_enable=True, nag_scale=3.0, nag_tau=2.0, nag_alpha=0.25, nag_start=0.1, nag_end=0.6,
-            momentum_enable=True, momentum_strength=0.75, momentum_ema=0.5,
-            dcw_enable=True, dcw_lambda=0.02, dcw_schedule="sigma", dcw_bands="all",
-            skim_enable=True, skim_scale=2.0, full_negative=True, disable_flip_filter=True,
-            start_percent=0.1, end_percent=0.9, flip_percent=0.5,
-            guidance_range_enable=True, guidance_range_start=0.2, guidance_range_end=0.8,
-        ),
+        {
+            "nag_enable": True, "nag_scale": 3.0, "nag_tau": 2.0, "nag_alpha": 0.25, "nag_start": 0.1, "nag_end": 0.6,
+            "momentum_enable": True, "momentum_strength": 0.75, "momentum_ema": 0.5,
+            "dcw_enable": True, "dcw_lambda": 0.02, "dcw_schedule": "sigma", "dcw_bands": "all",
+            "skim_enable": True, "skim_scale": 2.0, "full_negative": True, "disable_flip_filter": True,
+            "start_percent": 0.1, "end_percent": 0.9, "flip_percent": 0.5,
+            "guidance_range_enable": True, "guidance_range_start": 0.2, "guidance_range_end": 0.8,
+        },
     ),
     "smc_unipc": (
         "Anima Flow UniPC2",
         None,
         None,
-        dict(
-            guidance_mode=SMC_GUIDANCE, smc_alpha=0.3, smc_lambda=4.0, skim_enable=True,
-            flow_unipc_solver_type="bh1", flow_unipc_disable_corrector_first=2, flow_unipc_thresholding=True,
-            flow_unipc_dynamic_thresholding_ratio=0.99, flow_unipc_sample_max_value=2.0,
-        ),
+        {
+            "guidance_mode": SMC_GUIDANCE, "smc_alpha": 0.3, "smc_lambda": 4.0, "skim_enable": True,
+            "flow_unipc_solver_type": "bh1", "flow_unipc_disable_corrector_first": 2, "flow_unipc_thresholding": True,
+            "flow_unipc_dynamic_thresholding_ratio": 0.99, "flow_unipc_sample_max_value": 2.0,
+        },
     ),
     "fdg_pc3_replaced": (
         "Anima Flow PC3",
         "other_cfg",
         None,
-        dict(guidance_mode=FDG_GUIDANCE, fdg_high_scale=15.0, flow_pc3_gamma=0.5, flow_pc3_tolerance=0.01),
+        {"guidance_mode": FDG_GUIDANCE, "fdg_high_scale": 15.0, "flow_pc3_gamma": 0.5, "flow_pc3_tolerance": 0.01},
     ),
     "cfg_zero_cns": (
         "Anima ER SDE CNS",
         None,
         None,
-        dict(guidance_mode=CFG_ZERO_STAR_GUIDANCE, cfg_zero_init_steps=2, cns_strength=0.5, guidance_range_enable=True),
+        {"guidance_mode": CFG_ZERO_STAR_GUIDANCE, "cfg_zero_init_steps": 2, "cns_strength": 0.5, "guidance_range_enable": True},
     ),
     "apg_dcw": (
         "Euler a",
         None,
         None,
-        dict(guidance_mode=APG_GUIDANCE, apg_eta=0.3, apg_norm_threshold=5.0, apg_momentum=-0.25, dcw_enable=True),
+        {"guidance_mode": APG_GUIDANCE, "apg_eta": 0.3, "apg_norm_threshold": 5.0, "apg_momentum": -0.25, "dcw_enable": True},
     ),
     "tcfg_skim_momentum": (
         "Euler",
         None,
         None,
-        dict(guidance_mode=TCFG_GUIDANCE, skim_enable=True, momentum_enable=True, guidance_range_enable=True),
+        {"guidance_mode": TCFG_GUIDANCE, "skim_enable": True, "momentum_enable": True, "guidance_range_enable": True},
     ),
-    "conflicts": ("Anima ER SDE CNS", None, None, dict(guidance_mode=FDG_GUIDANCE, momentum_enable=True, dcw_enable=True)),
+    "conflicts": ("Anima ER SDE CNS", None, None, {"guidance_mode": FDG_GUIDANCE, "momentum_enable": True, "dcw_enable": True}),
     "modulation": (
         "Euler",
         None,
         _modulation_works,
-        dict(
-            modulation_enable=True, modulation_weight=2.5, modulation_base="base", modulation_positive="good",
-            modulation_negative="bad", nag_enable=True,
-        ),
+        {
+            "modulation_enable": True, "modulation_weight": 2.5, "modulation_base": "base", "modulation_positive": "good",
+            "modulation_negative": "bad", "nag_enable": True,
+        },
     ),
-    "modulation_failed_nag_unbatched": ("Euler", None, _modulation_fails, dict(modulation_enable=True, nag_enable=True)),
+    "modulation_failed_nag_unbatched": ("Euler", None, _modulation_fails, {"modulation_enable": True, "nag_enable": True}),
 }
 
 # The exact extra_generation_params (keys, values and order) of each
@@ -830,9 +831,9 @@ def _positional(**overrides):
     [
         ("Euler", False, None, {}, True, False),
         ("Anima ER SDE CNS", False, None, {}, True, True),
-        ("Anima ER SDE CNS", False, None, dict(cns_strength=0.0), True, False),
+        ("Anima ER SDE CNS", False, None, {"cns_strength": 0.0}, True, False),
         # Guidance off: the sampler runs at its default strength 1.
-        ("Anima ER SDE CNS", False, None, dict(enable=False, cns_strength=0.0), True, True),
+        ("Anima ER SDE CNS", False, None, {"enable": False, "cns_strength": 0.0}, True, True),
         ("Euler", True, "Anima ER SDE CNS", {}, True, True),
         ("Anima ER SDE CNS", True, None, {}, True, True),  # hires reuses the first pass's sampler
         ("Euler", False, "Anima ER SDE CNS", {}, True, False),  # no hires pass
@@ -854,9 +855,9 @@ def test_process_prefetches_the_cns_gamma_table_before_sampling(monkeypatch, sam
 @pytest.mark.parametrize(
     ("overrides", "expected"),
     [
-        (dict(enable=True, nag_enable=True), True),
-        (dict(enable=True, nag_enable=False), False),
-        (dict(enable=False, nag_enable=True), False),
+        ({"enable": True, "nag_enable": True}, True),
+        ({"enable": True, "nag_enable": False}, False),
+        ({"enable": False, "nag_enable": True}, False),
     ],
 )
 def test_process_keeps_the_negative_prompt_for_nag_at_cfg_1(overrides, expected):
@@ -872,22 +873,22 @@ def test_process_keeps_the_negative_prompt_for_nag_at_cfg_1(overrides, expected)
 
 
 # The panel a PNG is pasted into: every sub-feature on, every setting off its default.
-EVERYTHING_ON = dict(
-    enable=True, guidance_mode=SMC_GUIDANCE, smc_alpha=0.7, smc_lambda=3.0,
-    skim_enable=True, skim_scale=4.0, full_negative=True, disable_flip_filter=True,
-    start_percent=0.3, end_percent=0.7, flip_percent=0.4,
-    dcw_enable=True, dcw_lambda=0.05, dcw_schedule="constant", dcw_bands="HH",
-    cns_strength=0.25, flow_unipc_solver_type="bh1", flow_unipc_disable_corrector_first=3,
-    flow_unipc_thresholding=True, flow_unipc_dynamic_thresholding_ratio=0.9, flow_unipc_sample_max_value=3.0,
-    flow_pc3_gamma=0.25, flow_pc3_tolerance=0.02,
-    modulation_enable=True, modulation_weight=-4.0, modulation_start=5, modulation_end=10,
-    modulation_base="panel base", modulation_positive="panel good", modulation_negative="panel bad",
-    adapter_mode="Local file", adapter_path="a.pt", clip_mode="Local file", clip_path="c.safetensors",
-    nag_enable=True, nag_scale=5.0, nag_tau=4.0, nag_alpha=0.9, nag_start=0.2, nag_end=0.9,
-    momentum_enable=True, momentum_strength=1.2, momentum_ema=0.9, fdg_high_scale=20.0,
-    guidance_range_enable=True, guidance_range_start=0.3, guidance_range_end=0.6,
-    cfg_zero_init_steps=5, apg_eta=0.8, apg_norm_threshold=50.0, apg_momentum=0.5,
-)
+EVERYTHING_ON = {
+    "enable": True, "guidance_mode": SMC_GUIDANCE, "smc_alpha": 0.7, "smc_lambda": 3.0,
+    "skim_enable": True, "skim_scale": 4.0, "full_negative": True, "disable_flip_filter": True,
+    "start_percent": 0.3, "end_percent": 0.7, "flip_percent": 0.4,
+    "dcw_enable": True, "dcw_lambda": 0.05, "dcw_schedule": "constant", "dcw_bands": "HH",
+    "cns_strength": 0.25, "flow_unipc_solver_type": "bh1", "flow_unipc_disable_corrector_first": 3,
+    "flow_unipc_thresholding": True, "flow_unipc_dynamic_thresholding_ratio": 0.9, "flow_unipc_sample_max_value": 3.0,
+    "flow_pc3_gamma": 0.25, "flow_pc3_tolerance": 0.02,
+    "modulation_enable": True, "modulation_weight": -4.0, "modulation_start": 5, "modulation_end": 10,
+    "modulation_base": "panel base", "modulation_positive": "panel good", "modulation_negative": "panel bad",
+    "adapter_mode": "Local file", "adapter_path": "a.pt", "clip_mode": "Local file", "clip_path": "c.safetensors",
+    "nag_enable": True, "nag_scale": 5.0, "nag_tau": 4.0, "nag_alpha": 0.9, "nag_start": 0.2, "nag_end": 0.9,
+    "momentum_enable": True, "momentum_strength": 1.2, "momentum_ema": 0.9, "fdg_high_scale": 20.0,
+    "guidance_range_enable": True, "guidance_range_start": 0.3, "guidance_range_end": 0.6,
+    "cfg_zero_init_steps": 5, "apg_eta": 0.8, "apg_norm_threshold": 50.0, "apg_momentum": 0.5,
+}
 # Guidance off records nothing, like every other panel: the paste keeps the panel.
 ROUND_TRIP_CONFIGS = [name for name in INFOTEXT_CONFIGS if name != "disabled"]
 # What a run did rather than how it was set: a re-run without the conflict does not repeat it.

@@ -14,7 +14,7 @@ from safetensors.torch import save_file
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib_anima_guidance import modulation
+from lib_anima_guidance import modulation  # noqa: E402
 
 transformers = pytest.importorskip("transformers")
 
@@ -77,7 +77,7 @@ def _encode(clip, prompts):
 
 
 def test_load_builds_on_meta_and_assigns_the_file_weights(clip):
-    path, config_dir, tokenizer_dir, reference = clip
+    path, config_dir, tokenizer_dir, _reference = clip
     model, tokenizer = modulation._load_clip(path, config_dir, tokenizer_dir)
 
     assert not any(tensor.is_meta for tensor in [*model.parameters(), *model.buffers()])

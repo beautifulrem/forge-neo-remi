@@ -68,7 +68,7 @@ def test_written_infotext_restores_the_panel_params(sampling):
     p, _ = harness.make_process()
     sampling.AnimaRegionalScript().process_before_every_sampling(p, *args)
     written = p.extra_generation_params
-    assert written == dict(zip(sampling.INFOTEXT_KEYS, args))
+    assert written == dict(zip(sampling.INFOTEXT_KEYS, args, strict=True))
     harness.assert_infotext_restores_params(harness.script_layout(sampling.AnimaRegionalScript()), args, written)
 
 

@@ -10,7 +10,7 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib_anima_guidance.nag import NAGAttentionModifier
+from lib_anima_guidance.nag import NAGAttentionModifier  # noqa: E402
 
 
 def fake_attention(q, k, v, *, mask=None):

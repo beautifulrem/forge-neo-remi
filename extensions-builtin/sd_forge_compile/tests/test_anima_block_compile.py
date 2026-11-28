@@ -10,7 +10,7 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from anima_block_compile import (
+from anima_block_compile import (  # noqa: E402
     _EAGER_OPTION_KEYS,
     RECOMPILE_LIMIT,
     AnimaBlockCompileManager,
@@ -20,8 +20,9 @@ from anima_block_compile import (
     patched_inside,
     without_inactive_modifiers,
 )
-from backend.nn.anima_attention import ANIMA_ATTENTION_MODIFIERS
-from modules.forward_override import forward_overrides
+
+from backend.nn.anima_attention import ANIMA_ATTENTION_MODIFIERS  # noqa: E402
+from modules.forward_override import forward_overrides  # noqa: E402
 
 
 class _Diffusion(torch.nn.Module):
@@ -231,8 +232,8 @@ class _AttentionBlock(torch.nn.Module):
         super().__init__()
         self.linear = torch.nn.Linear(4, 4)
 
-    def forward(self, x, transformer_options={}):
-        override = transformer_options.get("optimized_attention_override")
+    def forward(self, x, transformer_options=None):
+        override = (transformer_options or {}).get("optimized_attention_override")
         if override is not None:
             return override(self.linear(x), transformer_options)
         return self.linear(x)
@@ -245,8 +246,8 @@ class _BlockIndexKModel:
         self.diffusion_model = torch.nn.Module()
         self.diffusion_model.blocks = torch.nn.ModuleList([_AttentionBlock() for _ in range(3)])
 
-    def apply_model(self, x, t=None, c_concat=None, c_crossattn=None, control=None, transformer_options={}):
-        options = dict(transformer_options)
+    def apply_model(self, x, t=None, c_concat=None, c_crossattn=None, control=None, transformer_options=None):
+        options = dict(transformer_options or {})
         outputs = []
         for block_index, block in enumerate(self.diffusion_model.blocks):
             options["block_index"] = block_index
@@ -263,7 +264,7 @@ class BlockIndexCompileTests(unittest.TestCase):
         torch._dynamo.reset()
         self.addCleanup(torch._dynamo.reset)
         model = _BlockIndexKModel()
-        config = dict(backend="eager", dynamic=False, fullgraph=False, options={"guard_filter_fn": _skip_transformer_options_guards})
+        config = {"backend": "eager", "dynamic": False, "fullgraph": False, "options": {"guard_filter_fn": _skip_transformer_options_guards}}
         AnimaBlockCompileManager.install(model, config)
         x = torch.zeros(1, 4)
         with torch.no_grad():
@@ -282,7 +283,7 @@ class RecompileLimitConfigTests(unittest.TestCase):
 
         config, settings = _recompile_limit_patch()
         self.assertIs(config, torch.compiler.config)  # the pinned PyTorch has them
-        self.assertEqual(settings, dict(recompile_limit=RECOMPILE_LIMIT, fail_on_recompile_limit_hit=True))
+        self.assertEqual(settings, {"recompile_limit": RECOMPILE_LIMIT, "fail_on_recompile_limit_hit": True})
         with config.patch(**settings):
             self.assertEqual(torch._dynamo.config.recompile_limit, RECOMPILE_LIMIT)  # an alias of Dynamo's
             self.assertTrue(torch._dynamo.config.fail_on_recompile_limit_hit)
@@ -292,12 +293,12 @@ class RecompileLimitConfigTests(unittest.TestCase):
         with patch.object(torch.compiler, "config", SimpleNamespace(), create=True):
             config, settings = _recompile_limit_patch()
             self.assertIs(config, torch._dynamo.config)
-            self.assertEqual(settings, dict(recompile_limit=RECOMPILE_LIMIT, fail_on_recompile_limit_hit=True))
+            self.assertEqual(settings, {"recompile_limit": RECOMPILE_LIMIT, "fail_on_recompile_limit_hit": True})
             old_dynamo = SimpleNamespace(cache_size_limit=8, fail_on_cache_limit_hit=False)
             with patch.object(torch._dynamo, "config", old_dynamo):
                 config, settings = _recompile_limit_patch()
             self.assertIs(config, old_dynamo)
-            self.assertEqual(settings, dict(cache_size_limit=RECOMPILE_LIMIT, fail_on_cache_limit_hit=True))
+            self.assertEqual(settings, {"cache_size_limit": RECOMPILE_LIMIT, "fail_on_cache_limit_hit": True})
 
 
 if __name__ == "__main__":

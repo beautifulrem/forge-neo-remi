@@ -74,6 +74,8 @@ class PatchRadialAttn:
             "allow_compile": allow_compile,
         }
 
+        previous_wrapper = model.model_options.get("model_function_wrapper")
+
         def unet_wrapper_function(model_function, kwargs):
             input = kwargs["input"]
             timestep = kwargs["timestep"]
@@ -121,7 +123,12 @@ class PatchRadialAttn:
 
                 wan.attention = try_radial_attn
 
-            return model_function(input, timestep, **c)
+            try:
+                if previous_wrapper is not None:
+                    return previous_wrapper(model_function, kwargs)
+                return model_function(input, timestep, **c)
+            finally:
+                wan.attention = ORIG_ATTENTION
 
         model.set_model_unet_function_wrapper(unet_wrapper_function)
 

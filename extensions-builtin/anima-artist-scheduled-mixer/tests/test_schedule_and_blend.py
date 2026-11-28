@@ -1,6 +1,5 @@
 import pytest
 import torch
-
 from lib_artist_mixer.contexts import artist_mask_like, broadcast_batch, norm_limited_delta, to_context_like
 from lib_artist_mixer.schedule import CURVE_BACK, CURVE_FRONT, CURVE_HOLD, CURVE_SMOOTH, CURVE_TRIANGLE, curve_factor, parse_blocks, parse_inline_weight
 

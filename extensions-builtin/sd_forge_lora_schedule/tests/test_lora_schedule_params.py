@@ -58,3 +58,50 @@ def test_a_schedule_holds_its_first_weight_before_its_first_point(monkeypatch):
         control.LoRAControl.mapping.clear()
 
     assert x.patch[0][0] == 0.2 and y.patch[0][0] == 0.7
+
+
+def test_batched_all_prompts_no_unet_lora_skip_duplicate_timestamps_and_cleanup(monkeypatch):
+    from types import SimpleNamespace
+
+    from modules import script_callbacks, shared
+    from remi.testing import webui_state
+
+    networks = ModuleType("networks")
+    networks.available_network_aliases = {
+        "a": SimpleNamespace(filename="/loras/a.safetensors"),
+        "b": SimpleNamespace(filename="/loras/b.safetensors"),
+    }
+    monkeypatch.setitem(sys.modules, "networks", networks)
+    monkeypatch.setattr(script_callbacks, "on_cfg_denoiser", lambda callback: None)
+    with webui_state():
+        control = harness.load_script(SCRIPT, "lora_schedule_batched_under_test")
+        monkeypatch.setattr(control.dynamic_args, "online_lora", True, raising=False)
+        script = control.LoRAControl()
+
+        # Supports batched p.all_prompts even when p.prompt is not a string
+        p = SimpleNamespace(
+            prompt=["<lora:a:[0.1@0,0.9@1]>"],
+            all_prompts=["<lora:a:[0.1@0,0.9@1]>", "<lora:b:[0.2@0.5,0.8@0.5,1.0@1.0]>"],
+        )
+        script.before_process(p)
+        assert set(control.LoRAControl.mapping) == {"/loras/a.safetensors", "/loras/b.safetensors"}
+
+        # Skips cleanly when UNet has no online LoRA keys (e.g. CLIP-only LoRA)
+        no_unet_lora = SimpleNamespace(has_online_lora=lambda: False, weight_wrapper_patches={})
+        monkeypatch.setattr(shared, "sd_model", SimpleNamespace(forge_objects=SimpleNamespace(unet=no_unet_lora)), raising=False)
+        control.LoRAControl.adjust_lora(SimpleNamespace(sampling_step=5, total_sampling_steps=10))
+
+        # Duplicate timestamps (t1 == t2) do not raise ZeroDivisionError
+        b_patch = SimpleNamespace(name="/loras/b.safetensors", patch=[[None]])
+        with_lora = SimpleNamespace(has_online_lora=lambda: True, weight_wrapper_patches={"w": [b_patch]})
+        monkeypatch.setattr(shared, "sd_model", SimpleNamespace(forge_objects=SimpleNamespace(unet=with_lora)), raising=False)
+        control.LoRAControl.adjust_lora(SimpleNamespace(sampling_step=5, total_sampling_steps=10))
+        assert b_patch.patch[0][0] == 0.8
+
+        # postprocess and cleanup clear class-level mapping
+        script.postprocess(p, SimpleNamespace())
+        assert control.LoRAControl.mapping == {}
+        script.before_process(p)
+        assert control.LoRAControl.mapping
+        script.cleanup(p)
+        assert control.LoRAControl.mapping == {}

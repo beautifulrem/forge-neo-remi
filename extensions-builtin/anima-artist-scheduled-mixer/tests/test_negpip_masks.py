@@ -1,5 +1,4 @@
 import torch
-
 from lib_artist_mixer.contexts import artist_mask_like, joined_mask
 
 

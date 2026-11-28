@@ -11,7 +11,7 @@ sys.argv = sys.argv[:1]
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from anima_block_compile import _FALLBACK_HANDLER_KEY, _FALLBACK_REASON_KEY, AnimaBlockCompileManager
+from anima_block_compile import _FALLBACK_HANDLER_KEY, _FALLBACK_REASON_KEY, AnimaBlockCompileManager  # noqa: E402
 
 SCRIPT = ROOT / "scripts" / "compile.py"
 SPEC = importlib.util.spec_from_file_location("forge_compile_script_under_test", SCRIPT)

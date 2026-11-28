@@ -8,7 +8,7 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib_spectrum.forecaster import SpectrumNode, _call_samples
+from lib_spectrum.forecaster import SpectrumNode, _call_samples  # noqa: E402
 
 
 def _branch_signatures(conditioning, branches):
@@ -33,7 +33,7 @@ def _reference(conditioning, branches):
     context = conditioning.get("c_crossattn")
     if not torch.is_tensor(context) or context.shape[0] % len(branches):
         return None
-    return {key: signature(chunk) for key, chunk in zip(branches, context.chunk(len(branches), dim=0))}
+    return {key: signature(chunk) for key, chunk in zip(branches, context.chunk(len(branches), dim=0), strict=True)}
 
 
 CASES = [
@@ -135,3 +135,54 @@ def test_call_sigma_is_read_exactly():
     assert set(signatures) == {0, 1}
     assert _call_samples(torch.tensor([0.5, 0.5]), None, [0])[0] == 0.5
     assert _call_samples(0.25, {"c_crossattn": torch.randn(1, 3)}, [0])[0] == 0.25
+
+
+def test_unchanged_context_memoizes_and_tail_skips_sampling(monkeypatch):
+    from lib_spectrum import forecaster
+
+    class FakePatcher:
+        def __init__(self):
+            self.model = SimpleNamespace(diffusion_model=torch.nn.Identity(), predictor=object())
+            self.model_options = {}
+            self.wrapper = None
+
+        def clone(self):
+            return self
+
+        def set_model_unet_function_wrapper(self, wrapper):
+            self.wrapper = wrapper
+
+    process = SimpleNamespace()
+    patcher = SpectrumNode.patch(
+        FakePatcher(), steps=8, weight=1.0, degree=1, lam=1e-6, window_size=2,
+        flex_window=0.0, warmup_steps=3, stop_caching_step=1.0, tail_actual_steps=2,
+        history_size=3, schedule="Window", refresh_ratio=0.0, sea_beta=2.0,
+        compat_policy="Conservative", verbose=False, sea_cache_dir="unused",
+        sea_cache_context={}, process=process,
+    )
+    sample_calls = []
+    orig_call_samples = forecaster._call_samples
+
+    def counting_call_samples(timestep, conditioning, branches):
+        sample_calls.append(branches)
+        return orig_call_samples(timestep, conditioning, branches)
+
+    monkeypatch.setattr(forecaster, "_call_samples", counting_call_samples)
+
+    context = torch.randn(2, 77, 64)
+    # Step 0 samples once, steps 1-5 reuse memoized signature for unchanged context,
+    # and tail steps 6-7 (state.forecasting_ended) skip context sampling.
+    for step in range(8):
+        patcher.wrapper(
+            lambda x, timestep, **_kwargs: x,
+            {"input": torch.zeros(2, 4), "timestep": torch.tensor([1.0 - step * 0.1]), "c": {"c_crossattn": context}, "cond_or_uncond": [0, 1]},
+        )
+    assert len(sample_calls) == 1
+
+    # In-place mutation increments _version and invalidates memo; higher sigma triggers reset
+    context.add_(1.0)
+    patcher.wrapper(
+        lambda x, timestep, **_kwargs: x,
+        {"input": torch.zeros(2, 4), "timestep": torch.tensor([1.0]), "c": {"c_crossattn": context}, "cond_or_uncond": [0, 1]},
+    )
+    assert len(sample_calls) == 2
