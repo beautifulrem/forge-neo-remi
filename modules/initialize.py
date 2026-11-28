@@ -80,17 +80,20 @@ def initialize_rest():
     sd_samplers.set_samplers()
     startup_timer.record("set samplers")
 
-    from modules import extensions
+    from modules import extensions, shared
 
     extensions.list_extensions()
     startup_timer.record("list extensions")
 
     from modules import initialize_util
 
+    restoring_config = bool(getattr(shared.opts, "restore_config_state_file", ""))
     initialize_util.restore_config_state_file()
+    if restoring_config:
+        extensions.list_extensions()
     startup_timer.record("restore config state file")
 
-    from modules import scripts, shared, upscaler
+    from modules import scripts, upscaler
 
     if cmd_opts.ui_debug_mode:
         shared.sd_upscalers = upscaler.UpscalerLanczos().scalers
@@ -109,6 +112,13 @@ def initialize_rest():
 
     with startup_timer.subcategory("load scripts"):
         scripts.load_scripts()
+
+    try:
+        from remi.extensions_admin import record_startup_load_times
+
+        record_startup_load_times()
+    except Exception:
+        pass
 
     from modules import modelloader
 

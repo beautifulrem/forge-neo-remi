@@ -22,7 +22,7 @@ def to_schema(node: Node | None, ctx: Context | None = None) -> dict | None:
     if node is None:
         return None
     ScriptLayout(node, owner="schema")
-    return node.schema(ensure_context(ctx))
+    return jsonable(node.schema(ensure_context(ctx)))
 
 
 def jsonable(value: Any) -> Any:

@@ -41,6 +41,17 @@ def not_(condition: Condition) -> dict:
     return check({"not": condition})
 
 
+def _check_finite(value: Any, operator: str) -> None:
+    if isinstance(value, float) and not math.isfinite(value):
+        raise SchemaError(f'"{operator}" requires a finite number, got {value!r}')
+    if isinstance(value, Mapping):
+        for item in value.values():
+            _check_finite(item, operator)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            _check_finite(item, operator)
+
+
 def check(condition: Any) -> Condition:
     """Validate the grammar; returns the condition as plain dicts/lists."""
 
@@ -71,8 +82,12 @@ def check(condition: Any) -> Condition:
                 if not isinstance(operand, Sequence) or isinstance(operand, str):
                     raise SchemaError('"in" takes a list')
                 operand = list(operand)
-            elif operator in _ORDER and not (isinstance(operand, (int, float)) and not isinstance(operand, bool) and math.isfinite(operand)):
-                raise SchemaError(f'"{operator}" compares with a finite number, got {operand!r}')
+                _check_finite(operand, operator)
+            elif operator in _ORDER:
+                if not (isinstance(operand, (int, float)) and not isinstance(operand, bool) and math.isfinite(operand)):
+                    raise SchemaError(f'"{operator}" compares with a finite number, got {operand!r}')
+            else:
+                _check_finite(operand, operator)
             result[operator] = operand
         return result
     raise SchemaError(f"unknown condition {dict(condition)!r}")

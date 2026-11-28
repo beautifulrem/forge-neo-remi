@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
-from remi.server.models import Model
+from remi.server.models import Model, reject_non_finite
 
 
 class NetworkKind(Model):
@@ -116,6 +116,11 @@ class UserMetadataPatch(Model):
 
     user_metadata: dict[str, Any]
     replace: bool = False
+
+    @model_validator(mode="after")
+    def _check_finite(self) -> UserMetadataPatch:
+        reject_non_finite(self.user_metadata, "user_metadata")
+        return self
 
 
 class PreviewRequest(Model):

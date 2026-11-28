@@ -8,7 +8,7 @@ from collections.abc import Callable
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from remi import prompt_tools as pt
 from remi.jobs import JobError
@@ -182,6 +182,12 @@ class PromptUpsampleRequest(m.Model):
     instructions: str = Field("", max_length=8000)
     temperature: float = Field(0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(1024, ge=16, le=8192)
+
+    @model_validator(mode="after")
+    def _check_finite(self) -> PromptUpsampleRequest:
+        if self.bbox_draft is not None:
+            m.reject_non_finite(self.bbox_draft, "bbox_draft")
+        return self
 
 
 class PromptUpsampleWarning(m.Model):

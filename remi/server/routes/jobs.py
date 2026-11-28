@@ -12,7 +12,7 @@ from remi.jobs import Job, Submission
 from remi.jobs.store import RUNNING
 from remi.realtime import JobRef, progress_snapshot
 from remi.server import models as m
-from remi.server.deps import ServicesDep, UserDep, iso
+from remi.server.deps import ServicesDep, UserDep, deep_json_response, iso
 
 router = APIRouter()
 
@@ -112,8 +112,9 @@ def list_jobs(
 
 
 @router.get("/jobs/{job_id}", response_model=m.JobDetail, responses=ERRORS, summary="One job with its parameters")
-def get_job(job_id: str, services: ServicesDep) -> dict[str, Any]:
-    return with_missing_outputs([job_json(services.queue.get(job_id), detail=True, running=services.queue.current_ref(), progress=services.bridge.progress_snapshot)], services.files)[0]
+def get_job(job_id: str, services: ServicesDep) -> Any:
+    payload = with_missing_outputs([job_json(services.queue.get(job_id), detail=True, running=services.queue.current_ref(), progress=services.bridge.progress_snapshot)], services.files)[0]
+    return deep_json_response(payload)
 
 
 @router.patch("/jobs/{job_id}", response_model=m.Job, responses=ERRORS, summary="Change a job's priority or its generate-forever flag")
@@ -138,7 +139,7 @@ def skip_job(job_id: str, services: ServicesDep) -> Response:
     return Response(status_code=204)
 
 
-@router.post("/jobs/{job_id}/retry", response_model=m.JobCreated, status_code=201, responses=ERRORS, summary="Queue a finished job again")
+@router.post("/jobs/{job_id}/retry", response_model=m.JobCreated, status_code=201, responses={**ERRORS, 422: {"model": m.ValidationErrorBody}}, summary="Queue a finished job again")
 def retry_job(job_id: str, services: ServicesDep, user: UserDep) -> dict[str, Any]:
     job = services.queue.retry(job_id, user=user)
     return {"job_id": job.id, "job_ids": [job.id], "seq": job.seq}

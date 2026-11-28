@@ -291,10 +291,14 @@ def serve(*, webui: bool, startup_timer: Any = None) -> None:
             server.stop()
             if not services.queue.stop(timeout=30, interrupt=True):
                 print("The running job did not stop in time")
-            services.stop()
-            workers = getattr(services, "workers", None)
-            if workers is not None:
-                workers.shutdown()
+            close = getattr(services, "close", None)
+            if callable(close):
+                close()
+            else:
+                services.stop()
+                workers = getattr(services, "workers", None)
+                if workers is not None:
+                    workers.shutdown()
             if command == RESTART_PROGRAM:
                 from modules import restart
 

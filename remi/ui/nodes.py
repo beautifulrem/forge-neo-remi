@@ -94,14 +94,17 @@ def _as_int(value: int | float) -> int:
 def check_finite_json(value: Any, path: str = "value") -> Any:
     """``value`` when it holds no NaN/Infinity anywhere (JSON numbers only)."""
 
-    if isinstance(value, float) and not math.isfinite(value):
-        raise ParamError(Sentence("{{path}} must be a finite number, got {{value}}", path=path, value=repr(value)))
-    if isinstance(value, Mapping):
-        for key, item in value.items():
-            check_finite_json(item, f"{path}.{key}")
-    elif isinstance(value, (list, tuple)):
-        for index, item in enumerate(value):
-            check_finite_json(item, f"{path}[{index}]")
+    pending: list[tuple[Any, str]] = [(value, path)]
+    while pending:
+        item, cur = pending.pop()
+        if isinstance(item, float):
+            if not math.isfinite(item):
+                raise ParamError(Sentence("{{path}} must be a finite number, got {{value}}", path=cur, value=repr(item)))
+        elif isinstance(item, Mapping):
+            pending.extend((child, f"{cur}.{key}") for key, child in reversed(list(item.items())))
+        elif isinstance(item, (list, tuple)):
+            n = len(item)
+            pending.extend((child, f"{cur}[{n - 1 - index}]") for index, child in enumerate(reversed(item)))
     return value
 
 
@@ -470,6 +473,8 @@ class Text(Input):
                 raise ParamError("the text has a broken character (an unpaired surrogate)")
             return value
         if _is_number(value):
+            if isinstance(value, float) and not math.isfinite(value):
+                raise ParamError(Sentence("expected a finite number, got {{value}}", value=repr(value)))
             return str(value)
         raise ParamError(Sentence("expected text, got {{type}}", type=type(value).__name__))
 

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import math
+import sys
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -253,6 +254,14 @@ OUTPUT_DIR_OPTIONS = ("outdir_samples", "outdir_txt2img_samples", "outdir_img2im
 
 
 def output_dirs() -> list[str]:
-    """The output folders that are set (a value of another kind reads as unset)."""
+    """The output folders that are set (a value of another kind reads as unset).
 
-    return [path for name in OUTPUT_DIR_OPTIONS if (path := setting(name, ""))]
+    Returns ``[]`` without importing :mod:`modules.shared` when the WebUI runtime
+    has not initialized it, so standalone callers (workers, benchmarks, unit tests)
+    do not trigger ``cmd_args.parser.parse_args()`` on foreign ``sys.argv``.
+    """
+
+    opts = getattr(sys.modules.get("modules.shared"), "opts", None)
+    if opts is None:
+        return []
+    return [path for name in OUTPUT_DIR_OPTIONS if (path := setting(name, "", opts=opts))]

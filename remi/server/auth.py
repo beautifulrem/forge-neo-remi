@@ -210,6 +210,7 @@ class Auth:
     """where revoked sessions persist (None: in memory)"""
     throttle: Throttle = field(default_factory=Throttle)
     _revoked: dict[str, int] | None = None
+    _revoked_stat: tuple[int, int] | None = field(default=None, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     @property
@@ -224,19 +225,32 @@ class Auth:
         ok = hmac.compare_digest((known if known is not None else secrets.token_hex(8)).encode(), password.encode())
         return ok and known is not None
 
-    def _signature(self, user: str, expiry: int) -> str:
+    def _signature(self, user: str, expiry: int, nonce: str = "") -> str:
         password = self.credentials.get(user, "")
-        message = f"{user}\0{expiry}\0{hashlib.sha256(password.encode()).hexdigest()}".encode()
+        if nonce:
+            message = f"{user}\0{expiry}\0{nonce}\0{hashlib.sha256(password.encode()).hexdigest()}".encode()
+        else:
+            message = f"{user}\0{expiry}\0{hashlib.sha256(password.encode()).hexdigest()}".encode()
         return _b64(hmac.new(self.secret, message, hashlib.sha256).digest())
 
     def issue(self, user: str, *, now: float | None = None) -> str:
         expiry = int((now or time.time()) + SESSION_SECONDS)
-        return f"{_b64(user.encode())}.{expiry}.{self._signature(user, expiry)}"
+        nonce = _b64(secrets.token_bytes(16))
+        return f"{_b64(user.encode())}.{expiry}.{nonce}.{self._signature(user, expiry, nonce)}"
 
     def verify(self, token: str | None, *, now: float | None = None) -> str | None:
-        if not token or token.count(".") != 2:
+        if not token:
             return None
-        encoded, expiry_text, signature = token.split(".")
+        parts = token.split(".")
+        if len(parts) == 4:
+            encoded, expiry_text, nonce, signature = parts
+            if not nonce or not nonce.isascii():
+                return None
+        elif len(parts) == 3:
+            encoded, expiry_text, signature = parts
+            nonce = ""
+        else:
+            return None
         try:
             user = _unb64(encoded).decode()
             expiry = int(expiry_text)
@@ -245,25 +259,42 @@ class Auth:
         if expiry < (now or time.time()) or user not in self.credentials:
             return None
         # compare_digest raises on non-ASCII text: a forged cookie is refused, not a 500 before any route
-        if not signature.isascii() or not hmac.compare_digest(signature, self._signature(user, expiry)):
+        if not signature.isascii() or not hmac.compare_digest(signature, self._signature(user, expiry, nonce)):
             return None
-        return None if signature in self._revocations() else user
+        with self._lock:
+            return None if signature in self._revocations_locked() else user
 
     # region Revocation (logout)
+
+    def _revocations_locked(self) -> dict[str, int]:
+        """Revoked signatures → their expiry (caller holds ``self._lock``)."""
+
+        stat: tuple[int, int] | None = None
+        if self.revoked_path is not None:
+            try:
+                st = self.revoked_path.stat()
+                stat = (st.st_mtime_ns, st.st_size)
+            except OSError:
+                stat = None
+        if self._revoked is None or (stat is not None and stat != self._revoked_stat):
+            loaded: dict[str, int] = {}
+            if self.revoked_path is not None:
+                try:
+                    data = json.loads(self.revoked_path.read_text())
+                    if isinstance(data, dict):
+                        now = time.time()
+                        loaded = {str(key): int(value) for key, value in data.items() if int(value) >= now}
+                except (OSError, ValueError, TypeError):
+                    pass
+            self._revoked = loaded
+            self._revoked_stat = stat
+        return self._revoked
 
     def _revocations(self) -> dict[str, int]:
         """Revoked signatures → their expiry."""
 
         with self._lock:
-            if self._revoked is None:
-                self._revoked = {}
-                if self.revoked_path is not None:
-                    try:
-                        data = json.loads(self.revoked_path.read_text())
-                        self._revoked = {str(key): int(value) for key, value in data.items()} if isinstance(data, dict) else {}
-                    except (OSError, ValueError, TypeError):
-                        pass
-            return self._revoked
+            return self._revocations_locked()
 
     def revoke(self, token: str | None) -> None:
         """Log out ``token`` for good (if it is a valid session)."""
@@ -271,19 +302,23 @@ class Auth:
         if self.verify(token) is None:
             return
         assert token is not None
-        _user, expiry, signature = token.split(".")
-        revoked = self._revocations()
-        now = time.time()
+        parts = token.split(".")
+        expiry = int(parts[1])
+        signature = parts[-1]
         with self._lock:
+            revoked = self._revocations_locked()
+            now = time.time()
             for key in [key for key, until in revoked.items() if until < now]:
                 del revoked[key]
-            revoked[signature] = int(expiry)
+            revoked[signature] = expiry
             if self.revoked_path is not None:
                 try:
                     self.revoked_path.parent.mkdir(parents=True, exist_ok=True)
                     temp = self.revoked_path.with_suffix(".tmp")
                     temp.write_text(json.dumps(revoked))
                     os.replace(temp, self.revoked_path)
+                    st = self.revoked_path.stat()
+                    self._revoked_stat = (st.st_mtime_ns, st.st_size)
                 except OSError:
                     pass
 
@@ -589,5 +624,6 @@ def _cross_site(scope: Scope, conn: HTTPConnection) -> bool:
     class _Request:
         method = scope.get("method") if scope["type"] == "http" else None
         headers = conn.headers
+        client = conn.client
 
     return guard.is_cross_site(_Request)

@@ -60,10 +60,11 @@ def upload_json(record: FileRecord) -> dict[str, Any]:
 async def upload(request: Request, services: ServicesDep) -> dict[str, Any]:
     limit = services.files.max_upload_bytes
     too_large = HTTPException(status_code=413, detail=f"the file is larger than {limit // (1024 * 1024)} MB")
-    length = request.headers.get("content-length")
+    length = (request.headers.get("content-length") or "").strip()
     if length and length.isdigit() and int(length) > limit + FORM_OVERHEAD:
         raise too_large
-    if not (request.headers.get("content-type") or "").startswith("multipart/form-data"):
+    media_type = (request.headers.get("content-type") or "").partition(";")[0].strip().lower()
+    if media_type != "multipart/form-data":
         raise HTTPException(status_code=422, detail="the form needs a `file` field (multipart/form-data)")
     # Parse the body ourselves: Request.form() spools file parts of any size
     parser = MultiPartParser(request.headers, limited(request.stream(), limit + FORM_OVERHEAD), max_files=1, max_fields=8)
@@ -133,6 +134,8 @@ def get_file(file_id: str, services: ServicesDep, download: bool = False, if_non
 
 @router.get("/thumbs/{file_id}", response_class=FileResponse, responses={200: {"content": {"image/webp": {}}}, 304: {}, 404: {"model": m.Detail}, 415: {"model": m.Detail}}, summary="A WebP thumbnail (width snapped to a fixed set)")
 def get_thumb(file_id: str, services: ServicesDep, w: int | None = Query(None, ge=1, le=4096), if_none_match: str | None = Header(None)) -> Response:
+    from PIL import Image
+
     from remi.files import snap_width
 
     record = _record(services, file_id)
@@ -145,6 +148,8 @@ def get_thumb(file_id: str, services: ServicesDep, w: int | None = Query(None, g
         path = services.files.thumbnail(record, width)
     except FileError as error:
         raise HTTPException(status_code=error.status, detail=str(error)) from error
+    except Image.DecompressionBombError as error:
+        raise HTTPException(status_code=415, detail="the image has too many pixels to read") from error
     except OSError as error:
         raise HTTPException(status_code=415, detail="cannot read the image") from error
     return FileResponse(path, media_type="image/webp", headers=headers)
@@ -169,7 +174,7 @@ def delete_output(file_id: str, services: ServicesDep, delete_file: bool = False
     return Response(status_code=204)
 
 
-@router.post("/outputs/save", response_model=m.SaveResult, responses={404: {"model": m.Detail}}, summary='Save copies to the "Save" folder (`outdir_save`, log.csv); `zip` also packs them')
+@router.post("/outputs/save", response_model=m.SaveResult, responses={404: {"model": m.Detail}, 415: {"model": m.Detail}}, summary='Save copies to the "Save" folder (`outdir_save`, log.csv); `zip` also packs them')
 def save_outputs(body: m.SaveRequest, services: ServicesDep) -> dict[str, Any]:
     from remi.server.gallery import GalleryError
     from remi.server.gallery import save_outputs as save

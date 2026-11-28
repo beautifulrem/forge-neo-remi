@@ -63,11 +63,43 @@ async def extension_diagnostics() -> dict[str, Any]:
     return await run_in_threadpool(_diagnostics)
 
 
+_BUILTIN_WIDGETS = (
+    "artist-mix-table",
+    "block-weight-grid",
+    "block-weights",
+    "controlnet-unit",
+    "image-list",
+    "pp-send",
+    "range-slider",
+    "region-boxes",
+    "resolution-presets",
+    "secret-text",
+    "send-button",
+    "shift-curve",
+    "sigma-curve",
+    "source-size-fit",
+    "stage-timeline",
+    "task-runner",
+    "text-file",
+    "xyz-values",
+)
+
+
+def _known_widgets() -> tuple[str, ...]:
+    from pathlib import Path
+
+    widgets_dir = Path(__file__).resolve().parents[3] / "webui" / "src" / "widgets"
+    if widgets_dir.is_dir():
+        found = tuple(sorted(entry.parent.name for entry in widgets_dir.glob("*/index.tsx")))
+        if found:
+            return found
+    return _BUILTIN_WIDGETS
+
+
 def _diagnostics() -> dict[str, Any]:
     from backend.nn.model_capabilities import known_capabilities
 
-    # the SPA's widgets are compiled into its bundle: the server knows no list to check required widgets against
-    return admin.diagnostics_report(known_capabilities=known_capabilities())
+    return admin.diagnostics_report(known_widgets=_known_widgets(), known_capabilities=known_capabilities())
 
 
 def _configure_and_list(disabled: list[str] | None, disable_all: str | None) -> dict[str, Any]:

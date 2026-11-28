@@ -17,10 +17,12 @@ import binascii
 import contextlib
 import copy
 import json
+import math
 import os
 import re
 import secrets
 import sqlite3
+import stat
 import threading
 import time
 import weakref
@@ -30,7 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from remi.files import ID_RE, FileRecord, FileStore, connect, path_inside
+from remi.files import ID_RE, FileRecord, FileStore, close_db, connect, path_inside
 from remi.image_meta import clip_infotext
 from remi.ui.errors import ParamError, ValidationError
 from remi.ui.sentence import Sentence
@@ -64,7 +66,8 @@ CREATE TABLE IF NOT EXISTS gallery_meta (
     file_id TEXT PRIMARY KEY,
     model TEXT,
     category TEXT NOT NULL,
-    starred INTEGER NOT NULL DEFAULT 0
+    starred INTEGER NOT NULL DEFAULT 0,
+    missing_since REAL
 );
 CREATE INDEX IF NOT EXISTS gallery_meta_model ON gallery_meta(model);
 CREATE TABLE IF NOT EXISTS boards (
@@ -207,11 +210,12 @@ class GalleryQuery:
 
 class GalleryIndex:
     def __init__(self, files: FileStore, *, folders: Callable[[], list[tuple[str, str]]] = output_folders) -> None:
-        self.files = files
+        self._files_ref: weakref.ref[FileStore] = weakref.ref(files)
         self.folders = folders
         self._lock = threading.RLock()
         self._db = connect(files.root / "files.db")
-        self._db.executescript(_SCHEMA)
+        self._ensure_schema()
+        self._finalizer = weakref.finalize(self, close_db, self._db)
         self._synced: int | None = None
         """``PRAGMA data_version`` at the last complete :meth:`sync` (it
         changes when another connection — the file store's — commits)"""
@@ -219,10 +223,42 @@ class GalleryIndex:
         """``(checked at, data_version, roots)`` of :meth:`_missing_roots`"""
         self._facets: tuple[tuple[Any, ...], dict[str, Any]] | None = None
         """``(key, answer)`` of the last :meth:`facets`"""
+        self._has_missing: bool = True
+
+    @property
+    def files(self) -> FileStore:
+        store = self._files_ref()
+        if store is None:
+            raise RuntimeError("FileStore has been closed")
+        return store
+
+    def _ensure_schema(self) -> None:
+        with self._lock:
+            rows = self._db.execute("SELECT type, name FROM sqlite_master WHERE type IN ('table', 'index')").fetchall()
+            tables = {name for kind, name in rows if kind == "table"}
+            indexes = {name for kind, name in rows if kind == "index"}
+            required_tables = {"gallery_meta", "boards", "board_items", "asset_lineage"}
+            required_indexes = {
+                "gallery_meta_model",
+                "board_items_file",
+                "board_items_board",
+                "asset_lineage_parent",
+                "asset_lineage_job",
+                "asset_lineage_chain",
+                "files_kind_name",
+                "files_kind_area",
+                "gallery_meta_starred",
+            }
+            if not (required_tables <= tables and required_indexes <= indexes):
+                self._db.executescript(_SCHEMA)
+            cols = {row[1] for row in self._db.execute("PRAGMA table_info(gallery_meta)").fetchall()}
+            if "missing_since" not in cols:
+                self._db.execute("ALTER TABLE gallery_meta ADD COLUMN missing_since REAL")
 
     def close(self) -> None:
         with self._lock:
-            self._db.close()
+            self._finalizer.detach()
+            close_db(self._db)
 
     @contextlib.contextmanager
     def _transaction(self) -> Iterator[None]:
@@ -247,6 +283,8 @@ class GalleryIndex:
         with self._lock:
             version = self._db.execute("PRAGMA data_version").fetchone()[0]
             if not force and version == self._synced:
+                if self._has_missing:
+                    self._restore_returned()
                 return 0
         folders = self.folders()
         categories: dict[tuple[str, str | None], str] = {}
@@ -271,9 +309,27 @@ class GalleryIndex:
                         [(file_id, model_of(infotext), category(path, tab)) for file_id, path, tab, infotext in rows],
                     )
                 if len(rows) < batch:
+                    self._restore_returned()
                     self._synced = version
                     return added + len(rows)
             added += len(rows)
+
+    def _restore_returned(self) -> None:
+        """Clear ``missing_since`` on files that reappeared on disk."""
+
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT g.file_id, f.path FROM gallery_meta g JOIN files f ON f.id = g.file_id WHERE g.missing_since IS NOT NULL"
+            ).fetchall()
+            if not rows:
+                self._has_missing = False
+                return
+        restored = [(file_id,) for file_id, path in rows if os.path.isfile(path)]
+        if restored:
+            with self._transaction():
+                self._db.executemany("UPDATE gallery_meta SET missing_since = NULL WHERE file_id = ?", restored)
+            if len(restored) == len(rows):
+                self._has_missing = False
 
     def _missing_roots(self) -> tuple[str, ...]:
         """The topmost missing folders that hold indexed outputs (a drive that
@@ -323,10 +379,51 @@ class GalleryIndex:
         return where, args
 
     def _prune_meta(self) -> None:
-        with self._lock:
+        with self._transaction():
             self._db.execute("DELETE FROM gallery_meta WHERE file_id NOT IN (SELECT id FROM files WHERE kind = 'output')")
             self._db.execute("DELETE FROM board_items WHERE file_id NOT IN (SELECT id FROM files WHERE kind = 'output')")
             self._db.execute("DELETE FROM asset_lineage WHERE child_id NOT IN (SELECT id FROM files) OR parent_id NOT IN (SELECT id FROM files)")
+
+    def prune_meta(self) -> None:
+        """Remove orphaned gallery metadata, board items, and lineage rows."""
+
+        self._prune_meta()
+
+    def _mark_missing(self, ids: list[str]) -> None:
+        """Hide temporarily vanished outputs from gallery queries without
+        destroying stars, board memberships, lineage, or thumbnails."""
+
+        now = time.time()
+        with self._transaction():
+            self._db.executemany(
+                "UPDATE gallery_meta SET missing_since = COALESCE(missing_since, ?) WHERE file_id = ?",
+                [(now, file_id) for file_id in ids],
+            )
+            self._has_missing = True
+
+    def prune_missing(self, max_age: float) -> int:
+        """Permanently forget outputs that stayed missing longer than ``max_age``
+        seconds (while their parent directory still exists)."""
+
+        cutoff = time.time() - max_age
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT g.file_id, f.path FROM gallery_meta g JOIN files f ON f.id = g.file_id WHERE g.missing_since IS NOT NULL AND g.missing_since < ?",
+                (cutoff,),
+            ).fetchall()
+        restored: list[str] = []
+        vanished: list[str] = []
+        for file_id, path in rows:
+            if os.path.isfile(path):
+                restored.append(file_id)
+            elif os.path.isdir(os.path.dirname(path)):
+                vanished.append(file_id)
+        if restored:
+            with self._transaction():
+                self._db.executemany("UPDATE gallery_meta SET missing_since = NULL WHERE file_id = ?", [(fid,) for fid in restored])
+        if vanished:
+            self._forget(vanished)
+        return len(vanished)
 
     def _forget(self, ids: list[str]) -> None:
         """Drop the index rows (and thumbnails) of deleted files; unlike
@@ -348,7 +445,7 @@ class GalleryIndex:
 
     def _filters(self, q: GalleryQuery) -> tuple[list[str], list[Any]]:
         available, available_args = self._available()
-        where, args = ["f.kind = 'output'", *available], list(available_args)
+        where, args = ["f.kind = 'output'", "g.missing_since IS NULL", *available], list(available_args)
         if q.category:
             where.append("g.category = ?")
             args.append(q.category)
@@ -390,7 +487,7 @@ class GalleryIndex:
         total = self._count(where, args) if cursor is None else None
 
         items: list[GalleryItem] = []
-        deleted: list[str] = []
+        missing: list[str] = []
         unavailable = False
         last: tuple[Any, int] | None = None
         more = False
@@ -415,23 +512,31 @@ class GalleryIndex:
                     break
                 last = (row[-2], row[-1])
                 record = FileRecord(*row[:12])
-                if os.path.isfile(record.path):
-                    items.append(GalleryItem(record, row[12], row[13], bool(row[14])))
-                elif os.path.isdir(os.path.dirname(record.path)):
-                    deleted.append(record.id)
+                try:
+                    st = os.stat(record.path)
+                except (FileNotFoundError, NotADirectoryError):
+                    if os.path.isdir(os.path.dirname(record.path)):
+                        missing.append(record.id)
+                    else:
+                        unavailable = True  # its folder went away since the last look
+                except OSError:
+                    unavailable = True  # transient I/O or permission error: do not purge metadata
                 else:
-                    unavailable = True  # its folder went away since the last look
+                    if stat.S_ISREG(st.st_mode):
+                        items.append(GalleryItem(record, row[12], row[13], bool(row[14])))
+                    else:
+                        unavailable = True
             if len(items) == limit or not more:
                 break
             after = last
         else:
             more = True  # gave up reading past missing files: the client goes on with the cursor
-        if deleted:
-            self._forget(deleted)
+        if missing:
+            self._mark_missing(missing)
         if unavailable:
             with self._lock:
                 self._missing = None
-        if total is not None and (deleted or unavailable):
+        if total is not None and (missing or unavailable):
             # count again, so the total matches the pages ("Images: 10006" over no tiles helps no one)
             where, args = self._filters(q)
             total = self._count(where, args)
@@ -449,9 +554,12 @@ class GalleryIndex:
                 f"SELECT {_COLUMNS}, g.model, g.category, g.starred FROM files f JOIN gallery_meta g ON g.file_id = f.id WHERE f.id = ? AND f.kind = 'output'",
                 (file_id,),
             ).fetchone()
-        if row is None or not os.path.isfile(row[2]):
+        if row is None:
             return None
-        return GalleryItem(FileRecord(*row[:12]), row[12], row[13], bool(row[14]))
+        record = self.files._valid_record(FileRecord(*row[:12]))
+        if record is None:
+            return None
+        return GalleryItem(record, row[12], row[13], bool(row[14]))
 
     def facets(self) -> dict[str, Any]:
         """Filter values with counts: models, categories, date bounds, stars. Three passes
@@ -461,7 +569,7 @@ class GalleryIndex:
 
         self.sync()
         available, args = self._available()
-        where = " AND ".join(["f.kind = 'output'", *available])
+        where = " AND ".join(["f.kind = 'output'", "g.missing_since IS NULL", *available])
         with self._lock:
             key = (self._db.execute("PRAGMA data_version").fetchone()[0], self._db.total_changes, tuple(args))
             if self._facets is not None and self._facets[0] == key:
@@ -665,17 +773,26 @@ class GalleryIndex:
             return self._db.execute("DELETE FROM boards WHERE id = ?", (board_id,)).rowcount > 0
 
     def add_to_board(self, board_id: str, file_ids: Iterable[str]) -> int:
-        if self.get_board(board_id) is None:
-            raise BoardError(f"no board {board_id!r}", status=404)
         unique_ids = list(dict.fromkeys(fid for fid in file_ids if isinstance(fid, str) and fid))[:MAX_ZIP_FILES]
-        if not unique_ids:
-            return 0
         now = time.time()
         added = 0
-        with self._lock:
+        with self._transaction():
+            if self.get_board(board_id) is None:
+                raise BoardError(f"no board {board_id!r}", status=404)
+            if not unique_ids:
+                return 0
+            existing: set[str] = set()
+            for start in range(0, len(unique_ids), _IN_CHUNK):
+                chunk = unique_ids[start : start + _IN_CHUNK]
+                existing.update(
+                    fid
+                    for (fid,) in self._db.execute(
+                        f"SELECT id FROM files WHERE kind = 'output' AND id IN ({','.join('?' * len(chunk))})",
+                        chunk,
+                    ).fetchall()
+                )
             for file_id in unique_ids:
-                row = self._db.execute("SELECT 1 FROM files WHERE id = ? AND kind = 'output'", (file_id,)).fetchone()
-                if row is None:
+                if file_id not in existing:
                     continue
                 cur = self._db.execute(
                     "INSERT OR IGNORE INTO board_items (board_id, file_id, added) VALUES (?, ?, ?)",
@@ -687,13 +804,13 @@ class GalleryIndex:
         return added
 
     def remove_from_board(self, board_id: str, file_ids: Iterable[str]) -> int:
-        if self.get_board(board_id) is None:
-            raise BoardError(f"no board {board_id!r}", status=404)
         unique_ids = list(dict.fromkeys(fid for fid in file_ids if isinstance(fid, str) and fid))[:MAX_ZIP_FILES]
-        if not unique_ids:
-            return 0
         now = time.time()
-        with self._lock:
+        with self._transaction():
+            if self.get_board(board_id) is None:
+                raise BoardError(f"no board {board_id!r}", status=404)
+            if not unique_ids:
+                return 0
             removed = self._db.execute(
                 f"DELETE FROM board_items WHERE board_id = ? AND file_id IN ({','.join('?' * len(unique_ids))})",
                 (board_id, *unique_ids),
@@ -959,7 +1076,9 @@ def _position(cursor: str | None, *, text: bool) -> tuple[Any, int] | None:
         value, rowid = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
     except (ValueError, TypeError, binascii.Error):
         return None
-    if not isinstance(rowid, int) or isinstance(value, bool) or not isinstance(value, str if text else (int, float)):
+    if not isinstance(rowid, int) or isinstance(rowid, bool) or isinstance(value, bool) or not isinstance(value, str if text else (int, float)):
+        return None
+    if not text and isinstance(value, float) and not math.isfinite(value):
         return None
     if not all(-(2**63) <= number < 2**63 for number in (rowid, value) if isinstance(number, int)):  # SQLite binds 64-bit integers only
         return None
@@ -1200,7 +1319,7 @@ def _coerce_scalar(value: str) -> Any:
         pass
     try:
         num = float(text)
-        if num == num:  # not NaN
+        if math.isfinite(num):
             return num
     except ValueError:
         pass
@@ -1214,7 +1333,8 @@ def _extract_loras(prompt: str, negative: str, params: Mapping[str, str]) -> dic
             name = match.group(1).strip()
             raw_weight = match.group(2).strip()
             try:
-                weight: Any = float(raw_weight)
+                parsed = float(raw_weight)
+                weight: Any = parsed if math.isfinite(parsed) else raw_weight
             except ValueError:
                 weight = raw_weight
             loras[name] = weight

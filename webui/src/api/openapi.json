@@ -174,6 +174,26 @@
               }
             }
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -191,7 +211,7 @@
             },
             "description": "Unprocessable Content"
           },
-          "404": {
+          "503": {
             "content": {
               "application/json": {
                 "schema": {
@@ -199,7 +219,17 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Service Unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
           }
         }
       }
@@ -405,6 +435,16 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
             "content": {
               "application/json": {
                 "schema": {
@@ -1336,14 +1376,21 @@
             "description": "Conflict"
           },
           "422": {
-            "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  ]
                 }
               }
-            }
+            },
+            "description": "Unprocessable Content"
           }
         }
       }
@@ -1937,6 +1984,16 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
             "content": {
               "application/json": {
                 "schema": {
@@ -6149,6 +6206,28 @@
       "post": {
         "summary": "Create (and optionally run) a linear multi-stage chain",
         "operationId": "create_chain_api_v2_chains_post",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "a fresh value per submission (a UUID): the same key sent again within 10 minutes creates nothing and answers the first chain",
+              "title": "Idempotency-Key"
+            },
+            "description": "a fresh value per submission (a UUID): the same key sent again within 10 minutes creates nothing and answers the first chain"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -6197,6 +6276,9 @@
                   "anyOf": [
                     {
                       "$ref": "#/components/schemas/Detail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
                     },
                     {
                       "$ref": "#/components/schemas/HTTPValidationError"
@@ -6263,6 +6345,9 @@
                   "anyOf": [
                     {
                       "$ref": "#/components/schemas/Detail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
                     },
                     {
                       "$ref": "#/components/schemas/HTTPValidationError"
@@ -6346,6 +6431,9 @@
                       "$ref": "#/components/schemas/Detail"
                     },
                     {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
+                    },
+                    {
                       "$ref": "#/components/schemas/HTTPValidationError"
                     }
                   ]
@@ -6411,6 +6499,9 @@
                       "$ref": "#/components/schemas/Detail"
                     },
                     {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
+                    },
+                    {
                       "$ref": "#/components/schemas/HTTPValidationError"
                     }
                   ]
@@ -6466,6 +6557,9 @@
                   "anyOf": [
                     {
                       "$ref": "#/components/schemas/Detail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
                     },
                     {
                       "$ref": "#/components/schemas/HTTPValidationError"
@@ -6534,6 +6628,9 @@
                       "$ref": "#/components/schemas/Detail"
                     },
                     {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
+                    },
+                    {
                       "$ref": "#/components/schemas/HTTPValidationError"
                     }
                   ]
@@ -6589,6 +6686,9 @@
                   "anyOf": [
                     {
                       "$ref": "#/components/schemas/Detail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
                     },
                     {
                       "$ref": "#/components/schemas/HTTPValidationError"
@@ -6674,6 +6774,9 @@
                       "$ref": "#/components/schemas/Detail"
                     },
                     {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
+                    },
+                    {
                       "$ref": "#/components/schemas/HTTPValidationError"
                     }
                   ]
@@ -6738,6 +6841,9 @@
                   "anyOf": [
                     {
                       "$ref": "#/components/schemas/Detail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
                     },
                     {
                       "$ref": "#/components/schemas/HTTPValidationError"
@@ -6806,6 +6912,9 @@
                       "$ref": "#/components/schemas/Detail"
                     },
                     {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
+                    },
+                    {
                       "$ref": "#/components/schemas/HTTPValidationError"
                     }
                   ]
@@ -6870,6 +6979,9 @@
                   "anyOf": [
                     {
                       "$ref": "#/components/schemas/Detail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorBody"
                     },
                     {
                       "$ref": "#/components/schemas/HTTPValidationError"
@@ -6985,6 +7097,16 @@
               }
             },
             "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "422": {
             "description": "Validation Error",
@@ -8973,6 +9095,91 @@
         "type": "object",
         "title": "AdoptPatch"
       },
+      "AdviceItem": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "warning",
+              "error"
+            ],
+            "title": "Severity"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "patch": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patch"
+          },
+          "action_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Label"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "message"
+        ],
+        "title": "AdviceItem"
+      },
       "ArchCount": {
         "properties": {
           "id": {
@@ -10305,6 +10512,14 @@
             ],
             "title": "Last Error At"
           },
+          "recent_errors": {
+            "items": {
+              "$ref": "#/components/schemas/ExtensionErrorEntry"
+            },
+            "type": "array",
+            "title": "Recent Errors",
+            "default": []
+          },
           "manifest_status": {
             "type": "string",
             "enum": [
@@ -10437,6 +10652,35 @@
           "with_manifest"
         ],
         "title": "ExtensionDiagnosticsSummary"
+      },
+      "ExtensionErrorEntry": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "message"
+        ],
+        "title": "ExtensionErrorEntry"
       },
       "ExtensionIndex": {
         "properties": {
@@ -17574,6 +17818,20 @@
             ],
             "title": "Conflict Params"
           },
+          "advice_params": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Advice Params"
+          },
           "capabilities": {
             "anyOf": [
               {
@@ -17584,6 +17842,20 @@
               }
             ],
             "title": "Capabilities"
+          },
+          "advice": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AdviceItem"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Advice"
           }
         },
         "additionalProperties": true,
@@ -17802,6 +18074,22 @@
             "title": "Ok",
             "default": true
           },
+          "dispatch_active": {
+            "type": "boolean",
+            "title": "Dispatch Active",
+            "default": false
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
           "worker": {
             "$ref": "#/components/schemas/WorkerStatusModel"
           }
@@ -17984,6 +18272,27 @@
               }
             ],
             "title": "Mode"
+          },
+          "dispatch_active": {
+            "type": "boolean",
+            "title": "Dispatch Active",
+            "default": false
+          },
+          "preview": {
+            "type": "boolean",
+            "title": "Preview",
+            "default": false
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
           },
           "workers": {
             "items": {

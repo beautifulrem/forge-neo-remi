@@ -39,6 +39,20 @@ def not_found(message: str = "Not Found") -> HTTPException:
     return HTTPException(status_code=404, detail=message)
 
 
+def deep_json_response(data: dict[str, Any], *, status_code: int = 200) -> Any:
+    """Bypass Pydantic response serialization when ``data`` nests past
+    ``200`` levels so ``pydantic_core``'s 255-level depth cap does not turn
+    a valid payload into HTTP 500, while keeping ``response_model`` intact."""
+
+    from remi.setting_values import nested_deeper
+
+    if nested_deeper(data, 200):
+        from remi.server.app import TextSafeResponse
+
+        return TextSafeResponse(content=data, status_code=status_code)
+    return data
+
+
 @contextlib.contextmanager
 def gpu_slot(services: Services) -> Iterator[None]:
     """One of the :data:`~remi.server.services.GPU_REQUESTS` slots of the

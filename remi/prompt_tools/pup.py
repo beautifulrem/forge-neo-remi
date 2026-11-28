@@ -19,6 +19,7 @@ Supports:
 from __future__ import annotations
 
 import base64
+import contextlib
 import gc
 import io
 import json
@@ -30,7 +31,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 from backend.nn import flux3_layout
 from remi.prompt_tools.translate import (
@@ -384,44 +385,62 @@ def prepare_reference_images(
         opened.load()
         return opened
 
-    for idx, item in enumerate(items):
-        if isinstance(item, Image.Image):
-            uri, resized = _encode_pil_to_data_uri(item, num_refs)
-            data_uris.append(uri)
-            pil_images.append(resized)
-        elif isinstance(item, (bytes, bytearray)):
-            with Image.open(io.BytesIO(bytes(item))) as opened:
-                uri, resized = _encode_pil_to_data_uri(checked(opened, idx), num_refs)
-            data_uris.append(uri)
-            pil_images.append(resized)
-        elif isinstance(item, (str, os.PathLike)):
-            text = os.fspath(item)
-            if text.startswith("data:image/"):
-                if ";base64," in text:
-                    raw_b64 = text.split(";base64,", 1)[1]
-                    try:
-                        raw_bytes = base64.b64decode(raw_b64)
-                        with Image.open(io.BytesIO(raw_bytes)) as opened:
-                            uri, resized = _encode_pil_to_data_uri(checked(opened, idx), num_refs)
-                        data_uris.append(uri)
-                        pil_images.append(resized)
-                    except TranslationError:
-                        raise
-                    except Exception:
-                        data_uris.append(text)
-                else:
-                    data_uris.append(text)
-            elif text.startswith(("http://", "https://")):
-                data_uris.append(text)
-            elif os.path.isfile(text):
-                with Image.open(text) as opened:
-                    uri, resized = _encode_pil_to_data_uri(checked(opened, idx), num_refs)
+    try:
+        for idx, item in enumerate(items):
+            if isinstance(item, Image.Image):
+                uri, resized = _encode_pil_to_data_uri(item, num_refs)
                 data_uris.append(uri)
                 pil_images.append(resized)
+            elif isinstance(item, (bytes, bytearray)):
+                try:
+                    with Image.open(io.BytesIO(bytes(item))) as opened:
+                        uri, resized = _encode_pil_to_data_uri(checked(opened, idx), num_refs)
+                except Image.DecompressionBombError as error:
+                    raise TranslationError(Sentence("the image has too many pixels to read"), 413) from error
+                except (UnidentifiedImageError, OSError) as error:
+                    raise TranslationError(Sentence("cannot read the image"), 422, param="reference_images") from error
+                data_uris.append(uri)
+                pil_images.append(resized)
+            elif isinstance(item, (str, os.PathLike)):
+                text = os.fspath(item)
+                if text.startswith("data:image/"):
+                    if ";base64," in text:
+                        raw_b64 = text.split(";base64,", 1)[1]
+                        try:
+                            raw_bytes = base64.b64decode(raw_b64)
+                            with Image.open(io.BytesIO(raw_bytes)) as opened:
+                                uri, resized = _encode_pil_to_data_uri(checked(opened, idx), num_refs)
+                            data_uris.append(uri)
+                            pil_images.append(resized)
+                        except TranslationError:
+                            raise
+                        except Image.DecompressionBombError as error:
+                            raise TranslationError(Sentence("the image has too many pixels to read"), 413) from error
+                        except Exception:
+                            data_uris.append(text)
+                    else:
+                        data_uris.append(text)
+                elif text.startswith(("http://", "https://")):
+                    data_uris.append(text)
+                elif os.path.isfile(text):
+                    try:
+                        with Image.open(text) as opened:
+                            uri, resized = _encode_pil_to_data_uri(checked(opened, idx), num_refs)
+                    except Image.DecompressionBombError as error:
+                        raise TranslationError(Sentence("the image has too many pixels to read"), 413) from error
+                    except (UnidentifiedImageError, OSError) as error:
+                        raise TranslationError(Sentence("cannot read the image"), 422, param="reference_file_ids") from error
+                    data_uris.append(uri)
+                    pil_images.append(resized)
+                else:
+                    raise TranslationError(Sentence("reference_images[{{index}}] file not found: {{path}}", index=idx, path=text), 422, param="reference_images")
             else:
-                raise TranslationError(Sentence("reference_images[{{index}}] file not found: {{path}}", index=idx, path=text), 422, param="reference_images")
-        else:
-            raise TranslationError(Sentence("unsupported reference image type at index {{index}}: {{type}}", index=idx, type=type(item).__name__), 422, param="reference_images")
+                raise TranslationError(Sentence("unsupported reference image type at index {{index}}: {{type}}", index=idx, type=type(item).__name__), 422, param="reference_images")
+    except BaseException:
+        for pil_img in pil_images:
+            with contextlib.suppress(Exception):
+                pil_img.close()
+        raise
 
     return data_uris, pil_images, warnings
 
@@ -545,6 +564,7 @@ class LocalQwen35PUPRunner:
         self.temperature = float(temperature)
         self.n_ctx = int(n_ctx)
         self.should_stop = should_stop or webui_interrupted
+        self._warnings: list[str] = []
 
     @staticmethod
     def release_vram() -> None:
@@ -637,6 +657,7 @@ class LocalQwen35PUPRunner:
                 def __call__(self, input_ids: Any, scores: Any, **kwargs: Any) -> Any:
                     return torch.full((input_ids.shape[0],), bool(should_stop()), device=input_ids.device, dtype=torch.bool)
 
+            self._warnings.clear()
             device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
             dtype = torch.bfloat16 if device != "cpu" else torch.float32
             if pil_images:
@@ -645,7 +666,15 @@ class LocalQwen35PUPRunner:
 
                     processor = AutoProcessor.from_pretrained(self.model_path, local_files_only=True)
                     model = AutoModelForImageTextToText.from_pretrained(self.model_path, dtype=dtype, local_files_only=True).to(device).eval()
-                except Exception:
+                except Exception as err:
+                    if isinstance(err, MemoryError) or "out of memory" in str(err).lower():
+                        raise
+                    log.warning(
+                        "Multimodal model load failed for %s; falling back to text-only CausalLM (reference images ignored): %s",
+                        self.model_path,
+                        err,
+                    )
+                    self._warnings.append("Local model does not support multimodal inputs; reference images were ignored.")
                     processor = AutoTokenizer.from_pretrained(self.model_path, local_files_only=True)
                     model = AutoModelForCausalLM.from_pretrained(self.model_path, dtype=dtype, local_files_only=True).to(device).eval()
             else:
@@ -760,36 +789,35 @@ def upsample_prompt(
     norm_aspect = normalize_aspect_ratio(aspect_ratio)
     locked_rows = _normalize_bbox_rows(bbox_draft) if bbox_draft else None
     image_uris, pil_images, warnings = prepare_reference_images(reference_images)
-
-    if req_mode == "auto":
-        if family == "fibo":
-            resolved_mode = "vgl_json"
-        elif image_uris and locked_rows:
-            resolved_mode = "i2i_bbox"
-        elif image_uris:
-            resolved_mode = "i2i"
-        elif locked_rows:
-            resolved_mode = "t2i_bbox"
-        else:
-            resolved_mode = "t2i"
-    else:
-        resolved_mode = req_mode
-
-    system = instructions.strip() or get_pup_system_prompt(family, resolved_mode, negative=negative)
-    user_message = _build_user_message(
-        original,
-        model_family=family,
-        mode=resolved_mode,
-        aspect_ratio=norm_aspect,
-        locked_rows=locked_rows,
-        num_refs=len(image_uris),
-        current=current,
-    )
-
-    use_local = bool(local_model_path and str(local_model_path).strip())
-    preserve_newlines = resolved_mode in ("t2i_bbox", "i2i_bbox", "vgl_json") or family in ("flux3", "qwen21", "moss", "fibo", "zimage", "ernie")
-
     try:
+        if req_mode == "auto":
+            if family == "fibo":
+                resolved_mode = "vgl_json"
+            elif image_uris and locked_rows:
+                resolved_mode = "i2i_bbox"
+            elif image_uris:
+                resolved_mode = "i2i"
+            elif locked_rows:
+                resolved_mode = "t2i_bbox"
+            else:
+                resolved_mode = "t2i"
+        else:
+            resolved_mode = req_mode
+
+        system = instructions.strip() or get_pup_system_prompt(family, resolved_mode, negative=negative)
+        user_message = _build_user_message(
+            original,
+            model_family=family,
+            mode=resolved_mode,
+            aspect_ratio=norm_aspect,
+            locked_rows=locked_rows,
+            num_refs=len(image_uris),
+            current=current,
+        )
+
+        use_local = bool(local_model_path and str(local_model_path).strip())
+        preserve_newlines = resolved_mode in ("t2i_bbox", "i2i_bbox", "vgl_json") or family in ("flux3", "qwen21", "moss", "fibo", "zimage", "ernie")
+
         if use_local:
             backend: Literal["openai_vlm", "local_qwen35"] = "local_qwen35"
             stop = should_stop or webui_interrupted
@@ -812,6 +840,7 @@ def upsample_prompt(
             else:
                 runner = LocalQwen35PUPRunner(local_model_path, max_tokens=max_tokens, temperature=temperature, should_stop=stop)
                 raw_output = runner.generate(system, user_message, image_uris=image_uris, pil_images=pil_images)
+                warnings.extend(runner._warnings)
             upsampled = _clean_prompt(str(raw_output or ""), preserve_newlines=preserve_newlines)
             if not upsampled:
                 raise TranslationError(Sentence("local Qwen3.5 PUP answered with an empty prompt"), 502)
@@ -839,10 +868,8 @@ def upsample_prompt(
             )
     finally:
         for pil_img in pil_images:
-            try:
+            with contextlib.suppress(Exception):
                 pil_img.close()
-            except Exception:
-                pass
 
     layout_rows: list[dict[str, Any]] | None = None
     vgl_json: dict[str, Any] | None = None

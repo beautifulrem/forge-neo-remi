@@ -12,10 +12,10 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.concurrency import run_in_threadpool
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from remi.server import models as m
-from remi.server.deps import ServicesDep, UserDep
+from remi.server.deps import ServicesDep, UserDep, deep_json_response
 from remi.server.routes.jobs import job_json
 
 router = APIRouter()
@@ -27,6 +27,12 @@ ImportSource = Literal["agent-scheduler", "prompt-queue"]
 class JobParams(m.Model):
     core: dict[str, Any] = {}
     scripts: dict[str, Any] = {}
+
+    @model_validator(mode="after")
+    def _check_finite(self) -> JobParams:
+        m.reject_non_finite(self.core, "core")
+        m.reject_non_finite(self.scripts, "scripts")
+        return self
 
 
 class StarRequest(m.Model):
@@ -92,8 +98,8 @@ def duplicate_job(job_id: str, services: ServicesDep, user: UserDep) -> dict[str
 
 
 @router.put("/jobs/{job_id}/params", response_model=m.JobDetail, responses={**ERRORS, 422: {"model": m.ValidationErrorBody}}, summary="Replace a queued job's parameters (validated)")
-def update_job_params(job_id: str, body: JobParams, services: ServicesDep) -> dict[str, Any]:
-    return job_json(services.queue.update_params(job_id, body.core, body.scripts), detail=True)
+def update_job_params(job_id: str, body: JobParams, services: ServicesDep) -> Any:
+    return deep_json_response(job_json(services.queue.update_params(job_id, body.core, body.scripts), detail=True))
 
 
 @router.post("/queue/move", response_model=m.QueueStatus, responses=ERRORS, summary="Move a queued job next to another (and into its priority group)")

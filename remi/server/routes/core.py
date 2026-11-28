@@ -3,17 +3,20 @@ models, styles, token counts, options and extension pages."""
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 from typing import Any
 
-from fastapi import APIRouter, Header, Request, Response
+from fastapi import APIRouter, Header, HTTPException, Request, Response
 
 from remi.server import i18n
 from remi.server import models as m
-from remi.server.deps import ServicesDep, UserDep, behind_generation, is_local_client, not_found, opts, publish_options_changed
+from remi.server.deps import ServicesDep, UserDep, behind_generation, deep_json_response, is_local_client, not_found, opts, publish_options_changed
 from remi.server.runtime import BUILTIN_TABS
 from remi.setting_values import setting
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -238,10 +241,16 @@ def _action_target(owner: str, tab: str | None) -> Any:
 @router.post(
     "/actions/{owner}/{action}",
     response_model=m.ActionPatch,
-    responses={422: {"model": m.ValidationErrorBody}, 404: {"model": m.Detail}},
+    responses={
+        404: {"model": m.Detail},
+        409: {"model": m.Detail},
+        422: {"model": m.ValidationErrorBody},
+        503: {"model": m.Detail},
+        504: {"model": m.Detail},
+    },
     summary="Run an owner's action; returns a patch (schema-format.md §5)",
 )
-def run_action(owner: str, action: str, body: m.ActionRequest, request: Request, services: ServicesDep, user: UserDep) -> dict[str, Any]:
+def run_action(owner: str, action: str, body: m.ActionRequest, request: Request, services: ServicesDep, user: UserDep) -> Any:
     from remi import ui
 
     extra = dict(body.model_extra or {})
@@ -270,24 +279,32 @@ def run_action(owner: str, action: str, body: m.ActionRequest, request: Request,
     def call() -> dict[str, Any]:
         # a GPU action that timed out would keep using the GPU after the lock is released:
         # it keeps its error isolation and runs without the limit
-        if spec.timeout is not None:
-            return ui.call_action_isolated(target, action, ctx, body.values, timeout=0 if spec.gpu else spec.timeout, extension=extension)
-        if extension is None:
-            return ui.call_action(target, action, ctx, body.values)
-        # no time limit: the failure is recorded and stays an error answer
-        return ui.call_action_isolated(target, action, ctx, body.values, extension=extension, return_toast=False)
+        if spec.timeout is not None or extension is not None:
+            return ui.call_action_isolated(
+                target,
+                action,
+                ctx,
+                body.values,
+                timeout=0 if spec.gpu else spec.timeout,
+                extension=extension,
+                return_toast=False,
+            )
+        return ui.call_action(target, action, ctx, body.values)
 
-    if spec.gpu:
-        patch = behind_generation(services, call)
-    else:
-        patch = call()
+    try:
+        if spec.gpu:
+            patch = behind_generation(services, call)
+        else:
+            patch = call()
+    except ui.ActionTimeoutError as error:
+        raise HTTPException(status_code=504, detail=str(error)) from error
     settings = patch.get("__settings__")
     if isinstance(settings, dict):
         publish_options_changed(services, list(settings))
     refreshed = patch.get("__refresh__")
     if isinstance(refreshed, dict):
         publish_options_changed(services, list(refreshed.get("keys", ())))
-    return patch
+    return deep_json_response(patch)
 
 
 def _settings_action(action: str, services: Any) -> dict[str, Any]:
@@ -347,7 +364,7 @@ def parse_infotext(body: m.InfotextRequest) -> dict[str, Any]:
     return parse(body.text, body.tab)
 
 
-@router.post("/infotext/image", response_model=m.ImageInfo, responses={404: {"model": m.Detail}}, summary="PNG Info of an uploaded or generated image")
+@router.post("/infotext/image", response_model=m.ImageInfo, responses={404: {"model": m.Detail}, 415: {"model": m.Detail}}, summary="PNG Info of an uploaded or generated image")
 def image_info(body: m.ImageInfoRequest, services: ServicesDep) -> dict[str, Any]:
     from PIL import Image
 
@@ -357,8 +374,14 @@ def image_info(body: m.ImageInfoRequest, services: ServicesDep) -> dict[str, Any
     record = services.files.get(body.file_id)
     if record is None or not record.is_image:
         raise not_found("no such image")
-    with Image.open(record.path) as image:
-        infotext, items = images.read_info_from_image(image)
+    try:
+        with Image.open(record.path) as image:
+            infotext, items = images.read_info_from_image(image)
+    except Image.DecompressionBombError as error:
+        raise HTTPException(status_code=415, detail="the image has too many pixels to read") from error
+    except OSError as error:
+        log.debug("cannot read the image: %s", error)
+        raise HTTPException(status_code=415, detail="cannot read the image") from error
     parsed = parse(infotext, body.tab) if infotext else None
     return {"infotext": infotext, "items": {str(k): str(v) for k, v in items.items() if not isinstance(v, bytes)}, "parsed": parsed}
 

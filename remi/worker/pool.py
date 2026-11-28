@@ -163,23 +163,27 @@ class InProcessWorker:
 class WorkerPool:
     """Multi-GPU / heterogeneous worker pool with affinity and load-balancing."""
 
-    def __init__(self, workers: Sequence[WorkerProtocol] = (), *, mode: str = "inprocess") -> None:
+    def __init__(self, workers: Sequence[WorkerProtocol] = (), *, mode: str = "inprocess", dispatch_active: bool = False) -> None:
         self.mode = mode
+        self.dispatch_active = bool(dispatch_active)
         self._cv = threading.Condition()
         self._workers: dict[str, WorkerProtocol] = {}
         self._busy: set[str] = set()
+        self._gen = 0
         for worker in workers:
             self._workers[worker.worker_id] = worker
 
     def add_worker(self, worker: WorkerProtocol) -> None:
         with self._cv:
             self._workers[worker.worker_id] = worker
+            self._gen += 1
             self._cv.notify_all()
 
     def remove_worker(self, worker_id: str) -> bool:
         with self._cv:
             worker = self._workers.pop(worker_id, None)
             self._busy.discard(worker_id)
+            self._gen += 1
             self._cv.notify_all()
         if worker is not None:
             worker.stop()
@@ -211,8 +215,8 @@ class WorkerPool:
             raise KeyError(f"no worker {worker_id!r}")
         return worker.restart()
 
-    def _score_candidate(self, worker: WorkerProtocol, *, preferred_model: str | None) -> tuple[int, int, int]:
-        hb = worker.status()
+    @staticmethod
+    def _score_hb(hb: WorkerHeartbeat, *, preferred_model: str | None) -> tuple[int, int, int]:
         caps = hb.capabilities
         # Lower tuple sorts first:
         # 0) model affinity match (0 = exact loaded_model match, 1 = mismatch)
@@ -223,16 +227,33 @@ class WorkerPool:
         neg_vram = -(caps.vram_free_mb or 0)
         return (affinity, load, neg_vram)
 
-    def _eligible(self, worker: WorkerProtocol, *, preferred_backend: str | None, model_family: str | None) -> bool:
-        if not worker.is_alive():
-            return False
-        hb = worker.status()
+    @staticmethod
+    def _eligible_hb(hb: WorkerHeartbeat, *, preferred_backend: str | None, model_family: str | None) -> bool:
         if hb.state in ("stopped", "unavailable", "error"):
             return False
         caps = hb.capabilities
         if preferred_backend and caps.backend != preferred_backend:
             return False
         return not (model_family and caps.supported_families and model_family not in caps.supported_families)
+
+    def _rank_candidates(
+        self,
+        snapshot: list[WorkerProtocol],
+        *,
+        preferred_model: str | None,
+        preferred_backend: str | None,
+        model_family: str | None,
+    ) -> list[WorkerProtocol]:
+        scored: list[tuple[tuple[int, int, int], int, WorkerProtocol]] = []
+        for idx, worker in enumerate(snapshot):
+            if not worker.is_alive():
+                continue
+            hb = worker.status()
+            if not self._eligible_hb(hb, preferred_backend=preferred_backend, model_family=model_family):
+                continue
+            scored.append((self._score_hb(hb, preferred_model=preferred_model), idx, worker))
+        scored.sort(key=lambda item: (item[0], item[1]))
+        return [worker for _score, _idx, worker in scored]
 
     def select_worker(
         self,
@@ -244,15 +265,14 @@ class WorkerPool:
         """Pick the best idle worker using model affinity + load balancing."""
 
         with self._cv:
-            candidates = [
-                w
-                for wid, w in self._workers.items()
-                if wid not in self._busy and self._eligible(w, preferred_backend=preferred_backend, model_family=model_family)
-            ]
-        if not candidates:
-            return None
-        candidates.sort(key=lambda w: self._score_candidate(w, preferred_model=preferred_model))
-        return candidates[0]
+            snapshot = [w for wid, w in self._workers.items() if wid not in self._busy]
+        ranked = self._rank_candidates(
+            snapshot,
+            preferred_model=preferred_model,
+            preferred_backend=preferred_backend,
+            model_family=model_family,
+        )
+        return ranked[0] if ranked else None
 
     def acquire_worker(
         self,
@@ -263,18 +283,31 @@ class WorkerPool:
         timeout: float = 30.0,
     ) -> WorkerProtocol | None:
         deadline = time.monotonic() + timeout
-        with self._cv:
-            while True:
-                candidates = [
-                    w
-                    for wid, w in self._workers.items()
-                    if wid not in self._busy and self._eligible(w, preferred_backend=preferred_backend, model_family=model_family)
-                ]
-                if candidates:
-                    candidates.sort(key=lambda w: self._score_candidate(w, preferred_model=preferred_model))
-                    chosen = candidates[0]
-                    self._busy.add(chosen.worker_id)
-                    return chosen
+        while True:
+            with self._cv:
+                seen_gen = self._gen
+                snapshot = [w for wid, w in self._workers.items() if wid not in self._busy]
+                if not snapshot:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        return None
+                    self._cv.wait(timeout=min(remaining, 0.2))
+                    continue
+
+            ranked = self._rank_candidates(
+                snapshot,
+                preferred_model=preferred_model,
+                preferred_backend=preferred_backend,
+                model_family=model_family,
+            )
+
+            with self._cv:
+                for chosen in ranked:
+                    if self._workers.get(chosen.worker_id) is chosen and chosen.worker_id not in self._busy:
+                        self._busy.add(chosen.worker_id)
+                        return chosen
+                if self._gen != seen_gen:
+                    continue
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     return None
@@ -283,6 +316,7 @@ class WorkerPool:
     def release_worker(self, worker_id: str) -> None:
         with self._cv:
             self._busy.discard(worker_id)
+            self._gen += 1
             self._cv.notify_all()
 
     def execute(

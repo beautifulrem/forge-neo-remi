@@ -33,7 +33,7 @@ HEADER_SIZE = _HEADER.size
 
 DEFAULT_PREVIEW_FPS = 6.0
 
-INLINE_MAX_PIXELS = {FORMAT_JPEG: 256 * 256, FORMAT_WEBP: 96 * 96}
+INLINE_MAX_PIXELS = {FORMAT_JPEG: 256 * 256, FORMAT_WEBP: 128 * 128}
 """Previews up to this size (by format) are encoded on the thread that assigns
 them (about 0.1-1.5 ms) instead of waking the encoder thread; see
 :meth:`PreviewEncoder.notify`."""
@@ -264,11 +264,39 @@ def preview_format(opts: Any) -> int:
     return FORMAT_JPEG if setting("live_previews_image_format", "jpeg", opts=opts) == "jpeg" else FORMAT_WEBP
 
 
+_PREVIEW_IMAGE_LOCK = threading.RLock()
+
+
+def preview_image_lock() -> threading.RLock:
+    """Lock serializing animated preview ``seek()``/``save()`` calls across threads."""
+
+    return _PREVIEW_IMAGE_LOCK
+
+
+def snapshot_preview(state: Any) -> tuple[int, Any, int]:
+    """Read ``(id_live_preview, current_image, sampling_step)`` consistently without tearing."""
+
+    id2 = 0
+    image: Any = None
+    step = 0
+    for _ in range(4):
+        id1 = getattr(state, "id_live_preview", 0)
+        image = getattr(state, "current_image", None)
+        step = int(getattr(state, "current_image_sampling_step", 0) or getattr(state, "sampling_step", 0) or 0)
+        id2 = getattr(state, "id_live_preview", 0)
+        if id1 == id2:
+            return id1, image, step
+    return id2, image, step
+
+
 def encode_preview(image: Any, fmt: int, quality: int = 80) -> bytes:
     """One preview frame's image bytes (an animated preview's first frame)."""
 
     if getattr(image, "is_animated", False):
-        image.seek(0)
+        with _PREVIEW_IMAGE_LOCK:
+            image.seek(0)
+            if hasattr(image, "copy"):
+                image = image.copy()
     buffer = io.BytesIO()
     if fmt == FORMAT_JPEG:
         image = image if image.mode == "RGB" else image.convert("RGB")
@@ -331,7 +359,7 @@ class PreviewEncoder(_Loop):
         if time.monotonic() < self._ready_at or not self._lock.acquire(blocking=False):
             return False  # throttled, or this thread is encoding: it takes the newest next
         try:
-            image = getattr(self.state(), "current_image", None)
+            _preview_id, image, _step = snapshot_preview(self.state())
             if image is None or getattr(image, "is_animated", False):
                 return False
             if image.width * image.height > INLINE_MAX_PIXELS[preview_format(self.opts())]:
@@ -402,13 +430,12 @@ class PreviewEncoder(_Loop):
         if not ref.begun:  # the state still holds the previous job's last preview
             return last
         state = self.state()
-        key = (ref.job_id, state.id_live_preview)
-        image = state.current_image
+        preview_id, image, step = snapshot_preview(state)
+        key = (ref.job_id, preview_id)
         if key == last or image is None:
             return last
         fmt = preview_format(opts)
         data = encode_preview(image, fmt)
-        step = int(state.current_image_sampling_step or state.sampling_step or 0)
         if self.before_frame is not None:
             try:
                 self.before_frame()

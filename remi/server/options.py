@@ -9,6 +9,7 @@ the current UI preset and the next generation loads it.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from typing import Any
 
@@ -16,6 +17,22 @@ from remi.setting_values import frozen_reason
 from remi.ui import Context, ParamError, Sentence, ValidationError
 
 MODEL_KEYS = ("sd_model_checkpoint", "forge_additional_modules", "forge_unet_storage_dtype")
+
+
+def _has_non_finite(value: Any) -> bool:
+    """Whether ``value`` contains NaN or Infinity anywhere (iterative)."""
+
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, float):
+            if not math.isfinite(item):
+                return True
+        elif isinstance(item, Mapping):
+            pending.extend(item.values())
+        elif isinstance(item, (list, tuple)):
+            pending.extend(item)
+    return False
 
 
 def _error(key: str, message: str) -> ParamError:
@@ -43,6 +60,9 @@ def coerce_values(opts: Any, values: Any, cmd_opts: Any) -> dict[str, Any]:
             continue
         if nested_deeper(value):  # config.json's write would stop half way (see MAX_NESTING)
             problems.append(ParamError(Sentence("nested deeper than {{limit}} levels", limit=MAX_NESTING), owner="settings", param=key))
+            continue
+        if _has_non_finite(value):
+            problems.append(_error(key, "non-finite numbers (NaN or Infinity) are not allowed"))
             continue
         if not encodable(value):  # config.json is written as UTF-8: the write would stop half way
             problems.append(_error(key, "the text has a broken character (an unpaired surrogate)"))

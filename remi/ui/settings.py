@@ -237,7 +237,8 @@ def settings_schema(opts, ctx: Context | None = None, *, categories=None, quicks
             if reason:
                 data["enabled_if"] = False
                 data["locked"] = reason
-        target = open_rows[section]["children"] if open_rows[section] is not None else items
+        open_row = open_rows[section]
+        target = open_row["children"] if open_row is not None else items
         target.append(data)
 
     stored = {key: info for key, info in opts.data_labels.items() if not getattr(info, "do_not_save", False)}

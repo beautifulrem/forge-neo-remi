@@ -43,9 +43,13 @@ class BodyTooLarge(HTTPException):
 
 
 def size(limit: int) -> str:
-    """``limit`` bytes for a message: whole MB, or KB below one MB."""
+    """``limit`` bytes for a message: whole MB, KB below one MB, or B below one KB."""
 
-    return f"{limit // (1024 * 1024)} MB" if limit >= 1024 * 1024 else f"{limit // 1024} KB"
+    if limit >= 1024 * 1024:
+        return f"{limit // (1024 * 1024)} MB"
+    if limit >= 1024:
+        return f"{limit // 1024} KB"
+    return f"{limit} B"
 
 
 class BodyLimitMiddleware:

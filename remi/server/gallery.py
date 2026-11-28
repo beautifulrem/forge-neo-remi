@@ -5,6 +5,7 @@ through the normal save path (filename pattern, ``on_image_saved``,
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import os
 import platform
@@ -86,6 +87,29 @@ def update_logfile(path: str, fields: list[str]) -> None:
         csv.writer(file).writerows(rows)
 
 
+_PNG_NATIVE_MODES = ("1", "L", "LA", "P", "RGB", "RGBA", "I;16")
+_JPEG_NATIVE_MODES = ("L", "RGB", "RGBA", "CMYK", "YCbCr", "I;16")
+_GIF_NATIVE_MODES = ("1", "L", "P", "RGB", "RGBA")
+
+
+def _prepare_image_for_extension(image: Any, extension: str) -> tuple[Any, Any]:
+    ext = extension.lower().lstrip(".")
+    if (ext in ("jpg", "jpeg") and (image.height > 65535 or image.width > 65535)) or (ext == "webp" and (image.height > 16383 or image.width > 16383)):
+        ext = "png"
+    if ext in ("jpg", "jpeg"):
+        if image.mode not in _JPEG_NATIVE_MODES:
+            converted = image.convert("RGB")
+            return converted, converted
+        return image, None
+    if ext in ("webp", "avif", "jxl"):
+        return image, None
+    native_modes = _GIF_NATIVE_MODES if ext == "gif" else _PNG_NATIVE_MODES
+    if image.mode not in native_modes:
+        converted = image.convert("RGBA" if image.has_transparency_data else "RGB")
+        return converted, converted
+    return image, None
+
+
 def save_outputs(records: list[FileRecord], *, make_zip: bool = False) -> SaveResult:
     """Save copies of ``records`` to ``opts.outdir_save`` (images through
     ``images.save_image``, other files copied), log them to ``log.csv``
@@ -105,43 +129,67 @@ def save_outputs(records: list[FileRecord], *, make_zip: bool = False) -> SaveRe
     result = SaveResult()
     rows: list[list[Any]] = []
     first: tuple[SavedParams, Any] | None = None
-    for record in records:
-        if not record.is_image:
-            target = _free_name(folder, record.name)
+    try:
+        for record in records:
+            if not record.is_image:
+                target = _free_name(folder, record.name)
+                try:
+                    shutil.copy2(record.path, target)
+                except BaseException:
+                    with contextlib.suppress(FileNotFoundError):
+                        os.unlink(target)  # the empty file that claimed the name
+                    raise
+                result.paths.append(target)
+                result.saved.append(os.path.relpath(target, folder))
+                continue
+            params = infotext_utils.parse_generation_parameters(record.infotext or "", [])
+            p = SavedParams(params, record)
             try:
-                shutil.copy2(record.path, target)
+                with Image.open(record.path) as opened:
+                    opened.load()
+                    image = opened.copy()
+            except Image.DecompressionBombError as error:
+                raise GalleryError("the image has too many pixels to read", 415) from error
+            except OSError as error:
+                raise GalleryError("cannot read the image", 415) from error
+            extension = (setting("samples_format", "png") or "png").strip().lstrip(".") or "png"
+            converted = None
+            try:
+                image_to_save, converted = _prepare_image_for_extension(image, extension)
+                fullfn, txt_fullfn = images.save_image(image_to_save, folder, "", seed=p.seed, prompt=p.prompt, extension=extension, info=record.infotext, p=p, save_to_dirs=setting("use_save_to_dirs_for_ui", False))
             except BaseException:
-                os.unlink(target)  # the empty file that claimed the name
+                if converted is not None:
+                    converted.close()
+                image.close()
                 raise
-            result.paths.append(target)
-            result.saved.append(os.path.relpath(target, folder))
-            continue
-        params = infotext_utils.parse_generation_parameters(record.infotext or "", [])
-        p = SavedParams(params, record)
-        with Image.open(record.path) as opened:
-            opened.load()
-            image = opened.copy()
-        fullfn, txt_fullfn = images.save_image(image, folder, "", seed=p.seed, prompt=p.prompt, extension=setting("samples_format", "png") or "png", info=record.infotext, p=p, save_to_dirs=setting("use_save_to_dirs_for_ui", False))
-        name = os.path.relpath(fullfn, folder)
-        result.paths.append(fullfn)
-        result.saved.append(name)
-        if txt_fullfn:
-            result.paths.append(txt_fullfn)
-            result.saved.append(os.path.relpath(txt_fullfn, folder))
-        rows.append([p.prompt, p.seed, record.width, record.height, p.sampler_name, p.cfg_scale, p.steps, name, p.negative_prompt, p.sd_model_name, p.sd_model_hash])
-        first = first or (p, image)
-    if rows and setting("save_write_log_csv", True):
-        log_path = os.path.join(folder, "log.csv")
-        if os.path.exists(log_path):
-            update_logfile(log_path, LOG_FIELDS)
-        with open(log_path, "a", encoding="utf8", newline="") as file:
-            writer = csv.writer(file)
-            if file.tell() == 0:
-                writer.writerow(LOG_FIELDS)
-            writer.writerows(rows)
-    if make_zip and result.paths:
-        result.zip_path = _zip(folder, result, first)
-    return result
+            if converted is not None:
+                image.close()
+            name = os.path.relpath(fullfn, folder)
+            result.paths.append(fullfn)
+            result.saved.append(name)
+            if txt_fullfn:
+                result.paths.append(txt_fullfn)
+                result.saved.append(os.path.relpath(txt_fullfn, folder))
+            rows.append([p.prompt, p.seed, record.width, record.height, p.sampler_name, p.cfg_scale, p.steps, name, p.negative_prompt, p.sd_model_name, p.sd_model_hash])
+            if first is None:
+                first = (p, image_to_save)
+            else:
+                image_to_save.close()
+        if rows and setting("save_write_log_csv", True):
+            log_path = os.path.join(folder, "log.csv")
+            if os.path.exists(log_path):
+                update_logfile(log_path, LOG_FIELDS)
+            with open(log_path, "a", encoding="utf8", newline="") as file:
+                writer = csv.writer(file)
+                if file.tell() == 0:
+                    writer.writerow(LOG_FIELDS)
+                writer.writerows(rows)
+        if make_zip and result.paths:
+            result.zip_path = _zip(folder, result, first)
+        return result
+    finally:
+        if first is not None:
+            first[1].close()
 
 
 def _zip(folder: str, result: SaveResult, first: tuple[SavedParams, Any] | None) -> str:

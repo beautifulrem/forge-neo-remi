@@ -25,17 +25,21 @@ from __future__ import annotations
 
 import contextlib
 import errno
+import http.client
 import ipaddress
 import json
 import logging
+import math
 import os
 import re
+import secrets
 import shutil
 import signal
 import socket
 import stat
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.parse
@@ -59,6 +63,10 @@ GIT_CLONE_TIMEOUT = 900
 """Seconds a clone (with submodules) may take."""
 GIT_LOCAL_TIMEOUT = 60
 """Seconds a local git command (rev-parse, reset) may take."""
+INSTALLER_TIMEOUT = 300
+"""Seconds an extension's ``install.py`` may run."""
+MAX_CONFIG_STATES = 50
+"""Maximum number of config-state backup files retained in ``config_states/``."""
 
 DIRNAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 GIT_URL_RE = re.compile(r"^(https?|ssh|git)://[^\s]+$|^git@[^\s:]+:[^\s]+$")
@@ -81,7 +89,9 @@ lock = threading.RLock()
 def render(template: str, params: dict[str, Any]) -> str:
     """``"git {{command}} failed"`` with ``command="fetch"`` → ``"git fetch failed"``."""
 
-    return re.sub(r"\{\{(\w+)\}\}", lambda match: str(params.get(match.group(1), match.group(0))), template)
+    from remi.ui.sentence import Sentence
+
+    return str(Sentence(template, **params))
 
 
 class AdminError(Exception):
@@ -92,9 +102,13 @@ class AdminError(Exception):
     status = 422
 
     def __init__(self, template: str, status: int | None = None, **params: Any) -> None:
-        self.template = template
-        self.params = {key: str(value) for key, value in params.items()}
-        super().__init__(render(template, self.params))
+        from remi.ui.sentence import Sentence
+
+        sentence = Sentence(template, **params)
+        self.sentence = sentence
+        self.template = sentence.template
+        self.params = {key: str(value) for key, value in sentence.params.items()}
+        super().__init__(str(sentence))
         if status is not None:
             self.status = status
 
@@ -255,8 +269,18 @@ def commit_url(remote: str | None, commit: str | None) -> str | None:
     return None
 
 
+def _valid_timestamp(timestamp: Any) -> bool:
+    if isinstance(timestamp, bool) or not isinstance(timestamp, (int, float)) or not math.isfinite(timestamp):
+        return False
+    try:
+        datetime.fromtimestamp(timestamp, UTC)
+        return True
+    except (OverflowError, OSError, ValueError):
+        return False
+
+
 def iso(timestamp: float | None) -> str | None:
-    if not timestamp:
+    if not timestamp or not _valid_timestamp(timestamp):
         return None
     return datetime.fromtimestamp(timestamp, UTC).isoformat()
 
@@ -594,11 +618,71 @@ def update(names: Iterable[str]) -> None:
         raise GitError("could not update {{names}}: {{reason}}", names=", ".join(name for name, _ in failed), reason=failed[0][1])
 
 
+_installing_urls: set[str] = set()
+
+
+def _rmtree(path: str) -> None:
+    if not os.path.lexists(path):
+        return
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_make_writable)
+    else:
+        shutil.rmtree(path, onerror=_make_writable)
+
+
+def run_installer(extension_dir: str, *, timeout: float = INSTALLER_TIMEOUT) -> None:
+    """Run ``<extension_dir>/install.py`` bounded by ``timeout`` seconds.
+    Raises :class:`AdminError` (502) if it cannot start, times out, or exits non-zero."""
+
+    from modules import launch_utils, paths_internal
+
+    path_installer = os.path.join(extension_dir, "install.py")
+    if not os.path.isfile(path_installer):
+        return
+
+    python = getattr(launch_utils, "python", None) or sys.executable
+    script_path = paths_internal.script_path
+    env = os.environ.copy()
+    env["PYTHONPATH"] = f"{script_path}{os.pathsep}{env.get('PYTHONPATH', '')}"
+    env["PIP_NO_INPUT"] = "1"
+    env["GIT_TERMINAL_PROMPT"] = "0"
+
+    options: dict[str, Any] = {}
+    if os.name == "nt":
+        options["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    else:
+        options["start_new_session"] = True
+    try:
+        process = subprocess.Popen(
+            [python, path_installer],
+            cwd=script_path,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            **options,
+        )
+    except OSError as error:
+        raise AdminError("extension installer could not be started: {{reason}}", status=502, reason=error) from error
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _kill_tree(process)
+        with contextlib.suppress(subprocess.TimeoutExpired, OSError, ValueError):
+            process.communicate(timeout=5)
+        raise AdminError("extension installer timed out after {{seconds}} s", status=502, seconds=int(timeout)) from None
+    if process.returncode != 0:
+        raise AdminError("extension installer failed: {{reason}}", status=502, reason=_reason(stderr or stdout))
+
+
 def install(url: str, branch: str | None = None, dirname: str | None = None) -> Any:
     """Clone ``url`` into ``extensions/<dirname>`` and run its installer.
     The extension loads after the next reload."""
 
-    from modules import extensions, launch_utils, paths
+    from modules import extensions, paths
 
     check_access()
     url = (url or "").strip()
@@ -610,12 +694,14 @@ def install(url: str, branch: str | None = None, dirname: str | None = None) -> 
         raise AdminError("not a valid folder name: {{name}}", name=dirname)
     if branch is not None and not valid_branch(branch):
         raise AdminError("not a valid branch name: {{name}}", name=branch)
+    norm_url = normalize_git_url(url)
     with lock:
         target = os.path.join(extensions.extensions_dir, dirname)
         if os.path.exists(target):
             raise Conflict("the folder {{name}} already exists", name=dirname)
-        if any(normalize_git_url(ext.remote) == normalize_git_url(url) for ext in all_extensions() if ext.remote):
+        if norm_url in _installing_urls or any(normalize_git_url(ext.remote) == norm_url for ext in all_extensions() if ext.remote):
             raise Conflict("an extension with this URL is installed")
+        _installing_urls.add(norm_url)
         temp = os.path.join(paths.data_path, "tmp", dirname)
         try:
             shutil.rmtree(temp, True)
@@ -630,10 +716,26 @@ def install(url: str, branch: str | None = None, dirname: str | None = None) -> 
                 if error.errno != errno.EXDEV:
                     raise
                 shutil.move(temp, target)  # tmp/ and extensions/ on different file systems
-            launch_utils.run_extension_installer(target)
-            extensions.list_extensions()
+        except BaseException:
+            _installing_urls.discard(norm_url)
+            raise
         finally:
             shutil.rmtree(temp, True)
+
+    try:
+        with repo_lock(target):
+            run_installer(target)
+        with lock:
+            extensions.list_extensions()
+    except BaseException:
+        with lock, repo_lock(target):
+            with contextlib.suppress(OSError):
+                _rmtree(target)
+            extensions.list_extensions()
+        raise
+    finally:
+        with lock:
+            _installing_urls.discard(norm_url)
     return find(dirname)
 
 
@@ -659,10 +761,7 @@ def uninstall(name: str) -> None:
     if os.path.dirname(path) != root:
         raise AdminError("the extension is not inside the extensions folder")
     with lock, repo_lock(path):
-        if sys.version_info >= (3, 12):
-            shutil.rmtree(path, onexc=_make_writable)
-        else:
-            shutil.rmtree(path, onerror=_make_writable)
+        _rmtree(path)
         extensions.extensions[:] = [item for item in extensions.extensions if item.name != name]
         # its name in the disabled list is harmless where the settings are frozen
         if name in (disabled := disabled_extensions()) and frozen_reason(shared.opts, "disabled_extensions", shared.cmd_opts) is None:
@@ -685,6 +784,16 @@ class _IndexCache:
 _index_cache: _IndexCache | None = None
 
 
+def _addresses_are_public(addresses: Iterable[str]) -> bool:
+    seen = False
+    for address in addresses:
+        seen = True
+        ip = ipaddress.ip_address(address)
+        if not (getattr(ip, "ipv4_mapped", None) or ip).is_global:
+            return False
+    return seen
+
+
 def host_is_public(host: str | None) -> bool:
     """Every address ``host`` resolves to (IPv4 and IPv6, mapped IPv4
     unwrapped) is a global internet address: no loopback, private, link-local
@@ -695,13 +804,9 @@ def host_is_public(host: str | None) -> bool:
     try:
         infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
         addresses = {info[4][0].split("%", 1)[0] for info in infos}
-        for address in addresses:
-            ip = ipaddress.ip_address(address)
-            if not (getattr(ip, "ipv4_mapped", None) or ip).is_global:
-                return False
+        return _addresses_are_public(addresses)
     except (OSError, UnicodeError, ValueError):
         return False
-    return bool(addresses)
 
 
 def check_index_url(url: str, *, public: bool) -> None:
@@ -717,6 +822,66 @@ def check_index_url(url: str, *, public: bool) -> None:
         raise AdminError("the index URL must be a public internet address (a local index can be set with WEBUI_EXTENSIONS_INDEX)")
 
 
+def _create_public_connection(
+    address: tuple[str, int],
+    timeout: float = socket._GLOBAL_DEFAULT_TIMEOUT,  # type: ignore[assignment]
+    source_address: tuple[str, int] | None = None,
+) -> socket.socket:
+    """Resolve ``address`` once, reject if any returned IP is non-global, and
+    connect directly to the validated ``sockaddr`` without a second DNS lookup."""
+
+    host, port = address
+    infos = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+    addresses = [info[4][0].split("%", 1)[0] for info in infos]
+    try:
+        is_public = _addresses_are_public(addresses)
+    except ValueError:
+        is_public = False
+    if not is_public:
+        raise AdminError("the index URL must be a public internet address (a local index can be set with WEBUI_EXTENSIONS_INDEX)")
+
+    last_error: OSError | None = None
+    for family, socktype, proto, _canonname, sockaddr in infos:
+        sock: socket.socket | None = None
+        try:
+            sock = socket.socket(family, socktype, proto)
+            if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT:
+                sock.settimeout(timeout)
+            if source_address:
+                sock.bind(source_address)
+            sock.connect(sockaddr)
+            return sock
+        except OSError as error:
+            last_error = error
+            if sock is not None:
+                sock.close()
+    if last_error is not None:
+        raise last_error
+    raise OSError("getaddrinfo returns an empty list")
+
+
+class _PublicHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._create_connection = _create_public_connection  # type: ignore[method-assign]
+
+
+class _PublicHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._create_connection = _create_public_connection  # type: ignore[method-assign]
+
+
+class _PublicHTTPHandler(urllib.request.HTTPHandler):
+    def http_open(self, req: urllib.request.Request) -> Any:
+        return self.do_open(_PublicHTTPConnection, req)
+
+
+class _PublicHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req: urllib.request.Request) -> Any:
+        return self.do_open(_PublicHTTPSConnection, req, context=self._context)
+
+
 class _PublicRedirects(urllib.request.HTTPRedirectHandler):
     """Follows a redirect only to another public http(s) URL."""
 
@@ -727,10 +892,15 @@ class _PublicRedirects(urllib.request.HTTPRedirectHandler):
 
 def open_public_url(request: urllib.request.Request, timeout: float) -> Any:
     """``urlopen`` for client-named URLs: every redirect hop is checked with
-    :func:`check_index_url`. (A DNS answer that changes between the check and
-    the connection is not caught.)"""
+    :func:`check_index_url`, and each socket pins the IP resolved and validated
+    at connect time so DNS rebinding cannot reach loopback or private targets."""
 
-    return urllib.request.build_opener(_PublicRedirects).open(request, timeout=timeout)
+    return urllib.request.build_opener(
+        urllib.request.ProxyHandler({}),
+        _PublicRedirects,
+        _PublicHTTPHandler,
+        _PublicHTTPSHandler,
+    ).open(request, timeout=timeout)
 
 
 def fetch_index(url: str, *, opener: Callable[..., Any] | None = None, public: bool = True) -> dict[str, Any]:
@@ -839,22 +1009,51 @@ def _legacy_states_dir() -> str | None:
     return None if os.path.realpath(legacy) == os.path.realpath(_states_dir()) else legacy
 
 
-def save_config_state(name: str = "") -> dict[str, Any]:
-    """Write the current WebUI and extension commits to ``config_states/``."""
+def save_config_state(name: str = "", *, max_states: int = MAX_CONFIG_STATES) -> dict[str, Any]:
+    """Write the current WebUI and extension commits to ``config_states/`` atomically."""
 
     from modules import config_states
 
-    state = config_states.get_config()
-    state["name"] = os.path.basename((name or "").strip()) or "Config"
-    folder = _states_dir()
-    os.makedirs(folder, exist_ok=True)
-    safe = re.sub(r"[^\w .()-]+", "_", state["name"])[:80]
-    filename = os.path.join(folder, f"{datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}_{safe}.json")
-    with open(filename, "w", encoding="utf-8") as file:
-        json.dump(state, file, indent=4, ensure_ascii=False)
-    config_states.list_config_states()
-    state["filepath"] = filename
-    return state_summary(state)
+    with lock:
+        state = config_states.get_config()
+        if not isinstance(state, dict) or not _valid_timestamp(state.get("created_at")):
+            raise AdminError("invalid config state timestamp")
+        state["name"] = os.path.basename((name or "").strip()) or "Config"
+        folder = _states_dir()
+        os.makedirs(folder, exist_ok=True)
+        safe = re.sub(r"[^\w .()-]+", "_", state["name"])[:80]
+        now = datetime.now()
+        suffix = secrets.token_hex(3)
+        filename = os.path.join(folder, f"{now.strftime('%Y_%m_%d-%H_%M_%S')}_{now.microsecond:06d}_{suffix}_{safe}.json")
+        tmp_path: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=folder, prefix=".tmp_", suffix=".tmp", delete=False) as tmp:
+                tmp_path = tmp.name
+                json.dump(state, tmp, indent=4, ensure_ascii=False, allow_nan=False)
+                tmp.flush()
+                os.fsync(tmp.fileno())
+            os.replace(tmp_path, filename)
+            tmp_path = None
+        finally:
+            if tmp_path is not None:
+                with contextlib.suppress(OSError):
+                    os.remove(tmp_path)
+
+        if max_states > 0:
+            existing = sorted(
+                _read_states(folder),
+                key=lambda item: (float(item["created_at"]), os.path.basename(item["filepath"])),
+                reverse=True,
+            )
+            for stale in existing[max_states:]:
+                stale_path = stale["filepath"]
+                if os.path.realpath(stale_path) != os.path.realpath(filename):
+                    with contextlib.suppress(OSError):
+                        os.remove(stale_path)
+
+        config_states.list_config_states()
+        state["filepath"] = filename
+        return state_summary(state)
 
 
 def _read_states(folder: str) -> list[dict[str, Any]]:
@@ -875,7 +1074,7 @@ def _read_states(folder: str) -> list[dict[str, Any]]:
         except (OSError, ValueError):
             continue
         created = state.get("created_at") if isinstance(state, dict) else None
-        if isinstance(created, (int, float)) and not isinstance(created, bool):
+        if _valid_timestamp(created):
             states.append({**state, "filepath": path})
     return states
 
@@ -888,10 +1087,10 @@ def _load_states() -> dict[str, dict[str, Any]]:
     from modules import config_states
 
     config_states.list_config_states()
-    states = {os.path.basename(state["filepath"]): state for state in config_states.all_config_states.values()}
+    states = {os.path.basename(state["filepath"]): state for state in _read_states(_states_dir())}
     legacy = _legacy_states_dir()
     if legacy is None:
-        return states
+        return dict(sorted(states.items(), key=lambda item: item[1]["created_at"], reverse=True))
     for state in _read_states(legacy):
         states.setdefault(os.path.basename(state["filepath"]), state)
     return dict(sorted(states.items(), key=lambda item: item[1]["created_at"], reverse=True))
@@ -956,10 +1155,12 @@ def config_state_detail(state_id: str) -> dict[str, Any]:
 
     state = _state(state_id)
     current_webui = config_states.get_webui_config()
-    saved_webui = state.get("webui") if isinstance(state.get("webui"), dict) else {}
+    raw_saved_webui = state.get("webui")
+    saved_webui = raw_saved_webui if isinstance(raw_saved_webui, dict) else {}
     current = {ext.name: ext for ext in all_extensions()}
     rows = []
-    saved_exts = state.get("extensions") if isinstance(state.get("extensions"), dict) else {}
+    raw_saved_exts = state.get("extensions")
+    saved_exts = raw_saved_exts if isinstance(raw_saved_exts, dict) else {}
     for name, entry in sorted(saved_exts.items(), key=lambda item: item[0].lower()):
         if not isinstance(entry, dict):
             continue
@@ -1032,7 +1233,42 @@ def _disabled_scripts_by_extension() -> dict[str, list[dict[str, Any]]]:
     return by_ext
 
 
-def _startup_load_times_ms() -> dict[str, float]:
+def _script_to_extension_map(exts: Iterable[Any]) -> dict[str, str]:
+    """Map script filenames (e.g. ``controlnet.py``) to extension folder names."""
+
+    from remi.ui.manifest import extension_of
+
+    mapping: dict[str, str] = {}
+    for ext in exts:
+        ext_name = str(ext.name)
+        ext_path = getattr(ext, "path", "") or ""
+        if ext_path and os.path.isdir(ext_path):
+            scripts_dir = os.path.join(ext_path, "scripts")
+            if os.path.isdir(scripts_dir):
+                try:
+                    for fname in os.listdir(scripts_dir):
+                        if fname.lower().endswith(".py") and os.path.isfile(os.path.join(scripts_dir, fname)):
+                            mapping.setdefault(fname, ext_name)
+                except OSError:
+                    pass
+    try:
+        from modules import scripts
+
+        for entry in (*getattr(scripts, "scripts_data", ()), *getattr(scripts, "postprocessing_scripts_data", ())):
+            path = getattr(entry, "path", None)
+            if isinstance(path, str) and path and (ext_name := extension_of(path)):
+                mapping[os.path.basename(path)] = ext_name
+        for scriptfile, _reason in getattr(scripts, "scripts_not_loaded", ()):
+            path = getattr(scriptfile, "path", None)
+            if isinstance(path, str) and path and (ext_name := extension_of(path)):
+                fname = getattr(scriptfile, "filename", None) or os.path.basename(path)
+                mapping[str(fname)] = ext_name
+    except Exception:
+        pass
+    return mapping
+
+
+def _startup_load_times_ms(extensions_list: Iterable[Any] | None = None) -> dict[str, float]:
     """Read per-extension script load times from ``modules.timer`` when recorded."""
 
     times: dict[str, float] = {}
@@ -1040,14 +1276,46 @@ def _startup_load_times_ms() -> dict[str, float]:
         from modules import timer
 
         records = getattr(timer.startup_timer, "records", None) or {}
-        if isinstance(records, dict):
-            scripts_rec = records.get("scripts") or records.get("load scripts")
-            if isinstance(scripts_rec, dict):
-                for name, value in scripts_rec.items():
-                    if isinstance(value, (int, float)):
-                        times[str(name)] = round(float(value) * 1000.0, 2)
+        if not isinstance(records, dict):
+            return times
+        exts = list(extensions_list) if extensions_list is not None else all_extensions()
+        ext_names = {str(ext.name) for ext in exts}
+        file_to_ext = _script_to_extension_map(exts)
+
+        for key, value in records.items():
+            if not isinstance(key, str) or not isinstance(value, (int, float)) or isinstance(value, bool):
+                continue
+            if key.startswith("load scripts/"):
+                script_key = key[len("load scripts/") :]
+            elif key.startswith("scripts/"):
+                script_key = key[len("scripts/") :]
+            else:
+                continue
+            ext_name = file_to_ext.get(script_key) or file_to_ext.get(os.path.basename(script_key))
+            if ext_name is None and script_key in ext_names:
+                ext_name = script_key
+            if ext_name is not None:
+                times[ext_name] = round(times.get(ext_name, 0.0) + max(0.0, float(value)) * 1000.0, 2)
+
+        scripts_rec = records.get("scripts") or records.get("load scripts")
+        if isinstance(scripts_rec, dict):
+            for name, value in scripts_rec.items():
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    ext_name = file_to_ext.get(str(name), str(name))
+                    times[ext_name] = round(max(0.0, float(value)) * 1000.0, 2)
     except Exception:
         pass
+    return times
+
+
+def record_startup_load_times(extensions_list: Iterable[Any] | None = None) -> dict[str, float]:
+    """Populate :data:`remi.ui.manifest.diagnostics` with startup script load times."""
+
+    from remi.ui.manifest import diagnostics as collector
+
+    times = _startup_load_times_ms(extensions_list=extensions_list)
+    for ext_name, duration_ms in times.items():
+        collector.record_load_time(ext_name, duration_ms)
     return times
 
 
@@ -1061,15 +1329,19 @@ def diagnostics_report(
     A manifest's required widgets and capabilities are checked against
     ``known_widgets`` / ``known_capabilities`` when given."""
 
+    from remi.ui.manifest import ManifestValidationResult, load_manifest
     from remi.ui.manifest import diagnostics as collector
-    from remi.ui.manifest import load_manifest
     from remi.ui.schema import SCHEMA_VERSION
     from remi.ui.sentence import sentence_fields
     from remi.ui.version import REMI_API_VERSION
 
     exts = list(extensions_list) if extensions_list is not None else all_extensions()
     disabled_map = _disabled_scripts_by_extension()
-    startup_times = _startup_load_times_ms()
+    startup_times = _startup_load_times_ms(extensions_list=exts)
+    for ext_name, duration_ms in startup_times.items():
+        existing = collector.get(ext_name)
+        if existing is None or existing.load_time_ms is None:
+            collector.record_load_time(ext_name, duration_ms)
     recorded = collector.snapshot()
     widgets = None if known_widgets is None else frozenset(known_widgets)
     capabilities = None if known_capabilities is None else frozenset(known_capabilities)
@@ -1082,11 +1354,10 @@ def diagnostics_report(
         enabled = bool(getattr(ext, "enabled", True))
         builtin = bool(getattr(ext, "is_builtin", False))
         path = getattr(ext, "path", "") or ""
-        mres = load_manifest(path or ".", known_widgets=widgets, known_capabilities=capabilities)
         if not path or not os.path.isdir(path):
-            from remi.ui.manifest import ManifestValidationResult
-
             mres = ManifestValidationResult(None, "missing", (), (), True)
+        else:
+            mres = load_manifest(path, known_widgets=widgets, known_capabilities=capabilities)
 
         rec = recorded.get(name)
         load_time_ms = rec.load_time_ms if rec and rec.load_time_ms is not None else startup_times.get(name)
@@ -1096,6 +1367,14 @@ def diagnostics_report(
         action_timeouts = rec.action_timeouts if rec else 0
         last_error = rec.last_error if rec else None
         last_error_at = iso(rec.last_error_at) if rec and rec.last_error_at else None
+        recent_errors = [
+            {
+                "kind": str(entry.get("kind") or "error"),
+                "message": str(entry.get("message") or ""),
+                "timestamp": iso(entry["timestamp"]) if isinstance(entry.get("timestamp"), (int, float)) else (entry.get("timestamp") if isinstance(entry.get("timestamp"), str) else None),
+            }
+            for entry in (rec.recent_errors if rec else ())
+        ]
         disabled_scripts = disabled_map.get(name, [])
 
         if not enabled:
@@ -1125,6 +1404,7 @@ def diagnostics_report(
                 "action_timeouts": action_timeouts,
                 "last_error": last_error,
                 "last_error_at": last_error_at,
+                "recent_errors": recent_errors,
                 "manifest_status": mres.status,
                 "manifest": mres.manifest.to_dict() if mres.manifest is not None else None,
                 "manifest_errors": list(mres.errors),

@@ -850,11 +850,15 @@ def read_info_from_image(image: Image.Image) -> tuple[str | None, dict]:
                 exif = piexif.load(exif_data)
             except Exception:  # malformed EXIF (struct.error, ValueError, ...): no comment
                 exif = None
-            exif_comment = (exif or {}).get("Exif", {}).get(piexif.ExifIFD.UserComment, b"")
-            try:
-                exif_comment = piexif.helper.UserComment.load(exif_comment)
-            except ValueError:
-                exif_comment = exif_comment.decode("utf8", errors="ignore")
+            raw_comment = (exif or {}).get("Exif", {}).get(piexif.ExifIFD.UserComment, b"")
+            if isinstance(raw_comment, (bytes, bytearray)):
+                raw_bytes = bytes(raw_comment)
+                try:
+                    exif_comment = piexif.helper.UserComment.load(raw_bytes)
+                except (ValueError, TypeError):
+                    exif_comment = raw_bytes.decode("utf8", errors="ignore")
+            else:
+                exif_comment = ""
 
             if exif_comment:
                 geninfo = exif_comment

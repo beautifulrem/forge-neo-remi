@@ -15,14 +15,16 @@ such a job is never run or retried as it is).
 from __future__ import annotations
 
 import json
+import math
 import secrets
 import threading
 import time
+import weakref
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from remi.files import connect, decode_cursor, encode_cursor, transaction
+from remi.files import close_db, connect, decode_cursor, encode_cursor, transaction
 from remi.jobs.texts import NOT_REPLAYABLE, SERVER_STOPPED
 
 QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED, INTERRUPTED = "queued", "running", "completed", "failed", "cancelled", "interrupted"
@@ -217,6 +219,7 @@ class JobStore:
         self._db = connect(Path(path))
         self._db.executescript(_SCHEMA)
         self._migrate()
+        self._finalizer = weakref.finalize(self, close_db, self._db)
 
     def _migrate(self) -> None:
         with self._lock:
@@ -227,7 +230,8 @@ class JobStore:
 
     def close(self) -> None:
         with self._lock:
-            self._db.close()
+            self._finalizer.detach()
+            close_db(self._db)
 
     def _fetch(self, sql: str, args: tuple | list = ()) -> list[Job]:
         with self._lock:
@@ -239,19 +243,22 @@ class JobStore:
 
         job_id = secrets.token_hex(8)
         now = time.time()
-        with self._lock:
+        with self._lock, transaction(self._db):
             cursor = self._db.execute(
                 "INSERT INTO jobs (id, tab, core, scripts, layout_hash, schema_version, priority, status, created, summary, forever, user, retry_of, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (job_id, tab, json.dumps(core), json.dumps(scripts), layout_hash, schema_version, int(priority), QUEUED, now, summary, int(forever), user, retry_of, json.dumps(meta) if meta else None),
             )
             seq = cursor.lastrowid
+            assert seq is not None
             position = self._tail_position(seq, int(priority))
             anchor = self._db.execute("SELECT position, priority FROM jobs WHERE id = ? AND status = ?", (after, QUEUED)).fetchone() if after else None
             self._db.execute("UPDATE jobs SET position = ? WHERE seq = ?", (position, seq))
             if anchor is not None:
                 self._db.execute("UPDATE jobs SET priority = ? WHERE seq = ?", (anchor[1], seq))
                 self._place(job_id, anchor[1], after, None)
-        return self.get(job_id)
+        created = self.get(job_id)
+        assert created is not None
+        return created
 
     def add_record(self, job: Job, *, imported: tuple[str, str] | None = None) -> Job:
         """Insert a job as it is (an imported one: any status, its own times
@@ -273,10 +280,14 @@ class JobStore:
                     int(job.starred), int(job.replayable), json.dumps(job.meta) if job.meta else None, job_id,
                 ),
             )
-            self._db.execute("UPDATE jobs SET position = ? WHERE seq = ?", (self._tail_position(cursor.lastrowid, int(job.priority)), cursor.lastrowid))
+            seq = cursor.lastrowid
+            assert seq is not None
+            self._db.execute("UPDATE jobs SET position = ? WHERE seq = ?", (self._tail_position(seq, int(job.priority)), seq))
             if imported is not None:
                 self._db.execute("INSERT OR REPLACE INTO imports (source, source_id, job_id) VALUES (?, ?, ?)", (*imported, job_id))
-        return self.get(job_id)
+        created = self.get(job_id)
+        assert created is not None
+        return created
 
     def _tail_position(self, seq: int, priority: int) -> float:
         """The position of a job added at the end of its priority group: its
@@ -306,7 +317,7 @@ class JobStore:
         them cancelled) is cancelled on the way, so the queue never counts
         a job it will not run."""
 
-        with self._lock:
+        with self._lock, transaction(self._db):
             self._db.execute(
                 "UPDATE jobs SET status = ?, finished = ?, error = COALESCE(error, ?) WHERE status = ? AND replayable = 0",
                 (CANCELLED, time.time(), NOT_REPLAYABLE, QUEUED),
@@ -322,7 +333,7 @@ class JobStore:
 
         if status not in FINISHED:
             raise ValueError(f"not a final status: {status}")
-        with self._lock:
+        with self._lock, transaction(self._db):
             self._db.execute(
                 "UPDATE jobs SET status = ?, finished = ?, outputs = ?, infotext = ?, error = ?, errors = ? WHERE id = ?",
                 (status, time.time(), json.dumps(outputs or []), infotext, error, json.dumps(errors) if errors else None, job_id),
@@ -343,7 +354,7 @@ class JobStore:
             return self._db.execute("DELETE FROM jobs WHERE id = ? AND status != ?", (job_id, RUNNING)).rowcount > 0
 
     def update(self, job_id: str, *, priority: int | None = None, forever: bool | None = None) -> Job | None:
-        with self._lock:
+        with self._lock, transaction(self._db):
             if priority is not None:
                 self._db.execute("UPDATE jobs SET priority = ? WHERE id = ?", (int(priority), job_id))
             if forever is not None:
@@ -378,13 +389,16 @@ class JobStore:
         earliest of them; the other queued jobs keep their positions."""
 
         ids = list(dict.fromkeys(ids))[:MAX_REORDER]
-        with self._lock:
+        with self._lock, transaction(self._db):
             rows = self._db.execute(f"SELECT id, position FROM jobs WHERE status = ? AND id IN ({','.join('?' * len(ids))})", (QUEUED, *ids)).fetchall() if ids else []
             positions = sorted(position for _id, position in rows)
             known = {job_id for job_id, _position in rows}
             ordered = [job_id for job_id in dict.fromkeys(ids) if job_id in known]
-            for job_id, position in zip(ordered, positions, strict=True):
-                self._db.execute("UPDATE jobs SET position = ? WHERE id = ?", (position, job_id))
+            if ordered:
+                self._db.executemany(
+                    "UPDATE jobs SET position = ? WHERE id = ?",
+                    [(position, job_id) for job_id, position in zip(ordered, positions, strict=True)],
+                )
 
     def move(self, job_id: str, *, after: str | None = None, before: str | None = None, priority: int | None = None) -> bool:
         """Move a queued job right after the queued job ``after`` (else right
@@ -393,7 +407,7 @@ class JobStore:
         started meanwhile); with neither, only the priority changes. False
         when ``job_id`` is not queued."""
 
-        with self._lock:
+        with self._lock, transaction(self._db):
             row = self._db.execute("SELECT priority FROM jobs WHERE id = ? AND status = ?", (job_id, QUEUED)).fetchone()
             if row is None:
                 return False
@@ -488,8 +502,9 @@ class JobStore:
             except ValueError:
                 pass
             else:
-                page += " AND (created < ? OR (created = ? AND seq < ?))"
-                page_args += [created, created, seq]
+                if math.isfinite(created) and -(2**63) <= seq < 2**63:
+                    page += " AND (created < ? OR (created = ? AND seq < ?))"
+                    page_args += [created, created, seq]
         limit = min(max(int(limit), 1), 200)
         with self._lock:
             total = self._db.execute(f"SELECT COUNT(*) FROM jobs WHERE {filters}", args).fetchone()[0]
@@ -567,14 +582,15 @@ class JobStore:
         found: set[str] = set()
 
         def walk(value: Any) -> None:
-            if isinstance(value, str):
-                found.add(value)
-            elif isinstance(value, dict):
-                for item in value.values():
-                    walk(item)
-            elif isinstance(value, list):
-                for item in value:
-                    walk(item)
+            pending = [value]
+            while pending:
+                item = pending.pop()
+                if isinstance(item, str):
+                    found.add(item)
+                elif isinstance(item, dict):
+                    pending.extend(item.values())
+                elif isinstance(item, list):
+                    pending.extend(item)
 
         for job in self._fetch(f"SELECT {_COLUMNS} FROM jobs WHERE status IN (?, ?)", (QUEUED, RUNNING)):
             walk(job.core)
@@ -592,6 +608,18 @@ class JobStore:
                 except Exception:
                     pass
         return found
+
+    def find_chain_stage_job(self, chain_id: str, stage_index: int, *, stage_started: float | None = None) -> Job | None:
+        """Return the newest job matching ``(chain_id, stage_index)`` (and ``stage_started`` when given)."""
+
+        pattern = f"%{json.dumps(chain_id)}%"
+        for job in self._fetch(f"SELECT {_COLUMNS} FROM jobs WHERE meta LIKE ? ORDER BY seq DESC", (pattern,)):
+            if job.meta.get("chain_id") != chain_id or job.meta.get("stage_index") != stage_index:
+                continue
+            if stage_started is not None and job.meta.get("stage_started") != stage_started:
+                continue
+            return job
+        return None
 
     def get_meta(self, key: str, default: str | None = None) -> str | None:
         with self._lock:

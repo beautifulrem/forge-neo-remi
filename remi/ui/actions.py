@@ -39,6 +39,8 @@ TOAST_LEVELS = ("info", "success", "warning", "error")
 class ActionTimeoutError(TimeoutError):
     """Raised when an isolated ``@ui.action`` exceeds its timeout."""
 
+    status = 504
+
 
 @dataclass(frozen=True)
 class ActionSpec:

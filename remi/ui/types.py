@@ -60,6 +60,7 @@ class NodeSchema(TypedDict, total=False):
     persist: bool
     submit: bool
     locks: str
+    locked: str
     # layout / display
     title: str
     open: bool
@@ -171,5 +172,6 @@ class TabSchema(TypedDict):
     core: OwnerSchema
     scripts: list[ScriptEntry]
     conflict_params: NotRequired[list[str]]
+    advice_params: NotRequired[list[str]]
     capabilities: NotRequired[ModelCapabilitySchema]
     advice: NotRequired[list[AdviceItemSchema]]

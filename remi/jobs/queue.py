@@ -111,31 +111,55 @@ def script_errors(sink: list[dict[str, Any]]) -> Iterator[None]:
         errors.report = original
 
 
+def submission_digest(submission: Submission) -> str:
+    """Deterministic SHA-256 digest of a :class:`Submission` payload."""
+
+    payload = {
+        "tab": submission.tab,
+        "core": submission.core,
+        "scripts": submission.scripts,
+        "priority": submission.priority,
+        "repeat": submission.repeat,
+        "forever": submission.forever,
+        "upscale_from": submission.upscale_from,
+        "meta": submission.meta,
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 class RecentSubmissions:
     """The jobs each recent keyed submission queued (``Idempotency-Key``):
-    ``(user, key)`` → its jobs, for ``ttl`` seconds and at most ``limit``
-    entries (the oldest are forgotten first). In memory: a restart forgets them."""
+    ``(user, key)`` → ``(timestamp, digest, jobs)``, for ``ttl`` seconds and at
+    most ``limit`` entries (the oldest are forgotten first). Reusing a key with
+    different parameters raises :class:`JobError` (409). In memory: a restart
+    forgets them."""
 
     def __init__(self, *, ttl: float = 600.0, limit: int = 1000, clock: Callable[[], float] = time.monotonic) -> None:
         self.ttl, self.limit, self.clock = ttl, limit, clock
-        self._answers: OrderedDict[tuple[str | None, str], tuple[float, list[Job]]] = OrderedDict()
+        self._answers: OrderedDict[tuple[str | None, str], tuple[float, str, list[Job]]] = OrderedDict()
 
     def _expire(self) -> None:
         now = self.clock()
         while self._answers:
-            key, (recorded, _jobs) = next(iter(self._answers.items()))
+            key, (recorded, _digest, _jobs) = next(iter(self._answers.items()))
             if now - recorded < self.ttl:
                 break
             del self._answers[key]
 
-    def get(self, user: str | None, key: str) -> list[Job] | None:
+    def get(self, user: str | None, key: str, *, digest: str | None = None) -> list[Job] | None:
         self._expire()
         entry = self._answers.get((user, key))
-        return entry[1] if entry is not None else None
+        if entry is None:
+            return None
+        _recorded, stored_digest, jobs = entry
+        if digest is not None and stored_digest and stored_digest != digest:
+            raise JobError(Sentence("Idempotency-Key was already used with different parameters"), status=409)
+        return jobs
 
-    def put(self, user: str | None, key: str, jobs: list[Job]) -> None:
+    def put(self, user: str | None, key: str, jobs: list[Job], *, digest: str = "") -> None:
         self._expire()
-        self._answers[(user, key)] = (self.clock(), jobs)
+        self._answers[(user, key)] = (self.clock(), digest, jobs)
         while len(self._answers) > self.limit:
             self._answers.popitem(last=False)
 
@@ -436,7 +460,7 @@ class JobQueue:
         """Until nothing runs and nothing runnable is queued (tests)."""
 
         with self._cv:
-            return self._cv.wait_for(lambda: self._claimed is None and (self._paused or self._holds or self.store.count(QUEUED) == 0), timeout)
+            return bool(self._cv.wait_for(lambda: self._claimed is None and (self._paused or self._holds or self.store.count(QUEUED) == 0), timeout))
 
     # endregion
 
@@ -472,18 +496,20 @@ class JobQueue:
         """Validate and queue (``repeat`` copies); raises
         ``remi.ui.ValidationError`` or :class:`JobError`. A submission with a
         ``key`` (``Idempotency-Key``) that ``user`` sent within the last minutes
-        queues nothing and answers the jobs the first one queued, whatever its
-        values (a double click, a retry after a lost answer). A refused
+        with the same parameters queues nothing and answers the jobs the first
+        one queued (a double click, a retry after a lost answer); different
+        parameters with the same key raise :class:`JobError` (409). A refused
         submission is not remembered."""
 
         if key is None:
             return self._submit(submission, user=user)
+        digest = submission_digest(submission)
         # its own lock, not ``_cv``: the worker claims jobs under ``_cv`` while this one validates
         with self._keyed:
-            jobs = self.recent.get(user, key)
+            jobs = self.recent.get(user, key, digest=digest)
             if jobs is None:
                 jobs = self._submit(submission, user=user)
-                self.recent.put(user, key, jobs)
+                self.recent.put(user, key, jobs, digest=digest)
             return jobs
 
     def _submit(self, submission: Submission, *, user: str | None) -> list[Job]:
@@ -634,9 +660,11 @@ class JobQueue:
         if forever and job.meta.get("chain_id"):
             # its copies would carry no chain and requeue each other on their own
             raise JobError(Sentence("a pipeline stage cannot generate forever"))
-        job = self.store.update(job_id, priority=priority, forever=forever)
+        updated = self.store.update(job_id, priority=priority, forever=forever)
+        if updated is None:
+            raise JobError(Sentence("no such job"), 404)
         self._changed()
-        return job
+        return updated
 
     def reorder(self, ids: list[str]) -> None:
         self.store.reorder(ids)

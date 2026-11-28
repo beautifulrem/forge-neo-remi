@@ -9,6 +9,8 @@ from fastapi import APIRouter, HTTPException
 from remi.server import models as m
 from remi.server.deps import ServicesDep, iso
 from remi.worker.mlx_sidecar import detect_mlx_environment
+from remi.worker.pool import InProcessWorker
+from remi.worker.subprocess_worker import SubprocessWorker
 
 router = APIRouter(prefix="/workers")
 
@@ -49,20 +51,38 @@ class MlxEnvironmentModel(m.Model):
 
 class WorkersResponse(m.Model):
     mode: WorkerMode | str
+    dispatch_active: bool = False
+    preview: bool = False
+    note: str | None = None
     workers: list[WorkerStatusModel]
     mlx: MlxEnvironmentModel
 
 
 class WorkerRestartResponse(m.Model):
     ok: bool = True
+    dispatch_active: bool = False
+    note: str | None = None
     worker: WorkerStatusModel
 
 
 @router.get("", response_model=WorkersResponse, summary="Inference worker pool & MLX sidecar status")
 def list_workers(services: ServicesDep) -> dict[str, Any]:
+    pool = services.workers
+    dispatch_active = bool(getattr(pool, "dispatch_active", False))
+    workers = pool.workers()
+    preview = (not dispatch_active) and (pool.mode != "inprocess" or any(not isinstance(w, InProcessWorker) for w in workers))
+    if dispatch_active:
+        note = None
+    elif preview:
+        note = "Preview only: queued jobs still run in-process (worker pool dispatch is inactive)."
+    else:
+        note = "Queued jobs run in-process; restarting resets worker counters without restarting the server."
     return {
-        "mode": services.workers.mode,
-        "workers": services.workers.list_statuses(iso=iso),
+        "mode": pool.mode,
+        "dispatch_active": dispatch_active,
+        "preview": preview,
+        "note": note,
+        "workers": pool.list_statuses(iso=iso),
         "mlx": detect_mlx_environment().to_dict(),
     }
 
@@ -75,10 +95,23 @@ def get_worker(worker_id: str, services: ServicesDep) -> dict[str, Any]:
     return worker.status().to_status_dict(iso=iso)
 
 
-@router.post("/{worker_id}/restart", response_model=WorkerRestartResponse, responses={404: {"model": m.Detail}}, summary="Restart a worker cleanly")
+@router.post("/{worker_id}/restart", response_model=WorkerRestartResponse, responses={404: {"model": m.Detail}, 409: {"model": m.Detail}}, summary="Restart a worker cleanly")
 def restart_worker(worker_id: str, services: ServicesDep) -> dict[str, Any]:
-    try:
-        hb = services.workers.restart_worker(worker_id)
-    except KeyError as error:
-        raise HTTPException(status_code=404, detail=f"no worker {worker_id!r}") from error
-    return {"ok": True, "worker": hb.to_status_dict(iso=iso)}
+    pool = services.workers
+    dispatch_active = bool(getattr(pool, "dispatch_active", False))
+    worker = pool.get_worker(worker_id)
+    if worker is None:
+        raise HTTPException(status_code=404, detail=f"no worker {worker_id!r}")
+    if not dispatch_active and isinstance(worker, SubprocessWorker):
+        raise HTTPException(
+            status_code=409,
+            detail="worker pool dispatch is inactive (preview mode); subprocess workers are not started",
+        )
+    hb = worker.restart()
+    note = "In-process worker: counters reset without restarting the server process." if isinstance(worker, InProcessWorker) else None
+    return {
+        "ok": True,
+        "dispatch_active": dispatch_active,
+        "note": note,
+        "worker": hb.to_status_dict(iso=iso),
+    }

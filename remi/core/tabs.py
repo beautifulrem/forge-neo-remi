@@ -44,6 +44,33 @@ def conflict_params(tab: str, layouts: Mapping[str, ScriptLayout] | None = None)
     return sorted(set(refs))
 
 
+def advice_params(tab: str, layouts: Mapping[str, ScriptLayout] | None = None) -> list[str]:
+    """``owner.param`` references whose edits affect pre-submit workflow
+    advice (``core.__advice__``), in addition to :func:`conflict_params`."""
+
+    if layouts is None:
+        runner = runner_for(tab)
+        layouts = {"core": forms.core_layout(tab, runner)}
+        if runner is not None:
+            layouts.update({script.script_id: script.layout for script in runner.scripts if script.layout is not None})
+
+    refs: list[str] = []
+    core_layout_obj = layouts.get("core")
+    if core_layout_obj is not None:
+        for param in ("prompt", "hr_prompt", "cfg_scale", "init_img", "checkpoint"):
+            if param in core_layout_obj.by_name:
+                refs.append(f"core.{param}")
+    sampler_layout = layouts.get("sampler")
+    if sampler_layout is not None and "steps" in sampler_layout.by_name:
+        refs.append("sampler.steps")
+    for owner, layout_obj in layouts.items():
+        if owner in ("imagestitch_integrated", "image_stitch", "imagestitch") or ("references" in layout_obj.by_name and "enable" in layout_obj.by_name):
+            for param in ("enable", "references"):
+                if param in layout_obj.by_name:
+                    refs.append(f"{owner}.{param}")
+    return sorted(set(refs))
+
+
 def tab_schema(tab: str, ctx: Context | None = None) -> TabSchema:
     """``GET /api/v2/schema/{tab}`` (schema-format.md §4)."""
 
@@ -56,20 +83,21 @@ def tab_schema(tab: str, ctx: Context | None = None) -> TabSchema:
     layout = forms.core_layout(tab, runner)
     capabilities = active_capability_summary()
     if runner is None:
-        script_entries = extras.scripts_schema(scripts.scripts_postproc, ctx)
+        script_entries = jsonable(extras.scripts_schema(scripts.scripts_postproc, ctx))
     else:
-        script_entries = runner.scripts_schema(ctx, capability_summary=capabilities)
+        script_entries = jsonable(runner.scripts_schema(ctx, capability_summary=capabilities))
     core_defaults = jsonable(layout.defaults(ctx))
     schema: TabSchema = {
         "version": SCHEMA_VERSION,
         "tab": tab,
-        "core": {"owner": "core", "layout": layout.schema(ctx), "defaults": core_defaults, "required": forms.required_inputs(tab)},
+        "core": {"owner": "core", "layout": jsonable(layout.schema(ctx)), "defaults": core_defaults, "required": forms.required_inputs(tab)},
         "scripts": script_entries,
         "capabilities": capabilities,
     }
     if runner is not None:
         layouts = {"core": layout, **{script.script_id: script.layout for script in runner.scripts if script.layout is not None}}
         schema["conflict_params"] = conflict_params(tab, layouts)
+        schema["advice_params"] = advice_params(tab, layouts)
         initial_values = {"core": core_defaults, **{entry["id"]: entry.get("defaults") or {} for entry in script_entries}}
         schema["advice"] = derive_advice(tab, initial_values, preset=capabilities.get("preset"))
     return schema

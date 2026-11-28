@@ -43,11 +43,13 @@ import types
 import uuid
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 from remi import ui
 from remi.ui.actions import ActionSpec, actions_of, check_patch, message
 from remi.ui.errors import SchemaError
+
+_PageT = TypeVar("_PageT", bound="Page")
 
 log = logging.getLogger(__name__)
 
@@ -305,6 +307,8 @@ class Page:
         coerced = layout.coerce(values, resolve, unknown="ignore")
         if not uploads:
             return coerced
+        from PIL import Image
+
         result = {}
         errors = []
         for node in (*layout.inputs, *layout.tools):
@@ -313,6 +317,10 @@ class Page:
             except ui.ParamError as error:
                 error.param, error.owner = node.name, self.owner
                 errors.append(error)
+            except Image.DecompressionBombError:
+                errors.append(ui.ParamError("the image has too many pixels to read", param=node.name, owner=self.owner))
+            except (OSError, ValueError):
+                errors.append(ui.ParamError("cannot read the image", param=node.name, owner=self.owner))
         if errors:
             raise ui.ValidationError(errors)
         return result
@@ -488,7 +496,7 @@ _pages: dict[str, Page] = {}
 _registry_lock = threading.Lock()
 
 
-def register(page: Page) -> Page:
+def register(page: _PageT) -> _PageT:
     """Add ``page`` (replacing one with the same id). It is dropped again
     when the scripts are unloaded (a "Reload UI" loads them anew)."""
 

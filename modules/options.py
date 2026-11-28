@@ -9,6 +9,7 @@ import shlex
 import shutil
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -206,7 +207,7 @@ def options_section(section_identifier, options_dict):
     return options_dict
 
 
-options_builtin_fields = {"data_labels", "data", "restricted_opts", "typemap"}
+options_builtin_fields = {"data_labels", "data", "restricted_opts", "typemap", "_held_for_run", "_lock"}
 _NOT_STORED = object()
 
 
@@ -317,6 +318,7 @@ class Options:
     typemap = {int: float}
 
     def __init__(self, data_labels: dict[str, OptionInfo], restricted_opts):
+        self._lock = threading.RLock()
         self.data_labels = data_labels
         self.data = {k: v.default for k, v in self.data_labels.items() if not v.do_not_save}
         self.restricted_opts = restricted_opts
@@ -358,7 +360,8 @@ class Options:
                 if cmd_opts.hide_ui_dir_config and key in self.restricted_opts:
                     raise RuntimeError(f"not possible to set '{key}' because it is restricted with --hide_ui_dir_config")
 
-                self.data[key] = value
+                with self._lock:
+                    self.data[key] = value
                 return
 
         return super(Options, self).__setattr__(key, value)
@@ -418,16 +421,19 @@ class Options:
         """Remi: sets ``key`` to ``value`` for this run only, past the frozen-settings checks (a
         frozen setting the WebUI has to fill in to start). Saves keep the stored value while
         ``value`` is still the live one."""
-        self._held_for_run[key] = (value, self.data.get(key, _NOT_STORED))
-        self.data[key] = value
+        with self._lock:
+            self._held_for_run[key] = (value, self.data.get(key, _NOT_STORED))
+            self.data[key] = value
 
     def save(self, filename):
         assert not cmd_opts.freeze_settings, "saving settings is disabled"
         if _under_test() and _is_owners_settings(filename):  # Remi: see _REPOSITORY_SETTINGS
             raise RuntimeError(f"A test cannot save settings to {filename}, the repository's settings file or the one COMMANDLINE_ARGS named: save to a file of its own (remi.testing.webui_state does)")
 
-        data = dict(self.data)
-        for key, (value, stored) in self._held_for_run.items():  # Remi: see hold_for_run
+        with self._lock:
+            data = dict(self.data)
+            held = dict(self._held_for_run)
+        for key, (value, stored) in held.items():  # Remi: see hold_for_run
             if key in data and data[key] == value:
                 if stored is _NOT_STORED:
                     del data[key]
@@ -458,12 +464,23 @@ class Options:
     def load(self, filename):
         try:
             with open(filename, "r", encoding="utf8") as file:
-                self.data = json.load(file)
+                loaded = json.load(file)
         except FileNotFoundError:
-            self.data = {}
+            loaded = {}
+        except (ValueError, OSError) as e:
+            errors.display(e, f"loading settings from {filename}")
+            loaded = {}
+
+        if not isinstance(loaded, dict):
+            print(f"Warning: invalid settings file format in {filename} (expected JSON object, got {type(loaded).__name__})", file=sys.stderr)
+            loaded = {}
+
+        with self._lock:
+            self.data = loaded
+            items = list(self.data.items())
 
         bad_settings = 0
-        for k, v in self.data.items():
+        for k, v in items:
             info = self.data_labels.get(k, None)
             if info is not None and not self.same_type(info.default, v):
                 print(f"Warning: bad setting value: {k}: {v} ({type(v).__name__}; expected {type(info.default).__name__})", file=sys.stderr)
@@ -480,9 +497,10 @@ class Options:
             func()
 
     def add_option(self, key, info):
-        self.data_labels[key] = info
-        if key not in self.data and not info.do_not_save:
-            self.data[key] = info.default
+        with self._lock:
+            self.data_labels[key] = info
+            if key not in self.data and not info.do_not_save:
+                self.data[key] = info.default
 
     def reorder(self):
         """Reorder settings so that:
@@ -535,8 +553,17 @@ class Options:
             return None
 
         expected_type = type(default_value)
-        if expected_type == bool and value == "False":
-            value = False
+        if expected_type == bool:
+            if isinstance(value, str):
+                low = value.strip().lower()
+                if low in ("false", "0", "no", "off", ""):
+                    value = False
+                elif low in ("true", "1", "yes", "on"):
+                    value = True
+                else:
+                    value = bool(value)
+            else:
+                value = bool(value)
         else:
             value = expected_type(value)
 

@@ -41,20 +41,26 @@ def run_job(job: Job, ctx: JobContext) -> JobResult:
     extras); raises ``remi.ui.ValidationError`` for bad values."""
 
     if job.tab == "txt2img":
-        ctx, said = collect_comments(ctx)
-        if source := job.meta.get("upscale_from"):
-            from modules.txt2img import run_txt2img_upscale
+        inner, said = collect_comments(ctx)
+        try:
+            if source := job.meta.get("upscale_from"):
+                from modules.txt2img import run_txt2img_upscale
 
-            image = upscale_source(ctx, source)
-            return _from_processed(run_txt2img_upscale(job.core, job.scripts, ctx, image, _source_infotext(image)), said)
-        from modules.txt2img import run_txt2img
+                image = upscale_source(inner, source)
+                return _from_processed(run_txt2img_upscale(job.core, job.scripts, inner, image, _source_infotext(image)), said)
+            from modules.txt2img import run_txt2img
 
-        return _from_processed(run_txt2img(job.core, job.scripts, ctx), said)
+            return _from_processed(run_txt2img(job.core, job.scripts, inner), said)
+        finally:
+            ctx.interrupted = ctx.interrupted or inner.interrupted
     if job.tab == "img2img":
         from modules.img2img import run_img2img
 
-        ctx, said = collect_comments(ctx)
-        return _from_processed(run_img2img(job.core, job.scripts, ctx), said)
+        inner, said = collect_comments(ctx)
+        try:
+            return _from_processed(run_img2img(job.core, job.scripts, inner), said)
+        finally:
+            ctx.interrupted = ctx.interrupted or inner.interrupted
     if job.tab == "extras":
         from modules.postprocessing import run_extras_named
 

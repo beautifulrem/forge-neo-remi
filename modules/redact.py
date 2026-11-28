@@ -30,7 +30,11 @@ def _known_flags() -> tuple[str, ...]:
         return (*SECRET_FLAGS, *_OTHER_FLAGS)
     return tuple(option for action in parser._actions for option in action.option_strings if option.startswith("--"))
 
-SECRET_KEY_RE = re.compile(r"(?:^|[_.-])(api_?key|key|token|secret|password|passwd|credentials?|auth)(?:$|[_.-])", re.I)
+SECRET_KEY_RE = re.compile(
+    r"(?:^|[_.-]|(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z]))"
+    r"(?i:api_?keys?|keys?|tokens?|secrets?|passwords?|passwd|credentials?|auth)"
+    r"(?:$|[_.-]|(?=[A-Z0-9]))"
+)
 # up to the last "@" before the path: a password may hold an unencoded "@", "#" or "?" (an "@" in a
 # query before any "/" is hidden too, the safe side)
 _URL_CREDENTIALS_RE = re.compile(r"(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*://)[^\s/]+@")
@@ -87,6 +91,18 @@ def command_line(text: str) -> str:
         return HIDDEN if any(flag in text for flag in SECRET_FLAGS) else url(text)
 
 
+def _value(value: Any) -> Any:
+    if isinstance(value, str):
+        return url(value)
+    if isinstance(value, Mapping):
+        return mapping(value)
+    if isinstance(value, list):
+        return [_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_value(item) for item in value)
+    return value
+
+
 def mapping(data: Mapping[str, Any]) -> dict[str, Any]:
     """Settings with secret-looking keys hidden (non-empty strings only) and
     URL credentials removed."""
@@ -95,8 +111,6 @@ def mapping(data: Mapping[str, Any]) -> dict[str, Any]:
     for key, value in data.items():
         if isinstance(value, str) and value and SECRET_KEY_RE.search(str(key)):
             result[key] = HIDDEN
-        elif isinstance(value, str):
-            result[key] = url(value)
         else:
-            result[key] = value
+            result[key] = _value(value)
     return result

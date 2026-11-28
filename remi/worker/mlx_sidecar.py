@@ -306,6 +306,12 @@ class MlxSidecarWorker:
                     status="failed",
                     error=self._env.reason or "MLX sidecar is unavailable on this machine",
                 )
+            if self._state == "stopped":
+                return WorkerResult(
+                    job_id=envelope.job_id,
+                    status="failed",
+                    error="MLX sidecar is stopped",
+                )
             cancel_ev = threading.Event()
             self._cancel_event = cancel_ev
             self._current_job_id = envelope.job_id
@@ -316,10 +322,6 @@ class MlxSidecarWorker:
                 out_path = Path(tmpdir) / f"{envelope.job_id}.png"
                 info = self._runner(envelope, out_path, on_progress, cancel_ev) or {}
                 if cancel_ev.is_set():
-                    with self._lock:
-                        self._state = "idle"
-                        self._current_job_id = None
-                        self._cancel_event = None
                     return WorkerResult(job_id=envelope.job_id, status="cancelled", error="Cancelled")
                 if not out_path.is_file():
                     raise RuntimeError("MLX sidecar completed without writing output image")
@@ -342,9 +344,6 @@ class MlxSidecarWorker:
                     self._jobs_completed += 1
                     self._loaded_model = envelope.model_checkpoint or info.get("model") or self._loaded_model
                     self._last_heartbeat = time.time()
-                    self._state = "idle"
-                    self._current_job_id = None
-                    self._cancel_event = None
                 return WorkerResult(
                     job_id=envelope.job_id,
                     status="completed",
@@ -353,18 +352,19 @@ class MlxSidecarWorker:
                     infotext=infotext,
                 )
         except InterruptedError:
-            with self._lock:
-                self._state = "idle"
-                self._current_job_id = None
-                self._cancel_event = None
             return WorkerResult(job_id=envelope.job_id, status="cancelled", error="Cancelled")
         except Exception as error:
             with self._lock:
                 self._jobs_failed += 1
-                self._state = "idle"
-                self._current_job_id = None
-                self._cancel_event = None
             return WorkerResult(job_id=envelope.job_id, status="failed", error=f"{type(error).__name__}: {error}")
+        finally:
+            with self._lock:
+                if self._current_job_id == envelope.job_id:
+                    self._current_job_id = None
+                    if self._state == "busy":
+                        self._state = "idle"
+                if self._cancel_event is cancel_ev:
+                    self._cancel_event = None
 
 
 __all__ = [

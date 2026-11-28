@@ -28,10 +28,11 @@ class Sentence(str):
 
     def __new__(cls, template: str, /, **params: Any) -> Sentence:
         values: dict[str, str | list[str]] = {
-            name: [str(item) for item in value] if isinstance(value, (list, tuple)) else value if isinstance(value, Sentence) else str(value) for name, value in params.items()
+            name: [item if isinstance(item, Sentence) else str(item) for item in value] if isinstance(value, (list, tuple)) else value if isinstance(value, Sentence) else str(value)
+            for name, value in params.items()
         }
         english = {name: ", ".join(value) if isinstance(value, list) else value for name, value in values.items()}
-        sentence = super().__new__(cls, _PLACEHOLDER.sub(lambda match: english[match.group(1)], template))
+        sentence = super().__new__(cls, _PLACEHOLDER.sub(lambda match: english.get(match.group(1), match.group(0)), template))
         sentence.template = template
         sentence.params = values
         return sentence
@@ -68,7 +69,11 @@ def _json_params(params: dict[str, str | list[str]], prefix: str = "") -> dict[s
     result: dict[str, str | list[str]] = {}
     for name, value in params.items():
         if isinstance(value, list):
-            result[prefix + name] = list(value)
+            result[prefix + name] = [str(item) for item in value]
+            for index, item in enumerate(value):
+                if isinstance(item, Sentence):
+                    result[f"{prefix}{name}.{index}.template"] = item.template
+                    result.update(_json_params(item.params, f"{prefix}{name}.{index}."))
         elif isinstance(value, Sentence):
             result[prefix + name] = str(value)
             result[f"{prefix}{name}.template"] = value.template

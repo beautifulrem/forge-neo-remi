@@ -12,12 +12,13 @@ import sqlite3
 import threading
 import time
 import uuid
+import weakref
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from remi.files import decode_offset, encode_cursor, readonly_uri, transaction
+from remi.files import close_db, connect, decode_offset, encode_cursor, readonly_uri, transaction
 from remi.ui.errors import ParamError, Refused, ValidationError
 from remi.ui.sentence import Sentence
 
@@ -133,21 +134,21 @@ def _collection_name(name: str | None) -> str:
 class PromptToolsStore:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
-        self._db = sqlite3.connect(self.path, check_same_thread=False, isolation_level=None, timeout=30)
+        self._db = connect(self.path)
         # the searches lower-case the terms in Python; SQLite's lower() folds ASCII letters only
         self._db.create_function("py_lower", 1, lambda text: text.lower() if isinstance(text, str) else text, deterministic=True)
         self._db.row_factory = sqlite3.Row
         with self._lock:
-            self._db.execute("PRAGMA journal_mode=WAL")
             self._db.execute("PRAGMA foreign_keys=ON")
             self._db.executescript(_SCHEMA)
             self._db.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('schema', ?)", (str(SCHEMA_VERSION),))
+        self._finalizer = weakref.finalize(self, close_db, self._db)
 
     def close(self) -> None:
         with self._lock:
-            self._db.close()
+            self._finalizer.detach()
+            close_db(self._db)
 
     @contextmanager
     def _tx(self) -> Iterator[sqlite3.Connection]:
@@ -294,10 +295,14 @@ class PromptToolsStore:
         if field in ("prompt", "negative"):
             column = "prompt" if field == "prompt" else "negative"
             base = f"SELECT id, tab, prompt, negative, name, created, MAX(last_used) AS last_used, SUM(uses) AS uses FROM history {clause} GROUP BY {column}"
-            total = self._one(f"SELECT COUNT(*) AS n FROM ({base})", params)["n"]
+            count_row = self._one(f"SELECT COUNT(*) AS n FROM ({base})", params)
+            assert count_row is not None
+            total = count_row["n"]
             rows = self._all(f"{base} ORDER BY last_used DESC LIMIT ? OFFSET ?", (*params, limit, offset))
         else:
-            total = self._one(f"SELECT COUNT(*) AS n FROM history {clause}", params)["n"]
+            count_row = self._one(f"SELECT COUNT(*) AS n FROM history {clause}", params)
+            assert count_row is not None
+            total = count_row["n"]
             rows = self._all(f"SELECT * FROM history {clause} ORDER BY last_used DESC LIMIT ? OFFSET ?", (*params, limit, offset))
         next_cursor = encode_cursor(offset + limit) if offset + limit < total else None
         return [self._history_item(row) for row in rows], next_cursor, int(total)
@@ -326,7 +331,9 @@ class PromptToolsStore:
             if scope is None:
                 raise StoreError(Sentence("no such history entry"), 404)
             db.execute(f"UPDATE history SET name = ? WHERE {scope[0]}", (_clean_name(name), *scope[1]))
-        return self.history_entry(entry_id)  # type: ignore[return-value]
+        entry = self.history_entry(entry_id)
+        assert entry is not None
+        return entry
 
     def delete_history(self, entry_id: str, *, field: str | None = None) -> int:
         """Removes an entry (``field``: its whole group); the number removed."""
@@ -349,7 +356,9 @@ class PromptToolsStore:
         rows = self._all(
             "SELECT c.id, c.name, c.created, COUNT(f.id) AS count FROM collections c LEFT JOIN favorites f ON f.collection_id = c.id GROUP BY c.id ORDER BY lower(c.name)"
         )
-        unsorted = self._one("SELECT COUNT(*) AS n FROM favorites WHERE collection_id IS NULL")["n"]
+        unsorted_row = self._one("SELECT COUNT(*) AS n FROM favorites WHERE collection_id IS NULL")
+        assert unsorted_row is not None
+        unsorted = unsorted_row["n"]
         return [{"id": None, "name": "", "created": 0.0, "count": int(unsorted)}, *({"id": row["id"], "name": row["name"], "created": row["created"], "count": row["count"]} for row in rows)]
 
     def create_collection(self, name: str) -> dict[str, Any]:
@@ -420,7 +429,9 @@ class PromptToolsStore:
         clause, params = self._favorite_query(collection_id=collection_id, all_collections=all_collections, kinds=kinds, query=query)
         offset = decode_offset(cursor)
         limit = min(max(int(limit), 1), 500)
-        total = int(self._one(f"SELECT COUNT(*) AS n FROM favorites {clause}", params)["n"])
+        count_row = self._one(f"SELECT COUNT(*) AS n FROM favorites {clause}", params)
+        assert count_row is not None
+        total = int(count_row["n"])
         rows = self._all(f"SELECT * FROM favorites {clause} ORDER BY position, created LIMIT ? OFFSET ?", (*params, limit, offset))
         next_cursor = encode_cursor(offset + limit) if offset + limit < total else None
         return [self._favorite_item(row) for row in rows], next_cursor, total
@@ -474,7 +485,9 @@ class PromptToolsStore:
             raise ValidationError([ParamError(Sentence("kind must be one of {{kinds}}", kinds=", ".join(FAVORITE_KINDS)), param="kind")])
         with self._tx() as db:
             favorite_id = self._insert_favorite(db, text, kind, _clean_name(name), collection_id)
-        return self.favorite(favorite_id)  # type: ignore[return-value]
+        fav = self.favorite(favorite_id)
+        assert fav is not None
+        return fav
 
     def update_favorite(self, favorite_id: str, changes: Mapping[str, Any]) -> dict[str, Any]:
         """``name``, ``text``, ``collection_id`` (None: unsorted) and
@@ -512,7 +525,9 @@ class PromptToolsStore:
                 params.append(position)
             if sets:
                 db.execute(f"UPDATE favorites SET {', '.join(sets)} WHERE id = ?", (*params, favorite_id))
-        return self.favorite(favorite_id)  # type: ignore[return-value]
+        fav = self.favorite(favorite_id)
+        assert fav is not None
+        return fav
 
     @staticmethod
     def _position_before(db: sqlite3.Connection, collection_id: str | None, before: str, favorite_id: str) -> float:
@@ -619,7 +634,7 @@ class PromptToolsStore:
         if self.meta("imported:tag_frequency") or not os.path.isfile(path):
             return 0
         try:
-            source = sqlite3.connect(readonly_uri(path), uri=True)
+            source = sqlite3.connect(readonly_uri(path), uri=True, timeout=30)
             try:
                 rows = source.execute("SELECT name, type, count_pos, count_neg, last_used FROM tag_frequency").fetchall()
             finally:

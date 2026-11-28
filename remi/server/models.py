@@ -7,13 +7,30 @@ documented in schema-format.md and typed loosely here (``dict[str, Any]``).
 
 from __future__ import annotations
 
+import math
 from typing import Any, Generic, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 FormTab = Literal["txt2img", "img2img", "extras"]
 JobStatus = Literal["queued", "running", "completed", "failed", "cancelled", "interrupted"]
 T = TypeVar("T")
+
+
+def reject_non_finite(value: Any, path: str = "body") -> None:
+    """Raise ``ValueError`` if ``value`` contains NaN or Infinity anywhere (iterative)."""
+
+    pending: list[tuple[Any, str]] = [(value, path)]
+    while pending:
+        item, cur = pending.pop()
+        if isinstance(item, float):
+            if not math.isfinite(item):
+                raise ValueError(f"{cur} must not contain NaN or Infinity")
+        elif isinstance(item, dict):
+            pending.extend((child, f"{cur}.{key}") for key, child in reversed(list(item.items())))
+        elif isinstance(item, (list, tuple)):
+            n = len(item)
+            pending.extend((child, f"{cur}[{n - 1 - index}]") for index, child in enumerate(reversed(item)))
 
 
 class Model(BaseModel):
@@ -196,6 +213,16 @@ class TokenCount(Model):
 # region Schema, actions, presets
 
 
+class AdviceItem(Model):
+    code: str
+    severity: Literal["info", "warning", "error"]
+    message: str
+    patch: dict[str, Any] | None = None
+    action_label: str | None = None
+    template: str | None = None
+    params: dict[str, str | list[str]] | None = None
+
+
 class TabSchema(Model):
     """``GET /schema/{tab}`` (schema-format.md §4)."""
 
@@ -205,7 +232,9 @@ class TabSchema(Model):
     core: dict[str, Any]
     scripts: list[dict[str, Any]]
     conflict_params: list[str] | None = None
+    advice_params: list[str] | None = None
     capabilities: dict[str, Any] | None = None
+    advice: list[AdviceItem] | None = None
 
 
 class PageSchema(Model):
@@ -233,6 +262,17 @@ class ActionRequest(Model):
     core: dict[str, Any] | None = None
     scripts: dict[str, dict[str, Any]] | None = None
 
+    @model_validator(mode="after")
+    def _check_finite(self) -> ActionRequest:
+        reject_non_finite(self.values, "values")
+        if self.core is not None:
+            reject_non_finite(self.core, "core")
+        if self.scripts is not None:
+            reject_non_finite(self.scripts, "scripts")
+        if self.model_extra:
+            reject_non_finite(self.model_extra, "body")
+        return self
+
 
 ActionPatch = dict[str, Any]
 
@@ -242,6 +282,12 @@ class RulesRequest(Model):
     core: dict[str, Any] = {}
     scripts: dict[str, dict[str, Any]] = {}
     selected: str | None = None
+
+    @model_validator(mode="after")
+    def _check_finite(self) -> RulesRequest:
+        reject_non_finite(self.core, "core")
+        reject_non_finite(self.scripts, "scripts")
+        return self
 
 
 class PresetList(Model):
@@ -263,6 +309,12 @@ class JobRequest(Model):
     repeat: int = Field(1, ge=1, le=100)
     forever: bool = False
     upscale_from: str | None = Field(None, description="txt2img only: Hires. fix this image (an output or upload id) instead of generating the first pass (A1111's ✨ button). Hires. fix is turned on and the size is the image's; the settings txt2img_upscale_single_batch and txt2img_upscale_same_seed apply")
+
+    @model_validator(mode="after")
+    def _check_finite(self) -> JobRequest:
+        reject_non_finite(self.core, "core")
+        reject_non_finite(self.scripts, "scripts")
+        return self
 
 
 class JobCreated(Model):
@@ -411,6 +463,12 @@ class ManifestErrorDetail(Model):
     params: dict[str, str | list[str]] | None = None
 
 
+class ExtensionErrorEntry(Model):
+    kind: str
+    message: str
+    timestamp: str | None = None
+
+
 class ExtensionDiagnosticItem(Model):
     name: str
     enabled: bool
@@ -423,6 +481,7 @@ class ExtensionDiagnosticItem(Model):
     action_timeouts: int = 0
     last_error: str | None = None
     last_error_at: str | None = None
+    recent_errors: list[ExtensionErrorEntry] = []
     manifest_status: Literal["valid", "missing", "invalid", "incompatible"]
     manifest: ExtensionManifestModel | None = None
     manifest_errors: list[str] = Field(default=[], description="why the manifest is invalid or incompatible, in English")

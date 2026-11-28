@@ -1359,6 +1359,8 @@ class NetworkIndex:
         entry = self.entry(kind, name)
         require_file(entry)
         changes = nm.normalize_user_metadata(values)
+        if nested_deeper(changes, MAX_NESTING):
+            raise ParamError(Sentence("user metadata is nested deeper than {{limit}} levels", limit=MAX_NESTING), param="user_metadata")
         # The limit is on what the client sends: a larger sidecar another tool wrote stays editable
         if len(json.dumps(changes, indent=4, ensure_ascii=False).encode()) > USER_METADATA_LIMIT:
             raise ParamError("user metadata is too large", param="user_metadata")
@@ -1370,6 +1372,8 @@ class NetworkIndex:
                     data.pop(key, None)
                 else:
                     data[key] = value
+            if nested_deeper(data, MAX_NESTING):
+                raise ParamError(Sentence("user metadata is nested deeper than {{limit}} levels", limit=MAX_NESTING), param="user_metadata")
             write_user_metadata(entry, data)
         self._forget(entry)
         return self.meta(kind, name)

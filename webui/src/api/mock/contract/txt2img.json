@@ -1273,5 +1273,11 @@
   "sampler.sampler_name",
   "sampler.scheduler"
  ],
+ "advice_params": [
+  "core.cfg_scale",
+  "core.hr_prompt",
+  "core.prompt",
+  "sampler.steps"
+ ],
  "advice": []
 }

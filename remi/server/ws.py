@@ -36,16 +36,18 @@ log = logging.getLogger(__name__)
 
 SERVER_FEATURES = ("events.v1", "preview.binary", "preview.jpeg", "preview.webp", "jobs.v1")
 MAX_EVENTS = 256
+SEND_TIMEOUT = 10.0
 
 
 Snapshot = Callable[[], list[dict[str, Any]]]
 
 
 class Client:
-    def __init__(self, websocket: WebSocket, max_events: int = MAX_EVENTS, snapshot: Snapshot | None = None, session: str | None = None) -> None:
+    def __init__(self, websocket: WebSocket, max_events: int = MAX_EVENTS, snapshot: Snapshot | None = None, session: str | None = None, send_timeout: float = SEND_TIMEOUT) -> None:
         self.websocket = websocket
         self.session = session
         """the session cookie of the handshake: logging that session out closes the socket"""
+        self.send_timeout = float(send_timeout)
         self.close_code: int | None = None
         """set to close the socket from its own send loop (see :meth:`Hub.disconnect`)"""
         self.events: deque[dict[str, Any]] = deque(maxlen=max_events)
@@ -59,6 +61,13 @@ class Client:
         """events lost since the last resync"""
 
     def push_event(self, event: dict[str, Any]) -> None:
+        if event.get("type") == "job.progress":
+            job_id = event.get("job_id")
+            for idx in range(len(self.events) - 1, -1, -1):
+                existing = self.events[idx]
+                if existing.get("type") == "job.progress" and existing.get("job_id") == job_id:
+                    del self.events[idx]
+                    break
         if len(self.events) == self.events.maxlen:
             self.dropped += 1
         self.events.append(event)
@@ -68,6 +77,11 @@ class Client:
         if self.accepts(frame):
             self.preview = frame
             self.wake.set()
+
+    def accepts_previews(self) -> bool:
+        if self.features is None:
+            return True
+        return "preview.binary" in self.features and any(f"preview.{name}" in self.features for name in FORMAT_NAMES.values())
 
     def accepts(self, frame: PreviewFrame) -> bool:
         if self.features is None:
@@ -82,21 +96,27 @@ class Client:
                 await self.wake.wait()
                 self.wake.clear()
                 if self.close_code is not None:
-                    await self.websocket.close(code=self.close_code)
+                    await asyncio.wait_for(self.websocket.close(code=self.close_code), timeout=min(self.send_timeout, 2.0))
                     return
                 if self.dropped:
                     await self._resync()
                 while self.events:
+                    if self.close_code is not None:
+                        await asyncio.wait_for(self.websocket.close(code=self.close_code), timeout=min(self.send_timeout, 2.0))
+                        return
                     await self._send(self.events.popleft())
                 frame, self.preview = self.preview, None
                 if frame is not None:
-                    await self.websocket.send_bytes(frame.pack())
+                    if self.close_code is not None:
+                        await asyncio.wait_for(self.websocket.close(code=self.close_code), timeout=min(self.send_timeout, 2.0))
+                        return
+                    await asyncio.wait_for(self.websocket.send_bytes(frame.pack()), timeout=self.send_timeout)
         except asyncio.CancelledError:
             raise
         except Exception as error:
             log.debug("websocket send failed: %s", error)
             with contextlib.suppress(Exception):
-                await self.websocket.close(code=1011)
+                await asyncio.wait_for(self.websocket.close(code=1011), timeout=min(self.send_timeout, 2.0))
 
     async def _send(self, event: dict[str, Any]) -> None:
         try:
@@ -108,7 +128,7 @@ class Client:
             # An unpaired surrogate (a job's error naming a file that is not UTF-8, an extension's
             # progress text): the frame is UTF-8, so it goes as a JSON escape, as the API writes it
             text = json.dumps(event, ensure_ascii=True, allow_nan=False, default=str)
-        await self.websocket.send_text(text)
+        await asyncio.wait_for(self.websocket.send_text(text), timeout=self.send_timeout)
 
     async def _resync(self) -> None:
         dropped, self.dropped = self.dropped, 0
@@ -126,10 +146,12 @@ class Client:
 class Hub:
     """Subscribes to the bus while its app runs (see ``create_app``)."""
 
-    def __init__(self, *, version: str = "", snapshot: Callable[[], list[dict[str, Any]]] | None = None) -> None:
+    def __init__(self, *, version: str = "", snapshot: Callable[[], list[dict[str, Any]]] | None = None, send_timeout: float = SEND_TIMEOUT) -> None:
         self.version = version
         self.snapshot = snapshot
+        self.send_timeout = float(send_timeout)
         self.clients: set[Client] = set()
+        self._pending: set[Client] = set()
         self.loop: asyncio.AbstractEventLoop | None = None
 
     def bind(self, loop: asyncio.AbstractEventLoop) -> None:
@@ -159,7 +181,7 @@ class Hub:
         self._call(self._disconnect, session)
 
     def _disconnect(self, session: str) -> None:
-        for client in self.clients:
+        for client in (*self.clients, *self._pending):
             if client.session == session:
                 client.close_code = 1008
                 client.wake.set()
@@ -175,32 +197,57 @@ class Hub:
 
     # Connections
 
+    @staticmethod
+    def _session_revoked(websocket: WebSocket) -> bool:
+        app = getattr(websocket, "app", None)
+        state = getattr(app, "state", None) if app is not None else None
+        auth = getattr(state, "auth", None) if state is not None else None
+        if auth is not None and getattr(auth, "required", False):
+            return auth.user_for(websocket, count_failures=False) is None
+        return False
+
     async def serve(self, websocket: WebSocket) -> None:
-        await websocket.accept()
         if self.loop is None:
             self.loop = asyncio.get_running_loop()
         from remi.server.auth import COOKIE_NAME
 
-        client = Client(websocket, snapshot=self.snapshot, session=websocket.cookies.get(COOKIE_NAME))
-        client.push_event({"type": "hello", "features": list(SERVER_FEATURES), "version": self.version})
+        client = Client(
+            websocket,
+            snapshot=self.snapshot,
+            session=websocket.cookies.get(COOKIE_NAME),
+            send_timeout=self.send_timeout,
+        )
+        # Track the handshake before accept() so a concurrent logout/disconnect()
+        # during accept() marks client.close_code instead of missing it.
+        self._pending.add(client)
         try:
-            for event in self.snapshot() if self.snapshot else []:
-                client.push_event(event)
-        except Exception:
-            log.exception("websocket snapshot")
-        self.clients.add(client)
-        sender = asyncio.create_task(client.send_loop())
-        receiver = asyncio.create_task(self._receive(client))
-        try:
-            # until the client leaves or a send fails
-            await asyncio.wait({sender, receiver}, return_when=asyncio.FIRST_COMPLETED)
+            await websocket.accept()
+            if client.close_code is not None or self._session_revoked(websocket):
+                with contextlib.suppress(Exception):
+                    await asyncio.wait_for(websocket.close(code=client.close_code or 1008), timeout=min(self.send_timeout, 2.0))
+                return
+            client.push_event({"type": "hello", "features": list(SERVER_FEATURES), "version": self.version})
+            try:
+                for event in self.snapshot() if self.snapshot else []:
+                    client.push_event(event)
+            except Exception:
+                log.exception("websocket snapshot")
+            self._pending.discard(client)
+            self.clients.add(client)
+            sender = asyncio.create_task(client.send_loop())
+            receiver = asyncio.create_task(self._receive(client))
+            try:
+                # until the client leaves or a send fails
+                await asyncio.wait({sender, receiver}, return_when=asyncio.FIRST_COMPLETED)
+            finally:
+                for task in (sender, receiver):
+                    task.cancel()
+                for task in (sender, receiver):
+                    with contextlib.suppress(asyncio.CancelledError, WebSocketDisconnect, Exception):
+                        await task
         finally:
+            self._pending.discard(client)
             self.clients.discard(client)
-            for task in (sender, receiver):
-                task.cancel()
-            for task in (sender, receiver):
-                with contextlib.suppress(asyncio.CancelledError, WebSocketDisconnect, Exception):
-                    await task
 
     async def _receive(self, client: Client) -> None:
         while True:
@@ -229,12 +276,13 @@ class Hub:
                 client.push_event({"type": "pong"})
 
     def wants_frames(self) -> bool:
-        """Whether a client's page is shown (any thread: the tuple copies the set in one step)."""
+        """Whether a visible client accepts binary previews (any thread: the tuple copies the set in one step)."""
 
-        return any(client.visible for client in tuple(self.clients))
+        return any(client.visible and client.accepts_previews() for client in tuple(self.clients))
 
     async def close_all(self) -> None:
-        for client in list(self.clients):
+        for client in [*self.clients, *self._pending]:
             with contextlib.suppress(Exception):
-                await client.websocket.close(code=1001)
+                await asyncio.wait_for(client.websocket.close(code=1001), timeout=min(self.send_timeout, 2.0))
         self.clients.clear()
+        self._pending.clear()

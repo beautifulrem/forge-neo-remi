@@ -15,12 +15,14 @@ import contextlib
 import dataclasses
 import hashlib
 import logging
+import math
 import os
 import re
 import secrets
 import sqlite3
 import threading
 import time
+import weakref
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -219,6 +221,22 @@ def connect(path: Path) -> sqlite3.Connection:
     return db
 
 
+def close_db(db: sqlite3.Connection) -> None:
+    """Checkpoint the WAL cleanly (best-effort) and close ``db``."""
+
+    try:
+        if db.in_transaction:
+            with contextlib.suppress(sqlite3.Error):
+                db.execute("ROLLBACK")
+        with contextlib.suppress(sqlite3.Error):
+            db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    except sqlite3.ProgrammingError:
+        return
+    finally:
+        with contextlib.suppress(sqlite3.Error):
+            db.close()
+
+
 def readonly_uri(path: str | os.PathLike) -> str:
     """The ``file:`` URI that opens the SQLite database at ``path`` read-only
     (``sqlite3.connect(uri, uri=True)``): ``%``, ``?`` and ``#`` in the path
@@ -268,7 +286,28 @@ class FileStore:
         self._max_upload = max_upload_bytes
         self._lock = threading.RLock()
         self._db = connect(self.root / "files.db")
-        self._db.executescript(_SCHEMA)
+        self._ensure_schema()
+        self._finalizer = weakref.finalize(self, close_db, self._db)
+
+    def _ensure_schema(self) -> None:
+        with self._lock:
+            rows = self._db.execute("SELECT type, name FROM sqlite_master WHERE type IN ('table', 'index')").fetchall()
+            tables = {name for kind, name in rows if kind == "table"}
+            indexes = {name for kind, name in rows if kind == "index"}
+            required_tables = {"files", "removed"}
+            required_indexes = {
+                "files_kind_created_id",
+                "files_kind_path_unique",
+                "files_kind_path_lookup",
+                "files_sha",
+                "files_job",
+                "files_path_nocase",
+                "removed_path_nocase",
+            }
+            obsolete_indexes = {"files_kind_created", "files_kind_path"}
+            if required_tables <= tables and required_indexes <= indexes and not (obsolete_indexes & indexes):
+                return
+            self._db.executescript(_SCHEMA)
 
     @property
     def max_upload_bytes(self) -> int:
@@ -281,12 +320,22 @@ class FileStore:
 
     def close(self) -> None:
         with self._lock:
-            self._db.close()
+            self._finalizer.detach()
+            close_db(self._db)
 
     # region Records
 
     def _record(self, row: tuple | None) -> FileRecord | None:
         return FileRecord(*row) if row else None
+
+    def _valid_record(self, record: FileRecord | None) -> FileRecord | None:
+        if record is None:
+            return None
+        if os.path.islink(record.path) or os.path.realpath(record.path) != record.path or not os.path.isfile(record.path):
+            return None
+        if record.kind == "upload" and path_inside(record.path, str(self.uploads_dir)) is None:
+            return None
+        return record
 
     def get(self, file_id: str) -> FileRecord | None:
         """The record of ``file_id`` when its file still exists."""
@@ -295,9 +344,7 @@ class FileStore:
             return None
         with self._lock:
             record = self._record(self._db.execute(f"SELECT {_COLUMNS} FROM files WHERE id = ?", (file_id,)).fetchone())
-        if record is None or not os.path.isfile(record.path):
-            return None
-        return record
+        return self._valid_record(record)
 
     def get_many(self, file_ids: Iterable[str]) -> dict[str, FileRecord]:
         """The records of those ``file_ids`` whose files still exist (as
@@ -310,8 +357,8 @@ class FileStore:
             with self._lock:
                 rows = self._db.execute(f"SELECT {_COLUMNS} FROM files WHERE id IN ({','.join('?' * len(chunk))})", chunk).fetchall()
             for row in rows:
-                record = FileRecord(*row)
-                if os.path.isfile(record.path):
+                record = self._valid_record(FileRecord(*row))
+                if record is not None:
                     found[record.id] = record
         return found
 
@@ -353,11 +400,18 @@ class FileStore:
         from now on). ``created_before``: only if still that old (a prune;
         a re-upload refreshes the time)."""
 
-        with self._lock:
+        with self._transaction():
             row = self._db.execute("SELECT path, kind, created FROM files WHERE id = ?", (file_id,)).fetchone()
             if row is None or (created_before is not None and row[2] >= created_before):
                 return False
             self._db.execute("DELETE FROM files WHERE id = ?", (file_id,))
+            for sql, params in (
+                ("DELETE FROM gallery_meta WHERE file_id = ?", (file_id,)),
+                ("DELETE FROM board_items WHERE file_id = ?", (file_id,)),
+                ("DELETE FROM asset_lineage WHERE child_id = ? OR parent_id = ?", (file_id, file_id)),
+            ):
+                with contextlib.suppress(sqlite3.OperationalError):
+                    self._db.execute(sql, params)
             path, kind, _ = row
             remove = delete_file or kind == "upload" or self._unsaved(path, self._outputs_real())
             if kind == "output" and not remove:
@@ -414,19 +468,26 @@ class FileStore:
                 width, height = _image_size(temp, max_pixels=MAX_UPLOAD_PIXELS)
             sha = digest.hexdigest()
             target = self.uploads_dir / sha[:2] / f"{sha}{sniffed.ext}"
-            with self._lock:  # one record per content and name, even for concurrent uploads
-                existing = self._upload_by_sha(sha, name)
-                if existing is not None:
-                    return self._touch(existing)  # a re-upload: not old enough to prune
-                stored = self._upload_by_sha(sha)
-                if stored is not None:  # the same content under another name: its file, this name
-                    target = Path(stored.path)
-                else:
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    os.replace(temp, target)
-                    self._db.execute("DELETE FROM files WHERE kind = 'upload' AND path = ?", (str(target),))  # its file was gone
-                record = FileRecord(secrets.token_urlsafe(16), "upload", str(target), name, sniffed.mime, size, width, height, time.time())
-                return self._insert(record, sha)
+            moved_to_target = False
+            try:
+                with self._transaction():  # one record per content and name, even for concurrent uploads
+                    existing = self._upload_by_sha(sha, name)
+                    if existing is not None:
+                        return self._touch(existing)  # a re-upload: not old enough to prune
+                    stored = self._upload_by_sha(sha)
+                    if stored is not None:  # the same content under another name: its file, this name
+                        target = Path(stored.path)
+                    else:
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        os.replace(temp, target)
+                        moved_to_target = True
+                        self._db.execute("DELETE FROM files WHERE kind = 'upload' AND path = ?", (str(target),))  # its file was gone
+                    record = FileRecord(secrets.token_urlsafe(16), "upload", str(target), name, sniffed.mime, size, width, height, time.time())
+                    return self._insert(record, sha)
+            except BaseException:
+                if moved_to_target:
+                    target.unlink(missing_ok=True)
+                raise
         finally:
             temp.unlink(missing_ok=True)
 
@@ -445,7 +506,7 @@ class FileStore:
         query = f"SELECT {_COLUMNS} FROM files WHERE kind = 'upload' AND sha256 = ?" + (" AND name = ?" if name is not None else "")
         with self._lock:
             record = self._record(self._db.execute(query, (sha, name) if name is not None else (sha,)).fetchone())
-        return record if record is not None and os.path.isfile(record.path) else None
+        return self._valid_record(record)
 
     def resolve_upload(self, node: Any, file_id: str) -> Any:
         """``remi.ui`` upload resolver: a PIL image for image inputs (with
@@ -464,7 +525,11 @@ class FileStore:
         from modules import images
 
         image = images.read(record.path)
-        image.load()
+        try:
+            image.load()
+        except BaseException:
+            image.close()  # a truncated file: do not leave it open
+            raise
         image.filename = record.name
         return image
 
@@ -501,13 +566,20 @@ class FileStore:
     def prune_unsaved(self, max_age: float, keep: set[str] | frozenset[str] = frozenset()) -> int:
         """Delete outputs older than ``max_age`` seconds that the save path
         did not write (``outputs/``: generated with saving turned off), except
-        ``keep`` (ids a queued job still reads)."""
+        ``keep`` (ids a queued job still reads), and stale thumbnail temps."""
 
         cutoff = time.time() - max_age
         with self._lock:
             rows = self._db.execute("SELECT id, path FROM files WHERE kind = 'output' AND created < ?", (cutoff,)).fetchall()
         outputs = self._outputs_real()
-        return sum(1 for file_id, path in rows if file_id not in keep and self._unsaved(path, outputs) and self.delete(file_id))
+        removed = sum(1 for file_id, path in rows if file_id not in keep and self._unsaved(path, outputs) and self.delete(file_id))
+        thumb_cutoff = time.time() - min(max_age, 3600.0)
+        if self.thumbs_dir.is_dir():
+            for partial in self.thumbs_dir.glob("*.tmp"):
+                with contextlib.suppress(OSError):
+                    if partial.stat().st_mtime < thumb_cutoff:
+                        partial.unlink()
+        return removed
 
     def _outputs_real(self) -> str:
         """The real path of ``outputs/`` (a link to another disk, say): outputs are stored under theirs."""
@@ -531,7 +603,55 @@ class FileStore:
 
         if infotext is not None:
             infotext = utf8_text(clip_infotext(infotext))
-        path = os.path.realpath(path)
+        raw_path = os.fspath(path)
+        if os.path.islink(raw_path):
+            raise FileError("symbolic links cannot be registered as outputs", 400)
+        real = os.path.realpath(raw_path)
+        from remi.setting_values import output_dirs
+
+        real_bases = [os.path.realpath(os.fspath(base)) for base in (self.root, self.outputs_dir, *output_dirs()) if base]
+        base_ids: set[tuple[int, int]] = set()
+        for base in real_bases:
+            try:
+                st = os.stat(base)
+            except OSError:
+                continue
+            base_ids.add((st.st_dev, st.st_ino))
+
+        def _inside_real_bases(candidate_real: str) -> bool:
+            if any(path_inside(candidate_real, base) is not None for base in real_bases):
+                return True
+            if not base_ids:
+                return False
+            cand_path = Path(candidate_real)
+            for ancestor in (cand_path, *cand_path.parents):
+                try:
+                    st = os.stat(ancestor)
+                except OSError:
+                    continue
+                if (st.st_dev, st.st_ino) in base_ids:
+                    return True
+            return False
+
+        if not _inside_real_bases(real):
+            p_obj = Path(raw_path)
+            if p_obj.is_absolute():
+                cur = os.path.realpath(p_obj.anchor)
+                parts = p_obj.parts[1:]
+            else:
+                cur = os.path.realpath(os.getcwd())
+                parts = p_obj.parts
+            for part in parts:
+                if part == ".":
+                    continue
+                if part == "..":
+                    cur = os.path.realpath(os.path.dirname(cur))
+                    continue
+                nxt = os.path.join(cur, part)
+                if os.path.islink(nxt) and _inside_real_bases(cur):
+                    raise FileError("symbolic link escapes output directory", 400)
+                cur = os.path.realpath(nxt)
+        path = real
         stale = self._removed_as(path)
         # A first look, so that the file is read (stat, type, size) before the transaction
         existing = self._output_at(path)
@@ -652,8 +772,9 @@ class FileStore:
             except ValueError:
                 position = None
             else:
-                page_where += " AND (created < ? OR (created = ? AND rowid < ?))"
-                page_args += [created, created, rowid]
+                if math.isfinite(created) and -(2**63) <= rowid < 2**63:
+                    page_where += " AND (created < ? OR (created = ? AND rowid < ?))"
+                    page_args += [created, created, rowid]
         limit = min(max(int(limit), 1), 200)
         with self._lock:
             total = self._db.execute(f"SELECT COUNT(*) FROM files WHERE {filters}", args).fetchone()[0]
@@ -669,15 +790,27 @@ class FileStore:
         from modules import images
 
         added = 0
-        for path in _walk_images(directories):
+        for path, dir_real in _walk_images_under(directories):
             if added >= limit:
                 break
+            if os.path.islink(path):
+                log.debug("not indexing symlink %r", path)
+                continue
             real = os.path.realpath(path)
+            if path_inside(real, dir_real) is None:
+                log.debug("not indexing %r: resolves outside %r", real, dir_real)
+                continue
             if utf8_text(real) != real:
                 # a file name that is not UTF-8 (Linux keeps its bytes as surrogates): no row can hold it
                 log.debug("not indexing %r: its name is not UTF-8", real)
                 continue
-            if self._output_at(real) is not None or self._was_removed(real):
+            existing = self._output_at(real)
+            if existing is not None:
+                with self._lock, contextlib.suppress(sqlite3.OperationalError):
+                    if self._db.execute("UPDATE gallery_meta SET missing_since = NULL WHERE file_id = ? AND missing_since IS NOT NULL", (existing.id,)).rowcount:
+                        added += 1
+                continue
+            if self._was_removed(real):
                 continue
             infotext = width = height = None
             try:
@@ -745,16 +878,19 @@ class FileStore:
         source_mtime = os.path.getmtime(record.path)
         if target.is_file() and target.stat().st_mtime >= source_mtime:
             return target
-        with Image.open(record.path) as image:
-            if getattr(image, "is_animated", False):
-                image.seek(0)
-            image.draft("RGB", (width, width * 4))
-            image = image.convert("RGBA" if image.mode in ("RGBA", "LA", "P") else "RGB")
-            if image.width > width:
-                image.thumbnail((width, max(1, round(image.height * width / image.width))), Image.Resampling.LANCZOS)
-            temp = target.with_suffix(f".{secrets.token_hex(4)}.tmp")
-            image.save(temp, format="WEBP", quality=82, method=4)
-        os.replace(temp, target)
+        temp = target.with_suffix(f".{secrets.token_hex(4)}.tmp")
+        try:
+            with Image.open(record.path) as image:
+                if getattr(image, "is_animated", False):
+                    image.seek(0)
+                image.draft("RGB", (width, width * 4))
+                image = image.convert("RGBA" if image.mode in ("RGBA", "LA", "P") else "RGB")
+                if image.width > width:
+                    image.thumbnail((width, max(1, round(image.height * width / image.width))), Image.Resampling.LANCZOS)
+                image.save(temp, format="WEBP", quality=82, method=4)
+            os.replace(temp, target)
+        finally:
+            temp.unlink(missing_ok=True)
         return target
 
     # endregion
@@ -831,10 +967,9 @@ def path_inside(path: str, folder: str) -> str | None:
     return path[len(prefix) + 1 :]
 
 
-def _walk_images(directories: Iterable[str | os.PathLike]) -> Iterator[str]:
-    """The image files below ``directories``, each folder walked once: two
-    settings can name one folder in different case (macOS keeps the case it
-    is given, realpath too), or one folder inside another."""
+def _walk_images_under(directories: Iterable[str | os.PathLike]) -> Iterator[tuple[str, str]]:
+    """The ``(image_path, real_directory)`` pairs below ``directories``, each
+    folder walked once and symlinks skipped."""
 
     seen: set[tuple[int, int]] = set()
 
@@ -859,4 +994,15 @@ def _walk_images(directories: Iterable[str | os.PathLike]) -> Iterator[str]:
             dirs[:] = [name for name in dirs if first_visit(os.path.join(current, name))]
             for name in files:
                 if name.lower().endswith(IMAGE_EXTENSIONS):
-                    yield os.path.join(current, name)
+                    candidate = os.path.join(current, name)
+                    if not os.path.islink(candidate):
+                        yield candidate, real
+
+
+def _walk_images(directories: Iterable[str | os.PathLike]) -> Iterator[str]:
+    """The image files below ``directories``, each folder walked once: two
+    settings can name one folder in different case (macOS keeps the case it
+    is given, realpath too), or one folder inside another."""
+
+    for path, _root in _walk_images_under(directories):
+        yield path

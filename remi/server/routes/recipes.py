@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Query, Response
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from remi.recipes import RECIPE_EXPORT_VERSION, RecipeError, apply_recipe, recipe_json, recipes_for
 from remi.server import models as m
-from remi.server.deps import ServicesDep, iso
+from remi.server.deps import ServicesDep, deep_json_response, iso
 from remi.ui.sentence import Sentence
 
 router = APIRouter(prefix="/recipes")
@@ -81,6 +81,12 @@ class RecipeApplyRequest(m.Model):
     core: dict[str, Any] = {}
     scripts: dict[str, dict[str, Any]] = {}
     check_conflicts: bool = True
+
+    @model_validator(mode="after")
+    def _check_finite(self) -> RecipeApplyRequest:
+        m.reject_non_finite(self.core, "core")
+        m.reject_non_finite(self.scripts, "scripts")
+        return self
 
 
 class RecipeApplyResult(m.Model):
@@ -170,7 +176,7 @@ def delete_recipe(recipe_id: str, services: ServicesDep) -> Response:
 
 
 @router.post("/{recipe_id}/apply", response_model=RecipeApplyResult, responses=ERRORS, summary="Apply a recipe onto form values with conflict & capability checks")
-def apply_recipe_route(recipe_id: str, body: RecipeApplyRequest, services: ServicesDep) -> dict[str, Any]:
+def apply_recipe_route(recipe_id: str, body: RecipeApplyRequest, services: ServicesDep) -> Any:
     recipe = recipes_for(services.files).get(recipe_id)
     if recipe is None:
         raise _missing(recipe_id)
@@ -181,4 +187,4 @@ def apply_recipe_route(recipe_id: str, body: RecipeApplyRequest, services: Servi
         scripts=body.scripts,
         check_conflicts=body.check_conflicts,
     )
-    return {"recipe": recipe_json(recipe, iso), **applied}
+    return deep_json_response({"recipe": recipe_json(recipe, iso), **applied})

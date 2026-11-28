@@ -9,6 +9,7 @@ conflict and capability checks.
 from __future__ import annotations
 
 import json
+import logging
 import math
 import secrets
 import sqlite3
@@ -20,9 +21,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from remi.files import FileStore, connect, transaction
+from remi.files import FileStore, close_db, connect, transaction
 from remi.ui.sentence import Sentence
 
+log = logging.getLogger(__name__)
+
+SCHEMA_VERSION = 1
 RECIPE_EXPORT_VERSION = 1
 VALID_TABS = ("txt2img", "img2img", "extras")
 MAX_IMPORT_RECIPES = 500
@@ -83,6 +87,7 @@ def recipe_json(recipe: Recipe, iso: Callable[[float | None], str | None]) -> di
 
 
 _SCHEMA = """
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS recipes (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
@@ -215,11 +220,15 @@ class RecipeStore:
         self.path = Path(path)
         self._lock = threading.RLock()
         self._db = connect(self.path)
-        self._db.executescript(_SCHEMA)
+        with self._lock:
+            self._db.executescript(_SCHEMA)
+            self._db.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('schema', ?)", (str(SCHEMA_VERSION),))
+        self._finalizer = weakref.finalize(self, close_db, self._db)
 
     def close(self) -> None:
         with self._lock:
-            self._db.close()
+            self._finalizer.detach()
+            close_db(self._db)
 
     def __enter__(self) -> RecipeStore:
         return self
@@ -254,6 +263,20 @@ class RecipeStore:
         if tab:
             where.append("tab = ?")
             args.append(tab)
+        if tag and tag.strip().isascii():
+            escaped = tag.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            where.append("tags LIKE ? ESCAPE '\\'")
+            args.append(f"%{escaped}%")
+        if capability and capability.strip().isascii():
+            escaped = capability.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            where.append("capabilities LIKE ? ESCAPE '\\'")
+            args.append(f"%{escaped}%")
+        if query:
+            for term in query.split():
+                if term.strip() and term.isascii():
+                    escaped = term.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+                    where.append("(name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR model_family LIKE ? ESCAPE '\\' OR tags LIKE ? ESCAPE '\\' OR capabilities LIKE ? ESCAPE '\\')")
+                    args.extend([f"%{escaped}%"] * 5)
         with self._lock:
             rows = self._db.execute(
                 f"SELECT {_COLUMNS} FROM recipes WHERE {' AND '.join(where)} ORDER BY updated DESC, name ASC",
@@ -377,6 +400,9 @@ class RecipeStore:
     def import_recipes(self, payload: Mapping[str, Any], *, overwrite: bool = False) -> dict[str, Any]:
         if not isinstance(payload, Mapping):
             raise RecipeError(Sentence("import payload must be a JSON object"))
+        version = payload.get("version")
+        if version is not None and (isinstance(version, bool) or not isinstance(version, int) or version != RECIPE_EXPORT_VERSION):
+            raise RecipeError(Sentence("unsupported recipe export version {{version}}", version=repr(version)))
         items = payload.get("recipes")
         if not isinstance(items, list):
             raise RecipeError(Sentence("import payload must include a 'recipes' list"))
@@ -507,8 +533,9 @@ def apply_recipe(
                         continue
                     patch[key] = {"value": entry["value"]}
                     values[param] = entry["value"]
-        except Exception:
-            pass
+        except Exception as err:
+            log.warning("failed to evaluate recipe conflicts for %r on %s", recipe.name, effective_tab, exc_info=True)
+            warnings.append(Sentence("Could not check recipe parameter conflicts: {{error}}", error=f"{type(err).__name__}: {err}"))
 
     return {
         "tab": effective_tab,

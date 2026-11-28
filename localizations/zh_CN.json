@@ -1186,5 +1186,14 @@
   "the stage made no image to pass on": "该阶段没有生成可传给下一阶段的图像",
   "stage job failed": "阶段任务失败",
   "the stage job was stopped": "该阶段的任务已被停止",
-  "prompt upsampling returned nothing": "提示词扩写没有返回内容"
+  "prompt upsampling returned nothing": "提示词扩写没有返回内容",
+  "Idempotency-Key was already used with different parameters": "Idempotency-Key 已被用于不同的参数",
+  "extension installer could not be started: {{reason}}": "无法启动扩展安装程序：{{reason}}",
+  "extension installer failed: {{reason}}": "扩展安装程序失败：{{reason}}",
+  "extension installer timed out after {{seconds}} s": "扩展安装程序在 {{seconds}} 秒后超时",
+  "unsupported recipe export version {{version}}": "不支持的配方导出版本 {{version}}",
+  "invalid config state timestamp": "配置状态时间戳无效",
+  "non-finite numbers (NaN or Infinity) are not allowed": "不允许非有限数值（NaN 或 Infinity）",
+  "user metadata is nested deeper than {{limit}} levels": "用户元数据嵌套超过 {{limit}} 层",
+  "the image has too many pixels to read": "图像像素过多，无法读取"
 }

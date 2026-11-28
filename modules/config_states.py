@@ -4,6 +4,7 @@ Supports saving and restoring webui and extensions from a known working set of c
 
 import os
 import json
+import math
 import tqdm
 
 from datetime import datetime
@@ -28,18 +29,25 @@ def list_config_states():
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     j = json.load(f)
-                    assert "created_at" in j, '"created_at" does not exist'
-                    j["filepath"] = path
-                    config_states.append(j)
+                assert isinstance(j, dict) and "created_at" in j, '"created_at" does not exist'
+                created_at = j["created_at"]
+                if isinstance(created_at, bool) or not isinstance(created_at, (int, float)) or not math.isfinite(created_at):
+                    raise ValueError(f"invalid created_at: {created_at!r}")
+                timestamp = datetime.fromtimestamp(created_at).strftime('%Y-%m-%d %H:%M:%S')
+                j["filepath"] = path
+                j["_formatted_timestamp"] = timestamp
+                config_states.append(j)
             except Exception as e:
                 print(f'[ERROR]: Config states {path}, {e}')
 
     config_states = sorted(config_states, key=lambda cs: cs["created_at"], reverse=True)
 
     for cs in config_states:
-        timestamp = datetime.fromtimestamp(cs["created_at"]).strftime('%Y-%m-%d %H:%M:%S')
+        timestamp = cs.pop("_formatted_timestamp")
         name = cs.get("name", "Config")
         full_name = f"{name}: {timestamp}"
+        if full_name in all_config_states:
+            full_name = f"{full_name} ({os.path.basename(cs['filepath'])})"
         all_config_states[full_name] = cs
 
     return all_config_states
@@ -154,16 +162,25 @@ def restore_extension_config(config):
 
     results = []
     disabled = []
+    existing_disabled = set(getattr(shared.opts, "disabled_extensions", []) or ())
 
     for ext in tqdm.tqdm(extensions.extensions):
         if ext.is_builtin:
+            if ext.name in ext_config and isinstance(ext_config[ext.name], dict) and "enabled" in ext_config[ext.name]:
+                enabled = bool(ext_config[ext.name].get("enabled", False))
+                ext.enabled = enabled
+                if not enabled:
+                    disabled.append(ext.name)
+            elif not ext.enabled or ext.name in existing_disabled:
+                ext.enabled = False
+                disabled.append(ext.name)
             continue
 
         ext.read_info_from_repo()
-        current_commit = ext.commit_hash
+        current_commit = ext.commit_hash or ""
 
         if ext.name not in ext_config:
-            ext.disabled = True
+            ext.enabled = False
             disabled.append(ext.name)
             results.append((ext, current_commit[:8], False, "Saved extension state not found in config, marking as disabled"))
             continue
@@ -182,12 +199,12 @@ def restore_extension_config(config):
             results.append((ext, current_commit[:8], False, "No commit hash found in config"))
 
         if not entry.get("enabled", False):
-            ext.disabled = True
+            ext.enabled = False
             disabled.append(ext.name)
         else:
-            ext.disabled = False
+            ext.enabled = True
 
-    shared.opts.disabled_extensions = disabled
+    shared.opts.disabled_extensions = list(dict.fromkeys(disabled))
     shared.opts.save(shared.config_filename)
 
     print("* Finished restoring extensions. Results:")

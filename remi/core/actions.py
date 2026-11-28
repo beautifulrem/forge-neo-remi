@@ -49,14 +49,14 @@ class CoreActions:
         current = hires_resolution_layout().coerce(values, unknown="ignore")
         return {"__outputs__": {"hr_final_resolution": hires_resolution(current)}}
 
-    @ui.action("__conflicts__")
+    @ui.action("__conflicts__", gpu=False, timeout=None)
     def conflicts(self, ctx: ui.ActionContext, values: dict) -> Patch:
         from remi.core.conflicts import conflict_patch
 
         selected = ctx.extra.get("selected")
         return conflict_patch(_tab(ctx), {**ctx.scripts, "core": values}, selected if isinstance(selected, str) else None)
 
-    @ui.action("__advice__")
+    @ui.action("__advice__", gpu=False, timeout=None)
     def advice(self, ctx: ui.ActionContext, values: dict) -> Patch:
         """Pre-submit structured model advice chips and active capability summary."""
 
@@ -84,16 +84,29 @@ class CoreActions:
         (behind generation); the patch carries the form defaults and the
         settings as stored now (``__settings__``)."""
 
-        from remi.core.capabilities import active_capability_summary
+        from remi.core.capabilities import active_capability_summary, derive_advice
         from remi.core.presets import apply_forge_preset, check_preset, forge_preset_patch
 
         tab = _tab(ctx)  # checked before the preset switches anything
         preset = check_preset(_argument(ctx, "preset"))
         settings = apply_forge_preset(preset)
+        patch = forge_preset_patch(tab, preset)
+        effective_core = dict(values)
+        effective_scripts = {owner: dict(vals) for owner, vals in ctx.scripts.items() if isinstance(vals, dict)}
+        for key, entry in patch.items():
+            if key.startswith("__") or not isinstance(entry, dict) or "value" not in entry:
+                continue
+            if "." in key:
+                owner, param = key.split(".", 1)
+                effective_scripts.setdefault(owner, {})[param] = entry["value"]
+            else:
+                effective_core[key] = entry["value"]
+        combined = {**effective_scripts, "core": effective_core}
         return {
-            **forge_preset_patch(tab, preset),
+            **patch,
             "__settings__": settings,
             "__capabilities__": active_capability_summary(preset=preset),
+            "__advice__": derive_advice(tab, combined, preset=preset),
         }
 
 

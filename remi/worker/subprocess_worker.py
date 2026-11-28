@@ -15,6 +15,7 @@ import contextlib
 import importlib
 import importlib.util
 import logging
+import math
 import os
 import queue
 import subprocess
@@ -130,6 +131,7 @@ class SubprocessWorker:
         max_restarts: int = DEFAULT_MAX_RESTARTS,
         restart_backoff_s: float = 0.25,
         startup_timeout: float = DEFAULT_STARTUP_TIMEOUT,
+        job_timeout: float = DEFAULT_JOB_TIMEOUT,
     ) -> None:
         self.worker_id = worker_id
         self.gpu_id = gpu_id
@@ -140,12 +142,14 @@ class SubprocessWorker:
         self.max_restarts = max(0, int(max_restarts))
         self.restart_backoff_s = max(0.0, float(restart_backoff_s))
         self.startup_timeout = float(startup_timeout)
+        self.job_timeout = float(job_timeout)
 
         self._lock = threading.RLock()
         self._exec_lock = threading.RLock()
         """one job at a time; :meth:`restart` takes it to start the new process (re-entered by the crash path)"""
         self._proc: subprocess.Popen[bytes] | None = None
         self._state: WorkerState = "stopped"
+        self._stop_gen: int = 0
         self._started_at: float = 0.0
         self._last_heartbeat: float | None = None
         self._current_job_id: str | None = None
@@ -204,7 +208,8 @@ class SubprocessWorker:
             with self._lock:
                 if self._proc is proc:
                     self._proc = None
-                self._state = "error"
+                if self._state != "stopped":
+                    self._state = "error"
             raise
 
     def _handshake(self, proc: subprocess.Popen[bytes]) -> None:
@@ -227,7 +232,11 @@ class SubprocessWorker:
                 rc = proc.poll()
                 stderr_text = _pipes(proc).stderr_tail(500)
                 raise RuntimeError(f"worker {self.worker_id} exited during startup (code={rc}): {stderr_text}")
-            msg = decode_message(line)
+            try:
+                msg = decode_message(line)
+            except ValueError as error:
+                log.warning("worker %s ignoring non-protocol startup line: %s", self.worker_id, error)
+                continue
             if msg.type == "capabilities":
                 with self._lock:
                     self._capabilities = WorkerCapabilities.from_dict(msg.payload)
@@ -237,7 +246,8 @@ class SubprocessWorker:
                 with self._lock:
                     if isinstance(caps_data, dict):
                         self._capabilities = WorkerCapabilities.from_dict(caps_data)
-                    self._state = "idle"
+                    if self._proc is proc and self._state != "stopped":
+                        self._state = "idle"
                     self._last_heartbeat = time.time()
                 return
 
@@ -279,6 +289,7 @@ class SubprocessWorker:
             self._proc = None
             self._state = "stopped"
             self._current_job_id = None
+            self._stop_gen += 1
         self._terminate_proc(proc, timeout=timeout)
 
     def restart(self) -> WorkerHeartbeat:
@@ -288,6 +299,7 @@ class SubprocessWorker:
         is done, so the two never race over which process is the worker's."""
 
         with self._lock:
+            gen = self._stop_gen
             self._state = "restarting"
             proc = self._proc
             self._proc = None
@@ -297,6 +309,9 @@ class SubprocessWorker:
         with self._exec_lock:
             if self.restart_backoff_s > 0:
                 time.sleep(self.restart_backoff_s)
+            with self._lock:
+                if self._stop_gen != gen or self._state == "stopped":
+                    return self.status()
             self.start()
         return self.status()
 
@@ -349,7 +364,9 @@ class SubprocessWorker:
         *,
         on_progress: ProgressCallback | None = None,
         on_preview: PreviewCallback | None = None,
+        timeout: float | None = None,
     ) -> WorkerResult:
+        effective_timeout = self.job_timeout if timeout is None else float(timeout)
         with self._exec_lock:
             if not self.is_alive():
                 self.start()
@@ -360,33 +377,77 @@ class SubprocessWorker:
                 self._state = "busy"
                 self._current_job_id = envelope.job_id
             lines = _pipes(proc).lines
+            deadline = (time.monotonic() + max(0.0, effective_timeout)) if math.isfinite(effective_timeout) else None
             try:
                 proc.stdin.write(encode_message(WorkerMessage("run_job", envelope.to_dict())))
                 proc.stdin.flush()
                 while True:
-                    line = lines.get()
+                    if deadline is not None:
+                        remaining = deadline - time.monotonic()
+                        try:
+                            if remaining <= 0:
+                                raise queue.Empty
+                            line = lines.get(timeout=remaining)
+                        except queue.Empty:
+                            return self._handle_crash(
+                                envelope.job_id,
+                                proc.poll(),
+                                proc,
+                                detail=f"job timed out after {effective_timeout:g}s",
+                            )
+                    else:
+                        line = lines.get()
                     if line is None:
                         with contextlib.suppress(subprocess.TimeoutExpired):
                             proc.wait(timeout=1.0)
                         return self._handle_crash(envelope.job_id, proc.poll(), proc)
-                    msg = decode_message(line)
+                    try:
+                        msg = decode_message(line)
+                    except ValueError as error:
+                        log.warning("worker %s ignoring non-protocol stdout line: %s", self.worker_id, error)
+                        continue
                     now = time.time()
                     with self._lock:
                         self._last_heartbeat = now
                     if msg.type == "progress":
                         if on_progress is not None:
-                            on_progress(WorkerProgress.from_dict(msg.payload))
+                            try:
+                                progress = WorkerProgress.from_dict(msg.payload)
+                            except (ValueError, KeyError, TypeError) as error:
+                                log.warning("worker %s ignoring malformed progress payload: %s", self.worker_id, error)
+                            else:
+                                on_progress(progress)
                     elif msg.type == "preview":
                         if on_preview is not None:
-                            on_preview(PreviewChunk.from_dict(msg.payload))
+                            try:
+                                preview = PreviewChunk.from_dict(msg.payload)
+                            except (ValueError, KeyError, TypeError) as error:
+                                log.warning("worker %s ignoring malformed preview payload: %s", self.worker_id, error)
+                            else:
+                                on_preview(preview)
                     elif msg.type == "capabilities":
-                        with self._lock:
-                            self._capabilities = WorkerCapabilities.from_dict(msg.payload)
+                        try:
+                            caps = WorkerCapabilities.from_dict(msg.payload)
+                        except (ValueError, KeyError, TypeError) as error:
+                            log.warning("worker %s ignoring malformed capabilities payload: %s", self.worker_id, error)
+                        else:
+                            with self._lock:
+                                self._capabilities = caps
                     elif msg.type == "result":
-                        result = WorkerResult.from_dict(msg.payload)
+                        try:
+                            result = WorkerResult.from_dict(msg.payload)
+                        except (ValueError, KeyError, TypeError) as error:
+                            log.warning("worker %s received malformed result payload: %s", self.worker_id, error)
+                            with self._lock:
+                                self._current_job_id = None
+                                if self._state == "busy":
+                                    self._state = "idle"
+                                self._jobs_failed += 1
+                            return WorkerResult(job_id=envelope.job_id, status="failed", error=f"malformed worker result: {error}")
                         with self._lock:
                             self._current_job_id = None
-                            self._state = "idle"
+                            if self._state == "busy":
+                                self._state = "idle"
                             if result.status == "completed":
                                 self._jobs_completed += 1
                             elif result.status == "failed":
@@ -396,12 +457,19 @@ class SubprocessWorker:
                         detail = str(msg.payload.get("error") or "worker error")
                         with self._lock:
                             self._current_job_id = None
-                            self._state = "idle"
+                            if self._state == "busy":
+                                self._state = "idle"
                             self._jobs_failed += 1
                         return WorkerResult(job_id=envelope.job_id, status="failed", error=detail)
             except OSError as error:
                 rc = proc.poll() if proc is not None else -1
                 return self._handle_crash(envelope.job_id, rc, proc, detail=str(error))
+            finally:
+                with self._lock:
+                    if self._current_job_id == envelope.job_id:
+                        self._current_job_id = None
+                    if self._state == "busy":
+                        self._state = "idle"
 
     def _handle_crash(self, job_id: str, returncode: int | None, proc: subprocess.Popen[bytes] | None, *, detail: str | None = None) -> WorkerResult:
         stderr_hint = ""
@@ -413,16 +481,23 @@ class SubprocessWorker:
                 self._proc = None
             self._current_job_id = None
             self._jobs_failed += 1
-            self._state = "error"
-            can_restart = self.auto_restart and self._restarts < self.max_restarts
+            stopped = self._state == "stopped"
+            restarting = self._state == "restarting"
+            stop_gen = self._stop_gen
+            if not stopped and not restarting:
+                self._state = "error"
+            can_restart = (not stopped) and (not restarting) and self.auto_restart and self._restarts < self.max_restarts
 
         restarted = False
         if can_restart:
-            try:
-                self.restart()
-                restarted = True
-            except Exception as err:
-                log.warning("worker %s auto-restart failed: %s", self.worker_id, err)
+            with self._lock:
+                still_stopped = self._state == "stopped" or self._stop_gen != stop_gen
+            if not still_stopped:
+                try:
+                    self.restart()
+                    restarted = True
+                except Exception as err:
+                    log.warning("worker %s auto-restart failed: %s", self.worker_id, err)
 
         reason = detail or f"exit code {returncode}"
         if stderr_hint:
@@ -441,6 +516,14 @@ class SubprocessWorker:
 JobHandler = Callable[[JobEnvelope, Callable[[WorkerProgress], None], Callable[[PreviewChunk], None], threading.Event], WorkerResult]
 
 
+def _interrupt_shared_state() -> None:
+    shared = sys.modules.get("modules.shared")
+    state = getattr(shared, "state", None) if shared is not None else None
+    if state is not None and hasattr(state, "interrupt"):
+        with contextlib.suppress(Exception):
+            state.interrupt()
+
+
 def default_forge_handler(
     envelope: JobEnvelope,
     emit_progress: Callable[[WorkerProgress], None],
@@ -453,11 +536,76 @@ def default_forge_handler(
     from remi.files import FileStore
     from remi.jobs.runner import run_job
     from remi.jobs.store import Job
+    from remi.realtime import FORMAT_WEBP, EventBus, JobRef, PreviewEncoder, ProgressMonitor
 
     files = FileStore(envelope.file_store_root)
+    bus = EventBus()
+    monitor: ProgressMonitor | None = None
+    encoder: PreviewEncoder | None = None
+    done_event = threading.Event()
+    ref = JobRef(envelope.job_id, envelope.seq, envelope.tab, begun=True)
+
+    class _Relay:
+        def send_event(self, event: dict[str, Any]) -> None:
+            if event.get("type") != "job.progress":
+                return
+            try:
+                emit_progress(
+                    WorkerProgress(
+                        job_id=envelope.job_id,
+                        seq=envelope.seq,
+                        step=int(event.get("step", 0)),
+                        steps=int(event.get("steps", 0)),
+                        job_no=int(event.get("job_no", 0)),
+                        job_count=int(event.get("job_count", 1)),
+                        progress=float(event.get("progress", 0.0)),
+                        eta=event.get("eta"),
+                        text=event.get("text"),
+                    )
+                )
+            except Exception:
+                log.debug("worker progress emit failed", exc_info=True)
+
+        def send_frame(self, frame: Any) -> None:
+            try:
+                fmt: Any = "webp" if frame.fmt == FORMAT_WEBP else "jpeg"
+                emit_preview(PreviewChunk.from_bytes(envelope.job_id, envelope.seq, frame.step, frame.data, fmt=fmt))
+            except Exception:
+                log.debug("worker preview emit failed", exc_info=True)
+
+        def wants_frames(self) -> bool:
+            return True
+
+    unsubscribe = bus.subscribe(_Relay())
+
+    def _get_state() -> Any:
+        return getattr(sys.modules.get("modules.shared"), "state", None)
+
+    def _get_opts() -> Any:
+        return getattr(sys.modules.get("modules.shared"), "opts", None)
+
+    def _on_begin() -> None:
+        nonlocal monitor, encoder
+        if cancel_event.is_set():
+            _interrupt_shared_state()
+        shared = sys.modules.get("modules.shared")
+        if shared is not None and getattr(shared, "state", None) is not None and getattr(shared, "opts", None) is not None:
+            monitor = ProgressMonitor(bus, lambda: ref, state=_get_state)
+            encoder = PreviewEncoder(bus, lambda: ref, state=_get_state, opts=_get_opts, before_frame=monitor.publish_now)
+            monitor.start()
+            encoder.start()
+
+    def _watch_cancel() -> None:
+        while not done_event.is_set():
+            if cancel_event.wait(0.02):
+                _interrupt_shared_state()
+                return
+
+    watcher = threading.Thread(target=_watch_cancel, name=f"worker-cancel-{envelope.job_id}", daemon=True)
+    watcher.start()
     try:
         job = Job(id=envelope.job_id, seq=envelope.seq, tab=envelope.tab, core=envelope.core, scripts=envelope.scripts, meta=envelope.meta)
-        ctx = JobContext(id_task=job.id_task, resolve_upload=files.resolve_upload)
+        ctx = JobContext(id_task=job.id_task, resolve_upload=files.resolve_upload, on_begin=_on_begin)
         result = run_job(job, ctx)
         outputs: list[dict[str, Any]] = []
         file_ids: list[str] = []
@@ -470,9 +618,16 @@ def default_forge_handler(
                 rec = files.save_output_image(img, infotext, job_id=job.id, tab=job.tab)
             file_ids.append(rec.id)
             outputs.append({"id": rec.id, "kind": "image", "width": rec.width, "height": rec.height, "infotext": infotext})
-        status = "cancelled" if cancel_event.is_set() else "completed"
+        status = "cancelled" if (cancel_event.is_set() or ctx.interrupted) else "completed"
         return WorkerResult(job_id=envelope.job_id, status=status, output_file_ids=file_ids, outputs=outputs, infotext=result.info, warnings=result.warnings)
     finally:
+        done_event.set()
+        watcher.join(timeout=1.0)
+        for thread in (encoder, monitor):
+            if thread is not None:
+                thread.stop()
+                thread.join(timeout=2.0)
+        unsubscribe()
         files.close()
 
 
@@ -507,8 +662,10 @@ def run_worker_stdio_loop(
     in_stream = stdin or sys.stdin.buffer
     out_stream = stdout or sys.stdout.buffer
     out_lock = threading.Lock()
+    cancel_lock = threading.Lock()
     caps = capabilities or WorkerCapabilities(backend="forge-pytorch", device=os.environ.get("CUDA_VISIBLE_DEVICES", "cpu"))
     cancel_events: dict[str, threading.Event] = {}
+    job_queue: queue.Queue[tuple[JobEnvelope, threading.Event] | None] = queue.Queue()
 
     def send(msg: WorkerMessage) -> None:
         raw = encode_message(msg)
@@ -516,43 +673,66 @@ def run_worker_stdio_loop(
             out_stream.write(raw)
             out_stream.flush()
 
-    while True:
-        line = in_stream.readline()
-        if not line:
-            return 0
-        try:
-            msg = decode_message(line)
-        except Exception as error:
-            send(WorkerMessage("error", {"error": f"protocol decode error: {error}"}))
-            continue
+    def _emit_progress(prog: WorkerProgress) -> None:
+        send(WorkerMessage("progress", prog.to_dict()))
 
-        if msg.type == "shutdown":
-            return 0
-        if msg.type == "ping":
-            send(WorkerMessage("pong", {"worker_id": worker_id, "pid": os.getpid(), "capabilities": caps.to_dict()}))
-        elif msg.type == "heartbeat":
-            send(WorkerMessage("heartbeat", {"worker_id": worker_id, "pid": os.getpid(), "capabilities": caps.to_dict()}))
-        elif msg.type == "cancel":
-            jid = str(msg.payload.get("job_id") or "")
-            ev = cancel_events.get(jid)
-            if ev is not None:
-                ev.set()
-        elif msg.type == "run_job":
-            envelope = JobEnvelope.from_dict(msg.payload)
-            cancel_ev = threading.Event()
-            cancel_events[envelope.job_id] = cancel_ev
+    def _emit_preview(chunk: PreviewChunk) -> None:
+        send(WorkerMessage("preview", chunk.to_dict()))
+
+    def _job_worker() -> None:
+        while True:
+            item = job_queue.get()
+            if item is None:
+                return
+            envelope, cancel_ev = item
             try:
-                result = handler(
-                    envelope,
-                    lambda prog: send(WorkerMessage("progress", prog.to_dict())),
-                    lambda chunk: send(WorkerMessage("preview", chunk.to_dict())),
-                    cancel_ev,
-                )
+                result = handler(envelope, _emit_progress, _emit_preview, cancel_ev)
                 send(WorkerMessage("result", result.to_dict()))
             except Exception as error:
                 send(WorkerMessage("result", WorkerResult(job_id=envelope.job_id, status="failed", error=f"{type(error).__name__}: {error}").to_dict()))
             finally:
-                cancel_events.pop(envelope.job_id, None)
+                with cancel_lock:
+                    if cancel_events.get(envelope.job_id) is cancel_ev:
+                        cancel_events.pop(envelope.job_id, None)
+
+    worker_thread = threading.Thread(target=_job_worker, name=f"worker-exec-{worker_id}", daemon=True)
+    worker_thread.start()
+    try:
+        while True:
+            line = in_stream.readline()
+            if not line:
+                return 0
+            try:
+                msg = decode_message(line)
+            except Exception as error:
+                send(WorkerMessage("error", {"error": f"protocol decode error: {error}"}))
+                continue
+
+            if msg.type == "shutdown":
+                return 0
+            if msg.type == "ping":
+                send(WorkerMessage("pong", {"worker_id": worker_id, "pid": os.getpid(), "capabilities": caps.to_dict()}))
+            elif msg.type == "heartbeat":
+                send(WorkerMessage("heartbeat", {"worker_id": worker_id, "pid": os.getpid(), "capabilities": caps.to_dict()}))
+            elif msg.type == "cancel":
+                jid = str(msg.payload.get("job_id") or "")
+                with cancel_lock:
+                    ev = cancel_events.get(jid)
+                if ev is not None:
+                    ev.set()
+            elif msg.type == "run_job":
+                try:
+                    envelope = JobEnvelope.from_dict(msg.payload)
+                except Exception as error:
+                    send(WorkerMessage("error", {"error": f"invalid job envelope: {error}"}))
+                    continue
+                cancel_ev = threading.Event()
+                with cancel_lock:
+                    cancel_events[envelope.job_id] = cancel_ev
+                job_queue.put((envelope, cancel_ev))
+    finally:
+        job_queue.put(None)
+        worker_thread.join()
 
 
 def main(argv: Sequence[str] | None = None) -> int:

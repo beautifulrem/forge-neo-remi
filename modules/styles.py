@@ -1,9 +1,12 @@
 from pathlib import Path
 from modules import errors
+import contextlib
 import csv
 import os
+import threading
 import typing
 import shutil
+import uuid
 
 
 class PromptStyle(typing.NamedTuple):
@@ -77,6 +80,7 @@ class StyleDatabase:
     def __init__(self, paths: list[str | Path]):
         self.no_style = PromptStyle("None", "", "", None)
         self.styles = {}
+        self._lock = threading.RLock()
         self.paths = paths
         self.all_styles_files: list[Path] = []
 
@@ -97,26 +101,27 @@ class StyleDatabase:
         Clears the style database and reloads the styles from the CSV file(s)
         matching the path used to initialize the database.
         """
-        self.styles.clear()
+        with self._lock:
+            self.styles.clear()
 
-        # scans for all styles files
-        all_styles_files = []
-        for pattern in self.paths:
-            folder, file = os.path.split(pattern)
-            if "*" in file or "?" in file:
-                found_files = Path(folder).glob(file)
-                [all_styles_files.append(file) for file in found_files]
-            else:
-                if os.path.exists(pattern):
-                    all_styles_files.append(Path(pattern))
+            # scans for all styles files
+            all_styles_files = []
+            for pattern in self.paths:
+                folder, file = os.path.split(pattern)
+                if "*" in file or "?" in file:
+                    found_files = Path(folder).glob(file)
+                    [all_styles_files.append(file) for file in found_files]
+                else:
+                    if os.path.exists(pattern):
+                        all_styles_files.append(Path(pattern))
 
-        # Remove any duplicate entries
-        seen = set()
-        self.all_styles_files = [s for s in all_styles_files if not (s in seen or seen.add(s))]
+            # Remove any duplicate entries
+            seen = set()
+            self.all_styles_files = [s for s in all_styles_files if not (s in seen or seen.add(s))]
 
-        for styles_file in self.all_styles_files:
-            assert styles_file.is_file()
-            self.load_from_csv(styles_file)
+            for styles_file in self.all_styles_files:
+                assert styles_file.is_file()
+                self.load_from_csv(styles_file)
 
     def load_from_csv(self, path: str | Path):
         try:
@@ -124,13 +129,17 @@ class StyleDatabase:
                 reader = csv.DictReader(file, skipinitialspace=True)
                 for row in reader:
                     # Ignore empty rows or rows starting with a comment
-                    if not row or row["name"].startswith("#"):
+                    if not row:
+                        continue
+                    name = row.get("name")
+                    if not isinstance(name, str) or not name or name.startswith("#"):
                         continue
                     # Support loading old CSV format with "name, text"-columns
-                    prompt = row["prompt"] if "prompt" in row else row["text"]
+                    prompt = row["prompt"] if "prompt" in row else row.get("text", "")
                     negative_prompt = row.get("negative_prompt", "")
                     # Add style to database
-                    self.styles[row["name"]] = PromptStyle(row["name"], prompt, negative_prompt, str(path))
+                    with self._lock:
+                        self.styles[name] = PromptStyle(name, prompt, negative_prompt, str(path))
         except Exception:
             errors.report(f"Error loading styles from {path}: ", exc_info=True)
 
@@ -167,26 +176,37 @@ class StyleDatabase:
 
     def save_styles(self, path: str = None) -> None:
         # The path argument is deprecated, but kept for backwards compatibility
+        with self._lock:
+            style_paths = self.get_style_paths()
 
-        style_paths = self.get_style_paths()
+            csv_names = [os.path.split(p)[1].lower() for p in style_paths]
+            styles_snapshot = list(self.styles.values())
 
-        csv_names = [os.path.split(path)[1].lower() for path in style_paths]
+            for style_path in style_paths:
+                # Always keep a backup file around
+                if os.path.exists(style_path):
+                    shutil.copy(style_path, f"{style_path}.bak")
 
-        for style_path in style_paths:
-            # Always keep a backup file around
-            if os.path.exists(style_path):
-                shutil.copy(style_path, f"{style_path}.bak")
-
-            # Write the styles to the CSV file
-            with open(style_path, "w", encoding="utf-8-sig", newline="") as file:
-                writer = csv.DictWriter(file, fieldnames=self.prompt_fields)
-                writer.writeheader()
-                for style in (s for s in self.styles.values() if s.path == style_path):
-                    # Skip style list dividers, e.g. "STYLES.CSV"
-                    if style.name.lower().strip("# ") in csv_names:
-                        continue
-                    # Write style fields, ignoring the path field
-                    writer.writerow({k: v for k, v in style._asdict().items() if k != "path"})
+                target_dir = os.path.dirname(os.path.abspath(style_path)) or "."
+                os.makedirs(target_dir, exist_ok=True)
+                temp_path = f"{style_path}.{uuid.uuid4().hex}.tmp"
+                try:
+                    # Write the styles to a temporary CSV file, then swap atomically
+                    with open(temp_path, "w", encoding="utf-8-sig", newline="") as file:
+                        writer = csv.DictWriter(file, fieldnames=self.prompt_fields)
+                        writer.writeheader()
+                        for style in (s for s in styles_snapshot if s.path == style_path):
+                            # Skip style list dividers, e.g. "STYLES.CSV"
+                            if style.name.lower().strip("# ") in csv_names:
+                                continue
+                            # Write style fields, ignoring the path field
+                            writer.writerow({k: v for k, v in style._asdict().items() if k != "path"})
+                        file.flush()
+                        os.fsync(file.fileno())
+                    os.replace(temp_path, style_path)
+                finally:
+                    with contextlib.suppress(OSError):
+                        os.remove(temp_path)
 
     def extract_styles_from_prompt(self, positive, negative):
         extracted = []

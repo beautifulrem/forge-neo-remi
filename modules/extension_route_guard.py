@@ -25,8 +25,8 @@ import binascii
 import ipaddress
 import re
 import sys
+from collections.abc import Iterable
 from hmac import compare_digest
-from typing import Iterable
 from urllib.parse import urlparse
 
 
@@ -133,7 +133,9 @@ def is_rebound_host(request) -> bool:
         return False
     host = request.headers.get("host") or ""
     hostname = _hostname(host)
-    if not hostname or _is_loopback_name(hostname):
+    if not hostname:
+        return True
+    if _is_loopback_name(hostname):
         return False
     allowed = {_hostname(_netloc(origin)) for origin in _cors_origins(cmd_opts)}
     if hostname in allowed:
@@ -145,6 +147,44 @@ def is_rebound_host(request) -> bool:
 _DEFAULT_PORTS = {"http": 80, "https": 443, "ws": 80, "wss": 443}
 
 
+def _trusted_proxy(request, cmd_opts) -> bool:
+    """Whether ``request.client.host`` is an explicitly configured trusted
+    reverse proxy (``--forwarded-allow-ips``). Default None/empty: never
+    trust client-supplied ``X-Forwarded-*`` / ``Forwarded`` headers."""
+
+    raw = getattr(cmd_opts, "forwarded_allow_ips", None) if cmd_opts is not None else None
+    if not raw:
+        return False
+    client = getattr(request, "client", None)
+    host = getattr(client, "host", None) if client is not None else None
+    if not host:
+        return False
+    entries = [item.strip() for item in str(raw).split(",") if item.strip()]
+    if not entries:
+        return False
+    if "*" in entries:
+        return True
+    try:
+        raw_peer = ipaddress.ip_address(host.split("%", 1)[0])
+    except ValueError:
+        return host in entries
+    mapped_peer = getattr(raw_peer, "ipv4_mapped", None)
+    peers = (mapped_peer, raw_peer) if mapped_peer is not None else (raw_peer,)
+    for entry in entries:
+        try:
+            if "/" in entry:
+                network = ipaddress.ip_network(entry, strict=False)
+                if any(peer in network for peer in peers):
+                    return True
+            else:
+                addr = ipaddress.ip_address(entry)
+                if any(peer == addr for peer in peers):
+                    return True
+        except ValueError:
+            continue
+    return False
+
+
 def _same_origin(origin: str, request) -> bool:
     try:
         target = urlparse(origin)
@@ -152,16 +192,19 @@ def _same_origin(origin: str, request) -> bool:
         origin_port = target.port or default_port
     except ValueError:  # an unreadable Origin ("http://["), an out-of-range or non-numeric port
         return False
-    forwarded_port = request.headers.get("x-forwarded-port")
+    trust_proxy = _trusted_proxy(request, _cmd_opts())
+    forwarded_port = request.headers.get("x-forwarded-port") if trust_proxy else None
+    first_forwarded_port = (forwarded_port or "").split(",", 1)[0].strip()
     candidates = [request.headers.get("host") or ""]
-    # Proxies: X-Forwarded-Host may list several hops (first is the client's),
-    # and Forwarded carries host=...
-    candidates += [value.strip() for value in (request.headers.get("x-forwarded-host") or "").split(",")[:1]]
-    for part in (request.headers.get("forwarded") or "").split(","):
-        for pair in part.split(";"):
-            key, _, value = pair.strip().partition("=")
-            if key.lower() == "host":
-                candidates.append(value.strip('"'))
+    if trust_proxy:
+        # Proxies: X-Forwarded-Host may list several hops (first is the client's),
+        # and Forwarded carries host=...
+        candidates += [value.strip() for value in (request.headers.get("x-forwarded-host") or "").split(",")[:1]]
+        for part in (request.headers.get("forwarded") or "").split(",")[:1]:
+            for pair in part.split(";"):
+                key, _, value = pair.strip().partition("=")
+                if key.lower() == "host":
+                    candidates.append(value.strip('"'))
     for host in filter(None, candidates):
         try:
             parsed = urlparse("//" + host)
@@ -175,7 +218,7 @@ def _same_origin(origin: str, request) -> bool:
                 return True
         # A proxy's "$host" has no port: only the scheme's default port (or
         # the one the proxy reports) is this site, not other local ports.
-        elif origin_port == default_port or (forwarded_port or "").strip() == str(origin_port):
+        elif origin_port == default_port or first_forwarded_port == str(origin_port):
             return True
     return False
 
@@ -247,6 +290,13 @@ def _has_api_credentials(request) -> bool:
     return matches
 
 
+def _auth_owner(app, auth_dependency):
+    owner = getattr(auth_dependency, "__self__", None)
+    if owner is not None and hasattr(owner, "throttled"):
+        return owner
+    return getattr(getattr(app, "state", None), "auth", None)
+
+
 def refusal(app, request, require_login: bool = True, accept_api_auth: bool = False, api_route: bool = False) -> tuple[int, str] | None:
     """(status, reason) when ``request`` must be refused, else None.
     ``accept_api_auth``: valid --api-auth credentials stand in for the login.
@@ -262,8 +312,17 @@ def refusal(app, request, require_login: bool = True, accept_api_auth: bool = Fa
     api_auth = accept_api_auth and getattr(_cmd_opts(), "api_auth", None)
     if api_auth and _valid_api_credentials(request):
         return None  # (checked first: they are not WebUI logins, which would count as failed ones)
+    webui_throttled = False
     if auth_dependency is not None:
-        user = auth_dependency(request)
+        from remi.server.auth import Auth, basic_credentials, client_key
+
+        auth_obj = _auth_owner(app, auth_dependency)
+        has_basic = basic_credentials(request.headers) is not None
+        webui_throttled = auth_obj is not None and has_basic and auth_obj.throttled(client_key(request))
+        if isinstance(auth_obj, Auth) and getattr(auth_dependency, "__name__", None) == "user_for":
+            user = auth_dependency(request, count_failures=not api_auth, basic=not webui_throttled)
+        else:
+            user = auth_dependency(request)
     elif api_auth:
         # No WebUI login on this app (--nowebui): --api-auth is the login, as for /sdapi
         return _api_auth_refusal(request)
@@ -271,7 +330,11 @@ def refusal(app, request, require_login: bool = True, accept_api_auth: bool = Fa
         return None
     if user is None and api_auth:
         return _api_auth_refusal(request)
-    return None if user is not None else (401, "Not authenticated")
+    if user is not None:
+        return None
+    if webui_throttled:
+        return 429, "Too many failed logins; wait a minute"
+    return 401, "Not authenticated"
 
 
 def _valid_api_credentials(request) -> bool:

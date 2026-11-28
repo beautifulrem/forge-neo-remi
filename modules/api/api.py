@@ -1,13 +1,19 @@
 import base64
 import io
 import ipaddress
+import math
+import re
+import socket
 import time
-from contextlib import closing
+from collections.abc import Mapping
+from contextlib import closing, contextmanager
+from contextvars import ContextVar
 from io import BytesIO
 from secrets import compare_digest
 from threading import Lock
 from types import UnionType
 from typing import Any, Union, get_args, get_origin
+from urllib.parse import unquote_to_bytes, urljoin, urlparse
 
 import piexif
 import piexif.helper
@@ -75,6 +81,108 @@ def validate_sampler_name(name):
     return name
 
 
+_PNGINFO_SURROGATE_RE = re.compile("[\ud800-\udfff]")
+
+
+def _sanitize_pnginfo_scalar(value: Any) -> Any:
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        data = bytes(value)
+        try:
+            decoded = data.decode("utf-8")
+        except UnicodeDecodeError:
+            return f"<{len(data)} bytes>"
+        if decoded.isprintable() or all(ch.isprintable() or ch in "\n\r\t" for ch in decoded):
+            return decoded
+        return f"<{len(data)} bytes>"
+    if isinstance(value, str):
+        return _PNGINFO_SURROGATE_RE.sub("\ufffd", value)
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    return value
+
+
+def _sanitize_pnginfo_items(items: Mapping[Any, Any] | None) -> dict[str, Any]:
+    """Ensure ``items`` from ``read_info_from_image`` holds only UTF-8-safe,
+    JSON/Pydantic-serializable values (never raw non-UTF-8 ``bytes``)."""
+
+    if not isinstance(items, Mapping):
+        return {}
+
+    def _sanitize_key(key: Any) -> str:
+        clean = _sanitize_pnginfo_scalar(key)
+        return clean if isinstance(clean, str) else _PNGINFO_SURROGATE_RE.sub("\ufffd", str(clean))
+
+    placeholder: dict[str, Any] = {}
+    pending: list[tuple[Any, Any]] = [(items, placeholder)]
+    while pending:
+        src, dst = pending.pop()
+        if isinstance(src, Mapping):
+            for k, v in src.items():
+                sk = _sanitize_key(k)
+                if isinstance(v, Mapping):
+                    child: Any = {}
+                    dst[sk] = child
+                    pending.append((v, child))
+                elif isinstance(v, (list, tuple)):
+                    child = []
+                    dst[sk] = child
+                    pending.append((v, child))
+                else:
+                    dst[sk] = _sanitize_pnginfo_scalar(v)
+        else:
+            for v in src:
+                if isinstance(v, Mapping):
+                    child = {}
+                    dst.append(child)
+                    pending.append((v, child))
+                elif isinstance(v, (list, tuple)):
+                    child = []
+                    dst.append(child)
+                    pending.append((v, child))
+                else:
+                    dst.append(_sanitize_pnginfo_scalar(v))
+    return placeholder
+
+
+def _split_scheduler_suffix(name: str) -> tuple[str, str | None]:
+    if name in sd_samplers.all_samplers_map:
+        return name, None
+    options = [
+        (name_option, scheduler.label)
+        for scheduler in sd_schedulers.schedulers
+        for name_option in (scheduler.label, scheduler.name, *(scheduler.aliases or ()))
+        if name_option
+    ]
+    options.sort(key=lambda item: len(item[0]), reverse=True)
+    for name_option, scheduler_label in options:
+        suffix = " " + name_option
+        if name.endswith(suffix):
+            return name[: -len(suffix)], scheduler_label
+    return name, None
+
+
+def _strip_scheduler_suffix(name: str) -> str:
+    return _split_scheduler_suffix(name)[0]
+
+
+def _resolve_sampler_and_scheduler(sampler_name: str | None, sampler_index: str | None, scheduler_name: str | None) -> tuple[str, str]:
+    requested = sampler_name or sampler_index
+    if requested:
+        stripped, matched_scheduler = _split_scheduler_suffix(requested)
+        validate_sampler_name(stripped)
+        sampler, scheduler = sd_samplers.get_sampler_and_scheduler(stripped, matched_scheduler or scheduler_name)
+    else:
+        sampler, scheduler = sd_samplers.get_sampler_and_scheduler(requested, scheduler_name)
+    return validate_sampler_name(sampler), scheduler
+
+
+def _require_state():
+    state = shared.state
+    if state is None:
+        raise HTTPException(status_code=503, detail="Runtime state is not initialized")
+    return state
+
+
 def setUpscalers(req: dict):
     reqDict = vars(req)
     reqDict["extras_upscaler_1"] = reqDict.pop("upscaler_1", None)
@@ -86,46 +194,133 @@ MAX_URL_IMAGE_BYTES = 64 * 1024 * 1024
 MAX_URL_REDIRECTS = 5
 
 
-def verify_url(url):
-    """Returns True if the url refers to a global resource: every address
-    its host resolves to (IPv4 and IPv6) is public."""
+_PINNED_DNS: ContextVar[tuple[frozenset[str], tuple[str, ...]] | None] = ContextVar("_remi_sdapi_pinned_dns", default=None)
+_PIN_HOOK_LOCK = Lock()
+_ORIG_CREATE_CONNECTION = None
+_UNSET = object()
 
-    import socket
-    from urllib.parse import urlparse
+
+def _resolve_public_ips(url: str) -> tuple[frozenset[str], tuple[str, ...]] | None:
+    """Resolve ``url``'s hostname once and verify every returned address is public.
+    Returns ``(normalized_hostnames, unique_ips)`` or ``None`` if invalid/non-global."""
 
     try:
         host = urlparse(url).hostname
         if not host:
-            return False
-        addresses = {info[4][0].split("%", 1)[0] for info in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)}
-        for ip in addresses:
+            return None
+        raw_ips: list[str] = []
+        seen: set[str] = set()
+        for info in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM):
+            ip = info[4][0].split("%", 1)[0]
             ip_addr = ipaddress.ip_address(ip)
             mapped = getattr(ip_addr, "ipv4_mapped", None)
             if not (mapped or ip_addr).is_global:
-                return False
-        return bool(addresses)
+                return None
+            if ip not in seen:
+                seen.add(ip)
+                raw_ips.append(ip)
+        if not raw_ips:
+            return None
+        norm = host.strip("[]").lower()
+        hosts = {norm}
+        try:
+            hosts.add(norm.encode("idna").decode("ascii").lower())
+        except UnicodeError:
+            pass
+        return frozenset(hosts), tuple(raw_ips)
     except Exception:
-        return False
+        return None
+
+
+def _pinned_create_connection(address, timeout=_UNSET, source_address=None, socket_options=None):
+    from urllib3.util import connection as urllib3_connection
+
+    if timeout is _UNSET:
+        timeout = urllib3_connection._DEFAULT_TIMEOUT
+    pinned = _PINNED_DNS.get()
+    host, port = address
+    norm_host = host.strip("[]").lower()
+    if pinned is None or norm_host not in pinned[0]:
+        assert _ORIG_CREATE_CONNECTION is not None
+        return _ORIG_CREATE_CONNECTION(address, timeout=timeout, source_address=source_address, socket_options=socket_options)
+
+    family = urllib3_connection.allowed_gai_family()
+    err = None
+    for ip_str in pinned[1]:
+        ip_obj = ipaddress.ip_address(ip_str)
+        af = socket.AF_INET6 if ip_obj.version == 6 else socket.AF_INET
+        if family != socket.AF_UNSPEC and af != family:
+            continue
+        sa = (ip_str, port, 0, 0) if af == socket.AF_INET6 else (ip_str, port)
+        sock = None
+        try:
+            sock = socket.socket(af, socket.SOCK_STREAM, 0)
+            urllib3_connection._set_socket_options(sock, socket_options)
+            if timeout is not urllib3_connection._DEFAULT_TIMEOUT:
+                sock.settimeout(timeout)
+            if source_address:
+                sock.bind(source_address)
+            sock.connect(sa)
+            return sock
+        except OSError as exc:
+            err = exc
+            if sock is not None:
+                sock.close()
+    if err is not None:
+        raise err
+    raise OSError("getaddrinfo returns an empty list")
+
+
+def _ensure_dns_pin_hook() -> None:
+    from urllib3.util import connection as urllib3_connection
+
+    global _ORIG_CREATE_CONNECTION
+    with _PIN_HOOK_LOCK:
+        if urllib3_connection.create_connection is not _pinned_create_connection:
+            _ORIG_CREATE_CONNECTION = urllib3_connection.create_connection
+            urllib3_connection.create_connection = _pinned_create_connection
+
+
+@contextmanager
+def _pin_dns(pinned: tuple[frozenset[str], tuple[str, ...]] | None):
+    if pinned is None:
+        yield
+        return
+    _ensure_dns_pin_hook()
+    token = _PINNED_DNS.set(pinned)
+    try:
+        yield
+    finally:
+        _PINNED_DNS.reset(token)
+
+
+def verify_url(url):
+    """Returns True if the url refers to a global resource: every address
+    its host resolves to (IPv4 and IPv6) is public."""
+
+    return _resolve_public_ips(url) is not None
 
 
 def fetch_url_image_bytes(url: str) -> bytes:
     """GET an image URL for the API (``api_enable_requests``): http(s) only,
     redirects followed by hand and each hop checked against
-    ``api_forbid_local_requests``, the body capped at ``MAX_URL_IMAGE_BYTES``.
-    (A DNS answer that changes between the check and the connection is not
-    caught; turn ``api_enable_requests`` off on servers that must not reach
-    their network.)"""
-
-    from urllib.parse import urljoin, urlparse
+    ``api_forbid_local_requests`` with the resolved public IP(s) pinned on
+    the socket connection to prevent DNS-rebinding TOCTOU, the body capped
+    at ``MAX_URL_IMAGE_BYTES``."""
 
     headers = {"user-agent": opts.api_useragent} if opts.api_useragent else {}
     current = url
     for _hop in range(MAX_URL_REDIRECTS + 1):
         if urlparse(current).scheme not in ("http", "https"):
             raise HTTPException(status_code=500, detail="Invalid image url")
-        if opts.api_forbid_local_requests and not verify_url(current):
-            raise HTTPException(status_code=500, detail="Request to local resource not allowed")
-        with requests.get(current, timeout=30, headers=headers, stream=True, allow_redirects=False) as response:
+        pinned = None
+        request_kwargs: dict[str, Any] = {"timeout": 30, "headers": headers, "stream": True, "allow_redirects": False}
+        if opts.api_forbid_local_requests:
+            pinned = _resolve_public_ips(current)
+            if pinned is None:
+                raise HTTPException(status_code=500, detail="Request to local resource not allowed")
+            request_kwargs["proxies"] = {"http": "", "https": ""}
+        with _pin_dns(pinned), requests.get(current, **request_kwargs) as response:
             if response.is_redirect:
                 current = urljoin(current, response.headers.get("location", ""))
                 continue
@@ -165,10 +360,25 @@ def decode_base64_to_image(encoding):
         except Exception as e:
             raise HTTPException(status_code=500, detail="Invalid image url") from e
 
-    if encoding.startswith("data:image/"):
-        encoding = encoding.split(";")[1].split(",")[1]
     try:
-        return _checked_image(base64.b64decode(encoding))
+        if encoding.startswith("data:image/"):
+            header, sep, payload = encoding.partition(",")
+            if not sep:
+                raise ValueError("Missing data URI payload")
+            params = [part.strip().lower() for part in header.split(";")[1:]]
+            if "base64" in params:
+                raw = base64.b64decode(payload)
+            else:
+                raw = unquote_to_bytes(payload)
+                try:
+                    return _checked_image(raw)
+                except HTTPException:
+                    raise
+                except Exception:
+                    raw = base64.b64decode(payload)
+        else:
+            raw = base64.b64decode(encoding)
+        return _checked_image(raw)
     except HTTPException:
         raise
     except Exception as e:
@@ -224,8 +434,12 @@ class Api:
         if shared.cmd_opts.api_auth:
             self.credentials = {}
             for auth in shared.cmd_opts.api_auth.split(","):
-                user, password = auth.split(":")
-                self.credentials[user] = password
+                auth = auth.strip()
+                if not auth:
+                    continue
+                user, sep, password = auth.partition(":")
+                if sep and user:
+                    self.credentials[user] = password
 
         self.router = APIRouter()
         self.app = app
@@ -457,11 +671,11 @@ class Api:
         self.apply_infotext(txt2imgreq, "txt2img", script_runner=script_runner, mentioned_script_args=infotext_script_args)
 
         selectable_scripts, selectable_script_idx = self.get_selectable_script(txt2imgreq.script_name, script_runner)
-        sampler, scheduler = sd_samplers.get_sampler_and_scheduler(txt2imgreq.sampler_name or txt2imgreq.sampler_index, txt2imgreq.scheduler)
+        sampler, scheduler = _resolve_sampler_and_scheduler(txt2imgreq.sampler_name, txt2imgreq.sampler_index, txt2imgreq.scheduler)
 
         populate = txt2imgreq.copy(
             update={  # Override __init__ params
-                "sampler_name": validate_sampler_name(sampler),
+                "sampler_name": sampler,
                 "do_not_save_samples": not txt2imgreq.save_images,
                 "do_not_save_grid": not txt2imgreq.save_images,
             }
@@ -483,6 +697,7 @@ class Api:
         send_images = args.pop("send_images", True)
         args.pop("save_images", None)
 
+        state = _require_state()
         add_task_to_queue(task_id)
 
         with self.queue_lock:
@@ -493,7 +708,7 @@ class Api:
                 p.outpath_samples = opts.outdir_txt2img_samples
 
                 try:
-                    shared.state.begin(job="scripts_txt2img")
+                    state.begin(job="scripts_txt2img")
                     start_task(task_id)
                     if selectable_scripts is not None:
                         p.script_args = script_args
@@ -504,8 +719,9 @@ class Api:
                     process_extra_images(processed)
                     finish_task(task_id)
                 finally:
-                    shared.state.end()
-                    shared.total_tqdm.clear()
+                    state.end()
+                    if shared.total_tqdm is not None:
+                        shared.total_tqdm.clear()
 
         b64images = list(map(encode_pil_to_base64, processed.images + processed.extra_images)) if send_images else []
 
@@ -529,11 +745,11 @@ class Api:
         self.apply_infotext(img2imgreq, "img2img", script_runner=script_runner, mentioned_script_args=infotext_script_args)
 
         selectable_scripts, selectable_script_idx = self.get_selectable_script(img2imgreq.script_name, script_runner)
-        sampler, scheduler = sd_samplers.get_sampler_and_scheduler(img2imgreq.sampler_name or img2imgreq.sampler_index, img2imgreq.scheduler)
+        sampler, scheduler = _resolve_sampler_and_scheduler(img2imgreq.sampler_name, img2imgreq.sampler_index, img2imgreq.scheduler)
 
         populate = img2imgreq.copy(
             update={  # Override __init__ params
-                "sampler_name": validate_sampler_name(sampler),
+                "sampler_name": sampler,
                 "do_not_save_samples": not img2imgreq.save_images,
                 "do_not_save_grid": not img2imgreq.save_images,
                 "mask": mask,
@@ -557,6 +773,7 @@ class Api:
         send_images = args.pop("send_images", True)
         args.pop("save_images", None)
 
+        state = _require_state()
         add_task_to_queue(task_id)
 
         with self.queue_lock:
@@ -568,7 +785,7 @@ class Api:
                 p.outpath_samples = opts.outdir_img2img_samples
 
                 try:
-                    shared.state.begin(job="scripts_img2img")
+                    state.begin(job="scripts_img2img")
                     start_task(task_id)
                     if selectable_scripts is not None:
                         p.script_args = script_args
@@ -579,8 +796,9 @@ class Api:
                     process_extra_images(processed)
                     finish_task(task_id)
                 finally:
-                    shared.state.end()
-                    shared.total_tqdm.clear()
+                    state.end()
+                    if shared.total_tqdm is not None:
+                        shared.total_tqdm.clear()
 
         b64images = list(map(encode_pil_to_base64, processed.images + processed.extra_images)) if send_images else []
 
@@ -620,40 +838,48 @@ class Api:
         geninfo, items = images.read_info_from_image(image)
         if geninfo is None:
             geninfo = ""
+        elif not isinstance(geninfo, str):
+            geninfo = str(_sanitize_pnginfo_scalar(geninfo))
+        geninfo = _PNGINFO_SURROGATE_RE.sub("\ufffd", geninfo)
+        sanitized_items = _sanitize_pnginfo_items(items)
 
         params = infotext_utils.parse_generation_parameters(geninfo)
         script_callbacks.infotext_pasted_callback(geninfo, params)
 
-        return models.PNGInfoResponse(info=geninfo, items=items, parameters=params)
+        return models.PNGInfoResponse(info=geninfo, items=sanitized_items, parameters=params)
 
     def progressapi(self, req: models.ProgressRequest = Depends()):
         # copy from check_progress_call of ui.py
+        state = _require_state()
 
-        if shared.state.job_count == 0:
-            return models.ProgressResponse(progress=0, eta_relative=0, state=shared.state.dict(), textinfo=shared.state.textinfo)
+        if state.job_count == 0:
+            return models.ProgressResponse(progress=0, eta_relative=0, state=state.dict(), textinfo=state.textinfo)
 
         # avoid dividing zero
         progress = 0.01
 
-        if shared.state.job_count > 0:
-            progress += shared.state.job_no / shared.state.job_count
-        if shared.state.sampling_steps > 0:
-            progress += 1 / shared.state.job_count * shared.state.sampling_step / shared.state.sampling_steps
+        if state.job_count > 0:
+            progress += state.job_no / state.job_count
+        if state.sampling_steps > 0 and state.job_count > 0:
+            progress += 1 / state.job_count * state.sampling_step / state.sampling_steps
 
-        time_since_start = time.time() - shared.state.time_start
-        eta = time_since_start / progress
-        eta_relative = eta - time_since_start
+        progress = max(0.0, min(progress, 1.0))
 
-        progress = min(progress, 1)
+        time_since_start = (time.time() - state.time_start) if state.time_start is not None else 0.0
+        if progress > 0:
+            eta = time_since_start / progress
+            eta_relative = eta - time_since_start
+        else:
+            eta_relative = 0.0
 
         current_image = None
-        if shared.state.current_image and not req.skip_current_image:
-            current_image = encode_pil_to_base64(shared.state.current_image)
+        if state.current_image and not req.skip_current_image:
+            current_image = encode_pil_to_base64(state.current_image)
 
-        return models.ProgressResponse(progress=progress, eta_relative=eta_relative, state=shared.state.dict(), current_image=current_image, textinfo=shared.state.textinfo, current_task=current_task)
+        return models.ProgressResponse(progress=progress, eta_relative=eta_relative, state=state.dict(), current_image=current_image, textinfo=state.textinfo, current_task=current_task)
 
     def interruptapi(self):
-        shared.state.interrupt()
+        _require_state().interrupt()
 
         return {}
 
@@ -663,7 +889,7 @@ class Api:
         return {}
 
     def skip(self):
-        shared.state.skip()
+        _require_state().skip()
 
     def get_config(self):
         from modules.sysinfo import get_config
@@ -884,7 +1110,7 @@ class Api:
         return models.MemoryResponse(ram=ram, cuda=cuda)
 
     def get_extensions_list(self):
-        from modules import extensions
+        from modules import extensions, redact
 
         extensions.list_extensions()
         ext_list = []
@@ -892,10 +1118,13 @@ class Api:
             ext: extensions.Extension
             ext.read_info_from_repo()
             if ext.remote is not None:
+                remote = redact.url(ext.remote)
+                if "://" not in remote:
+                    remote = re.sub(r"^([^:@/\s]+):[^@/\s]+@([^:/\s]+:)", rf"\1:{redact.HIDDEN}@\2", remote)
                 ext_list.append(
                     {
                         "name": ext.name,
-                        "remote": ext.remote,
+                        "remote": remote,
                         "branch": ext.branch,
                         "commit_hash": ext.commit_hash,
                         "commit_date": ext.commit_date,
@@ -922,9 +1151,33 @@ class Api:
 
     def restart_webui(self):
         if restart.is_restartable():
+            services = getattr(getattr(self.app, "state", None), "services", None)
+            if services is not None:
+                queue = getattr(services, "queue", None)
+                if queue is not None:
+                    try:
+                        queue.stop(timeout=30, interrupt=True)
+                    except Exception:
+                        pass
+                if hasattr(services, "close"):
+                    try:
+                        services.close()
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        services.stop()
+                    except Exception:
+                        pass
+                    workers = getattr(services, "workers", None)
+                    if workers is not None:
+                        try:
+                            workers.shutdown()
+                        except Exception:
+                            pass
             restart.restart_program()
         return Response(status_code=501)
 
     def stop_webui(self):
-        shared.state.server_command = "stop"
+        _require_state().server_command = "stop"
         return Response("Stopping.")

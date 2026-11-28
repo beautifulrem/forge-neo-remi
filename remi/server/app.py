@@ -73,17 +73,45 @@ def _phrase(status: int) -> str:
         return "Error"
 
 
+def _json_safe_encode(value: Any, *, custom_encoder: dict[Any, Callable[[Any], Any]] | None = None) -> Any:
+    def _leaf(item: Any) -> Any:
+        if isinstance(item, float):
+            return repr(item) if not math.isfinite(item) else item
+        if custom_encoder is not None:
+            if isinstance(item, (bytes, bytearray, memoryview)):
+                return _echoed_bytes(bytes(item))
+            if not isinstance(item, (str, int, bool, type(None))):
+                return jsonable_encoder(item, custom_encoder=custom_encoder)
+        return item
+
+    if not isinstance(value, (dict, list, tuple)) and not (custom_encoder is not None and isinstance(value, (set, frozenset))):
+        return _leaf(value)
+
+    sentinel: list[Any] = [None]
+    stack: list[tuple[Any, Any, Any]] = [(sentinel, 0, value)]
+    while stack:
+        parent, key, item = stack.pop()
+        if isinstance(item, dict):
+            copy: dict[Any, Any] = {}
+            parent[key] = copy
+            for k, v in reversed(list(item.items())):
+                stack.append((copy, k if custom_encoder is None or isinstance(k, (str, int, float, bool, type(None))) else _leaf(k), v))
+        elif isinstance(item, (list, tuple)) or (custom_encoder is not None and isinstance(item, (set, frozenset))):
+            seq = list(item) if isinstance(item, (set, frozenset)) else item
+            lst: list[Any] = [None] * len(seq)
+            parent[key] = lst
+            for idx in range(len(seq) - 1, -1, -1):
+                stack.append((lst, idx, seq[idx]))
+        else:
+            parent[key] = _leaf(item)
+    return sentinel[0]
+
+
 def json_safe(value: Any) -> Any:
     """``value`` with every non-finite float (``inf``, ``nan``: what a JSON
     body like ``1e999`` parses to) as its text, so it can be encoded."""
 
-    if isinstance(value, float) and not math.isfinite(value):
-        return repr(value)
-    if isinstance(value, dict):
-        return {key: json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [json_safe(item) for item in value]
-    return value
+    return _json_safe_encode(value)
 
 
 class TextSafeResponse(JSONResponse):
@@ -158,7 +186,7 @@ def _request_validation_error(request: Request, error: RequestValidationError) -
 
     log.debug("%s %s: invalid request (%d errors)", request.method, request.url.path, len(error.errors()))
     encoders = {bytes: _echoed_bytes, bytearray: lambda value: _echoed_bytes(bytes(value)), memoryview: lambda value: _echoed_bytes(value.tobytes())}
-    return ErrorResponse(status_code=422, content={"detail": jsonable_encoder(error.errors(), custom_encoder=encoders)})
+    return ErrorResponse(status_code=422, content={"detail": _json_safe_encode(error.errors(), custom_encoder=encoders)})
 
 
 def _validation_error(request: Request, error: ValidationError) -> JSONResponse:

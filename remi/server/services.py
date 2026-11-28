@@ -208,28 +208,37 @@ class Services:
 
         try:
             days = _positive(option("remi_upload_retention_days", 7), 7)
+            self.chains.store.prune_cache(time.time() - days * 86400, files=self.files)
+        except Exception:
+            log.exception("pruning the pipeline stage cache")
+        try:
+            days = _positive(option("remi_upload_retention_days", 7), 7)
             referenced = self.store.referenced_strings()
             removed = self.files.prune_uploads(days * 86400, keep=referenced)
             if removed:
                 log.info("Removed %d old upload(s)", removed)
             from remi.library import gallery_for
 
-            # a starred image, one on a board or one of a starred job was chosen to be kept, saved or not
-            kept = gallery_for(self.files).kept_ids() | self.store.starred_output_ids()
+            # a starred image, one on a board, one of a starred job, or an active stage_cache output is kept
+            cached = self.chains.store.cached_file_ids()
+            kept = gallery_for(self.files).kept_ids() | self.store.starred_output_ids() | cached
             removed = self.files.prune_unsaved(days * 86400, keep=referenced | kept)
             if removed:
                 log.info("Removed %d old unsaved output(s)", removed)
         except Exception:
             log.exception("pruning uploads")
         try:
-            days = _positive(option("remi_upload_retention_days", 7), 7)
-            self.chains.store.prune_cache(time.time() - days * 86400)
-        except Exception:
-            log.exception("pruning the pipeline stage cache")
-        try:
             from remi.library import gallery_for
 
-            gallery_for(self.files).prune_exports()
+            gallery = gallery_for(self.files)
+            gallery.prune_exports()
+            prune_missing = getattr(gallery, "prune_missing", None)
+            if callable(prune_missing):
+                days = _positive(option("remi_upload_retention_days", 7), 7)
+                prune_missing(days * 86400)
+            prune_meta = getattr(gallery, "prune_meta", None) or getattr(gallery, "_prune_meta", None)
+            if callable(prune_meta):
+                prune_meta()
         except Exception:
             log.exception("pruning gallery exports")
         try:

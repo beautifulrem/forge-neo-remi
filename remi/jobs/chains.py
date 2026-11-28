@@ -25,16 +25,20 @@ import hashlib
 import json
 import logging
 import math
+import os
+import re
 import secrets
 import sqlite3
+import sys
 import threading
 import time
+import weakref
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from remi.files import FileStore, connect, decode_cursor, encode_cursor, transaction
+from remi.files import FileStore, close_db, connect, decode_cursor, encode_cursor, transaction
 from remi.jobs import texts
 from remi.jobs.queue import JobError, JobQueue, Submission
 from remi.jobs.store import CANCELLED, CHAIN_SCHEMA, COMPLETED, FAILED, INTERRUPTED, Job, JobStore
@@ -54,7 +58,8 @@ CHAIN_STATUSES = ("queued", "running", "paused", "completed", "failed", "cancell
 STAGE_STATUSES = ("pending", "running", "cached", "completed", "failed", "skipped", "cancelled")
 TERMINAL_CHAIN_STATUSES = ("completed", "failed", "cancelled")
 MAX_STAGES = 8
-STAGE_HASH_VERSION = 2
+MAX_STAGE_CACHE_ENTRIES = 2000
+STAGE_HASH_VERSION = 3
 """Bumped when the hash inputs change, so entries keyed the old way never hit."""
 SEEDED_TABS = ("txt2img", "img2img")
 """Tabs whose output depends on the seed (``extras`` and prompt upsampling do not)."""
@@ -187,14 +192,17 @@ class CachedStageOutput:
 
 
 def _check_finite(value: Any, path: str) -> None:
-    if isinstance(value, float) and not math.isfinite(value):
-        raise ChainError(Sentence("{{path}} must not contain NaN or Infinity", path=path), status=422)
-    if isinstance(value, Mapping):
-        for key, item in value.items():
-            _check_finite(item, f"{path}.{key}")
-    elif isinstance(value, (list, tuple)):
-        for index, item in enumerate(value):
-            _check_finite(item, f"{path}[{index}]")
+    pending: list[tuple[Any, str]] = [(value, path)]
+    while pending:
+        item, cur = pending.pop()
+        if isinstance(item, float):
+            if not math.isfinite(item):
+                raise ChainError(Sentence("{{path}} must not contain NaN or Infinity", path=cur), status=422)
+        elif isinstance(item, Mapping):
+            pending.extend((child, f"{cur}.{key}") for key, child in reversed(list(item.items())))
+        elif isinstance(item, (list, tuple)):
+            n = len(item)
+            pending.extend((child, f"{cur}[{n - 1 - index}]") for index, child in enumerate(reversed(item)))
 
 
 def check_stages_finite(stages: Sequence[StageSpec]) -> None:
@@ -327,17 +335,21 @@ class ChainStore:
             self._db = target._db
             self._lock = target._lock
             self._owns_db = False
+            self._finalizer = None
         else:
             self._lock = threading.RLock()
             self._db = connect(Path(target))
             self._owns_db = True
+            self._finalizer = weakref.finalize(self, close_db, self._db)
         with self._lock:
             self._db.executescript(CHAIN_SCHEMA)
 
     def close(self) -> None:
         if self._owns_db:
             with self._lock:
-                self._db.close()
+                if self._finalizer is not None:
+                    self._finalizer.detach()
+                close_db(self._db)
 
     def __enter__(self) -> ChainStore:
         return self
@@ -350,7 +362,7 @@ class ChainStore:
         """Several writes that land together or not at all (the connection
         autocommits otherwise)."""
 
-        with self._lock, transaction(self._db, "BEGIN"):
+        with self._lock, transaction(self._db, "BEGIN IMMEDIATE"):
             yield
 
     def _insert_stages(self, chain_id: str, stages: Sequence[StageSpec]) -> None:
@@ -489,8 +501,9 @@ class ChainStore:
             except ValueError:
                 pass
             else:
-                page_where += " AND (created < ? OR (created = ? AND id < ?))"
-                page_args.extend([created_val, created_val, cid])
+                if math.isfinite(created_val):
+                    page_where += " AND (created < ? OR (created = ? AND id < ?))"
+                    page_args.extend([created_val, created_val, cid])
         limit = min(max(int(limit), 1), 200)
         with self._lock:
             total = self._db.execute(f"SELECT COUNT(*) FROM chains WHERE {filters}", args).fetchone()[0]
@@ -630,7 +643,7 @@ class ChainStore:
         if not sets:
             return
         args.extend([chain_id, int(stage_index)])
-        with self._lock:
+        with self._transaction():
             self._db.execute(f"UPDATE stage_runs SET {', '.join(sets)} WHERE chain_id = ? AND stage_index = ?", args)
             self._db.execute("UPDATE chains SET updated = ? WHERE id = ?", (time.time(), chain_id))
 
@@ -665,6 +678,23 @@ class ChainStore:
             created=float(row[6]),
         )
 
+    def cached_file_ids(self) -> set[str]:
+        """Output file ids currently referenced by ``stage_cache`` entries."""
+
+        with self._lock:
+            rows = self._db.execute("SELECT output_file_ids FROM stage_cache").fetchall()
+        found: set[str] = set()
+        for (raw,) in rows:
+            try:
+                ids = json.loads(raw or "[]")
+            except ValueError:
+                continue
+            if isinstance(ids, list):
+                for fid in ids:
+                    if isinstance(fid, str) and fid:
+                        found.add(fid)
+        return found
+
     def put_cached(
         self,
         stage_hash: str,
@@ -674,8 +704,9 @@ class ChainStore:
         output_prompt: str | None = None,
         infotext: str | None = None,
         job_id: str | None = None,
+        max_entries: int = MAX_STAGE_CACHE_ENTRIES,
     ) -> None:
-        with self._lock:
+        with self._transaction():
             self._db.execute(
                 """
                 INSERT OR REPLACE INTO stage_cache (stage_hash, kind, output_file_ids, output_prompt, infotext, job_id, created)
@@ -683,6 +714,11 @@ class ChainStore:
                 """,
                 (stage_hash, kind, json.dumps(list(output_file_ids), ensure_ascii=False), output_prompt, infotext, job_id, time.time()),
             )
+            if max_entries > 0:
+                self._db.execute(
+                    "DELETE FROM stage_cache WHERE stage_hash NOT IN (SELECT stage_hash FROM stage_cache ORDER BY created DESC LIMIT ?)",
+                    (int(max_entries),),
+                )
 
     def touch_cached(self, stage_hash: str, when: float) -> None:
         """A pipeline reused this entry at ``when``: its ``created`` is the
@@ -691,13 +727,51 @@ class ChainStore:
         with self._lock:
             self._db.execute("UPDATE stage_cache SET created = ? WHERE stage_hash = ?", (when, stage_hash))
 
-    def prune_cache(self, older_than: float) -> int:
-        """Forget the cached stage outputs stored or last reused before
-        ``older_than`` (a time); how many went. A pipeline that needs one runs
-        the stage again."""
+    def prune_cache(
+        self,
+        older_than: float,
+        *,
+        max_entries: int = MAX_STAGE_CACHE_ENTRIES,
+        files: FileStore | None = None,
+    ) -> int:
+        """Forget cached stage outputs older than ``older_than``, cap entries at
+        ``max_entries``, and (when ``files`` is given) drop entries whose outputs
+        were deleted from disk/index."""
 
-        with self._lock:
-            return self._db.execute("DELETE FROM stage_cache WHERE created < ?", (older_than,)).rowcount
+        with self._transaction():
+            removed = self._db.execute("DELETE FROM stage_cache WHERE created < ?", (older_than,)).rowcount
+            if max_entries > 0:
+                removed += self._db.execute(
+                    "DELETE FROM stage_cache WHERE stage_hash NOT IN (SELECT stage_hash FROM stage_cache ORDER BY created DESC LIMIT ?)",
+                    (int(max_entries),),
+                ).rowcount
+            if files is not None:
+                rows = self._db.execute("SELECT stage_hash, kind, output_file_ids FROM stage_cache WHERE kind != 'prompt_upsample'").fetchall()
+                dead: list[tuple[str]] = []
+                all_ids: list[str] = []
+                parsed: list[tuple[str, list[str]]] = []
+                for stage_hash, _kind, raw_ids in rows:
+                    try:
+                        ids = json.loads(raw_ids or "[]")
+                    except ValueError:
+                        dead.append((stage_hash,))
+                        continue
+                    if not isinstance(ids, list) or not ids:
+                        dead.append((stage_hash,))
+                        continue
+                    str_ids = [fid for fid in ids if isinstance(fid, str)]
+                    if len(str_ids) != len(ids):
+                        dead.append((stage_hash,))
+                        continue
+                    parsed.append((stage_hash, str_ids))
+                    all_ids.extend(str_ids)
+                present = files.get_many(all_ids) if all_ids else {}
+                for stage_hash, str_ids in parsed:
+                    if not all(fid in present for fid in str_ids):
+                        dead.append((stage_hash,))
+                if dead:
+                    removed += self._db.executemany("DELETE FROM stage_cache WHERE stage_hash = ?", dead).rowcount
+        return removed
 
     # endregion
 
@@ -779,21 +853,165 @@ class ChainStore:
     # endregion
 
 
+_LORA_TAG_RE = re.compile(r"<(?:lora|lyco):([^:<>]+)(?::[^<>]*)?>", re.IGNORECASE)
+
+
 def _file_identity(path: Any) -> str:
     try:
-        import os
-
-        stat = os.stat(path)
+        target = os.fspath(path)
+        stat = os.stat(target)
     except (OSError, TypeError, ValueError):
         return ""
+    if os.path.isdir(target):
+        digest = hashlib.sha256()
+        entries: list[tuple[str, int, int]] = []
+        try:
+            for root, dirs, files in os.walk(target):
+                dirs.sort()
+                for name in sorted(files):
+                    full = os.path.join(root, name)
+                    try:
+                        fst = os.stat(full, follow_symlinks=False)
+                    except OSError:
+                        continue
+                    rel = os.path.relpath(full, target).replace("\\", "/")
+                    entries.append((rel, fst.st_size, fst.st_mtime_ns))
+        except OSError:
+            return f"{stat.st_size}:{stat.st_mtime_ns}"
+        for rel, size, mtime_ns in entries:
+            digest.update(f"{rel}\0{size}\0{mtime_ns}\n".encode("utf-8", "surrogateescape"))
+        return f"dir:{digest.hexdigest()[:24]}"
     return f"{stat.st_size}:{stat.st_mtime_ns}"
+
+
+def _resolve_module_path(entry: Any) -> str | None:
+    if not isinstance(entry, (str, os.PathLike)):
+        return None
+    text = os.fspath(entry).strip()
+    if not text:
+        return None
+    if os.path.exists(text):
+        return text
+    main_entry = sys.modules.get("modules_forge.main_entry")
+    if main_entry is not None:
+        module_list = getattr(main_entry, "module_list", None) or {}
+        for key in (text, os.path.basename(text)):
+            candidate = module_list.get(key)
+            if candidate and os.path.exists(candidate):
+                return os.fspath(candidate)
+    try:
+        from modules import paths, shared
+
+        search_dirs = [
+            os.path.join(paths.models_path, "VAE"),
+            os.path.join(paths.models_path, "text_encoder"),
+            *(getattr(getattr(shared, "cmd_opts", None), "vae_dirs", None) or ()),
+            *(getattr(getattr(shared, "cmd_opts", None), "text_encoder_dirs", None) or ()),
+        ]
+        base = os.path.basename(text)
+        for root_dir in search_dirs:
+            if not root_dir or not os.path.isdir(root_dir):
+                continue
+            direct = os.path.join(root_dir, text)
+            if os.path.exists(direct):
+                return direct
+            for cur, dirs, files in os.walk(root_dir):
+                if base in files or base in dirs:
+                    return os.path.join(cur, base)
+    except Exception:
+        pass
+    return None
+
+
+def _resolve_vae_identity(vae_name: str) -> str:
+    if not vae_name or vae_name in ("None", "Automatic"):
+        return ""
+    if os.path.exists(vae_name):
+        return _file_identity(vae_name)
+    sd_vae = sys.modules.get("modules.sd_vae")
+    if sd_vae is not None:
+        vae_dict = getattr(sd_vae, "vae_dict", None) or {}
+        candidate = vae_dict.get(vae_name) or vae_dict.get(os.path.basename(vae_name))
+        if candidate and os.path.exists(candidate):
+            return _file_identity(candidate)
+    try:
+        from modules import paths, shared
+
+        search_dirs = [
+            os.path.join(paths.models_path, "VAE"),
+            *(getattr(getattr(shared, "cmd_opts", None), "vae_dirs", None) or ()),
+        ]
+        base = os.path.basename(vae_name)
+        for root_dir in search_dirs:
+            if not root_dir or not os.path.isdir(root_dir):
+                continue
+            direct = os.path.join(root_dir, vae_name)
+            if os.path.exists(direct):
+                return _file_identity(direct)
+            for cur, _dirs, files in os.walk(root_dir):
+                if base in files:
+                    return _file_identity(os.path.join(cur, base))
+    except Exception:
+        pass
+    return ""
+
+
+def _resolve_lora_identity(name: str) -> str:
+    clean = name.strip()
+    if not clean or clean == "None":
+        return ""
+    if os.path.exists(clean):
+        return _file_identity(clean)
+    networks_mod = sys.modules.get("networks")
+    if networks_mod is not None:
+        for attr in ("available_networks", "available_network_aliases"):
+            mapping = getattr(networks_mod, attr, None) or {}
+            entry = mapping.get(clean) or mapping.get(os.path.splitext(clean)[0])
+            filename = getattr(entry, "filename", None) if entry is not None else None
+            if filename and os.path.exists(filename):
+                return _file_identity(filename)
+    try:
+        from modules import paths, shared
+
+        cmd_opts = getattr(shared, "cmd_opts", None)
+        lora_dirs = [
+            getattr(cmd_opts, "lora_dir", None),
+            getattr(cmd_opts, "lyco_dir_backcompat", None),
+            os.path.join(paths.models_path, "Lora"),
+        ]
+        stem = os.path.splitext(os.path.basename(clean))[0]
+        for root_dir in lora_dirs:
+            if not root_dir or not os.path.isdir(root_dir):
+                continue
+            for cur, _dirs, files in os.walk(root_dir):
+                for fname in files:
+                    if fname == clean or os.path.splitext(fname)[0] == stem:
+                        return _file_identity(os.path.join(cur, fname))
+    except Exception:
+        pass
+    return ""
+
+
+def _prompt_lora_identities(*texts: str | None) -> str:
+    names: set[str] = set()
+    for text in texts:
+        if isinstance(text, str) and text:
+            for match in _LORA_TAG_RE.finditer(text):
+                name = match.group(1).strip()
+                if name:
+                    names.add(name)
+    if not names:
+        return ""
+    resolved = [f"{name}@{_resolve_lora_identity(name)}" for name in sorted(names)]
+    return ",".join(resolved)
 
 
 def _default_model_fingerprint() -> str:
     """What the loaded model and the settings that change every image amount to.
 
-    The checkpoint goes in by name and file identity (size and mtime), so a
-    file replaced under the same name does not reuse the old outputs."""
+    The checkpoint, VAE, additional modules (including sharded HF directories),
+    and active global LoRA go in by name and file identity, so a file replaced
+    under the same name does not reuse old outputs."""
 
     try:
         from remi.setting_values import setting
@@ -809,18 +1027,30 @@ def _default_model_fingerprint() -> str:
                 identity = _file_identity(getattr(info, "filename", None))
         except Exception:
             pass
-        modules = setting("forge_additional_modules", [])
+        modules = setting("forge_additional_modules", []) or []
+        module_parts: list[str] = []
+        for mod in modules:
+            resolved = _resolve_module_path(mod)
+            module_parts.append(f"{mod}@{_file_identity(resolved or mod)}")
+        vae = str(setting("sd_vae", "") or "")
+        vae_id = _resolve_vae_identity(vae)
+        sd_lora = str(setting("sd_lora", "") or "")
+        lora_id = _resolve_lora_identity(sd_lora) if sd_lora and sd_lora != "None" else ""
         parts = [
             checkpoint,
             identity,
             setting("forge_preset", "") or "",
             setting("forge_unet_storage_dtype", "") or "",
-            setting("sd_vae", "") or "",
-            ",".join(sorted(f"{m}@{_file_identity(m)}" for m in modules)),
+            f"{vae}@{vae_id}" if vae else "",
+            ",".join(sorted(module_parts)),
+            f"{sd_lora}@{lora_id}" if sd_lora and sd_lora != "None" else "",
             setting("CLIP_stop_at_last_layers") or "",
             setting("emphasis") or "",
             setting("eta_noise_seed_delta") or "",
             setting("randn_source") or "",
+            setting("s_min_uncond") or "",
+            setting("upcast_sampling") or "",
+            setting("extra_networks_default_multiplier") or "",
         ]
         return "|".join(str(p) for p in parts)
     except Exception:
@@ -974,6 +1204,13 @@ class ChainRunner:
             # another endpoint or model writes another prompt (a local model is in the config)
             provider = "local" if spec.config.get("local_model_path") else self.upsample_identity()
             fingerprint = f"{fingerprint}|upsample:{provider}"
+        elif spec.tab in SEEDED_TABS:
+            lora_ids = _prompt_lora_identities(
+                spec.core.get("prompt") or upstream_prompt,
+                spec.core.get("negative_prompt"),
+            )
+            if lora_ids:
+                fingerprint = f"{fingerprint}|loras:{lora_ids}"
         return compute_stage_hash(
             spec,
             upstream_hash=upstream_hash,
@@ -1005,6 +1242,7 @@ class ChainRunner:
         hit); without it a random-seed stage always runs. Disabled stages pass
         their upstream on untouched, as :meth:`_advance` does."""
 
+        check_stages_finite(stages)
         salt = model_fingerprint
         if salt is None and chain_id:
             existing = self.store.get_chain(chain_id)
@@ -1177,6 +1415,15 @@ class ChainRunner:
         with self._lock:
             now = time.time()
             for stage in chain.stages:
+                if stage.status == "pending" and stage.job_id is None and stage.started is not None:
+                    find_orphan = getattr(self.queue.store, "find_chain_stage_job", None)
+                    orphan = find_orphan(chain.id, stage.index, stage_started=stage.started) if callable(find_orphan) else None
+                    if orphan is not None:
+                        self.store.update_stage(chain.id, stage.index, status="running", job_id=orphan.id)
+                        if orphan.status in FINISHED:
+                            finished_jobs.append(orphan)
+                            continue
+                        return False
                 if stage.status != "running":
                     continue
                 job = self.queue.store.get(stage.job_id) if stage.job_id and stage.kind != "prompt_upsample" else None
@@ -1347,9 +1594,37 @@ class ChainRunner:
             return updated_chain
 
         # Queue a generation stage job (the completion hook waits for this lock,
-        # so it sees the job id even when the job ends at once)
+        # so it sees the job id even when the job ends at once).
+        # Record `started` before submit so a crash between queue.submit() and
+        # update_stage() links the orphaned job on restart instead of duplicating it.
+        find_orphan = getattr(self.queue.store, "find_chain_stage_job", None)
+        if next_stage.started is not None and callable(find_orphan):
+            existing = find_orphan(chain_id, next_stage.index, stage_started=next_stage.started)
+            if existing is not None:
+                self.store.update_stage(
+                    chain_id,
+                    next_stage.index,
+                    status="running",
+                    stage_hash=stage_hash,
+                    cached=False,
+                    job_id=existing.id,
+                    started=next_stage.started,
+                )
+                updated_chain = self.store.get_chain(chain_id)
+                assert updated_chain is not None
+                self._publish_chain(updated_chain)
+                return updated_chain
+
+        self.store.update_stage(
+            chain_id,
+            next_stage.index,
+            stage_hash=stage_hash,
+            cached=False,
+            started=now,
+        )
         try:
             submission = self._build_stage_submission(chain, next_stage, upstream_outputs, upstream_prompt)
+            submission.meta = {**(submission.meta or {}), "stage_started": now}
             jobs = self.queue.submit(submission, user=chain.user)
         except Exception as error:
             return self._fail_chain(chain_id, next_stage.index, f"{type(error).__name__}: {error}", stage_hash=stage_hash, started=now)

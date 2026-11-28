@@ -19,6 +19,7 @@ import queue
 import re
 import sys
 import threading
+import weakref
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -615,11 +616,16 @@ class HistoryRecorder:
         self._thread = threading.Thread(target=self._run, name="remi-prompt-history", daemon=True)
         self._thread.start()
 
-    def stop(self) -> None:
+    def stop(self, timeout: float = 5.0) -> None:
         if self._unsubscribe is not None:
             self._unsubscribe()
             self._unsubscribe = None
-        self._queue.put(None)
+        thread = self._thread
+        if thread is not None:
+            self._queue.put(None)
+            if thread is not threading.current_thread():
+                thread.join(timeout)
+            self._thread = None
 
     def send_event(self, event: dict[str, Any]) -> None:
         if event.get("type") == "job.queued" and isinstance(event.get("job_id"), str):
@@ -655,17 +661,40 @@ class HistoryRecorder:
 
 
 _tools: dict[str, PromptTools] = {}
+_tools_owners: dict[str, set[int]] = {}
 _tools_lock = threading.Lock()
+
+
+def _on_services_gc(key: str, owner_id: int) -> None:
+    with _tools_lock:
+        owners = _tools_owners.get(key)
+        if owners is not None:
+            owners.discard(owner_id)
+            if owners:
+                return
+            _tools_owners.pop(key, None)
+        tools = _tools.pop(key, None)
+    if tools is not None:
+        tools.close()
 
 
 def tools_for(services: Any) -> PromptTools:
     """The prompt tools of a server's services (one per data folder)."""
 
     key = str(Path(services.root).resolve())
+    owner_id = id(services)
     with _tools_lock:
         tools = _tools.get(key)
         if tools is None:
             tools = _tools[key] = PromptTools(services.root, getattr(services, "networks", None))
+        owners = _tools_owners.setdefault(key, set())
+        if owner_id not in owners:
+            try:
+                weakref.finalize(services, _on_services_gc, key, owner_id)
+            except TypeError:
+                pass
+            else:
+                owners.add(owner_id)
         return tools
 
 
@@ -684,7 +713,14 @@ def forget(services: Any) -> None:
     """Closes the prompt tools of ``services`` (tests)."""
 
     key = str(Path(services.root).resolve())
+    owner_id = id(services)
     with _tools_lock:
+        owners = _tools_owners.get(key)
+        if owners is not None:
+            owners.discard(owner_id)
+            if owners:
+                return
+            _tools_owners.pop(key, None)
         tools = _tools.pop(key, None)
     if tools is not None:
         tools.close()

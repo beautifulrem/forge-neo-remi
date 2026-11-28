@@ -67,13 +67,15 @@ class ActionFiles:
         """The image as a PIL image (``image.filename`` = the upload's name),
         or ``None`` when there is none, it is not an image or cannot be read."""
 
+        from PIL import Image
+
         from remi.ui.errors import ParamError
 
         if self.get(file_id) is None:
             return None
         try:
             return self._store.resolve_upload(None, file_id)
-        except (ParamError, OSError, ValueError):
+        except (ParamError, Image.DecompressionBombError, OSError, ValueError):
             return None
 
     def store_bytes(self, data: bytes, name: str) -> str:
@@ -92,9 +94,17 @@ class ActionFiles:
             import numpy as np
 
             image = Image.fromarray(np.ascontiguousarray(np.clip(image, 0, 255).astype(np.uint8)))
-        buffer = io.BytesIO()
-        image.save(buffer, format="PNG")
-        return self.store_bytes(buffer.getvalue(), name)
+        converted: Image.Image | None = None
+        if image.mode not in ("1", "L", "LA", "P", "RGB", "RGBA", "I;16"):
+            converted = image.convert("RGBA" if image.has_transparency_data else "RGB")
+            image = converted
+        try:
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            return self.store_bytes(buffer.getvalue(), name)
+        finally:
+            if converted is not None:
+                converted.close()
 
     def resolve_upload(self, node: Any, file_id: str) -> Any:
         """The ``remi.ui`` upload resolver (``ui.Context(resolve_upload=...)``):

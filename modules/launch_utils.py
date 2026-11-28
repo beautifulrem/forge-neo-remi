@@ -2,6 +2,7 @@
 This script installs necessary requirements and launches main program in webui.py
 """
 
+import contextlib
 import importlib.metadata
 import importlib.util
 import json
@@ -9,6 +10,7 @@ import logging
 import os
 import re
 import shlex
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -159,30 +161,92 @@ def git_clone(*args, **kwargs):
     raise NotImplementedError()
 
 
+def _kill_installer_tree(proc: subprocess.Popen[str]) -> None:
+    if os.name == "nt":
+        with contextlib.suppress(OSError, subprocess.SubprocessError):
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, timeout=5, check=False)
+    else:
+        with contextlib.suppress(ProcessLookupError, PermissionError, OSError):
+            os.killpg(proc.pid, signal.SIGKILL)
+    with contextlib.suppress(OSError):
+        proc.kill()
+
+
 def git_pull_recursive(dir):
+    pull_timeout = float(os.environ.get("REMI_GIT_PULL_TIMEOUT", "120"))
+    git_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     for subdir, _, _ in os.walk(dir):
         if os.path.exists(os.path.join(subdir, ".git")):
             try:
-                output = subprocess.check_output([git, "-C", subdir, "pull", "--autostash"])
-                print(f"Pulled changes for repository in '{subdir}':\n{output.decode('utf-8').strip()}\n")
+                output = subprocess.check_output(
+                    [git, "-C", subdir, "pull", "--autostash"],
+                    env=git_env,
+                    stdin=subprocess.DEVNULL,
+                    stderr=subprocess.STDOUT,
+                    timeout=pull_timeout,
+                )
+                print(f"Pulled changes for repository in '{subdir}':\n{output.decode('utf-8', errors='replace').strip()}\n")
             except subprocess.CalledProcessError as e:
-                print(f"Couldn't perform 'git pull' on repository in '{subdir}':\n{e.output.decode('utf-8').strip()}\n")
+                out = e.output.decode("utf-8", errors="replace").strip() if e.output else str(e)
+                print(f"Couldn't perform 'git pull' on repository in '{subdir}':\n{out}\n")
+            except subprocess.TimeoutExpired:
+                print(f"Timed out after {pull_timeout:.0f}s performing 'git pull' on repository in '{subdir}'\n")
 
 
-def run_extension_installer(extension_dir):
+def run_extension_installer(extension_dir, *, timeout: float | None = None) -> bool:
     path_installer = os.path.join(extension_dir, "install.py")
     if not os.path.isfile(path_installer):
-        return
+        return True
+
+    effective_timeout = float(os.environ.get("REMI_INSTALLER_TIMEOUT", "300")) if timeout is None else float(timeout)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = f"{script_path}{os.pathsep}{env.get('PYTHONPATH', '')}"
+    env["PIP_NO_INPUT"] = "1"
+    env["GIT_TERMINAL_PROMPT"] = "0"
+
+    popen_kwargs: dict[str, Any] = {}
+    if os.name == "nt":
+        popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    else:
+        popen_kwargs["start_new_session"] = True
 
     try:
-        env = os.environ.copy()
-        env["PYTHONPATH"] = f"{script_path}{os.pathsep}{env.get('PYTHONPATH', '')}"
-
-        stdout = run(f'"{python}" "{path_installer}"', errdesc=f"Error running install.py for extension {extension_dir}", custom_env=env).strip()
-        if stdout:
-            print(stdout)
+        proc = subprocess.Popen(
+            [python, path_installer],
+            cwd=script_path,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            **popen_kwargs,
+        )
     except Exception as e:
-        errors.report(str(e))
+        errors.report(f"Error starting install.py for extension {extension_dir}: {e}")
+        return False
+
+    try:
+        stdout, stderr = proc.communicate(timeout=effective_timeout)
+    except subprocess.TimeoutExpired:
+        _kill_installer_tree(proc)
+        with contextlib.suppress(subprocess.TimeoutExpired, OSError, ValueError):
+            proc.communicate(timeout=5)
+        errors.report(f"Timed out after {effective_timeout:.0f}s running install.py for extension {extension_dir}")
+        return False
+
+    if proc.returncode != 0:
+        detail = (stderr or stdout or "").strip()
+        msg = f"Error running install.py for extension {extension_dir} (exit code {proc.returncode})"
+        if detail:
+            msg = f"{msg}:\n{detail}"
+        errors.report(msg)
+        return False
+
+    if stdout and stdout.strip():
+        print(stdout.strip())
+    return True
 
 
 def list_extensions(settings_file):
