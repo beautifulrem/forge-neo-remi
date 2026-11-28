@@ -224,6 +224,31 @@ def test_ported(name):
     contract.assert_ported(ROOT / "scripts" / f"{name}.py")
 
 
+def test_scripts_pass_verify_extension_contract(webui):
+    from remi.testing import assert_extension_contract
+
+    script_classes = [
+        load("loopback").Loopback,
+        load("prompt_matrix").PromptMatrix,
+        load("prompts_from_file").PromptsFromTexts,
+        load("sd_upscale").SDUpscale,
+        load("xyz_grid").Script,
+    ]
+    report = assert_extension_contract(
+        ROOT / "scripts",
+        script_classes=script_classes,
+        check_manifest=False,
+    )
+    assert report.ok is True
+    assert report.script_count == 5
+    assert set(report.tabs_checked) == {"txt2img", "img2img"}
+    assert report.param_counts["Loopback:img2img"] == 3
+    assert report.param_counts["PromptMatrix:txt2img"] == 5
+    assert report.param_counts["PromptsFromTexts:txt2img"] == 4
+    assert report.param_counts["SDUpscale:img2img"] == 4
+    assert report.param_counts["Script:txt2img"] == 19
+
+
 def test_zh_cn_covers_every_string(webui):
     """scripts/ strings are in the core catalog (localizations/zh_CN.json),
     or in the SPA's own catalog, which wins over it (so the core catalog must

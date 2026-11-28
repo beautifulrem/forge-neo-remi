@@ -108,25 +108,40 @@ def test_websocket_handshakes_get_the_same_checks(monkeypatch):
         assert websocket.receive_text() == "hello"
 
 
-def test_proxies_and_cors_allow_list():
+def test_proxies_and_cors_allow_list(monkeypatch):
     import sys
     from types import SimpleNamespace
 
     from modules.extension_route_guard import is_cross_site
 
-    def request(origin, host, **headers):
-        return SimpleNamespace(method="POST", headers={"origin": origin, "host": host, **headers})
+    def request(origin, host, client=None, **headers):
+        return SimpleNamespace(method="POST", headers={"origin": origin, "host": host, **headers}, client=client)
+
+    trusted = SimpleNamespace(host="127.0.0.1")
+    untrusted = SimpleNamespace(host="198.51.100.1")
 
     # nginx "Host: $host" drops the port; "$host:$server_port" keeps 443.
     assert not is_cross_site(request("https://example.com", "example.com"))
     assert not is_cross_site(request("https://example.com", "example.com:443"))
-    assert not is_cross_site(request("https://example.com:8443", "example.com", **{"x-forwarded-port": "8443"}))
     assert is_cross_site(request("http://localhost:3000", "localhost"))  # another local port
-    assert not is_cross_site(request("https://a.com", "backend:7860", **{"x-forwarded-host": "a.com, a.com"}))
-    assert not is_cross_site(request("https://a.com", "backend:7860", forwarded='for=1.2.3.4;host="a.com"'))
     assert is_cross_site(request("http://localhost:3000", "localhost:7860"))
 
-    fake = SimpleNamespace(cmd_opts=SimpleNamespace(cors_allow_origins="http://localhost:3000", cors_allow_origins_regex=None))
+    # Without --forwarded-allow-ips, forwarding headers from any peer are ignored.
+    _guard_options(monkeypatch, forwarded_allow_ips=None)
+    assert is_cross_site(request("https://example.com:8443", "example.com", client=trusted, **{"x-forwarded-port": "8443"}))
+    assert is_cross_site(request("https://a.com", "backend:7860", client=trusted, **{"x-forwarded-host": "a.com, a.com"}))
+    assert is_cross_site(request("https://a.com", "backend:7860", client=trusted, forwarded='for=1.2.3.4;host="a.com"'))
+
+    # With --forwarded-allow-ips, only trusted proxy peers may supply X-Forwarded-* / Forwarded.
+    _guard_options(monkeypatch, forwarded_allow_ips="127.0.0.1")
+    assert not is_cross_site(request("https://example.com:8443", "example.com", client=trusted, **{"x-forwarded-port": "8443"}))
+    assert not is_cross_site(request("https://a.com", "backend:7860", client=trusted, **{"x-forwarded-host": "a.com, a.com"}))
+    assert not is_cross_site(request("https://a.com", "backend:7860", client=trusted, forwarded='for=1.2.3.4;host="a.com"'))
+    assert is_cross_site(request("https://example.com:8443", "example.com", client=untrusted, **{"x-forwarded-port": "8443"}))
+    assert is_cross_site(request("https://a.com", "backend:7860", client=untrusted, **{"x-forwarded-host": "a.com, a.com"}))
+    assert is_cross_site(request("https://a.com", "backend:7860", client=untrusted, forwarded='for=1.2.3.4;host="a.com"'))
+
+    fake = SimpleNamespace(cmd_opts=SimpleNamespace(cors_allow_origins="http://localhost:3000", cors_allow_origins_regex=None, forwarded_allow_ips=None))
     saved = sys.modules.get("modules.shared_cmd_options")
     sys.modules["modules.shared_cmd_options"] = fake
     try:
@@ -457,16 +472,22 @@ def test_fetch_metadata_refuses_cross_site_writes_without_an_origin():
     assert client.post("/ext/write", headers={"sec-fetch-site": "cross-site", "origin": "http://127.0.0.1:7860"}).json() == "written"
 
 
-def test_only_the_first_forwarded_host_hop_names_the_site():
+def test_only_the_first_forwarded_host_hop_names_the_site(monkeypatch):
     from types import SimpleNamespace
 
     from modules.extension_route_guard import is_cross_site
 
-    def request(origin, forwarded_hosts):
-        return SimpleNamespace(method="POST", headers={"origin": origin, "host": "backend:7860", "x-forwarded-host": forwarded_hosts})
+    _guard_options(monkeypatch, forwarded_allow_ips="10.0.0.0/8")
+    trusted = SimpleNamespace(host="10.1.2.3")
+    untrusted = SimpleNamespace(host="192.0.2.5")
+
+    def request(origin, forwarded_hosts, client=trusted):
+        return SimpleNamespace(method="POST", headers={"origin": origin, "host": "backend:7860", "x-forwarded-host": forwarded_hosts}, client=client)
 
     assert not is_cross_site(request("https://a.com", "a.com, proxy.internal"))
     assert not is_cross_site(request("https://a.com", " a.com "))
+    # untrusted peers cannot spoof X-Forwarded-Host even when the first hop matches
+    assert is_cross_site(request("https://a.com", "a.com, proxy.internal", client=untrusted))
     # a later hop (appended by a proxy, or spoofed by the client) is not the site
     assert is_cross_site(request("https://evil.example", "a.com, evil.example"))
     assert is_cross_site(request("https://proxy.internal", "a.com,proxy.internal"))
@@ -542,3 +563,31 @@ def test_an_unreadable_allowed_origin_does_not_break_the_host_check(monkeypatch)
     _guard_options(monkeypatch, cors_allow_origins="http://[,https://ui.example")
     assert is_rebound_host(_get("evil.example:7860"))
     assert not is_rebound_host(_get("ui.example:7860"))
+
+
+def test_rebound_host_fails_closed_on_empty_or_malformed_host(monkeypatch):
+    from modules.extension_route_guard import is_rebound_host
+
+    _guard_options(monkeypatch)
+    assert is_rebound_host(_get("")) is True
+    assert is_rebound_host(_get("[::1")) is True
+    assert is_rebound_host(_get("127.0.0.1:7860")) is False
+
+
+def test_same_origin_splits_multi_hop_forwarded_port(monkeypatch):
+    from types import SimpleNamespace
+
+    from modules.extension_route_guard import _same_origin
+
+    _guard_options(monkeypatch, listen=True, forwarded_allow_ips="127.0.0.1")
+    req = SimpleNamespace(
+        method="POST",
+        headers={
+            "host": "backend:7860",
+            "x-forwarded-host": "app.example, proxy1",
+            "x-forwarded-port": "8443, 80",
+        },
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
+    assert _same_origin("https://app.example:8443", req) is True
+    assert _same_origin("https://app.example:9443", req) is False

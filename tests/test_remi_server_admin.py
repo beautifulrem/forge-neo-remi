@@ -221,7 +221,7 @@ def _git(*args, cwd):
 
 
 def test_install_clones_runs_the_installer_and_refuses_duplicates(env, monkeypatch):
-    from modules import extensions, launch_utils
+    from modules import extensions
 
     source = env.tmp / "source" / "sd-demo"
     source.mkdir(parents=True)
@@ -234,7 +234,7 @@ def test_install_clones_runs_the_installer_and_refuses_duplicates(env, monkeypat
     # a local repository stands in for the remote (file:// is not allowed for real installs)
     monkeypatch.setattr(admin, "valid_git_url", lambda value: value.startswith("file://"))
     monkeypatch.setattr(admin, "INSTALL_PROTOCOLS", admin.INSTALL_PROTOCOLS + ":file")
-    monkeypatch.setattr(launch_utils, "run_extension_installer", lambda path: installed.append(path))
+    monkeypatch.setattr(admin, "run_installer", lambda path: installed.append(path))
     monkeypatch.setattr(extensions, "list_extensions", lambda: extensions.extensions.append(fake_ext("sd-demo", path=env.ext_dir / "sd-demo", remote=url)))
     monkeypatch.setattr("modules.paths.data_path", str(env.tmp), raising=False)
 
@@ -246,6 +246,72 @@ def test_install_clones_runs_the_installer_and_refuses_duplicates(env, monkeypat
     assert env.client.post("/api/v2/extensions/install", json={"url": url, "dirname": "other"}).status_code == 409
     bad_branch = env.client.post("/api/v2/extensions/install", json={"url": url, "dirname": "x", "branch": "a b"})
     assert bad_branch.status_code == 422
+
+
+def test_install_surfaces_installer_failures_bounds_runtime_and_releases_lock(env, monkeypatch):
+    import sys
+    import threading
+    import time
+
+    from modules import extensions, paths_internal
+
+    source = env.tmp / "source" / "sd-fail"
+    source.mkdir(parents=True)
+    (source / "install.py").write_text("import sys\nsys.stderr.write('pip failed\\n')\nsys.exit(2)\n", encoding="utf-8")
+    _git("init", "-q", "-b", "main", cwd=source)
+    _git("add", ".", cwd=source)
+    _git("commit", "-q", "-m", "init", cwd=source)
+    url = source.as_uri()
+    monkeypatch.setattr(admin, "valid_git_url", lambda value: value.startswith("file://"))
+    monkeypatch.setattr(admin, "INSTALL_PROTOCOLS", admin.INSTALL_PROTOCOLS + ":file")
+    monkeypatch.setattr(paths_internal, "script_path", str(env.tmp))
+    monkeypatch.setattr("modules.paths.data_path", str(env.tmp), raising=False)
+
+    # Non-zero install.py failure surfaces as 502 and cleans up target
+    failed = env.client.post("/api/v2/extensions/install", json={"url": url})
+    assert failed.status_code == 502
+    assert "pip failed" in failed.json()["detail"]
+    assert not (env.ext_dir / "sd-fail").exists()
+
+    # Timed-out install.py raises AdminError (502) promptly
+    slow_dir = env.tmp / "slow-ext"
+    slow_dir.mkdir()
+    (slow_dir / "install.py").write_text("import time\ntime.sleep(30)\n", encoding="utf-8")
+    started = time.monotonic()
+    with pytest.raises(admin.AdminError, match="timed out") as timeout_exc:
+        admin.run_installer(str(slow_dir), timeout=0.2)
+    assert timeout_exc.value.status == 502
+    assert time.monotonic() - started < 5
+
+    # Global admin.lock is released while run_installer executes
+    source_ok = env.tmp / "source" / "sd-lock"
+    source_ok.mkdir(parents=True)
+    (source_ok / "README.md").write_text("ok")
+    _git("init", "-q", "-b", "main", cwd=source_ok)
+    _git("add", ".", cwd=source_ok)
+    _git("commit", "-q", "-m", "init", cwd=source_ok)
+    lock_free: list[bool] = []
+
+    def check_lock(path: str) -> None:
+        acquired: list[bool] = []
+
+        def probe() -> None:
+            got = admin.lock.acquire(blocking=False)
+            if got:
+                admin.lock.release()
+            acquired.append(got)
+
+        t = threading.Thread(target=probe)
+        t.start()
+        t.join(5)
+        lock_free.extend(acquired)
+
+    monkeypatch.setattr(admin, "run_installer", check_lock)
+    monkeypatch.setattr(extensions, "list_extensions", lambda: extensions.extensions.append(fake_ext("sd-lock", path=env.ext_dir / "sd-lock", remote=source_ok.as_uri())))
+    assert sys.executable
+    ok_resp = env.client.post("/api/v2/extensions/install", json={"url": source_ok.as_uri()})
+    assert ok_resp.status_code == 201
+    assert lock_free == [True]
 
 
 def test_install_rejects_bad_urls_and_folder_names(env):
@@ -417,6 +483,46 @@ def test_public_hosts_are_global_addresses():
     assert admin.host_is_public("8.8.8.8")
 
 
+def test_open_public_url_pins_validated_ip_against_dns_rebinding(monkeypatch):
+    import socket
+
+    calls = {"count": 0}
+    connected_to: list[tuple[str, int]] = []
+
+    def rebinding_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+        calls["count"] += 1
+        ip = "93.184.216.34" if calls["count"] == 1 else "127.0.0.1"
+        return [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (ip, port or 0))]
+
+    class FakeSocket:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, sockaddr):
+            connected_to.append(sockaddr)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(socket, "getaddrinfo", rebinding_getaddrinfo)
+    monkeypatch.setattr(socket, "socket", FakeSocket)
+    with pytest.raises(admin.AdminError, match="public internet address"):
+        admin.fetch_index("http://rebind.example/index.json", public=True)
+    assert connected_to == []
+
+    # When resolution stays public, _create_public_connection connects directly to the validated sockaddr
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda host, port, family=0, type=0, proto=0, flags=0: [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", ("93.184.216.34", port or 80))],
+    )
+    sock = admin._create_public_connection(("rebind.example", 80), timeout=5)
+    assert isinstance(sock, FakeSocket) and connected_to == [("93.184.216.34", 80)]
+
+
 # endregion
 
 # region Config states
@@ -528,6 +634,31 @@ def test_the_webui_checkout_is_never_restored(env, monkeypatch):
     with pytest.raises(admin.AdminError, match="never reset"):
         admin.restore_config_state(saved["id"], "webui")
     assert resets == [] and not shared.opts.restore_config_state_file
+
+
+def test_save_config_state_same_second_unique_and_bounded(env, monkeypatch):
+    import time
+
+    from modules import config_states, extensions
+
+    monkeypatch.setattr(config_states, "get_webui_config", lambda: {"remote": None, "commit_hash": None, "commit_date": None, "branch": None})
+    monkeypatch.setattr(extensions, "extensions", [])
+
+    # Two rapid saves in the same second produce distinct files (no overwrite)
+    first = admin.save_config_state("Backup", max_states=3)
+    second = admin.save_config_state("Backup", max_states=3)
+    assert first["id"] != second["id"]
+    assert (env.states / first["id"]).is_file() and (env.states / second["id"]).is_file()
+
+    # Bounded pruning keeps only the newest max_states backups in config_states/
+    time.sleep(0.01)
+    third = admin.save_config_state("Backup", max_states=3)
+    time.sleep(0.01)
+    fourth = admin.save_config_state("Backup", max_states=3)
+    remaining = {item["id"] for item in admin.list_config_states()}
+    assert len(remaining) == 3
+    assert first["id"] not in remaining
+    assert {second["id"], third["id"], fourth["id"]} == remaining
 
 
 # endregion

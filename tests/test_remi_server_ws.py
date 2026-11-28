@@ -205,13 +205,14 @@ def test_a_small_preview_is_encoded_on_the_assigning_thread():
     state.assign_current_image(Image.new("RGB", (512, 512)))
     assert len(published) == 1 and encoder._wake.is_set()
     encoder._wake.clear()
-    # WebP costs more per pixel: a smaller limit
+    # WebP costs more per pixel: 128x128 is encoded inline, larger previews wake the encoder thread
     opts.live_previews_image_format = "webp"
     state.sampling_step = 4
-    state.assign_current_image(Image.new("RGB", (64, 64)))
+    state.assign_current_image(Image.new("RGB", (128, 128)))
+    assert not encoder._wake.is_set()
     state.sampling_step = 5
     encoder._ready_at = 0.0
-    state.assign_current_image(Image.new("RGB", (128, 128)))
+    state.assign_current_image(Image.new("RGB", (160, 160)))
     assert [(step, fmt) for _, step, fmt in published] == [(1, FORMAT_JPEG), (4, FORMAT_WEBP)] and encoder._wake.is_set()
 
 
@@ -542,6 +543,220 @@ def test_each_steps_progress_arrives_right_before_its_preview(webui, tmp_path, m
         # and no second progress event for a step that already went out with its frame
         steps = [step for kind, step in stream if kind == "job.progress"]
         assert len(steps) == len(set(steps))
+
+
+def test_hub_wants_frames_requires_visible_and_preview_capabilities(webui, tmp_path):
+    """clients that only subscribe to events.v1 (or omit preview format features) must not trigger preview encoding."""
+
+    from remi.server.ws import Hub
+
+    hub = Hub()
+    c_events_only = Client(FakeSocket())
+    c_events_only.features = {"events.v1"}
+    c_events_only.visible = True
+    hub.clients.add(c_events_only)
+    assert hub.wants_frames() is False
+
+    c_binary_no_fmt = Client(FakeSocket())
+    c_binary_no_fmt.features = {"events.v1", "preview.binary"}
+    c_binary_no_fmt.visible = True
+    hub.clients.add(c_binary_no_fmt)
+    assert hub.wants_frames() is False
+
+    c_webp = Client(FakeSocket())
+    c_webp.features = {"events.v1", "preview.binary", "preview.webp"}
+    c_webp.visible = False
+    hub.clients.add(c_webp)
+    assert hub.wants_frames() is False
+
+    c_webp.visible = True
+    assert hub.wants_frames() is True
+
+    with server_app(tmp_path) as server, server.client.websocket_connect(WS_URL) as socket:
+        socket.receive_json(), socket.receive_json()  # hello, queue
+        socket.send_json({"type": "hello", "features": ["events.v1"], "visible": True})
+        socket.send_json({"type": "ping"})
+        assert socket.receive_json() == {"type": "pong"}
+        assert not server.services.bus.wants_frames()
+
+
+def test_stalled_ws_client_times_out_and_stops_pinning_wants_frames():
+    """a stalled peer triggers send timeout, closes, and leaves hub.clients."""
+
+    from remi.server.ws import Hub
+
+    class StalledSocket(FakeSocket):
+        def __init__(self):
+            super().__init__()
+            self.cookies = {}
+
+        async def accept(self):
+            return None
+
+        async def receive(self):
+            await asyncio.sleep(10)
+            return {"type": "websocket.disconnect", "code": 1000}
+
+        async def send_text(self, text):
+            if '"hello"' in text:
+                await super().send_text(text)
+                return
+            await asyncio.Future()  # hangs forever
+
+    async def scenario():
+        hub = Hub(send_timeout=0.05)
+        socket = StalledSocket()
+        serve_task = asyncio.create_task(hub.serve(socket))
+        await asyncio.sleep(0.02)
+        assert hub.wants_frames() is True
+        hub.send_event({"type": "toast", "message": "stalled"})
+        await asyncio.wait_for(serve_task, timeout=2.0)
+        assert socket.closed == 1011
+        assert hub.wants_frames() is False
+        assert len(hub.clients) == 0
+
+    asyncio.run(scenario())
+
+
+def test_hub_serve_closes_accept_vs_logout_revocation_race():
+    """disconnect(session) arriving while Hub.serve() awaits accept() must close with 1008 and never register the client."""
+
+    from remi.server.auth import COOKIE_NAME, Auth
+    from remi.server.ws import Hub
+
+    async def scenario():
+        auth = Auth({"alice": "secret"})
+        token = auth.issue("alice")
+        accept_entered = asyncio.Event()
+        allow_accept = asyncio.Event()
+
+        class RacingSocket(FakeSocket):
+            def __init__(self):
+                super().__init__()
+                self.cookies = {COOKIE_NAME: token}
+                self.headers = {}
+                self.app = SimpleNamespace(state=SimpleNamespace(auth=auth))
+
+            async def accept(self):
+                accept_entered.set()
+                await allow_accept.wait()
+
+            async def receive(self):
+                return {"type": "websocket.disconnect", "code": 1000}
+
+        hub = Hub(send_timeout=0.2)
+        hub.bind(asyncio.get_running_loop())
+        socket = RacingSocket()
+        serve_task = asyncio.create_task(hub.serve(socket))
+        await accept_entered.wait()
+        # Simulate concurrent /api/v2/auth/logout during accept()
+        auth.revoke(token)
+        hub.disconnect(token)
+        await asyncio.sleep(0.01)
+        allow_accept.set()
+        await asyncio.wait_for(serve_task, timeout=2.0)
+        assert socket.closed == 1008
+        assert len(hub.clients) == 0
+
+    asyncio.run(scenario())
+
+
+def test_client_coalesces_job_progress_so_terminal_events_are_not_dropped():
+    """high-frequency job.progress events coalesce per job_id without overflowing MAX_EVENTS or dropping terminal events."""
+
+    client = Client(SimpleNamespace(), max_events=8)
+    client.push_event({"type": "job.started", "job_id": "j1"})
+    for step in range(1, 301):
+        client.push_event({"type": "job.progress", "job_id": "j1", "step": step, "steps": 300})
+    client.push_event({"type": "job.progress", "job_id": "j2", "step": 1, "steps": 10})
+    client.push_event({"type": "job.progress", "job_id": "j2", "step": 2, "steps": 10})
+    client.push_event({"type": "job.completed", "job_id": "j1"})
+    client.push_event({"type": "chain.stage_completed", "chain_id": "c1", "stage_index": 0})
+
+    assert client.dropped == 0
+    events = list(client.events)
+    assert [(e["type"], e.get("job_id"), e.get("step")) for e in events] == [
+        ("job.started", "j1", None),
+        ("job.progress", "j1", 300),
+        ("job.progress", "j2", 2),
+        ("job.completed", "j1", None),
+        ("chain.stage_completed", None, None),
+    ]
+
+
+def test_snapshot_preview_and_animated_image_lock_prevent_tearing_and_seek_races(webui, tmp_path, monkeypatch):
+    """snapshot_preview avoids torn (id, image) reads and encode_preview/progressapi synchronize animated seek(0)."""
+
+    from modules import progress, shared
+    from remi.realtime import preview_image_lock, snapshot_preview
+
+    # 1. Torn-read retry check: mutate id_live_preview during getattr(state, "current_image")
+    class TearingState:
+        def __init__(self):
+            self.id_live_preview = 1
+            self.sampling_step = 1
+            self.current_image_sampling_step = 1
+            self._reads = 0
+
+        @property
+        def current_image(self):
+            self._reads += 1
+            if self._reads == 1:
+                self.id_live_preview = 2
+                return "stale-1"
+            return "fresh-2"
+
+    snap_id, img, _step = snapshot_preview(TearingState())
+    assert (snap_id, img) == (2, "fresh-2")
+
+    # 2. Animated GIF concurrent encode_preview() vs progressapi()
+    gif_buf = io.BytesIO()
+    frames = [Image.new("RGB", (16, 16), (i * 50, 10, 20)) for i in range(4)]
+    frames[0].save(gif_buf, format="GIF", save_all=True, append_images=frames[1:], duration=50, loop=0)
+    gif_buf.seek(0)
+    anim = Image.open(gif_buf)
+    assert getattr(anim, "is_animated", False)
+
+    state = FakeState()
+    state.current_image = anim
+    state.id_live_preview = 1
+    state.job_count = 1
+    state.sampling_steps = 4
+    state.sampling_step = 2
+    state.time_start = time.time()
+
+    monkeypatch.setattr(shared, "state", state)
+    monkeypatch.setattr(shared.opts, "live_previews_enable", True)
+    monkeypatch.setattr(progress, "current_task", "task-anim")
+    errors: list[BaseException] = []
+
+    def run_encoder():
+        try:
+            for _ in range(15):
+                data = encode_preview(anim, FORMAT_JPEG)
+                assert data.startswith(b"\xff\xd8")
+        except BaseException as err:
+            errors.append(err)
+
+    def run_progress():
+        try:
+            for _ in range(15):
+                resp = progress.progressapi(progress.ProgressRequest(id_task="task-anim", id_live_preview=-1, live_preview=True))
+                assert resp.live_preview and resp.live_preview.startswith("data:image/gif;base64,")
+                assert resp.id_live_preview == 1
+        except BaseException as err:
+            errors.append(err)
+
+    with preview_image_lock():
+        pass
+    t1 = threading.Thread(target=run_encoder)
+    t2 = threading.Thread(target=run_progress)
+    t1.start()
+    t2.start()
+    t1.join(timeout=10)
+    t2.join(timeout=10)
+    assert errors == []
+    anim.close()
 
 
 # endregion

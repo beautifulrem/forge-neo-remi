@@ -116,6 +116,49 @@ def test_validation_errors_reach_the_caller(stub_module):
         runner.run_job(make_job("txt2img"), JobContext())
 
 
+@pytest.mark.parametrize(("tab", "module", "entry"), [("txt2img", "txt2img", "run_txt2img"), ("img2img", "img2img", "run_img2img")])
+def test_interrupted_inner_context_propagates_to_caller_context(stub_module, tab, module, entry):
+    processed = SimpleNamespace(images=[], infotexts=[], info=None)
+
+    def run(core, scripts, inner):
+        inner.interrupted = True
+        return processed
+
+    stub_module(module, **{entry: run})
+    ctx = JobContext(id_task="task-interrupt")
+    runner.run_job(make_job(tab), ctx)
+    assert ctx.interrupted is True
+
+
+@pytest.mark.parametrize(("tab", "module", "entry"), [("txt2img", "txt2img", "run_txt2img"), ("img2img", "img2img", "run_img2img")])
+def test_interrupted_inner_context_propagates_even_on_exception(stub_module, tab, module, entry):
+    def run(core, scripts, inner):
+        inner.interrupted = True
+        raise RuntimeError("aborted mid-step")
+
+    stub_module(module, **{entry: run})
+    ctx = JobContext(id_task="task-interrupt-err")
+    with pytest.raises(RuntimeError, match="aborted mid-step"):
+        runner.run_job(make_job(tab), ctx)
+    assert ctx.interrupted is True
+
+
+def test_upscale_from_txt2img_propagates_interrupted_context(stub_module):
+    source_image = image_with_infotext("fox\nSteps: 20")
+    processed = SimpleNamespace(images=[source_image], infotexts=["fox\nSteps: 20"], info=None)
+
+    def run_upscale(core, scripts, inner, image, infotext):
+        inner.interrupted = True
+        return processed
+
+    stub_module("images", read_info_from_image=lambda image: ("fox\nSteps: 20", {}))
+    stub_module("txt2img", run_txt2img_upscale=run_upscale)
+    job = Job(id="job-up", seq=2, tab="txt2img", core={"prompt": "a fox"}, scripts={"seed": {"seed": 7}}, meta={"upscale_from": "out-1"})
+    ctx = JobContext(id_task="task-up", resolve_upload=lambda param, fid: source_image)
+    runner.run_job(job, ctx)
+    assert ctx.interrupted is True
+
+
 # endregion
 
 # region Processed results

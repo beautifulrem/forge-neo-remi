@@ -1106,3 +1106,344 @@ def test_a_store_whose_commit_failed_takes_the_next_transaction(tmp_path, which)
         write()
     finally:
         store.close()
+
+
+def test_gallery_index_breaks_weakkey_cycle_without_resource_warning(tmp_path):
+    """GalleryIndex must not form a strong cycle with FileStore
+    in _indexes, and closing stores checkpoints the WAL cleanly."""
+
+    import gc
+    import warnings
+
+    from remi import library
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", ResourceWarning)
+        fs = FileStore(tmp_path / "files")
+        gi = library.gallery_for(fs)
+        assert fs in library._indexes and gi.files is fs
+        del gi, fs
+        gc.collect()
+    assert len(library._indexes) == 0
+    assert [w for w in caught if issubclass(w.category, ResourceWarning)] == []
+
+    # PRAGMA wal_checkpoint(TRUNCATE) on close truncates -wal to 0 bytes
+    fs2 = FileStore(tmp_path / "wal_check")
+    fs2.save_output_image(Image.new("RGB", (4, 4)), "test")
+    wal_path = tmp_path / "wal_check" / "files.db-wal"
+    fs2.close()
+    assert not wal_path.exists() or wal_path.stat().st_size == 0
+
+
+def test_filestore_skips_redundant_ddl_and_cleans_thumbnail_tmp_and_upload_on_error(tmp_path, monkeypatch):
+    """reopening FileStore skips DROP/CREATE INDEX DDL;
+    thumbnail() cleans .tmp on save failure; add_upload() rolls back file on DB error;
+    list_outputs() ignores NaN/Infinity cursors."""
+
+    import io
+    import sqlite3
+
+    from remi.files import encode_cursor
+
+    store = FileStore(tmp_path / "files")
+    out = store.save_output_image(Image.new("RGB", (16, 16)), "hello")
+    store.close()
+
+    reopened = FileStore(tmp_path / "files")
+    try:
+        statements: list[str] = []
+        reopened._db.set_trace_callback(statements.append)
+        reopened._ensure_schema()
+        reopened._db.set_trace_callback(None)
+        assert not any("DROP INDEX" in s or "CREATE INDEX" in s for s in statements)
+
+        # NaN/Inf cursors on list_outputs return page 1 instead of 0 rows
+        assert len(reopened.list_outputs(cursor=encode_cursor("nan", 999))[0]) == 1
+        assert len(reopened.list_outputs(cursor=encode_cursor("inf", 999))[0]) == 1
+
+        # thumbnail() failure cleans .tmp
+        def broken_save(self, *args, **kwargs):
+            raise OSError("disk full during webp save")
+
+        monkeypatch.setattr(Image.Image, "save", broken_save)
+        with pytest.raises(OSError, match="disk full"):
+            reopened.thumbnail(out, 128)
+        monkeypatch.undo()
+        assert not list(reopened.thumbs_dir.glob("*.tmp"))
+
+        # add_upload() failure in _insert unlinks target file and rolls back DB
+        buf = io.BytesIO()
+        Image.new("RGB", (8, 8), (5, 6, 7)).save(buf, format="PNG")
+        monkeypatch.setattr(reopened, "_insert", lambda *a, **kw: (_ for _ in ()).throw(sqlite3.OperationalError("insert failed")))
+        with pytest.raises(sqlite3.OperationalError, match="insert failed"):
+            reopened.add_upload_bytes(buf.getvalue(), "pic.png")
+        assert list(reopened.uploads_dir.rglob("*.png")) == []
+        assert reopened._db.execute("SELECT COUNT(*) FROM files WHERE kind = 'upload'").fetchone()[0] == 0
+    finally:
+        reopened.close()
+
+
+def test_register_output_works_outside_launch_without_parsing_cli_args(tmp_path, monkeypatch):
+    """Standalone callers (e.g. bench_inference.py / worker tools) may run with foreign sys.argv
+    and without modules.shared initialized; register_output must not trigger cmd_args.parse_args()
+    while still enforcing symlink and external-output containment."""
+
+    import subprocess
+    import sys
+
+    from remi.files import FileError
+
+    # 1. In-process check: modules.shared absent + unrecognized sys.argv flags
+    with monkeypatch.context() as m:
+        m.delitem(sys.modules, "modules.shared", raising=False)
+        m.setattr(sys, "argv", ["bench_inference.py", "--synthetic", "--bogus-flag", "123"])
+        store = FileStore(tmp_path / "data")
+        try:
+            outside = tmp_path / "outside"
+            outside.mkdir()
+            secret = outside / "secret.png"
+            secret.write_bytes(png())
+
+            record = store.save_output_image(Image.new("RGB", (16, 16)), "standalone")
+            assert record.kind == "output"
+            assert "modules.shared" not in sys.modules
+
+            store.outputs_dir.mkdir(parents=True, exist_ok=True)
+            escaped_dir = store.outputs_dir / "escape_dir"
+            escaped_dir.symlink_to(outside, target_is_directory=True)
+            with pytest.raises(FileError, match="escapes"):
+                store.register_output(escaped_dir / "secret.png")
+        finally:
+            store.close()
+
+    # 2. When modules.shared.opts IS initialized with a configured output directory,
+    #    register_output still enforces symlink containment against it.
+    from types import SimpleNamespace
+
+    from modules import shared
+
+    custom_out = tmp_path / "custom_outputs"
+    custom_out.mkdir()
+    outside2 = tmp_path / "outside2"
+    outside2.mkdir()
+    (outside2 / "leak.png").write_bytes(png())
+    monkeypatch.setattr(shared, "opts", SimpleNamespace(outdir_samples=str(custom_out)))
+    store2 = FileStore(tmp_path / "data2")
+    try:
+        (custom_out / "legit.png").write_bytes(png())
+        assert store2.register_output(custom_out / "legit.png").kind == "output"
+        esc = custom_out / "esc"
+        esc.symlink_to(outside2, target_is_directory=True)
+        with pytest.raises(FileError, match="escapes"):
+            store2.register_output(esc / "leak.png")
+    finally:
+        store2.close()
+
+    # 3. Subprocess check (no conftest pre-importing modules.shared_cmd_options):
+    #    both register_output and symlink containment work with foreign sys.argv.
+    script = (
+        "import sys\n"
+        "from pathlib import Path\n"
+        "from PIL import Image\n"
+        "from remi.files import FileError, FileStore\n"
+        "root = Path(sys.argv[1])\n"
+        "store = FileStore(root / 'store')\n"
+        "try:\n"
+        "    rec = store.save_output_image(Image.new('RGB', (8, 8)), 'ok')\n"
+        "    assert rec.kind == 'output'\n"
+        "    assert 'modules.shared' not in sys.modules\n"
+        "    assert 'modules.shared_cmd_options' not in sys.modules\n"
+        "    outside = root / 'outside'\n"
+        "    outside.mkdir(exist_ok=True)\n"
+        "    secret = outside / 's.png'\n"
+        "    Image.new('RGB', (8, 8)).save(secret)\n"
+        "    link_dir = store.outputs_dir / 'link_out'\n"
+        "    link_dir.symlink_to(outside, target_is_directory=True)\n"
+        "    try:\n"
+        "        store.register_output(link_dir / 's.png')\n"
+        "    except FileError:\n"
+        "        pass\n"
+        "    else:\n"
+        "        raise AssertionError('expected FileError for symlink escape')\n"
+        "finally:\n"
+        "    store.close()\n"
+    )
+    sub_root = tmp_path / "sub"
+    sub_root.mkdir()
+    proc = subprocess.run(
+        [sys.executable, "-c", script, str(sub_root), "--synthetic", "--unknown-cli-flag"],
+        cwd=str(Path(__file__).resolve().parents[1]),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, f"stdout={proc.stdout!r}\nstderr={proc.stderr!r}"
+
+
+def test_register_output_rejects_symlink_escape_through_unresolved_ancestor_alias(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from modules import shared
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.png").write_bytes(png())
+    (outside / "nested").mkdir()
+    (outside / "nested" / "secret.png").write_bytes(png())
+
+    # 1. Alias -> real_root: reject escapes from root and nested outputs, allow legit output & external file
+    real_root = tmp_path / "real_root"
+    (real_root / "outputs").mkdir(parents=True)
+    (real_root / "outputs" / "legit.png").write_bytes(png())
+    (real_root / "esc_root").symlink_to(outside, target_is_directory=True)
+    (real_root / "outputs" / "esc_dir").symlink_to(outside, target_is_directory=True)
+
+    root_alias = tmp_path / "root_alias"
+    root_alias.symlink_to(real_root, target_is_directory=True)
+
+    store = FileStore(real_root)
+    try:
+        with pytest.raises(FileError, match="escapes"):
+            store.register_output(root_alias / "esc_root" / "secret.png")
+        with pytest.raises(FileError, match="escapes"):
+            store.register_output(root_alias / "outputs" / "esc_dir" / "nested" / "secret.png")
+        assert store.register_output(root_alias / "outputs" / "legit.png").kind == "output"
+
+        # macOS /var -> /private/var unresolved-ancestor check when tmp_path resides under /private/var
+        resolved_var = os.path.realpath("/var")
+        if Path("/var").resolve() != Path("/var") and os.path.realpath(real_root).startswith(resolved_var + os.sep):
+            var_root = Path("/var") / os.path.realpath(real_root)[len(resolved_var) + 1 :]
+            with pytest.raises(FileError, match="escapes"):
+                store.register_output(var_root / "esc_root" / "secret.png")
+            assert store.register_output(var_root / "outputs" / "legit.png").kind == "output"
+
+        # Legitimate external output outside all real_bases continues to work
+        ext_file = outside / "external.png"
+        ext_file.write_bytes(png())
+        assert store.register_output(ext_file).kind == "output"
+    finally:
+        store.close()
+
+    # 2. Alias -> real_out (outdir_samples)
+    real_out = tmp_path / "real_out"
+    real_out.mkdir()
+    (real_out / "legit.png").write_bytes(png())
+    (real_out / "esc_sub").symlink_to(outside, target_is_directory=True)
+    out_alias = tmp_path / "out_alias"
+    out_alias.symlink_to(real_out, target_is_directory=True)
+
+    monkeypatch.setattr(shared, "opts", SimpleNamespace(outdir_samples=str(real_out)))
+    store_out = FileStore(tmp_path / "data_out")
+    try:
+        with pytest.raises(FileError, match="escapes"):
+            store_out.register_output(out_alias / "esc_sub" / "secret.png")
+        assert store_out.register_output(out_alias / "legit.png").kind == "output"
+    finally:
+        store_out.close()
+
+    # 3. Symlinked outputs_dir reached via data_alias
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "legit.png").write_bytes(png())
+    (elsewhere / "esc_out").symlink_to(outside, target_is_directory=True)
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "outputs").symlink_to(elsewhere, target_is_directory=True)
+    data_alias = tmp_path / "data_alias"
+    data_alias.symlink_to(data, target_is_directory=True)
+
+    store_sym = FileStore(data)
+    try:
+        assert store_sym.register_output(data_alias / "outputs" / "legit.png").kind == "output"
+        with pytest.raises(FileError, match="escapes"):
+            store_sym.register_output(data_alias / "outputs" / "esc_out" / "secret.png")
+    finally:
+        store_sym.close()
+
+
+def test_register_output_rejects_dotdot_symlink_escape_and_allows_direct_external(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from modules import shared
+
+    outside = tmp_path / "outside"
+    (outside / "a" / "b").mkdir(parents=True)
+    (outside / "secret.png").write_bytes(png())
+    (outside / "a" / "secret_a.png").write_bytes(png())
+    (outside / "external.png").write_bytes(png())
+
+    real_root = tmp_path / "real_root"
+    (real_root / "outputs").mkdir(parents=True)
+    (real_root / "outputs" / "esc_deep").symlink_to(outside / "a" / "b", target_is_directory=True)
+
+    store = FileStore(real_root)
+    try:
+        with pytest.raises(FileError, match="escapes"):
+            store.register_output(real_root / "outputs" / "esc_deep" / ".." / ".." / ".." / "secret.png")
+        with pytest.raises(FileError, match="escapes"):
+            store.register_output(real_root / "outputs" / "esc_deep" / ".." / ".." / ".." / "a" / "secret_a.png")
+        # Direct non-symlink traversal to an external file remains allowed
+        assert store.register_output(real_root / "outputs" / ".." / ".." / "outside" / "external.png").kind == "output"
+    finally:
+        store.close()
+
+    real_out = tmp_path / "real_out"
+    real_out.mkdir()
+    (real_out / "esc_deep").symlink_to(outside / "a" / "b", target_is_directory=True)
+    monkeypatch.setattr(shared, "opts", SimpleNamespace(outdir_samples=str(real_out)))
+
+    store_out = FileStore(tmp_path / "data_out")
+    try:
+        with pytest.raises(FileError, match="escapes"):
+            store_out.register_output(real_out / "esc_deep" / ".." / ".." / "secret.png")
+        assert store_out.register_output(real_out / ".." / "outside" / "external.png").kind == "output"
+        monkeypatch.chdir(real_out)
+        with pytest.raises(FileError, match="escapes"):
+            store_out.register_output("esc_deep/../../secret.png")
+        assert store_out.register_output("../outside/external.png").kind == "output"
+    finally:
+        store_out.close()
+
+
+def test_register_output_rejects_unicode_case_folded_symlink_escape(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.png").write_bytes(png())
+
+    upper_root = tmp_path / "\u0130_Root"
+    (upper_root / "outputs").mkdir(parents=True)
+    (upper_root / "outputs" / "legit.png").write_bytes(png())
+    (upper_root / "outputs" / "esc").symlink_to(outside, target_is_directory=True)
+    folded_root = tmp_path / "i\u0307_root"
+    if not (folded_root.exists() and os.path.samefile(upper_root, folded_root)):
+        pytest.skip("this volume does not fold \u0130 to i\\u0307")
+
+    store = FileStore(upper_root)
+    try:
+        with pytest.raises(FileError, match="escapes"):
+            store.register_output(folded_root / "outputs" / "esc" / "secret.png")
+        assert store.register_output(folded_root / "outputs" / "legit.png").kind == "output"
+    finally:
+        store.close()
+
+
+def test_register_output_rejects_in_base_symlink_to_in_base_dir_followed_by_dotdot(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.png").write_bytes(png())
+    (outside / "external.png").write_bytes(png())
+
+    real_root = tmp_path / "real_root"
+    (real_root / "outputs" / "sub").mkdir(parents=True)
+    (real_root / "outputs" / "sub" / "legit.png").write_bytes(png())
+    # In-base symlink pointing to an ancestor still inside real_bases, then '..' escaping real_bases
+    (real_root / "outputs" / "sub" / "to_root").symlink_to(real_root, target_is_directory=True)
+
+    store = FileStore(real_root)
+    try:
+        with pytest.raises(FileError, match="escapes"):
+            store.register_output(real_root / "outputs" / "sub" / "to_root" / ".." / "outside" / "secret.png")
+        assert store.register_output(real_root / "outputs" / "sub" / "to_root" / "outputs" / "sub" / "legit.png").kind == "output"
+        assert store.register_output(outside / "external.png").kind == "output"
+    finally:
+        store.close()

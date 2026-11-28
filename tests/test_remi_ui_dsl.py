@@ -106,6 +106,14 @@ class TestConditions:
         for operand in ("1", True, None, math.nan, [1]):
             with pytest.raises(ui.SchemaError):
                 ui.param("cfg", gt=operand)
+        # eq/ne/in also reject non-finite floats (strict JSON)
+        for bad in (math.nan, math.inf, -math.inf):
+            with pytest.raises(ui.SchemaError):
+                ui.param("cfg", eq=bad)
+            with pytest.raises(ui.SchemaError):
+                ui.param("cfg", ne=bad)
+            with pytest.raises(ui.SchemaError):
+                ui.param("cfg", in_=[1, bad])
         assert ui.param("cfg", lte=1.5) == {"param": "cfg", "lte": 1.5}
 
     def test_evaluation_matches_the_client_rules(self):
@@ -397,3 +405,23 @@ def test_a_json_validator_refusing_with_a_sentence_keeps_its_template():
     error = caught.value.errors[0].to_json()
     assert error["message"] == "too many items: 3" and error["template"] == "too many {{what}}: {{count}}"
     assert error["params"] == {"what": "items", "count": "3"}
+
+
+def test_sentence_unmatched_placeholder_and_list_sentences():
+    from remi.ui.sentence import sentence_fields
+
+    # Unmatched placeholder does not raise KeyError
+    missing = ui.Sentence("hello {{missing}}", other="x")
+    assert missing == "hello {{missing}}"
+    assert missing.template == "hello {{missing}}"
+
+    # Nested Sentence items inside list params preserve their templates
+    sub = ui.Sentence("step {{n}}", n=2)
+    outer = ui.Sentence("items: {{items}}", items=[sub, "plain"])
+    assert outer == "items: step 2, plain"
+    assert isinstance(outer.params["items"][0], ui.Sentence)
+    assert outer.params["items"][0].template == "step {{n}}"
+    fields = sentence_fields(outer)
+    assert fields["params"]["items"] == ["step 2", "plain"]
+    assert fields["params"]["items.0.template"] == "step {{n}}"
+    assert fields["params"]["items.0.n"] == "2"

@@ -197,6 +197,8 @@ def test_page_actions_resolve_uploads(server):
 
 
 def test_a_gpu_action_with_a_timeout_runs_without_the_limit_and_keeps_its_isolation(server):
+    from fastapi.testclient import TestClient
+
     class Handlers:
         @ui.action("slow", gpu=True, timeout=0.05)
         def slow(self, ctx, values):
@@ -210,8 +212,10 @@ def test_a_gpu_action_with_a_timeout_runs_without_the_limit_and_keeps_its_isolat
     pages.register(pages.Page("gpu", "GPU", params=ui.Text("a"), actions=Handlers()))
     slow = server.client.post("/api/v2/actions/page:gpu/slow", json={"tab": "page:gpu", "values": {}})
     assert slow.status_code == 200 and slow.json() == {"__outputs__": {"result": "done"}}
-    broken = server.client.post("/api/v2/actions/page:gpu/broken", json={"tab": "page:gpu", "values": {}})
-    assert broken.status_code == 200 and broken.json()["__toast__"]["level"] == "error"
+    # Errors stay HTTP 500 consistently whether timeout is set or not, while still recorded in diagnostics
+    client = TestClient(server.app, base_url=str(server.client.base_url), raise_server_exceptions=False)
+    broken = client.post("/api/v2/actions/page:gpu/broken", json={"tab": "page:gpu", "values": {}})
+    assert broken.status_code == 500
 
 
 def test_gpu_requests_past_the_waiting_limit_are_refused(server):

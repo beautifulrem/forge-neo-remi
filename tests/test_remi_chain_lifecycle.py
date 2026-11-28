@@ -616,3 +616,32 @@ def test_an_upsample_thread_that_cannot_start_is_not_waited_for(tmp_path, monkey
         assert chain.status == "failed" and not r.runner._threads
         monkeypatch.undo()
         assert r.runner.wait_idle(1)
+
+
+def test_reconcile_links_orphaned_job_after_crash_between_submit_and_update_stage(tmp_path):
+    """if a crash happens after queue.submit() commits a stage job and before
+    update_stage(..., status='running', job_id=...) writes the link, reconcile() on
+    restart links the existing job instead of submitting a duplicate."""
+
+    with rig(tmp_path, start=False) as r:
+        chain = r.runner.store.create_chain(seeded(5), status="running")
+        now = time.time()
+        r.runner.store.update_stage(chain.id, 0, stage_hash="h0", cached=False, started=now)
+        sub = r.runner._build_stage_submission(chain, chain.stages[0], [], None)
+        sub.meta = {**(sub.meta or {}), "stage_started": now}
+        [job] = r.queue.submit(sub, user=chain.user)
+        # Simulate crash before update_stage sets status='running' and job_id=job.id:
+        assert r.runner.store.get_chain(chain.id).stages[0].status == "pending"
+        assert r.runner.store.get_chain(chain.id).stages[0].job_id is None
+
+        # Restart reconcile() links the orphaned job rather than submitting a second one
+        r.new_runner().reconcile()
+        reloaded = r.runner.store.get_chain(chain.id)
+        assert reloaded.stages[0].status == "running"
+        assert reloaded.stages[0].job_id == job.id
+        assert r.jobs.count("queued") == 1
+
+        r.queue.set_paused(False)
+        done = r.wait(chain.id)
+        assert done.status == "completed"
+        assert len(r.executed) == 2

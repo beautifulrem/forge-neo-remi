@@ -348,13 +348,17 @@ def post_keyed(server, key, prompt="a cat", **extra):
 
 
 def test_a_repeated_idempotency_key_answers_the_first_submission_again(server):
-    """A double click or a retry after a lost answer sends the same key: one job, the same answer."""
+    """A double click or a retry after a lost answer sends the same key and payload:
+    one job, the same answer; reusing the key with different parameters returns 409."""
 
     server.services.queue.set_paused(True)
     first = post_keyed(server, "press-1", repeat=2)
-    again = post_keyed(server, "press-1", "edited meanwhile", repeat=2)
+    again = post_keyed(server, "press-1", repeat=2)
     assert first.status_code == again.status_code == 201
     assert again.json() == first.json() and len(first.json()["job_ids"]) == 2
+    assert server.services.store.count(QUEUED) == 2
+    conflict = post_keyed(server, "press-1", "edited meanwhile", repeat=2)
+    assert conflict.status_code == 409
     assert server.services.store.count(QUEUED) == 2
     other = post_keyed(server, "press-2")
     assert other.status_code == 201 and other.json()["job_id"] not in first.json()["job_ids"]
@@ -1146,6 +1150,140 @@ def test_the_completion_action_waits_for_a_running_pipeline(webui, tmp_path):
         submit(server, "the last stage")
         assert server.services.queue.wait_idle() and wait_until(lambda: ran == ["Shut down"])
         unhook()
+
+
+def test_job_store_mutations_are_atomic_and_nan_cursors_are_ignored(tmp_path):
+    """multi-statement JobStore mutations roll back cleanly on error,
+    and NaN/Infinity pagination cursors are ignored."""
+
+    import sqlite3
+
+    from remi.files import encode_cursor
+
+    store = JobStore(tmp_path / "jobs.db")
+    try:
+        j1 = store.add("txt2img", {"prompt": "one"}, {})
+        j2 = store.add("txt2img", {"prompt": "two"}, {})
+        assert len(store.history(cursor=encode_cursor("nan", 999))[0]) == 2
+        assert len(store.history(cursor=encode_cursor("inf", 999))[0]) == 2
+
+        # Trigger failure on UPDATE inside JobStore.add must roll back the INSERT too
+        store._db.execute("CREATE TEMP TRIGGER refuse_pos BEFORE UPDATE OF position ON jobs BEGIN SELECT RAISE(ABORT, 'refused'); END")
+        with pytest.raises(sqlite3.IntegrityError):
+            store.add("txt2img", {"prompt": "three"}, {})
+        assert store.count(QUEUED) == 2
+        store._db.execute("DROP TRIGGER refuse_pos")
+
+        # Trigger failure inside JobStore.reorder must leave original positions intact
+        before = [(j.id, j.position) for j in store.queued()]
+        store._db.execute(
+            f"CREATE TEMP TRIGGER refuse_second BEFORE UPDATE OF position ON jobs WHEN NEW.id = '{j1.id}' BEGIN SELECT RAISE(ABORT, 'refused'); END"
+        )
+        with pytest.raises(sqlite3.IntegrityError):
+            store.reorder([j2.id, j1.id])
+        store._db.execute("DROP TRIGGER refuse_second")
+        assert [(j.id, j.position) for j in store.queued()] == before
+    finally:
+        store.close()
+
+
+def test_launch_serve_calls_services_close_on_stop_and_restart(monkeypatch):
+    """remi.server.launch.serve() calls services.close() on stop and restart."""
+
+    import contextlib
+    import sys
+    import types
+    from types import SimpleNamespace
+
+    from remi import server as server_pkg
+    from remi.server import launch, runtime
+
+    def run_for(command):
+        closed = []
+        restarted = []
+        fake_services = SimpleNamespace(
+            queue=SimpleNamespace(stop=lambda **kw: True, hold=lambda: contextlib.nullcontext()),
+            stop=lambda: None,
+            workers=SimpleNamespace(shutdown=lambda: None),
+            close=lambda: closed.append(True),
+        )
+        fake_server = SimpleNamespace(url="http://127.0.0.1:7860/", stop=lambda: True)
+        monkeypatch.setattr(server_pkg, "default_services", lambda: fake_services)
+        monkeypatch.setattr(server_pkg, "create_app", lambda **kw: object())
+        monkeypatch.setattr(runtime, "prepare", lambda: None)
+        monkeypatch.setattr(launch, "bind_host", lambda _opts: "127.0.0.1")
+        monkeypatch.setattr(launch, "pick_port", lambda _h, _r, _d: 7860)
+        monkeypatch.setattr(launch, "exposure_warnings", lambda _opts: [])
+        monkeypatch.setattr(launch, "worker_mode_summary", lambda _opts: None)
+        monkeypatch.setattr(launch, "_start_server", lambda *a, **kw: fake_server)
+        monkeypatch.setattr(launch, "_wait_for_command", lambda: command)
+        monkeypatch.setattr(launch, "setting", lambda name, default=None: False)
+
+        import modules
+
+        fake_restart = types.ModuleType("modules.restart")
+        fake_restart.restart_program = lambda: restarted.append(True)
+        monkeypatch.setitem(sys.modules, "modules.restart", fake_restart)
+        monkeypatch.setattr(modules, "restart", fake_restart, raising=False)
+
+        from modules import extension_route_guard, script_callbacks, shared_cmd_options
+
+        monkeypatch.setattr(shared_cmd_options.cmd_opts, "port", 7860, raising=False)
+        monkeypatch.setattr(shared_cmd_options.cmd_opts, "share", False, raising=False)
+        monkeypatch.setattr(shared_cmd_options.cmd_opts, "ngrok", None, raising=False)
+        monkeypatch.setattr(script_callbacks, "before_ui_callback", lambda: None)
+        monkeypatch.setattr(script_callbacks, "app_started_callback", lambda *a: None)
+        monkeypatch.setattr(extension_route_guard, "snapshot_routes", lambda app: set())
+        monkeypatch.setattr(extension_route_guard, "guard_new_routes", lambda app, before: None)
+
+        launch.serve(webui=False)
+        assert closed == [True]
+        assert restarted == ([True] if command == launch.RESTART_PROGRAM else [])
+
+    for cmd in ("stop", launch.RESTART_PROGRAM):
+        run_for(cmd)
+
+
+def test_deep_nested_job_payloads_round_trip_without_server_error(tmp_path):
+    """Deeply nested finite payloads (>= 256 levels) accepted by POST /api/v2/jobs
+    must round-trip via GET /api/v2/jobs/{job_id} (200) and GET /api/v2/jobs (200)
+    without hitting Pydantic's 255-level serialization depth limit."""
+
+    import json
+
+    from fastapi.testclient import TestClient
+
+    def build_nested(leaf: object, depth: int, *, mixed: bool) -> dict:
+        val: object = leaf
+        for idx in range(depth):
+            val = [val] if (mixed and idx % 2 == 1) else {"a": val}
+        return {"nested": val}
+
+    def canonical(value: object) -> str:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+    state = FakeState()
+    with webui_state(), server_app(tmp_path, executor=StubExecutor(state, count=1, steps=0), state=state, validate=lambda *a: None) as srv:
+        srv.services.queue.set_paused(True)
+        client = TestClient(srv.app, raise_server_exceptions=False, base_url="http://127.0.0.1:7860")
+        for depth in (256, 260, 1100):
+            for mixed in (False, True):
+                for field in ("core", "scripts"):
+                    leaf = f"upload-{depth}-{int(mixed)}-{field}" if field == "core" else {f"leaf_{depth}": 1.0}
+                    nested = build_nested(leaf, depth, mixed=mixed)
+                    payload = {"tab": "txt2img", "core": nested if field == "core" else {}, "scripts": {"custom": nested} if field == "scripts" else {}}
+                    created = client.post("/api/v2/jobs", content=canonical(payload), headers={"Content-Type": "application/json"})
+                    assert created.status_code == 201, (depth, mixed, field, created.status_code, created.text)
+                    job_id = created.json()["job_id"]
+
+                    detail = client.get(f"/api/v2/jobs/{job_id}")
+                    assert detail.status_code == 200, (depth, mixed, field, detail.status_code, detail.text)
+                    body = detail.json()
+                    assert canonical(body[field]) == canonical(payload[field]), (depth, mixed, field)
+
+        listed = client.get("/api/v2/jobs", params={"limit": 50})
+        assert listed.status_code == 200 and listed.json()["total"] == 12
+        assert "upload-1100-1-core" in srv.services.store.referenced_strings()
 
 
 # endregion

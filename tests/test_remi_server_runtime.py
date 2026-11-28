@@ -1196,4 +1196,114 @@ def test_sdapi_infotext_sets_the_inpaint_choices_by_their_index(webui_tmp):
         assert (request.inpainting_fill, request.inpaint_full_res) == (1, False)
 
 
+def test_sdapi_unknown_sampler_returns_400_and_combined_scheduler_resolves(webui_tmp):
+    from fastapi import HTTPException
+
+    from modules import sd_samplers
+    from modules.api import api, models
+
+    with server_app(webui_tmp):
+        fake_api = SimpleNamespace(
+            apply_infotext=lambda *a, **kw: None,
+            get_selectable_script=lambda *a, **kw: (None, None),
+        )
+        for bad in ("NoSuchSampler", "NoSuchSampler Karras", "   "):
+            with pytest.raises(HTTPException) as err:
+                api.Api.text2imgapi(fake_api, models.StableDiffusionTxt2ImgProcessingAPI(sampler_name=bad))
+            assert err.value.status_code == 400 and err.value.detail == "Sampler not found"
+
+            with pytest.raises(HTTPException) as err:
+                api.Api.img2imgapi(fake_api, models.StableDiffusionImg2ImgProcessingAPI(init_images=["a"], sampler_name=bad))
+            assert err.value.status_code == 400 and err.value.detail == "Sampler not found"
+
+        with pytest.raises(HTTPException) as err:
+            api.Api.text2imgapi(fake_api, models.StableDiffusionTxt2ImgProcessingAPI(sampler_name=None, sampler_index="NoSuchSampler"))
+        assert err.value.status_code == 400 and err.value.detail == "Sampler not found"
+
+        with pytest.raises(HTTPException) as err:
+            api.Api.img2imgapi(fake_api, models.StableDiffusionImg2ImgProcessingAPI(init_images=["a"], sampler_name=None, sampler_index="NoSuchSampler"))
+        assert err.value.status_code == 400 and err.value.detail == "Sampler not found"
+
+        assert api._resolve_sampler_and_scheduler("Euler", None, None)[0] == "Euler"
+        assert api._resolve_sampler_and_scheduler("Euler Karras", None, None) == ("Euler", "Karras")
+        assert api._resolve_sampler_and_scheduler("DPM++ 2M Karras", None, None) == ("DPM++ 2M", "Automatic")
+        assert api._resolve_sampler_and_scheduler("DPM++ 2M Exponential", None, None) == ("DPM++ 2M", "Exponential")
+        assert api._resolve_sampler_and_scheduler("Euler a SGM Uniform", None, None) == ("Euler a", "SGM Uniform")
+        assert api._resolve_sampler_and_scheduler("Euler a RES4LYF Beta57", None, None) == ("Euler a", "Beta57")
+        assert api._resolve_sampler_and_scheduler("DPM++ 2M SGM Uniform", None, None) == ("DPM++ 2M", "SGM Uniform")
+        for sampler_info in sd_samplers.all_samplers:
+            assert api._resolve_sampler_and_scheduler(f"{sampler_info.name} SGM Uniform", None, None) == (sampler_info.name, "SGM Uniform")
+            assert api._resolve_sampler_and_scheduler(f"{sampler_info.name} RES4LYF Beta57", None, None) == (sampler_info.name, "Beta57")
+        with pytest.raises(HTTPException) as err:
+            api._resolve_sampler_and_scheduler("NoSuchSampler SGM Uniform", None, None)
+        assert err.value.status_code == 400 and err.value.detail == "Sampler not found"
+        default_name = sd_samplers.samplers[0].name
+        assert api._resolve_sampler_and_scheduler(None, None, None)[0] == default_name
+        assert api._resolve_sampler_and_scheduler("", "", None)[0] == default_name
+
+
+def test_sdapi_requires_initialized_shared_state_and_handles_progress_edge_cases(webui_tmp, monkeypatch):
+    from fastapi import HTTPException
+    from fastapi.testclient import TestClient
+
+    from modules import shared
+    from modules.api import api, models
+    from modules.shared_state import State
+    from remi.jobs import run_inline
+    from remi.server import Services, create_app
+    from remi.server.auth import Auth
+
+    services = Services.create(webui_tmp, dispatch=run_inline, realtime=False, housekeeping=False)
+    try:
+        app = create_app(services=services, auth=Auth(), sdapi=True, start_services=False)
+        sd_api = api.Api(app, queue_lock=services.queue.lock)
+        sd_api.add_api_route("/sdapi/v1/server-stop", sd_api.stop_webui, methods=["POST"])
+
+        monkeypatch.setattr(shared, "state", None)
+        for call in (
+            lambda: sd_api.progressapi(models.ProgressRequest()),
+            sd_api.interruptapi,
+            sd_api.skip,
+            sd_api.stop_webui,
+            lambda: sd_api.text2imgapi(models.StableDiffusionTxt2ImgProcessingAPI(prompt="fox")),
+            lambda: sd_api.img2imgapi(models.StableDiffusionImg2ImgProcessingAPI(init_images=["a"], prompt="fox")),
+        ):
+            with pytest.raises(HTTPException) as err:
+                call()
+            assert err.value.status_code == 503 and "not initialized" in err.value.detail
+
+        with TestClient(app, base_url="http://127.0.0.1:7860", raise_server_exceptions=False) as client:
+            for method, path in (
+                ("GET", "/sdapi/v1/progress"),
+                ("POST", "/sdapi/v1/interrupt"),
+                ("POST", "/sdapi/v1/skip"),
+                ("POST", "/sdapi/v1/server-stop"),
+            ):
+                resp = client.request(method, path)
+                assert resp.status_code == 503 and "not initialized" in resp.json()["detail"]
+
+        state = State()
+        state.job_count = -1
+        state.sampling_steps = 10
+        state.sampling_step = 3
+        state.time_start = None
+        monkeypatch.setattr(shared, "state", state)
+        prog = sd_api.progressapi(models.ProgressRequest(skip_current_image=True))
+        assert 0.0 <= prog.progress <= 1.0 and prog.eta_relative == 0.0
+
+        import time
+
+        state.job_count = 100
+        state.job_no = -1
+        state.sampling_steps = 0
+        state.sampling_step = 0
+        state.time_start = time.time() - 1.0
+        zero_prog_resp = client.get("/sdapi/v1/progress", params={"skip_current_image": "true"})
+        assert zero_prog_resp.status_code == 200, zero_prog_resp.text
+        zero_prog = zero_prog_resp.json()
+        assert zero_prog["progress"] == 0.0 and zero_prog["eta_relative"] == 0.0
+    finally:
+        services.close()
+
+
 # endregion

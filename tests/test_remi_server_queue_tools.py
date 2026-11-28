@@ -518,3 +518,39 @@ def test_every_import_note_is_translated_in_the_spa():
     assert len(messages) >= 15
     catalog = json.loads((root / "webui/src/locales/zh-CN.json").read_text(encoding="utf-8"))
     assert sorted(message for message in messages if message not in catalog) == []
+
+
+def test_update_job_params_deep_nested_payloads_round_trip(tmp_path):
+    """PUT /api/v2/jobs/{job_id}/params returns JobDetail (200) even when
+    core or scripts are nested >= 256 levels deep."""
+
+    from fastapi.testclient import TestClient
+
+    def build_nested(leaf: object, depth: int, *, mixed: bool) -> dict:
+        val: object = leaf
+        for idx in range(depth):
+            val = [val] if (mixed and idx % 2 == 1) else {"a": val}
+        return {"nested": val}
+
+    def canonical(value: object) -> str:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+    with webui_state(), server_app(tmp_path, validate=lambda *a: None) as srv:
+        srv.services.queue.set_paused(True)
+        client = TestClient(srv.app, raise_server_exceptions=False, base_url="http://127.0.0.1:7860")
+        created = client.post("/api/v2/jobs", json={"tab": "txt2img", "core": {"prompt": "base"}, "scripts": {}})
+        assert created.status_code == 201
+        job_id = created.json()["job_id"]
+
+        for depth in (260, 1100):
+            for mixed in (False, True):
+                for field in ("core", "scripts"):
+                    nested = build_nested(1.5, depth, mixed=mixed)
+                    payload = {"core": nested if field == "core" else {}, "scripts": {"custom": nested} if field == "scripts" else {}}
+                    updated = client.put(f"/api/v2/jobs/{job_id}/params", content=canonical(payload), headers={"Content-Type": "application/json"})
+                    assert updated.status_code == 200, (depth, mixed, field, updated.status_code, updated.text)
+                    assert canonical(updated.json()[field]) == canonical(payload[field]), (depth, mixed, field)
+
+                    fetched = client.get(f"/api/v2/jobs/{job_id}")
+                    assert fetched.status_code == 200
+                    assert canonical(fetched.json()[field]) == canonical(payload[field])

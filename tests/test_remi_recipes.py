@@ -314,3 +314,78 @@ def test_a_patch_nested_deeper_than_the_limit_is_refused_not_a_server_error(tmp_
             answer = server.client.post("/api/v2/recipes", json=body)
             assert answer.status_code == 422, answer.text
         assert server.client.post("/api/v2/recipes", json={"name": "Shallow", "core_patch": {"x": [[{"a": 1}]]}}).status_code == 201
+
+
+def test_import_validates_export_version_and_apply_surfaces_conflict_warning(tmp_path, monkeypatch, caplog):
+    """import_recipes rejects unsupported versions, and apply_recipe logs/surfaces
+    conflict evaluation failures instead of swallowing them silently."""
+
+    import logging
+
+    from remi.recipes import apply_recipe
+
+    with RecipeStore(tmp_path / "recipes.db") as store:
+        for bad_version in (99, 0, "1", True):
+            with pytest.raises(RecipeError, match="unsupported recipe export version"):
+                store.import_recipes({"version": bad_version, "recipes": [{"name": "A"}]})
+
+        recipe = store.create("ConflictTest", tab="txt2img", core_patch={"cfg_scale": 5.0})
+
+        from remi.core import conflicts
+
+        monkeypatch.setattr(conflicts, "_layouts", lambda tab: (_ for _ in ()).throw(RuntimeError("layout broken")))
+        with caplog.at_level(logging.WARNING, logger="remi.recipes"):
+            result = apply_recipe(recipe, check_conflicts=True)
+        assert any("Could not check recipe parameter conflicts" in w for w in result["warnings"])
+        assert any(n["message"] == "Could not check recipe parameter conflicts: {{error}}" for n in result["warning_notes"])
+        assert "failed to evaluate recipe conflicts" in caplog.text
+
+
+def test_apply_recipe_route_refuses_non_finite_numbers(tmp_path):
+    with webui_state(), server_app(tmp_path) as server:
+        created = server.client.post("/api/v2/recipes", json={"name": "FiniteCheck", "tab": "txt2img", "core_patch": {"steps": 20}})
+        assert created.status_code == 201
+        recipe_id = created.json()["id"]
+        headers = {"Content-Type": "application/json"}
+        for token in ("NaN", "Infinity", "-Infinity", "1e999"):
+            for payload in (
+                f'{{"tab": "txt2img", "core": {{"cfg_scale": {token}}}}}',
+                f'{{"tab": "txt2img", "scripts": {{"sampler": {{"eta": {token}}}}}}}',
+            ):
+                resp = server.client.post(f"/api/v2/recipes/{recipe_id}/apply", content=payload, headers=headers)
+                assert resp.status_code == 422, (token, resp.status_code, resp.text)
+
+
+def test_apply_recipe_route_deep_nested_payloads_round_trip(tmp_path):
+    """POST /api/v2/recipes/{recipe_id}/apply returns RecipeApplyResult (200)
+    even when request core or scripts are nested >= 256 levels deep."""
+
+    import json
+
+    from fastapi.testclient import TestClient
+
+    def build_nested(leaf: object, depth: int, *, mixed: bool) -> dict:
+        val: object = leaf
+        for idx in range(depth):
+            val = [val] if (mixed and idx % 2 == 1) else {"a": val}
+        return {"nested": val}
+
+    def canonical(value: object) -> str:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+    with webui_state(), server_app(tmp_path) as srv:
+        client = TestClient(srv.app, raise_server_exceptions=False, base_url="http://127.0.0.1:7860")
+        created = client.post("/api/v2/recipes", json={"name": "DeepApply", "tab": "txt2img", "core_patch": {"steps": 20}})
+        assert created.status_code == 201
+        recipe_id = created.json()["id"]
+
+        for depth in (260, 1100):
+            for mixed in (False, True):
+                for field in ("core", "scripts"):
+                    nested = build_nested(1.0, depth, mixed=mixed)
+                    payload = {"tab": "txt2img", "core": nested if field == "core" else {}, "scripts": {"custom": nested} if field == "scripts" else {}}
+                    resp = client.post(f"/api/v2/recipes/{recipe_id}/apply", content=canonical(payload), headers={"Content-Type": "application/json"})
+                    assert resp.status_code == 200, (depth, mixed, field, resp.status_code, resp.text)
+                    body = resp.json()
+                    expected = {**nested, "steps": 20} if field == "core" else payload["scripts"]
+                    assert canonical(body[field]) == canonical(expected), (depth, mixed, field)

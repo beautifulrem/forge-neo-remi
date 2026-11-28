@@ -566,6 +566,18 @@ def test_core_actions(webui):
 
     assert ui.call_action(core_actions, "__preset__", ui.ActionContext(tab="txt2img", extra={"label": SAFE_BASE_AESTHETIC_LABEL}), {})
 
+    # Amendment 3: __advice__ and __conflicts__ stay non-GPU and non-timed
+    specs = ui.actions_of(core_actions)
+    assert specs["__advice__"].gpu is False and specs["__advice__"].timeout is None
+    assert specs["__conflicts__"].gpu is False and specs["__conflicts__"].timeout is None
+
+    # tab_schema exposes advice and advice_params on txt2img / img2img
+    from remi.core.tabs import tab_schema
+
+    t2i = tab_schema("txt2img")
+    assert isinstance(t2i["advice"], list)
+    assert {"core.prompt", "core.cfg_scale", "sampler.steps"} <= set(t2i["advice_params"])
+
 
 # endregion
 
@@ -977,6 +989,7 @@ def test_forge_preset_action_switches_the_model_on_the_server(webui, monkeypatch
         assert calls == [("dtype", "Automatic", False, False), ("modules", [], False, False), ("checkpoint", "anima.safetensors", False, False), ("save",), ("refresh",)]
         assert patch["__settings__"]["forge_preset"] == "anima" and webui.opts.forge_preset == "anima"
         assert patch["cfg_scale"] == {"value": 4.0} and "sampler.steps" in patch
+        assert isinstance(patch["__advice__"], list) and isinstance(patch["__capabilities__"], dict)
         for extra in ({}, {"preset": "nope"}):
             with pytest.raises(ui.ValidationError):
                 ui.call_action(core_actions, "__forge_preset__", ui.ActionContext(tab="txt2img", extra=extra), {})

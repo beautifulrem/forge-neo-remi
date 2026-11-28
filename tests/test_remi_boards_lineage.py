@@ -104,12 +104,16 @@ def test_forgetting_a_vanished_output_is_one_transaction(tmp_path):
         assert index.add_to_board(board["id"], [out.id]) == 1
         assert [item.record.id for item in index.list(GalleryQuery())[0]] == [out.id]
         os.remove(out.path)
+        # GalleryIndex.list() is non-destructive: hides the missing file without purging metadata
+        assert index.list(GalleryQuery())[0] == []
+        assert rows() == [1, 1, 1]
+        # Permanent forgetting via prune_missing(0) runs in a single atomic transaction
         index._db.execute("CREATE TEMP TRIGGER refuse BEFORE DELETE ON board_items BEGIN SELECT RAISE(ABORT, 'refused'); END")
         with pytest.raises(sqlite3.IntegrityError):
-            index.list(GalleryQuery())
+            index.prune_missing(0)
         assert rows() == [1, 1, 1]
         index._db.execute("DROP TRIGGER refuse")
-        assert index.list(GalleryQuery())[0] == []
+        assert index.prune_missing(0) == 1
         assert rows() == [0, 0, 0]
     finally:
         index.close()
@@ -429,3 +433,92 @@ def test_a_refused_board_name_names_its_field_and_reason(tmp_path):
             response = server.client.patch(f"/api/v2/boards/{board['id']}", json={"name": name})
             assert response.status_code == 422 and response.json() == {"errors": [error]}, name
         assert server.client.get(f"/api/v2/boards/{board['id']}").json()["name"] == "y" * 120
+
+
+def test_gallery_list_is_non_destructive_on_transient_missing_file_and_nan_cursor(tmp_path):
+    """temporary file disappearance hides the item without losing
+    stars/boards/lineage; NaN/Infinity cursors are ignored."""
+
+    import base64
+    import json
+    import os
+
+    files = FileStore(tmp_path / "files")
+    job_store = JobStore(tmp_path / "jobs.db")
+    index = GalleryIndex(files, folders=list)
+    try:
+        parent = _save_img(files, (10, 20, 30), "parent\nSteps: 10")
+        job = job_store.add("img2img", {"prompt": "child", "init_img": parent.id}, {})
+        child = _save_img(files, (40, 50, 60), "child\nSteps: 10", job_id=job.id, tab="img2img")
+        job = job_store.finish(job.id, "completed", outputs=[{"id": child.id, "kind": "image"}])
+        index.index_job_lineage(job, [child.id], job_store=job_store)
+
+        index.set_starred([child.id], True)
+        board = index.create_board("Favorites")
+        index.add_to_board(board["id"], [child.id])
+
+        # NaN / Infinity cursors must be ignored and return page 1
+        nan_cursor = base64.urlsafe_b64encode(b"[NaN, 999]").decode().rstrip("=")
+        inf_cursor = base64.urlsafe_b64encode(b"[Infinity, 999]").decode().rstrip("=")
+        assert len(index.list(GalleryQuery(), cursor=nan_cursor)[0]) == 2
+        assert len(index.list(GalleryQuery(), cursor=inf_cursor)[0]) == 2
+
+        # Temporarily move child away, call GalleryIndex.list(), then restore it
+        tmp_moved = child.path + ".away"
+        os.rename(child.path, tmp_moved)
+        items, _c, total = index.list(GalleryQuery())
+        assert [item.record.id for item in items] == [parent.id] and total == 1
+
+        os.rename(tmp_moved, child.path)
+        assert files.scan_outputs([os.path.dirname(child.path)]) >= 1
+        restored_items, _c2, restored_total = index.list(GalleryQuery())
+        assert restored_total == 2
+        restored_child = next(it for it in restored_items if it.record.id == child.id)
+        assert restored_child.starred is True
+        assert [b["id"] for b in index.boards_for_file(child.id)] == [board["id"]]
+        assert [n["file_id"] for n in index.lineage_for(child.id)["ancestors"]] == [parent.id]
+        assert json.loads(json.dumps(board["id"])) == board["id"]
+    finally:
+        index.close()
+        job_store.close()
+        files.close()
+
+
+def test_housekeeping_prunes_orphaned_lineage_and_board_metadata(tmp_path):
+    """expired uploads / deleted files prune orphaned asset_lineage,
+    gallery_meta, and board_items during housekeeping; add_to_board is transactional."""
+
+    import sqlite3
+    import time
+
+    import pytest
+
+    from remi.jobs import run_inline
+    from remi.server.services import Services
+
+    with webui_state():
+        services = Services.create(tmp_path, dispatch=run_inline, realtime=False, housekeeping=False)
+        try:
+            upload = services.files.add_upload_bytes(b"\x89PNG\r\n\x1a\n" + _png_bytes(), "ref.png")
+            out = _save_img(services.files, (1, 2, 3), "fox\nSteps: 10")
+            index = GalleryIndex(services.files, folders=list)
+            try:
+                index.record_lineage(out.id, upload.id, "init_img")
+                board = index.create_board("B")
+                # Atomic add_to_board rollback on trigger failure
+                index._db.execute("CREATE TEMP TRIGGER refuse_board BEFORE UPDATE ON boards BEGIN SELECT RAISE(ABORT, 'refused'); END")
+                with pytest.raises(sqlite3.IntegrityError):
+                    index.add_to_board(board["id"], [out.id])
+                index._db.execute("DROP TRIGGER refuse_board")
+                assert index.get_board(board["id"])["item_count"] == 0
+            finally:
+                index.close()
+
+            services.files._db.execute("UPDATE files SET created = ? WHERE id = ?", (time.time() - 30 * 86400, upload.id))
+            services.housekeeping()
+            assert services.files.get(upload.id) is None
+            with services.files._lock:
+                orphans = services.files._db.execute("SELECT COUNT(*) FROM asset_lineage WHERE parent_id = ?", (upload.id,)).fetchone()[0]
+            assert orphans == 0
+        finally:
+            services.close()

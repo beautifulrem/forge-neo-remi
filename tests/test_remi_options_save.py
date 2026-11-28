@@ -536,3 +536,59 @@ def test_importing_the_options_does_not_probe_the_temporary_folder():
     env = {key: value for key, value in os.environ.items() if key != "COMMANDLINE_ARGS"}
     result = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env, capture_output=True, text=True, timeout=300)
     assert result.returncode == 0, result.stderr[-3000:]
+
+
+def test_options_load_corrupt_json_cast_value_bool_and_concurrent_save(tmp_path, opts):
+    """Options.load() handles corrupt/non-dict JSON gracefully, cast_value()
+    parses bool strings properly, and Options.save() is safe under concurrent dict mutation."""
+
+    import threading
+
+    from modules.options import OptionInfo
+
+    corrupt = tmp_path / "corrupt.json"
+    corrupt.write_text("{not valid json", encoding="utf-8")
+    opts.load(str(corrupt))
+    assert opts.data == {}
+
+    non_dict = tmp_path / "list.json"
+    non_dict.write_text("[1, 2, 3]", encoding="utf-8")
+    opts.load(str(non_dict))
+    assert opts.data == {}
+
+    opts.add_option("remi_test_bool", OptionInfo(True, "Test bool"))
+    assert opts.cast_value("remi_test_bool", "False") is False
+    assert opts.cast_value("remi_test_bool", "false") is False
+    assert opts.cast_value("remi_test_bool", "0") is False
+    assert opts.cast_value("remi_test_bool", "no") is False
+    assert opts.cast_value("remi_test_bool", "off") is False
+    assert opts.cast_value("remi_test_bool", "") is False
+    assert opts.cast_value("remi_test_bool", "true") is True
+    assert opts.cast_value("remi_test_bool", "1") is True
+
+    target = tmp_path / "concurrent.json"
+    errors: list[BaseException] = []
+
+    def mutator():
+        try:
+            for idx in range(50):
+                opts.add_option(f"remi_conc_{idx}", OptionInfo(idx, f"c{idx}"))
+                opts.hold_for_run(f"remi_conc_{idx}", idx + 1)
+        except BaseException as exc:
+            errors.append(exc)
+
+    def saver():
+        try:
+            for _ in range(25):
+                opts.save(str(target))
+        except BaseException as exc:
+            errors.append(exc)
+
+    t1 = threading.Thread(target=mutator)
+    t2 = threading.Thread(target=saver)
+    t1.start()
+    t2.start()
+    t1.join(timeout=10)
+    t2.join(timeout=10)
+    assert errors == []
+    assert json.loads(target.read_text(encoding="utf-8")) is not None

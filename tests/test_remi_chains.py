@@ -679,3 +679,286 @@ def test_a_failed_upsample_stage_says_why_in_its_own_sentence(tmp_path, monkeypa
         runner.close()
         files.close()
         jobs.close()
+
+
+def test_housekeeping_preserves_reused_stage_cache_outputs_and_prunes_dead_or_excess(tmp_path):
+    """active stage_cache outputs survive FileStore.prune_unsaved();
+    stage_cache enforces max_entries eviction and prune_cache(..., files=files) drops
+    entries whose outputs were removed."""
+
+    from remi.jobs import run_inline
+    from remi.server.services import Services
+
+    with webui_state():
+        services = Services.create(tmp_path, dispatch=run_inline, realtime=False, housekeeping=False)
+        try:
+            out = services.files.save_output_image(Image.new("RGB", (8, 8)), "cached")
+            stale_out = services.files.save_output_image(Image.new("RGB", (8, 8)), "stale")
+            # Backdate file creation > 7 days ago, but touch stage_cache entry to now
+            services.files._db.execute("UPDATE files SET created = ?", (time.time() - 30 * 86400,))
+            services.chains.store.put_cached("hash-active", "generate", output_file_ids=[out.id])
+            services.chains.store.touch_cached("hash-active", time.time())
+            services.chains.store.put_cached("hash-dead", "generate", output_file_ids=[stale_out.id])
+            services.files.delete(stale_out.id, delete_file=True)
+
+            services.housekeeping()
+            # Actively reused cached output MUST survive prune_unsaved()!
+            assert services.files.get(out.id) is not None
+            assert services.chains.store.get_cached("hash-active") is not None
+            # Dead entry whose output file was deleted must be cleaned up
+            assert services.chains.store.get_cached("hash-dead") is None
+
+            # Bounded max_entries eviction on put_cached
+            for idx in range(5):
+                services.chains.store.put_cached(f"cap-{idx}", "prompt_upsample", output_prompt=f"p{idx}", max_entries=3)
+                time.sleep(0.002)
+            assert services.chains.store._db.execute("SELECT COUNT(*) FROM stage_cache").fetchone()[0] == 3
+        finally:
+            services.close()
+
+
+def test_model_fingerprint_resolves_basenames_sharded_dirs_vae_and_loras(tmp_path, monkeypatch):
+    """_default_model_fingerprint resolves short basenames, hashes sharded HF
+    directory contents, and includes VAE + LoRA file identities."""
+
+    import sys
+    import types
+
+    from remi.jobs import chains as chains_mod
+
+    assert chains_mod.STAGE_HASH_VERSION >= 3
+
+    vae_dir = tmp_path / "models" / "VAE"
+    te_dir = tmp_path / "models" / "text_encoder"
+    shard_dir = te_dir / "qwen3_sharded"
+    lora_dir = tmp_path / "models" / "Lora"
+    vae_dir.mkdir(parents=True)
+    shard_dir.mkdir(parents=True)
+    lora_dir.mkdir(parents=True)
+
+    vae_file = vae_dir / "custom.vae.safetensors"
+    vae_file.write_bytes(b"vae-v1")
+    mod_file = te_dir / "ae.safetensors"
+    mod_file.write_bytes(b"ae-v1")
+    shard_file = shard_dir / "model-00001-of-00002.safetensors"
+    shard_file.write_bytes(b"shard-v1")
+    (shard_dir / "model.safetensors.index.json").write_text('{"weight_map": {}}', encoding="utf-8")
+    lora_file = lora_dir / "style_lora.safetensors"
+    lora_file.write_bytes(b"lora-v1")
+
+    opts_values = {
+        "sd_model_checkpoint": "",
+        "forge_additional_modules": ["ae.safetensors", str(shard_dir)],
+        "forge_preset": "anima",
+        "forge_unet_storage_dtype": "Automatic",
+        "sd_vae": "custom.vae.safetensors",
+        "sd_lora": "None",
+        "CLIP_stop_at_last_layers": 1,
+        "emphasis": "Original",
+        "eta_noise_seed_delta": 0,
+        "randn_source": "GPU",
+        "s_min_uncond": 0.0,
+        "upcast_sampling": False,
+        "extra_networks_default_multiplier": 1.0,
+    }
+    monkeypatch.setattr("remi.setting_values.setting", lambda name, default=None, **kw: opts_values.get(name, default))
+
+    fake_paths = types.SimpleNamespace(models_path=str(tmp_path / "models"))
+    fake_shared = types.SimpleNamespace(cmd_opts=types.SimpleNamespace(vae_dirs=[], text_encoder_dirs=[], lora_dir=None, lyco_dir_backcompat=None))
+    monkeypatch.setitem(sys.modules, "modules.paths", fake_paths)
+    monkeypatch.setitem(sys.modules, "modules.shared", fake_shared)
+    monkeypatch.setattr("modules.paths", fake_paths, raising=False)
+    monkeypatch.setattr("modules.shared", fake_shared, raising=False)
+
+    fp1 = chains_mod._default_model_fingerprint()
+    # Replacing short-basename module file changes fingerprint
+    mod_file.write_bytes(b"ae-v2-modified!")
+    fp2 = chains_mod._default_model_fingerprint()
+    assert fp2 != fp1
+
+    # Replacing shard inside sharded HF dir changes fingerprint
+    shard_file.write_bytes(b"shard-v2-longer-weights")
+    fp3 = chains_mod._default_model_fingerprint()
+    assert fp3 != fp2
+
+    # Replacing VAE file changes fingerprint
+    vae_file.write_bytes(b"vae-v2-longer")
+    fp4 = chains_mod._default_model_fingerprint()
+    assert fp4 != fp3
+
+    # Stage hash detects replaced LoRA file referenced in prompt
+    files = FileStore(tmp_path / "files")
+    jobs = JobStore(tmp_path / "jobs.db")
+    bus = EventBus()
+    queue = JobQueue(jobs, files, bus, executor=lambda j, c: None, dispatch=run_inline, lock=threading.Lock(), validate=lambda *a: None, state=FakeState, hash_layout=lambda t: "h")
+    runner = ChainRunner(ChainStore(jobs), queue, files, bus, model_fingerprint=lambda: fp4)
+    try:
+        spec = StageSpec(kind="generate", tab="txt2img", core={"prompt": "fox <lora:style_lora:0.8>"}, scripts={"seed": {"seed": 42}})
+        h1 = runner._stage_hash(spec, ("", [], None), fingerprint=fp4, chain_id="c1")
+        lora_file.write_bytes(b"lora-v2-updated-weights!")
+        h2 = runner._stage_hash(spec, ("", [], None), fingerprint=fp4, chain_id="c1")
+        assert h1 != h2
+    finally:
+        runner.close()
+        jobs.close()
+        files.close()
+
+
+def test_chain_store_nan_cursors_and_begin_immediate_update_stage(tmp_path):
+    """ChainStore ignores NaN/Infinity cursors and update_stage is atomic."""
+
+    import sqlite3
+
+    import pytest
+
+    from remi.files import encode_cursor
+
+    with ChainStore(tmp_path / "chains.db") as store:
+        chain = store.create_chain([StageSpec(kind="generate", core={"prompt": "p"})], name="One")
+        assert len(store.list_chains(cursor=encode_cursor("nan", "z"))[0]) == 1
+        assert len(store.list_chains(cursor=encode_cursor("inf", "z"))[0]) == 1
+
+        store._db.execute("CREATE TEMP TRIGGER refuse_chain_update BEFORE UPDATE ON chains BEGIN SELECT RAISE(ABORT, 'refused'); END")
+        with pytest.raises(sqlite3.IntegrityError):
+            store.update_stage(chain.id, 0, status="running", error="partial")
+        store._db.execute("DROP TRIGGER refuse_chain_update")
+        assert store.get_chain(chain.id).stages[0].status == "pending"
+
+
+def test_create_chain_idempotency_key(tmp_path):
+    state = FakeState()
+    with webui_state(), server_app(tmp_path, executor=StubExecutor(state, count=1, steps=0), state=state, validate=lambda *a: None) as server:
+        payload = {"name": "Idemp", "run_now": False, "stages": [{"kind": "generate", "tab": "txt2img", "core": {"prompt": "fox"}}]}
+        first = server.client.post("/api/v2/chains", json=payload, headers={"Idempotency-Key": "chain-k1"})
+        assert first.status_code == 201
+        again = server.client.post("/api/v2/chains", json=payload, headers={"Idempotency-Key": "chain-k1"})
+        assert again.status_code == 201 and again.json()["id"] == first.json()["id"]
+        assert server.client.get("/api/v2/chains").json()["total"] == 1
+
+        # Reusing the key with a different payload returns 409 Conflict
+        different = {**payload, "name": "Changed"}
+        conflict = server.client.post("/api/v2/chains", json=different, headers={"Idempotency-Key": "chain-k1"})
+        assert conflict.status_code == 409
+        assert conflict.json()["detail"] == "Idempotency-Key was already used with different parameters"
+        assert conflict.json()["template"] == "Idempotency-Key was already used with different parameters"
+
+        # A rejected 422 submission is not remembered under its key
+        bad = server.client.post(
+            "/api/v2/chains",
+            content='{"name": "bad", "run_now": false, "stages": [{"kind": "generate", "core": {"cfg_scale": 1e999}}]}',
+            headers={"Content-Type": "application/json", "Idempotency-Key": "chain-k2"},
+        )
+        assert bad.status_code == 422
+        recovered = server.client.post("/api/v2/chains", json=payload, headers={"Idempotency-Key": "chain-k2"})
+        assert recovered.status_code == 201 and recovered.json()["id"] != first.json()["id"]
+
+        # Keys longer than 255 characters are rejected
+        assert server.client.post("/api/v2/chains", json=payload, headers={"Idempotency-Key": "x" * 256}).status_code == 422
+
+
+def test_preview_chain_refuses_non_finite_numbers(tmp_path):
+    with webui_state(), server_app(tmp_path, validate=lambda tab, core, scripts: None) as server:
+        headers = {"Content-Type": "application/json"}
+        for token in ("NaN", "Infinity", "-Infinity", "1e999"):
+            body = f'{{"stages": [{{"kind": "generate", "core": {{"cfg_scale": {token}}}}}]}}'
+            resp = server.client.post("/api/v2/chains/preview", content=body, headers=headers)
+            assert resp.status_code == 422, (token, resp.status_code, resp.text)
+
+
+def test_deep_nested_stages_never_raise_recursion_error(tmp_path):
+    import pytest
+    from fastapi.testclient import TestClient
+
+    from remi.jobs.chains import ChainError
+
+    deep_bad: object = float("nan")
+    deep_ok: object = 1.0
+    for _ in range(900):
+        deep_bad = {"k": [deep_bad]}
+        deep_ok = {"k": [deep_ok]}
+
+    def nest_json(leaf: str, depth: int) -> str:
+        raw = leaf
+        for _ in range(depth):
+            raw = f'{{"a": {raw}}}'
+        return raw
+
+    bad_1100 = nest_json("1e999", 1100)
+    ok_1100 = nest_json("1.0", 1100)
+
+    with webui_state(), server_app(tmp_path, validate=lambda tab, core, scripts: None) as server:
+        with pytest.raises(ChainError) as exc:
+            server.services.chains.plan_chain([StageSpec(kind="generate", core={"deep": deep_bad})])
+        assert exc.value.status == 422
+        assert len(server.services.chains.plan_chain([StageSpec(kind="generate", core={"deep": deep_ok})])) == 1
+
+        client = TestClient(server.app, raise_server_exceptions=False, base_url="http://127.0.0.1:7860")
+        headers = {"Content-Type": "application/json"}
+
+        for path, bad_body, ok_body, ok_status in (
+            (
+                "/api/v2/chains/preview",
+                f'{{"stages": [{{"kind": "generate", "core": {bad_1100}}}]}}',
+                f'{{"stages": [{{"kind": "generate", "core": {ok_1100}}}]}}',
+                200,
+            ),
+            (
+                "/api/v2/chains",
+                f'{{"name": "bad", "run_now": false, "stages": [{{"kind": "generate", "core": {bad_1100}}}]}}',
+                f'{{"name": "ok", "run_now": false, "stages": [{{"kind": "generate", "core": {ok_1100}}}]}}',
+                201,
+            ),
+            (
+                "/api/v2/chains/templates",
+                f'{{"name": "bad", "stages": [{{"kind": "generate", "core": {bad_1100}}}]}}',
+                f'{{"name": "ok", "stages": [{{"kind": "generate", "core": {ok_1100}}}]}}',
+                201,
+            ),
+        ):
+            bad_resp = client.post(path, content=bad_body, headers=headers)
+            assert bad_resp.status_code == 422, (path, bad_resp.status_code, bad_resp.text)
+            ok_resp = client.post(path, content=ok_body, headers=headers)
+            assert ok_resp.status_code == ok_status, (path, ok_resp.status_code, ok_resp.text)
+
+        assert client.get("/api/v2/chains").status_code == 200
+        assert client.get("/api/v2/chains/templates").status_code == 200
+
+
+def test_create_chain_idempotency_key_deep_nesting(tmp_path):
+    from fastapi.testclient import TestClient
+
+    def nest_json(leaf: str, depth: int) -> str:
+        raw = leaf
+        for _ in range(depth):
+            raw = f'{{"a": {raw}}}'
+        return raw
+
+    state = FakeState()
+    with webui_state(), server_app(tmp_path, executor=StubExecutor(state, count=1, steps=0), state=state, validate=lambda *a: None) as server:
+        client = TestClient(server.app, raise_server_exceptions=False, base_url="http://127.0.0.1:7860")
+
+        for expected_total, depth in enumerate((260, 1100), start=1):
+            for token in ("1e999", "NaN", "Infinity"):
+                bad_body = f'{{"name": "bad-{depth}", "run_now": false, "stages": [{{"kind": "generate", "core": {nest_json(token, depth)}}}]}}'
+                bad_resp = client.post(
+                    "/api/v2/chains",
+                    content=bad_body,
+                    headers={"Content-Type": "application/json", "Idempotency-Key": f"deep-key-{depth}"},
+                )
+                assert bad_resp.status_code == 422, (depth, token, bad_resp.status_code, bad_resp.text)
+
+            ok_body = f'{{"name": "ok-{depth}", "run_now": false, "stages": [{{"kind": "generate", "core": {nest_json("1.0", depth)}}}]}}'
+            headers = {"Content-Type": "application/json", "Idempotency-Key": f"deep-key-{depth}"}
+            created = client.post("/api/v2/chains", content=ok_body, headers=headers)
+            assert created.status_code == 201, (depth, created.status_code, created.text)
+            chain_id = created.json()["id"]
+
+            replay = client.post("/api/v2/chains", content=ok_body, headers=headers)
+            assert replay.status_code == 201, (depth, replay.status_code, replay.text)
+            assert replay.json()["id"] == chain_id
+            assert client.get("/api/v2/chains").json()["total"] == expected_total
+
+            changed_body = f'{{"name": "ok-{depth}", "run_now": false, "stages": [{{"kind": "generate", "core": {nest_json("2.0", depth)}}}]}}'
+            conflict = client.post("/api/v2/chains", content=changed_body, headers=headers)
+            assert conflict.status_code == 409, (depth, conflict.status_code, conflict.text)
+            assert conflict.json()["detail"] == "Idempotency-Key was already used with different parameters"

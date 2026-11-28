@@ -1422,4 +1422,181 @@ def test_history_and_favorites_say_why_they_refuse_in_sentences_the_ui_translate
     rejected(server.client.post(f"{api}/usage", json={"name": "   "}), "name", "invalid name")
 
 
+def test_prompt_tools_store_pragmas_and_close_drains_history_recorder(tmp_path, monkeypatch):
+    """PromptToolsStore uses synchronous=NORMAL and foreign_keys=ON,
+    and PromptTools.close() joins HistoryRecorder._thread before closing the DB."""
+
+    from types import SimpleNamespace
+
+    from remi.realtime import EventBus
+
+    store = PromptToolsStore(tmp_path / "pt.db")
+    try:
+        assert store._db.execute("PRAGMA synchronous").fetchone()[0] == 1  # NORMAL
+        assert store._db.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+    finally:
+        store.close()
+
+    monkeypatch.setattr(pt.registry, "group_dirs", [str(tmp_path)])
+    bus = EventBus()
+    entered = threading.Event()
+    release = threading.Event()
+
+    class SlowJobStore:
+        def get(self, job_id):
+            entered.set()
+            release.wait(5)
+            return SimpleNamespace(core={"prompt": "draining prompt", "negative_prompt": ""}, tab="txt2img")
+
+    services = SimpleNamespace(root=tmp_path, bus=bus, store=SlowJobStore(), networks=None)
+    tools = pt.tools_for(services)
+    tools.attach(services)
+    bus.publish("job.queued", job_id="j1")
+    assert entered.wait(5)
+
+    closed = threading.Event()
+
+    def do_close():
+        tools.close()
+        closed.set()
+
+    closer = threading.Thread(target=do_close)
+    closer.start()
+    assert not closed.wait(0.1)  # Must wait for HistoryRecorder thread, not close DB mid-record
+    release.set()
+    closer.join(5)
+    assert closed.is_set()
+
+    reopened = PromptToolsStore(tmp_path / "prompt-tools.db")
+    try:
+        items, _c, total = reopened.history()
+        assert total == 1 and items[0]["prompt"] == "draining prompt"
+    finally:
+        reopened.close()
+        pt._tools.pop(str(tmp_path.resolve()), None)
+        pt._tools_owners.pop(str(tmp_path.resolve()), None)
+
+
+def test_tools_for_gc_releases_prompt_tools_and_pup_closes_pil_images_and_warns(tmp_path, monkeypatch):
+    """_tools cleans up when Services is garbage collected; pup closes PIL
+    images on error; LocalQwen35PUPRunner warns on multimodal fallback."""
+
+    import gc
+    import io
+    import logging
+    import sys
+    import types
+
+    from PIL import Image
+
+    from remi.prompt_tools import pup
+    from remi.prompt_tools.translate import TranslationError
+
+    class DummyServices:
+        def __init__(self, root):
+            self.root = root
+            self.networks = None
+
+    s = DummyServices(tmp_path)
+    tools = pt.tools_for(s)
+    key = str(tmp_path.resolve())
+    assert key in pt._tools and tools is pt._tools[key]
+    del tools, s
+    gc.collect()
+    assert key not in pt._tools
+
+    # PIL close on prepare_reference_images error
+    closed_flags: list[bool] = []
+    real_img = Image.new("RGB", (8, 8), (1, 2, 3))
+    buf = io.BytesIO()
+    real_img.save(buf, format="PNG")
+    real_img.close()
+    real_close = Image.Image.close
+
+    def tracked_close(self):
+        closed_flags.append(True)
+        return real_close(self)
+
+    monkeypatch.setattr(Image.Image, "close", tracked_close)
+    with pytest.raises(TranslationError):
+        pup.prepare_reference_images([buf.getvalue(), str(tmp_path / "missing.png")])
+    assert len(closed_flags) >= 1
+
+    # Multimodal fallback warning in LocalQwen35PUPRunner._run_transformers
+    model_dir = tmp_path / "qwen_model"
+    model_dir.mkdir()
+    fake_torch = types.SimpleNamespace(
+        cuda=types.SimpleNamespace(is_available=lambda: False),
+        backends=types.SimpleNamespace(mps=types.SimpleNamespace(is_available=lambda: False)),
+        bfloat16="bf16",
+        float32="fp32",
+        bool="bool",
+        inference_mode=lambda: __import__("contextlib").nullcontext(),
+        full=lambda *a, **kw: None,
+    )
+
+    class _FakeInputs(dict):
+        def to(self, _d):
+            return self
+
+    class _FakeTok:
+        def __call__(self, *a, **kw):
+            return _FakeInputs({"input_ids": types.SimpleNamespace(shape=(1, 2))})
+
+        def decode(self, *a, **kw):
+            return "expanded prompt"
+
+    class _FakeOutputIds:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def __getitem__(self, key):
+            if isinstance(key, tuple) and len(key) == 2:
+                return self._rows[key[0]][key[1]]
+            return self._rows[key]
+
+    class _FakeModel:
+        def to(self, _d):
+            return self
+
+        def eval(self):
+            return self
+
+        def generate(self, **kw):
+            return _FakeOutputIds([[0, 1, 2]])
+
+    class _FakeImageModel:
+        @classmethod
+        def from_pretrained(cls, *a, **kw):
+            raise ValueError("not a VLM architecture")
+
+    class _FakeCausal:
+        @classmethod
+        def from_pretrained(cls, *a, **kw):
+            return _FakeModel()
+
+    class _FakeStopping:
+        pass
+
+    class _FakeStoppingList(list):
+        pass
+
+    fake_transformers = types.SimpleNamespace(
+        AutoModelForCausalLM=_FakeCausal,
+        AutoModelForImageTextToText=_FakeImageModel,
+        AutoProcessor=types.SimpleNamespace(from_pretrained=lambda *a, **kw: _FakeTok()),
+        AutoTokenizer=types.SimpleNamespace(from_pretrained=lambda *a, **kw: _FakeTok()),
+        StoppingCriteria=_FakeStopping,
+        StoppingCriteriaList=_FakeStoppingList,
+    )
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+
+    with monkeypatch.context() as mp:
+        mp.setattr(logging.getLogger("remi.prompt_tools.pup"), "level", logging.WARNING)
+        res = pup.upsample_prompt("cat", reference_images=[buf.getvalue()], local_model_path=str(model_dir))
+    assert res.prompt == "expanded prompt"
+    assert any("multimodal" in str(w).lower() for w in res.warnings)
+
+
 # endregion

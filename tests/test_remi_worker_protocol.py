@@ -839,3 +839,294 @@ def test_mlx_sidecar_pool_and_bridge_edge_cases(tmp_path, monkeypatch):
     assert hb.to_status_dict(iso=lambda ts: "2026-01-01T00:00:00Z" if ts else None)["worker_id"] == "w"
     assert WorkerProgress.from_dict(WorkerProgress(job_id="j", seq=1, step=1, steps=2).to_dict()).step == 1
     assert WorkerResult.from_dict(WorkerResult(job_id="j", status="completed").to_dict()).job_id == "j"
+
+
+def test_subprocess_worker_stop_during_active_job_does_not_respawn(tmp_path):
+    """SubprocessWorker.stop() while a job runs must preserve state='stopped' and never trigger auto-restart."""
+
+    handler_file = tmp_path / "sleep_handler.py"
+    handler_file.write_text(
+        "import time\n"
+        "from remi.worker.protocol import WorkerResult\n\n"
+        "def handle(envelope, emit_progress, emit_preview, cancel_event):\n"
+        "    time.sleep(30)\n"
+        "    return WorkerResult(job_id=envelope.job_id, status='completed')\n",
+        encoding="utf-8",
+    )
+    worker = SubprocessWorker(
+        worker_id="w-stop-no-respawn",
+        handler_import=f"{handler_file}:handle",
+        auto_restart=True,
+        max_restarts=3,
+        restart_backoff_s=0.0,
+        startup_timeout=10.0,
+    )
+    worker.start()
+    results: list[WorkerResult] = []
+    try:
+        t = threading.Thread(target=lambda: results.append(worker.execute(JobEnvelope(job_id="j-stop", seq=1, tab="txt2img", core={}))), daemon=True)
+        t.start()
+        deadline = time.monotonic() + 10.0
+        while worker.status().current_job_id != "j-stop" and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert worker.status().current_job_id == "j-stop"
+        worker.stop(timeout=0.3)
+        t.join(timeout=10.0)
+        assert not t.is_alive()
+        assert results and results[0].status == "failed"
+        assert worker.is_alive() is False
+        hb = worker.status()
+        assert hb.state == "stopped"
+        assert hb.restarts == 0
+        assert hb.pid is None
+    finally:
+        worker.stop()
+
+
+def test_stdio_loop_concurrent_cancel_and_default_forge_handler_forwarding(tmp_path, monkeypatch):
+    """run_worker_stdio_loop dispatches cancel mid-job and default_forge_handler forwards interrupt/progress/preview."""
+
+    import io
+    from types import SimpleNamespace
+
+    from remi.jobs.runner import JobResult
+    from remi.worker import subprocess_worker as sw
+
+    # 1. Pipe run_job + cancel + shutdown where handler blocks on cancel_event.wait()
+    seen_cancel: list[bool] = []
+
+    def blocking_handler(env, emit_progress, emit_preview, cancel_ev):
+        got = cancel_ev.wait(2.0)
+        seen_cancel.append(got)
+        return WorkerResult(job_id=env.job_id, status="cancelled" if got else "completed")
+
+    in_bytes = b"".join(
+        [
+            encode_message(WorkerMessage("run_job", JobEnvelope(job_id="j-can", seq=1, tab="txt2img", core={}).to_dict())),
+            encode_message(WorkerMessage("cancel", {"job_id": "j-can"})),
+            encode_message(WorkerMessage("shutdown", {})),
+        ]
+    )
+    out_buf = io.BytesIO()
+    assert sw.run_worker_stdio_loop(blocking_handler, worker_id="w-can", stdin=io.BytesIO(in_bytes), stdout=out_buf) == 0
+    assert seen_cancel == [True]
+    msgs = [decode_message(line) for line in out_buf.getvalue().splitlines() if line]
+    assert [m.type for m in msgs] == ["result"]
+    assert msgs[0].payload["status"] == "cancelled"
+
+    # 2. default_forge_handler wires cancel_event -> shared.state.interrupt() and forwards progress/preview safely
+    import modules.shared as shared
+    import remi.jobs.runner as runner_mod
+
+    fake_state = FakeState()
+    fake_opts = SimpleNamespace(live_previews_enable=True, live_previews_image_format="jpeg", live_preview_fps=30)
+    monkeypatch.setattr(shared, "state", fake_state)
+    monkeypatch.setattr(shared, "opts", fake_opts)
+
+    cancel_ev = threading.Event()
+    progress_seen: list[WorkerProgress] = []
+    previews_seen: list[PreviewChunk] = []
+
+    def fake_run_job(job, ctx):
+        fake_state.time_start = time.time()
+        fake_state.job_count = 1
+        fake_state.sampling_steps = 2
+        fake_state.sampling_step = 1
+        if ctx.on_begin is not None:
+            ctx.on_begin()
+        fake_state.assign_current_image(Image.new("RGB", (16, 16), (10, 20, 30)))
+        cancel_ev.set()
+        deadline = time.monotonic() + 2.0
+        while not fake_state.interrupted and time.monotonic() < deadline:
+            time.sleep(0.01)
+        ctx.interrupted = bool(fake_state.interrupted)
+        return JobResult(images=[], infotexts=[], info=None)
+
+    monkeypatch.setattr(runner_mod, "run_job", fake_run_job)
+    res = sw.default_forge_handler(
+        JobEnvelope(job_id="j-dfh", seq=7, tab="txt2img", core={}, file_store_root=str(tmp_path / "files")),
+        lambda p: (progress_seen.append(p), (_ for _ in ()).throw(RuntimeError("ignore callback fail")))[0],
+        previews_seen.append,
+        cancel_ev,
+    )
+    assert fake_state.interrupted is True
+    assert res.status == "cancelled"
+    assert progress_seen and previews_seen
+
+
+def test_subprocess_worker_timeout_non_json_stdout_finally_cleanup_and_single_restart(tmp_path, monkeypatch):
+    """DEFAULT_JOB_TIMEOUT enforcement, non-JSON stdout resilience, finally cleanup, and no _restarts double-count."""
+
+    # 1. Job timeout triggers structured failure and cleans up worker state
+    hang_handler = tmp_path / "hang_handler.py"
+    hang_handler.write_text(
+        "import time\n"
+        "from remi.worker.protocol import WorkerResult\n\n"
+        "def handle(envelope, emit_progress, emit_preview, cancel_event):\n"
+        "    time.sleep(30)\n"
+        "    return WorkerResult(job_id=envelope.job_id, status='completed')\n",
+        encoding="utf-8",
+    )
+    w_to = SubprocessWorker(
+        worker_id="w-job-timeout",
+        handler_import=f"{hang_handler}:handle",
+        auto_restart=False,
+        startup_timeout=10.0,
+        job_timeout=0.2,
+    )
+    w_to.start()
+    try:
+        res_to = w_to.execute(JobEnvelope(job_id="j-to", seq=1, tab="txt2img", core={}))
+        assert res_to.status == "failed"
+        assert "timed out" in (res_to.error or "")
+        assert w_to.status().state == "error"
+        assert w_to.status().current_job_id is None
+    finally:
+        w_to.stop()
+
+    # 2. Non-JSON stdout lines during startup & execution are ignored cleanly
+    noisy_child = (
+        "import json, sys\n"
+        "print('PyTorch diagnostic warning', flush=True)\n"
+        "for line in sys.stdin:\n"
+        "    msg = json.loads(line)\n"
+        "    if msg['type'] == 'ping':\n"
+        "        print(json.dumps({'protocol_version': 1, 'type': 'pong', 'payload': {}}), flush=True)\n"
+        "    elif msg['type'] == 'run_job':\n"
+        "        print('CUDA kernel info line', flush=True)\n"
+        "        jid = msg['payload']['job_id']\n"
+        "        print(json.dumps({'protocol_version': 1, 'type': 'result', 'payload': {'job_id': jid, 'status': 'completed'}}), flush=True)\n"
+        "    elif msg['type'] == 'shutdown':\n"
+        "        break\n"
+    )
+    w_noisy = SubprocessWorker(worker_id="w-noisy", command=[sys.executable, "-c", noisy_child], auto_restart=False, startup_timeout=10.0)
+    w_noisy.start()
+    try:
+        res_ok = w_noisy.execute(JobEnvelope(job_id="j-noisy", seq=1, tab="txt2img", core={}))
+        assert res_ok.status == "completed"
+        assert w_noisy.status().state == "idle"
+        assert w_noisy.status().current_job_id is None
+    finally:
+        w_noisy.stop()
+
+    # 3. Unexpected callback error still resets _state and _current_job_id in finally
+    import io
+
+    prog_child = (
+        "import json, sys\n"
+        "for line in sys.stdin:\n"
+        "    msg = json.loads(line)\n"
+        "    if msg['type'] == 'ping':\n"
+        "        print(json.dumps({'protocol_version': 1, 'type': 'pong', 'payload': {}}), flush=True)\n"
+        "    elif msg['type'] == 'run_job':\n"
+        "        jid = msg['payload']['job_id']\n"
+        "        print(json.dumps({'protocol_version': 1, 'type': 'progress', 'payload': {'job_id': jid, 'seq': 1, 'step': 1, 'steps': 2}}), flush=True)\n"
+        "    elif msg['type'] == 'shutdown':\n"
+        "        break\n"
+    )
+    w_cb = SubprocessWorker(worker_id="w-cb", command=[sys.executable, "-c", prog_child], auto_restart=False, startup_timeout=10.0)
+    w_cb.start()
+    try:
+        with pytest.raises(RuntimeError, match="cb boom"):
+            w_cb.execute(
+                JobEnvelope(job_id="j-cb", seq=1, tab="txt2img", core={}),
+                on_progress=lambda _p: (_ for _ in ()).throw(RuntimeError("cb boom")),
+            )
+        assert w_cb.status().state == "idle"
+        assert w_cb.status().current_job_id is None
+    finally:
+        w_cb.stop()
+        _ = io  # keep unused import away
+
+    # 4. Concurrent restart() during execute() with auto_restart=True increments _restarts only once
+    w_conc = SubprocessWorker(
+        worker_id="w-conc-restart",
+        handler_import=f"{hang_handler}:handle",
+        auto_restart=True,
+        max_restarts=5,
+        restart_backoff_s=0.0,
+        startup_timeout=10.0,
+    )
+    w_conc.start()
+    results_conc: list[WorkerResult] = []
+    try:
+        t = threading.Thread(target=lambda: results_conc.append(w_conc.execute(JobEnvelope(job_id="j-hang", seq=1, tab="txt2img", core={}))), daemon=True)
+        t.start()
+        deadline = time.monotonic() + 10.0
+        while w_conc.status().current_job_id != "j-hang" and time.monotonic() < deadline:
+            time.sleep(0.02)
+        hb_after = w_conc.restart()
+        t.join(timeout=10.0)
+        assert results_conc and results_conc[0].status == "failed"
+        assert hb_after.state == "idle"
+        assert w_conc.status().restarts == 1
+    finally:
+        w_conc.stop()
+
+
+def test_mlx_stop_state_preserved_and_pool_releases_cv_before_status():
+    """MlxSidecarWorker.execute() preserves 'stopped' and WorkerPool does not hold _cv during status()."""
+
+    avail_env = MlxEnvironment(available=True, platform_supported=True, unified_memory_mb=16384)
+    entered = threading.Event()
+    release = threading.Event()
+
+    def slow_runner(env, out, prog, cancel_ev):
+        entered.set()
+        release.wait(timeout=5.0)
+        return {}
+
+    w_mlx = MlxSidecarWorker(env_probe=lambda: avail_env, runner=slow_runner)
+    res_box: list[WorkerResult] = []
+    t = threading.Thread(target=lambda: res_box.append(w_mlx.execute(JobEnvelope(job_id="m-stop", seq=1, tab="txt2img", core={}))), daemon=True)
+    t.start()
+    assert entered.wait(timeout=5.0)
+    w_mlx.stop()
+    release.set()
+    t.join(timeout=5.0)
+    assert res_box and res_box[0].status == "cancelled"
+    assert w_mlx.status().state == "stopped"
+    assert w_mlx.is_alive() is False
+
+    # WorkerPool.acquire_worker() must not hold _cv across worker.status()/is_alive()
+    lock_held_during_status: list[bool] = []
+    pool: WorkerPool
+
+    class CheckingWorker(InProcessWorker):
+        def status(self):
+            lock_held_during_status.append(pool._cv._is_owned())
+            return super().status()
+
+    w_check = CheckingWorker(worker_id="w-lock-check")
+    pool = WorkerPool([w_check], mode="pool")
+    chosen = pool.acquire_worker(timeout=1.0)
+    assert chosen is w_check
+    assert lock_held_during_status == [False]
+    pool.release_worker(w_check.worker_id)
+
+
+def test_workers_route_reports_dispatch_active_and_refuses_preview_subprocess_restart(tmp_path):
+    """/api/v2/workers exposes dispatch_active/preview and refuses idle subprocess spawn when inactive."""
+
+    with webui_state(), server_app(tmp_path) as server:
+        data = server.client.get("/api/v2/workers").json()
+        assert data["dispatch_active"] is False
+        assert data["preview"] is False
+        assert data["note"]
+
+        # Swap pool to preview subprocess mode (dispatch_active=False)
+        sub = SubprocessWorker(worker_id="worker-preview-0", auto_restart=False)
+        server.services.workers = WorkerPool([sub], mode="subprocess", dispatch_active=False)
+        try:
+            preview_data = server.client.get("/api/v2/workers").json()
+            assert preview_data["mode"] == "subprocess"
+            assert preview_data["dispatch_active"] is False
+            assert preview_data["preview"] is True
+            assert "preview" in (preview_data["note"] or "").lower()
+
+            refused = server.client.post("/api/v2/workers/worker-preview-0/restart")
+            assert refused.status_code == 409
+            assert sub.is_alive() is False
+            assert sub.status().restarts == 0
+        finally:
+            server.services.workers.shutdown()

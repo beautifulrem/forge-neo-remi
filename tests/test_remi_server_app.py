@@ -130,11 +130,12 @@ def test_an_extension_action_that_fails_counts_against_its_extension(server, web
         return client.post(f"/api/v2/actions/broken/{action}", json={"tab": "txt2img", "values": {}})
 
     assert run("boom").status_code == 500
-    assert run("limited_boom").json()["__toast__"]["level"] == "error"
-    assert run("slow").json()["__toast__"]["level"] == "error"
+    assert run("limited_boom").status_code == 500
+    slow_resp = run("slow")
+    assert slow_resp.status_code == 504 and "timed out" in slow_resp.json()["detail"]
     assert run("bad_input").status_code == 422  # the user's input, not the extension's fault
     assert run("gone_upload").status_code == 404  # nor is a request the server answers with a 4xx
-    assert run("key_bug").json()["__toast__"]["level"] == "error"
+    assert run("key_bug").status_code == 500
     record = ui.diagnostics.get("broken-ext")
     assert record is not None
     assert (record.action_errors, record.action_timeouts) == (3, 1)
@@ -209,8 +210,8 @@ def test_a_remote_service_refusing_an_extension_action_is_the_extensions_failure
     def run(action):
         return client.post(f"/api/v2/actions/caller/{action}", json={"tab": "txt2img", "values": {}})
 
-    assert run("denied").json()["__toast__"]["level"] == "error"
-    assert run("limited").json()["__toast__"]["level"] == "error"
+    assert run("denied").status_code == 500
+    assert run("limited").status_code == 500
     assert run("denied_without_limit").status_code == 500
     record = ui.diagnostics.get("remote-ext")
     assert record is not None and record.action_errors == 3
@@ -862,6 +863,20 @@ def test_a_route_with_its_own_422_still_lists_the_422_of_a_malformed_request(ser
     for status in ("400", "422"):
         assert upload[status]["content"]["application/json"]["schema"] == {"$ref": "#/components/schemas/Detail"}
     assert server.client.post("/api/v2/uploads", files={"other": ("a.png", b"x")}).json() == {"detail": "the form needs a `file` field"}
+
+
+def test_openapi_error_schemas_and_diagnostics_advice_properties(server):
+    document = server.client.get("/openapi.json").json()
+    schemas = document["components"]["schemas"]
+    assert {"advice", "advice_params"} <= set(schemas["TabSchema"]["properties"])
+    assert "recent_errors" in schemas["ExtensionDiagnosticItem"]["properties"]
+
+    chains_422 = json.dumps(document["paths"]["/api/v2/chains"]["post"]["responses"]["422"])
+    assert "ValidationErrorBody" in chains_422 and "Detail" in chains_422
+    retry_422 = json.dumps(document["paths"]["/api/v2/jobs/{job_id}/retry"]["post"]["responses"]["422"])
+    assert "ValidationErrorBody" in retry_422
+    action_responses = document["paths"]["/api/v2/actions/{owner}/{action}"]["post"]["responses"]
+    assert {"404", "409", "422", "503", "504"} <= set(action_responses)
 
 
 # endregion

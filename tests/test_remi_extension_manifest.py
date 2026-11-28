@@ -251,6 +251,48 @@ def test_extension_diagnostics_report_and_route(tmp_path, monkeypatch):
     ui.diagnostics.reset()
 
 
+def test_diagnostics_parses_startup_timer_exposes_recent_errors_and_validates_widgets(tmp_path, monkeypatch):
+    from modules import timer
+
+    ext_demo = tmp_path / "ext_demo"
+    (ext_demo / "scripts").mkdir(parents=True)
+    (ext_demo / "scripts" / "demo_script.py").write_text("# demo\n", encoding="utf-8")
+    (ext_demo / ui.MANIFEST_FILENAME).write_text(
+        json.dumps({"api_version": "1.0", "requires_widgets": ["image-list", "nonexistent-widget"]}),
+        encoding="utf-8",
+    )
+    ext_empty = SimpleNamespace(name="ext_empty", enabled=True, is_builtin=False, path="")
+    demo_item = SimpleNamespace(name="ext_demo", enabled=True, is_builtin=False, path=str(ext_demo))
+
+    monkeypatch.setattr(
+        timer.startup_timer,
+        "records",
+        {"load scripts/demo_script.py": 0.1234, "load scripts": 0.5, "load scripts/core_only.py": 0.05},
+    )
+    monkeypatch.setattr(extensions_admin, "all_extensions", lambda: [demo_item, ext_empty])
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ui.MANIFEST_FILENAME).write_text(json.dumps({"api_version": "invalid"}), encoding="utf-8")
+
+    ui.diagnostics.reset()
+    ui.diagnostics.record_hook_warning("ext_demo", "warn 1")
+    ui.diagnostics.record_action_error("ext_demo", "act", "boom", timed_out=False)
+
+    with webui_state(), server_app(tmp_path) as server:
+        resp = server.client.get("/api/v2/extensions/diagnostics")
+        assert resp.status_code == 200
+        by_name = {item["name"]: item for item in resp.json()["items"]}
+        demo = by_name["ext_demo"]
+        assert demo["load_time_ms"] == 123.4
+        assert ui.diagnostics.get("ext_demo").load_time_ms == 123.4
+        assert len(demo["recent_errors"]) == 2
+        assert [entry["kind"] for entry in demo["recent_errors"]] == ["hook_warning", "action_error"]
+        assert all(isinstance(entry["timestamp"], str) and entry["timestamp"] for entry in demo["recent_errors"])
+        assert demo["manifest_warnings"] == ["unknown required widgets: nonexistent-widget"]
+        # Empty path does not fall back to loading ./remi-extension.json
+        assert by_name["ext_empty"]["manifest_status"] == "missing"
+    ui.diagnostics.reset()
+
+
 def test_public_verify_extension_contract(tmp_path):
     ext_dir = tmp_path / "clean_ext"
     (ext_dir / "scripts").mkdir(parents=True)

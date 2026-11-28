@@ -149,6 +149,19 @@ def test_jsonable():
     assert ui.jsonable({"a": (1, float("nan")), 2: {3}}) == {"a": [1, None], "2": [3]}
 
 
+def test_to_schema_normalizes_custom_props_with_jsonable():
+    from remi.ui.schema import dumps
+
+    tree = ui.Group(ui.Custom("x", "w", props={"vals": {1, 2}, "pair": (3, 4), "bad": float("nan")}))
+    schema = ui.to_schema(tree)
+    assert schema is not None
+    props = schema["children"][0]["props"]
+    assert sorted(props["vals"]) == [1, 2]
+    assert props["pair"] == [3, 4]
+    assert props["bad"] is None
+    assert isinstance(dumps(schema), str)
+
+
 class _Category:
     def __init__(self, id, label):
         self.id, self.label = id, label

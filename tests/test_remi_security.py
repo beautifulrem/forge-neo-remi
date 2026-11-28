@@ -38,7 +38,7 @@ def options(webui, monkeypatch):
         for key, value in values.items():
             monkeypatch.setattr(shared.cmd_opts, key, value, raising=False)
 
-    set_options(listen=False, server_name=None, ngrok=None, share=False, nowebui=False, api_auth=None, auth=None, auth_file=None, api_no_auth_on_localhost=False, cors_allow_origins=None, cors_allow_origins_regex=None)
+    set_options(listen=False, server_name=None, ngrok=None, share=False, nowebui=False, api_auth=None, auth=None, auth_file=None, api_no_auth_on_localhost=False, cors_allow_origins=None, cors_allow_origins_regex=None, forwarded_allow_ips=None)
     return set_options
 
 
@@ -365,6 +365,86 @@ def test_non_finite_numbers_are_client_errors_without_a_traceback(webui, tmp_pat
         with pytest.raises(ValidationError):
             Weighted(weight=value)
     assert Weighted(weight=1.5).weight == 1.5
+
+
+def test_request_models_reject_non_finite_floats_iteratively(webui, tmp_path):
+    from pydantic import ValidationError
+
+    from remi.server import models as m
+    from remi.server.network_models import UserMetadataPatch
+    from remi.server.routes.prompt_tools import PromptUpsampleRequest
+    from remi.server.routes.queue_tools import JobParams
+
+    with pytest.raises(ValueError, match=r"root\.items\[1\]\.x must not contain NaN or Infinity"):
+        m.reject_non_finite({"items": [1.0, {"x": float("nan")}, 2.0]}, "root")
+
+    deep: object = float("inf")
+    for _ in range(900):
+        deep = [deep]
+    with pytest.raises(ValidationError):
+        m.ActionRequest(tab="txt2img", values={"nested": deep})
+
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(ValidationError):
+            m.ActionRequest(tab="txt2img", values={"cfg_scale": bad})
+        with pytest.raises(ValidationError):
+            m.ActionRequest(tab="txt2img", values={}, extra_param=bad)
+        with pytest.raises(ValidationError):
+            m.ActionRequest(tab="txt2img", values={}, core={"nested": [1.0, bad]})
+        with pytest.raises(ValidationError):
+            m.ActionRequest(tab="txt2img", values={}, scripts={"sampler": {"eta": bad}})
+        with pytest.raises(ValidationError):
+            m.RulesRequest(tab="txt2img", core={"cfg_scale": bad})
+        with pytest.raises(ValidationError):
+            m.JobRequest(tab="txt2img", core={"nested": {"v": bad}})
+        with pytest.raises(ValidationError):
+            JobParams(core={"nested": [bad]})
+        with pytest.raises(ValidationError):
+            PromptUpsampleRequest(prompt="cat", bbox_draft=[{"x": bad}])
+        with pytest.raises(ValidationError):
+            UserMetadataPatch(user_metadata={"custom": [bad]})
+
+    with server_app(tmp_path) as server:
+        client = TestClient(server.app, raise_server_exceptions=False, base_url="http://127.0.0.1:7860")
+        headers = {"Content-Type": "application/json"}
+        for token in ("NaN", "Infinity", "-Infinity", "1e999"):
+            for endpoint, payload in (
+                ("/api/v2/actions/core/__advice__", f'{{"tab":"txt2img","values":{{"cfg_scale":{token}}}}}'),
+                ("/api/v2/actions/core/__advice__", f'{{"tab":"txt2img","values":{{}},"extra_arg":{token}}}'),
+                ("/api/v2/actions/core/__conflicts__", f'{{"tab":"txt2img","values":{{"cfg_scale":{token}}}}}'),
+                ("/api/v2/actions/core/swap_dimensions", f'{{"tab":"txt2img","values":{{"prompt":{token}}}}}'),
+                ("/api/v2/rules/derive", f'{{"tab":"txt2img","core":{{"cfg_scale":{token}}},"scripts":{{}}}}'),
+            ):
+                resp = client.post(endpoint, content=payload.encode(), headers=headers)
+                assert resp.status_code == 422, (endpoint, token, resp.status_code, resp.text)
+
+
+def test_deep_non_finite_request_validation_error_returns_422_without_recursion_error(webui, tmp_path):
+    from remi.server.app import json_safe
+
+    deep_obj: object = (float("inf"), 1.0)
+    for _ in range(1100):
+        deep_obj = {"a": [deep_obj]}
+    safe = json_safe(deep_obj)
+    cur = safe
+    for _ in range(1100):
+        cur = cur["a"][0]
+    assert cur == ["inf", 1.0]
+
+    bad_1100 = "1e999"
+    ok_1100 = "1.0"
+    for _ in range(1100):
+        bad_1100 = f'{{"a":{bad_1100}}}'
+        ok_1100 = f'{{"a":{ok_1100}}}'
+
+    with server_app(tmp_path) as server:
+        client = TestClient(server.app, raise_server_exceptions=False, base_url="http://127.0.0.1:7860")
+        headers = {"Content-Type": "application/json"}
+        bad_resp = client.post("/api/v2/actions/core/__advice__", content=f'{{"tab":"txt2img","values":{bad_1100}}}'.encode(), headers=headers)
+        assert bad_resp.status_code == 422, (bad_resp.status_code, bad_resp.text)
+        assert bad_resp.json()["detail"]
+        ok_resp = client.post("/api/v2/actions/core/__advice__", content=f'{{"tab":"txt2img","values":{ok_1100}}}'.encode(), headers=headers)
+        assert ok_resp.status_code == 200, (ok_resp.status_code, ok_resp.text)
 
 
 def test_no_route_answers_a_non_finite_body_with_a_server_error(webui, tmp_path, caplog):
@@ -751,6 +831,51 @@ def test_an_images_exif_chunk_is_never_opened_as_a_file_name(webui, tmp_path):
         assert geninfo != "secret"
 
 
+def test_read_info_from_image_handles_non_bytes_exif_user_comment(webui):
+    """non-bytes EXIF UserComment (e.g., TIFF LONG/SHORT) and invalid bytes
+    never raise TypeError or UnicodeDecodeError in read_info_from_image."""
+    import struct
+
+    from PIL import Image
+
+    from modules.images import read_info_from_image
+
+    # TIFF type LONG (4), count 1, value 12345 on EXIF tag 0x9286 (UserComment)
+    tiff_long = (
+        b"II"
+        + struct.pack("<HI", 42, 8)
+        + struct.pack("<H", 1)
+        + struct.pack("<HHII", 0x8769, 4, 1, 26)
+        + struct.pack("<I", 0)
+        + struct.pack("<H", 1)
+        + struct.pack("<HHII", 0x9286, 4, 1, 12345)
+        + struct.pack("<I", 0)
+    )
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 8), (1, 2, 3)).save(buf, format="JPEG", exif=b"Exif\x00\x00" + tiff_long)
+    with Image.open(io.BytesIO(buf.getvalue())) as image:
+        geninfo, items = read_info_from_image(image)
+    assert geninfo is None
+    assert isinstance(items, dict)
+
+    # Non-UTF-8 bytes in UserComment without piexif encoding prefix falls back cleanly
+    tiff_bad_bytes = (
+        b"II"
+        + struct.pack("<HI", 42, 8)
+        + struct.pack("<H", 1)
+        + struct.pack("<HHII", 0x8769, 4, 1, 26)
+        + struct.pack("<I", 0)
+        + struct.pack("<H", 1)
+        + struct.pack("<HHII", 0x9286, 7, 4, 0x01FEFF00)
+        + struct.pack("<I", 0)
+    )
+    buf2 = io.BytesIO()
+    Image.new("RGB", (8, 8), (1, 2, 3)).save(buf2, format="JPEG", exif=b"Exif\x00\x00" + tiff_bad_bytes)
+    with Image.open(io.BytesIO(buf2.getvalue())) as image2:
+        geninfo2, _ = read_info_from_image(image2)
+    assert isinstance(geninfo2, (str, type(None)))
+
+
 def test_the_docs_name_every_header_value_sent():
     """architecture.md said ``X-Robots-Tag: noindex``; every response carries ``noindex, nofollow``."""
 
@@ -763,3 +888,334 @@ def test_the_docs_name_every_header_value_sent():
         text = " ".join((docs / name).read_text(encoding="utf-8").split()).lower()
         for header, value in BASE_HEADERS:
             assert f"`{header.decode()}: {value.decode()}`" in text, (name, header, value)
+
+
+# region Security and proxy trust regressions
+
+
+def test_forged_forwarded_headers_cannot_bypass_wildcard_cors_write_guard(options, tmp_path):
+    """X-Forwarded-Host / Forwarded / X-Forwarded-Port are ignored unless
+    the direct peer is in --forwarded-allow-ips."""
+    from modules import extension_route_guard as guard
+
+    options(cors_allow_origins="*", forwarded_allow_ips=None)
+    forged_req = SimpleNamespace(
+        method="POST",
+        headers={"origin": "https://evil.com", "host": "127.0.0.1:7860", "x-forwarded-host": "evil.com"},
+        client=SimpleNamespace(host="127.0.0.1"),
+    )
+    assert guard.is_cross_site(forged_req) is True
+    assert guard.is_cross_site(SimpleNamespace(method="POST", headers={"origin": "https://evil.com", "host": "127.0.0.1:7860", "forwarded": 'for=1.2.3.4;host="evil.com"'}, client=SimpleNamespace(host="127.0.0.1"))) is True
+    assert guard.is_cross_site(SimpleNamespace(method="POST", headers={"origin": "https://127.0.0.1", "host": "127.0.0.1:7860", "x-forwarded-port": "443"}, client=SimpleNamespace(host="127.0.0.1"))) is True
+
+    with server_app(tmp_path) as server:
+        before = guard.snapshot_routes(server.app)
+        server.app.post("/ext/mutate")(lambda: {"ok": True})
+        guard.guard_new_routes(server.app, before)
+
+        preflight = server.client.options(
+            "/api/v2/queue/pause",
+            headers={"Origin": "https://evil.com", "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": "x-forwarded-host"},
+        )
+        assert preflight.status_code == 200
+        for headers in (
+            {"Origin": "https://evil.com", "X-Forwarded-Host": "evil.com"},
+            {"Origin": "https://evil.com", "Forwarded": "host=evil.com"},
+            {"Origin": "https://127.0.0.1", "X-Forwarded-Port": "443"},
+        ):
+            assert server.client.post("/api/v2/queue/pause", headers=headers).status_code == 403, headers
+            assert server.client.post("/ext/mutate", headers=headers).status_code == 403, headers
+
+
+def test_forwarded_headers_trusted_only_from_configured_proxy_ips(options):
+    """trusted proxy IPs/CIDRs honor forwarded host/port; untrusted peers do not."""
+    from modules import extension_route_guard as guard
+
+    options(forwarded_allow_ips="127.0.0.1, 10.0.0.0/8")
+    headers = {"origin": "https://ui.example:8443", "host": "backend:7860", "x-forwarded-host": "ui.example", "x-forwarded-port": "8443"}
+    assert guard.is_cross_site(SimpleNamespace(method="POST", headers=headers, client=SimpleNamespace(host="127.0.0.1"))) is False
+    assert guard.is_cross_site(SimpleNamespace(method="POST", headers=headers, client=SimpleNamespace(host="10.2.3.4"))) is False
+    assert guard.is_cross_site(SimpleNamespace(method="POST", headers=headers, client=SimpleNamespace(host="203.0.113.5"))) is True
+    assert guard.is_cross_site(SimpleNamespace(method="POST", headers=headers)) is True  # missing client
+
+    # Dual-stack IPv4-mapped IPv6 peers match IPv4 trusted proxy entries/CIDRs (and reject untrusted ones)
+    options(forwarded_allow_ips="127.0.0.1, 10.20.0.0/16")
+    assert guard.is_cross_site(SimpleNamespace(method="POST", headers=headers, client=SimpleNamespace(host="::ffff:10.20.0.5"))) is False
+    assert guard.is_cross_site(SimpleNamespace(method="POST", headers=headers, client=SimpleNamespace(host="::ffff:127.0.0.1"))) is False
+    assert guard.is_cross_site(SimpleNamespace(method="POST", headers=headers, client=SimpleNamespace(host="::ffff:203.0.113.5"))) is True
+    options(forwarded_allow_ips="::ffff:10.20.0.0/112")
+    assert guard.is_cross_site(SimpleNamespace(method="POST", headers=headers, client=SimpleNamespace(host="::ffff:10.20.0.5"))) is False
+
+
+def test_sdapi_init_parses_api_auth_with_colons_and_empty_entries(options):
+    """Api.__init__ uses partition(':') and skips blank entries."""
+    from threading import Lock
+
+    from fastapi.security import HTTPBasicCredentials
+
+    from modules.api.api import Api
+
+    options(api_auth="alice:p@ss:123, , bob:sec:ret:pw,")
+    api_obj = Api(FastAPI(), Lock())
+    assert api_obj.credentials == {"alice": "p@ss:123", "bob": "sec:ret:pw"}
+    assert api_obj.auth(HTTPBasicCredentials(username="alice", password="p@ss:123")) is True
+    assert api_obj.auth(HTTPBasicCredentials(username="bob", password="sec:ret:pw")) is True
+    with pytest.raises(Api.auth.__globals__["HTTPException"]):
+        api_obj.auth(HTTPBasicCredentials(username="alice", password="wrong"))
+
+
+def test_extension_route_guard_separates_api_auth_throttle_and_returns_429(options):
+    """--api-auth failures do not increment WebUI Auth.throttle, and throttled routes return 429."""
+    from modules import extension_route_guard as guard
+
+    API_AUTH_THROTTLE._failures.clear()
+    try:
+        options(listen=True, auth="web:web", api_auth="api:api")
+        auth = Auth({"web": "web"}, b"k" * 32)
+        app = FastAPI()
+        app.auth_dependency = auth.user_for
+        before = guard.snapshot_routes(app)
+        app.post("/ext/action")(lambda: {"ok": True})
+        guard.guard_new_routes(app, before)
+        client = TestClient(app, base_url="http://127.0.0.1:7860")
+
+        for _ in range(MAX_FAILURES_PER_MINUTE):
+            assert client.post("/ext/action", headers=basic("api", "wrong")).status_code == 401
+        assert auth.throttled("testclient") is False
+        assert client.post("/ext/action", headers=basic("api", "api")).status_code == 429
+        assert client.post("/ext/action", headers=basic("web", "web")).status_code == 200
+
+        # Without --api-auth, WebUI Basic failures throttle and return 429 on extension routes
+        options(api_auth=None)
+        for _ in range(MAX_FAILURES_PER_MINUTE):
+            assert client.post("/ext/action", headers=basic("web", "wrong")).status_code == 401
+        assert auth.throttled("testclient") is True
+        assert client.post("/ext/action", headers=basic("web", "web")).status_code == 429
+    finally:
+        API_AUTH_THROTTLE._failures.clear()
+
+
+def test_sdapi_extensions_redacts_remote_credentials(monkeypatch):
+    """/sdapi/v1/extensions redacts credentials from ext.remote."""
+    from modules import extensions
+    from modules.api.api import Api
+
+    fake_exts = [
+        SimpleNamespace(name="https-ext", remote="https://user:ghp_secret@github.com/org/repo.git", branch="main", commit_hash="abc", commit_date=1, version="1", enabled=True, read_info_from_repo=lambda: None),
+        SimpleNamespace(name="ssh-ext", remote="git:tok@github.com:org/priv.git", branch="main", commit_hash="def", commit_date=2, version="1", enabled=True, read_info_from_repo=lambda: None),
+        SimpleNamespace(name="public-ext", remote="https://github.com/org/pub.git", branch="main", commit_hash="ghi", commit_date=3, version="1", enabled=False, read_info_from_repo=lambda: None),
+    ]
+    monkeypatch.setattr(extensions, "list_extensions", lambda: None)
+    monkeypatch.setattr(extensions, "extensions", fake_exts)
+
+    result = Api.get_extensions_list(SimpleNamespace())
+    assert result[0]["remote"] == "https://<hidden>@github.com/org/repo.git"
+    assert result[1]["remote"] == "git:<hidden>@github.com:org/priv.git"
+    assert result[2]["remote"] == "https://github.com/org/pub.git"
+    assert "ghp_secret" not in str(result) and "tok" not in str(result)
+
+
+def test_redact_mapping_is_recursive_and_catches_camelcase_keys():
+    """redact.mapping recurses into nested dicts/lists and catches camelCase secret keys."""
+    from modules import redact
+
+    payload = {
+        "apiKey": "sk-1",
+        "openaiKey": "sk-2",
+        "authToken": "tok-1",
+        "clientSecret": "sec-1",
+        "APIKey": "sk-3",
+        "apiKey2": "sk-4",
+        "hotkey": "ctrl+s",
+        "keyboard": "us",
+        "author": "alice",
+        "nested": {
+            "token": "abc",
+            "deepList": [{"accessToken": "xyz", "url": "https://u:p@h/x"}, "https://user:pw@example.com/a"],
+        },
+    }
+    redacted = redact.mapping(payload)
+    for key in ("apiKey", "openaiKey", "authToken", "clientSecret", "APIKey", "apiKey2"):
+        assert redacted[key] == redact.HIDDEN, key
+    assert redacted["hotkey"] == "ctrl+s"
+    assert redacted["keyboard"] == "us"
+    assert redacted["author"] == "alice"
+    assert redacted["nested"]["token"] == redact.HIDDEN
+    assert redacted["nested"]["deepList"] == [
+        {"accessToken": redact.HIDDEN, "url": f"https://{redact.HIDDEN}@h/x"},
+        f"https://{redact.HIDDEN}@example.com/a",
+    ]
+
+
+def test_uploads_accept_case_insensitive_multipart_content_type(webui, tmp_path):
+    """POST /api/v2/uploads accepts mixed-case Multipart/Form-Data and padded Content-Length."""
+    boundary = "remicaseboundary"
+    body = (
+        f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.png"\r\nContent-Type: image/png\r\n\r\n'.encode()
+        + png()
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
+    with server_app(tmp_path) as server:
+        ok = server.client.post(
+            "/api/v2/uploads",
+            content=body,
+            headers={"Content-Type": f"Multipart/Form-Data; boundary={boundary}", "Content-Length": f" {len(body)} "},
+        )
+        assert ok.status_code == 201
+        bad = server.client.post("/api/v2/uploads", content=body, headers={"Content-Type": f"multipart/form-data-fake; boundary={boundary}"})
+        assert bad.status_code == 422
+
+
+def test_sdapi_url_fetcher_pins_resolved_public_ip_against_dns_rebinding(webui, monkeypatch):
+    """fetch_url_image_bytes pins the validated public IP on socket.connect
+    and does not re-resolve DNS during requests.get."""
+    import socket
+
+    from modules.api import api
+
+    calls = []
+
+    def fake_getaddrinfo(host, port, *args, **kwargs):
+        calls.append((host, port))
+        ip = "93.184.216.34" if len(calls) == 1 else "127.0.0.1"
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 0))]
+
+    connected_to = []
+    payload = png()
+    raw_http = (
+        b"HTTP/1.1 200 OK\r\n"
+        + f"Content-Length: {len(payload)}\r\nConnection: close\r\n\r\n".encode()
+        + payload
+    )
+
+    class FakeSocket:
+        def __init__(self, family, type_, proto=0):
+            self._buf = io.BytesIO(raw_http)
+
+        def setsockopt(self, *args):
+            pass
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, address):
+            connected_to.append(address)
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, size):
+            return self._buf.read(size)
+
+        def makefile(self, mode="rb", buffering=-1):
+            return io.BytesIO(raw_http)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("socket.getaddrinfo", fake_getaddrinfo)
+    monkeypatch.setattr("socket.socket", FakeSocket)
+    monkeypatch.setattr(api.opts, "api_forbid_local_requests", True, raising=False)
+    monkeypatch.setattr(api.opts, "api_useragent", "", raising=False)
+
+    assert api.fetch_url_image_bytes("http://rebind.example/a.png") == payload
+    assert len(calls) == 1
+    assert connected_to == [("93.184.216.34", 80)]
+
+    # IPv4-mapped IPv6 loopback is refused before connecting
+    monkeypatch.setattr("socket.getaddrinfo", lambda host, *a, **kw: [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("::ffff:127.0.0.1", 0, 0, 0))])
+    with pytest.raises(api.HTTPException) as refused:
+        api.fetch_url_image_bytes("http://mapped.example/a.png")
+    assert "local resource" in refused.value.detail
+
+
+def test_session_tokens_have_per_session_nonce_and_independent_revocation(tmp_path):
+    """same-second logins yield distinct tokens; revoking one does not revoke the other;
+    legacy 3-part tokens remain verifiable and revocation files reload cleanly."""
+    import time
+
+    revoked_path = tmp_path / "revoked.json"
+    auth_a = Auth({"ann": "pw"}, b"k" * 32, revoked_path=revoked_path)
+    auth_b = Auth({"ann": "pw"}, b"k" * 32, revoked_path=revoked_path)
+
+    base = float(int(time.time()))
+    t1 = auth_a.issue("ann", now=base + 0.1)
+    t2 = auth_a.issue("ann", now=base + 0.9)
+    assert t1 != t2 and t1.count(".") == 3 and t2.count(".") == 3
+    assert auth_a.verify(t1, now=base + 1.0) == "ann" and auth_a.verify(t2, now=base + 1.0) == "ann"
+
+    # Prime auth_b cache before auth_a revokes t1
+    assert auth_b.verify(t1, now=base + 1.0) == "ann"
+    auth_a.revoke(t1)
+    assert auth_a.verify(t1, now=base + 1.0) is None
+    assert auth_a.verify(t2, now=base + 1.0) == "ann"
+    assert auth_b.verify(t1, now=base + 1.0) is None
+    assert auth_b.verify(t2, now=base + 1.0) == "ann"
+
+    # Backward-compatible 3-part legacy token verification and revocation
+    expiry = int(base + 30 * 24 * 3600)
+    user_b64 = base64.urlsafe_b64encode(b"ann").decode().rstrip("=")
+    legacy = f"{user_b64}.{expiry}.{auth_a._signature('ann', expiry)}"
+    assert auth_a.verify(legacy, now=base + 1.0) == "ann"
+    auth_a.revoke(legacy)
+    assert auth_a.verify(legacy, now=base + 1.0) is None
+
+
+def test_sdapi_data_uri_without_base64_and_restart_webui_shutdown(webui, monkeypatch):
+    """decode_base64_to_image handles data:image/ without ;base64 safely and
+    restart_webui drains queue/services before restarting."""
+    from urllib.parse import quote_from_bytes
+
+    from modules import restart
+    from modules.api import api
+
+    img_bytes = png((8, 8))
+    b64 = base64.b64encode(img_bytes).decode()
+    assert api.decode_base64_to_image(f"data:image/png;charset=utf-8;base64,{b64}").size == (8, 8)
+    assert api.decode_base64_to_image(f"data:image/png,{b64}").size == (8, 8)
+    assert api.decode_base64_to_image(f"data:image/png,{quote_from_bytes(img_bytes)}").size == (8, 8)
+    for bad in ("data:image/png,AAAA", "data:image/png"):
+        with pytest.raises(api.HTTPException) as err:
+            api.decode_base64_to_image(bad)
+        assert err.value.status_code == 500 and err.value.detail == "Invalid encoded image"
+
+    events = []
+
+    class FakeQueue:
+        def stop(self, timeout=5, interrupt=False):
+            events.append(("queue.stop", timeout, interrupt))
+
+    class FakeWorkers:
+        def shutdown(self):
+            events.append(("workers.shutdown",))
+
+    class FakeServices:
+        queue = FakeQueue()
+        workers = FakeWorkers()
+
+        def stop(self):
+            events.append(("services.stop",))
+
+        def close(self):
+            self.stop()
+            self.workers.shutdown()
+            events.append(("services.close",))
+
+    fake_api = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(services=FakeServices())))
+    monkeypatch.setattr(restart, "is_restartable", lambda: False)
+    assert api.Api.restart_webui(fake_api).status_code == 501
+    assert events == []
+
+    monkeypatch.setattr(restart, "is_restartable", lambda: True)
+    monkeypatch.setattr(restart, "restart_program", lambda: events.append(("restart_program",)))
+    api.Api.restart_webui(fake_api)
+    assert events == [
+        ("queue.stop", 30, True),
+        ("services.stop",),
+        ("workers.shutdown",),
+        ("services.close",),
+        ("restart_program",),
+    ]
+
+
+# endregion

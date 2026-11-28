@@ -81,7 +81,7 @@ def test_prepare_registers_settings_runners_and_tab_names(webui, main_entry, mon
     assert calls == ["ui_settings", "runners"]
     # the built-in tabs first, then each extension page once (a page titled like a built-in tab is that tab)
     assert shared.tab_names == ["txt2img", "img2img", "Extras", "PNG Info", "Gallery", "Networks", "Prompt Workshop", "Joy Caption"]
-    assert "callbacks" in {getattr(info, "section", ("",))[0] for info in shared.opts.data_labels.values()}
+    assert "callbacks" in {(getattr(info, "section", None) or ("",))[0] for info in shared.opts.data_labels.values()}
 
     calls.clear()
     runtime.prepare()
